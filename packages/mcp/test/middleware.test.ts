@@ -3,13 +3,17 @@ import { atrib } from '../src/middleware.js'
 import { base64urlEncode } from '../src/base64url.js'
 import { getPublicKey } from '../src/signing.js'
 import * as signingModule from '../src/signing.js'
-import { decodeToken } from '../src/token.js'
+import { decodeToken, encodeToken } from '../src/token.js'
 import { canonicalRecord } from '../src/canon.js'
 import { hexEncode, sha256 } from '../src/hash.js'
 import { LOCAL_SUBSTRATE_RESPONSE_SCHEMA } from '../src/local-substrate.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AtribRecord } from '../src/types.js'
-import type { LocalSubstrateShadowAttempt, OnRecordSidecar } from '../src/middleware.js'
+import type {
+  LocalSubstrateCommitAttempt,
+  LocalSubstrateShadowAttempt,
+  OnRecordSidecar,
+} from '../src/middleware.js'
 import type { LocalSubstrateCoordinatorRequest } from '../src/local-substrate.js'
 
 // Deterministic test key
@@ -1191,6 +1195,166 @@ describe('atrib() middleware', () => {
         throw new Error(attempts[0]!.result.status)
       }
       expect(attempts[0]!.result.reason).toContain('coordinator offline')
+    })
+  })
+
+  describe('localSubstrate commit path', () => {
+    it('delegates queue ownership after the coordinator accepts the same record hash', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'ok' }] }
+      const originalHandler = vi.fn().mockResolvedValue(resultObj)
+      const captured: AtribRecord[] = []
+      const seenRequests: LocalSubstrateCoordinatorRequest[] = []
+      const attempts: LocalSubstrateCommitAttempt[] = []
+      const submittedRecords: AtribRecord[] = []
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+        if (String(url) === 'https://log.test/v1/entries' && init) {
+          const body = JSON.parse((init as RequestInit).body as string) as AtribRecord
+          submittedRecords.push(body)
+        }
+        return new Response(
+          JSON.stringify({
+            log_index: 1,
+            checkpoint: 'log.test/v1\n2\nrootHashBase64\n',
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
+      })
+      let resolveAttempt!: () => void
+      const attemptDone = new Promise<void>((resolve) => {
+        resolveAttempt = resolve
+      })
+
+      try {
+        const wrapped = atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          logEndpoint: 'https://log.test/v1/entries',
+          onRecord: (record) => {
+            captured.push(record)
+          },
+          localSubstrateCommit: {
+            producer: {
+              name: 'test-wrapper',
+              harness_class: 'startup-spawn',
+              pid: 123,
+              transport: 'stdio-mcp-wrapper',
+              creator_key_policy: 'explicit-single-creator',
+            },
+            transport: async (request) => {
+              seenRequests.push(request)
+              const signed = await signingModule.signRecord(
+                { ...request.record_body, signature: '' } as AtribRecord,
+                TEST_PRIVATE_KEY,
+              )
+              return {
+                schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+                operation: request.operation,
+                status: 'accepted',
+                record_hash: `sha256:${hexEncode(sha256(canonicalRecord(signed)))}`,
+                receipt_id: encodeToken(signed),
+              }
+            },
+            onAttempt: (attempt) => {
+              attempts.push(attempt)
+              resolveAttempt()
+            },
+          },
+        })
+        registerToolHandler(originalHandler)
+
+        const result = await getToolHandler()!(createToolCallRequest('search_web'), {})
+        await waitForProbe(attemptDone)
+        await wrapped.flush()
+
+        expect(result).toBe(resultObj)
+        expect(captured).toHaveLength(1)
+        expect(seenRequests).toHaveLength(1)
+        const request = seenRequests[0]!
+        const { signature: _signature, ...unsignedCommitted } = captured[0]!
+        expect(request.mode).toBe('commit')
+        expect(request.operation).toBe('sign_record')
+        expect(request.producer).toMatchObject({
+          name: 'test-wrapper',
+          harness_class: 'startup-spawn',
+          pid: 123,
+          transport: 'stdio-mcp-wrapper',
+          creator_key_policy: 'explicit-single-creator',
+        })
+        expect(request.record_body).toEqual(unsignedCommitted)
+        expect(attempts).toHaveLength(1)
+        expect(attempts[0]!.recordHashMatches).toBe(true)
+        expect((resultObj as { _meta?: { atrib?: string } })._meta?.atrib).toBeDefined()
+        expect(submittedRecords).toHaveLength(0)
+      } finally {
+        fetchSpy.mockRestore()
+      }
+    })
+
+    it('falls back to the local queue when coordinator commit is unavailable', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const resultObj = { content: [{ type: 'text', text: 'ok' }] }
+      const captured: AtribRecord[] = []
+      const attempts: LocalSubstrateCommitAttempt[] = []
+      const submittedRecords: AtribRecord[] = []
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+        if (String(url) === 'https://log.test/v1/entries' && init) {
+          const body = JSON.parse((init as RequestInit).body as string) as AtribRecord
+          submittedRecords.push(body)
+        }
+        return new Response(
+          JSON.stringify({
+            log_index: 1,
+            checkpoint: 'log.test/v1\n2\nrootHashBase64\n',
+            inclusion_proof: [],
+            leaf_hash: 'leafHashBase64',
+          }),
+          { status: 200 },
+        )
+      })
+      let resolveAttempt!: () => void
+      const attemptDone = new Promise<void>((resolve) => {
+        resolveAttempt = resolve
+      })
+
+      try {
+        const wrapped = atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://test.example.com',
+          logEndpoint: 'https://log.test/v1/entries',
+          onRecord: (record) => {
+            captured.push(record)
+          },
+          localSubstrateCommit: {
+            producer: { name: 'test-wrapper', harness_class: 'startup-spawn' },
+            transport: async () => {
+              throw new Error('coordinator offline')
+            },
+            onAttempt: (attempt) => {
+              attempts.push(attempt)
+              resolveAttempt()
+            },
+          },
+        })
+        registerToolHandler(vi.fn().mockResolvedValue(resultObj))
+
+        const result = await getToolHandler()!(createToolCallRequest('search_web'), {})
+        await waitForProbe(attemptDone)
+        await wrapped.flush()
+
+        expect(result).toBe(resultObj)
+        expect(captured).toHaveLength(1)
+        expect(attempts).toHaveLength(1)
+        expect(attempts[0]!.result.ok).toBe(false)
+        expect(attempts[0]!.result.status).toBe('unavailable')
+        expect(submittedRecords).toHaveLength(1)
+        expect(submittedRecords[0]).toEqual(captured[0])
+        expect((resultObj as { _meta?: { atrib?: string } })._meta?.atrib).toBeDefined()
+      } finally {
+        fetchSpy.mockRestore()
+      }
     })
   })
 

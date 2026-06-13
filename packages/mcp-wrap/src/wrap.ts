@@ -72,6 +72,12 @@ type InformedByHook = NonNullable<AtribOptions['informedBy']>
 type LocalSubstrateAttemptHook = NonNullable<
   NonNullable<AtribOptions['localSubstrate']>['onAttempt']
 >
+type LocalSubstrateCommitAttemptHook = NonNullable<
+  NonNullable<AtribOptions['localSubstrateCommit']>['onAttempt']
+>
+type LocalSubstrateAttemptLoggerInput =
+  | Parameters<LocalSubstrateAttemptHook>[0]
+  | Parameters<LocalSubstrateCommitAttemptHook>[0]
 
 function valueAtPath(value: unknown, path: string): unknown {
   let current = value
@@ -174,11 +180,14 @@ function defaultPaths(config: WrapConfig): { logFile: string; recordFile: string
   }
 }
 
-function buildLocalSubstrateAttemptLogger(log: LogFn): LocalSubstrateAttemptHook {
+function buildLocalSubstrateAttemptLogger(
+  log: LogFn,
+  mode: 'shadow' | 'commit',
+): (attempt: LocalSubstrateAttemptLoggerInput) => void {
   return (attempt) => {
     const result = attempt.result
     const level = result.ok && attempt.recordHashMatches !== false ? 'info' : 'warn'
-    log(level, 'local substrate shadow attempt completed', {
+    log(level, `local substrate ${mode} attempt completed`, {
       status: result.status,
       elapsed_ms: result.elapsed_ms,
       expected_record_hash: attempt.expectedRecordHash,
@@ -192,6 +201,14 @@ function buildLocalSubstrateAttemptLogger(log: LogFn): LocalSubstrateAttemptHook
           : undefined,
     })
   }
+}
+
+function localSubstrateWarningDetail(detail: unknown): Record<string, unknown> | undefined {
+  if (detail === undefined) return undefined
+  if (detail !== null && typeof detail === 'object' && !Array.isArray(detail)) {
+    return detail as Record<string, unknown>
+  }
+  return { detail: String(detail) }
 }
 
 /**
@@ -227,6 +244,7 @@ export async function wrap(
   const preCallTransform = buildPreCallTransform(config)
   const informedBy = buildInformedBy(config)
   const recordReferenceResolver = buildRecordReferenceResolver(config, recordFile, log)
+  const localSubstrateMode = config.localSubstrate?.mode ?? 'shadow'
   const localSubstrateTransport = config.localSubstrate
     ? createHttpLocalSubstrateTransport(config.localSubstrate.endpoint, {
         ...(config.localSubstrate.headers ? { headers: config.localSubstrate.headers } : {}),
@@ -260,7 +278,7 @@ export async function wrap(
       ...(informedBy ? { informedBy } : {}),
       recordReferenceResolver,
       ...(config.disclosure ? { disclosure: config.disclosure } : {}),
-      ...(config.localSubstrate && localSubstrateTransport
+      ...(config.localSubstrate && localSubstrateMode === 'shadow' && localSubstrateTransport
         ? {
             localSubstrate: {
               transport: localSubstrateTransport,
@@ -274,7 +292,27 @@ export async function wrap(
                 transport: 'stdio-mcp-wrapper',
                 creator_key_policy: 'explicit-single-creator',
               },
-              onAttempt: buildLocalSubstrateAttemptLogger(log),
+              onAttempt: buildLocalSubstrateAttemptLogger(log, 'shadow'),
+            },
+          }
+        : {}),
+      ...(config.localSubstrate && localSubstrateMode === 'commit' && localSubstrateTransport
+        ? {
+            localSubstrateCommit: {
+              transport: localSubstrateTransport,
+              ...(config.localSubstrate.timeoutMs !== undefined
+                ? { timeoutMs: config.localSubstrate.timeoutMs }
+                : {}),
+              producer: {
+                name: `${config.name}-${config.agent}`,
+                harness_class: 'startup-spawn',
+                pid: process.pid,
+                transport: 'stdio-mcp-wrapper',
+                creator_key_policy: 'explicit-single-creator',
+              },
+              onAttempt: buildLocalSubstrateAttemptLogger(log, 'commit'),
+              onWarning: (message, detail) =>
+                log('warn', message, localSubstrateWarningDetail(detail)),
             },
           }
         : {}),

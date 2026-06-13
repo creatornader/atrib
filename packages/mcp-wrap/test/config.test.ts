@@ -57,6 +57,23 @@ describe('parseConfig', () => {
     })
   })
 
+  it('parses opt-in local substrate commit config', () => {
+    const config = parseConfig({
+      ...MINIMAL,
+      localSubstrate: {
+        mode: 'commit',
+        endpoint: 'http://127.0.0.1:8787/atrib/local-substrate',
+        timeoutMs: 50,
+      },
+    })
+
+    expect(config.localSubstrate).toEqual({
+      mode: 'commit',
+      endpoint: 'http://127.0.0.1:8787/atrib/local-substrate',
+      timeoutMs: 50,
+    })
+  })
+
   it('honors autoChain false', () => {
     const config = parseConfig({ ...MINIMAL, autoChain: false })
     expect(config.autoChain).toBe(false)
@@ -164,6 +181,18 @@ describe('parseConfig', () => {
       parseConfig({
         ...MINIMAL,
         localSubstrate: { endpoint: 'not a url' },
+      }),
+    ).toThrow()
+  })
+
+  it('rejects unknown local substrate modes', () => {
+    expect(() =>
+      parseConfig({
+        ...MINIMAL,
+        localSubstrate: {
+          mode: 'other',
+          endpoint: 'http://127.0.0.1:8787/atrib/local-substrate',
+        },
       }),
     ).toThrow()
   })

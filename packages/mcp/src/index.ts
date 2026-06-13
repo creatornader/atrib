@@ -7,6 +7,8 @@ export { atrib } from './middleware.js'
 export type {
   AtribOptions,
   AtribServer,
+  LocalSubstrateCommitAttempt,
+  LocalSubstrateCommitOptions,
   LocalSubstrateShadowAttempt,
   LocalSubstrateShadowOptions,
   OnRecordSidecar,
