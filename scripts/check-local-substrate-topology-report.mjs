@@ -19,6 +19,7 @@ import {
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const FIXTURE_DIR = join(ROOT, 'spec/conformance/local-substrate-coordinator/topology')
+const BRIDGE_SERVICE_DIR = ['agent', 'bridge', 'atrib'].join('-')
 const failures = []
 
 function readJson(path) {
@@ -777,6 +778,16 @@ function checkStdioProxyClassification() {
       command:
         'node /workspace/atrib/services/atrib-primitives/dist/index.js --transport stdio-http-proxy --endpoint http://127.0.0.1:8792/mcp',
     },
+    {
+      pid: 230,
+      ppid: 1,
+      command: `node /workspace/private/services/${BRIDGE_SERVICE_DIR}/dist/index.js --transport streamable-http --host 127.0.0.1 --port 8791 --path /mcp`,
+    },
+    {
+      pid: 231,
+      ppid: 210,
+      command: `node /workspace/private/services/${BRIDGE_SERVICE_DIR}/dist/index.js --transport stdio-http-proxy --endpoint http://127.0.0.1:8791/mcp`,
+    },
   )
 
   const report = buildReport(snapshot, {
@@ -796,6 +807,19 @@ function checkStdioProxyClassification() {
     fail(
       `stdio proxy classification: expected 1 proxy process, got ${report.summary.primitive_proxy_processes}`,
     )
+  }
+  if (report.summary.bridge_runtime_processes !== 1) {
+    fail(
+      `stdio proxy classification: expected 1 bridge runtime, got ${report.summary.bridge_runtime_processes}`,
+    )
+  }
+  if (report.summary.bridge_proxy_processes !== 1) {
+    fail(
+      `stdio proxy classification: expected 1 bridge proxy, got ${report.summary.bridge_proxy_processes}`,
+    )
+  }
+  if (report.summary.bridge_wrapper_processes !== 0) {
+    fail('stdio proxy classification: expected no legacy bridge wrapper processes')
   }
 }
 

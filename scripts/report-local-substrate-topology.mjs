@@ -59,6 +59,7 @@ const LOCAL_SUBSTRATE_INFRA_LABEL_PREFIXES = [
   'com.nader.atrib-local-substrate.',
   'com.nader.atrib-primitives.',
 ]
+const AGENT_BRIDGE_ATTRIBUTED_SERVICE = ['agent', 'bridge', 'atrib'].join('-')
 const SAFE_ENDPOINT_ENV_KEYS = [
   'ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
   'KNOWLEDGE_BASE_ATRIB_LOCAL_SUBSTRATE_ENDPOINT',
@@ -239,6 +240,11 @@ function serviceNameForCommand(command) {
     }
   }
   if (command.includes('/bridge-wrapper/dist/')) return 'bridge-wrapper'
+  if (command.includes(`/${AGENT_BRIDGE_ATTRIBUTED_SERVICE}/dist/`)) {
+    return bridgeRuntimeTransport({ command }) === 'stdio-http-proxy'
+      ? 'agent-bridge-proxy'
+      : 'agent-bridge-runtime'
+  }
   if (command.includes('/agent-bridge/dist/') || command.includes('/upstream-bridge/dist/')) {
     return 'bridge-upstream'
   }
@@ -350,6 +356,9 @@ function summarizeProcesses(processes) {
 }
 
 function summarizeBridgeProcesses(rows, byPid) {
+  const runtime = rows.filter((row) => row.service === 'agent-bridge-runtime')
+  const runtimeHttp = runtime.filter((row) => bridgeRuntimeTransport(row) === 'streamable-http')
+  const proxy = rows.filter((row) => row.service === 'agent-bridge-proxy')
   const upstreams = rows.filter((row) => row.service === 'bridge-upstream')
   const explicitWrappers = rows.filter((row) => row.service === 'bridge-wrapper')
   const inferredWrappers = upstreams
@@ -390,6 +399,12 @@ function summarizeBridgeProcesses(rows, byPid) {
   const upstreamsWithoutWrapper = upstreams.filter((row) => !wrapperByPid.has(row.ppid))
   return {
     bridge_processes: wrappers.length + upstreams.length,
+    bridge_runtime_processes: runtime.length,
+    bridge_runtime_http_processes: runtimeHttp.length,
+    bridge_proxy_processes: proxy.length,
+    bridge_proxy_stdio_processes: proxy.filter(
+      (row) => bridgeRuntimeTransport(row) === 'stdio-http-proxy',
+    ).length,
     bridge_wrapper_processes: wrappers.length,
     bridge_upstream_processes: upstreams.length,
     obsolete_bridge_wrapper_processes: 0,
@@ -520,6 +535,13 @@ function annotateBridgeConfigDrift(processSummary, configs) {
 }
 
 function primitiveRuntimeTransport(row) {
+  if (row.command.includes('--transport stdio-http-proxy')) return 'stdio-http-proxy'
+  return row.command.includes('--transport streamable-http') || row.command.includes('--http')
+    ? 'streamable-http'
+    : 'stdio'
+}
+
+function bridgeRuntimeTransport(row) {
   if (row.command.includes('--transport stdio-http-proxy')) return 'stdio-http-proxy'
   return row.command.includes('--transport streamable-http') || row.command.includes('--http')
     ? 'streamable-http'
@@ -2312,7 +2334,17 @@ function buildGates({
   }
 
   if (processSummary.bridge_processes === 0) {
-    gates.push(gate('bridge-wrapper-footprint', 'pass', 'no bridge wrapper process evidence found'))
+    const proxyDetail =
+      processSummary.bridge_proxy_processes > 0
+        ? `; ${processSummary.bridge_proxy_processes} stdio-http bridge proxy adapter(s)`
+        : ''
+    gates.push(
+      gate(
+        'bridge-wrapper-footprint',
+        'pass',
+        `no legacy bridge wrapper process evidence found${proxyDetail}`,
+      ),
+    )
   } else if (processSummary.obsolete_bridge_wrapper_processes > 0) {
     gates.push(
       gate(
@@ -2692,6 +2724,10 @@ function buildReport(input, options = {}) {
         processSummary.obsolete_standalone_primitive_generations,
       duplicate_primitive_groups: processSummary.duplicate_primitive_groups,
       bridge_processes: processSummary.bridge_processes,
+      bridge_runtime_processes: processSummary.bridge_runtime_processes,
+      bridge_runtime_http_processes: processSummary.bridge_runtime_http_processes,
+      bridge_proxy_processes: processSummary.bridge_proxy_processes,
+      bridge_proxy_stdio_processes: processSummary.bridge_proxy_stdio_processes,
       bridge_wrapper_processes: processSummary.bridge_wrapper_processes,
       bridge_upstream_processes: processSummary.bridge_upstream_processes,
       obsolete_bridge_wrapper_processes: processSummary.obsolete_bridge_wrapper_processes,

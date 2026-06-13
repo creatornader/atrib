@@ -11,6 +11,7 @@ import { buildReport } from './report-local-substrate-topology.mjs'
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const FIXTURE_DIR = join(ROOT, 'spec/conformance/local-substrate-coordinator/topology')
 const GENERATED_AT = '2026-06-12T00:00:00.000Z'
+const BRIDGE_SERVICE_DIR = ['agent', 'bridge', 'atrib'].join('-')
 const failures = []
 
 function readJson(path) {
@@ -114,6 +115,42 @@ function checkReceiptBacklogFailsMeasurement() {
   }
 }
 
+function checkBridgeProxyProcessFootprint() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  snapshot.processes.push(
+    {
+      pid: 210,
+      ppid: 1,
+      service: 'claude-desktop',
+      command: '/Applications/Claude.app/Contents/MacOS/Claude',
+    },
+    {
+      pid: 230,
+      ppid: 1,
+      command: `node /workspace/private/services/${BRIDGE_SERVICE_DIR}/dist/index.js --transport streamable-http --host 127.0.0.1 --port 8791 --path /mcp`,
+    },
+    {
+      pid: 231,
+      ppid: 210,
+      command: `node /workspace/private/services/${BRIDGE_SERVICE_DIR}/dist/index.js --transport stdio-http-proxy --endpoint http://127.0.0.1:8791/mcp`,
+    },
+  )
+  const measurement = measurementForReport(buildReport(snapshot, { generatedAt: GENERATED_AT }))
+  if (measurement.status !== 'ready_for_default_trial') {
+    fail(`bridge proxy process footprint: expected ready, got ${measurement.status}`)
+  }
+  if (measurement.process_footprint.bridge.runtime_processes !== 1) {
+    fail('bridge proxy process footprint: expected one bridge runtime process')
+  }
+  if (measurement.process_footprint.bridge.proxy_processes !== 1) {
+    fail('bridge proxy process footprint: expected one bridge proxy process')
+  }
+  if (measurement.process_footprint.bridge.wrapper_processes !== 0) {
+    fail('bridge proxy process footprint: expected zero legacy bridge wrappers')
+  }
+}
+
 function checkLongLivedGapFailsMeasurement() {
   const measurement = measurementForReport(fixtureReport('missing-long-lived-agent-route.json'))
   if (measurement.status !== 'not_ready') {
@@ -149,6 +186,7 @@ function main() {
   checkHealthyMeasurement()
   checkRestartResidueFailsMeasurement()
   checkReceiptBacklogFailsMeasurement()
+  checkBridgeProxyProcessFootprint()
   checkLongLivedGapFailsMeasurement()
   checkLongLivedActivityFailsMeasurement()
 
