@@ -1,6 +1,6 @@
 {
   "name": "@atrib/mcp",
-  "version": "0.17.6",
+  "version": "0.18.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

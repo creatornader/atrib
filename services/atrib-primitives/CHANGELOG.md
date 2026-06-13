@@ -1,5 +1,17 @@
 # @atrib/primitives-runtime
 
+## 0.1.7
+
+### Patch Changes
+
+- @atrib/annotate@0.2.36
+- @atrib/emit@0.16.1
+- @atrib/recall@0.12.18
+- @atrib/revise@0.2.36
+- @atrib/summarize@0.4.18
+- @atrib/trace@0.5.16
+- @atrib/verify-mcp@0.2.16
+
 ## 0.1.6
 
 ### Patch Changes

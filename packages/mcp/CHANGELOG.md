@@ -1,5 +1,11 @@
 # @atrib/mcp
 
+## 0.18.0
+
+### Minor Changes
+
+- e700e1a: Add opt-in startup-spawn local-substrate commit mode. `@atrib/mcp` can send a post-success `sign_record` commit request to a coordinator and skip its local log-submission queue after the returned `record_hash` matches. `@atrib/mcp-wrap` exposes the path through `localSubstrate.mode = "commit"` while keeping shadow mode as the default.
+
 ## 0.17.6
 
 ### Patch Changes

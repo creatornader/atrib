@@ -1,5 +1,12 @@
 # @atrib/log-dev
 
+## 0.1.31
+
+### Patch Changes
+
+- Updated dependencies [e700e1a]
+  - @atrib/mcp@0.18.0
+
 ## 0.1.30
 
 ### Patch Changes

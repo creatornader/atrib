@@ -1,5 +1,12 @@
 # @atrib/summarize
 
+## 0.4.18
+
+### Patch Changes
+
+- Updated dependencies [e700e1a]
+  - @atrib/mcp@0.18.0
+
 ## 0.4.17
 
 ### Patch Changes

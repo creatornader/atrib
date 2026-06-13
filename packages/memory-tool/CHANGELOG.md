@@ -1,5 +1,12 @@
 # @atrib/memory-tool
 
+## 0.2.10
+
+### Patch Changes
+
+- Updated dependencies [e700e1a]
+  - @atrib/mcp@0.18.0
+
 ## 0.2.9
 
 ### Patch Changes
