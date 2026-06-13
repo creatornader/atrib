@@ -193,8 +193,21 @@
         "reachable": true,
         "status": "healthy",
         "report": {
+          "bridge_runtime": {
+            "pid": 120,
+            "version": "0.1.0",
+            "transport": "streamable-http",
+            "upstream": "in-process",
+            "tool_count": 3
+          },
           "profile": {
             "agent": "codex"
+          },
+          "sessions": {
+            "active": 1,
+            "opened": 3,
+            "closed": 2,
+            "idle_timeout_ms": 43200000
           }
         }
       },
@@ -203,8 +216,21 @@
         "reachable": true,
         "status": "healthy",
         "report": {
+          "bridge_runtime": {
+            "pid": 121,
+            "version": "0.1.0",
+            "transport": "streamable-http",
+            "upstream": "in-process",
+            "tool_count": 3
+          },
           "profile": {
             "agent": "claude-code"
+          },
+          "sessions": {
+            "active": 1,
+            "opened": 2,
+            "closed": 1,
+            "idle_timeout_ms": 43200000
           }
         }
       },
@@ -213,8 +239,21 @@
         "reachable": true,
         "status": "healthy",
         "report": {
+          "bridge_runtime": {
+            "pid": 122,
+            "version": "0.1.0",
+            "transport": "streamable-http",
+            "upstream": "in-process",
+            "tool_count": 3
+          },
           "profile": {
             "agent": "future-spawn"
+          },
+          "sessions": {
+            "active": 1,
+            "opened": 2,
+            "closed": 1,
+            "idle_timeout_ms": 43200000
           }
         }
       }

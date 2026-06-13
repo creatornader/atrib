@@ -143,3 +143,9 @@ pnpm measure:local-substrate
 ```
 
 The measurement reuses the same collector but fails closed unless process footprint, shared HTTP surfaces, coordinator queue/orphan state, watcher receipt join-back, watcher activity, long-lived route health, and long-lived producer activity all pass together. It can write a JSON baseline with `--report <path>`. Dogfood trials can also pass `--require-startup-profiles <csv>` and `--require-long-lived-profiles <csv>` so named harnesses fail early when the aggregate counts stay green but a specific profile drops out. The fixture checker runs in `pnpm doc-sync` so `ready_for_default_trial` cannot drift into a prose-only claim. Future versions should extend [D084](../../DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) rather than create another private health surface.
+
+The named-profile gate also covers registry-discovered future harnesses. A
+future startup-spawn registry entry has to prove the full profile stack by name:
+config surface, effective local-substrate evidence, shared primitive HTTP,
+healthy bridge HTTP, and context routing. A future long-lived route has to prove
+both route coverage and delegated activity by agent name.
