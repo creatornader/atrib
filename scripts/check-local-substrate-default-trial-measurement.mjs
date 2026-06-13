@@ -5,7 +5,10 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildDefaultTrialMeasurement } from './measure-local-substrate-default-trial.mjs'
+import {
+  buildDefaultTrialMeasurement,
+  formatTextMeasurement,
+} from './measure-local-substrate-default-trial.mjs'
 import { buildReport } from './report-local-substrate-topology.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -68,6 +71,12 @@ function checkHealthyMeasurement() {
   }
   if (measurement.process_footprint.long_lived_agents.activity_endpoint_mismatch !== 0) {
     fail('healthy measurement: expected zero long-lived activity endpoint mismatches')
+  }
+  if (!measurement.profile_coverage.primitive_http_shared_profiles.includes('claude-desktop')) {
+    fail('healthy measurement: expected named startup profile coverage to include claude-desktop')
+  }
+  if (!measurement.long_lived_profile_coverage.activity_ok_profiles.includes('hermes')) {
+    fail('healthy measurement: expected named long-lived activity coverage to include hermes')
   }
 }
 
@@ -160,6 +169,50 @@ function checkBridgeProxyProcessFootprint() {
   }
   if (measurement.process_footprint.bridge.wrapper_processes !== 0) {
     fail('bridge proxy process footprint: expected zero legacy bridge wrappers')
+  }
+  const text = formatTextMeasurement(measurement)
+  if (!text.includes('runtime=1 (http=1, proxy=1, stdio-proxy=1)')) {
+    fail('bridge proxy process footprint: expected text output to show stdio-proxy count')
+  }
+}
+
+function checkRequiredNamedProfiles() {
+  const report = fixtureReport('healthy-collapsed-startup-spawn.json')
+  const measurement = buildDefaultTrialMeasurement(report, {
+    generatedAt: GENERATED_AT,
+    requiredStartupProfiles: ['codex', 'claude-code', 'claude-desktop'],
+    requiredLongLivedProfiles: ['hermes'],
+  })
+  if (measurement.status !== 'ready_for_default_trial') {
+    fail(`required named profiles: expected ready, got ${measurement.status}`)
+  }
+  if (statusFor(measurement, 'required-startup-profiles') !== 'pass') {
+    fail('required named profiles: expected required-startup-profiles=pass')
+  }
+  if (statusFor(measurement, 'required-long-lived-profiles') !== 'pass') {
+    fail('required named profiles: expected required-long-lived-profiles=pass')
+  }
+
+  const missing = buildDefaultTrialMeasurement(report, {
+    generatedAt: GENERATED_AT,
+    requiredStartupProfiles: ['future-spawn'],
+    requiredLongLivedProfiles: ['openclaw'],
+  })
+  if (missing.status !== 'not_ready') {
+    fail(`missing named profiles: expected not_ready, got ${missing.status}`)
+  }
+  if (statusFor(missing, 'required-startup-profiles') !== 'fail') {
+    fail('missing named profiles: expected required-startup-profiles=fail')
+  }
+  if (statusFor(missing, 'required-long-lived-profiles') !== 'fail') {
+    fail('missing named profiles: expected required-long-lived-profiles=fail')
+  }
+  const details = missing.blockers.map((blocker) => blocker.detail).join('\n')
+  if (!details.includes('config_profiles missing future-spawn')) {
+    fail('missing named profiles: expected startup profile missing detail')
+  }
+  if (!details.includes('route_profiles missing openclaw')) {
+    fail('missing named profiles: expected long-lived profile missing detail')
   }
 }
 
@@ -256,7 +309,9 @@ function checkLongLivedActivityFailsMeasurement() {
     fail('non-delegated long-lived measurement: expected freshness to stay clean')
   }
 
-  const endpointMismatchFixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const endpointMismatchFixture = readJson(
+    join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'),
+  )
   const endpointMismatchSnapshot = JSON.parse(JSON.stringify(endpointMismatchFixture.snapshot))
   for (const activity of endpointMismatchSnapshot.long_lived_activity_report.activities) {
     activity.route_endpoint = 'http://127.0.0.1:9999/atrib/local-substrate'
@@ -265,7 +320,9 @@ function checkLongLivedActivityFailsMeasurement() {
     buildReport(endpointMismatchSnapshot, { generatedAt: GENERATED_AT }),
   )
   if (endpointMismatch.status !== 'not_ready') {
-    fail(`endpoint-mismatch long-lived measurement: expected not_ready, got ${endpointMismatch.status}`)
+    fail(
+      `endpoint-mismatch long-lived measurement: expected not_ready, got ${endpointMismatch.status}`,
+    )
   }
   if (statusFor(endpointMismatch, 'long-lived-activity-clean') !== 'fail') {
     fail('endpoint-mismatch long-lived measurement: expected long-lived-activity-clean=fail')
@@ -286,6 +343,7 @@ function main() {
   checkWatcherActivityFailsMeasurement()
   checkLongLivedGapFailsMeasurement()
   checkLongLivedActivityFailsMeasurement()
+  checkRequiredNamedProfiles()
 
   if (failures.length > 0) {
     for (const failure of failures) process.stderr.write(`FAIL ${failure}\n`)
