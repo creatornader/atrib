@@ -65,7 +65,7 @@ node scripts/check-local-substrate-coordinator-fixtures.mjs
 
 The validator checks body equality, pinned canonical hashes, non-blocking fallback, and the health-report fields needed before rollout.
 
-The shared TypeScript contract lives in `@atrib/mcp` as request and response validators, canonical body hashing, fixture validation, an opt-in coordinator client shim, explicit HTTP transport helper, a matching server-side HTTP handler, an in-process coordinator prototype, middleware shadow probes, and read-only health-probe helpers. Wrappers, emit-like producers, and watcher pipelines should consume that surface rather than minting a parallel schema. The prototype and HTTP handler are still opt-in; the package defines the adapter boundary and rollout-gate probes without making a daemon required.
+The shared TypeScript contract lives in `@atrib/mcp` as request and response validators, canonical body hashing, fixture validation, an opt-in coordinator client shim, explicit HTTP transport helper, a matching server-side HTTP handler, an in-process coordinator prototype, middleware shadow and commit paths, and read-only health-probe helpers. Wrappers, emit-like producers, and watcher pipelines should consume that surface rather than minting a parallel schema. The prototype and HTTP handler are still opt-in; the package defines the adapter boundary and rollout-gate probes without making a daemon required.
 
 ## Worked Example
 
@@ -92,7 +92,7 @@ With a coordinator, the wrapper builds the same unsigned body and sends:
 
 The coordinator may own the queue, mirror, and health report. It may not add fields to the record body before signing. The fixture pins that property by hashing the canonical record body and comparing it to the direct path.
 
-Current `@atrib/mcp-wrap` wiring uses `mode: "shadow_probe"`, not coordinator-owned commit. In this mode, the wrapper still signs, mirrors, attaches outbound context, and queues submission locally. The coordinator validates and signs the same unsigned body, returns a hash, and skips queue or mirror side effects. The wrapper log records whether that hash matched the local path. This avoids duplicate commits while proving the real startup-spawn adapter can reach the coordinator with byte-identical input.
+`@atrib/mcp-wrap` now supports two startup-spawn postures. Shadow mode remains the default. It sends `mode: "shadow_probe"`, keeps wrapper signing, mirror append, outbound context, and queue submission local, and logs whether the coordinator hash matched the local path. Commit mode sends `mode: "commit"` after a successful tool call and skips the wrapper's local log-submission queue only when the coordinator accepts the same `record_hash`. Local signing, mirror append, and outbound context stay in the wrapper because the sidecar and tool result are local to the MCP call. Rejection, timeout, invalid response, or hash mismatch falls back to the local queue under [§5.8](../../atrib-spec.md#58-degradation-contract), and `flush()` waits for pending commit attempts before draining local submissions.
 
 `@atrib/emit` supports two opt-in postures for the `long-lived-agent` class. In `shadow` mode, the emit path validates and signs the record locally, strips `signature` back out to recover the exact unsigned body, and sends that body to the coordinator with a `long-lived-agent` producer envelope. `emitInProcess()` waits only for the configured shadow timeout so short-lived hook producers do not exit before telemetry lands; the emit MCP server can keep the attempt in the background. In `commit` mode, emit sends the same unsigned body as `operation: "sign_record"` and `mode: "commit"`, then skips its own log-submission queue only after the coordinator returns the expected `record_hash`. Local signing and mirror append stay in place so local recall remains available, and rejection, timeout, or hash mismatch falls back to the existing local queue path.
 
@@ -108,7 +108,7 @@ Agent Bridge gets the same process-count treatment as a separate host-owned HTTP
 
 ## Rollout Gate
 
-The current implementation slices provide an in-process startup-spawn prototype, watcher-WAL commit mode, `@atrib/mcp-wrap` HTTP shadow probes, `@atrib/emit` long-lived-agent shadow and commit modes, shared Fetch/plain-result/Node HTTP handlers, the `atrib-local-substrate` host binary, and one live watcher-WAL dogfood route behind opt-in config. They should not become broad defaults until a process-health report shows:
+The current implementation slices provide an in-process startup-spawn prototype, watcher-WAL commit mode, `@atrib/mcp-wrap` HTTP shadow and commit modes, `@atrib/emit` long-lived-agent shadow and commit modes, shared Fetch/plain-result/Node HTTP handlers, the `atrib-local-substrate` host binary, and one live watcher-WAL dogfood route behind opt-in config. They should not become broad defaults until a process-health report shows:
 
 - one startup-spawn harness can call the coordinator without extra stale children
 - one startup-spawn harness can use `atrib-primitives` when the desired rollout gate is per-thread MCP child-process count rather than coordinator signing

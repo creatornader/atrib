@@ -46,6 +46,11 @@ const DEFAULT_LOCAL_SUBSTRATE_SHADOW_DEGRADATION: LocalSubstrateDegradationPolic
   primary_path_blocking: false,
 }
 
+const DEFAULT_LOCAL_SUBSTRATE_COMMIT_DEGRADATION: LocalSubstrateDegradationPolicy = {
+  if_unavailable: 'submit through the local queue and continue without coordinator receipt',
+  primary_path_blocking: false,
+}
+
 /** Context passed to a {@link PreCallTransform} callback. */
 export interface PreCallTransformContext {
   /** MCP tool name (params.name), e.g. "post_context". */
@@ -132,6 +137,29 @@ export interface LocalSubstrateShadowOptions {
    * signed locally, and any observer error is caught per §5.8.
    */
   onAttempt?: (attempt: LocalSubstrateShadowAttempt) => void | Promise<void>
+}
+
+export interface LocalSubstrateCommitAttempt {
+  request: LocalSubstrateCoordinatorRequest
+  result: TryLocalSubstrateCoordinatorResult
+  expectedRecordHash: string
+  responseRecordHash?: string
+  recordHashMatches: boolean
+}
+
+export interface LocalSubstrateCommitOptions {
+  /** Coordinator transport. Library callers can use HTTP, Unix sockets, or tests. */
+  transport: LocalSubstrateCoordinatorTransport
+  /** Producer identity written into the coordinator envelope. */
+  producer: LocalSubstrateProducer
+  /** Per-attempt timeout. Defaults to the shared client helper default. */
+  timeoutMs?: number
+  /** Fallback posture written into the coordinator envelope. */
+  degradation?: LocalSubstrateDegradationPolicy
+  /** Observer for rollout telemetry. It never affects the tool response. */
+  onAttempt?: (attempt: LocalSubstrateCommitAttempt) => void | Promise<void>
+  /** Warning hook for mismatches or observer errors. It never affects the tool response. */
+  onWarning?: (message: string, detail?: unknown) => void
 }
 
 /**
@@ -369,6 +397,14 @@ export interface AtribOptions {
    * without moving ownership of queue or mirror side effects.
    */
   localSubstrate?: LocalSubstrateShadowOptions
+  /**
+   * Opt-in local substrate commit path. The middleware signs locally so it can
+   * attach outbound context and persist the local sidecar, then sends the exact
+   * unsigned record body to a coordinator in `commit` mode. If the coordinator
+   * returns the same record_hash, this process skips its own log-submission
+   * queue. Rejection, timeout, or hash mismatch falls back to the local queue.
+   */
+  localSubstrateCommit?: LocalSubstrateCommitOptions
 }
 
 /** Extended McpServer with atrib-specific methods. */
@@ -497,6 +533,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   // §5.6.3: Track whether destroy() has been called. After destroy, the
   // private key is zeroed and no further signing is possible.
   let destroyed = false
+  const pendingLocalSubstrateCommits: Promise<void>[] = []
 
   // Derive the public key once at init (async, cached).
   let publicKeyB64: string | undefined
@@ -588,6 +625,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
    */
   interface BuiltRecord {
     signed: AtribRecord
+    recordBody: UnsignedAtribRecord
     /** Hex-encoded record_hash WITHOUT "sha256:" prefix. */
     recordHashHex: string
     contextId: string
@@ -595,6 +633,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     inboundTraceparent: unknown
     eventType: string
     parentRecordHashSeeded: boolean
+    parentRecordHash?: string
   }
 
   /**
@@ -605,7 +644,8 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
    * because the handler hasn't returned yet; disclosure.result is
    * silently ignored on that path with a warning. The optional local
    * substrate shadow probe is fire-and-forget and never replaces local
-   * signing in this path.
+   * signing in this path. The optional commit path runs later after the tool
+   * succeeds, so failed tool calls never queue a local or coordinator record.
    */
   const buildSignedRecord = async (
     request: Record<string, unknown>,
@@ -864,12 +904,16 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
 
     return {
       signed,
+      recordBody: record,
       recordHashHex,
       contextId,
       sessionToken,
       inboundTraceparent,
       eventType,
       parentRecordHashSeeded,
+      ...(parentRecordHashSeeded && parentRecordHashSeed
+        ? { parentRecordHash: parentRecordHashSeed }
+        : {}),
     }
   }
 
@@ -917,6 +961,114 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       })
   }
 
+  const dispatchLocalSubstrateCommit = (
+    built: BuiltRecord,
+    priority: 'high' | 'normal',
+    sidecar?: OnRecordSidecar,
+  ): void => {
+    const commit = options.localSubstrateCommit
+    if (!commit) {
+      queue.submit(built.signed, priority, sidecar)
+      return
+    }
+
+    const expectedRecordHash = `sha256:${built.recordHashHex}`
+    const request: LocalSubstrateCoordinatorRequest = {
+      schema: LOCAL_SUBSTRATE_REQUEST_SCHEMA,
+      operation: 'sign_record',
+      mode: 'commit',
+      producer: commit.producer,
+      context: {
+        source: '@atrib/mcp',
+        context_id: built.contextId,
+        chain_tail: built.signed.chain_root,
+        ...(built.parentRecordHash !== undefined
+          ? { parent_record_hash: built.parentRecordHash }
+          : {}),
+      },
+      record_body: built.recordBody,
+      degradation: commit.degradation ?? DEFAULT_LOCAL_SUBSTRATE_COMMIT_DEGRADATION,
+    }
+
+    const attempt = tryLocalSubstrateCoordinator(request, {
+      transport: commit.transport,
+      ...(commit.timeoutMs !== undefined ? { timeoutMs: commit.timeoutMs } : {}),
+      expectedHarnessClass: commit.producer.harness_class,
+      directRecordBody: built.recordBody,
+    })
+      .then((result) => {
+        const responseRecordHash =
+          result.ok || result.status === 'rejected' ? result.response?.record_hash : undefined
+        const recordHashMatches = responseRecordHash === expectedRecordHash
+        if (commit.onAttempt) {
+          try {
+            const observed = commit.onAttempt({
+              request,
+              result,
+              expectedRecordHash,
+              ...(responseRecordHash !== undefined ? { responseRecordHash } : {}),
+              recordHashMatches,
+            })
+            void Promise.resolve(observed).catch((error) => {
+              notifyLocalSubstrateCommitWarning(
+                commit,
+                'local substrate commit observer rejected',
+                error,
+              )
+            })
+          } catch (error) {
+            notifyLocalSubstrateCommitWarning(
+              commit,
+              'local substrate commit observer threw',
+              error,
+            )
+          }
+        }
+
+        if (result.ok && recordHashMatches) {
+          return
+        }
+
+        if (result.ok && !recordHashMatches) {
+          notifyLocalSubstrateCommitWarning(commit, 'local substrate commit record_hash mismatch', {
+            expected_record_hash: expectedRecordHash,
+            response_record_hash: responseRecordHash ?? null,
+          })
+        }
+        queue.submit(built.signed, priority, sidecar)
+      })
+      .catch((error) => {
+        notifyLocalSubstrateCommitWarning(
+          commit,
+          'local substrate commit failed unexpectedly',
+          error,
+        )
+        queue.submit(built.signed, priority, sidecar)
+      })
+
+    pendingLocalSubstrateCommits.push(attempt)
+    void attempt.finally(() => {
+      const idx = pendingLocalSubstrateCommits.indexOf(attempt)
+      if (idx !== -1) pendingLocalSubstrateCommits.splice(idx, 1)
+    })
+  }
+
+  const notifyLocalSubstrateCommitWarning = (
+    commit: LocalSubstrateCommitOptions,
+    message: string,
+    detail?: unknown,
+  ): void => {
+    if (commit.onWarning) {
+      try {
+        commit.onWarning(`atrib: ${message}`, detail)
+        return
+      } catch {
+        // Warning observers must not affect the signed record path.
+      }
+    }
+    console.warn(`atrib: ${message}`, detail)
+  }
+
   /**
    * Commit a built record: run the onRecord observer, attach outbound
    * context to the result, queue for log submission, update autoChain
@@ -962,9 +1114,11 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
 
     // 5.3.5: Non-blocking log submission. Transaction records (1.7 commerce hooks)
     // are admitted at high priority so they are not delayed behind tool_call backlog.
+    // In local-substrate commit mode, queue ownership moves to the coordinator
+    // only after a bounded hash-matching attempt accepts the same signed bytes.
     const priority: 'high' | 'normal' =
       built.eventType === EVENT_TYPE_TRANSACTION_URI ? 'high' : 'normal'
-    queue.submit(built.signed, priority, sidecar)
+    dispatchLocalSubstrateCommit(built, priority, sidecar)
     if (built.parentRecordHashSeeded) {
       parentRecordHashSeedConsumed = true
     }
@@ -1106,7 +1260,13 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     }
   }
 
-  atribServer.flush = () => queue.flush()
+  atribServer.flush = async () => {
+    while (pendingLocalSubstrateCommits.length > 0) {
+      const inFlight = pendingLocalSubstrateCommits.splice(0)
+      await Promise.allSettled(inFlight)
+    }
+    await queue.flush()
+  }
   atribServer.getProof = (hash: string) => queue.getProof(hash)
 
   // §5.6.3: Zero the private key and mark as destroyed. After this call,

@@ -45,7 +45,7 @@ export const ArchiveSubmissionSchema = z.object({
 export type ArchiveSubmissionConfig = z.infer<typeof ArchiveSubmissionSchema>
 
 export const LocalSubstrateSchema = z.object({
-  mode: z.literal('shadow').default('shadow'),
+  mode: z.enum(['shadow', 'commit']).default('shadow'),
   endpoint: z.string().url(),
   timeoutMs: z.number().int().positive().optional(),
   headers: z.record(z.string(), z.string()).optional(),
@@ -110,9 +110,10 @@ export const WrapConfigSchema = z.object({
   archiveSubmission: ArchiveSubmissionSchema.optional(),
 
   /**
-   * Optional startup-spawn local substrate shadow probe. The wrapper sends the
-   * exact unsigned record body to this endpoint in shadow mode, while the
-   * wrapper still signs and commits locally.
+   * Optional startup-spawn local substrate path. Shadow mode sends the exact
+   * unsigned record body to the coordinator while the wrapper still queues
+   * locally. Commit mode skips the wrapper's local queue only after the
+   * coordinator accepts the same record_hash.
    */
   localSubstrate: LocalSubstrateSchema.optional(),
 
