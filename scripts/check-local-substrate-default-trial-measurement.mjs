@@ -216,6 +216,46 @@ function checkRequiredNamedProfiles() {
   }
 }
 
+function checkRegisteredFutureHarnessProfiles() {
+  const futureStartup = buildDefaultTrialMeasurement(
+    fixtureReport('registered-future-startup-spawn-config.json'),
+    {
+      generatedAt: GENERATED_AT,
+      requiredStartupProfiles: ['future-spawn'],
+      requiredLongLivedProfiles: ['future-agent'],
+    },
+  )
+  if (futureStartup.status !== 'ready_for_default_trial') {
+    fail(`registered future startup profile: expected ready, got ${futureStartup.status}`)
+  }
+  if (statusFor(futureStartup, 'required-startup-profiles') !== 'pass') {
+    fail('registered future startup profile: expected required-startup-profiles=pass')
+  }
+  if (statusFor(futureStartup, 'required-long-lived-profiles') !== 'pass') {
+    fail('registered future startup profile: expected required-long-lived-profiles=pass')
+  }
+  if (!futureStartup.profile_coverage.bridge_http_healthy_profiles.includes('future-spawn')) {
+    fail('registered future startup profile: expected bridge HTTP coverage for future-spawn')
+  }
+
+  const futureLongLived = buildDefaultTrialMeasurement(
+    fixtureReport('registered-future-long-lived-agent-route.json'),
+    {
+      generatedAt: GENERATED_AT,
+      requiredLongLivedProfiles: ['future-agent'],
+    },
+  )
+  if (futureLongLived.status !== 'ready_for_default_trial') {
+    fail(`registered future long-lived profile: expected ready, got ${futureLongLived.status}`)
+  }
+  if (statusFor(futureLongLived, 'required-long-lived-profiles') !== 'pass') {
+    fail('registered future long-lived profile: expected required-long-lived-profiles=pass')
+  }
+  if (!futureLongLived.long_lived_profile_coverage.activity_ok_profiles.includes('future-agent')) {
+    fail('registered future long-lived profile: expected activity coverage for future-agent')
+  }
+}
+
 function checkLongLivedGapFailsMeasurement() {
   const measurement = measurementForReport(fixtureReport('missing-long-lived-agent-route.json'))
   if (measurement.status !== 'not_ready') {
@@ -344,6 +384,7 @@ function main() {
   checkLongLivedGapFailsMeasurement()
   checkLongLivedActivityFailsMeasurement()
   checkRequiredNamedProfiles()
+  checkRegisteredFutureHarnessProfiles()
 
   if (failures.length > 0) {
     for (const failure of failures) process.stderr.write(`FAIL ${failure}\n`)

@@ -90,3 +90,11 @@ pnpm measure:local-substrate
 ```
 
 The measurement reuses the topology collector, then fails closed unless the topology is `ready_for_default_trial`, no stale startup-spawn primitive or bridge wrapper processes remain, every configured startup-spawn profile uses shared primitive HTTP plus healthy bridge HTTP, all known coordinators have empty queues and no stale children or orphan receipts, the watcher receipt join-back report has no join-required backlog, watcher activity is recent, every known long-lived route points at a healthy coordinator endpoint, and every known long-lived route has recent producer activity bound to that route endpoint. Use `--report <path>` to write a JSON baseline for rollout notes. `scripts/check-local-substrate-default-trial-measurement.mjs` pins the ready case plus restart-residue, receipt-backlog, missing watcher activity, missing-long-lived-route, missing-long-lived-activity, and mismatched long-lived endpoint failures, and it runs through `pnpm doc-sync`.
+
+Named profile requirements are part of that post-restart gate, not only the
+private dogfood wrapper. The fixture checker proves current hard-coded profiles
+and registry-discovered future profiles can satisfy
+`--require-startup-profiles` and `--require-long-lived-profiles`. A future
+startup-spawn registry entry therefore needs a matching shared primitive HTTP
+profile, bridge HTTP profile, local-substrate endpoint evidence, and context
+routing evidence before the measurement can pass by name.
