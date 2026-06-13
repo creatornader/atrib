@@ -1,7 +1,7 @@
 # Local Substrate Coordinator
 
-**Status**: DRAFT
-**Spec anchors**: [P042](../../DECISIONS.md#p042-local-substrate-coordinator-for-long-lived-and-multi-harness-dogfood), [§5.8](../../atrib-spec.md#58-degradation-contract), [§5.9](../../atrib-spec.md#59-local-mirror-conventions), [D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers), [D102](../../DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox)
+**Status**: Accepted deployment pattern
+**Spec anchors**: [D120](../../DECISIONS.md#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned), [§5.8](../../atrib-spec.md#58-degradation-contract), [§5.9](../../atrib-spec.md#59-local-mirror-conventions), [D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers), [D102](../../DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox)
 **Builds on**: [Integration patterns](10-integration-patterns.md), [The chain](04-the-chain.md), [The six cognitive primitives](11-cognitive-primitives.md)
 **Enables**: host-owned process control for startup-spawn agents, long-lived local assistants, and watcher WAL pipelines
 
