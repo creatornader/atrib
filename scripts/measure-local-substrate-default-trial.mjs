@@ -290,6 +290,16 @@ function allCoordinatorsClean(report) {
   )
 }
 
+function runtimeVersionsFresh(summary) {
+  if (summary.runtime_versions_checked !== true) return true
+  return (
+    typeof summary.coordinator_version_expected === 'string' &&
+    typeof summary.primitive_runtime_version_expected === 'string' &&
+    Number(summary.coordinator_version_mismatches ?? 0) === 0 &&
+    Number(summary.primitive_runtime_version_mismatches ?? 0) === 0
+  )
+}
+
 function buildDefaultTrialGates(report, options = {}) {
   const summary = report.summary
   const requiredStartupProfiles = options.requiredStartupProfiles ?? []
@@ -325,6 +335,7 @@ function buildDefaultTrialGates(report, options = {}) {
     summary.bridge_runtime_http_endpoints > 0 &&
     summary.bridge_runtime_http_healthy === summary.bridge_runtime_http_endpoints
   const coordinatorHealthClean = allCoordinatorsClean(report)
+  const runtimeVersionsClean = runtimeVersionsFresh(summary)
   const watcherWalAndReceiptsClean =
     summary.watcher_wal_launch_agents > 0 &&
     summary.knowledge_base_receipt_report_status === 'clean' &&
@@ -381,6 +392,13 @@ function buildDefaultTrialGates(report, options = {}) {
       coordinatorHealthClean
         ? 'all known coordinators are healthy with empty queues and no stale children or orphan receipts'
         : 'one or more known coordinators are unreachable, unhealthy, queued, stale, or orphaned',
+    ),
+    gate(
+      'runtime-version-freshness',
+      runtimeVersionsClean,
+      runtimeVersionsClean
+        ? 'coordinators and primitive runtimes match the checked-out package versions'
+        : `coordinator_mismatches=${summary.coordinator_version_mismatches ?? 0}, primitive_mismatches=${summary.primitive_runtime_version_mismatches ?? 0}`,
     ),
     gate(
       'watcher-wal-and-receipts-clean',
@@ -467,6 +485,15 @@ function buildDefaultTrialMeasurement(report, options = {}) {
       coordinators: {
         configured: summary.configured_coordinators,
         healthy: summary.healthy_coordinators,
+        version_expected: summary.coordinator_version_expected,
+        version_mismatches: Number(summary.coordinator_version_mismatches ?? 0),
+      },
+      runtime_versions: {
+        checked: summary.runtime_versions_checked === true,
+        coordinator_expected: summary.coordinator_version_expected,
+        coordinator_mismatches: Number(summary.coordinator_version_mismatches ?? 0),
+        primitive_expected: summary.primitive_runtime_version_expected,
+        primitive_mismatches: Number(summary.primitive_runtime_version_mismatches ?? 0),
       },
       startup_spawn: {
         primitive_runtime_processes: summary.primitive_runtime_processes,
@@ -550,6 +577,7 @@ function formatTextMeasurement(measurement) {
     `local-substrate default-trial measurement: ${measurement.status}`,
     `topology: ${measurement.topology.status}`,
     `coordinators: healthy=${measurement.process_footprint.coordinators.healthy}/${measurement.process_footprint.coordinators.configured}`,
+    `runtime versions: coordinator=${measurement.process_footprint.runtime_versions.coordinator_expected ?? 'unchecked'} mismatches=${measurement.process_footprint.runtime_versions.coordinator_mismatches}, primitive=${measurement.process_footprint.runtime_versions.primitive_expected ?? 'unchecked'} mismatches=${measurement.process_footprint.runtime_versions.primitive_mismatches}`,
     `startup-spawn: primitive-http-shared=${measurement.process_footprint.startup_spawn.primitive_runtime_http_shared}/${measurement.process_footprint.startup_spawn.primitive_runtime_http_processes}, direct-stdio=${measurement.process_footprint.startup_spawn.primitive_runtime_stdio_processes}, proxy=${measurement.process_footprint.startup_spawn.primitive_proxy_processes}, standalone=${measurement.process_footprint.startup_spawn.standalone_primitive_processes}, restart-targets=${measurement.process_footprint.startup_spawn.restart_targets}`,
     `bridge: http=${measurement.process_footprint.bridge.runtime_http_healthy}/${measurement.process_footprint.bridge.runtime_http_endpoints}, runtime=${measurement.process_footprint.bridge.runtime_processes} (http=${measurement.process_footprint.bridge.runtime_http_processes}, proxy=${measurement.process_footprint.bridge.proxy_processes}, stdio-proxy=${measurement.process_footprint.bridge.proxy_stdio_processes}), wrappers=${measurement.process_footprint.bridge.wrapper_processes}, upstream=${measurement.process_footprint.bridge.upstream_processes}`,
     `startup profiles: required=${formatList(measurement.requirements.startup_profiles)}, config=${formatList(measurement.profile_coverage.config_profiles)}, effective=${formatList(measurement.profile_coverage.effective_local_substrate_profiles)}, primitive-http=${formatList(measurement.profile_coverage.primitive_http_shared_profiles)}, bridge-http=${formatList(measurement.profile_coverage.bridge_http_healthy_profiles)}, context-ready=${formatList(measurement.profile_coverage.context_ready_profiles)}`,

@@ -176,6 +176,89 @@ function checkBridgeProxyProcessFootprint() {
   }
 }
 
+function withExpectedRuntimeVersions(snapshot, versions) {
+  return {
+    ...snapshot,
+    expected_runtime_versions: versions,
+  }
+}
+
+function checkRuntimeVersionFreshness() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const freshSnapshot = withExpectedRuntimeVersions(JSON.parse(JSON.stringify(fixture.snapshot)), {
+    coordinator: '0.15.0',
+    primitive_runtime: '0.2.0',
+  })
+  const fresh = measurementForReport(buildReport(freshSnapshot, { generatedAt: GENERATED_AT }))
+  if (fresh.status !== 'ready_for_default_trial') {
+    fail(`fresh runtime versions: expected ready, got ${fresh.status}`)
+  }
+  if (statusFor(fresh, 'runtime-version-freshness') !== 'pass') {
+    fail('fresh runtime versions: expected runtime-version-freshness=pass')
+  }
+
+  const staleCoordinatorSnapshot = withExpectedRuntimeVersions(
+    JSON.parse(JSON.stringify(fixture.snapshot)),
+    {
+      coordinator: '0.16.0',
+      primitive_runtime: '0.2.0',
+    },
+  )
+  const staleCoordinator = measurementForReport(
+    buildReport(staleCoordinatorSnapshot, { generatedAt: GENERATED_AT }),
+  )
+  if (staleCoordinator.status !== 'not_ready') {
+    fail(`stale coordinator version: expected not_ready, got ${staleCoordinator.status}`)
+  }
+  if (statusFor(staleCoordinator, 'runtime-version-freshness') !== 'fail') {
+    fail('stale coordinator version: expected runtime-version-freshness=fail')
+  }
+  if (staleCoordinator.process_footprint.runtime_versions.coordinator_mismatches !== 3) {
+    fail('stale coordinator version: expected three coordinator mismatches')
+  }
+
+  const stalePrimitiveSnapshot = withExpectedRuntimeVersions(
+    JSON.parse(JSON.stringify(fixture.snapshot)),
+    {
+      coordinator: '0.15.0',
+      primitive_runtime: '0.3.0',
+    },
+  )
+  const stalePrimitive = measurementForReport(
+    buildReport(stalePrimitiveSnapshot, { generatedAt: GENERATED_AT }),
+  )
+  if (stalePrimitive.status !== 'not_ready') {
+    fail(`stale primitive version: expected not_ready, got ${stalePrimitive.status}`)
+  }
+  if (statusFor(stalePrimitive, 'runtime-version-freshness') !== 'fail') {
+    fail('stale primitive version: expected runtime-version-freshness=fail')
+  }
+  if (stalePrimitive.process_footprint.runtime_versions.primitive_mismatches !== 3) {
+    fail('stale primitive version: expected three primitive mismatches')
+  }
+
+  const missingExpectedSnapshot = withExpectedRuntimeVersions(
+    JSON.parse(JSON.stringify(fixture.snapshot)),
+    {
+      checked: true,
+      coordinator: null,
+      primitive_runtime: '0.2.0',
+    },
+  )
+  const missingExpected = measurementForReport(
+    buildReport(missingExpectedSnapshot, { generatedAt: GENERATED_AT }),
+  )
+  if (missingExpected.status !== 'not_ready') {
+    fail(`missing expected runtime version: expected not_ready, got ${missingExpected.status}`)
+  }
+  if (statusFor(missingExpected, 'runtime-version-freshness') !== 'fail') {
+    fail('missing expected runtime version: expected runtime-version-freshness=fail')
+  }
+  if (missingExpected.process_footprint.runtime_versions.checked !== true) {
+    fail('missing expected runtime version: expected checked=true')
+  }
+}
+
 function checkRequiredNamedProfiles() {
   const report = fixtureReport('healthy-collapsed-startup-spawn.json')
   const measurement = buildDefaultTrialMeasurement(report, {
@@ -380,6 +463,7 @@ function main() {
   checkRestartResidueFailsMeasurement()
   checkReceiptBacklogFailsMeasurement()
   checkBridgeProxyProcessFootprint()
+  checkRuntimeVersionFreshness()
   checkWatcherActivityFailsMeasurement()
   checkLongLivedGapFailsMeasurement()
   checkLongLivedActivityFailsMeasurement()
