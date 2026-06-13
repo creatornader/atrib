@@ -243,6 +243,37 @@ function checkRouteRegistryDiagnosticsGate() {
   }
 }
 
+function checkConfigSurfaceEndpointEvidence() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const report = buildReport(fixture.snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  const codex = report.config_surfaces.find((config) => config.name === 'codex')
+  const claudeCode = report.config_surfaces.find((config) => config.name === 'claude-code')
+  if (!codex) {
+    fail('config endpoint evidence: missing codex config surface')
+  } else if (codex.local_substrate_endpoints.length !== 0) {
+    fail('config endpoint evidence: expected raw Codex config endpoint list to stay empty')
+  } else if (
+    codex.effective_local_substrate_endpoints[0] !==
+    'http://127.0.0.1:8797/atrib/local-substrate'
+  ) {
+    fail('config endpoint evidence: expected Codex effective endpoint from primitive profile')
+  } else if (
+    codex.local_substrate_endpoint_evidence[0]?.source !== 'primitive-runtime-profile'
+  ) {
+    fail('config endpoint evidence: expected Codex primitive-runtime-profile evidence source')
+  }
+  if (!claudeCode) {
+    fail('config endpoint evidence: missing claude-code config surface')
+  } else if (
+    claudeCode.effective_local_substrate_endpoints[0] !==
+    'http://127.0.0.1:8788/atrib/local-substrate'
+  ) {
+    fail('config endpoint evidence: expected Claude Code effective endpoint from primitive profile')
+  }
+}
+
 function checkPrimitiveBackendContractGate() {
   const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
@@ -815,6 +846,7 @@ function main() {
   }
   checkRouteRegistryNormalization()
   checkRouteRegistryDiagnosticsGate()
+  checkConfigSurfaceEndpointEvidence()
   checkPrimitiveBackendContractGate()
   checkExplicitContextPolicyGate()
   checkKnowledgeBaseReceiptJoinGate()
