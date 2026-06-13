@@ -38,8 +38,12 @@
         "has_primitives_runtime": true,
         "standalone_primitive_servers": [],
         "local_substrate_endpoints": [],
-        "primitive_http_endpoints": ["http://127.0.0.1:8796/mcp"],
-        "bridge_http_endpoints": ["http://127.0.0.1:8794/mcp"]
+        "primitive_http_endpoints": [
+          "http://127.0.0.1:8796/mcp"
+        ],
+        "bridge_http_endpoints": [
+          "http://127.0.0.1:8794/mcp"
+        ]
       },
       {
         "name": "claude-code",
@@ -49,8 +53,12 @@
         "has_primitives_runtime": true,
         "standalone_primitive_servers": [],
         "local_substrate_endpoints": [],
-        "primitive_http_endpoints": ["http://127.0.0.1:8795/mcp"],
-        "bridge_http_endpoints": ["http://127.0.0.1:8793/mcp"]
+        "primitive_http_endpoints": [
+          "http://127.0.0.1:8795/mcp"
+        ],
+        "bridge_http_endpoints": [
+          "http://127.0.0.1:8793/mcp"
+        ]
       }
     ],
     "launch_agents": [
@@ -285,6 +293,36 @@
         "total": 0
       },
       "caveats": 2
+    },
+    "long_lived_activity_report": {
+      "schema": "atrib.long-lived-agent-activity-report.v0",
+      "path": "~/.atrib/state/local-substrate/long-lived-activity-latest.json",
+      "exists": true,
+      "status": "clean",
+      "generated_at": "2026-06-10T23:00:00.000Z",
+      "age_ms": 3600000,
+      "max_age_ms": 43200000,
+      "max_activity_age_ms": 43200000,
+      "stale": false,
+      "activities": [
+        {
+          "label": "ai.hermes.gateway",
+          "agent": "hermes",
+          "status": "ok",
+          "last_activity_at": "2026-06-10T22:45:00.000Z",
+          "age_ms": 900000,
+          "stale": false,
+          "record_hash": "sha256:505ee3512b9444767673df49d656f1d288c135f517458a03ae71171a1eec9d7a",
+          "route_endpoint": "http://127.0.0.1:8788/atrib/local-substrate",
+          "producer": "hermes"
+        }
+      ],
+      "counts": {
+        "total": 1,
+        "ok": 1,
+        "stale": 0,
+        "error": 0
+      }
     }
   },
   "expected": {
@@ -301,7 +339,11 @@
       "active_session_profiles": 2,
       "active_session_profiles_valid": 2,
       "knowledge_base_receipt_report_status": "clean",
-      "knowledge_base_receipt_pending_total": 0
+      "knowledge_base_receipt_pending_total": 0,
+      "long_lived_activity_report_status": "clean",
+      "long_lived_agent_activity_ok": 1,
+      "long_lived_agent_activity_missing": 0,
+      "long_lived_agent_activity_stale": 0
     },
     "gates": {
       "coordinator-health": "pass",
@@ -313,7 +355,8 @@
       "broad-default-readiness": "pass",
       "host-owned-bridge-http": "pass",
       "host-owned-active-session-context": "pass",
-      "knowledge-base-receipt-join-back": "pass"
+      "knowledge-base-receipt-join-back": "pass",
+      "long-lived-agent-activity": "pass"
     }
   }
 }

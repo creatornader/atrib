@@ -30,9 +30,16 @@ const DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_PATH =
   (existsSync(DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_GENERIC_PATH)
     ? DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_GENERIC_PATH
     : DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_LEGACY_PATH)
+const LONG_LIVED_ACTIVITY_REPORT_SCHEMA = 'atrib.long-lived-agent-activity-report.v0'
+const DEFAULT_LONG_LIVED_ACTIVITY_REPORT_PATH = join(
+  HOME,
+  '.atrib/state/local-substrate/long-lived-activity-latest.json',
+)
 const DEFAULT_HEALTH_TIMEOUT_MS = 1500
 const DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_MAX_AGE_MS = 30 * 3_600_000
+const DEFAULT_LONG_LIVED_ACTIVITY_REPORT_MAX_AGE_MS = 12 * 3_600_000
 const HEX_32 = /^[0-9a-f]{32}$/
+const RECORD_HASH = /^sha256:[0-9a-f]{64}$/
 const ACTIVE_SESSION_STATE_MAX_BYTES = 128
 const SAFE_ACTIVE_SESSION_PROFILE = /^[A-Za-z0-9._-]{1,64}$/
 const ACTIVE_SESSION_STATE_DIR = join(HOME, '.claude', 'state')
@@ -78,14 +85,17 @@ Options:
   --route-registry <path> Read supervised agent routes from a JSON registry.
   --knowledge-base-receipt-report <path>
                           Read the knowledge-base receipt join-back report.
+  --long-lived-activity-report <path>
+                          Read the long-lived producer activity report.
   --timeout-ms <n>        Live coordinator health timeout. Defaults to 1500.
   --help                  Print this help.
 
 The live report reads process rows, local MCP config summaries, launchd
 service metadata, an optional route registry for supervised agents and
 startup-spawn config summaries, the knowledge-base receipt join-back report, and
-local-substrate health probes. It does not print raw config files, raw pending
-receipt rows, or environment secrets.
+the long-lived producer activity report, and local-substrate health probes. It
+does not print raw config files, raw pending receipt rows, raw producer logs, or
+environment secrets.
 `
 }
 
@@ -95,6 +105,7 @@ function parseArgs(argv) {
     snapshotPath: undefined,
     routeRegistryPath: DEFAULT_ROUTE_REGISTRY_PATH,
     knowledgeBaseReceiptReportPath: DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_PATH,
+    longLivedActivityReportPath: DEFAULT_LONG_LIVED_ACTIVITY_REPORT_PATH,
     timeoutMs: DEFAULT_HEALTH_TIMEOUT_MS,
     help: false,
   }
@@ -113,6 +124,8 @@ function parseArgs(argv) {
         ++i,
         '--knowledge-base-receipt-report',
       )
+    } else if (arg === '--long-lived-activity-report') {
+      out.longLivedActivityReportPath = requireValue(argv, ++i, '--long-lived-activity-report')
     } else if (arg === '--timeout-ms') {
       out.timeoutMs = parsePositiveInt(requireValue(argv, ++i, '--timeout-ms'), '--timeout-ms')
     } else if (arg === '--help' || arg === '-h') {
@@ -210,7 +223,11 @@ function parsePsStart(raw) {
 }
 
 function serviceNameForCommand(command) {
-  if (command.includes('/services/atrib-primitives/dist/index.js')) return 'atrib-primitives'
+  if (command.includes('/services/atrib-primitives/dist/index.js')) {
+    return primitiveRuntimeTransport({ command }) === 'stdio-http-proxy'
+      ? 'atrib-primitives-proxy'
+      : 'atrib-primitives'
+  }
   if (command.includes('/local-substrate-host.js')) return 'atrib-local-substrate'
   for (const name of PRIMITIVE_SERVERS) {
     const stem = name.replace('atrib-', '')
@@ -249,6 +266,7 @@ function summarizeProcesses(processes) {
   const primitiveRuntimeStdio = primitiveRuntime.filter(
     (row) => primitiveRuntimeTransport(row) === 'stdio',
   )
+  const primitiveProxy = rows.filter((row) => row.service === 'atrib-primitives-proxy')
   const coordinator = rows.filter((row) => row.service === 'atrib-local-substrate')
   const bridgeSummary = summarizeBridgeProcesses(rows, byPid)
   const standalone = rows.filter((row) => PRIMITIVE_SERVERS.includes(row.service))
@@ -287,12 +305,30 @@ function summarizeProcesses(processes) {
     })
     .sort((a, b) => b.process_count - a.process_count || a.ppid - b.ppid)
 
+  const proxyGroups = [...groupBy(primitiveProxy, (row) => row.ppid).entries()]
+    .map(([ppid, group]) => {
+      const parent = byPid.get(ppid)
+      return {
+        ppid,
+        parent_service: parent?.service ?? 'unknown',
+        transport: unique(group.map((row) => primitiveRuntimeTransport(row))).join('+'),
+        process_count: group.length,
+        pids: group.map((row) => row.pid).sort((a, b) => a - b),
+        ...startWindow(group),
+      }
+    })
+    .sort((a, b) => b.process_count - a.process_count || a.ppid - b.ppid)
+
   return {
     total_processes_seen: rows.length,
     coordinator_processes: coordinator.length,
     primitive_runtime_processes: primitiveRuntime.length,
     primitive_runtime_http_processes: primitiveRuntimeHttp.length,
     primitive_runtime_stdio_processes: primitiveRuntimeStdio.length,
+    primitive_proxy_processes: primitiveProxy.length,
+    primitive_proxy_stdio_processes: primitiveProxy.filter(
+      (row) => primitiveRuntimeTransport(row) === 'stdio-http-proxy',
+    ).length,
     standalone_primitive_processes: standalone.length,
     standalone_primitive_groups: standaloneGroups.length,
     standalone_primitive_generations: standaloneGroups.reduce(
@@ -308,6 +344,7 @@ function summarizeProcesses(processes) {
     obsolete_standalone_primitive_generations: 0,
     ...bridgeSummary,
     runtime_groups: runtimeGroups,
+    proxy_groups: proxyGroups,
     standalone_groups: standaloneGroups,
   }
 }
@@ -483,6 +520,7 @@ function annotateBridgeConfigDrift(processSummary, configs) {
 }
 
 function primitiveRuntimeTransport(row) {
+  if (row.command.includes('--transport stdio-http-proxy')) return 'stdio-http-proxy'
   return row.command.includes('--transport streamable-http') || row.command.includes('--http')
     ? 'streamable-http'
     : 'stdio'
@@ -534,9 +572,9 @@ function summarizeCodexConfig(path) {
   })
 }
 
-function summarizeClaudeConfig(path) {
+function summarizeClaudeConfig(path, name = 'claude-code') {
   if (!existsSync(path)) {
-    return missingConfig('claude-code', path)
+    return missingConfig(name, path)
   }
   try {
     const parsed = readJson(path)
@@ -552,19 +590,17 @@ function summarizeClaudeConfig(path) {
         endpointValues.push(env.ATRIB_LOCAL_SUBSTRATE_ENDPOINT)
     }
     const primitiveServer = servers['atrib-primitives']
-    if (
-      primitiveServer &&
-      typeof primitiveServer === 'object' &&
-      typeof primitiveServer.url === 'string'
-    ) {
-      primitiveHttpEndpoints.push(primitiveServer.url)
+    const primitiveEndpoint = httpEndpointFromMcpServer(primitiveServer)
+    if (primitiveEndpoint) {
+      primitiveHttpEndpoints.push(primitiveEndpoint)
     }
     const bridgeServer = servers['agent-bridge']
-    if (bridgeServer && typeof bridgeServer === 'object' && typeof bridgeServer.url === 'string') {
-      bridgeHttpEndpoints.push(bridgeServer.url)
+    const bridgeEndpoint = httpEndpointFromMcpServer(bridgeServer)
+    if (bridgeEndpoint) {
+      bridgeHttpEndpoints.push(bridgeEndpoint)
     }
     return summarizeServerConfig({
-      name: 'claude-code',
+      name,
       path,
       serverNames,
       endpointValues,
@@ -574,7 +610,7 @@ function summarizeClaudeConfig(path) {
     })
   } catch (error) {
     return {
-      name: 'claude-code',
+      name,
       path: displayPath(path),
       exists: true,
       parse_error: error instanceof Error ? error.message : String(error),
@@ -585,6 +621,22 @@ function summarizeClaudeConfig(path) {
       bridge_http_endpoints: [],
     }
   }
+}
+
+function httpEndpointFromMcpServer(server) {
+  if (!server || typeof server !== 'object') return undefined
+  if (typeof server.url === 'string') return server.url
+  const env = server.env && typeof server.env === 'object' ? server.env : {}
+  if (typeof env.ATRIB_PRIMITIVES_HTTP_ENDPOINT === 'string') {
+    return env.ATRIB_PRIMITIVES_HTTP_ENDPOINT
+  }
+  if (typeof env.AGENT_BRIDGE_HTTP_ENDPOINT === 'string') {
+    return env.AGENT_BRIDGE_HTTP_ENDPOINT
+  }
+  const args = Array.isArray(server.args) ? server.args : []
+  const endpointIndex = args.indexOf('--endpoint')
+  const endpoint = endpointIndex >= 0 ? args[endpointIndex + 1] : undefined
+  return typeof endpoint === 'string' ? endpoint : undefined
 }
 
 function missingConfig(name, path) {
@@ -936,6 +988,175 @@ function collectKnowledgeBaseReceiptReport({
     },
     caveats: Array.isArray(raw.caveats) ? raw.caveats.length : undefined,
   }
+}
+
+function collectLongLivedActivityReport({
+  path = DEFAULT_LONG_LIVED_ACTIVITY_REPORT_PATH,
+  maxAgeMs = DEFAULT_LONG_LIVED_ACTIVITY_REPORT_MAX_AGE_MS,
+} = {}) {
+  const expandedPath = expandHomePath(path)
+  const display = expandedPath ? displayPath(expandedPath) : path
+  if (!expandedPath || !existsSync(expandedPath)) {
+    return {
+      path: display,
+      exists: false,
+      status: 'absent',
+      max_age_ms: maxAgeMs,
+      activities: [],
+    }
+  }
+
+  let raw
+  try {
+    raw = readJson(expandedPath)
+  } catch (error) {
+    return {
+      path: display,
+      exists: true,
+      status: 'parse_error',
+      reason: error instanceof Error ? error.message : String(error),
+      max_age_ms: maxAgeMs,
+      activities: [],
+    }
+  }
+
+  const generatedAtMs =
+    typeof raw?.generated_at === 'string' ? Date.parse(raw.generated_at) : Number.NaN
+  let fileMtimeMs = Number.NaN
+  try {
+    fileMtimeMs = statSync(expandedPath).mtimeMs
+  } catch {
+    fileMtimeMs = Number.NaN
+  }
+  const ageSourceMs = Number.isFinite(generatedAtMs) ? generatedAtMs : fileMtimeMs
+  const ageMs = Number.isFinite(ageSourceMs) ? Math.max(0, Date.now() - ageSourceMs) : undefined
+  const reportMaxAgeMs = positiveInteger(raw?.max_age_ms) ?? maxAgeMs
+  const activityMaxAgeMs = positiveInteger(raw?.max_activity_age_ms) ?? reportMaxAgeMs
+  const rawActivities = Array.isArray(raw?.activities)
+    ? raw.activities
+    : Array.isArray(raw?.agents)
+      ? raw.agents
+      : undefined
+
+  if (raw?.schema !== undefined && raw.schema !== LONG_LIVED_ACTIVITY_REPORT_SCHEMA) {
+    return {
+      path: display,
+      exists: true,
+      status: 'invalid_shape',
+      reason: `schema must be ${LONG_LIVED_ACTIVITY_REPORT_SCHEMA}`,
+      generated_at: typeof raw?.generated_at === 'string' ? raw.generated_at : undefined,
+      age_ms: ageMs === undefined ? undefined : Math.round(ageMs),
+      max_age_ms: reportMaxAgeMs,
+      activities: [],
+    }
+  }
+
+  if (!Array.isArray(rawActivities)) {
+    return {
+      path: display,
+      exists: true,
+      status: 'invalid_shape',
+      reason: 'activities must be an array',
+      generated_at: typeof raw?.generated_at === 'string' ? raw.generated_at : undefined,
+      age_ms: ageMs === undefined ? undefined : Math.round(ageMs),
+      max_age_ms: reportMaxAgeMs,
+      activities: [],
+    }
+  }
+
+  const normalized = []
+  const invalid = []
+  for (const [index, activity] of rawActivities.entries()) {
+    const item = normalizeLongLivedActivity(activity, {
+      index,
+      maxAgeMs: activityMaxAgeMs,
+    })
+    if (item.invalid) invalid.push(item.invalid)
+    else normalized.push(item)
+  }
+
+  if (invalid.length > 0) {
+    return {
+      path: display,
+      exists: true,
+      status: 'invalid_shape',
+      reason: invalid.slice(0, 3).join('; '),
+      generated_at: typeof raw?.generated_at === 'string' ? raw.generated_at : undefined,
+      age_ms: ageMs === undefined ? undefined : Math.round(ageMs),
+      max_age_ms: reportMaxAgeMs,
+      max_activity_age_ms: activityMaxAgeMs,
+      activities: [],
+    }
+  }
+
+  const stale = ageMs === undefined ? true : ageMs > reportMaxAgeMs
+  const ok = normalized.filter((item) => item.status === 'ok' && !item.stale).length
+  const staleActivities = normalized.filter((item) => item.status === 'ok' && item.stale).length
+  const errors = normalized.filter((item) => item.status !== 'ok').length
+  const status =
+    errors > 0
+      ? 'backlog'
+      : stale || staleActivities > 0
+        ? 'stale'
+        : normalized.length > 0
+          ? 'clean'
+          : 'empty'
+
+  return {
+    path: display,
+    exists: true,
+    status,
+    generated_at: typeof raw.generated_at === 'string' ? raw.generated_at : undefined,
+    age_ms: ageMs === undefined ? undefined : Math.round(ageMs),
+    max_age_ms: reportMaxAgeMs,
+    max_activity_age_ms: activityMaxAgeMs,
+    stale,
+    activities: normalized,
+    counts: {
+      total: normalized.length,
+      ok,
+      stale: staleActivities,
+      error: errors,
+    },
+  }
+}
+
+function normalizeLongLivedActivity(activity, { index, maxAgeMs }) {
+  if (!activity || typeof activity !== 'object') {
+    return { invalid: `activities[${index}] must be an object` }
+  }
+  const label = safeLabel(stringValue(activity.label))
+  const agent = safeLabel(stringValue(activity.agent))
+  if (!label && !agent) {
+    return { invalid: `activities[${index}] requires label or agent` }
+  }
+  const status = stringValue(activity.status) ?? 'unknown'
+  const lastActivityAt = stringValue(activity.last_activity_at)
+  const lastActivityMs = lastActivityAt ? Date.parse(lastActivityAt) : Number.NaN
+  const ageMs = Number.isFinite(lastActivityMs) ? Math.max(0, Date.now() - lastActivityMs) : undefined
+  const recordHash = stringValue(activity.record_hash)
+  const endpoint = endpointList(
+    stringValue(activity.route_endpoint) ??
+      stringValue(activity.endpoint) ??
+      stringValue(activity.coordinator_endpoint),
+  )[0]
+
+  return withoutUndefinedValues({
+    label,
+    agent,
+    status,
+    last_activity_at: Number.isFinite(lastActivityMs) ? lastActivityAt : undefined,
+    age_ms: ageMs === undefined ? undefined : Math.round(ageMs),
+    stale: ageMs === undefined ? true : ageMs > maxAgeMs,
+    record_hash: recordHash && RECORD_HASH.test(recordHash) ? recordHash : undefined,
+    route_endpoint: endpoint,
+    producer: safeLabel(stringValue(activity.producer)),
+  })
+}
+
+function safeLabel(value) {
+  if (!value) return undefined
+  return /^[A-Za-z0-9._:-]{1,128}$/.test(value) ? value : undefined
 }
 
 function isNonNegativeInteger(value) {
@@ -1342,6 +1563,7 @@ async function collectLiveSnapshot({
   timeoutMs = DEFAULT_HEALTH_TIMEOUT_MS,
   routeRegistryPath = DEFAULT_ROUTE_REGISTRY_PATH,
   knowledgeBaseReceiptReportPath = DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_PATH,
+  longLivedActivityReportPath = DEFAULT_LONG_LIVED_ACTIVITY_REPORT_PATH,
 } = {}) {
   const launchAgents = collectLaunchAgents()
   const longLivedAgents = collectLongLivedAgents({ routeRegistryPath })
@@ -1349,6 +1571,10 @@ async function collectLiveSnapshot({
   const configs = dedupeServerConfigs([
     summarizeCodexConfig(join(HOME, '.codex/config.toml')),
     summarizeClaudeConfig(join(HOME, '.claude.json')),
+    summarizeClaudeConfig(
+      join(HOME, 'Library/Application Support/Claude/claude_desktop_config.json'),
+      'claude-desktop',
+    ),
     ...collectRegisteredStartupSpawnConfigs(routeRegistryPath),
   ])
   const endpoints = unique([
@@ -1395,6 +1621,9 @@ async function collectLiveSnapshot({
     bridge_runtime_health: bridgeRuntimeHealth,
     knowledge_base_receipt_report: collectKnowledgeBaseReceiptReport({
       path: knowledgeBaseReceiptReportPath,
+    }),
+    long_lived_activity_report: collectLongLivedActivityReport({
+      path: longLivedActivityReportPath,
     }),
   }
 }
@@ -1576,6 +1805,51 @@ function summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints) {
   }
 }
 
+function summarizeLongLivedActivity(longLivedAgents, activityReport) {
+  const reportStatus = longLivedActivityReportStatus(activityReport)
+  const activities = Array.isArray(activityReport?.activities) ? activityReport.activities : []
+  const byLabel = new Map(activities.filter((item) => item.label).map((item) => [item.label, item]))
+  const byAgent = new Map(activities.filter((item) => item.agent).map((item) => [item.agent, item]))
+  const reportClean = reportStatus === 'clean'
+  const agents = longLivedAgents.map((agent) => {
+    const activity = byLabel.get(agent.label) ?? byAgent.get(agent.agent)
+    const activityOk = Boolean(
+      reportClean && activity && activity.status === 'ok' && activity.stale !== true,
+    )
+    return withoutUndefinedValues({
+      label: agent.label,
+      agent: agent.agent,
+      route_endpoint: agent.endpoint,
+      activity_status: activity?.status ?? 'missing',
+      last_activity_at: activity?.last_activity_at,
+      activity_age_ms: activity?.age_ms,
+      record_hash: activity?.record_hash,
+      route_activity_ok: activityOk,
+    })
+  })
+  return {
+    status: reportStatus,
+    age_ms: activityReport?.age_ms,
+    total: agents.length,
+    ok: agents.filter((agent) => agent.route_activity_ok).length,
+    missing: agents.filter((agent) => agent.activity_status === 'missing').length,
+    stale: agents.filter(
+      (agent) => agent.activity_status !== 'missing' && agent.route_activity_ok !== true,
+    ).length,
+    agents,
+  }
+}
+
+function longLivedActivityReportStatus(report) {
+  if (!report || report.exists === false) return 'absent'
+  if (report.status === 'parse_error' || report.status === 'invalid_shape') return report.status
+  if (report.status === 'clean') return 'clean'
+  if (report.status === 'stale') return 'stale'
+  if (report.status === 'backlog') return 'backlog'
+  if (report.status === 'empty') return 'empty'
+  return 'unknown'
+}
+
 function knowledgeBaseReceiptReportStatus(report) {
   if (!report || report.exists === false) return 'absent'
   if (report.status === 'parse_error' || report.status === 'invalid_shape') return report.status
@@ -1622,6 +1896,7 @@ function buildGates({
   bridgeHealth,
   routeRegistry,
   knowledgeBaseReceiptReport,
+  longLivedActivityReport,
 }) {
   const registryProblems = routeRegistry.filter(
     (item) => item.exists && item.status !== 'valid' && item.status !== 'absent',
@@ -1675,6 +1950,7 @@ function buildGates({
 
   if (
     processSummary.primitive_runtime_processes > 0 &&
+    processSummary.primitive_runtime_stdio_processes === 0 &&
     processSummary.standalone_primitive_processes === 0
   ) {
     gates.push(
@@ -1690,9 +1966,11 @@ function buildGates({
       gate(
         'startup-spawn-mcp-collapse',
         'warn',
-        obsoleteAll
-          ? `${processSummary.primitive_runtime_processes} atrib-primitives process(es) plus ${processSummary.standalone_primitive_processes} obsolete standalone primitive process(es) across ${processSummary.obsolete_standalone_primitive_generations} generation(s); current config no longer declares them`
-          : `${processSummary.primitive_runtime_processes} atrib-primitives process(es) plus ${processSummary.standalone_primitive_processes} standalone primitive process(es)`,
+        processSummary.primitive_runtime_stdio_processes > 0
+          ? `${processSummary.primitive_runtime_stdio_processes} direct stdio atrib-primitives runtime process(es); stdio-only clients should use the proxy backed by shared HTTP`
+          : obsoleteAll
+            ? `${processSummary.primitive_runtime_processes} atrib-primitives process(es) plus ${processSummary.standalone_primitive_processes} obsolete standalone primitive process(es) across ${processSummary.obsolete_standalone_primitive_generations} generation(s); current config no longer declares them`
+            : `${processSummary.primitive_runtime_processes} atrib-primitives process(es) plus ${processSummary.standalone_primitive_processes} standalone primitive process(es)`,
       ),
     )
   } else if (processSummary.standalone_primitive_processes > 0) {
@@ -2011,6 +2289,7 @@ function buildGates({
   }
 
   const longLivedRoutes = summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints)
+  const longLivedActivity = summarizeLongLivedActivity(longLivedAgents, longLivedActivityReport)
   if (longLivedRoutes.total > 0 && longLivedRoutes.healthy === longLivedRoutes.total) {
     gates.push(
       gate(
@@ -2037,6 +2316,46 @@ function buildGates({
     )
   } else {
     gates.push(gate('long-lived-agent-route', 'warn', 'no long-lived agent route evidence found'))
+  }
+
+  if (longLivedRoutes.total === 0) {
+    gates.push(
+      gate(
+        'long-lived-agent-activity',
+        'warn',
+        'no long-lived agent route evidence exists to match against activity',
+      ),
+    )
+  } else if (
+    longLivedActivity.status === 'parse_error' ||
+    longLivedActivity.status === 'invalid_shape'
+  ) {
+    gates.push(
+      gate(
+        'long-lived-agent-activity',
+        'fail',
+        `long-lived activity report is ${longLivedActivity.status}`,
+      ),
+    )
+  } else if (
+    longLivedActivity.status === 'clean' &&
+    longLivedActivity.ok === longLivedActivity.total
+  ) {
+    gates.push(
+      gate(
+        'long-lived-agent-activity',
+        'pass',
+        `${longLivedActivity.ok}/${longLivedActivity.total} known long-lived agent route(s) have recent activity evidence`,
+      ),
+    )
+  } else {
+    gates.push(
+      gate(
+        'long-lived-agent-activity',
+        'warn',
+        `${longLivedActivity.ok}/${longLivedActivity.total} known long-lived agent route(s) have recent activity evidence; report=${longLivedActivity.status}, missing=${longLivedActivity.missing}, stale=${longLivedActivity.stale}`,
+      ),
+    )
   }
 
   const broadReady = gates.every((item) => item.status === 'pass')
@@ -2189,6 +2508,7 @@ function buildReport(input, options = {}) {
     : []
   const routeRegistry = Array.isArray(snapshot.route_registry) ? snapshot.route_registry : []
   const knowledgeBaseReceiptReport = snapshot.knowledge_base_receipt_report
+  const longLivedActivityReport = snapshot.long_lived_activity_report
   const processSummary = annotateBridgeConfigDrift(
     annotateStandaloneConfigDrift(summarizeProcesses(processes), configs),
     configs,
@@ -2199,6 +2519,7 @@ function buildReport(input, options = {}) {
       .map((item) => item.endpoint),
   )
   const longLivedRoutes = summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints)
+  const longLivedActivity = summarizeLongLivedActivity(longLivedAgents, longLivedActivityReport)
   const sharedPrimitiveHttp = primitiveHealth.filter(hasSharedPrimitiveHttpBackend)
   const receiptSummary = knowledgeBaseReceiptSummary(knowledgeBaseReceiptReport)
   const gates = buildGates({
@@ -2212,6 +2533,7 @@ function buildReport(input, options = {}) {
     bridgeHealth,
     routeRegistry,
     knowledgeBaseReceiptReport,
+    longLivedActivityReport,
   })
   const status = statusFromGates(gates, processSummary)
   const restartTargets = restartTargetsFor(processSummary)
@@ -2234,6 +2556,8 @@ function buildReport(input, options = {}) {
       primitive_runtime_processes: processSummary.primitive_runtime_processes,
       primitive_runtime_http_processes: processSummary.primitive_runtime_http_processes,
       primitive_runtime_stdio_processes: processSummary.primitive_runtime_stdio_processes,
+      primitive_proxy_processes: processSummary.primitive_proxy_processes,
+      primitive_proxy_stdio_processes: processSummary.primitive_proxy_stdio_processes,
       primitive_runtime_http_shared: sharedPrimitiveHttp.length,
       standalone_primitive_processes: processSummary.standalone_primitive_processes,
       standalone_primitive_generations: processSummary.standalone_primitive_generations,
@@ -2282,6 +2606,11 @@ function buildReport(input, options = {}) {
       long_lived_agent_routes_configured: longLivedRoutes.configured,
       long_lived_agent_routes_healthy: longLivedRoutes.healthy,
       long_lived_agent_routes_missing: longLivedRoutes.missing,
+      long_lived_activity_report_status: longLivedActivity.status,
+      long_lived_activity_report_age_ms: longLivedActivity.age_ms,
+      long_lived_agent_activity_ok: longLivedActivity.ok,
+      long_lived_agent_activity_missing: longLivedActivity.missing,
+      long_lived_agent_activity_stale: longLivedActivity.stale,
       restart_targets: restartTargets.length,
     },
     gates,
@@ -2290,6 +2619,8 @@ function buildReport(input, options = {}) {
     active_session_state: activeSessionStateSummary(activeSessionState),
     bridge_runtimes: bridgeRuntimeHealthSummary(bridgeHealth),
     knowledge_base_receipt_report: knowledgeBaseReceiptReport,
+    long_lived_activity_report: longLivedActivityReport,
+    long_lived_activity: longLivedActivity.agents,
     route_registry: routeRegistry,
     process_inventory: processSummary,
     restart_targets: restartTargets,
@@ -2302,7 +2633,7 @@ function buildReport(input, options = {}) {
 
 function recommendationsFor({ status, gates, processSummary }) {
   if (status === 'ready_for_default_trial') {
-    return ['run a restart-to-measure pass before widening default config']
+    return ['run pnpm measure:local-substrate after every startup-spawn restart or route edit']
   }
   const recommendations = []
   const gateStatus = (name) => gates.find((item) => item.name === name)?.status
@@ -2319,6 +2650,10 @@ function recommendationsFor({ status, gates, processSummary }) {
   if (obsoleteStandaloneResidue(processSummary)) {
     recommendations.push(
       'fully quit or restart startup-spawn hosts that still own obsolete standalone primitive generations',
+    )
+  } else if (processSummary.primitive_runtime_stdio_processes > 0) {
+    recommendations.push(
+      'route stdio-only startup-spawn clients through the atrib-primitives stdio-http-proxy backed by a shared Streamable HTTP host',
     )
   } else if (processSummary.standalone_primitive_processes > 0) {
     recommendations.push(
@@ -2377,6 +2712,11 @@ function recommendationsFor({ status, gates, processSummary }) {
       'point every known long-lived agent route at a healthy coordinator endpoint before broad rollout',
     )
   }
+  if (gates.find((item) => item.name === 'long-lived-agent-activity')?.status !== 'pass') {
+    recommendations.push(
+      'refresh or repair the long-lived activity report before treating supervised agent routing as clean',
+    )
+  }
   return recommendations
 }
 
@@ -2385,13 +2725,14 @@ function formatTextReport(report) {
     `local-substrate topology: ${report.summary.status}`,
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
     `route registry: ${report.summary.route_registry_status}`,
-    `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, stdio=${report.summary.primitive_runtime_stdio_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
+    `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, direct-stdio=${report.summary.primitive_runtime_stdio_processes}, proxy=${report.summary.primitive_proxy_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `bridge processes: wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
     `active-session profile state: valid=${report.summary.active_session_profiles_valid}/${report.summary.active_session_profiles}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
     `knowledge-base receipt join-back: status=${report.summary.knowledge_base_receipt_report_status}, pending=${report.summary.knowledge_base_receipt_pending_total}, obs=${report.summary.knowledge_base_receipt_observation_pending}, annotations=${report.summary.knowledge_base_receipt_annotation_pending}, wal-queued=${report.summary.knowledge_base_wal_queued}, wal-quarantined=${report.summary.knowledge_base_wal_quarantined}`,
     `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agent_routes}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}, endpoints=${report.summary.long_lived_agent_route_endpoints}`,
+    `long-lived activity: status=${report.summary.long_lived_activity_report_status}, ok=${report.summary.long_lived_agent_activity_ok}/${report.summary.long_lived_agent_routes}, missing=${report.summary.long_lived_agent_activity_missing}, stale=${report.summary.long_lived_agent_activity_stale}`,
     '',
     'gates:',
   ]
@@ -2436,6 +2777,7 @@ async function main() {
         timeoutMs: args.timeoutMs,
         routeRegistryPath: args.routeRegistryPath,
         knowledgeBaseReceiptReportPath: args.knowledgeBaseReceiptReportPath,
+        longLivedActivityReportPath: args.longLivedActivityReportPath,
       })
   const report = buildReport(snapshot)
   process.stdout.write(
@@ -2457,6 +2799,7 @@ export {
   SNAPSHOT_SCHEMA,
   buildReport,
   collectKnowledgeBaseReceiptReport,
+  collectLongLivedActivityReport,
   collectLiveSnapshot,
   collectRegisteredLongLivedAgents,
   collectRegisteredStartupSpawnConfigs,

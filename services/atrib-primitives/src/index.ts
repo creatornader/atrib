@@ -25,6 +25,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -79,13 +80,14 @@ export interface AtribPrimitivesRuntime {
 }
 
 type PrimitiveFactory = () => Promise<PrimitiveHandle> | PrimitiveHandle
-type TransportMode = 'stdio' | 'streamable-http'
+type TransportMode = 'stdio' | 'streamable-http' | 'stdio-http-proxy'
 
 interface CliOptions {
   transport: TransportMode
   host: string
   port: number
   path: string
+  endpoint: string
   json: boolean
   sessionIdleMs: number
   help: boolean
@@ -246,6 +248,44 @@ export async function createAtribPrimitivesRuntime(): Promise<AtribPrimitivesRun
   }
 }
 
+export async function createAtribPrimitivesHttpProxyRuntime(
+  endpoint: string,
+): Promise<AtribPrimitivesRuntime> {
+  const upstreamTransport = new StreamableHTTPClientTransport(new URL(endpoint))
+  const upstream = new Client({
+    name: 'atrib-primitives-stdio-http-proxy',
+    version: readPackageVersion(),
+  })
+  await upstream.connect(upstreamTransport)
+  const listed = await upstream.listTools()
+  const server = new Server(
+    {
+      name: 'atrib-primitives-stdio-http-proxy',
+      version: readPackageVersion(),
+    },
+    {
+      capabilities: { tools: {} },
+      instructions:
+        'Lightweight stdio proxy for atrib primitives. It forwards MCP calls to a host-owned Streamable HTTP primitive runtime.',
+    },
+  )
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: listed.tools }))
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    return upstream.callTool(request.params) as Promise<CallToolResult>
+  })
+
+  return {
+    server,
+    tools: listed.tools,
+    toolNames: listed.tools.map((tool) => tool.name),
+    flush: async () => {},
+    close: async () => {
+      await Promise.allSettled([server.close(), upstream.close(), upstreamTransport.close()])
+    },
+  }
+}
+
 function normalizeMcpPath(raw: string): string {
   const withSlash = raw.startsWith('/') ? raw : `/${raw}`
   let end = withSlash.length
@@ -352,6 +392,9 @@ function parseCliOptions(argv: readonly string[]): CliOptions {
     host: process.env.ATRIB_PRIMITIVES_HTTP_HOST ?? DEFAULT_HTTP_HOST,
     port: parseOptionalPort(process.env.ATRIB_PRIMITIVES_HTTP_PORT) ?? DEFAULT_HTTP_PORT,
     path: process.env.ATRIB_PRIMITIVES_HTTP_PATH ?? DEFAULT_HTTP_PATH,
+    endpoint:
+      process.env.ATRIB_PRIMITIVES_HTTP_ENDPOINT ??
+      httpEndpoint(DEFAULT_HTTP_HOST, DEFAULT_HTTP_PORT, DEFAULT_HTTP_PATH),
     json: false,
     sessionIdleMs:
       parseOptionalPositiveInt(process.env.ATRIB_PRIMITIVES_SESSION_IDLE_MS) ??
@@ -367,10 +410,12 @@ function parseCliOptions(argv: readonly string[]): CliOptions {
       options.transport = 'streamable-http'
     } else if (arg === '--transport') {
       const value = requireArg(argv, ++i, '--transport')
-      if (value !== 'stdio' && value !== 'streamable-http') {
-        throw new Error('--transport must be stdio or streamable-http')
+      if (value !== 'stdio' && value !== 'streamable-http' && value !== 'stdio-http-proxy') {
+        throw new Error('--transport must be stdio, streamable-http, or stdio-http-proxy')
       }
       options.transport = value
+    } else if (arg === '--endpoint') {
+      options.endpoint = requireArg(argv, ++i, '--endpoint')
     } else if (arg === '--host') {
       options.host = requireArg(argv, ++i, '--host')
     } else if (arg === '--port') {
@@ -390,6 +435,7 @@ function parseCliOptions(argv: readonly string[]): CliOptions {
   }
 
   options.path = normalizeMcpPath(options.path)
+  options.endpoint = normalizeHttpEndpoint(options.endpoint, '--endpoint')
   return options
 }
 
@@ -397,10 +443,12 @@ function usage(): string {
   return `Usage:
   atrib-primitives [--transport stdio]
   atrib-primitives --transport streamable-http [--host 127.0.0.1] [--port 8796] [--path /mcp]
+  atrib-primitives --transport stdio-http-proxy --endpoint http://127.0.0.1:8796/mcp
 
 Options:
   --http                         Alias for --transport streamable-http.
-  --transport <mode>             stdio or streamable-http. Defaults to stdio.
+  --transport <mode>             stdio, streamable-http, or stdio-http-proxy. Defaults to stdio.
+  --endpoint <url>               HTTP MCP endpoint for stdio-http-proxy mode.
   --host <host>                  HTTP bind host. Defaults to 127.0.0.1.
   --port <port>                  HTTP bind port. Defaults to 8796. Use 0 for ephemeral.
   --path <path>                  HTTP MCP path. Defaults to /mcp.
@@ -432,6 +480,18 @@ function parsePort(raw: string): number {
 function parseOptionalPositiveInt(raw: string | undefined): number | undefined {
   if (raw === undefined || raw === '') return undefined
   return parsePositiveInt(raw, 'ATRIB_PRIMITIVES_SESSION_IDLE_MS')
+}
+
+function normalizeHttpEndpoint(raw: string, flag: string): string {
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error('unsupported protocol')
+    }
+    return url.toString()
+  } catch {
+    throw new Error(`${flag} must be an absolute HTTP URL`)
+  }
 }
 
 function parsePositiveInt(raw: string, name: string): number {
@@ -665,7 +725,10 @@ async function main(): Promise<void> {
     return
   }
 
-  const runtime = await createAtribPrimitivesRuntime()
+  const runtime =
+    options.transport === 'stdio-http-proxy'
+      ? await createAtribPrimitivesHttpProxyRuntime(options.endpoint)
+      : await createAtribPrimitivesRuntime()
   const shutdown = async () => {
     try {
       await runtime.close()

@@ -63,6 +63,26 @@ async function connectStdioClient(env: NodeJS.ProcessEnv): Promise<Client> {
   }
 }
 
+async function connectProxyClient(endpoint: string, env: NodeJS.ProcessEnv): Promise<Client> {
+  const transport = new StdioClientTransport({
+    command: 'node',
+    args: [BINARY, '--transport', 'stdio-http-proxy', '--endpoint', endpoint],
+    env: processEnvWith(env),
+    stderr: 'pipe',
+  })
+  const client = new Client({
+    name: 'atrib-primitives-stdio-http-proxy-test',
+    version: '0.0.0',
+  })
+  try {
+    await client.connect(transport)
+    return client
+  } catch (error) {
+    await transport.close().catch(() => {})
+    throw error
+  }
+}
+
 async function connectHttpClient(endpoint: string, name: string): Promise<Client> {
   const transport = new StreamableHTTPClientTransport(new URL(endpoint))
   const client = new Client({
@@ -211,6 +231,33 @@ describe('atrib-primitives MCP runtime', () => {
       expect(payload.returned).toBe(0)
     } finally {
       await client.close()
+    }
+  })
+
+  it('proxies stdio clients into a host-owned Streamable HTTP runtime', async () => {
+    const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
+    try {
+      const client = await connectProxyClient(host.endpoint, {
+        ATRIB_RECORD_FILE: recordFile,
+      })
+      try {
+        const listed = await client.listTools()
+        expect(listed.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+        const result = await client.callTool({
+          name: 'recall_my_attribution_history',
+          arguments: { compact: true },
+        })
+        const payload = JSON.parse(result.content[0]!.text) as {
+          total: number
+          returned: number
+        }
+        expect(payload.total).toBe(0)
+        expect(payload.returned).toBe(0)
+      } finally {
+        await client.close()
+      }
+    } finally {
+      await host.close()
     }
   })
 
