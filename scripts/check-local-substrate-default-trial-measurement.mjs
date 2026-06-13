@@ -66,6 +66,9 @@ function checkHealthyMeasurement() {
   if (measurement.process_footprint.long_lived_agents.activity_not_delegated !== 0) {
     fail('healthy measurement: expected zero non-delegated long-lived activities')
   }
+  if (measurement.process_footprint.long_lived_agents.activity_endpoint_mismatch !== 0) {
+    fail('healthy measurement: expected zero long-lived activity endpoint mismatches')
+  }
 }
 
 function checkRestartResidueFailsMeasurement() {
@@ -251,6 +254,27 @@ function checkLongLivedActivityFailsMeasurement() {
   }
   if (nonDelegated.process_footprint.long_lived_agents.activity_stale !== 0) {
     fail('non-delegated long-lived measurement: expected freshness to stay clean')
+  }
+
+  const endpointMismatchFixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const endpointMismatchSnapshot = JSON.parse(JSON.stringify(endpointMismatchFixture.snapshot))
+  for (const activity of endpointMismatchSnapshot.long_lived_activity_report.activities) {
+    activity.route_endpoint = 'http://127.0.0.1:9999/atrib/local-substrate'
+  }
+  const endpointMismatch = measurementForReport(
+    buildReport(endpointMismatchSnapshot, { generatedAt: GENERATED_AT }),
+  )
+  if (endpointMismatch.status !== 'not_ready') {
+    fail(`endpoint-mismatch long-lived measurement: expected not_ready, got ${endpointMismatch.status}`)
+  }
+  if (statusFor(endpointMismatch, 'long-lived-activity-clean') !== 'fail') {
+    fail('endpoint-mismatch long-lived measurement: expected long-lived-activity-clean=fail')
+  }
+  if (endpointMismatch.process_footprint.long_lived_agents.activity_endpoint_mismatch !== 1) {
+    fail('endpoint-mismatch long-lived measurement: expected one endpoint mismatch')
+  }
+  if (endpointMismatch.process_footprint.long_lived_agents.activity_not_delegated !== 0) {
+    fail('endpoint-mismatch long-lived measurement: expected zero non-delegated activities')
   }
 }
 

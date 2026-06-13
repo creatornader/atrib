@@ -1272,15 +1272,24 @@ function normalizeLongLivedActivity(activity, { index, maxAgeMs }) {
   const status = stringValue(activity.status) ?? 'unknown'
   const lastActivityAt = stringValue(activity.last_activity_at)
   const lastActivityMs = lastActivityAt ? Date.parse(lastActivityAt) : Number.NaN
+  if (!Number.isFinite(lastActivityMs)) {
+    return { invalid: `activities[${index}] requires valid last_activity_at` }
+  }
   const ageMs = Number.isFinite(lastActivityMs)
     ? Math.max(0, Date.now() - lastActivityMs)
     : undefined
   const recordHash = stringValue(activity.record_hash)
+  if (!recordHash || !RECORD_HASH.test(recordHash)) {
+    return { invalid: `activities[${index}] requires valid record_hash` }
+  }
   const endpoint = endpointList(
     stringValue(activity.route_endpoint) ??
       stringValue(activity.endpoint) ??
       stringValue(activity.coordinator_endpoint),
   )[0]
+  if (!endpoint) {
+    return { invalid: `activities[${index}] requires loopback route_endpoint` }
+  }
 
   return withoutUndefinedValues({
     label,
@@ -1289,7 +1298,7 @@ function normalizeLongLivedActivity(activity, { index, maxAgeMs }) {
     last_activity_at: Number.isFinite(lastActivityMs) ? lastActivityAt : undefined,
     age_ms: ageMs === undefined ? undefined : Math.round(ageMs),
     stale: ageMs === undefined ? true : ageMs > maxAgeMs,
-    record_hash: recordHash && RECORD_HASH.test(recordHash) ? recordHash : undefined,
+    record_hash: recordHash,
     route_endpoint: endpoint,
     producer: safeLabel(stringValue(activity.producer)),
     local_substrate_mode: safeLabel(stringValue(activity.local_substrate_mode)),
@@ -2052,6 +2061,8 @@ function summarizeLongLivedActivity(longLivedAgents, activityReport) {
   const reportClean = reportStatus === 'clean'
   const agents = longLivedAgents.map((agent) => {
     const activity = byLabel.get(agent.label) ?? byAgent.get(agent.agent)
+    const routeEndpointMatches =
+      Boolean(activity?.route_endpoint) && activity?.route_endpoint === agent.endpoint
     const delegatedCommit =
       activity?.local_substrate_mode === 'commit' &&
       activity?.submission === 'local_substrate_delegated'
@@ -2060,12 +2071,16 @@ function summarizeLongLivedActivity(longLivedAgents, activityReport) {
         activity &&
         activity.status === 'ok' &&
         activity.stale !== true &&
+        activity.record_hash &&
+        routeEndpointMatches &&
         delegatedCommit,
     )
     return withoutUndefinedValues({
       label: agent.label,
       agent: agent.agent,
       route_endpoint: agent.endpoint,
+      activity_route_endpoint: activity?.route_endpoint,
+      activity_route_endpoint_matches: routeEndpointMatches,
       activity_status: activity?.status ?? 'missing',
       last_activity_at: activity?.last_activity_at,
       activity_age_ms: activity?.age_ms,
@@ -2085,10 +2100,17 @@ function summarizeLongLivedActivity(longLivedAgents, activityReport) {
     ok: agents.filter((agent) => agent.route_activity_ok).length,
     missing: agents.filter((agent) => agent.activity_status === 'missing').length,
     stale: present.filter((agent) => agent.activity_stale === true).length,
+    endpoint_mismatch: present.filter(
+      (agent) =>
+        agent.activity_status === 'ok' &&
+        agent.activity_stale !== true &&
+        agent.activity_route_endpoint_matches !== true,
+    ).length,
     not_delegated: present.filter(
       (agent) =>
         agent.activity_status === 'ok' &&
         agent.activity_stale !== true &&
+        agent.activity_route_endpoint_matches === true &&
         agent.delegated_commit !== true,
     ).length,
     agents,
@@ -2950,6 +2972,7 @@ function buildReport(input, options = {}) {
       long_lived_agent_activity_ok: longLivedActivity.ok,
       long_lived_agent_activity_missing: longLivedActivity.missing,
       long_lived_agent_activity_stale: longLivedActivity.stale,
+      long_lived_agent_activity_endpoint_mismatch: longLivedActivity.endpoint_mismatch,
       long_lived_agent_activity_not_delegated: longLivedActivity.not_delegated,
       restart_targets: restartTargets.length,
     },

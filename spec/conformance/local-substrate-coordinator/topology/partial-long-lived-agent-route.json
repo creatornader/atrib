@@ -379,9 +379,10 @@
       "knowledge_base_receipt_report_status": "clean",
       "knowledge_base_receipt_pending_total": 0,
       "long_lived_activity_report_status": "clean",
-      "long_lived_agent_activity_ok": 2,
+      "long_lived_agent_activity_ok": 1,
       "long_lived_agent_activity_missing": 0,
       "long_lived_agent_activity_stale": 0,
+      "long_lived_agent_activity_endpoint_mismatch": 1,
       "knowledge_base_activity_status": "ok",
       "long_lived_agent_activity_not_delegated": 0
     },
@@ -396,7 +397,7 @@
       "host-owned-bridge-http": "pass",
       "host-owned-active-session-context": "pass",
       "knowledge-base-receipt-join-back": "pass",
-      "long-lived-agent-activity": "pass",
+      "long-lived-agent-activity": "warn",
       "knowledge-base-watcher-activity": "pass"
     }
   }
