@@ -754,15 +754,42 @@ describe('D083 harness session-id discovery (consumer integration)', () => {
 
   let priorCtx: string | undefined
   let priorClaude: string | undefined
+  let priorCodex: string | undefined
+  let priorRequireExplicitContextId: string | undefined
+  let priorAgent: string | undefined
+  let priorActiveSessionProfile: string | undefined
+  let priorHome: string | undefined
   beforeEach(() => {
     priorCtx = process.env['ATRIB_CONTEXT_ID']
     priorClaude = process.env['CLAUDE_CODE_SESSION_ID']
+    priorCodex = process.env['CODEX_THREAD_ID']
+    priorRequireExplicitContextId = process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID']
+    priorAgent = process.env['ATRIB_AGENT']
+    priorActiveSessionProfile = process.env['ATRIB_ACTIVE_SESSION_PROFILE']
+    priorHome = process.env['HOME']
+    if (testEnvTmpDir) process.env['HOME'] = testEnvTmpDir
   })
   afterEach(() => {
     if (priorCtx === undefined) delete process.env['ATRIB_CONTEXT_ID']
     else process.env['ATRIB_CONTEXT_ID'] = priorCtx
     if (priorClaude === undefined) delete process.env['CLAUDE_CODE_SESSION_ID']
     else process.env['CLAUDE_CODE_SESSION_ID'] = priorClaude
+    if (priorCodex === undefined) delete process.env['CODEX_THREAD_ID']
+    else process.env['CODEX_THREAD_ID'] = priorCodex
+    if (priorRequireExplicitContextId === undefined) {
+      delete process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID']
+    } else {
+      process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID'] = priorRequireExplicitContextId
+    }
+    if (priorAgent === undefined) delete process.env['ATRIB_AGENT']
+    else process.env['ATRIB_AGENT'] = priorAgent
+    if (priorActiveSessionProfile === undefined) {
+      delete process.env['ATRIB_ACTIVE_SESSION_PROFILE']
+    } else {
+      process.env['ATRIB_ACTIVE_SESSION_PROFILE'] = priorActiveSessionProfile
+    }
+    if (priorHome === undefined) delete process.env['HOME']
+    else process.env['HOME'] = priorHome
   })
 
   async function emitWithoutCallerContextId() {
@@ -799,11 +826,40 @@ describe('D083 harness session-id discovery (consumer integration)', () => {
   it('falls through to fresh genesis when neither env var is set', async () => {
     delete process.env['ATRIB_CONTEXT_ID']
     delete process.env['CLAUDE_CODE_SESSION_ID']
+    delete process.env['CODEX_THREAD_ID']
+    delete process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID']
+    delete process.env['ATRIB_AGENT']
+    delete process.env['ATRIB_ACTIVE_SESSION_PROFILE']
     const result = await emitWithoutCallerContextId()
     // 32-hex context_id was synthesized (matches §1.2.3 format), not the
     // harness-derived value above.
     expect(result.context_id).toMatch(/^[0-9a-f]{32}$/)
     expect(result.context_id).not.toBe('38af29c4fc3a4f888fec392501b8a0a9')
+  })
+
+  it('refuses to sign without a resolved context when explicit context is required', async () => {
+    delete process.env['ATRIB_CONTEXT_ID']
+    delete process.env['CLAUDE_CODE_SESSION_ID']
+    delete process.env['CODEX_THREAD_ID']
+    delete process.env['ATRIB_AGENT']
+    delete process.env['ATRIB_ACTIVE_SESSION_PROFILE']
+    process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID'] = '1'
+    const result = await emitWithoutCallerContextId()
+    expect(result.record_hash).toBe('sha256:unknown')
+    expect(
+      result.warnings.some((warning) =>
+        warning.includes('context_id is required by ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID'),
+      ),
+    ).toBe(true)
+  })
+
+  it('still signs when explicit context is required and a harness context resolves', async () => {
+    delete process.env['ATRIB_CONTEXT_ID']
+    process.env['CLAUDE_CODE_SESSION_ID'] = '38af29c4-fc3a-4f88-8fec-392501b8a0a9'
+    process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID'] = 'true'
+    const result = await emitWithoutCallerContextId()
+    expect(result.record_hash).not.toBe('sha256:unknown')
+    expect(result.context_id).toBe('38af29c4fc3a4f888fec392501b8a0a9')
   })
 })
 

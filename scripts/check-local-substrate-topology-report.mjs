@@ -282,6 +282,48 @@ function checkPrimitiveBackendContractGate() {
   }
 }
 
+function checkExplicitContextPolicyGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'missing-active-session-profile-state.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  for (const item of snapshot.primitive_runtime_health ?? []) {
+    if (item.report?.profile?.agent !== 'claude-code') continue
+    item.report.profile.context_id_policy = 'explicit-required'
+    item.report.profile.requires_explicit_context_id = true
+  }
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'ready_for_default_trial') {
+    fail(`explicit context policy gate: expected ready_for_default_trial, got ${report.summary.status}`)
+  }
+  if (report.summary.active_session_profiles_valid !== 1) {
+    fail(
+      `explicit context policy gate: expected 1 active-session profile, got ${report.summary.active_session_profiles_valid}`,
+    )
+  }
+  if (report.summary.active_session_profiles_explicit_required !== 1) {
+    fail(
+      `explicit context policy gate: expected 1 explicit-context profile, got ${report.summary.active_session_profiles_explicit_required}`,
+    )
+  }
+  if (report.summary.active_session_profiles_ready !== 2) {
+    fail(
+      `explicit context policy gate: expected 2 ready context profiles, got ${report.summary.active_session_profiles_ready}`,
+    )
+  }
+  const activeSessionGate = report.gates.find(
+    (gate) => gate.name === 'host-owned-active-session-context',
+  )
+  if (activeSessionGate?.status !== 'pass') {
+    fail('explicit context policy gate: expected host-owned-active-session-context=pass')
+  }
+  const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (broadGate?.status !== 'pass') {
+    fail('explicit context policy gate: expected broad-default-readiness=pass')
+  }
+}
+
 function checkKnowledgeBaseReceiptJoinGate() {
   const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
@@ -774,6 +816,7 @@ function main() {
   checkRouteRegistryNormalization()
   checkRouteRegistryDiagnosticsGate()
   checkPrimitiveBackendContractGate()
+  checkExplicitContextPolicyGate()
   checkKnowledgeBaseReceiptJoinGate()
   checkKnowledgeBaseReceiptCollector()
   checkLongLivedActivityCollector()

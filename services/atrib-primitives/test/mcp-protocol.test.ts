@@ -262,7 +262,11 @@ describe('atrib-primitives MCP runtime', () => {
   })
 
   it('serves the same tools from one host-owned Streamable HTTP process', async () => {
-    const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
+    const host = await startHttpHost({
+      ATRIB_AGENT: 'test-agent',
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID: '1',
+    })
     try {
       const health = (await (await fetch(host.healthEndpoint)).json()) as {
         status?: string
@@ -274,7 +278,11 @@ describe('atrib-primitives MCP runtime', () => {
             tool_count?: number
             transport?: string
           }
-          profile?: { agent?: string }
+          profile?: {
+            agent?: string
+            context_id_policy?: string
+            requires_explicit_context_id?: boolean
+          }
         }
       }
       expect(health.status).toBe('healthy')
@@ -286,6 +294,8 @@ describe('atrib-primitives MCP runtime', () => {
       expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(7)
       expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
       expect(health.report?.profile?.agent).toBe('test-agent')
+      expect(health.report?.profile?.context_id_policy).toBe('explicit-required')
+      expect(health.report?.profile?.requires_explicit_context_id).toBe(true)
 
       const client = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test')
       try {

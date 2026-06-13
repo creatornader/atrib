@@ -139,7 +139,7 @@ function buildDefaultTrialGates(report) {
     summary.primitive_runtime_stdio_processes === 0 &&
     summary.primitive_runtime_http_shared === summary.primitive_runtime_http_processes &&
     summary.active_session_profiles > 0 &&
-    summary.active_session_profiles_valid === summary.active_session_profiles &&
+    summary.active_session_profiles_ready === summary.active_session_profiles &&
     summary.bridge_runtime_http_endpoints > 0 &&
     summary.bridge_runtime_http_healthy === summary.bridge_runtime_http_endpoints
   const coordinatorHealthClean = allCoordinatorsClean(report)
@@ -180,7 +180,7 @@ function buildDefaultTrialGates(report) {
       hostOwnedHttpSurfaces,
       hostOwnedHttpSurfaces
         ? 'startup-spawn profiles use shared primitive HTTP and healthy bridge HTTP surfaces'
-        : `primitive_http_shared=${summary.primitive_runtime_http_shared}/${summary.primitive_runtime_http_processes}, active_session_profiles=${summary.active_session_profiles_valid}/${summary.active_session_profiles}, bridge_http=${summary.bridge_runtime_http_healthy}/${summary.bridge_runtime_http_endpoints}`,
+        : `primitive_http_shared=${summary.primitive_runtime_http_shared}/${summary.primitive_runtime_http_processes}, context_profiles_ready=${summary.active_session_profiles_ready}/${summary.active_session_profiles}, active_session_profiles=${summary.active_session_profiles_valid}, explicit_context_profiles=${summary.active_session_profiles_explicit_required}, bridge_http=${summary.bridge_runtime_http_healthy}/${summary.bridge_runtime_http_endpoints}`,
     ),
     gate(
       'coordinator-health-clean',
@@ -260,6 +260,8 @@ function buildDefaultTrialMeasurement(report, options = {}) {
       active_session_profiles: {
         total: summary.active_session_profiles,
         valid: summary.active_session_profiles_valid,
+        explicit_required: summary.active_session_profiles_explicit_required,
+        ready: summary.active_session_profiles_ready,
       },
       watcher_wal: {
         launch_agents: summary.watcher_wal_launch_agents,

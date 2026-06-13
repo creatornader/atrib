@@ -359,8 +359,8 @@
       "knowledge-base-receipt-join-back": "pass",
       "long-lived-agent-activity": "pass"
     },
-    "recommendations": [
-      "make every host-owned primitive profile write a valid active-session state file before relying on profile fallback"
-    ]
-  }
+  "recommendations": [
+    "make every host-owned primitive profile either write valid active-session state or require explicit context_id before relying on profile fallback"
+  ]
+}
 }

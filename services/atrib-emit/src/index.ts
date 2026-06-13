@@ -67,12 +67,18 @@ const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 // 16 bytes encoded as base64url with no padding = 22 chars per spec §1.2.6.
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
 const DEFAULT_KEY_RESOLVE_RETRY_MS = 30_000
+const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
 
 function keyResolveRetryMs(): number {
   const raw = process.env['ATRIB_KEY_RESOLVE_RETRY_MS']
   if (raw === undefined || raw === '') return DEFAULT_KEY_RESOLVE_RETRY_MS
   const parsed = Number(raw)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_KEY_RESOLVE_RETRY_MS
+}
+
+export function requiresExplicitContextId(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID']
+  return raw !== undefined && TRUE_ENV_VALUES.has(raw.trim().toLowerCase())
 }
 
 const EmitInput = z.object({
@@ -504,6 +510,11 @@ async function handleEmit({
   // fall through to the existing inheritChainContext logic. Explicit
   // input.context_id still wins per "explicit beats implicit."
   const callerContextId = input.context_id ?? resolveEnvContextId()
+  if (!callerContextId && requiresExplicitContextId()) {
+    return emptyOutput(input.context_id ?? randomContextId(), [
+      'context_id is required by ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID; no record signed',
+    ])
+  }
 
   // Multi-producer chain composition per spec §1.2.3 / D067. Single source
   // of truth in @atrib/mcp's inheritChainContext: caller-supplied verbatim

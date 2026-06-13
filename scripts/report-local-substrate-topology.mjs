@@ -1723,6 +1723,8 @@ function primitiveRuntimeHealthSummary(items) {
       agent: report.profile?.agent,
       mirror_file: report.profile?.mirror_file,
       local_substrate_endpoint: report.profile?.local_substrate_endpoint,
+      context_id_policy: report.profile?.context_id_policy,
+      requires_explicit_context_id: report.profile?.requires_explicit_context_id,
       active_sessions: report.sessions?.active,
       opened_sessions: report.sessions?.opened,
       reason: item.reason,
@@ -1742,6 +1744,50 @@ function hasSharedPrimitiveHttpBackend(item) {
     Number(runtime.mounted_primitive_count) === 7 &&
     Number(runtime.tool_count) === 15
   )
+}
+
+function hasExplicitContextIdPolicy(item) {
+  return (
+    item.reachable === true &&
+    item.status === 'healthy' &&
+    item.report?.profile?.requires_explicit_context_id === true
+  )
+}
+
+function activeSessionCoverage(primitiveHealth, activeSessionState) {
+  const healthyPrimitiveHttp = primitiveHealth.filter(
+    (item) => item.reachable && item.status === 'healthy',
+  )
+  const runtimeProfiles = unique(healthyPrimitiveHttp.map((item) => item.report?.profile?.agent))
+  const activeSessionStateByProfile = new Map(
+    activeSessionState.map((item) => [item.profile, item]),
+  )
+  const explicitContextProfiles = unique(
+    healthyPrimitiveHttp
+      .filter(hasExplicitContextIdPolicy)
+      .map((item) => item.report?.profile?.agent),
+  )
+  const explicitContextProfileSet = new Set(explicitContextProfiles)
+  const validStateProfiles = runtimeProfiles.filter(
+    (profile) => activeSessionStateByProfile.get(profile)?.valid_context_id,
+  )
+  const readyProfiles = runtimeProfiles.filter(
+    (profile) =>
+      activeSessionStateByProfile.get(profile)?.valid_context_id ||
+      explicitContextProfileSet.has(profile),
+  )
+  const missingProfiles = runtimeProfiles.filter(
+    (profile) =>
+      !activeSessionStateByProfile.get(profile)?.valid_context_id &&
+      !explicitContextProfileSet.has(profile),
+  )
+  return {
+    runtimeProfiles,
+    validStateProfiles,
+    explicitContextProfiles,
+    readyProfiles,
+    missingProfiles,
+  }
 }
 
 function activeSessionStateSummary(items) {
@@ -2096,17 +2142,8 @@ function buildGates({
     )
   }
 
-  const runtimeProfiles = unique(healthyPrimitiveHttp.map((item) => item.report?.profile?.agent))
-  const activeSessionStateByProfile = new Map(
-    activeSessionState.map((item) => [item.profile, item]),
-  )
-  const runtimeProfilesWithValidState = runtimeProfiles.filter(
-    (profile) => activeSessionStateByProfile.get(profile)?.valid_context_id,
-  )
-  const runtimeProfilesMissingState = runtimeProfiles.filter(
-    (profile) => !activeSessionStateByProfile.get(profile)?.valid_context_id,
-  )
-  if (runtimeProfiles.length === 0) {
+  const contextCoverage = activeSessionCoverage(primitiveHealth, activeSessionState)
+  if (contextCoverage.runtimeProfiles.length === 0) {
     gates.push(
       gate(
         'host-owned-active-session-context',
@@ -2114,12 +2151,12 @@ function buildGates({
         'no healthy primitive HTTP profile can prove active-session context resolution',
       ),
     )
-  } else if (runtimeProfilesMissingState.length === 0) {
+  } else if (contextCoverage.missingProfiles.length === 0) {
     gates.push(
       gate(
         'host-owned-active-session-context',
         'pass',
-        `${runtimeProfilesWithValidState.length}/${runtimeProfiles.length} primitive HTTP profile(s) have valid active-session state`,
+        `${contextCoverage.readyProfiles.length}/${contextCoverage.runtimeProfiles.length} primitive HTTP profile(s) have context routing coverage (${contextCoverage.validStateProfiles.length} active-session state, ${contextCoverage.explicitContextProfiles.length} explicit-context-required)`,
       ),
     )
   } else {
@@ -2127,7 +2164,7 @@ function buildGates({
       gate(
         'host-owned-active-session-context',
         'warn',
-        `${runtimeProfilesWithValidState.length}/${runtimeProfiles.length} primitive HTTP profile(s) have valid active-session state; missing or invalid: ${runtimeProfilesMissingState.join(', ')}`,
+        `${contextCoverage.readyProfiles.length}/${contextCoverage.runtimeProfiles.length} primitive HTTP profile(s) have context routing coverage (${contextCoverage.validStateProfiles.length} active-session state, ${contextCoverage.explicitContextProfiles.length} explicit-context-required); missing or invalid: ${contextCoverage.missingProfiles.join(', ')}`,
       ),
     )
   }
@@ -2513,6 +2550,7 @@ function buildReport(input, options = {}) {
     annotateStandaloneConfigDrift(summarizeProcesses(processes), configs),
     configs,
   )
+  const contextCoverage = activeSessionCoverage(primitiveHealth, activeSessionState)
   const reachableEndpoints = new Set(
     health
       .filter((item) => item.reachable && item.status === 'healthy')
@@ -2580,13 +2618,10 @@ function buildReport(input, options = {}) {
       bridge_runtime_http_healthy: bridgeHealth.filter(
         (item) => item.reachable && item.status === 'healthy',
       ).length,
-      active_session_profiles: unique(
-        primitiveHealth
-          .filter((item) => item.reachable && item.status === 'healthy')
-          .map((item) => item.report?.profile?.agent),
-      ).length,
-      active_session_profiles_valid: activeSessionState.filter((item) => item.valid_context_id)
-        .length,
+      active_session_profiles: contextCoverage.runtimeProfiles.length,
+      active_session_profiles_valid: contextCoverage.validStateProfiles.length,
+      active_session_profiles_explicit_required: contextCoverage.explicitContextProfiles.length,
+      active_session_profiles_ready: contextCoverage.readyProfiles.length,
       duplicate_bridge_wrapper_groups: processSummary.duplicate_bridge_wrapper_groups,
       bridge_wrappers_without_upstream: processSummary.bridge_wrappers_without_upstream,
       bridge_upstreams_without_wrapper: processSummary.bridge_upstreams_without_wrapper,
@@ -2667,7 +2702,7 @@ function recommendationsFor({ status, gates, processSummary }) {
   }
   if (gates.find((item) => item.name === 'host-owned-active-session-context')?.status !== 'pass') {
     recommendations.push(
-      'make every host-owned primitive profile write a valid active-session state file before relying on profile fallback',
+      'make every host-owned primitive profile either write valid active-session state or require explicit context_id before relying on profile fallback',
     )
   }
   if (gates.find((item) => item.name === 'host-owned-bridge-http')?.status !== 'pass') {
@@ -2728,7 +2763,7 @@ function formatTextReport(report) {
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, direct-stdio=${report.summary.primitive_runtime_stdio_processes}, proxy=${report.summary.primitive_proxy_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `bridge processes: wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
-    `active-session profile state: valid=${report.summary.active_session_profiles_valid}/${report.summary.active_session_profiles}`,
+    `context routing profiles: ready=${report.summary.active_session_profiles_ready}/${report.summary.active_session_profiles}, active-session=${report.summary.active_session_profiles_valid}, explicit-required=${report.summary.active_session_profiles_explicit_required}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
     `knowledge-base receipt join-back: status=${report.summary.knowledge_base_receipt_report_status}, pending=${report.summary.knowledge_base_receipt_pending_total}, obs=${report.summary.knowledge_base_receipt_observation_pending}, annotations=${report.summary.knowledge_base_receipt_annotation_pending}, wal-queued=${report.summary.knowledge_base_wal_queued}, wal-quarantined=${report.summary.knowledge_base_wal_quarantined}`,
     `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agent_routes}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}, endpoints=${report.summary.long_lived_agent_route_endpoints}`,
