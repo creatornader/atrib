@@ -11,8 +11,11 @@ import { buildReport } from './report-local-substrate-topology.mjs'
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const FIXTURE_DIR = join(ROOT, 'spec/conformance/local-substrate-coordinator/topology')
 const GENERATED_AT = '2026-06-12T00:00:00.000Z'
+const FIXTURE_NOW_MS = Date.parse('2026-06-10T23:00:00.000Z')
 const BRIDGE_SERVICE_DIR = ['agent', 'bridge', 'atrib'].join('-')
 const failures = []
+
+Date.now = () => FIXTURE_NOW_MS
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
@@ -177,6 +180,31 @@ function checkWatcherActivityFailsMeasurement() {
   }
   if (statusFor(measurement, 'watcher-wal-activity-clean') !== 'fail') {
     fail('watcher activity measurement: expected watcher-wal-activity-clean=fail')
+  }
+
+  const staleSnapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  staleSnapshot.knowledge_base_receipt_report.activity = {
+    status: 'ok',
+    source: 'synthesize',
+    producer: 'atrib-emit-cli',
+    last_activity_at: '2000-01-01T00:00:00.000Z',
+    age_ms: 1000,
+    max_age_ms: 3_600_000,
+  }
+  const staleMeasurement = measurementForReport(
+    buildReport(staleSnapshot, { generatedAt: GENERATED_AT }),
+  )
+  if (staleMeasurement.status !== 'not_ready') {
+    fail(`stale watcher activity measurement: expected not_ready, got ${staleMeasurement.status}`)
+  }
+  if (statusFor(staleMeasurement, 'watcher-wal-and-receipts-clean') !== 'pass') {
+    fail('stale watcher activity measurement: expected watcher-wal-and-receipts-clean=pass')
+  }
+  if (statusFor(staleMeasurement, 'watcher-wal-activity-clean') !== 'fail') {
+    fail('stale watcher activity measurement: expected watcher-wal-activity-clean=fail')
+  }
+  if (staleMeasurement.process_footprint.watcher_wal.activity_stale !== true) {
+    fail('stale watcher activity measurement: expected activity_stale=true')
   }
 }
 

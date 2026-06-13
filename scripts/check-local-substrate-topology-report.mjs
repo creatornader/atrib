@@ -19,8 +19,11 @@ import {
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const FIXTURE_DIR = join(ROOT, 'spec/conformance/local-substrate-coordinator/topology')
+const FIXTURE_NOW_MS = Date.parse('2026-06-10T23:00:00.000Z')
 const BRIDGE_SERVICE_DIR = ['agent', 'bridge', 'atrib'].join('-')
 const failures = []
+
+Date.now = () => FIXTURE_NOW_MS
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
@@ -484,6 +487,41 @@ function checkKnowledgeBaseWatcherActivityGate() {
   ) {
     fail('knowledge-base watcher activity gate: expected watcher activity recommendation')
   }
+
+  const staleSnapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  staleSnapshot.knowledge_base_receipt_report.activity = {
+    status: 'ok',
+    source: 'synthesize',
+    producer: 'atrib-emit-cli',
+    last_activity_at: '2000-01-01T00:00:00.000Z',
+    age_ms: 1000,
+    max_age_ms: 3_600_000,
+  }
+  const staleReport = buildReport(staleSnapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (staleReport.summary.status !== 'mixed') {
+    fail(`knowledge-base watcher stale activity gate: expected status mixed, got ${staleReport.summary.status}`)
+  }
+  if (staleReport.summary.knowledge_base_activity_status !== 'ok') {
+    fail('knowledge-base watcher stale activity gate: expected activity status ok')
+  }
+  if (staleReport.summary.knowledge_base_activity_stale !== true) {
+    fail('knowledge-base watcher stale activity gate: expected activity_stale=true')
+  }
+  if (Number(staleReport.summary.knowledge_base_activity_age_ms ?? 0) <= 1000) {
+    fail('knowledge-base watcher stale activity gate: expected recomputed activity age')
+  }
+  const staleActivityGate = staleReport.gates.find(
+    (gate) => gate.name === 'knowledge-base-watcher-activity',
+  )
+  if (staleActivityGate?.status !== 'warn') {
+    fail('knowledge-base watcher stale activity gate: expected knowledge-base-watcher-activity=warn')
+  }
+  const staleBroadGate = staleReport.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (staleBroadGate?.status !== 'fail') {
+    fail('knowledge-base watcher stale activity gate: expected broad-default-readiness=fail')
+  }
 }
 
 function checkKnowledgeBaseReceiptCollector() {
@@ -601,6 +639,46 @@ function checkKnowledgeBaseReceiptCollector() {
     }
     if (activeReceipt.receipt_integrity.orphan_receipt_files !== 1) {
       fail('knowledge-base receipt collector: expected orphan receipt integrity count')
+    }
+
+    const diagnosticReceiptPath = join(dir, 'diagnostic-receipt.json')
+    writeFileSync(
+      diagnosticReceiptPath,
+      JSON.stringify({
+        generated_at: new Date().toISOString(),
+        days: 7,
+        observations: { entries: 1, pending_receipt_joins: 0 },
+        annotations: { entries: 1, pending_receipt_or_parent_joins: 0 },
+        wal: {
+          queued: 0,
+          non_joinable_queued: 0,
+          quarantined: 0,
+          receipted: 0,
+          non_joinable_receipted: 2,
+        },
+        pending: { observations: 0, annotations: 0, wal_queued: 0, wal_quarantined: 0, total: 0 },
+        receipt_integrity: {
+          active_receipt_files: 2,
+          active_joinable_receipt_files: 0,
+          non_joinable_receipt_files: 2,
+          invalid_receipt_files: 0,
+          orphan_receipt_files: 0,
+          receipt_mismatches: 0,
+          ready_to_join_receipt_files: 0,
+          already_joined_receipt_files: 0,
+          issues: [],
+        },
+      }),
+    )
+    const diagnosticReceipt = collectKnowledgeBaseReceiptReport({ path: diagnosticReceiptPath })
+    if (diagnosticReceipt.status !== 'clean' || diagnosticReceipt.pending.total !== 0) {
+      fail('knowledge-base receipt collector: expected diagnostic receipts to stay clean')
+    }
+    if (diagnosticReceipt.wal.non_joinable_receipted !== 2) {
+      fail('knowledge-base receipt collector: expected non-joinable receipt count')
+    }
+    if (diagnosticReceipt.receipt_integrity.non_joinable_receipt_files !== 2) {
+      fail('knowledge-base receipt collector: expected non-joinable integrity count')
     }
   } finally {
     rmSync(dir, { recursive: true, force: true })
