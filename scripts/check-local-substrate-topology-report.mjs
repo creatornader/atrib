@@ -250,6 +250,9 @@ function checkConfigSurfaceEndpointEvidence() {
   })
   const codex = report.config_surfaces.find((config) => config.name === 'codex')
   const claudeCode = report.config_surfaces.find((config) => config.name === 'claude-code')
+  const claudeDesktop = report.config_surfaces.find(
+    (config) => config.name === 'claude-desktop',
+  )
   if (!codex) {
     fail('config endpoint evidence: missing codex config surface')
   } else if (codex.local_substrate_endpoints.length !== 0) {
@@ -271,6 +274,25 @@ function checkConfigSurfaceEndpointEvidence() {
     'http://127.0.0.1:8788/atrib/local-substrate'
   ) {
     fail('config endpoint evidence: expected Claude Code effective endpoint from primitive profile')
+  }
+  if (!claudeDesktop) {
+    fail('config endpoint evidence: missing claude-desktop config surface')
+  } else if (
+    claudeDesktop.local_substrate_endpoints[0] !==
+    'http://127.0.0.1:8786/atrib/local-substrate'
+  ) {
+    fail('config endpoint evidence: expected raw Claude Desktop local-substrate endpoint')
+  } else if (
+    claudeDesktop.effective_local_substrate_endpoints[0] !==
+    'http://127.0.0.1:8786/atrib/local-substrate'
+  ) {
+    fail('config endpoint evidence: expected Claude Desktop effective endpoint')
+  } else if (
+    !claudeDesktop.local_substrate_endpoint_evidence.some(
+      (evidence) => evidence.source === 'primitive-runtime-profile',
+    )
+  ) {
+    fail('config endpoint evidence: expected Claude Desktop primitive profile evidence')
   }
 }
 

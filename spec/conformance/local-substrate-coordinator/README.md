@@ -62,7 +62,7 @@ Long-lived route counters distinguish route entries from shared coordinator endp
 
 Fixture snapshots live in [`topology/`](topology/). They pin these states:
 
-- `healthy-collapsed-startup-spawn.json`: coordinator services are healthy, Codex and Claude Code each point at loopback `atrib-primitives` and Agent Bridge Streamable HTTP hosts for their agent profile, supervised long-lived routes have recent activity evidence, and no standalone primitive bundle remains.
+- `healthy-collapsed-startup-spawn.json`: coordinator services are healthy, Codex, Claude Code, and Claude Desktop each point at loopback `atrib-primitives` and Agent Bridge Streamable HTTP hosts for their agent profile, Desktop proves explicit-context enforcement instead of active-session state, supervised long-lived routes have recent activity evidence, and no standalone primitive bundle remains.
 - The checker mutates the healthy fixture to pin the knowledge-base receipt join-back failure mode where pending joins keep the broad-default gate closed.
 - The checker mutates the healthy fixture to pin the long-lived activity failure mode where routes are healthy but producer evidence is missing.
 - The checker mutates the healthy fixture to pin the stdio-only client migration boundary: a direct stdio `atrib-primitives` runtime keeps broad readiness closed, while a `stdio-http-proxy` process is treated as a thin adapter to the shared HTTP backend.
