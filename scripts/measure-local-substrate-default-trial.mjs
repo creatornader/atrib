@@ -149,6 +149,10 @@ function buildDefaultTrialGates(report) {
     summary.knowledge_base_receipt_pending_total === 0 &&
     summary.knowledge_base_wal_queued === 0 &&
     Number(summary.knowledge_base_wal_receipted ?? 0) === 0 &&
+    Number(summary.knowledge_base_receipt_integrity_active_joinable ?? 0) === 0 &&
+    Number(summary.knowledge_base_receipt_integrity_invalid ?? 0) === 0 &&
+    Number(summary.knowledge_base_receipt_integrity_orphans ?? 0) === 0 &&
+    Number(summary.knowledge_base_receipt_integrity_mismatches ?? 0) === 0 &&
     summary.knowledge_base_wal_quarantined === 0
   const watcherWalActivityClean =
     summary.watcher_wal_launch_agents > 0 &&
@@ -198,8 +202,8 @@ function buildDefaultTrialGates(report) {
       'watcher-wal-and-receipts-clean',
       watcherWalAndReceiptsClean,
       watcherWalAndReceiptsClean
-        ? 'watcher-WAL route is present and the receipt join-back report is clean'
-        : `watchers=${summary.watcher_wal_launch_agents}, receipt_status=${summary.knowledge_base_receipt_report_status}, pending=${summary.knowledge_base_receipt_pending_total}, wal_queued=${summary.knowledge_base_wal_queued}, wal_quarantined=${summary.knowledge_base_wal_quarantined}`,
+        ? 'watcher-WAL route is present and the receipt join-back report has no join-required backlog'
+        : `watchers=${summary.watcher_wal_launch_agents}, receipt_status=${summary.knowledge_base_receipt_report_status}, pending=${summary.knowledge_base_receipt_pending_total}, wal_queued=${summary.knowledge_base_wal_queued}, wal_receipted=${summary.knowledge_base_wal_receipted}, active_joinable=${summary.knowledge_base_receipt_integrity_active_joinable}, orphan_receipts=${summary.knowledge_base_receipt_integrity_orphans}, receipt_mismatches=${summary.knowledge_base_receipt_integrity_mismatches}, wal_quarantined=${summary.knowledge_base_wal_quarantined}`,
     ),
     gate(
       'watcher-wal-activity-clean',
@@ -286,16 +290,12 @@ function buildDefaultTrialMeasurement(report, options = {}) {
         wal_queued: summary.knowledge_base_wal_queued,
         wal_non_joinable_queued: Number(summary.knowledge_base_wal_non_joinable_queued ?? 0),
         wal_receipted: Number(summary.knowledge_base_wal_receipted ?? 0),
-        wal_non_joinable_receipted: Number(
-          summary.knowledge_base_wal_non_joinable_receipted ?? 0,
-        ),
+        wal_non_joinable_receipted: Number(summary.knowledge_base_wal_non_joinable_receipted ?? 0),
         wal_quarantined: summary.knowledge_base_wal_quarantined,
         receipt_active_joinable: Number(
           summary.knowledge_base_receipt_integrity_active_joinable ?? 0,
         ),
-        receipt_non_joinable: Number(
-          summary.knowledge_base_receipt_integrity_non_joinable ?? 0,
-        ),
+        receipt_non_joinable: Number(summary.knowledge_base_receipt_integrity_non_joinable ?? 0),
         receipt_mismatches: Number(summary.knowledge_base_receipt_integrity_mismatches ?? 0),
         receipt_orphans: Number(summary.knowledge_base_receipt_integrity_orphans ?? 0),
         receipt_invalid: Number(summary.knowledge_base_receipt_integrity_invalid ?? 0),
