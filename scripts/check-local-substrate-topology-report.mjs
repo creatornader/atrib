@@ -254,21 +254,16 @@ function checkConfigSurfaceEndpointEvidence() {
   })
   const codex = report.config_surfaces.find((config) => config.name === 'codex')
   const claudeCode = report.config_surfaces.find((config) => config.name === 'claude-code')
-  const claudeDesktop = report.config_surfaces.find(
-    (config) => config.name === 'claude-desktop',
-  )
+  const claudeDesktop = report.config_surfaces.find((config) => config.name === 'claude-desktop')
   if (!codex) {
     fail('config endpoint evidence: missing codex config surface')
   } else if (codex.local_substrate_endpoints.length !== 0) {
     fail('config endpoint evidence: expected raw Codex config endpoint list to stay empty')
   } else if (
-    codex.effective_local_substrate_endpoints[0] !==
-    'http://127.0.0.1:8797/atrib/local-substrate'
+    codex.effective_local_substrate_endpoints[0] !== 'http://127.0.0.1:8797/atrib/local-substrate'
   ) {
     fail('config endpoint evidence: expected Codex effective endpoint from primitive profile')
-  } else if (
-    codex.local_substrate_endpoint_evidence[0]?.source !== 'primitive-runtime-profile'
-  ) {
+  } else if (codex.local_substrate_endpoint_evidence[0]?.source !== 'primitive-runtime-profile') {
     fail('config endpoint evidence: expected Codex primitive-runtime-profile evidence source')
   }
   if (!claudeCode) {
@@ -282,8 +277,7 @@ function checkConfigSurfaceEndpointEvidence() {
   if (!claudeDesktop) {
     fail('config endpoint evidence: missing claude-desktop config surface')
   } else if (
-    claudeDesktop.local_substrate_endpoints[0] !==
-    'http://127.0.0.1:8786/atrib/local-substrate'
+    claudeDesktop.local_substrate_endpoints[0] !== 'http://127.0.0.1:8786/atrib/local-substrate'
   ) {
     fail('config endpoint evidence: expected raw Claude Desktop local-substrate endpoint')
   } else if (
@@ -352,7 +346,9 @@ function checkExplicitContextPolicyGate() {
     generatedAt: '2026-06-11T00:00:00.000Z',
   })
   if (report.summary.status !== 'ready_for_default_trial') {
-    fail(`explicit context policy gate: expected ready_for_default_trial, got ${report.summary.status}`)
+    fail(
+      `explicit context policy gate: expected ready_for_default_trial, got ${report.summary.status}`,
+    )
   }
   if (report.summary.active_session_profiles_valid !== 1) {
     fail(
@@ -425,7 +421,7 @@ function checkKnowledgeBaseReceiptJoinGate() {
     )
   }
   if (report.summary.knowledge_base_wal_receipted !== 1) {
-    fail('knowledge-base receipt join gate: expected active receipted WAL count 1')
+    fail('knowledge-base receipt join gate: expected active joinable receipted WAL count 1')
   }
   if (report.summary.knowledge_base_receipt_integrity_mismatches !== 1) {
     fail('knowledge-base receipt join gate: expected receipt mismatch count 1')
@@ -456,7 +452,9 @@ function checkKnowledgeBaseWatcherActivityGate() {
     generatedAt: '2026-06-11T00:00:00.000Z',
   })
   if (report.summary.status !== 'mixed') {
-    fail(`knowledge-base watcher activity gate: expected status mixed, got ${report.summary.status}`)
+    fail(
+      `knowledge-base watcher activity gate: expected status mixed, got ${report.summary.status}`,
+    )
   }
   if (report.summary.knowledge_base_receipt_report_status !== 'clean') {
     fail('knowledge-base watcher activity gate: expected receipt report to stay clean')
@@ -470,9 +468,7 @@ function checkKnowledgeBaseWatcherActivityGate() {
   if (receiptGate?.status !== 'pass') {
     fail('knowledge-base watcher activity gate: expected knowledge-base-receipt-join-back=pass')
   }
-  const activityGate = report.gates.find(
-    (gate) => gate.name === 'knowledge-base-watcher-activity',
-  )
+  const activityGate = report.gates.find((gate) => gate.name === 'knowledge-base-watcher-activity')
   if (activityGate?.status !== 'warn') {
     fail('knowledge-base watcher activity gate: expected knowledge-base-watcher-activity=warn')
   }
@@ -501,7 +497,9 @@ function checkKnowledgeBaseWatcherActivityGate() {
     generatedAt: '2026-06-11T00:00:00.000Z',
   })
   if (staleReport.summary.status !== 'mixed') {
-    fail(`knowledge-base watcher stale activity gate: expected status mixed, got ${staleReport.summary.status}`)
+    fail(
+      `knowledge-base watcher stale activity gate: expected status mixed, got ${staleReport.summary.status}`,
+    )
   }
   if (staleReport.summary.knowledge_base_activity_status !== 'ok') {
     fail('knowledge-base watcher stale activity gate: expected activity status ok')
@@ -516,7 +514,9 @@ function checkKnowledgeBaseWatcherActivityGate() {
     (gate) => gate.name === 'knowledge-base-watcher-activity',
   )
   if (staleActivityGate?.status !== 'warn') {
-    fail('knowledge-base watcher stale activity gate: expected knowledge-base-watcher-activity=warn')
+    fail(
+      'knowledge-base watcher stale activity gate: expected knowledge-base-watcher-activity=warn',
+    )
   }
   const staleBroadGate = staleReport.gates.find((gate) => gate.name === 'broad-default-readiness')
   if (staleBroadGate?.status !== 'fail') {
@@ -557,6 +557,27 @@ function checkKnowledgeBaseReceiptCollector() {
     if (invalid.status !== 'invalid_shape') {
       fail(
         `knowledge-base receipt collector: expected invalid report invalid_shape, got ${invalid.status}`,
+      )
+    }
+
+    const invalidIntegrityPath = join(dir, 'invalid-integrity.json')
+    writeFileSync(
+      invalidIntegrityPath,
+      JSON.stringify({
+        generated_at: '2026-06-12T00:00:00.000Z',
+        observations: { entries: 1, pending_receipt_joins: 0 },
+        annotations: { entries: 1, pending_receipt_or_parent_joins: 0 },
+        wal: { queued: 0, quarantined: 0, receipted: 0 },
+        receipt_integrity: {
+          active_receipt_files: 'bad-count',
+          issues: { kind: 'bad-shape' },
+        },
+      }),
+    )
+    const invalidIntegrity = collectKnowledgeBaseReceiptReport({ path: invalidIntegrityPath })
+    if (invalidIntegrity.status !== 'invalid_shape') {
+      fail(
+        `knowledge-base receipt collector: expected invalid integrity report invalid_shape, got ${invalidIntegrity.status}`,
       )
     }
 
@@ -635,10 +656,40 @@ function checkKnowledgeBaseReceiptCollector() {
     )
     const activeReceipt = collectKnowledgeBaseReceiptReport({ path: activeReceiptPath })
     if (activeReceipt.status !== 'backlog' || activeReceipt.pending.total !== 1) {
-      fail('knowledge-base receipt collector: expected active receipted WAL backlog')
+      fail('knowledge-base receipt collector: expected active joinable receipted WAL backlog')
     }
     if (activeReceipt.receipt_integrity.orphan_receipt_files !== 1) {
       fail('knowledge-base receipt collector: expected orphan receipt integrity count')
+    }
+
+    const integrityOnlyBacklogPath = join(dir, 'integrity-only-backlog.json')
+    writeFileSync(
+      integrityOnlyBacklogPath,
+      JSON.stringify({
+        generated_at: new Date().toISOString(),
+        days: 7,
+        observations: { entries: 1, pending_receipt_joins: 0 },
+        annotations: { entries: 1, pending_receipt_or_parent_joins: 0 },
+        wal: { queued: 0, quarantined: 0, receipted: 0 },
+        pending: { observations: 0, annotations: 0, wal_queued: 0, wal_quarantined: 0, total: 0 },
+        receipt_integrity: {
+          active_receipt_files: 0,
+          active_joinable_receipt_files: 0,
+          non_joinable_receipt_files: 0,
+          invalid_receipt_files: 0,
+          orphan_receipt_files: 0,
+          receipt_mismatches: 1,
+          ready_to_join_receipt_files: 0,
+          already_joined_receipt_files: 0,
+          issues: [{ kind: 'receipt_hash_mismatch' }],
+        },
+      }),
+    )
+    const integrityOnlyBacklog = collectKnowledgeBaseReceiptReport({
+      path: integrityOnlyBacklogPath,
+    })
+    if (integrityOnlyBacklog.status !== 'backlog' || integrityOnlyBacklog.pending.total !== 1) {
+      fail('knowledge-base receipt collector: expected integrity-only backlog')
     }
 
     const diagnosticReceiptPath = join(dir, 'diagnostic-receipt.json')
@@ -690,7 +741,9 @@ function checkLongLivedActivityCollector() {
   try {
     const missing = collectLongLivedActivityReport({ path: join(dir, 'missing.json') })
     if (missing.status !== 'absent' || missing.exists !== false) {
-      fail(`long-lived activity collector: expected missing report to be absent, got ${missing.status}`)
+      fail(
+        `long-lived activity collector: expected missing report to be absent, got ${missing.status}`,
+      )
     }
 
     const malformedPath = join(dir, 'malformed.json')

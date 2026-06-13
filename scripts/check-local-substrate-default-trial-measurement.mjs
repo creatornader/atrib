@@ -58,7 +58,7 @@ function checkHealthyMeasurement() {
     fail('healthy measurement: expected zero pending receipt joins')
   }
   if (measurement.process_footprint.watcher_wal.wal_receipted !== 0) {
-    fail('healthy measurement: expected zero active receipted WAL files')
+    fail('healthy measurement: expected zero active joinable receipted WAL files')
   }
   if (measurement.process_footprint.watcher_wal.activity_status !== 'ok') {
     fail('healthy measurement: expected watcher-WAL activity status ok')
@@ -114,7 +114,7 @@ function checkReceiptBacklogFailsMeasurement() {
     fail('receipt backlog measurement: expected watcher-wal-and-receipts-clean=fail')
   }
   if (measurement.process_footprint.watcher_wal.wal_receipted !== 1) {
-    fail('receipt backlog measurement: expected active receipted WAL count 1')
+    fail('receipt backlog measurement: expected active joinable receipted WAL count 1')
   }
   if (measurement.process_footprint.watcher_wal.receipt_orphans !== 1) {
     fail('receipt backlog measurement: expected orphan receipt count 1')

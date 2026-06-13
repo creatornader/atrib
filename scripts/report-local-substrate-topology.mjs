@@ -943,6 +943,24 @@ function collectKnowledgeBaseReceiptReport({
     }
   }
 
+  const rawReceiptIntegrity = raw?.receipt_integrity
+  const receiptIntegrityNumericFields =
+    rawReceiptIntegrity && typeof rawReceiptIntegrity === 'object'
+      ? {
+          receipt_integrity_active_receipt_files: rawReceiptIntegrity.active_receipt_files,
+          receipt_integrity_active_joinable_receipt_files:
+            rawReceiptIntegrity.active_joinable_receipt_files,
+          receipt_integrity_non_joinable_receipt_files:
+            rawReceiptIntegrity.non_joinable_receipt_files,
+          receipt_integrity_invalid_receipt_files: rawReceiptIntegrity.invalid_receipt_files,
+          receipt_integrity_orphan_receipt_files: rawReceiptIntegrity.orphan_receipt_files,
+          receipt_integrity_receipt_mismatches: rawReceiptIntegrity.receipt_mismatches,
+          receipt_integrity_ready_to_join_receipt_files:
+            rawReceiptIntegrity.ready_to_join_receipt_files,
+          receipt_integrity_already_joined_receipt_files:
+            rawReceiptIntegrity.already_joined_receipt_files,
+        }
+      : {}
   const numericFields = {
     observation_entries: raw?.observations?.entries,
     observation_pending_receipt_joins: raw?.observations?.pending_receipt_joins,
@@ -955,6 +973,20 @@ function collectKnowledgeBaseReceiptReport({
   const missingFields = Object.entries(numericFields)
     .filter(([, value]) => !isNonNegativeInteger(value))
     .map(([name]) => name)
+  const malformedOptionalFields = Object.entries(receiptIntegrityNumericFields)
+    .filter(([, value]) => value !== undefined && !isNonNegativeInteger(value))
+    .map(([name]) => name)
+  if (rawReceiptIntegrity !== undefined && typeof rawReceiptIntegrity !== 'object') {
+    malformedOptionalFields.push('receipt_integrity')
+  }
+  if (
+    rawReceiptIntegrity &&
+    typeof rawReceiptIntegrity === 'object' &&
+    rawReceiptIntegrity.issues !== undefined &&
+    !Array.isArray(rawReceiptIntegrity.issues)
+  ) {
+    malformedOptionalFields.push('receipt_integrity_issues')
+  }
 
   const generatedAtMs =
     typeof raw?.generated_at === 'string' ? Date.parse(raw.generated_at) : Number.NaN
@@ -962,12 +994,12 @@ function collectKnowledgeBaseReceiptReport({
   const ageSourceMs = Number.isFinite(generatedAtMs) ? generatedAtMs : fileMtimeMs
   const ageMs = Number.isFinite(ageSourceMs) ? Math.max(0, Date.now() - ageSourceMs) : undefined
 
-  if (missingFields.length > 0) {
+  if (missingFields.length > 0 || malformedOptionalFields.length > 0) {
     return {
       path: display,
       exists: true,
       status: 'invalid_shape',
-      reason: `missing or non-negative-integer field(s): ${missingFields.join(', ')}`,
+      reason: `missing, malformed, or non-negative-integer field(s): ${missingFields.concat(malformedOptionalFields).join(', ')}`,
       generated_at: typeof raw?.generated_at === 'string' ? raw.generated_at : undefined,
       age_ms: ageMs === undefined ? undefined : Math.round(ageMs),
       max_age_ms: maxAgeMs,
@@ -981,12 +1013,6 @@ function collectKnowledgeBaseReceiptReport({
   const walReceipted = Number(raw.wal.receipted)
   const recomputedPending =
     observationPending + annotationPending + walQueued + walQuarantined + walReceipted
-  const totalPending = Number.isFinite(Number(raw?.pending?.total))
-    ? Math.max(Number(raw.pending.total), recomputedPending)
-    : recomputedPending
-  const stale = ageMs === undefined ? true : ageMs > maxAgeMs
-  const status = totalPending > 0 ? 'backlog' : stale ? 'stale' : 'clean'
-  const rawReceiptIntegrity = raw?.receipt_integrity
   const receiptIntegrity =
     rawReceiptIntegrity && typeof rawReceiptIntegrity === 'object'
       ? {
@@ -994,15 +1020,11 @@ function collectKnowledgeBaseReceiptReport({
           active_joinable_receipt_files: Number(
             rawReceiptIntegrity.active_joinable_receipt_files ?? walReceipted,
           ),
-          non_joinable_receipt_files: Number(
-            rawReceiptIntegrity.non_joinable_receipt_files ?? 0,
-          ),
+          non_joinable_receipt_files: Number(rawReceiptIntegrity.non_joinable_receipt_files ?? 0),
           invalid_receipt_files: Number(rawReceiptIntegrity.invalid_receipt_files ?? 0),
           orphan_receipt_files: Number(rawReceiptIntegrity.orphan_receipt_files ?? 0),
           receipt_mismatches: Number(rawReceiptIntegrity.receipt_mismatches ?? 0),
-          ready_to_join_receipt_files: Number(
-            rawReceiptIntegrity.ready_to_join_receipt_files ?? 0,
-          ),
+          ready_to_join_receipt_files: Number(rawReceiptIntegrity.ready_to_join_receipt_files ?? 0),
           already_joined_receipt_files: Number(
             rawReceiptIntegrity.already_joined_receipt_files ?? 0,
           ),
@@ -1020,6 +1042,19 @@ function collectKnowledgeBaseReceiptReport({
           issues: undefined,
         }
   const activity = normalizeKnowledgeBaseActivity(raw?.activity)
+  const declaredPending = Number.isFinite(Number(raw?.pending?.total))
+    ? Number(raw.pending.total)
+    : 0
+  const totalPending = Math.max(
+    declaredPending,
+    recomputedPending,
+    knowledgeBaseReceiptIntegrityBlockingTotal({
+      receipt_integrity: receiptIntegrity,
+      wal: { receipted: walReceipted },
+    }),
+  )
+  const stale = ageMs === undefined ? true : ageMs > maxAgeMs
+  const status = totalPending > 0 ? 'backlog' : stale ? 'stale' : 'clean'
 
   return {
     path: display,
@@ -1076,7 +1111,7 @@ function normalizeKnowledgeBaseActivity(activity) {
   const ageMs =
     declaredAgeMs !== undefined && currentAgeMs !== undefined
       ? Math.max(declaredAgeMs, currentAgeMs)
-      : declaredAgeMs ?? currentAgeMs
+      : (declaredAgeMs ?? currentAgeMs)
   const maxAgeMs = positiveInteger(activity.max_age_ms)
   const recordHash = stringValue(activity.record_hash)
   const contextId = parseSessionContextId(stringValue(activity.context_id))
@@ -1237,7 +1272,9 @@ function normalizeLongLivedActivity(activity, { index, maxAgeMs }) {
   const status = stringValue(activity.status) ?? 'unknown'
   const lastActivityAt = stringValue(activity.last_activity_at)
   const lastActivityMs = lastActivityAt ? Date.parse(lastActivityAt) : Number.NaN
-  const ageMs = Number.isFinite(lastActivityMs) ? Math.max(0, Date.now() - lastActivityMs) : undefined
+  const ageMs = Number.isFinite(lastActivityMs)
+    ? Math.max(0, Date.now() - lastActivityMs)
+    : undefined
   const recordHash = stringValue(activity.record_hash)
   const endpoint = endpointList(
     stringValue(activity.route_endpoint) ??
@@ -2066,14 +2103,40 @@ function knowledgeBaseReceiptPendingTotal(report) {
     Number(report?.wal?.quarantined ?? 0) +
     Number(report?.wal?.receipted ?? 0)
   const declared = Number(report?.pending?.total ?? 0)
-  return Math.max(Number.isFinite(declared) ? declared : 0, recomputed)
+  return Math.max(
+    Number.isFinite(declared) ? declared : 0,
+    recomputed,
+    knowledgeBaseReceiptIntegrityBlockingTotal(report),
+  )
+}
+
+function knowledgeBaseReceiptIntegrityBlockingTotal(report) {
+  const integrity = report?.receipt_integrity
+  if (!integrity || typeof integrity !== 'object') return 0
+  const activeJoinable = isNonNegativeInteger(integrity.active_joinable_receipt_files)
+    ? Number(integrity.active_joinable_receipt_files)
+    : nonNegativeIntegerOrZero(integrity.active_receipt_files ?? report?.wal?.receipted)
+  return Math.max(
+    0,
+    activeJoinable,
+    nonNegativeIntegerOrZero(integrity.invalid_receipt_files),
+    nonNegativeIntegerOrZero(integrity.orphan_receipt_files),
+    nonNegativeIntegerOrZero(integrity.receipt_mismatches),
+    nonNegativeIntegerOrZero(integrity.ready_to_join_receipt_files),
+    nonNegativeIntegerOrZero(integrity.issues),
+  )
+}
+
+function nonNegativeIntegerOrZero(value) {
+  return isNonNegativeInteger(value) ? Number(value) : 0
 }
 
 function knowledgeBaseReceiptSummary(report) {
   const status = knowledgeBaseReceiptReportStatus(report)
-  const activity = report?.activity && typeof report.activity === 'object'
-    ? normalizeKnowledgeBaseActivity(report.activity)
-    : { status: 'missing' }
+  const activity =
+    report?.activity && typeof report.activity === 'object'
+      ? normalizeKnowledgeBaseActivity(report.activity)
+      : { status: 'missing' }
   return {
     status,
     age_ms: Number.isFinite(Number(report?.age_ms)) ? Number(report.age_ms) : undefined,
@@ -2461,7 +2524,7 @@ function buildGates({
       gate(
         'knowledge-base-receipt-join-back',
         'pass',
-        'knowledge-base receipt join-back report is fresh and has no pending joins or active receipts',
+        'knowledge-base receipt join-back report is fresh and has no pending joins, active joinable receipts, orphan receipts, or mismatches',
       ),
     )
   } else if (receiptSummary.status === 'parse_error' || receiptSummary.status === 'invalid_shape') {
