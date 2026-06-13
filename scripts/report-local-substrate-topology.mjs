@@ -4,13 +4,18 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { dirname, join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const HOME = process.env.HOME || ''
+const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const SCHEMA = 'atrib.local-substrate-topology-report.v0'
 const SNAPSHOT_SCHEMA = 'atrib.local-substrate-topology-snapshot.v0'
 const ROUTE_REGISTRY_SCHEMA = 'atrib.local-substrate-route-registry.v0'
+const EXPECTED_RUNTIME_PACKAGE_PATHS = {
+  coordinator: join(ROOT, 'services/atrib-emit/package.json'),
+  primitive_runtime: join(ROOT, 'services/atrib-primitives/package.json'),
+}
 const DEFAULT_ROUTE_REGISTRY_PATH = join(HOME, '.atrib/local-substrate/routes.json')
 const LEGACY_KNOWLEDGE_BASE_RECEIPT_REPORT_ENV = ['ATRIB_HEALTH_SECOND', 'BRAIN_REPORT'].join('_')
 const DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_GENERIC_PATH = join(
@@ -159,6 +164,25 @@ function unique(values) {
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
+}
+
+function readPackageVersion(path) {
+  try {
+    const parsed = readJson(path)
+    return typeof parsed.version === 'string' && parsed.version.trim()
+      ? parsed.version.trim()
+      : null
+  } catch {
+    return null
+  }
+}
+
+function collectExpectedRuntimeVersions() {
+  return {
+    checked: true,
+    coordinator: readPackageVersion(EXPECTED_RUNTIME_PACKAGE_PATHS.coordinator),
+    primitive_runtime: readPackageVersion(EXPECTED_RUNTIME_PACKAGE_PATHS.primitive_runtime),
+  }
 }
 
 function safeFileMtimeMs(path) {
@@ -1769,6 +1793,7 @@ async function collectLiveSnapshot({
     route_registry: routeRegistryDiagnostics,
     coordinator_health: coordinatorHealth,
     primitive_runtime_health: primitiveRuntimeHealth,
+    expected_runtime_versions: collectExpectedRuntimeVersions(),
     active_session_state: activeSessionState,
     bridge_runtime_health: bridgeRuntimeHealth,
     knowledge_base_receipt_report: collectKnowledgeBaseReceiptReport({
@@ -1883,6 +1908,43 @@ function primitiveRuntimeHealthSummary(items) {
       http_status: item.http_status,
     }
   })
+}
+
+function expectedRuntimeVersion(expectedRuntimeVersions, key) {
+  return typeof expectedRuntimeVersions?.[key] === 'string' &&
+    expectedRuntimeVersions[key].trim()
+    ? expectedRuntimeVersions[key].trim()
+    : undefined
+}
+
+function runtimeVersionCheckEnabled(expectedRuntimeVersions, key) {
+  return (
+    expectedRuntimeVersions?.checked === true ||
+    Object.prototype.hasOwnProperty.call(expectedRuntimeVersions ?? {}, key)
+  )
+}
+
+function coordinatorVersion(item) {
+  return stringValue(item.report?.coordinator?.version)
+}
+
+function primitiveRuntimeVersion(item) {
+  return stringValue(item.report?.primitive_runtime?.version)
+}
+
+function healthyItems(items) {
+  return items.filter((item) => item.reachable && item.status === 'healthy')
+}
+
+function versionMismatches(items, expectedVersion, versionFn) {
+  if (!expectedVersion) return []
+  return healthyItems(items)
+    .filter((item) => versionFn(item) !== expectedVersion)
+    .map((item) => ({
+      endpoint: item.endpoint,
+      pid: item.report?.coordinator?.pid ?? item.report?.primitive_runtime?.pid,
+      version: versionFn(item),
+    }))
 }
 
 function hasSharedPrimitiveHttpBackend(item) {
@@ -2209,6 +2271,7 @@ function buildGates({
   routeRegistry,
   knowledgeBaseReceiptReport,
   longLivedActivityReport,
+  expectedRuntimeVersions,
 }) {
   const registryProblems = routeRegistry.filter(
     (item) => item.exists && item.status !== 'valid' && item.status !== 'absent',
@@ -2258,6 +2321,24 @@ function buildGates({
     )
   } else {
     gates.push(gate('coordinator-health', 'pass', `${reachableHealth.length} healthy endpoint(s)`))
+  }
+
+  const expectedCoordinatorVersion = expectedRuntimeVersion(expectedRuntimeVersions, 'coordinator')
+  if (runtimeVersionCheckEnabled(expectedRuntimeVersions, 'coordinator')) {
+    const stale = versionMismatches(health, expectedCoordinatorVersion, coordinatorVersion)
+    const ok = Boolean(expectedCoordinatorVersion) && stale.length === 0
+    const detail = ok
+      ? `all healthy coordinator endpoint(s) report @atrib/emit ${expectedCoordinatorVersion}`
+      : expectedCoordinatorVersion
+        ? `${stale.length} healthy coordinator endpoint(s) do not report @atrib/emit ${expectedCoordinatorVersion}`
+        : 'checked-out @atrib/emit package version could not be read'
+    gates.push(
+      gate(
+        'coordinator-version-freshness',
+        ok ? 'pass' : 'fail',
+        detail,
+      ),
+    )
   }
 
   if (
@@ -2315,6 +2396,30 @@ function buildGates({
     (item) => item.reachable && item.status === 'healthy',
   )
   const sharedPrimitiveHttp = healthyPrimitiveHttp.filter(hasSharedPrimitiveHttpBackend)
+  const expectedPrimitiveVersion = expectedRuntimeVersion(
+    expectedRuntimeVersions,
+    'primitive_runtime',
+  )
+  if (runtimeVersionCheckEnabled(expectedRuntimeVersions, 'primitive_runtime')) {
+    const stale = versionMismatches(
+      primitiveHealth,
+      expectedPrimitiveVersion,
+      primitiveRuntimeVersion,
+    )
+    const ok = Boolean(expectedPrimitiveVersion) && stale.length === 0
+    const detail = ok
+      ? `all healthy primitive HTTP endpoint(s) report @atrib/primitives-runtime ${expectedPrimitiveVersion}`
+      : expectedPrimitiveVersion
+        ? `${stale.length} healthy primitive HTTP endpoint(s) do not report @atrib/primitives-runtime ${expectedPrimitiveVersion}`
+        : 'checked-out @atrib/primitives-runtime package version could not be read'
+    gates.push(
+      gate(
+        'primitive-runtime-version-freshness',
+        ok ? 'pass' : 'fail',
+        detail,
+      ),
+    )
+  }
   const healthyPrimitiveHttpByEndpoint = new Map(
     healthyPrimitiveHttp.map((item) => [item.endpoint, item]),
   )
@@ -2846,6 +2951,10 @@ function buildReport(input, options = {}) {
   const bridgeHealth = Array.isArray(snapshot.bridge_runtime_health)
     ? snapshot.bridge_runtime_health
     : []
+  const expectedRuntimeVersions =
+    snapshot.expected_runtime_versions && typeof snapshot.expected_runtime_versions === 'object'
+      ? snapshot.expected_runtime_versions
+      : undefined
   const routeRegistry = Array.isArray(snapshot.route_registry) ? snapshot.route_registry : []
   const knowledgeBaseReceiptReport = snapshot.knowledge_base_receipt_report
   const longLivedActivityReport = snapshot.long_lived_activity_report
@@ -2875,6 +2984,7 @@ function buildReport(input, options = {}) {
     routeRegistry,
     knowledgeBaseReceiptReport,
     longLivedActivityReport,
+    expectedRuntimeVersions,
   })
   const status = statusFromGates(gates, processSummary)
   const restartTargets = restartTargetsFor(processSummary)
@@ -2892,6 +3002,24 @@ function buildReport(input, options = {}) {
       healthy_coordinators: health.filter((item) => item.reachable && item.status === 'healthy')
         .length,
       configured_coordinators: launchAgents.filter((agent) => agent.kind === 'coordinator').length,
+      runtime_versions_checked:
+        runtimeVersionCheckEnabled(expectedRuntimeVersions, 'coordinator') ||
+        runtimeVersionCheckEnabled(expectedRuntimeVersions, 'primitive_runtime'),
+      coordinator_version_expected: expectedRuntimeVersion(expectedRuntimeVersions, 'coordinator'),
+      coordinator_version_mismatches: versionMismatches(
+        health,
+        expectedRuntimeVersion(expectedRuntimeVersions, 'coordinator'),
+        coordinatorVersion,
+      ).length,
+      primitive_runtime_version_expected: expectedRuntimeVersion(
+        expectedRuntimeVersions,
+        'primitive_runtime',
+      ),
+      primitive_runtime_version_mismatches: versionMismatches(
+        primitiveHealth,
+        expectedRuntimeVersion(expectedRuntimeVersions, 'primitive_runtime'),
+        primitiveRuntimeVersion,
+      ).length,
       route_registry_status:
         registryProblems.length > 0 ? 'problem' : registryValid.length > 0 ? 'valid' : 'absent',
       primitive_runtime_processes: processSummary.primitive_runtime_processes,
@@ -2977,6 +3105,7 @@ function buildReport(input, options = {}) {
       restart_targets: restartTargets.length,
     },
     gates,
+    expected_runtime_versions: expectedRuntimeVersions,
     coordinators: healthSummary(health),
     primitive_runtimes: primitiveRuntimeHealthSummary(primitiveHealth),
     active_session_state: activeSessionStateSummary(activeSessionState),
@@ -3005,6 +3134,11 @@ function recommendationsFor({ status, gates, processSummary }) {
       'restore healthy local-substrate coordinator endpoints before relying on coordinator-owned paths',
     )
   }
+  if (gates.find((item) => item.name === 'coordinator-version-freshness')?.status === 'fail') {
+    recommendations.push(
+      'restart stale local-substrate coordinator LaunchAgents so they run the checked-out @atrib/emit package version',
+    )
+  }
   if (gates.find((item) => item.name === 'route-registry')?.status !== 'pass') {
     recommendations.push(
       'fix the local route registry before relying on future harness coverage in the topology report',
@@ -3026,6 +3160,13 @@ function recommendationsFor({ status, gates, processSummary }) {
   if (gates.find((item) => item.name === 'host-owned-primitives-http')?.status !== 'pass') {
     recommendations.push(
       'start or restart one loopback atrib-primitives Streamable HTTP host with a shared primitive backend per startup-spawn agent profile before broad process-sharing rollout',
+    )
+  }
+  if (
+    gates.find((item) => item.name === 'primitive-runtime-version-freshness')?.status === 'fail'
+  ) {
+    recommendations.push(
+      'restart stale atrib-primitives LaunchAgents so they run the checked-out @atrib/primitives-runtime package version',
     )
   }
   if (gates.find((item) => item.name === 'host-owned-active-session-context')?.status !== 'pass') {
@@ -3092,6 +3233,7 @@ function formatTextReport(report) {
   const lines = [
     `local-substrate topology: ${report.summary.status}`,
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
+    `runtime versions: coordinator=${report.summary.coordinator_version_expected ?? 'unchecked'} mismatches=${report.summary.coordinator_version_mismatches ?? 0}, primitive=${report.summary.primitive_runtime_version_expected ?? 'unchecked'} mismatches=${report.summary.primitive_runtime_version_mismatches ?? 0}`,
     `route registry: ${report.summary.route_registry_status}`,
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, direct-stdio=${report.summary.primitive_runtime_stdio_processes}, proxy=${report.summary.primitive_proxy_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `bridge processes: runtimes=${report.summary.bridge_runtime_processes} (http=${report.summary.bridge_runtime_http_processes}, proxy=${report.summary.bridge_proxy_processes}, stdio-proxy=${report.summary.bridge_proxy_stdio_processes}), legacy-wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
