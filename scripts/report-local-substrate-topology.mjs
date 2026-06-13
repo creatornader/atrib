@@ -46,6 +46,7 @@ const DEFAULT_LONG_LIVED_ACTIVITY_REPORT_MAX_AGE_MS = 12 * 3_600_000
 const HEX_32 = /^[0-9a-f]{32}$/
 const RECORD_HASH = /^sha256:[0-9a-f]{64}$/
 const ACTIVE_SESSION_STATE_MAX_BYTES = 128
+const ACTIVE_SESSION_STATE_MAX_AGE_MS = 4 * 3_600_000
 const SAFE_ACTIVE_SESSION_PROFILE = /^[A-Za-z0-9._-]{1,64}$/
 const ACTIVE_SESSION_STATE_DIR = join(HOME, '.claude', 'state')
 const PRIMITIVE_SERVERS = [
@@ -1833,17 +1834,27 @@ function collectActiveSessionState(profiles) {
           path: displayPath(path),
           exists: true,
           valid_context_id: false,
+          fresh_context_id: false,
           mtime_ms: Math.round(stat.mtimeMs),
+          age_ms: Math.max(0, Math.round(Date.now() - stat.mtimeMs)),
+          max_age_ms: ACTIVE_SESSION_STATE_MAX_AGE_MS,
           reason: 'oversize',
         }
       }
       const contextId = parseSessionContextId(readFileSync(path, 'utf8'))
+      const ageMs = Math.max(0, Math.round(Date.now() - stat.mtimeMs))
+      const validContextId = Boolean(contextId)
+      const freshContextId = validContextId && ageMs <= ACTIVE_SESSION_STATE_MAX_AGE_MS
       return {
         profile,
         path: displayPath(path),
         exists: true,
-        valid_context_id: Boolean(contextId),
+        valid_context_id: validContextId,
+        fresh_context_id: freshContextId,
         mtime_ms: Math.round(stat.mtimeMs),
+        age_ms: ageMs,
+        max_age_ms: ACTIVE_SESSION_STATE_MAX_AGE_MS,
+        reason: validContextId && !freshContextId ? 'stale' : undefined,
       }
     } catch {
       return {
@@ -1851,6 +1862,7 @@ function collectActiveSessionState(profiles) {
         path: displayPath(path),
         exists: false,
         valid_context_id: false,
+        fresh_context_id: false,
         reason: 'missing',
       }
     }
@@ -1968,11 +1980,38 @@ function hasExplicitContextIdPolicy(item) {
   )
 }
 
+function primitiveRuntimeHasNoSessions(item) {
+  const sessions = item?.report?.sessions
+  return Number(sessions?.active) === 0 && Number(sessions?.opened) === 0
+}
+
+function activeSessionStateAgeMs(item) {
+  if (Number.isFinite(item?.age_ms)) return Math.max(0, Math.round(item.age_ms))
+  if (Number.isFinite(item?.mtime_ms)) return Math.max(0, Math.round(Date.now() - item.mtime_ms))
+  return undefined
+}
+
+function activeSessionStateMaxAgeMs(item) {
+  return Number.isFinite(item?.max_age_ms)
+    ? Math.max(0, Math.round(item.max_age_ms))
+    : ACTIVE_SESSION_STATE_MAX_AGE_MS
+}
+
+function hasFreshActiveSessionState(item) {
+  if (!item?.valid_context_id) return false
+  if (typeof item.fresh_context_id === 'boolean') return item.fresh_context_id
+  const ageMs = activeSessionStateAgeMs(item)
+  return Number.isFinite(ageMs) && ageMs <= activeSessionStateMaxAgeMs(item)
+}
+
 function activeSessionCoverage(primitiveHealth, activeSessionState) {
   const healthyPrimitiveHttp = primitiveHealth.filter(
     (item) => item.reachable && item.status === 'healthy',
   )
   const runtimeProfiles = unique(healthyPrimitiveHttp.map((item) => item.report?.profile?.agent))
+  const primitiveHttpByProfile = new Map(
+    healthyPrimitiveHttp.map((item) => [item.report?.profile?.agent, item]),
+  )
   const activeSessionStateByProfile = new Map(
     activeSessionState.map((item) => [item.profile, item]),
   )
@@ -1985,19 +2024,30 @@ function activeSessionCoverage(primitiveHealth, activeSessionState) {
   const validStateProfiles = runtimeProfiles.filter(
     (profile) => activeSessionStateByProfile.get(profile)?.valid_context_id,
   )
+  const freshStateProfiles = runtimeProfiles.filter(
+    (profile) => hasFreshActiveSessionState(activeSessionStateByProfile.get(profile)),
+  )
+  const idleProfiles = runtimeProfiles.filter((profile) =>
+    primitiveRuntimeHasNoSessions(primitiveHttpByProfile.get(profile)),
+  )
+  const idleProfileSet = new Set(idleProfiles)
   const readyProfiles = runtimeProfiles.filter(
     (profile) =>
-      activeSessionStateByProfile.get(profile)?.valid_context_id ||
-      explicitContextProfileSet.has(profile),
+      hasFreshActiveSessionState(activeSessionStateByProfile.get(profile)) ||
+      explicitContextProfileSet.has(profile) ||
+      idleProfileSet.has(profile),
   )
   const missingProfiles = runtimeProfiles.filter(
     (profile) =>
-      !activeSessionStateByProfile.get(profile)?.valid_context_id &&
-      !explicitContextProfileSet.has(profile),
+      !hasFreshActiveSessionState(activeSessionStateByProfile.get(profile)) &&
+      !explicitContextProfileSet.has(profile) &&
+      !idleProfileSet.has(profile),
   )
   return {
     runtimeProfiles,
     validStateProfiles,
+    freshStateProfiles,
+    idleProfiles,
     explicitContextProfiles,
     readyProfiles,
     missingProfiles,
@@ -2005,14 +2055,21 @@ function activeSessionCoverage(primitiveHealth, activeSessionState) {
 }
 
 function activeSessionStateSummary(items) {
-  return items.map((item) => ({
-    profile: item.profile,
-    path: item.path,
-    exists: Boolean(item.exists),
-    valid_context_id: Boolean(item.valid_context_id),
-    mtime_ms: item.mtime_ms,
-    reason: item.reason,
-  }))
+  return items.map((item) => {
+    const ageMs = activeSessionStateAgeMs(item)
+    const freshContextId = hasFreshActiveSessionState(item)
+    return {
+      profile: item.profile,
+      path: item.path,
+      exists: Boolean(item.exists),
+      valid_context_id: Boolean(item.valid_context_id),
+      fresh_context_id: freshContextId,
+      mtime_ms: item.mtime_ms,
+      age_ms: ageMs,
+      max_age_ms: activeSessionStateMaxAgeMs(item),
+      reason: item.reason ?? (item.valid_context_id && !freshContextId ? 'stale' : undefined),
+    }
+  })
 }
 
 function bridgeRuntimeHealthSummary(items) {
@@ -2527,7 +2584,7 @@ function buildGates({
       gate(
         'host-owned-active-session-context',
         'pass',
-        `${contextCoverage.readyProfiles.length}/${contextCoverage.runtimeProfiles.length} primitive HTTP profile(s) have context routing coverage (${contextCoverage.validStateProfiles.length} active-session state, ${contextCoverage.explicitContextProfiles.length} explicit-context-required)`,
+        `${contextCoverage.readyProfiles.length}/${contextCoverage.runtimeProfiles.length} primitive HTTP profile(s) have context routing coverage (${contextCoverage.freshStateProfiles.length} fresh active-session state, ${contextCoverage.explicitContextProfiles.length} explicit-context-required, ${contextCoverage.idleProfiles.length} idle)`,
       ),
     )
   } else {
@@ -2535,7 +2592,7 @@ function buildGates({
       gate(
         'host-owned-active-session-context',
         'warn',
-        `${contextCoverage.readyProfiles.length}/${contextCoverage.runtimeProfiles.length} primitive HTTP profile(s) have context routing coverage (${contextCoverage.validStateProfiles.length} active-session state, ${contextCoverage.explicitContextProfiles.length} explicit-context-required); missing or invalid: ${contextCoverage.missingProfiles.join(', ')}`,
+        `${contextCoverage.readyProfiles.length}/${contextCoverage.runtimeProfiles.length} primitive HTTP profile(s) have context routing coverage (${contextCoverage.freshStateProfiles.length} fresh active-session state, ${contextCoverage.explicitContextProfiles.length} explicit-context-required, ${contextCoverage.idleProfiles.length} idle); missing, invalid, or stale while active: ${contextCoverage.missingProfiles.join(', ')}`,
       ),
     )
   }
@@ -3055,6 +3112,8 @@ function buildReport(input, options = {}) {
       ).length,
       active_session_profiles: contextCoverage.runtimeProfiles.length,
       active_session_profiles_valid: contextCoverage.validStateProfiles.length,
+      active_session_profiles_fresh: contextCoverage.freshStateProfiles.length,
+      active_session_profiles_idle: contextCoverage.idleProfiles.length,
       active_session_profiles_explicit_required: contextCoverage.explicitContextProfiles.length,
       active_session_profiles_ready: contextCoverage.readyProfiles.length,
       duplicate_bridge_wrapper_groups: processSummary.duplicate_bridge_wrapper_groups,
@@ -3171,7 +3230,7 @@ function recommendationsFor({ status, gates, processSummary }) {
   }
   if (gates.find((item) => item.name === 'host-owned-active-session-context')?.status !== 'pass') {
     recommendations.push(
-      'make every host-owned primitive profile either write valid active-session state or require explicit context_id before relying on profile fallback',
+      'make every active host-owned primitive profile either write fresh valid active-session state or require explicit context_id before relying on profile fallback',
     )
   }
   if (gates.find((item) => item.name === 'host-owned-bridge-http')?.status !== 'pass') {
@@ -3238,7 +3297,7 @@ function formatTextReport(report) {
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, direct-stdio=${report.summary.primitive_runtime_stdio_processes}, proxy=${report.summary.primitive_proxy_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `bridge processes: runtimes=${report.summary.bridge_runtime_processes} (http=${report.summary.bridge_runtime_http_processes}, proxy=${report.summary.bridge_proxy_processes}, stdio-proxy=${report.summary.bridge_proxy_stdio_processes}), legacy-wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
-    `context routing profiles: ready=${report.summary.active_session_profiles_ready}/${report.summary.active_session_profiles}, active-session=${report.summary.active_session_profiles_valid}, explicit-required=${report.summary.active_session_profiles_explicit_required}`,
+    `context routing profiles: ready=${report.summary.active_session_profiles_ready}/${report.summary.active_session_profiles}, active-session=${report.summary.active_session_profiles_valid}, fresh=${report.summary.active_session_profiles_fresh}, idle=${report.summary.active_session_profiles_idle}, explicit-required=${report.summary.active_session_profiles_explicit_required}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
     `knowledge-base receipt join-back: status=${report.summary.knowledge_base_receipt_report_status}, pending=${report.summary.knowledge_base_receipt_pending_total}, obs=${report.summary.knowledge_base_receipt_observation_pending}, annotations=${report.summary.knowledge_base_receipt_annotation_pending}, wal-queued=${report.summary.knowledge_base_wal_queued}, wal-receipted=${report.summary.knowledge_base_wal_receipted}, non-joinable-receipted=${report.summary.knowledge_base_wal_non_joinable_receipted}, wal-quarantined=${report.summary.knowledge_base_wal_quarantined}, receipt-mismatches=${report.summary.knowledge_base_receipt_integrity_mismatches}, receipt-orphans=${report.summary.knowledge_base_receipt_integrity_orphans}`,
     `knowledge-base watcher activity: status=${report.summary.knowledge_base_activity_status}, source=${report.summary.knowledge_base_activity_source ?? 'unknown'}, age-ms=${report.summary.knowledge_base_activity_age_ms ?? 'unknown'}`,

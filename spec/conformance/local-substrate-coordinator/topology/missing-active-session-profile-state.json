@@ -379,7 +379,7 @@
       "knowledge-base-watcher-activity": "pass"
     },
     "recommendations": [
-      "make every host-owned primitive profile either write valid active-session state or require explicit context_id before relying on profile fallback"
+      "make every active host-owned primitive profile either write fresh valid active-session state or require explicit context_id before relying on profile fallback"
     ]
   }
 }

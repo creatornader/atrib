@@ -378,6 +378,121 @@ function checkExplicitContextPolicyGate() {
   }
 }
 
+function checkStaleActiveSessionStateGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  for (const item of snapshot.active_session_state ?? []) {
+    if (item.profile !== 'codex') continue
+    item.mtime_ms = FIXTURE_NOW_MS - 5 * 3_600_000
+    delete item.age_ms
+    delete item.fresh_context_id
+  }
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'mixed') {
+    fail(`stale active-session gate: expected status mixed, got ${report.summary.status}`)
+  }
+  if (report.summary.active_session_profiles_valid !== 2) {
+    fail(
+      `stale active-session gate: expected 2 valid active-session profiles, got ${report.summary.active_session_profiles_valid}`,
+    )
+  }
+  if (report.summary.active_session_profiles_fresh !== 1) {
+    fail(
+      `stale active-session gate: expected 1 fresh active-session profile, got ${report.summary.active_session_profiles_fresh}`,
+    )
+  }
+  if (report.summary.active_session_profiles_idle !== 0) {
+    fail(
+      `stale active-session gate: expected 0 idle active-session profiles, got ${report.summary.active_session_profiles_idle}`,
+    )
+  }
+  if (report.summary.active_session_profiles_ready !== 2) {
+    fail(
+      `stale active-session gate: expected 2 ready context profiles, got ${report.summary.active_session_profiles_ready}`,
+    )
+  }
+  const codexState = report.active_session_state.find((item) => item.profile === 'codex')
+  if (codexState?.fresh_context_id !== false || codexState?.reason !== 'stale') {
+    fail('stale active-session gate: expected codex state to be stale')
+  }
+  const activeSessionGate = report.gates.find(
+    (gate) => gate.name === 'host-owned-active-session-context',
+  )
+  if (activeSessionGate?.status !== 'warn') {
+    fail('stale active-session gate: expected host-owned-active-session-context=warn')
+  }
+  const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (broadGate?.status !== 'fail') {
+    fail('stale active-session gate: expected broad-default-readiness=fail')
+  }
+  if (
+    !report.recommendations.includes(
+      'make every active host-owned primitive profile either write fresh valid active-session state or require explicit context_id before relying on profile fallback',
+    )
+  ) {
+    fail('stale active-session gate: expected fresh-state recommendation')
+  }
+}
+
+function checkIdleActiveSessionStateGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  for (const item of snapshot.active_session_state ?? []) {
+    if (item.profile !== 'claude-code') continue
+    item.mtime_ms = FIXTURE_NOW_MS - 5 * 3_600_000
+    delete item.age_ms
+    delete item.fresh_context_id
+  }
+  for (const item of snapshot.primitive_runtime_health ?? []) {
+    if (item.report?.profile?.agent !== 'claude-code') continue
+    item.report.sessions = {
+      ...(item.report.sessions ?? {}),
+      active: 0,
+      opened: 0,
+    }
+  }
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'ready_for_default_trial') {
+    fail(`idle active-session gate: expected ready_for_default_trial, got ${report.summary.status}`)
+  }
+  if (report.summary.active_session_profiles_valid !== 2) {
+    fail(
+      `idle active-session gate: expected 2 valid active-session profiles, got ${report.summary.active_session_profiles_valid}`,
+    )
+  }
+  if (report.summary.active_session_profiles_fresh !== 1) {
+    fail(
+      `idle active-session gate: expected 1 fresh active-session profile, got ${report.summary.active_session_profiles_fresh}`,
+    )
+  }
+  if (report.summary.active_session_profiles_idle !== 1) {
+    fail(
+      `idle active-session gate: expected 1 idle active-session profile, got ${report.summary.active_session_profiles_idle}`,
+    )
+  }
+  if (report.summary.active_session_profiles_ready !== 3) {
+    fail(
+      `idle active-session gate: expected 3 ready context profiles, got ${report.summary.active_session_profiles_ready}`,
+    )
+  }
+  const activeSessionGate = report.gates.find(
+    (gate) => gate.name === 'host-owned-active-session-context',
+  )
+  if (activeSessionGate?.status !== 'pass') {
+    fail('idle active-session gate: expected host-owned-active-session-context=pass')
+  }
+  const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (broadGate?.status !== 'pass') {
+    fail('idle active-session gate: expected broad-default-readiness=pass')
+  }
+}
+
 function checkKnowledgeBaseReceiptJoinGate() {
   const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
@@ -1238,6 +1353,8 @@ function main() {
   checkConfigSurfaceEndpointEvidence()
   checkPrimitiveBackendContractGate()
   checkExplicitContextPolicyGate()
+  checkStaleActiveSessionStateGate()
+  checkIdleActiveSessionStateGate()
   checkKnowledgeBaseReceiptJoinGate()
   checkKnowledgeBaseWatcherActivityGate()
   checkKnowledgeBaseReceiptCollector()
