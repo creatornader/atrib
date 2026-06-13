@@ -151,7 +151,9 @@ function buildDefaultTrialGates(report) {
     Number(summary.knowledge_base_wal_receipted ?? 0) === 0 &&
     summary.knowledge_base_wal_quarantined === 0
   const watcherWalActivityClean =
-    summary.watcher_wal_launch_agents > 0 && summary.knowledge_base_activity_status === 'ok'
+    summary.watcher_wal_launch_agents > 0 &&
+    summary.knowledge_base_activity_status === 'ok' &&
+    summary.knowledge_base_activity_stale !== true
   const longLivedRoutesHealthy =
     summary.long_lived_agent_routes > 0 &&
     summary.long_lived_agent_routes_healthy === summary.long_lived_agent_routes &&
@@ -204,7 +206,7 @@ function buildDefaultTrialGates(report) {
       watcherWalActivityClean,
       watcherWalActivityClean
         ? 'watcher-WAL route has recent knowledge-base producer activity evidence'
-        : `watchers=${summary.watcher_wal_launch_agents}, activity_status=${summary.knowledge_base_activity_status}, activity_age_ms=${summary.knowledge_base_activity_age_ms}`,
+        : `watchers=${summary.watcher_wal_launch_agents}, activity_status=${summary.knowledge_base_activity_status}, activity_age_ms=${summary.knowledge_base_activity_age_ms}, activity_stale=${summary.knowledge_base_activity_stale}`,
     ),
     gate(
       'long-lived-routes-healthy',
@@ -282,14 +284,25 @@ function buildDefaultTrialMeasurement(report, options = {}) {
         receipt_report_status: summary.knowledge_base_receipt_report_status,
         receipt_pending_total: summary.knowledge_base_receipt_pending_total,
         wal_queued: summary.knowledge_base_wal_queued,
+        wal_non_joinable_queued: Number(summary.knowledge_base_wal_non_joinable_queued ?? 0),
         wal_receipted: Number(summary.knowledge_base_wal_receipted ?? 0),
+        wal_non_joinable_receipted: Number(
+          summary.knowledge_base_wal_non_joinable_receipted ?? 0,
+        ),
         wal_quarantined: summary.knowledge_base_wal_quarantined,
+        receipt_active_joinable: Number(
+          summary.knowledge_base_receipt_integrity_active_joinable ?? 0,
+        ),
+        receipt_non_joinable: Number(
+          summary.knowledge_base_receipt_integrity_non_joinable ?? 0,
+        ),
         receipt_mismatches: Number(summary.knowledge_base_receipt_integrity_mismatches ?? 0),
         receipt_orphans: Number(summary.knowledge_base_receipt_integrity_orphans ?? 0),
         receipt_invalid: Number(summary.knowledge_base_receipt_integrity_invalid ?? 0),
         activity_status: summary.knowledge_base_activity_status,
         activity_source: summary.knowledge_base_activity_source,
         activity_age_ms: summary.knowledge_base_activity_age_ms,
+        activity_stale: summary.knowledge_base_activity_stale,
       },
       long_lived_agents: {
         total: summary.long_lived_agents,
@@ -320,7 +333,7 @@ function formatTextMeasurement(measurement) {
     `coordinators: healthy=${measurement.process_footprint.coordinators.healthy}/${measurement.process_footprint.coordinators.configured}`,
     `startup-spawn: primitive-http-shared=${measurement.process_footprint.startup_spawn.primitive_runtime_http_shared}/${measurement.process_footprint.startup_spawn.primitive_runtime_http_processes}, direct-stdio=${measurement.process_footprint.startup_spawn.primitive_runtime_stdio_processes}, proxy=${measurement.process_footprint.startup_spawn.primitive_proxy_processes}, standalone=${measurement.process_footprint.startup_spawn.standalone_primitive_processes}, restart-targets=${measurement.process_footprint.startup_spawn.restart_targets}`,
     `bridge: http=${measurement.process_footprint.bridge.runtime_http_healthy}/${measurement.process_footprint.bridge.runtime_http_endpoints}, proxy=${measurement.process_footprint.bridge.proxy_processes}, wrappers=${measurement.process_footprint.bridge.wrapper_processes}, upstream=${measurement.process_footprint.bridge.upstream_processes}`,
-    `watcher-WAL: launch-agents=${measurement.process_footprint.watcher_wal.launch_agents}, receipt-status=${measurement.process_footprint.watcher_wal.receipt_report_status}, pending=${measurement.process_footprint.watcher_wal.receipt_pending_total}, receipted=${measurement.process_footprint.watcher_wal.wal_receipted}, mismatches=${measurement.process_footprint.watcher_wal.receipt_mismatches}, orphans=${measurement.process_footprint.watcher_wal.receipt_orphans}`,
+    `watcher-WAL: launch-agents=${measurement.process_footprint.watcher_wal.launch_agents}, receipt-status=${measurement.process_footprint.watcher_wal.receipt_report_status}, pending=${measurement.process_footprint.watcher_wal.receipt_pending_total}, receipted=${measurement.process_footprint.watcher_wal.wal_receipted}, non-joinable-receipted=${measurement.process_footprint.watcher_wal.wal_non_joinable_receipted}, mismatches=${measurement.process_footprint.watcher_wal.receipt_mismatches}, orphans=${measurement.process_footprint.watcher_wal.receipt_orphans}`,
     `watcher-WAL activity: status=${measurement.process_footprint.watcher_wal.activity_status}, source=${measurement.process_footprint.watcher_wal.activity_source ?? 'unknown'}, age-ms=${measurement.process_footprint.watcher_wal.activity_age_ms ?? 'unknown'}`,
     `long-lived routes: healthy=${measurement.process_footprint.long_lived_agents.healthy_routes}/${measurement.process_footprint.long_lived_agents.routes}, missing=${measurement.process_footprint.long_lived_agents.missing_routes}`,
     `long-lived activity: status=${measurement.process_footprint.long_lived_agents.activity_report_status}, ok=${measurement.process_footprint.long_lived_agents.activity_ok}/${measurement.process_footprint.long_lived_agents.routes}, missing=${measurement.process_footprint.long_lived_agents.activity_missing}, stale=${measurement.process_footprint.long_lived_agents.activity_stale}`,

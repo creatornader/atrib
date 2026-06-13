@@ -991,6 +991,12 @@ function collectKnowledgeBaseReceiptReport({
     rawReceiptIntegrity && typeof rawReceiptIntegrity === 'object'
       ? {
           active_receipt_files: Number(rawReceiptIntegrity.active_receipt_files ?? walReceipted),
+          active_joinable_receipt_files: Number(
+            rawReceiptIntegrity.active_joinable_receipt_files ?? walReceipted,
+          ),
+          non_joinable_receipt_files: Number(
+            rawReceiptIntegrity.non_joinable_receipt_files ?? 0,
+          ),
           invalid_receipt_files: Number(rawReceiptIntegrity.invalid_receipt_files ?? 0),
           orphan_receipt_files: Number(rawReceiptIntegrity.orphan_receipt_files ?? 0),
           receipt_mismatches: Number(rawReceiptIntegrity.receipt_mismatches ?? 0),
@@ -1004,6 +1010,8 @@ function collectKnowledgeBaseReceiptReport({
         }
       : {
           active_receipt_files: walReceipted,
+          active_joinable_receipt_files: walReceipted,
+          non_joinable_receipt_files: 0,
           invalid_receipt_files: 0,
           orphan_receipt_files: 0,
           receipt_mismatches: 0,
@@ -1032,8 +1040,10 @@ function collectKnowledgeBaseReceiptReport({
     },
     wal: {
       queued: walQueued,
+      non_joinable_queued: Number(raw?.wal?.non_joinable_queued ?? 0),
       quarantined: walQuarantined,
       receipted: walReceipted,
+      non_joinable_receipted: Number(raw?.wal?.non_joinable_receipted ?? 0),
     },
     pending: {
       observations: observationPending,
@@ -1057,11 +1067,16 @@ function normalizeKnowledgeBaseActivity(activity) {
   const lastActivityAt = stringValue(activity.last_activity_at)
   const lastActivityMs = lastActivityAt ? Date.parse(lastActivityAt) : Number.NaN
   const declaredAge = Number(activity.age_ms)
-  const ageMs = Number.isFinite(declaredAge)
+  const declaredAgeMs = Number.isFinite(declaredAge)
     ? Math.max(0, Math.round(declaredAge))
-    : Number.isFinite(lastActivityMs)
-      ? Math.max(0, Math.round(Date.now() - lastActivityMs))
-      : undefined
+    : undefined
+  const currentAgeMs = Number.isFinite(lastActivityMs)
+    ? Math.max(0, Math.round(Date.now() - lastActivityMs))
+    : undefined
+  const ageMs =
+    declaredAgeMs !== undefined && currentAgeMs !== undefined
+      ? Math.max(declaredAgeMs, currentAgeMs)
+      : declaredAgeMs ?? currentAgeMs
   const maxAgeMs = positiveInteger(activity.max_age_ms)
   const recordHash = stringValue(activity.record_hash)
   const contextId = parseSessionContextId(stringValue(activity.context_id))
@@ -2057,7 +2072,7 @@ function knowledgeBaseReceiptPendingTotal(report) {
 function knowledgeBaseReceiptSummary(report) {
   const status = knowledgeBaseReceiptReportStatus(report)
   const activity = report?.activity && typeof report.activity === 'object'
-    ? report.activity
+    ? normalizeKnowledgeBaseActivity(report.activity)
     : { status: 'missing' }
   return {
     status,
@@ -2066,8 +2081,10 @@ function knowledgeBaseReceiptSummary(report) {
     observation_pending: Number(report?.observations?.pending_receipt_joins ?? 0),
     annotation_pending: Number(report?.annotations?.pending_receipt_or_parent_joins ?? 0),
     wal_queued: Number(report?.wal?.queued ?? 0),
+    wal_non_joinable_queued: Number(report?.wal?.non_joinable_queued ?? 0),
     wal_quarantined: Number(report?.wal?.quarantined ?? 0),
     wal_receipted: Number(report?.wal?.receipted ?? 0),
+    wal_non_joinable_receipted: Number(report?.wal?.non_joinable_receipted ?? 0),
     receipt_integrity: report?.receipt_integrity,
     activity,
   }
@@ -2820,10 +2837,16 @@ function buildReport(input, options = {}) {
       knowledge_base_receipt_observation_pending: receiptSummary.observation_pending,
       knowledge_base_receipt_annotation_pending: receiptSummary.annotation_pending,
       knowledge_base_wal_queued: receiptSummary.wal_queued,
+      knowledge_base_wal_non_joinable_queued: receiptSummary.wal_non_joinable_queued,
       knowledge_base_wal_quarantined: receiptSummary.wal_quarantined,
       knowledge_base_wal_receipted: receiptSummary.wal_receipted,
+      knowledge_base_wal_non_joinable_receipted: receiptSummary.wal_non_joinable_receipted,
       knowledge_base_receipt_integrity_active:
         receiptSummary.receipt_integrity?.active_receipt_files,
+      knowledge_base_receipt_integrity_active_joinable:
+        receiptSummary.receipt_integrity?.active_joinable_receipt_files,
+      knowledge_base_receipt_integrity_non_joinable:
+        receiptSummary.receipt_integrity?.non_joinable_receipt_files,
       knowledge_base_receipt_integrity_mismatches:
         receiptSummary.receipt_integrity?.receipt_mismatches,
       knowledge_base_receipt_integrity_orphans:
@@ -2832,6 +2855,7 @@ function buildReport(input, options = {}) {
         receiptSummary.receipt_integrity?.invalid_receipt_files,
       knowledge_base_activity_status: receiptSummary.activity?.status,
       knowledge_base_activity_age_ms: receiptSummary.activity?.age_ms,
+      knowledge_base_activity_stale: receiptSummary.activity?.stale,
       knowledge_base_activity_source: receiptSummary.activity?.source,
       long_lived_agents: longLivedAgents.length,
       long_lived_agent_routes: longLivedRoutes.total,
@@ -2969,7 +2993,7 @@ function formatTextReport(report) {
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
     `context routing profiles: ready=${report.summary.active_session_profiles_ready}/${report.summary.active_session_profiles}, active-session=${report.summary.active_session_profiles_valid}, explicit-required=${report.summary.active_session_profiles_explicit_required}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
-    `knowledge-base receipt join-back: status=${report.summary.knowledge_base_receipt_report_status}, pending=${report.summary.knowledge_base_receipt_pending_total}, obs=${report.summary.knowledge_base_receipt_observation_pending}, annotations=${report.summary.knowledge_base_receipt_annotation_pending}, wal-queued=${report.summary.knowledge_base_wal_queued}, wal-receipted=${report.summary.knowledge_base_wal_receipted}, wal-quarantined=${report.summary.knowledge_base_wal_quarantined}, receipt-mismatches=${report.summary.knowledge_base_receipt_integrity_mismatches}, receipt-orphans=${report.summary.knowledge_base_receipt_integrity_orphans}`,
+    `knowledge-base receipt join-back: status=${report.summary.knowledge_base_receipt_report_status}, pending=${report.summary.knowledge_base_receipt_pending_total}, obs=${report.summary.knowledge_base_receipt_observation_pending}, annotations=${report.summary.knowledge_base_receipt_annotation_pending}, wal-queued=${report.summary.knowledge_base_wal_queued}, wal-receipted=${report.summary.knowledge_base_wal_receipted}, non-joinable-receipted=${report.summary.knowledge_base_wal_non_joinable_receipted}, wal-quarantined=${report.summary.knowledge_base_wal_quarantined}, receipt-mismatches=${report.summary.knowledge_base_receipt_integrity_mismatches}, receipt-orphans=${report.summary.knowledge_base_receipt_integrity_orphans}`,
     `knowledge-base watcher activity: status=${report.summary.knowledge_base_activity_status}, source=${report.summary.knowledge_base_activity_source ?? 'unknown'}, age-ms=${report.summary.knowledge_base_activity_age_ms ?? 'unknown'}`,
     `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agent_routes}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}, endpoints=${report.summary.long_lived_agent_route_endpoints}`,
     `long-lived activity: status=${report.summary.long_lived_activity_report_status}, ok=${report.summary.long_lived_agent_activity_ok}/${report.summary.long_lived_agent_routes}, missing=${report.summary.long_lived_agent_activity_missing}, stale=${report.summary.long_lived_agent_activity_stale}`,
