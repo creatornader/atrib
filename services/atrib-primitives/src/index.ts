@@ -133,6 +133,13 @@ const PRIMITIVES: readonly [string, PrimitiveFactory][] = [
   ['verify', createAtribVerifyServer],
 ]
 
+const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
+
+function requiresExplicitContextId(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID']
+  return raw !== undefined && TRUE_ENV_VALUES.has(raw.trim().toLowerCase())
+}
+
 function readPackageVersion(): string {
   try {
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
@@ -558,6 +565,10 @@ export async function bindAtribPrimitivesHttpHost(
             agent: process.env.ATRIB_AGENT,
             mirror_file: process.env.ATRIB_MIRROR_FILE,
             local_substrate_endpoint: process.env.ATRIB_LOCAL_SUBSTRATE_ENDPOINT,
+            context_id_policy: requiresExplicitContextId()
+              ? 'explicit-required'
+              : 'active-session-or-fallback',
+            requires_explicit_context_id: requiresExplicitContextId(),
           },
           sessions: {
             active: sessions.size,

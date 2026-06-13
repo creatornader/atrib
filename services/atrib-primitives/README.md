@@ -38,6 +38,8 @@ Streamable HTTP mode keeps one host-owned process alive and lets MCP clients for
 
 The HTTP host creates one mounted primitive backend per host process, gives each MCP client its own Streamable HTTP session transport, closes idle sessions after 12 hours by default, and never spawns the seven standalone primitive binaries.
 
+The health report includes the profile's context policy. Set `ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID=1` on hosts that should refuse write-primitive calls when neither the caller nor the harness can provide a `context_id`. The write primitives then return a warnings-only response instead of signing a synthesized orphan context.
+
 ## Run As A Stdio Proxy
 
 ```sh
@@ -54,4 +56,4 @@ Proxy mode speaks MCP over stdio to the client, connects to the host-owned Strea
 pnpm --filter @atrib/primitives-runtime test
 ```
 
-The protocol test lists all 15 tools over stdio, routes a recall call through the combined server, repeats the path through Streamable HTTP, checks the stdio proxy path, and verifies that two HTTP sessions share one mounted primitive backend.
+The protocol test lists all 15 tools over stdio, routes a recall call through the combined server, repeats the path through Streamable HTTP, checks the stdio proxy path, verifies that two HTTP sessions share one mounted primitive backend, and asserts the health contract for explicit-context profiles.
