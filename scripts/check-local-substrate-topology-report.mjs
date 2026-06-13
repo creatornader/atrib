@@ -787,6 +787,54 @@ function checkLongLivedActivityCollector() {
       )
     }
 
+    const missingHashPath = join(dir, 'missing-hash.json')
+    writeFileSync(
+      missingHashPath,
+      JSON.stringify({
+        schema: 'atrib.long-lived-agent-activity-report.v0',
+        generated_at: new Date().toISOString(),
+        activities: [
+          {
+            label: 'ai.future.gateway',
+            agent: 'future',
+            status: 'ok',
+            last_activity_at: new Date().toISOString(),
+            route_endpoint: 'http://127.0.0.1:8898/atrib/local-substrate',
+          },
+        ],
+      }),
+    )
+    const missingHash = collectLongLivedActivityReport({ path: missingHashPath })
+    if (missingHash.status !== 'invalid_shape') {
+      fail(
+        `long-lived activity collector: expected missing record_hash invalid_shape, got ${missingHash.status}`,
+      )
+    }
+
+    const missingEndpointPath = join(dir, 'missing-endpoint.json')
+    writeFileSync(
+      missingEndpointPath,
+      JSON.stringify({
+        schema: 'atrib.long-lived-agent-activity-report.v0',
+        generated_at: new Date().toISOString(),
+        activities: [
+          {
+            label: 'ai.future.gateway',
+            agent: 'future',
+            status: 'ok',
+            last_activity_at: new Date().toISOString(),
+            record_hash: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          },
+        ],
+      }),
+    )
+    const missingEndpoint = collectLongLivedActivityReport({ path: missingEndpointPath })
+    if (missingEndpoint.status !== 'invalid_shape') {
+      fail(
+        `long-lived activity collector: expected missing route_endpoint invalid_shape, got ${missingEndpoint.status}`,
+      )
+    }
+
     const stalePath = join(dir, 'stale.json')
     writeFileSync(
       stalePath,
@@ -924,6 +972,26 @@ function checkLongLivedActivityGate() {
   }
   if (nonDelegatedReport.summary.long_lived_agent_activity_stale !== 0) {
     fail('long-lived activity gate: expected non-delegated activity to stay freshness-clean')
+  }
+
+  const endpointMismatchSnapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  for (const activity of endpointMismatchSnapshot.long_lived_activity_report.activities) {
+    activity.route_endpoint = 'http://127.0.0.1:9999/atrib/local-substrate'
+  }
+  const endpointMismatchReport = buildReport(endpointMismatchSnapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  const endpointMismatchGate = endpointMismatchReport.gates.find(
+    (gate) => gate.name === 'long-lived-agent-activity',
+  )
+  if (endpointMismatchGate?.status !== 'warn') {
+    fail('long-lived activity gate: expected endpoint mismatch activity to warn')
+  }
+  if (endpointMismatchReport.summary.long_lived_agent_activity_endpoint_mismatch !== 1) {
+    fail('long-lived activity gate: expected one endpoint mismatch activity')
+  }
+  if (endpointMismatchReport.summary.long_lived_agent_activity_not_delegated !== 0) {
+    fail('long-lived activity gate: expected endpoint mismatch not to count as non-delegated')
   }
 }
 
