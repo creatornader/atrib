@@ -17,6 +17,12 @@
         "command": "node services/atrib-primitives/dist/index.js --transport streamable-http --port 8795 --path /mcp"
       },
       {
+        "pid": 112,
+        "ppid": 1,
+        "service": "atrib-primitives",
+        "command": "node services/atrib-primitives/dist/index.js --transport streamable-http --port 8792 --path /mcp"
+      },
+      {
         "pid": 300,
         "ppid": 1,
         "service": "atrib-local-substrate",
@@ -27,6 +33,12 @@
         "ppid": 1,
         "service": "atrib-local-substrate",
         "command": "node services/atrib-emit/dist/local-substrate-host.js --port 8797"
+      },
+      {
+        "pid": 302,
+        "ppid": 1,
+        "service": "atrib-local-substrate",
+        "command": "node services/atrib-emit/dist/local-substrate-host.js --port 8786"
       }
     ],
     "configs": [
@@ -59,6 +71,23 @@
         "bridge_http_endpoints": [
           "http://127.0.0.1:8793/mcp"
         ]
+      },
+      {
+        "name": "claude-desktop",
+        "path": "~/Library/Application Support/Claude/claude_desktop_config.json",
+        "exists": true,
+        "server_count": 2,
+        "has_primitives_runtime": true,
+        "standalone_primitive_servers": [],
+        "local_substrate_endpoints": [
+          "http://127.0.0.1:8786/atrib/local-substrate"
+        ],
+        "primitive_http_endpoints": [
+          "http://127.0.0.1:8792/mcp"
+        ],
+        "bridge_http_endpoints": [
+          "http://127.0.0.1:8791/mcp"
+        ]
       }
     ],
     "launch_agents": [
@@ -73,6 +102,12 @@
         "kind": "coordinator",
         "endpoint": "http://127.0.0.1:8788/atrib/local-substrate",
         "agent": "claude-code"
+      },
+      {
+        "label": "com.nader.atrib-local-substrate.claude-desktop",
+        "kind": "coordinator",
+        "endpoint": "http://127.0.0.1:8786/atrib/local-substrate",
+        "agent": "claude-desktop"
       },
       {
         "label": "com.nader.atrib-drain",
@@ -143,6 +178,33 @@
             "stale_children": 0
           }
         }
+      },
+      {
+        "endpoint": "http://127.0.0.1:8786/atrib/local-substrate",
+        "reachable": true,
+        "status": "healthy",
+        "report": {
+          "coordinator": {
+            "pid": 302,
+            "version": "0.15.0",
+            "transport": "node-http",
+            "creator_key_scope": "keychain:atrib-creator-claude-desktop"
+          },
+          "queues": {
+            "log_submission_depth": 0
+          },
+          "wal": {
+            "pending": 0,
+            "orphan_receipts": 0
+          },
+          "contexts": {
+            "active": []
+          },
+          "processes": {
+            "active_wrappers": 0,
+            "stale_children": 0
+          }
+        }
       }
     ],
     "primitive_runtime_health": [
@@ -197,6 +259,34 @@
             "closed": 1
           }
         }
+      },
+      {
+        "endpoint": "http://127.0.0.1:8792/mcp",
+        "reachable": true,
+        "status": "healthy",
+        "report": {
+          "primitive_runtime": {
+            "pid": 112,
+            "version": "0.2.0",
+            "transport": "streamable-http",
+            "tool_count": 15,
+            "backend": "shared",
+            "session_model": "per-session-transport-shared-backend",
+            "mounted_primitive_count": 7
+          },
+          "profile": {
+            "agent": "claude-desktop",
+            "mirror_file": "~/.atrib/records/atrib-emit-claude-desktop.jsonl",
+            "local_substrate_endpoint": "http://127.0.0.1:8786/atrib/local-substrate",
+            "context_id_policy": "explicit-required",
+            "requires_explicit_context_id": true
+          },
+          "sessions": {
+            "active": 1,
+            "opened": 2,
+            "closed": 1
+          }
+        }
       }
     ],
     "bridge_runtime_health": [
@@ -237,6 +327,29 @@
           },
           "profile": {
             "agent": "claude-code"
+          },
+          "sessions": {
+            "active": 1,
+            "opened": 2,
+            "closed": 1,
+            "idle_timeout_ms": 43200000
+          }
+        }
+      },
+      {
+        "endpoint": "http://127.0.0.1:8791/mcp",
+        "reachable": true,
+        "status": "healthy",
+        "report": {
+          "bridge_runtime": {
+            "pid": 115,
+            "version": "0.1.0",
+            "transport": "streamable-http",
+            "upstream": "in-process",
+            "tool_count": 3
+          },
+          "profile": {
+            "agent": "claude-desktop"
           },
           "sessions": {
             "active": 1,
@@ -328,16 +441,18 @@
   "expected": {
     "status": "ready_for_default_trial",
     "summary": {
-      "primitive_runtime_processes": 2,
-      "primitive_runtime_http_processes": 2,
+      "primitive_runtime_processes": 3,
+      "primitive_runtime_http_processes": 3,
       "primitive_runtime_stdio_processes": 0,
       "standalone_primitive_processes": 0,
       "duplicate_primitive_groups": 0,
       "long_lived_agent_routes": 1,
-      "bridge_runtime_http_endpoints": 2,
-      "bridge_runtime_http_healthy": 2,
-      "active_session_profiles": 2,
+      "bridge_runtime_http_endpoints": 3,
+      "bridge_runtime_http_healthy": 3,
+      "active_session_profiles": 3,
       "active_session_profiles_valid": 2,
+      "active_session_profiles_explicit_required": 1,
+      "active_session_profiles_ready": 3,
       "knowledge_base_receipt_report_status": "clean",
       "knowledge_base_receipt_pending_total": 0,
       "long_lived_activity_report_status": "clean",

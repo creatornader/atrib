@@ -1832,6 +1832,56 @@ function localSubstrateEndpointsForConfig(config, primitiveHealthByEndpoint) {
   ])
 }
 
+function localSubstrateEndpointEvidenceForConfig(config, primitiveHealthByEndpoint) {
+  const evidence = []
+  for (const endpoint of config.local_substrate_endpoints ?? []) {
+    evidence.push({
+      source: config.source === 'registry' ? 'route-registry' : 'config',
+      endpoint,
+    })
+  }
+  for (const primitiveEndpoint of config.primitive_http_endpoints ?? []) {
+    const health = primitiveHealthByEndpoint.get(primitiveEndpoint)
+    const endpoint = health?.report?.profile?.local_substrate_endpoint
+    if (endpoint) {
+      evidence.push({
+        source: 'primitive-runtime-profile',
+        endpoint,
+        primitive_http_endpoint: primitiveEndpoint,
+        profile: health?.report?.profile?.agent,
+      })
+    }
+  }
+  const seen = new Set()
+  return evidence.filter((item) => {
+    const key = `${item.source}:${item.endpoint}:${item.primitive_http_endpoint ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function configSurfaceSummary(configs, primitiveHealth) {
+  const healthyPrimitiveHttpByEndpoint = new Map(
+    primitiveHealth
+      .filter((item) => item.reachable && item.status === 'healthy')
+      .map((item) => [item.endpoint, item]),
+  )
+  return configs.map((config) => {
+    const localSubstrateEndpointEvidence = localSubstrateEndpointEvidenceForConfig(
+      config,
+      healthyPrimitiveHttpByEndpoint,
+    )
+    return {
+      ...config,
+      effective_local_substrate_endpoints: unique(
+        localSubstrateEndpointEvidence.map((item) => item.endpoint),
+      ),
+      local_substrate_endpoint_evidence: localSubstrateEndpointEvidence,
+    }
+  })
+}
+
 function summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints) {
   const agents = longLivedAgents.map((agent) => {
     const endpoint = agent.endpoint
@@ -2659,7 +2709,7 @@ function buildReport(input, options = {}) {
     route_registry: routeRegistry,
     process_inventory: processSummary,
     restart_targets: restartTargets,
-    config_surfaces: configs,
+    config_surfaces: configSurfaceSummary(configs, primitiveHealth),
     launch_agents: launchAgents,
     long_lived_agents: longLivedAgents,
     recommendations: recommendationsFor({ status, gates, processSummary }),
