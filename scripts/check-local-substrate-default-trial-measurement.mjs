@@ -53,6 +53,9 @@ function checkHealthyMeasurement() {
   if (measurement.process_footprint.watcher_wal.receipt_pending_total !== 0) {
     fail('healthy measurement: expected zero pending receipt joins')
   }
+  if (measurement.process_footprint.watcher_wal.wal_receipted !== 0) {
+    fail('healthy measurement: expected zero active receipted WAL files')
+  }
 }
 
 function checkRestartResidueFailsMeasurement() {
@@ -78,9 +81,20 @@ function checkReceiptBacklogFailsMeasurement() {
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
   snapshot.knowledge_base_receipt_report.status = 'backlog'
   snapshot.knowledge_base_receipt_report.observations.pending_receipt_joins = 1
+  snapshot.knowledge_base_receipt_report.wal.receipted = 1
+  snapshot.knowledge_base_receipt_report.receipt_integrity = {
+    active_receipt_files: 1,
+    invalid_receipt_files: 0,
+    orphan_receipt_files: 1,
+    receipt_mismatches: 0,
+    ready_to_join_receipt_files: 0,
+    already_joined_receipt_files: 0,
+    issues: [],
+  }
   snapshot.knowledge_base_receipt_report.pending = {
     observations: 1,
     annotations: 0,
+    wal_receipted: 0,
     wal_queued: 0,
     wal_quarantined: 0,
     total: 1,
@@ -91,6 +105,12 @@ function checkReceiptBacklogFailsMeasurement() {
   }
   if (statusFor(measurement, 'watcher-wal-and-receipts-clean') !== 'fail') {
     fail('receipt backlog measurement: expected watcher-wal-and-receipts-clean=fail')
+  }
+  if (measurement.process_footprint.watcher_wal.wal_receipted !== 1) {
+    fail('receipt backlog measurement: expected active receipted WAL count 1')
+  }
+  if (measurement.process_footprint.watcher_wal.receipt_orphans !== 1) {
+    fail('receipt backlog measurement: expected orphan receipt count 1')
   }
 }
 

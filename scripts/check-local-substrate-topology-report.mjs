@@ -384,10 +384,21 @@ function checkKnowledgeBaseReceiptJoinGate() {
   snapshot.knowledge_base_receipt_report.observations.pending_receipt_joins = 2
   snapshot.knowledge_base_receipt_report.annotations.pending_receipt_or_parent_joins = 3
   snapshot.knowledge_base_receipt_report.wal.queued = 1
+  snapshot.knowledge_base_receipt_report.wal.receipted = 1
   snapshot.knowledge_base_receipt_report.wal.quarantined = 0
+  snapshot.knowledge_base_receipt_report.receipt_integrity = {
+    active_receipt_files: 1,
+    invalid_receipt_files: 0,
+    orphan_receipt_files: 0,
+    receipt_mismatches: 1,
+    ready_to_join_receipt_files: 0,
+    already_joined_receipt_files: 0,
+    issues: [],
+  }
   snapshot.knowledge_base_receipt_report.pending = {
     observations: 2,
     annotations: 3,
+    wal_receipted: 0,
     wal_queued: 1,
     wal_quarantined: 0,
     total: 6,
@@ -404,10 +415,16 @@ function checkKnowledgeBaseReceiptJoinGate() {
       `knowledge-base receipt join gate: expected summary.knowledge_base_receipt_report_status=backlog, got ${report.summary.knowledge_base_receipt_report_status}`,
     )
   }
-  if (report.summary.knowledge_base_receipt_pending_total !== 6) {
+  if (report.summary.knowledge_base_receipt_pending_total !== 7) {
     fail(
-      `knowledge-base receipt join gate: expected pending total 6, got ${report.summary.knowledge_base_receipt_pending_total}`,
+      `knowledge-base receipt join gate: expected pending total 7, got ${report.summary.knowledge_base_receipt_pending_total}`,
     )
+  }
+  if (report.summary.knowledge_base_wal_receipted !== 1) {
+    fail('knowledge-base receipt join gate: expected active receipted WAL count 1')
+  }
+  if (report.summary.knowledge_base_receipt_integrity_mismatches !== 1) {
+    fail('knowledge-base receipt join gate: expected receipt mismatch count 1')
   }
   const receiptGate = report.gates.find((gate) => gate.name === 'knowledge-base-receipt-join-back')
   if (receiptGate?.status !== 'warn') {
@@ -498,6 +515,36 @@ function checkKnowledgeBaseReceiptCollector() {
     const clean = collectKnowledgeBaseReceiptReport({ path: cleanPath })
     if (clean.status !== 'clean' || clean.pending.total !== 0 || clean.caveats !== 1) {
       fail(`knowledge-base receipt collector: expected clean report, got ${clean.status}`)
+    }
+
+    const activeReceiptPath = join(dir, 'active-receipt.json')
+    writeFileSync(
+      activeReceiptPath,
+      JSON.stringify({
+        generated_at: new Date().toISOString(),
+        days: 7,
+        observations: { entries: 1, pending_receipt_joins: 0 },
+        annotations: { entries: 1, pending_receipt_or_parent_joins: 0 },
+        wal: { queued: 0, quarantined: 0, receipted: 1 },
+        pending: { observations: 0, annotations: 0, wal_queued: 0, wal_quarantined: 0, total: 0 },
+        receipt_integrity: {
+          active_receipt_files: 1,
+          invalid_receipt_files: 0,
+          orphan_receipt_files: 1,
+          receipt_mismatches: 0,
+          ready_to_join_receipt_files: 0,
+          already_joined_receipt_files: 0,
+          issues: [{ kind: 'orphan_receipt_file' }],
+        },
+        caveats: ['receipt integrity scan checks markdown join state'],
+      }),
+    )
+    const activeReceipt = collectKnowledgeBaseReceiptReport({ path: activeReceiptPath })
+    if (activeReceipt.status !== 'backlog' || activeReceipt.pending.total !== 1) {
+      fail('knowledge-base receipt collector: expected active receipted WAL backlog')
+    }
+    if (activeReceipt.receipt_integrity.orphan_receipt_files !== 1) {
+      fail('knowledge-base receipt collector: expected orphan receipt integrity count')
     }
   } finally {
     rmSync(dir, { recursive: true, force: true })
