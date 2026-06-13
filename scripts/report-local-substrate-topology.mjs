@@ -1292,6 +1292,8 @@ function normalizeLongLivedActivity(activity, { index, maxAgeMs }) {
     record_hash: recordHash && RECORD_HASH.test(recordHash) ? recordHash : undefined,
     route_endpoint: endpoint,
     producer: safeLabel(stringValue(activity.producer)),
+    local_substrate_mode: safeLabel(stringValue(activity.local_substrate_mode)),
+    submission: safeLabel(stringValue(activity.submission)),
   })
 }
 
@@ -2050,8 +2052,15 @@ function summarizeLongLivedActivity(longLivedAgents, activityReport) {
   const reportClean = reportStatus === 'clean'
   const agents = longLivedAgents.map((agent) => {
     const activity = byLabel.get(agent.label) ?? byAgent.get(agent.agent)
+    const delegatedCommit =
+      activity?.local_substrate_mode === 'commit' &&
+      activity?.submission === 'local_substrate_delegated'
     const activityOk = Boolean(
-      reportClean && activity && activity.status === 'ok' && activity.stale !== true,
+      reportClean &&
+        activity &&
+        activity.status === 'ok' &&
+        activity.stale !== true &&
+        delegatedCommit,
     )
     return withoutUndefinedValues({
       label: agent.label,
@@ -2060,18 +2069,27 @@ function summarizeLongLivedActivity(longLivedAgents, activityReport) {
       activity_status: activity?.status ?? 'missing',
       last_activity_at: activity?.last_activity_at,
       activity_age_ms: activity?.age_ms,
+      activity_stale: activity?.stale,
       record_hash: activity?.record_hash,
+      local_substrate_mode: activity?.local_substrate_mode,
+      submission: activity?.submission,
+      delegated_commit: delegatedCommit,
       route_activity_ok: activityOk,
     })
   })
+  const present = agents.filter((agent) => agent.activity_status !== 'missing')
   return {
     status: reportStatus,
     age_ms: activityReport?.age_ms,
     total: agents.length,
     ok: agents.filter((agent) => agent.route_activity_ok).length,
     missing: agents.filter((agent) => agent.activity_status === 'missing').length,
-    stale: agents.filter(
-      (agent) => agent.activity_status !== 'missing' && agent.route_activity_ok !== true,
+    stale: present.filter((agent) => agent.activity_stale === true).length,
+    not_delegated: present.filter(
+      (agent) =>
+        agent.activity_status === 'ok' &&
+        agent.activity_stale !== true &&
+        agent.delegated_commit !== true,
     ).length,
     agents,
   }
@@ -2645,7 +2663,7 @@ function buildGates({
       gate(
         'long-lived-agent-activity',
         'pass',
-        `${longLivedActivity.ok}/${longLivedActivity.total} known long-lived agent route(s) have recent activity evidence`,
+        `${longLivedActivity.ok}/${longLivedActivity.total} known long-lived agent route(s) have recent delegated commit evidence`,
       ),
     )
   } else {
@@ -2653,7 +2671,7 @@ function buildGates({
       gate(
         'long-lived-agent-activity',
         'warn',
-        `${longLivedActivity.ok}/${longLivedActivity.total} known long-lived agent route(s) have recent activity evidence; report=${longLivedActivity.status}, missing=${longLivedActivity.missing}, stale=${longLivedActivity.stale}`,
+        `${longLivedActivity.ok}/${longLivedActivity.total} known long-lived agent route(s) have recent delegated commit evidence; report=${longLivedActivity.status}, missing=${longLivedActivity.missing}, stale=${longLivedActivity.stale}, not_delegated=${longLivedActivity.not_delegated}`,
       ),
     )
   }
@@ -2932,6 +2950,7 @@ function buildReport(input, options = {}) {
       long_lived_agent_activity_ok: longLivedActivity.ok,
       long_lived_agent_activity_missing: longLivedActivity.missing,
       long_lived_agent_activity_stale: longLivedActivity.stale,
+      long_lived_agent_activity_not_delegated: longLivedActivity.not_delegated,
       restart_targets: restartTargets.length,
     },
     gates,

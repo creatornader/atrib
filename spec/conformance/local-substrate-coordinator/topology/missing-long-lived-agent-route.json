@@ -339,7 +339,8 @@
       "long_lived_agent_activity_ok": 0,
       "long_lived_agent_activity_missing": 0,
       "long_lived_agent_activity_stale": 0,
-      "knowledge_base_activity_status": "ok"
+      "knowledge_base_activity_status": "ok",
+      "long_lived_agent_activity_not_delegated": 0
     },
     "gates": {
       "coordinator-health": "pass",

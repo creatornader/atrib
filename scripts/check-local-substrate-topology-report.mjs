@@ -826,6 +826,8 @@ function checkLongLivedActivityCollector() {
             record_hash: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
             route_endpoint: 'http://127.0.0.1:8898/atrib/local-substrate',
             producer: 'future-prerun',
+            local_substrate_mode: 'commit',
+            submission: 'local_substrate_delegated',
             secret: 'must-not-leak',
           },
         ],
@@ -901,6 +903,27 @@ function checkLongLivedActivityGate() {
   const invalidGate = invalidReport.gates.find((gate) => gate.name === 'long-lived-agent-activity')
   if (invalidGate?.status !== 'fail') {
     fail('long-lived activity gate: expected invalid report to fail activity gate')
+  }
+
+  const nonDelegatedSnapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  for (const activity of nonDelegatedSnapshot.long_lived_activity_report.activities) {
+    delete activity.local_substrate_mode
+    delete activity.submission
+  }
+  const nonDelegatedReport = buildReport(nonDelegatedSnapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  const nonDelegatedGate = nonDelegatedReport.gates.find(
+    (gate) => gate.name === 'long-lived-agent-activity',
+  )
+  if (nonDelegatedGate?.status !== 'warn') {
+    fail('long-lived activity gate: expected non-delegated activity to warn')
+  }
+  if (nonDelegatedReport.summary.long_lived_agent_activity_not_delegated !== 1) {
+    fail('long-lived activity gate: expected one non-delegated activity')
+  }
+  if (nonDelegatedReport.summary.long_lived_agent_activity_stale !== 0) {
+    fail('long-lived activity gate: expected non-delegated activity to stay freshness-clean')
   }
 }
 
