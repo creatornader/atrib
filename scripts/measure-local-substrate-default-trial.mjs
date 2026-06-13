@@ -171,7 +171,13 @@ function profileCoverageFromReport(report) {
   const contextReadyProfiles = primitiveRuntimes
     .filter((runtime) => {
       const activeState = activeSessionByProfile.get(runtime.agent)
-      return activeState?.valid_context_id === true || runtime.requires_explicit_context_id === true
+      const noOpenedSessions =
+        Number(runtime.active_sessions) === 0 && Number(runtime.opened_sessions) === 0
+      return (
+        activeState?.fresh_context_id === true ||
+        runtime.requires_explicit_context_id === true ||
+        noOpenedSessions
+      )
     })
     .map((runtime) => runtime.agent)
 
@@ -520,6 +526,8 @@ function buildDefaultTrialMeasurement(report, options = {}) {
       active_session_profiles: {
         total: summary.active_session_profiles,
         valid: summary.active_session_profiles_valid,
+        fresh: summary.active_session_profiles_fresh,
+        idle: summary.active_session_profiles_idle,
         explicit_required: summary.active_session_profiles_explicit_required,
         ready: summary.active_session_profiles_ready,
       },
