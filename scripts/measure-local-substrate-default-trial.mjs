@@ -22,13 +22,16 @@ Options:
   --route-registry <path> Read supervised agent routes from a JSON registry.
   --knowledge-base-receipt-report <path>
                           Read the knowledge-base receipt join-back report.
+  --long-lived-activity-report <path>
+                          Read the long-lived producer activity report.
   --timeout-ms <n>        Live coordinator health timeout. Defaults to 1500.
   --help                  Print this help.
 
 The measurement consumes the same topology evidence as
 report-local-substrate-topology.mjs and fails closed unless the process
 footprint, shared HTTP surfaces, coordinator health, watcher receipt join-back,
-and long-lived routes are all ready for a controlled default trial.
+long-lived routes, and long-lived producer activity are all ready for a
+controlled default trial.
 `
 }
 
@@ -39,6 +42,7 @@ function parseArgs(argv) {
     snapshotPath: undefined,
     routeRegistryPath: undefined,
     knowledgeBaseReceiptReportPath: undefined,
+    longLivedActivityReportPath: undefined,
     timeoutMs: DEFAULT_HEALTH_TIMEOUT_MS,
     help: false,
   }
@@ -59,6 +63,8 @@ function parseArgs(argv) {
         ++i,
         '--knowledge-base-receipt-report',
       )
+    } else if (arg === '--long-lived-activity-report') {
+      out.longLivedActivityReportPath = requireValue(argv, ++i, '--long-lived-activity-report')
     } else if (arg === '--timeout-ms') {
       out.timeoutMs = parsePositiveInt(requireValue(argv, ++i, '--timeout-ms'), '--timeout-ms')
     } else if (arg === '--help' || arg === '-h') {
@@ -147,6 +153,12 @@ function buildDefaultTrialGates(report) {
     summary.long_lived_agent_routes > 0 &&
     summary.long_lived_agent_routes_healthy === summary.long_lived_agent_routes &&
     summary.long_lived_agent_routes_missing === 0
+  const longLivedActivityHealthy =
+    summary.long_lived_agent_routes > 0 &&
+    summary.long_lived_activity_report_status === 'clean' &&
+    summary.long_lived_agent_activity_ok === summary.long_lived_agent_routes &&
+    summary.long_lived_agent_activity_missing === 0 &&
+    summary.long_lived_agent_activity_stale === 0
 
   return [
     gate(
@@ -191,6 +203,13 @@ function buildDefaultTrialGates(report) {
         ? 'every known long-lived route points at a healthy coordinator endpoint'
         : `healthy=${summary.long_lived_agent_routes_healthy}/${summary.long_lived_agent_routes}, missing=${summary.long_lived_agent_routes_missing}`,
     ),
+    gate(
+      'long-lived-activity-clean',
+      longLivedActivityHealthy,
+      longLivedActivityHealthy
+        ? 'every known long-lived route has recent activity evidence'
+        : `activity_status=${summary.long_lived_activity_report_status}, ok=${summary.long_lived_agent_activity_ok}/${summary.long_lived_agent_routes}, missing=${summary.long_lived_agent_activity_missing}, stale=${summary.long_lived_agent_activity_stale}`,
+    ),
   ]
 }
 
@@ -225,6 +244,7 @@ function buildDefaultTrialMeasurement(report, options = {}) {
         primitive_runtime_http_processes: summary.primitive_runtime_http_processes,
         primitive_runtime_http_shared: summary.primitive_runtime_http_shared,
         primitive_runtime_stdio_processes: summary.primitive_runtime_stdio_processes,
+        primitive_proxy_processes: summary.primitive_proxy_processes,
         standalone_primitive_processes: summary.standalone_primitive_processes,
         standalone_primitive_generations: summary.standalone_primitive_generations,
         duplicate_primitive_groups: summary.duplicate_primitive_groups,
@@ -254,6 +274,10 @@ function buildDefaultTrialMeasurement(report, options = {}) {
         healthy_routes: summary.long_lived_agent_routes_healthy,
         missing_routes: summary.long_lived_agent_routes_missing,
         route_endpoints: summary.long_lived_agent_route_endpoints,
+        activity_report_status: summary.long_lived_activity_report_status,
+        activity_ok: summary.long_lived_agent_activity_ok,
+        activity_missing: summary.long_lived_agent_activity_missing,
+        activity_stale: summary.long_lived_agent_activity_stale,
       },
     },
     gates,
@@ -271,10 +295,11 @@ function formatTextMeasurement(measurement) {
     `local-substrate default-trial measurement: ${measurement.status}`,
     `topology: ${measurement.topology.status}`,
     `coordinators: healthy=${measurement.process_footprint.coordinators.healthy}/${measurement.process_footprint.coordinators.configured}`,
-    `startup-spawn: primitive-http-shared=${measurement.process_footprint.startup_spawn.primitive_runtime_http_shared}/${measurement.process_footprint.startup_spawn.primitive_runtime_http_processes}, standalone=${measurement.process_footprint.startup_spawn.standalone_primitive_processes}, restart-targets=${measurement.process_footprint.startup_spawn.restart_targets}`,
+    `startup-spawn: primitive-http-shared=${measurement.process_footprint.startup_spawn.primitive_runtime_http_shared}/${measurement.process_footprint.startup_spawn.primitive_runtime_http_processes}, direct-stdio=${measurement.process_footprint.startup_spawn.primitive_runtime_stdio_processes}, proxy=${measurement.process_footprint.startup_spawn.primitive_proxy_processes}, standalone=${measurement.process_footprint.startup_spawn.standalone_primitive_processes}, restart-targets=${measurement.process_footprint.startup_spawn.restart_targets}`,
     `bridge: http=${measurement.process_footprint.bridge.runtime_http_healthy}/${measurement.process_footprint.bridge.runtime_http_endpoints}, wrappers=${measurement.process_footprint.bridge.wrapper_processes}, upstream=${measurement.process_footprint.bridge.upstream_processes}`,
     `watcher-WAL: launch-agents=${measurement.process_footprint.watcher_wal.launch_agents}, receipt-status=${measurement.process_footprint.watcher_wal.receipt_report_status}, pending=${measurement.process_footprint.watcher_wal.receipt_pending_total}`,
     `long-lived routes: healthy=${measurement.process_footprint.long_lived_agents.healthy_routes}/${measurement.process_footprint.long_lived_agents.routes}, missing=${measurement.process_footprint.long_lived_agents.missing_routes}`,
+    `long-lived activity: status=${measurement.process_footprint.long_lived_agents.activity_report_status}, ok=${measurement.process_footprint.long_lived_agents.activity_ok}/${measurement.process_footprint.long_lived_agents.routes}, missing=${measurement.process_footprint.long_lived_agents.activity_missing}, stale=${measurement.process_footprint.long_lived_agents.activity_stale}`,
     '',
     'measurement gates:',
   ]
@@ -303,6 +328,7 @@ async function main() {
         timeoutMs: args.timeoutMs,
         routeRegistryPath: args.routeRegistryPath,
         knowledgeBaseReceiptReportPath: args.knowledgeBaseReceiptReportPath,
+        longLivedActivityReportPath: args.longLivedActivityReportPath,
       })
   const snapshot = snapshotInput?.snapshot ?? snapshotInput
   const topology = buildReport(snapshot)

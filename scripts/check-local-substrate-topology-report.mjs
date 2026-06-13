@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import {
   buildReport,
   collectKnowledgeBaseReceiptReport,
+  collectLongLivedActivityReport,
   collectRegisteredLongLivedAgents,
   collectRegisteredStartupSpawnConfigs,
   registeredLongLivedAgentsFromRegistry,
@@ -408,6 +409,254 @@ function checkKnowledgeBaseReceiptCollector() {
   }
 }
 
+function checkLongLivedActivityCollector() {
+  const dir = mkdtempSync(join(tmpdir(), 'atrib-long-lived-activity-'))
+  try {
+    const missing = collectLongLivedActivityReport({ path: join(dir, 'missing.json') })
+    if (missing.status !== 'absent' || missing.exists !== false) {
+      fail(`long-lived activity collector: expected missing report to be absent, got ${missing.status}`)
+    }
+
+    const malformedPath = join(dir, 'malformed.json')
+    writeFileSync(malformedPath, '{')
+    const malformed = collectLongLivedActivityReport({ path: malformedPath })
+    if (malformed.status !== 'parse_error') {
+      fail(
+        `long-lived activity collector: expected malformed report parse_error, got ${malformed.status}`,
+      )
+    }
+
+    const wrongSchemaPath = join(dir, 'wrong-schema.json')
+    writeFileSync(
+      wrongSchemaPath,
+      JSON.stringify({
+        schema: 'atrib.long-lived-agent-activity-report.v99',
+        generated_at: new Date().toISOString(),
+        activities: [],
+      }),
+    )
+    const wrongSchema = collectLongLivedActivityReport({ path: wrongSchemaPath })
+    if (wrongSchema.status !== 'invalid_shape') {
+      fail(
+        `long-lived activity collector: expected wrong schema invalid_shape, got ${wrongSchema.status}`,
+      )
+    }
+
+    const invalidActivityPath = join(dir, 'invalid-activity.json')
+    writeFileSync(
+      invalidActivityPath,
+      JSON.stringify({
+        schema: 'atrib.long-lived-agent-activity-report.v0',
+        generated_at: new Date().toISOString(),
+        activities: [{ status: 'ok' }],
+      }),
+    )
+    const invalidActivity = collectLongLivedActivityReport({ path: invalidActivityPath })
+    if (invalidActivity.status !== 'invalid_shape') {
+      fail(
+        `long-lived activity collector: expected missing identity invalid_shape, got ${invalidActivity.status}`,
+      )
+    }
+
+    const stalePath = join(dir, 'stale.json')
+    writeFileSync(
+      stalePath,
+      JSON.stringify({
+        schema: 'atrib.long-lived-agent-activity-report.v0',
+        generated_at: '2000-01-01T00:00:00.000Z',
+        max_activity_age_ms: 1,
+        activities: [
+          {
+            label: 'ai.future.gateway',
+            agent: 'future',
+            status: 'ok',
+            last_activity_at: '2000-01-01T00:00:00.000Z',
+            record_hash: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            route_endpoint: 'http://127.0.0.1:8898/atrib/local-substrate',
+          },
+        ],
+      }),
+    )
+    const stale = collectLongLivedActivityReport({ path: stalePath, maxAgeMs: 3_600_000 })
+    if (stale.status !== 'stale' || stale.counts?.stale !== 1) {
+      fail(`long-lived activity collector: expected stale activity report, got ${stale.status}`)
+    }
+
+    const cleanPath = join(dir, 'clean.json')
+    writeFileSync(
+      cleanPath,
+      JSON.stringify({
+        schema: 'atrib.long-lived-agent-activity-report.v0',
+        generated_at: new Date().toISOString(),
+        activities: [
+          {
+            label: 'ai.future.gateway',
+            agent: 'future',
+            status: 'ok',
+            last_activity_at: new Date().toISOString(),
+            record_hash: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            route_endpoint: 'http://127.0.0.1:8898/atrib/local-substrate',
+            producer: 'future-prerun',
+            secret: 'must-not-leak',
+          },
+        ],
+      }),
+    )
+    const clean = collectLongLivedActivityReport({ path: cleanPath })
+    const serialized = JSON.stringify(clean)
+    if (clean.status !== 'clean' || clean.counts?.ok !== 1) {
+      fail(`long-lived activity collector: expected clean report, got ${clean.status}`)
+    } else if (serialized.includes('must-not-leak') || serialized.includes('secret')) {
+      fail('long-lived activity collector: unsafe activity field leaked into normalized report')
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+function checkLongLivedActivityGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  snapshot.long_lived_activity_report = {
+    path: '~/.atrib/state/local-substrate/long-lived-activity-latest.json',
+    exists: false,
+    status: 'absent',
+    activities: [],
+  }
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'mixed') {
+    fail(`long-lived activity gate: expected status mixed, got ${report.summary.status}`)
+  }
+  if (report.summary.long_lived_agent_routes_healthy !== report.summary.long_lived_agent_routes) {
+    fail('long-lived activity gate: expected route health to stay green')
+  }
+  if (report.summary.long_lived_agent_activity_missing !== report.summary.long_lived_agent_routes) {
+    fail(
+      `long-lived activity gate: expected all activity evidence missing, got ${report.summary.long_lived_agent_activity_missing}`,
+    )
+  }
+  const routeGate = report.gates.find((gate) => gate.name === 'long-lived-agent-route')
+  if (routeGate?.status !== 'pass') {
+    fail('long-lived activity gate: expected long-lived-agent-route=pass')
+  }
+  const activityGate = report.gates.find((gate) => gate.name === 'long-lived-agent-activity')
+  if (activityGate?.status !== 'warn') {
+    fail('long-lived activity gate: expected long-lived-agent-activity=warn')
+  }
+  const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (broadGate?.status !== 'fail') {
+    fail('long-lived activity gate: expected broad-default-readiness=fail')
+  }
+  if (
+    !report.recommendations.includes(
+      'refresh or repair the long-lived activity report before treating supervised agent routing as clean',
+    )
+  ) {
+    fail('long-lived activity gate: expected activity report recommendation')
+  }
+
+  const invalidSnapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  invalidSnapshot.long_lived_activity_report = {
+    path: '~/.atrib/state/local-substrate/long-lived-activity-latest.json',
+    exists: true,
+    status: 'invalid_shape',
+    reason: 'activities must be an array',
+    activities: [],
+  }
+  const invalidReport = buildReport(invalidSnapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  const invalidGate = invalidReport.gates.find((gate) => gate.name === 'long-lived-agent-activity')
+  if (invalidGate?.status !== 'fail') {
+    fail('long-lived activity gate: expected invalid report to fail activity gate')
+  }
+}
+
+function checkDirectStdioRuntimeGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  snapshot.processes.push(
+    {
+      pid: 210,
+      ppid: 1,
+      service: 'claude-desktop',
+      command: '/Applications/Claude.app/Contents/MacOS/Claude',
+    },
+    {
+      pid: 222,
+      ppid: 210,
+      command: 'node /workspace/atrib/services/atrib-primitives/dist/index.js',
+    },
+  )
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  const gateStatus = (name) => report.gates.find((gate) => gate.name === name)?.status
+  if (gateStatus('startup-spawn-mcp-collapse') !== 'warn') {
+    fail('direct stdio runtime gate: expected startup-spawn-mcp-collapse=warn')
+  }
+  if (gateStatus('broad-default-readiness') !== 'fail') {
+    fail('direct stdio runtime gate: expected broad-default-readiness=fail')
+  }
+  if (report.summary.status !== 'mixed') {
+    fail(`direct stdio runtime gate: expected status mixed, got ${report.summary.status}`)
+  }
+  if (report.summary.primitive_runtime_stdio_processes !== 1) {
+    fail(
+      `direct stdio runtime gate: expected 1 direct stdio runtime, got ${report.summary.primitive_runtime_stdio_processes}`,
+    )
+  }
+  if (
+    !report.recommendations.includes(
+      'route stdio-only startup-spawn clients through the atrib-primitives stdio-http-proxy backed by a shared Streamable HTTP host',
+    )
+  ) {
+    fail('direct stdio runtime gate: expected proxy recommendation')
+  }
+}
+
+function checkStdioProxyClassification() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  snapshot.processes.push(
+    {
+      pid: 210,
+      ppid: 1,
+      service: 'claude-desktop',
+      command: '/Applications/Claude.app/Contents/MacOS/Claude',
+    },
+    {
+      pid: 222,
+      ppid: 210,
+      command:
+        'node /workspace/atrib/services/atrib-primitives/dist/index.js --transport stdio-http-proxy --endpoint http://127.0.0.1:8792/mcp',
+    },
+  )
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  const gateStatus = (name) => report.gates.find((gate) => gate.name === name)?.status
+  if (gateStatus('startup-spawn-mcp-collapse') !== 'pass') {
+    fail('stdio proxy classification: expected startup-spawn-mcp-collapse=pass')
+  }
+  if (gateStatus('broad-default-readiness') !== 'pass') {
+    fail('stdio proxy classification: expected broad-default-readiness=pass')
+  }
+  if (report.summary.primitive_runtime_stdio_processes !== 0) {
+    fail('stdio proxy classification: expected no direct stdio runtime processes')
+  }
+  if (report.summary.primitive_proxy_processes !== 1) {
+    fail(
+      `stdio proxy classification: expected 1 proxy process, got ${report.summary.primitive_proxy_processes}`,
+    )
+  }
+}
+
 function checkCombinedRestartResidueClassification() {
   const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
@@ -527,6 +776,10 @@ function main() {
   checkPrimitiveBackendContractGate()
   checkKnowledgeBaseReceiptJoinGate()
   checkKnowledgeBaseReceiptCollector()
+  checkLongLivedActivityCollector()
+  checkLongLivedActivityGate()
+  checkDirectStdioRuntimeGate()
+  checkStdioProxyClassification()
   checkCombinedRestartResidueClassification()
 
   if (failures.length > 0) {

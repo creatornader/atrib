@@ -104,11 +104,33 @@ function checkLongLivedGapFailsMeasurement() {
   }
 }
 
+function checkLongLivedActivityFailsMeasurement() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  snapshot.long_lived_activity_report = {
+    path: '~/.atrib/state/local-substrate/long-lived-activity-latest.json',
+    exists: false,
+    status: 'absent',
+    activities: [],
+  }
+  const measurement = measurementForReport(buildReport(snapshot, { generatedAt: GENERATED_AT }))
+  if (measurement.status !== 'not_ready') {
+    fail(`long-lived activity measurement: expected not_ready, got ${measurement.status}`)
+  }
+  if (statusFor(measurement, 'long-lived-routes-healthy') !== 'pass') {
+    fail('long-lived activity measurement: expected long-lived-routes-healthy=pass')
+  }
+  if (statusFor(measurement, 'long-lived-activity-clean') !== 'fail') {
+    fail('long-lived activity measurement: expected long-lived-activity-clean=fail')
+  }
+}
+
 function main() {
   checkHealthyMeasurement()
   checkRestartResidueFailsMeasurement()
   checkReceiptBacklogFailsMeasurement()
   checkLongLivedGapFailsMeasurement()
+  checkLongLivedActivityFailsMeasurement()
 
   if (failures.length > 0) {
     for (const failure of failures) process.stderr.write(`FAIL ${failure}\n`)
