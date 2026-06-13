@@ -1,5 +1,11 @@
 # @atrib/emit
 
+## 0.15.3
+
+### Patch Changes
+
+- 444a0d7: Add `ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID` for hosts that should return a warnings-only response instead of signing a fresh orphan record when no `context_id` can be resolved.
+
 ## 0.15.2
 
 ### Patch Changes
