@@ -25,6 +25,7 @@ import {
 } from '@atrib/mcp'
 import {
   createAtribEmitServer,
+  resolveEmitLocalSubstrateCommitFromEnv,
   resolveEmitLocalSubstrateShadowFromEnv,
   __test_only__ as __index_test_only__,
   type EmitLocalSubstrateShadowAttempt,
@@ -70,11 +71,7 @@ async function freshKey(): Promise<Uint8Array> {
   return seed
 }
 
-async function waitFor<T>(
-  read: () => T | undefined,
-  message: string,
-  attempts = 50,
-): Promise<T> {
+async function waitFor<T>(read: () => T | undefined, message: string, attempts = 50): Promise<T> {
   for (let i = 0; i < attempts; i++) {
     const value = read()
     if (value !== undefined) return value
@@ -514,12 +511,12 @@ describe('local substrate shadow probe (P042 long-lived producer path)', () => {
     expect(attempt.result.ok).toBe(false)
     expect(attempt.result.status).toBe('unavailable')
     expect(attempt.recordHashMatches).toBe(false)
-    expect(
-      attempt.result.status === 'unavailable' ? attempt.result.reason : '',
-    ).toContain('coordinator offline')
+    expect(attempt.result.status === 'unavailable' ? attempt.result.reason : '').toContain(
+      'coordinator offline',
+    )
   })
 
-  it('resolves opt-in HTTP shadow config from env without enabling commit mode', async () => {
+  it('resolves opt-in HTTP shadow config from env', async () => {
     const env = {
       ATRIB_LOCAL_SUBSTRATE_ENDPOINT: 'http://127.0.0.1:8787/atrib/local-substrate',
       ATRIB_LOCAL_SUBSTRATE_MODE: 'shadow',
@@ -552,6 +549,44 @@ describe('local substrate shadow probe (P042 long-lived producer path)', () => {
     expect(
       resolveEmitLocalSubstrateShadowFromEnv({
         env: { ...env, ATRIB_LOCAL_SUBSTRATE_MODE: 'commit' },
+      }),
+    ).toBeUndefined()
+  })
+
+  it('resolves opt-in HTTP commit config from env', async () => {
+    const env = {
+      ATRIB_LOCAL_SUBSTRATE_ENDPOINT: 'http://127.0.0.1:8787/atrib/local-substrate',
+      ATRIB_LOCAL_SUBSTRATE_MODE: 'commit',
+      ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS: '25',
+    } as NodeJS.ProcessEnv
+    const localSubstrateCommit = resolveEmitLocalSubstrateCommitFromEnv({
+      env,
+      producer: 'atrib-emit-cli',
+      transport: 'emit-in-process',
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            schema: 'atrib.local-substrate-coordinator.response.v0',
+            operation: 'sign_record',
+            status: 'rejected',
+            rejection_reason: 'test response',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    })
+
+    expect(localSubstrateCommit).toBeDefined()
+    expect(localSubstrateCommit!.timeoutMs).toBe(25)
+    expect(localSubstrateCommit!.wal).toBeUndefined()
+    expect(localSubstrateCommit!.producer).toMatchObject({
+      name: 'atrib-emit-cli',
+      harness_class: 'long-lived-agent',
+      transport: 'emit-in-process',
+      creator_key_policy: 'explicit-single-creator',
+    })
+    expect(
+      resolveEmitLocalSubstrateCommitFromEnv({
+        env: { ...env, ATRIB_LOCAL_SUBSTRATE_MODE: 'shadow' },
       }),
     ).toBeUndefined()
   })

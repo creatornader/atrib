@@ -3,15 +3,17 @@
 // suite. Prevents test fixtures from leaking real submissions into the
 // public log, which would corrupt audit-trail integrity for real records.
 //
-// Also clears harness-injected env vars so D083 harness discovery
-// (CLAUDE_CODE_SESSION_ID) does not leak from the parent harness process
-// (e.g. Claude Code running `vitest run`) into the env-default lookup
-// path. Tests that want to exercise the env-driven path should set the
-// relevant vars explicitly inside their describe/beforeEach.
+// Also clears D083 harness discovery env vars so the parent harness process
+// does not leak its active session into the env-default lookup path. Tests
+// that exercise the env-driven path should set the relevant vars explicitly
+// inside their describe/beforeEach.
 
 import { beforeAll } from 'vitest'
 
+delete process.env.ATRIB_ACTIVE_SESSION_PROFILE
+delete process.env.ATRIB_AGENT
 delete process.env.CLAUDE_CODE_SESSION_ID
+delete process.env.CODEX_THREAD_ID
 delete process.env.ATRIB_CONTEXT_ID
 
 const FORBIDDEN_HOSTS = [
