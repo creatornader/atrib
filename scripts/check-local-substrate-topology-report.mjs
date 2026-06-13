@@ -1109,6 +1109,14 @@ function checkStdioProxyClassification() {
   if (report.summary.bridge_wrapper_processes !== 0) {
     fail('stdio proxy classification: expected no legacy bridge wrapper processes')
   }
+  const text = formatTextReport(report)
+  if (
+    !text.includes(
+      'bridge processes: runtimes=1 (http=1, proxy=1, stdio-proxy=1), legacy-wrappers=0, upstream=0, duplicate-groups=0',
+    )
+  ) {
+    fail('stdio proxy classification: expected bridge runtime and proxy counts in text output')
+  }
 }
 
 function checkCombinedRestartResidueClassification() {
