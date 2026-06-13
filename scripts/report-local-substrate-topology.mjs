@@ -2693,7 +2693,7 @@ function buildGates({
       gate(
         'long-lived-agent-activity',
         'warn',
-        `${longLivedActivity.ok}/${longLivedActivity.total} known long-lived agent route(s) have recent delegated commit evidence; report=${longLivedActivity.status}, missing=${longLivedActivity.missing}, stale=${longLivedActivity.stale}, not_delegated=${longLivedActivity.not_delegated}`,
+        `${longLivedActivity.ok}/${longLivedActivity.total} known long-lived agent route(s) have recent delegated commit evidence; report=${longLivedActivity.status}, missing=${longLivedActivity.missing}, stale=${longLivedActivity.stale}, endpoint_mismatch=${longLivedActivity.endpoint_mismatch}, not_delegated=${longLivedActivity.not_delegated}`,
       ),
     )
   }
@@ -3101,7 +3101,7 @@ function formatTextReport(report) {
     `knowledge-base receipt join-back: status=${report.summary.knowledge_base_receipt_report_status}, pending=${report.summary.knowledge_base_receipt_pending_total}, obs=${report.summary.knowledge_base_receipt_observation_pending}, annotations=${report.summary.knowledge_base_receipt_annotation_pending}, wal-queued=${report.summary.knowledge_base_wal_queued}, wal-receipted=${report.summary.knowledge_base_wal_receipted}, non-joinable-receipted=${report.summary.knowledge_base_wal_non_joinable_receipted}, wal-quarantined=${report.summary.knowledge_base_wal_quarantined}, receipt-mismatches=${report.summary.knowledge_base_receipt_integrity_mismatches}, receipt-orphans=${report.summary.knowledge_base_receipt_integrity_orphans}`,
     `knowledge-base watcher activity: status=${report.summary.knowledge_base_activity_status}, source=${report.summary.knowledge_base_activity_source ?? 'unknown'}, age-ms=${report.summary.knowledge_base_activity_age_ms ?? 'unknown'}`,
     `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agent_routes}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}, endpoints=${report.summary.long_lived_agent_route_endpoints}`,
-    `long-lived activity: status=${report.summary.long_lived_activity_report_status}, ok=${report.summary.long_lived_agent_activity_ok}/${report.summary.long_lived_agent_routes}, missing=${report.summary.long_lived_agent_activity_missing}, stale=${report.summary.long_lived_agent_activity_stale}`,
+    `long-lived activity: status=${report.summary.long_lived_activity_report_status}, ok=${report.summary.long_lived_agent_activity_ok}/${report.summary.long_lived_agent_routes}, missing=${report.summary.long_lived_agent_activity_missing}, stale=${report.summary.long_lived_agent_activity_stale}, endpoint_mismatch=${report.summary.long_lived_agent_activity_endpoint_mismatch}, not_delegated=${report.summary.long_lived_agent_activity_not_delegated}`,
     '',
     'gates:',
   ]
