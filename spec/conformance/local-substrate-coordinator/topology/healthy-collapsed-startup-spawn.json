@@ -405,6 +405,29 @@
         "wal_quarantined": 0,
         "total": 0
       },
+      "receipt_integrity": {
+        "active_receipt_files": 0,
+        "invalid_receipt_files": 0,
+        "orphan_receipt_files": 0,
+        "receipt_mismatches": 0,
+        "ready_to_join_receipt_files": 0,
+        "already_joined_receipt_files": 0,
+        "issues": []
+      },
+      "activity": {
+        "status": "ok",
+        "source": "bridge-poller",
+        "producer": "atrib-emit",
+        "last_activity_at": "2026-06-10T22:50:00.000Z",
+        "age_ms": 600000,
+        "max_age_ms": 108000000,
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "35ae959b3e8d4d5f943a9cf90bf8e538",
+        "topics": [
+          "agent-bridge",
+          "codex"
+        ]
+      },
       "caveats": 2
     },
     "long_lived_activity_report": {
@@ -455,6 +478,7 @@
       "active_session_profiles_ready": 3,
       "knowledge_base_receipt_report_status": "clean",
       "knowledge_base_receipt_pending_total": 0,
+      "knowledge_base_activity_status": "ok",
       "long_lived_activity_report_status": "clean",
       "long_lived_agent_activity_ok": 1,
       "long_lived_agent_activity_missing": 0,
@@ -471,6 +495,7 @@
       "host-owned-bridge-http": "pass",
       "host-owned-active-session-context": "pass",
       "knowledge-base-receipt-join-back": "pass",
+      "knowledge-base-watcher-activity": "pass",
       "long-lived-agent-activity": "pass"
     }
   }

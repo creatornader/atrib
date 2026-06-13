@@ -161,6 +161,14 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
 }
 
+function safeFileMtimeMs(path) {
+  try {
+    return statSync(path).mtimeMs
+  } catch {
+    return Number.NaN
+  }
+}
+
 function parseSessionContextId(value) {
   if (typeof value !== 'string' || value.length === 0) return undefined
   const candidate = value.trim().replace(/-/g, '').toLowerCase()
@@ -820,7 +828,7 @@ function longLivedEnvFileFromProgramArguments(args) {
 function readSafeEnvFile(path) {
   const out = {}
   const safeKeys = new Set([...SAFE_ENDPOINT_ENV_KEYS, ...SAFE_AGENT_ENV_KEYS])
-  let text = ''
+  let text
   try {
     text = readFileSync(path, 'utf8')
   } catch {
@@ -950,12 +958,7 @@ function collectKnowledgeBaseReceiptReport({
 
   const generatedAtMs =
     typeof raw?.generated_at === 'string' ? Date.parse(raw.generated_at) : Number.NaN
-  let fileMtimeMs = Number.NaN
-  try {
-    fileMtimeMs = statSync(expandedPath).mtimeMs
-  } catch {
-    fileMtimeMs = Number.NaN
-  }
+  const fileMtimeMs = safeFileMtimeMs(expandedPath)
   const ageSourceMs = Number.isFinite(generatedAtMs) ? generatedAtMs : fileMtimeMs
   const ageMs = Number.isFinite(ageSourceMs) ? Math.max(0, Date.now() - ageSourceMs) : undefined
 
@@ -1008,6 +1011,7 @@ function collectKnowledgeBaseReceiptReport({
           already_joined_receipt_files: 0,
           issues: undefined,
         }
+  const activity = normalizeKnowledgeBaseActivity(raw?.activity)
 
   return {
     path: display,
@@ -1040,8 +1044,44 @@ function collectKnowledgeBaseReceiptReport({
       total: totalPending,
     },
     receipt_integrity: receiptIntegrity,
+    activity,
     caveats: Array.isArray(raw.caveats) ? raw.caveats.length : undefined,
   }
+}
+
+function normalizeKnowledgeBaseActivity(activity) {
+  if (!activity || typeof activity !== 'object') {
+    return { status: 'missing' }
+  }
+  const status = stringValue(activity.status) ?? 'unknown'
+  const lastActivityAt = stringValue(activity.last_activity_at)
+  const lastActivityMs = lastActivityAt ? Date.parse(lastActivityAt) : Number.NaN
+  const declaredAge = Number(activity.age_ms)
+  const ageMs = Number.isFinite(declaredAge)
+    ? Math.max(0, Math.round(declaredAge))
+    : Number.isFinite(lastActivityMs)
+      ? Math.max(0, Math.round(Date.now() - lastActivityMs))
+      : undefined
+  const maxAgeMs = positiveInteger(activity.max_age_ms)
+  const recordHash = stringValue(activity.record_hash)
+  const contextId = parseSessionContextId(stringValue(activity.context_id))
+  return withoutUndefinedValues({
+    status,
+    source: safeLabel(stringValue(activity.source)),
+    producer: safeLabel(stringValue(activity.producer)),
+    last_activity_at: Number.isFinite(lastActivityMs) ? lastActivityAt : undefined,
+    age_ms: ageMs,
+    max_age_ms: maxAgeMs,
+    stale:
+      status === 'stale' ||
+      (ageMs !== undefined && maxAgeMs !== undefined ? ageMs > maxAgeMs : undefined),
+    event_type: stringValue(activity.event_type),
+    context_id: contextId,
+    record_hash: recordHash && RECORD_HASH.test(recordHash) ? recordHash : undefined,
+    topics: Array.isArray(activity.topics)
+      ? activity.topics.map((topic) => safeLabel(stringValue(topic))).filter(Boolean)
+      : undefined,
+  })
 }
 
 function collectLongLivedActivityReport({
@@ -1076,12 +1116,7 @@ function collectLongLivedActivityReport({
 
   const generatedAtMs =
     typeof raw?.generated_at === 'string' ? Date.parse(raw.generated_at) : Number.NaN
-  let fileMtimeMs = Number.NaN
-  try {
-    fileMtimeMs = statSync(expandedPath).mtimeMs
-  } catch {
-    fileMtimeMs = Number.NaN
-  }
+  const fileMtimeMs = safeFileMtimeMs(expandedPath)
   const ageSourceMs = Number.isFinite(generatedAtMs) ? generatedAtMs : fileMtimeMs
   const ageMs = Number.isFinite(ageSourceMs) ? Math.max(0, Date.now() - ageSourceMs) : undefined
   const reportMaxAgeMs = positiveInteger(raw?.max_age_ms) ?? maxAgeMs
@@ -2021,6 +2056,9 @@ function knowledgeBaseReceiptPendingTotal(report) {
 
 function knowledgeBaseReceiptSummary(report) {
   const status = knowledgeBaseReceiptReportStatus(report)
+  const activity = report?.activity && typeof report.activity === 'object'
+    ? report.activity
+    : { status: 'missing' }
   return {
     status,
     age_ms: Number.isFinite(Number(report?.age_ms)) ? Number(report.age_ms) : undefined,
@@ -2031,6 +2069,7 @@ function knowledgeBaseReceiptSummary(report) {
     wal_quarantined: Number(report?.wal?.quarantined ?? 0),
     wal_receipted: Number(report?.wal?.receipted ?? 0),
     receipt_integrity: report?.receipt_integrity,
+    activity,
   }
 }
 
@@ -2442,6 +2481,33 @@ function buildGates({
     )
   }
 
+  const watcherActivity = receiptSummary.activity ?? { status: 'missing' }
+  if (watcherActivity.status === 'ok' && watcherActivity.stale !== true) {
+    gates.push(
+      gate(
+        'knowledge-base-watcher-activity',
+        'pass',
+        `knowledge-base watcher has recent activity evidence from ${watcherActivity.source ?? 'unknown source'}`,
+      ),
+    )
+  } else if (watcherActivity.status === 'invalid' || watcherActivity.status === 'invalid_shape') {
+    gates.push(
+      gate(
+        'knowledge-base-watcher-activity',
+        'fail',
+        `knowledge-base watcher activity evidence is ${watcherActivity.status}`,
+      ),
+    )
+  } else {
+    gates.push(
+      gate(
+        'knowledge-base-watcher-activity',
+        'warn',
+        `knowledge-base watcher activity evidence is ${watcherActivity.status ?? 'missing'}`,
+      ),
+    )
+  }
+
   const longLivedRoutes = summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints)
   const longLivedActivity = summarizeLongLivedActivity(longLivedAgents, longLivedActivityReport)
   if (longLivedRoutes.total > 0 && longLivedRoutes.healthy === longLivedRoutes.total) {
@@ -2764,6 +2830,9 @@ function buildReport(input, options = {}) {
         receiptSummary.receipt_integrity?.orphan_receipt_files,
       knowledge_base_receipt_integrity_invalid:
         receiptSummary.receipt_integrity?.invalid_receipt_files,
+      knowledge_base_activity_status: receiptSummary.activity?.status,
+      knowledge_base_activity_age_ms: receiptSummary.activity?.age_ms,
+      knowledge_base_activity_source: receiptSummary.activity?.source,
       long_lived_agents: longLivedAgents.length,
       long_lived_agent_routes: longLivedRoutes.total,
       long_lived_agent_route_endpoints: unique(longLivedAgents.map((agent) => agent.endpoint))
@@ -2872,6 +2941,11 @@ function recommendationsFor({ status, gates, processSummary }) {
       'refresh or repair the knowledge-base receipt join-back report before treating watcher-WAL routing as clean',
     )
   }
+  if (gates.find((item) => item.name === 'knowledge-base-watcher-activity')?.status !== 'pass') {
+    recommendations.push(
+      'refresh or repair knowledge-base watcher activity evidence before treating watcher-WAL routing as active',
+    )
+  }
   if (gates.find((item) => item.name === 'long-lived-agent-route')?.status !== 'pass') {
     recommendations.push(
       'point every known long-lived agent route at a healthy coordinator endpoint before broad rollout',
@@ -2896,6 +2970,7 @@ function formatTextReport(report) {
     `context routing profiles: ready=${report.summary.active_session_profiles_ready}/${report.summary.active_session_profiles}, active-session=${report.summary.active_session_profiles_valid}, explicit-required=${report.summary.active_session_profiles_explicit_required}`,
     `watcher-WAL launch agents: ${report.summary.watcher_wal_launch_agents}`,
     `knowledge-base receipt join-back: status=${report.summary.knowledge_base_receipt_report_status}, pending=${report.summary.knowledge_base_receipt_pending_total}, obs=${report.summary.knowledge_base_receipt_observation_pending}, annotations=${report.summary.knowledge_base_receipt_annotation_pending}, wal-queued=${report.summary.knowledge_base_wal_queued}, wal-receipted=${report.summary.knowledge_base_wal_receipted}, wal-quarantined=${report.summary.knowledge_base_wal_quarantined}, receipt-mismatches=${report.summary.knowledge_base_receipt_integrity_mismatches}, receipt-orphans=${report.summary.knowledge_base_receipt_integrity_orphans}`,
+    `knowledge-base watcher activity: status=${report.summary.knowledge_base_activity_status}, source=${report.summary.knowledge_base_activity_source ?? 'unknown'}, age-ms=${report.summary.knowledge_base_activity_age_ms ?? 'unknown'}`,
     `long-lived agent routes: healthy=${report.summary.long_lived_agent_routes_healthy}/${report.summary.long_lived_agent_routes}, configured=${report.summary.long_lived_agent_routes_configured}, missing=${report.summary.long_lived_agent_routes_missing}, endpoints=${report.summary.long_lived_agent_route_endpoints}`,
     `long-lived activity: status=${report.summary.long_lived_activity_report_status}, ok=${report.summary.long_lived_agent_activity_ok}/${report.summary.long_lived_agent_routes}, missing=${report.summary.long_lived_agent_activity_missing}, stale=${report.summary.long_lived_agent_activity_stale}`,
     '',

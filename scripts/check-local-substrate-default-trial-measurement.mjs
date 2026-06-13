@@ -57,6 +57,9 @@ function checkHealthyMeasurement() {
   if (measurement.process_footprint.watcher_wal.wal_receipted !== 0) {
     fail('healthy measurement: expected zero active receipted WAL files')
   }
+  if (measurement.process_footprint.watcher_wal.activity_status !== 'ok') {
+    fail('healthy measurement: expected watcher-WAL activity status ok')
+  }
 }
 
 function checkRestartResidueFailsMeasurement() {
@@ -161,6 +164,22 @@ function checkLongLivedGapFailsMeasurement() {
   }
 }
 
+function checkWatcherActivityFailsMeasurement() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  delete snapshot.knowledge_base_receipt_report.activity
+  const measurement = measurementForReport(buildReport(snapshot, { generatedAt: GENERATED_AT }))
+  if (measurement.status !== 'not_ready') {
+    fail(`watcher activity measurement: expected not_ready, got ${measurement.status}`)
+  }
+  if (statusFor(measurement, 'watcher-wal-and-receipts-clean') !== 'pass') {
+    fail('watcher activity measurement: expected watcher-wal-and-receipts-clean=pass')
+  }
+  if (statusFor(measurement, 'watcher-wal-activity-clean') !== 'fail') {
+    fail('watcher activity measurement: expected watcher-wal-activity-clean=fail')
+  }
+}
+
 function checkLongLivedActivityFailsMeasurement() {
   const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
@@ -187,6 +206,7 @@ function main() {
   checkRestartResidueFailsMeasurement()
   checkReceiptBacklogFailsMeasurement()
   checkBridgeProxyProcessFootprint()
+  checkWatcherActivityFailsMeasurement()
   checkLongLivedGapFailsMeasurement()
   checkLongLivedActivityFailsMeasurement()
 
