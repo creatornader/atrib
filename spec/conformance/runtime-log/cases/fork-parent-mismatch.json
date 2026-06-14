@@ -1,0 +1,170 @@
+{
+  "schema": "https://atrib.dev/schemas/runtime-log/conformance-case/v0",
+  "id": "fork-parent-mismatch",
+  "description": "Verifier rejects fork evidence when the supplied parent manifest hash does not match fork.parent_window_manifest_hash.",
+  "manifest": {
+    "schema": "https://atrib.dev/schemas/runtime-log/log-window-manifest/v0",
+    "source": {
+      "id": "reference.runtime-log",
+      "kind": "jsonl-reference",
+      "version": "0.1.0"
+    },
+    "runtime": {
+      "name": "reference-runtime-log",
+      "version": "0.1.0",
+      "environment": "conformance"
+    },
+    "session": {
+      "id": "runtime-log-fork",
+      "digest": "sha256:ca4c2292e94e2718001890ece0b71e6f5c38af4fdc530bcda260ca4a4ae814fb",
+      "format": "json",
+      "uri": "file://spec/conformance/runtime-log/session-definition.json"
+    },
+    "window": {
+      "start": 3,
+      "end": 4,
+      "label": "fork-window"
+    },
+    "event_count": 2,
+    "event_root": "sha256:7fba637534e1edad8006a7d5932520e49fd4345588699e7c9dd5b217cb64a36b",
+    "fork": {
+      "parent_window_manifest_hash": "sha256:1efe31e4a9b692d10cedb6934d36046466d4c912b8df29923a7d48c43d4d9c0b",
+      "fork_event_hash": "sha256:efed9cc2618ca2323e68ee1fd386d1aca2b26111f95489666cbfd05a3797d0b6",
+      "reason": "manual-review"
+    },
+    "canonicalization": {
+      "algorithm": "jcs-sha256-v0",
+      "event_hash_rule": "sha256(JCS(runtime event payload))",
+      "window_root_rule": "sha256(JCS(ordered event refs))",
+      "manifest_hash_rule": "sha256(JCS(log_window_manifest))",
+      "projection_root_rule": "sha256(JCS(sorted projection refs))",
+      "side_effect_receipt_root_rule": "sha256(JCS(sorted side-effect receipt refs))"
+    },
+    "redaction": {
+      "mode": "hash-only",
+      "fields": ["raw_prompt", "raw_tool_args", "raw_output"]
+    },
+    "privacy_posture": "public-fixture",
+    "verifier_policy": {
+      "require_event_root": true,
+      "require_fork_parent": true,
+      "trusted_sources": ["reference.runtime-log"]
+    },
+    "created_at": "2026-06-14T00:00:00.000Z"
+  },
+  "evidence": {
+    "events": [
+      {
+        "event_id": "evt-003",
+        "position": 3,
+        "kind": "approval.granted",
+        "event_hash": "sha256:efed9cc2618ca2323e68ee1fd386d1aca2b26111f95489666cbfd05a3797d0b6"
+      },
+      {
+        "event_id": "evt-004",
+        "position": 4,
+        "kind": "object.created",
+        "event_hash": "sha256:79aec2d17612c44e7fcbb26bd8657cb9dd02432ac18ed43204102abd49badff2"
+      }
+    ],
+    "fork_parent_manifest": {
+      "schema": "https://atrib.dev/schemas/runtime-log/log-window-manifest/v0",
+      "source": {
+        "id": "reference.runtime-log",
+        "kind": "jsonl-reference",
+        "version": "0.1.0"
+      },
+      "runtime": {
+        "name": "reference-runtime-log",
+        "version": "0.1.0",
+        "environment": "conformance"
+      },
+      "session": {
+        "id": "runtime-log-other-parent",
+        "digest": "sha256:ca4c2292e94e2718001890ece0b71e6f5c38af4fdc530bcda260ca4a4ae814fb",
+        "format": "json",
+        "uri": "file://spec/conformance/runtime-log/session-definition.json"
+      },
+      "window": {
+        "start": 1,
+        "end": 2,
+        "label": "other-parent-window"
+      },
+      "event_count": 2,
+      "event_root": "sha256:e7c7090f0e93c0251dbcf192b9010edf3fa8fbb282c8624e35cd3626c5ea7182",
+      "canonicalization": {
+        "algorithm": "jcs-sha256-v0",
+        "event_hash_rule": "sha256(JCS(runtime event payload))",
+        "window_root_rule": "sha256(JCS(ordered event refs))",
+        "manifest_hash_rule": "sha256(JCS(log_window_manifest))",
+        "projection_root_rule": "sha256(JCS(sorted projection refs))",
+        "side_effect_receipt_root_rule": "sha256(JCS(sorted side-effect receipt refs))"
+      },
+      "redaction": {
+        "mode": "hash-only",
+        "fields": ["raw_prompt", "raw_tool_args", "raw_output"]
+      },
+      "privacy_posture": "public-fixture",
+      "verifier_policy": {
+        "require_event_root": true,
+        "trusted_sources": ["reference.runtime-log"]
+      },
+      "created_at": "2026-06-14T00:00:00.000Z"
+    }
+  },
+  "expected": {
+    "valid": false,
+    "issue_codes": ["fork_parent_mismatch"]
+  },
+  "privacy_expectation": {
+    "manifest_embeds_raw_runtime_bodies": false,
+    "redaction_mode": "hash-only",
+    "withheld_manifest_fields": ["raw_prompt", "raw_tool_args", "raw_output"]
+  },
+  "support_manifests": {
+    "expected_parent_manifest": {
+      "schema": "https://atrib.dev/schemas/runtime-log/log-window-manifest/v0",
+      "source": {
+        "id": "reference.runtime-log",
+        "kind": "jsonl-reference",
+        "version": "0.1.0"
+      },
+      "runtime": {
+        "name": "reference-runtime-log",
+        "version": "0.1.0",
+        "environment": "conformance"
+      },
+      "session": {
+        "id": "runtime-log-parent",
+        "digest": "sha256:ca4c2292e94e2718001890ece0b71e6f5c38af4fdc530bcda260ca4a4ae814fb",
+        "format": "json",
+        "uri": "file://spec/conformance/runtime-log/session-definition.json"
+      },
+      "window": {
+        "start": 1,
+        "end": 2,
+        "label": "parent-window"
+      },
+      "event_count": 2,
+      "event_root": "sha256:e7c7090f0e93c0251dbcf192b9010edf3fa8fbb282c8624e35cd3626c5ea7182",
+      "canonicalization": {
+        "algorithm": "jcs-sha256-v0",
+        "event_hash_rule": "sha256(JCS(runtime event payload))",
+        "window_root_rule": "sha256(JCS(ordered event refs))",
+        "manifest_hash_rule": "sha256(JCS(log_window_manifest))",
+        "projection_root_rule": "sha256(JCS(sorted projection refs))",
+        "side_effect_receipt_root_rule": "sha256(JCS(sorted side-effect receipt refs))"
+      },
+      "redaction": {
+        "mode": "hash-only",
+        "fields": ["raw_prompt", "raw_tool_args", "raw_output"]
+      },
+      "privacy_posture": "public-fixture",
+      "verifier_policy": {
+        "require_event_root": true,
+        "trusted_sources": ["reference.runtime-log"]
+      },
+      "created_at": "2026-06-14T00:00:00.000Z"
+    }
+  }
+}

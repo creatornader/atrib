@@ -238,6 +238,68 @@ This keeps the product boundary clean. Langfuse-style systems remain the right p
 
 `informed_by` is narrower than OTel parent-child nesting. Parent-child span structure says the runtime correlated two spans inside one trace. It does not prove that a later signed action depended on the earlier signed action's output. atrib only emits `informed_by` when an explicit rule can run before signing, such as the current LLM `tool_call.id` to matching TOOL `tool_call.id` rule.
 
+### Runtime log boundary
+
+A runtime log is the host-owned execution record a runtime uses to reconstruct,
+resume, fork, compact, replay, or audit a run. Different hosts call that object
+a session log, event stream, thread, trace, or run history. The name varies. The
+boundary does not: the runtime owns the raw log body, while atrib verifies
+claims over bounded windows of it.
+
+[D121](DECISIONS.md#d121-runtime-log-proof-manifests-verify-host-owned-run-windows)
+accepts `RuntimeLogSource` as the adapter contract and `log_window_manifest` as
+the proof object. A source exports canonical metadata for a bounded window:
+source identity, source version, runtime version, session-definition reference,
+window bounds, event-root hash, projection roots, fork and compaction parents,
+side-effect receipt hashes, canonicalization rules, redaction policy, privacy
+posture, and verifier policy. The manifest can point to archive bodies or
+evidence when the host opts in.
+
+The public Merkle log receives the signed manifest commitment. The raw runtime
+log stays in the runtime store, local mirror, continuation packet, private
+evidence bundle, or Record Body Archive Layer according to the host's privacy
+posture. A verifier can check that a claim depends on a specific runtime-log
+window without trusting a screenshot, local database file, or unchecked export.
+
+Trace systems remain projections or intake surfaces. OpenTelemetry,
+OpenInference, Langfuse, Phoenix, LangSmith, and similar systems can help
+produce or inspect traces, but the manifest binds a claim to the source-owned
+runtime-log window. Hosted-runtime adapters that sign each exported event remain
+the future [P013](DECISIONS.md#p013-new-runtime-integration-pattern---hosted-runtime-adapter-sign-events-stored-by-hosted-runtimes-like-anthropic-managed-agents)
+pattern. [D121](DECISIONS.md#d121-runtime-log-proof-manifests-verify-host-owned-run-windows)
+is the narrower proof boundary that lets runtime adapters, reference logs, job
+packets, and trace projections produce the same verifier object.
+
+The local reference source lives at
+[`packages/integration/examples/reference-runtime-log/`](packages/integration/examples/reference-runtime-log/).
+It uses append-only JSONL only to make the source contract inspectable in tests:
+`append`, `exportWindow`, event-kind projections, fork binding, compaction
+binding, and side-effect receipt refs. Real runtimes can use a database,
+workflow store, object store, or hosted trace API behind the same manifest
+boundary.
+
+The dogfood proof lives at
+[`packages/integration/examples/dogfood-runtime-log/`](packages/integration/examples/dogfood-runtime-log/).
+It uses sanitized Agent Bridge entries from a real runtime-log proof-kit job
+window. The manifest binds job status, result record refs, annotation refs,
+Agent Bridge receipt ids, and withheld private-body policy without publishing
+raw bridge message content or private note bodies.
+
+The secondary adapter-family proof lives at
+[`packages/integration/examples/secondary-runtime-log/`](packages/integration/examples/secondary-runtime-log/).
+It pairs a LangGraph-checkpointer-shaped runtime source with an OpenInference
+span-tree projection. The LangGraph side owns checkpoint identity, resume state,
+and fork binding. The OpenInference side carries span edges and signed-record
+refs while declaring that it does not own runtime identity, resume, or fork
+semantics.
+
+The verifier UX lives at
+[`packages/integration/examples/runtime-log-verifier-ux/`](packages/integration/examples/runtime-log-verifier-ux/).
+It renders file-backed static proof packets from the same manifests and local
+evidence, so a reviewer can inspect hashes, roots, bindings, redaction posture,
+signed record refs, and verifier issue codes without viewing raw runtime-log
+bodies.
+
 ### Cross-harness investigation continuity
 
 Runtime mounting is only half the problem. Real support and RCA work often crosses a support system, a log store, a hosted agent, a chat thread, and a local coding harness. The public Merkle log proves that each signed record existed, but it does not carry the private bodies and evidence a later harness needs to continue the task.
@@ -388,6 +450,10 @@ Versioned URL paths (`/v1/checkpoint`, `/v6/lookup/<key>`) are immutable: once a
 @atrib/verify         Merchant verification library
   └── Runs §4.6 calculation locally, verifies settlement recommendations and AP2 / VI evidence
 
+@atrib/runtime-log    Runtime-log proof helpers
+  └── Builds and verifies log_window_manifest objects for host-owned run
+      windows. It does not sign records or store raw runtime logs.
+
 @atrib/log-dev        In-memory dev log stub (private, never deploy)
   └── Implements §2.6 submission API for local testing
 
@@ -454,7 +520,7 @@ services/archive-node  Record Body Archive Layer (§2.12), deployed at https://a
       contract.
 ```
 
-The fifteen designed-public packages are published to npm via Trusted Publishing OIDC: eight SDK and integration packages (`mcp`, `agent`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`) and seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`). The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The private `@atrib/primitives-runtime` binary composes them into one local stdio server for harness configs that need fewer child processes; no separate deployment is needed.
+The sixteen designed-public packages are published to npm via Trusted Publishing OIDC: nine SDK and integration packages (`mcp`, `agent`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`, `runtime-log`) and seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`). The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The private `@atrib/primitives-runtime` binary composes them into one local stdio server for harness configs that need fewer child processes; no separate deployment is needed.
 
 Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hashes` for SHA-256, `canonicalize` for JCS. Framework dependencies are structural-typed, never hard-imported.
 
@@ -463,10 +529,12 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 ## Further reading
 
 - [atrib-spec.md](atrib-spec.md), the complete protocol specification ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns))
-- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D118](DECISIONS.md#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain); [D053](DECISIONS.md#d053-inclusion-proof-aggregation-flagged-for-follow-up) remains a placeholder ADR awaiting a formal write-up)
+- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D121](DECISIONS.md#d121-runtime-log-proof-manifests-verify-host-owned-run-windows))
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
 - [packages/integration/examples/signer-proxy/](packages/integration/examples/signer-proxy/) -- sandbox signer proxy example ([§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution) / [D102](DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox))
 - [spec/conformance/1.4/](spec/conformance/1.4/) -- signing and adversarial record conformance corpus ([§1.4](atrib-spec.md#14-signing-and-verification) / [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus))
 - [spec/conformance/1.2.6/](spec/conformance/1.2.6/) -- conformance corpus for the `provenance_token` field ([D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) / [§1.2.6](atrib-spec.md#126-provenance_token))
 - [spec/conformance/2.6.1/](spec/conformance/2.6.1/) -- shared conformance corpus for the submission API
 - [spec/conformance/3.2.4/](spec/conformance/3.2.4/) -- full graph edge derivation conformance corpus ([§3.2.4](atrib-spec.md#324-edge-derivation-rules) / [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus))
+- [spec/conformance/runtime-log/](spec/conformance/runtime-log/) -- runtime-log proof manifest conformance corpus ([D121](DECISIONS.md#d121-runtime-log-proof-manifests-verify-host-owned-run-windows))
+- [packages/integration/examples/reference-runtime-log/](packages/integration/examples/reference-runtime-log/) -- local reference source for runtime-log window, fork, compaction, and receipt proofs

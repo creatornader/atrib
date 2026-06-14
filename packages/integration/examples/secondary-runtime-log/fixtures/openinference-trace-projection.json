@@ -1,0 +1,55 @@
+{
+  "schema": "https://atrib.dev/schemas/runtime-log/openinference-trace-projection-fixture/v0",
+  "captured_at": "2026-06-14T07:05:30Z",
+  "source": {
+    "id": "openinference.rl009.trace-projection.fixture",
+    "kind": "openinference-trace-projection",
+    "version": "0.1.0"
+  },
+  "runtime": {
+    "name": "openinference",
+    "version": "0.3.12",
+    "environment": "fixture"
+  },
+  "trace": {
+    "id": "oi-rl009-trace",
+    "source_runtime": "vercel-ai-sdk",
+    "projection_scope": "span-tree",
+    "runtime_identity": "not-owned"
+  },
+  "spans": [
+    {
+      "trace_id": "oi-rl009-trace",
+      "span_id": "span-llm-001",
+      "position": 1,
+      "name": "generate-text",
+      "kind": "LLM",
+      "timestamp": "2026-06-14T07:05:31Z",
+      "span_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "signed_record_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",
+      "attributes": {
+        "model": "qwen3.5-397b",
+        "tool_call_id": "call-search-docs"
+      }
+    },
+    {
+      "trace_id": "oi-rl009-trace",
+      "span_id": "span-tool-001",
+      "parent_span_id": "span-llm-001",
+      "position": 2,
+      "name": "search_docs",
+      "kind": "TOOL",
+      "timestamp": "2026-06-14T07:05:32Z",
+      "span_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "signed_record_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc",
+      "attributes": {
+        "tool_name": "search_docs",
+        "tool_call_id": "call-search-docs"
+      }
+    }
+  ],
+  "privacy": {
+    "raw_span_bodies": "omitted",
+    "fixture_contains": "span-ids-digests-parent-edges-and-record-refs"
+  }
+}

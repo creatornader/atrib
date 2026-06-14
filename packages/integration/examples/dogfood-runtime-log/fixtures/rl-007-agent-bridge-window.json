@@ -1,0 +1,112 @@
+{
+  "schema": "https://atrib.dev/schemas/runtime-log/dogfood-agent-bridge-fixture/v0",
+  "captured_at": "2026-06-14T06:46:00.889975Z",
+  "source": {
+    "id": "atrib-dogfood.agent-bridge.runtime-log-proof-kit",
+    "kind": "agent-bridge-sanitized-window",
+    "version": "0.1.0"
+  },
+  "job_packet": {
+    "job_id": "RL-007",
+    "workstream": "runtime-log-proof-kit",
+    "goal": "Give atrib a local runtime log good enough for examples and dogfood.",
+    "status_before": "planned",
+    "status_after": "accepted",
+    "source_of_truth_paths": [
+      "private/runtime-log-proof-kit-loop-plan.md",
+      "private/v4-in-flight-tracker.md",
+      "private/v4-consolidated-roadmap.md"
+    ],
+    "result_packet_path": "private/runtime-log-proof-kit-loop-plan.md#rl-007-reference-runtime-log",
+    "private_body_policy": "omitted"
+  },
+  "result_packet": {
+    "status": "accepted",
+    "bridge_entry_id": 1851,
+    "result_record_hash": "sha256:da49af12d0c3c49571da92e62ed214a9038650fa7bccc12f3f8157219e4a7690",
+    "annotation_record_hash": "sha256:e18c380d324453b990aee7a1eeaa245f2818782e7fc87f606ecaf32505d8919f",
+    "next_job": "RL-008",
+    "checks_passed": [
+      "pnpm --filter @atrib/integration typecheck",
+      "pnpm --filter @atrib/integration test -- test/reference-runtime-log.test.ts",
+      "pnpm --filter @atrib/integration reference-runtime-log-smoke",
+      "pnpm --filter @atrib/runtime-log test",
+      "pnpm --filter @atrib/integration test -- test/activegraph-runtime-log.test.ts",
+      "pnpm --filter @atrib/integration activegraph-runtime-log-smoke",
+      "pnpm --filter @atrib/integration test",
+      "pnpm typecheck",
+      "pnpm doc-sync",
+      "pnpm --filter @atrib/runtime-log build",
+      "pnpm test",
+      "git diff --check",
+      "private node scripts/check-doc-sync.mjs",
+      "private node scripts/check-strategy-currency.mjs",
+      "private git diff --check",
+      "targeted Prettier check",
+      "diff-only prose scans"
+    ],
+    "public_artifact_refs": [
+      "packages/integration/src/reference-runtime-log.ts",
+      "packages/integration/test/reference-runtime-log.test.ts",
+      "packages/integration/examples/reference-runtime-log/README.md",
+      "packages/integration/examples/reference-runtime-log/reference-runtime-log-smoke.ts"
+    ],
+    "private_artifact_refs": [
+      "docs/plans/2026-06-13-runtime-log-proof-kit-loop-plan.md",
+      "docs/strategy/v4-in-flight-tracker.md",
+      "docs/strategy/v4-consolidated-roadmap.md"
+    ]
+  },
+  "bridge_entries": [
+    {
+      "id": 1846,
+      "source": "codex",
+      "category": "goal-update",
+      "kind": "goal-update",
+      "priority": "high",
+      "project": "atrib",
+      "created_at": "2026-06-14T06:27:05.369102Z",
+      "message_id": "33ea3d45-7d95-4c7f-8a47-27bb4f587094",
+      "atrib_receipt_id": "7SB4RsEcrNiE0q7PApNmb2wUxnUzB0qApiIl7CsEz1w.dnWSctVbWb_f7q4K1aqdpC2QzK5Q-f32LKpCpvBJwMo",
+      "accepted_job": "RL-006",
+      "next_job": "RL-007",
+      "informed_by": [
+        "sha256:6e63e029d12c8cc787b17908664308464473cbc10fabc5ccd8537ac14a7a977f",
+        "sha256:7e6fc1a8dde12da9d7bc7b0f04cbac7f4cffa96d7217d7abdfde085d4f773990"
+      ],
+      "content_summary": "RL-006 accepted and set RL-007 as the next reference runtime-log job.",
+      "content_hash": "sha256:73cd7d6343a579a31a2ccd949c586969214fe0acfb34a88fe9540c93074744e5"
+    },
+    {
+      "id": 1851,
+      "source": "codex",
+      "category": "goal-update",
+      "kind": "goal-update",
+      "priority": "high",
+      "project": "atrib",
+      "created_at": "2026-06-14T06:46:00.889975Z",
+      "message_id": "b6b82feb-7146-4f24-aa75-63da0c85dd9b",
+      "atrib_receipt_id": "wmjdvncNybt2lt5hE8dQxe0pgMOHf2o5mOO4vuq3XEM.dnWSctVbWb_f7q4K1aqdpCpvBJwMo",
+      "job_id": "RL-007",
+      "status": "accepted",
+      "next_job": "RL-008",
+      "informed_by": [
+        "sha256:da49af12d0c3c49571da92e62ed214a9038650fa7bccc12f3f8157219e4a7690",
+        "sha256:e18c380d324453b990aee7a1eeaa245f2818782e7fc87f606ecaf32505d8919f"
+      ],
+      "content_summary": "RL-007 accepted and set RL-008 as the next dogfood adapter job.",
+      "content_hash": "sha256:c216deabf9ed1565093ea7063823de744312271d3a3d0521ff78c21026ac09e4"
+    }
+  ],
+  "signed_refs": [
+    "sha256:6e63e029d12c8cc787b17908664308464473cbc10fabc5ccd8537ac14a7a977f",
+    "sha256:7e6fc1a8dde12da9d7bc7b0f04cbac7f4cffa96d7217d7abdfde085d4f773990",
+    "sha256:da49af12d0c3c49571da92e62ed214a9038650fa7bccc12f3f8157219e4a7690",
+    "sha256:e18c380d324453b990aee7a1eeaa245f2818782e7fc87f606ecaf32505d8919f"
+  ],
+  "privacy": {
+    "raw_bridge_content": "omitted",
+    "private_note_bodies": "omitted",
+    "fixture_contains": "ids-hashes-statuses-and-summaries"
+  }
+}

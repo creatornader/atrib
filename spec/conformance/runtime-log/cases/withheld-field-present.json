@@ -1,0 +1,126 @@
+{
+  "schema": "https://atrib.dev/schemas/runtime-log/conformance-case/v0",
+  "id": "withheld-field-present",
+  "description": "Verifier rejects a manifest that embeds a field named by redaction.fields.",
+  "manifest": {
+    "schema": "https://atrib.dev/schemas/runtime-log/log-window-manifest/v0",
+    "source": {
+      "id": "reference.runtime-log",
+      "kind": "jsonl-reference",
+      "version": "0.1.0"
+    },
+    "runtime": {
+      "name": "reference-runtime-log",
+      "version": "0.1.0",
+      "environment": "conformance"
+    },
+    "session": {
+      "id": "runtime-log-conformance-run",
+      "digest": "sha256:ca4c2292e94e2718001890ece0b71e6f5c38af4fdc530bcda260ca4a4ae814fb",
+      "format": "json",
+      "uri": "file://spec/conformance/runtime-log/session-definition.json"
+    },
+    "window": {
+      "start": 1,
+      "end": 4,
+      "label": "approval-gate-window"
+    },
+    "event_count": 4,
+    "event_root": "sha256:24122d91d6e97c0521e13931e7848b58281064847aa180b5914cd53fde9f27ac",
+    "projection_root": "sha256:bc536daff4b359306d12e55fc4e9c15aae88f3d1167587df02f3e26df170f2a9",
+    "projections": [
+      {
+        "name": "approval-gate",
+        "format": "activegraph.approval_gate.v0",
+        "root_hash": "sha256:1339d684ec9822969748350d4609e45ea0d35f3afa362539a81d80897e6943d1",
+        "event_count": 3
+      }
+    ],
+    "side_effect_receipts_root": "sha256:6d5dba2987c4463d4c0f39a4e5b35baee984788d529e9303a60a6385045330dd",
+    "side_effect_receipts": [
+      {
+        "protocol": "activegraph.approval_gate",
+        "receipt_hash": "sha256:bce73ecb28dc8082ce4e94bc00c725b1b96fcced36f3d673646d0bd85dce3b17"
+      }
+    ],
+    "canonicalization": {
+      "algorithm": "jcs-sha256-v0",
+      "event_hash_rule": "sha256(JCS(runtime event payload))",
+      "window_root_rule": "sha256(JCS(ordered event refs))",
+      "manifest_hash_rule": "sha256(JCS(log_window_manifest))",
+      "projection_root_rule": "sha256(JCS(sorted projection refs))",
+      "side_effect_receipt_root_rule": "sha256(JCS(sorted side-effect receipt refs))"
+    },
+    "redaction": {
+      "mode": "hash-only",
+      "fields": ["raw_prompt", "raw_tool_args", "raw_output"]
+    },
+    "privacy_posture": "public-fixture",
+    "verifier_policy": {
+      "require_event_root": true,
+      "require_session_definition": true,
+      "require_projection_roots": ["approval-gate"],
+      "require_receipt_protocols": ["activegraph.approval_gate"],
+      "trusted_sources": ["reference.runtime-log"]
+    },
+    "created_at": "2026-06-14T00:00:00.000Z",
+    "raw_prompt": "this field is deliberately forbidden by redaction.fields"
+  },
+  "evidence": {
+    "session_definition": {
+      "session_id": "runtime-log-conformance-run",
+      "runner": "reference-runtime-log",
+      "model_policy": "deterministic-fixture",
+      "tool_surface": ["model", "tool", "approval"]
+    },
+    "events": [
+      {
+        "event_id": "evt-001",
+        "position": 1,
+        "kind": "model.message",
+        "event_hash": "sha256:6da79306e32956d81e23ad8233ccc5696bae279682ac3ecad169d9a7643f7de0"
+      },
+      {
+        "event_id": "evt-002",
+        "position": 2,
+        "kind": "approval.proposed",
+        "event_hash": "sha256:87b9f3a6400c11659cc877d8b16923ed79e18d99c0c709c676fe0cbf7e69a0b8"
+      },
+      {
+        "event_id": "evt-003",
+        "position": 3,
+        "kind": "approval.granted",
+        "event_hash": "sha256:efed9cc2618ca2323e68ee1fd386d1aca2b26111f95489666cbfd05a3797d0b6"
+      },
+      {
+        "event_id": "evt-004",
+        "position": 4,
+        "kind": "object.created",
+        "event_hash": "sha256:79aec2d17612c44e7fcbb26bd8657cb9dd02432ac18ed43204102abd49badff2"
+      }
+    ],
+    "projections": [
+      {
+        "name": "approval-gate",
+        "format": "activegraph.approval_gate.v0",
+        "root_hash": "sha256:1339d684ec9822969748350d4609e45ea0d35f3afa362539a81d80897e6943d1",
+        "event_count": 3
+      }
+    ],
+    "side_effect_receipts": [
+      {
+        "protocol": "activegraph.approval_gate",
+        "receipt_hash": "sha256:bce73ecb28dc8082ce4e94bc00c725b1b96fcced36f3d673646d0bd85dce3b17"
+      }
+    ]
+  },
+  "expected": {
+    "valid": false,
+    "issue_codes": ["withheld_field_present"]
+  },
+  "privacy_expectation": {
+    "manifest_embeds_raw_runtime_bodies": false,
+    "redaction_mode": "hash-only",
+    "withheld_manifest_fields": ["raw_prompt", "raw_tool_args", "raw_output"]
+  }
+}

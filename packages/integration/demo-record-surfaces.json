@@ -157,6 +157,41 @@
       ]
     },
     {
+      "id": "activegraph-runtime-log",
+      "path": "examples/activegraph-runtime-log",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["activegraph-runtime-log-smoke"]
+    },
+    {
+      "id": "reference-runtime-log",
+      "path": "examples/reference-runtime-log",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["reference-runtime-log-smoke"]
+    },
+    {
+      "id": "dogfood-runtime-log",
+      "path": "examples/dogfood-runtime-log",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["dogfood-runtime-log-smoke"]
+    },
+    {
+      "id": "secondary-runtime-log",
+      "path": "examples/secondary-runtime-log",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["secondary-runtime-log-smoke"]
+    },
+    {
+      "id": "runtime-log-verifier-ux",
+      "path": "examples/runtime-log-verifier-ux",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["runtime-log-verifier-ux-smoke"]
+    },
+    {
       "id": "brief-dcbench",
       "path": "examples/brief-dcbench",
       "record_class": "offline-local",

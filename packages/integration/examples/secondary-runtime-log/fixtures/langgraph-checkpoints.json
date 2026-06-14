@@ -1,0 +1,96 @@
+{
+  "schema": "https://atrib.dev/schemas/runtime-log/langgraph-checkpoint-fixture/v0",
+  "captured_at": "2026-06-14T07:05:00Z",
+  "source": {
+    "id": "langgraph-checkpointer.rl009.fixture",
+    "kind": "langgraph-checkpoint-log",
+    "version": "0.1.0"
+  },
+  "runtime": {
+    "name": "langgraph-checkpointer",
+    "version": "1.2.4",
+    "environment": "fixture"
+  },
+  "thread": {
+    "main_session_id": "lg-rl009-main",
+    "fork_session_id": "lg-rl009-fork",
+    "saver": "InMemorySaver-shaped-checkpoints",
+    "raw_state_policy": "local-only"
+  },
+  "checkpoints": [
+    {
+      "session_id": "lg-rl009-main",
+      "event_id": "lg-main-001",
+      "checkpoint_id": "ckpt-main-001",
+      "position": 1,
+      "kind": "input.received",
+      "timestamp": "2026-06-14T07:05:01Z",
+      "checkpoint_ref": "local://langgraph/lg-rl009-main/checkpoints/ckpt-main-001",
+      "state_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "metadata": {
+        "node": "start"
+      }
+    },
+    {
+      "session_id": "lg-rl009-main",
+      "event_id": "lg-main-002",
+      "checkpoint_id": "ckpt-main-002",
+      "position": 2,
+      "kind": "tool.write",
+      "timestamp": "2026-06-14T07:05:02Z",
+      "checkpoint_ref": "local://langgraph/lg-rl009-main/checkpoints/ckpt-main-002",
+      "state_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "parent_checkpoint_ids": ["ckpt-main-001"],
+      "metadata": {
+        "node": "lookup_policy"
+      }
+    },
+    {
+      "session_id": "lg-rl009-main",
+      "event_id": "lg-main-003",
+      "checkpoint_id": "ckpt-main-003",
+      "position": 3,
+      "kind": "resume.ready",
+      "timestamp": "2026-06-14T07:05:03Z",
+      "checkpoint_ref": "local://langgraph/lg-rl009-main/checkpoints/ckpt-main-003",
+      "state_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "parent_checkpoint_ids": ["ckpt-main-002"],
+      "resume_from_checkpoint_id": "ckpt-main-002",
+      "metadata": {
+        "node": "agent"
+      }
+    },
+    {
+      "session_id": "lg-rl009-fork",
+      "event_id": "lg-fork-001",
+      "checkpoint_id": "ckpt-fork-001",
+      "position": 1,
+      "kind": "fork.created",
+      "timestamp": "2026-06-14T07:05:04Z",
+      "checkpoint_ref": "local://langgraph/lg-rl009-fork/checkpoints/ckpt-fork-001",
+      "state_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "forked_from_checkpoint_id": "ckpt-main-003",
+      "metadata": {
+        "node": "fork"
+      }
+    },
+    {
+      "session_id": "lg-rl009-fork",
+      "event_id": "lg-fork-002",
+      "checkpoint_id": "ckpt-fork-002",
+      "position": 2,
+      "kind": "fork.result",
+      "timestamp": "2026-06-14T07:05:05Z",
+      "checkpoint_ref": "local://langgraph/lg-rl009-fork/checkpoints/ckpt-fork-002",
+      "state_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "parent_checkpoint_ids": ["ckpt-fork-001"],
+      "metadata": {
+        "node": "agent"
+      }
+    }
+  ],
+  "privacy": {
+    "raw_checkpoint_bodies": "omitted",
+    "fixture_contains": "checkpoint-ids-state-digests-and-refs"
+  }
+}
