@@ -10,8 +10,18 @@ window through a `log_window_manifest`.
 
 ## Install
 
+Post-publication:
+
 ```bash
 pnpm add @atrib/runtime-log
+```
+
+Before the first npm publish, test through the workspace or a packed tarball:
+
+```bash
+pnpm --filter @atrib/runtime-log build
+cd packages/runtime-log
+pnpm pack --pack-destination /tmp
 ```
 
 ## Basic use
