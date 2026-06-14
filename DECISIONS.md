@@ -6283,6 +6283,158 @@ join-back metadata is source-targeted and belongs with the WAL drain.
 - [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox), signer
   isolation for sandboxed producers.
 
+---
+
+## D121: Runtime-log proof manifests verify host-owned run windows
+
+**Date:** 2026-06-14
+
+**Status:** Accepted
+
+**Extends:** [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary), [D062](#d062-local-mirror-sidecar--two-tier-private-local--public-canonical-persistence), [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path), [D070](#d070-record-body-archive-layer), [D087](#d087-diagnostic-outcome-plus-trace-replay-is-the-repairrefinement-pattern), [D108](#d108-observability-span-trees-are-intake-local-sidecars-are-cognitive-payload), [D118](#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain), and [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned).
+
+**Relates to:** [P013](#p013-new-runtime-integration-pattern---hosted-runtime-adapter-sign-events-stored-by-hosted-runtimes-like-anthropic-managed-agents).
+
+**Context.** Some agent runtimes already treat an append-only execution log as
+the object a host uses to reconstruct, resume, fork, compact, replay, or audit a
+run. Hosted agent systems call this a session log, event stream, thread, trace,
+or run history. ActiveGraph and BabyAGI make the same pressure visible from a
+graph-runtime direction: the runtime needs a durable record of what happened,
+and useful review happens over a bounded window of that record.
+
+atrib already signs tool calls, transactions, observations, annotations,
+revisions, handoffs, sidecar commitments, trace projections, and verifier
+evidence. [D108](#d108-observability-span-trees-are-intake-local-sidecars-are-cognitive-payload)
+keeps OpenTelemetry and OpenInference spans as intake and correlation surfaces.
+[D118](#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain)
+keeps explorer trace paths as presentation metadata. [P013](#p013-new-runtime-integration-pattern---hosted-runtime-adapter-sign-events-stored-by-hosted-runtimes-like-anthropic-managed-agents)
+parks the later adapter pattern where atrib signs individual events exported
+from hosted-runtime APIs.
+
+Those pieces still leave a product gap. A reviewer may need to verify a claim
+about a runtime-log window without receiving the raw log body. A later agent may
+need to know which bounded run window a diagnosis, fork, compaction, or approval
+claim depends on. Screenshots, database files, and unchecked exports do not give
+that verifier a stable object.
+
+**Decision.** Accept a runtime-log proof boundary built around a
+`RuntimeLogSource` adapter contract and a `log_window_manifest` proof object.
+
+`RuntimeLogSource` is the adapter boundary for host-owned runtime logs. It does
+not require the host to move raw events into atrib. A source exposes enough
+canonical metadata for a bounded window to be identified, hashed, checked, and
+linked to signed records.
+
+`log_window_manifest` is the v0 proof object for that bounded window. It commits
+to the source identity, source version, runtime version, session-definition
+reference, window bounds, event-root hash, projection roots, fork and compaction
+parents, side-effect receipt hashes, canonicalization rules, redaction policy,
+privacy posture, and verifier policy. The manifest may also name archive
+references for raw bodies or evidence when the host opts in.
+
+The first implementation path uses extension records and ordinary signed
+commitments. No normative event_type byte is allocated now. Promotion still
+requires the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)
+bar: a repeated verifier need, graph effect, settlement requirement, or other
+consumer requirement that cannot stay extension-shaped.
+
+Raw runtime-log bodies remain host-owned by default. They can stay in the
+runtime store, local mirror, continuation packet, private evidence bundle, or
+Record Body Archive Layer. The public Merkle log receives a signed commitment to
+the manifest record, not the raw event stream.
+
+Trace systems remain projections or intake surfaces. OpenTelemetry,
+OpenInference, Langfuse, Phoenix, LangSmith, and similar tools can help produce
+or inspect traces, but the runtime-log manifest is the verifier object that
+binds a claim to a bounded source-owned window.
+
+[P013](#p013-new-runtime-integration-pattern---hosted-runtime-adapter-sign-events-stored-by-hosted-runtimes-like-anthropic-managed-agents)
+stays pending. This decision defines the proof object and source boundary. P013
+still covers the later pattern where a hosted-runtime adapter signs each
+exported event under the agent's atrib key.
+
+**Alternatives considered.**
+
+- _Make atrib the hosted agent runtime._ Rejected. atrib verifies action and
+  runtime-log claims. It should not own scheduling, sandboxing, memory storage,
+  session replay, or host runtime state by default.
+- _Treat OpenTelemetry, OpenInference, or a Langfuse trace as the runtime log._
+  Rejected. Those systems are useful traces and projections, but a verifier
+  still needs a source-owned window identity, canonicalization rule, and privacy
+  posture.
+- _Publish raw runtime logs to the public Merkle log._ Rejected. It breaks the
+  salted-commitment privacy posture and would make the log operator a storage
+  surface for private run bodies.
+- _Allocate a new event_type byte now._ Rejected. The extension path can prove
+  the contract before atrib decides whether the object needs a protocol byte.
+- _Make the contract ActiveGraph-specific._ Rejected. ActiveGraph is a good
+  first adapter proof if its export surface supports the contract, but the
+  architecture must also fit hosted runtimes, local run logs, job packets, and
+  trace-projection adapters.
+
+**Consequences.**
+
+- `@atrib/runtime-log` has a narrow package scope: define the source contract,
+  manifest shape, canonical hashing, verifier result type, inspection packet,
+  fixture corpus, and CLI proof helpers.
+- The private integration package carries a local reference source at
+  [`packages/integration/examples/reference-runtime-log/`](packages/integration/examples/reference-runtime-log/).
+  JSONL is the test fixture storage, not the protocol. The proof contract is the
+  manifest plus verifier evidence for windows, forks, compactions, and
+  side-effect receipt refs.
+- The private integration package also carries a dogfood source at
+  [`packages/integration/examples/dogfood-runtime-log/`](packages/integration/examples/dogfood-runtime-log/).
+  It proves a real Agent Bridge job window can emit the same manifest shape
+  while keeping raw bridge content and private note bodies local.
+- The private integration package carries a secondary adapter-family proof at
+  [`packages/integration/examples/secondary-runtime-log/`](packages/integration/examples/secondary-runtime-log/).
+  It pairs a LangGraph-checkpoint runtime source with an OpenInference
+  span-tree projection, and the tests fail if the projection claims runtime-log
+  completeness.
+- The private integration package carries a verifier UX proof at
+  [`packages/integration/examples/runtime-log-verifier-ux/`](packages/integration/examples/runtime-log-verifier-ux/).
+  It renders static proof packets from ActiveGraph, reference JSONL, dogfood,
+  LangGraph, and OpenInference manifests, plus one invalid packet that exposes
+  named issue codes.
+- ActiveGraph outreach can stay proof-gated. The claim becomes "atrib can verify
+  exported runtime-log windows when the export supports this manifest contract,"
+  not "ActiveGraph needs atrib."
+- BabyAGI's own record or trace graph can remain its runtime-owned graph. atrib
+  relates by signing and verifying bounded windows, forks, compactions, and
+  receipt refs when BabyAGI exports or attests to them.
+- Continuation packets remain distinct. They can carry manifest refs alongside
+  private bodies, archive refs, skill versions, chain tails, and signed
+  diagnostics.
+- Verifier UX can inspect a signed manifest, source identity, roots, receipts,
+  redaction posture, archive refs, and inclusion proof without rendering the raw
+  runtime log.
+- Future spec work should add an informative runtime-log proof section only
+  after the package and conformance fixtures prove the field names.
+
+**Cross-references.**
+
+- [`ARCHITECTURE.md#runtime-log-boundary`](ARCHITECTURE.md#runtime-log-boundary),
+  runtime-log proof boundary.
+- [`spec/conformance/runtime-log/`](spec/conformance/runtime-log/),
+  runtime-log proof manifest conformance corpus.
+- [`packages/integration/examples/reference-runtime-log/`](packages/integration/examples/reference-runtime-log/),
+  local reference source for runtime-log proof exports.
+- [`packages/integration/examples/dogfood-runtime-log/`](packages/integration/examples/dogfood-runtime-log/),
+  sanitized Agent Bridge job-window runtime-log proof.
+- [`packages/integration/examples/secondary-runtime-log/`](packages/integration/examples/secondary-runtime-log/),
+  secondary adapter-family proof for runtime source versus trace projection.
+- [`packages/integration/examples/runtime-log-verifier-ux/`](packages/integration/examples/runtime-log-verifier-ux/),
+  static verifier proof packets for runtime-log manifests.
+- [§2.12](atrib-spec.md#212-record-body-archive-layer), Record Body Archive
+  Layer.
+- [§5.9](atrib-spec.md#59-local-mirror-conventions), local mirror conventions.
+- [§7.8](atrib-spec.md#78-cross-harness-continuation-packets),
+  cross-harness continuation packets.
+- [§8.3](atrib-spec.md#83-salted-commitment-posture), salted commitment
+  posture.
+- [§9](atrib-spec.md#9-runtime-integration-patterns), runtime integration
+  patterns.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

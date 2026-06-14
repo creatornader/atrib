@@ -1,0 +1,55 @@
+{
+  "name": "@atrib/runtime-log",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "atrib-runtime-log": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "description": "Runtime-log proof helpers for atrib. Builds and verifies manifests for host-owned agent run windows.",
+  "author": "atrib <hello@atrib.dev>",
+  "license": "Apache-2.0",
+  "homepage": "https://atrib.dev",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creatornader/atrib.git",
+    "directory": "packages/runtime-log"
+  },
+  "keywords": [
+    "atrib",
+    "runtime-log",
+    "agent-runtime",
+    "verifiable",
+    "merkle-log",
+    "provenance",
+    "agent-trace"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc && chmod +x dist/cli.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.2.0",
+    "canonicalize": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}

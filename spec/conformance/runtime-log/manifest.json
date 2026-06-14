@@ -1,0 +1,75 @@
+{
+  "spec_section": "D121 runtime-log proof manifests",
+  "spec_title": "Runtime-log proof manifest conformance",
+  "schema": "https://atrib.dev/schemas/runtime-log/conformance-manifest/v0",
+  "generated_at": "2026-06-14T00:00:00.000Z",
+  "generator": "@atrib/runtime-log fixture generator, manual RL-006 corpus slice",
+  "reference_consumer": "packages/runtime-log/test/conformance-runtime-log.test.ts",
+  "cases": [
+    {
+      "id": "valid-host-owned-window",
+      "file": "cases/valid-host-owned-window.json",
+      "expected_valid": true
+    },
+    {
+      "id": "canonical-event-order-mismatch",
+      "file": "cases/canonical-event-order-mismatch.json",
+      "expected_valid": false
+    },
+    {
+      "id": "event-root-mismatch",
+      "file": "cases/event-root-mismatch.json",
+      "expected_valid": false
+    },
+    {
+      "id": "event-count-mismatch",
+      "file": "cases/event-count-mismatch.json",
+      "expected_valid": false
+    },
+    {
+      "id": "window-bounds-mismatch",
+      "file": "cases/window-bounds-mismatch.json",
+      "expected_valid": false
+    },
+    {
+      "id": "session-definition-digest-mismatch",
+      "file": "cases/session-definition-digest-mismatch.json",
+      "expected_valid": false
+    },
+    {
+      "id": "projection-root-mismatch",
+      "file": "cases/projection-root-mismatch.json",
+      "expected_valid": false
+    },
+    {
+      "id": "required-receipt-missing",
+      "file": "cases/required-receipt-missing.json",
+      "expected_valid": false
+    },
+    {
+      "id": "side-effect-receipts-root-mismatch",
+      "file": "cases/side-effect-receipts-root-mismatch.json",
+      "expected_valid": false
+    },
+    {
+      "id": "fork-parent-mismatch",
+      "file": "cases/fork-parent-mismatch.json",
+      "expected_valid": false
+    },
+    {
+      "id": "compaction-source-mismatch",
+      "file": "cases/compaction-source-mismatch.json",
+      "expected_valid": false
+    },
+    {
+      "id": "compaction-event-root-mismatch",
+      "file": "cases/compaction-event-root-mismatch.json",
+      "expected_valid": false
+    },
+    {
+      "id": "withheld-field-present",
+      "file": "cases/withheld-field-present.json",
+      "expected_valid": false
+    }
+  ]
+}

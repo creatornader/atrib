@@ -1,0 +1,172 @@
+{
+  "schema": "https://atrib.dev/schemas/runtime-log/conformance-case/v0",
+  "id": "compaction-event-root-mismatch",
+  "description": "Verifier rejects compacted event refs when they do not match compaction.compacted_event_root.",
+  "manifest": {
+    "schema": "https://atrib.dev/schemas/runtime-log/log-window-manifest/v0",
+    "source": {
+      "id": "reference.runtime-log",
+      "kind": "jsonl-reference",
+      "version": "0.1.0"
+    },
+    "runtime": {
+      "name": "reference-runtime-log",
+      "version": "0.1.0",
+      "environment": "conformance"
+    },
+    "session": {
+      "id": "runtime-log-compaction",
+      "digest": "sha256:ca4c2292e94e2718001890ece0b71e6f5c38af4fdc530bcda260ca4a4ae814fb",
+      "format": "json",
+      "uri": "file://spec/conformance/runtime-log/session-definition.json"
+    },
+    "window": {
+      "start": "summary-1",
+      "end": "summary-1",
+      "label": "compaction-window"
+    },
+    "event_count": 1,
+    "event_root": "sha256:ce819dcbc8ed201cde8f5a1e3eebf1af51f0386de522947f71196cf4c224e724",
+    "compaction": {
+      "source_window_manifest_hash": "sha256:a05c23240c4eda0bae15dc97ed6b5d94672c3cd2275878c9ba198be4eb7a7970",
+      "compacted_event_root": "sha256:ce819dcbc8ed201cde8f5a1e3eebf1af51f0386de522947f71196cf4c224e724",
+      "summary_hash": "sha256:d743497a42b71de67ab9c0f1829592448ba56540e80ef4211363086584501710"
+    },
+    "canonicalization": {
+      "algorithm": "jcs-sha256-v0",
+      "event_hash_rule": "sha256(JCS(runtime event payload))",
+      "window_root_rule": "sha256(JCS(ordered event refs))",
+      "manifest_hash_rule": "sha256(JCS(log_window_manifest))",
+      "projection_root_rule": "sha256(JCS(sorted projection refs))",
+      "side_effect_receipt_root_rule": "sha256(JCS(sorted side-effect receipt refs))"
+    },
+    "redaction": {
+      "mode": "hash-only",
+      "fields": ["raw_prompt", "raw_tool_args", "raw_output"]
+    },
+    "privacy_posture": "public-fixture",
+    "verifier_policy": {
+      "require_event_root": true,
+      "require_compaction_source": true,
+      "trusted_sources": ["reference.runtime-log"]
+    },
+    "created_at": "2026-06-14T00:00:00.000Z"
+  },
+  "evidence": {
+    "events": [
+      {
+        "event_id": "evt-summary-001",
+        "position": "summary-1",
+        "kind": "compaction.summary",
+        "event_hash": "sha256:119ec5d7380f70e69619f960b1722451798944796e72f55f62b80b84406e4301"
+      }
+    ],
+    "compaction_source_manifest": {
+      "schema": "https://atrib.dev/schemas/runtime-log/log-window-manifest/v0",
+      "source": {
+        "id": "reference.runtime-log",
+        "kind": "jsonl-reference",
+        "version": "0.1.0"
+      },
+      "runtime": {
+        "name": "reference-runtime-log",
+        "version": "0.1.0",
+        "environment": "conformance"
+      },
+      "session": {
+        "id": "runtime-log-source-window",
+        "digest": "sha256:ca4c2292e94e2718001890ece0b71e6f5c38af4fdc530bcda260ca4a4ae814fb",
+        "format": "json",
+        "uri": "file://spec/conformance/runtime-log/session-definition.json"
+      },
+      "window": {
+        "start": 1,
+        "end": 4,
+        "label": "source-window"
+      },
+      "event_count": 4,
+      "event_root": "sha256:24122d91d6e97c0521e13931e7848b58281064847aa180b5914cd53fde9f27ac",
+      "canonicalization": {
+        "algorithm": "jcs-sha256-v0",
+        "event_hash_rule": "sha256(JCS(runtime event payload))",
+        "window_root_rule": "sha256(JCS(ordered event refs))",
+        "manifest_hash_rule": "sha256(JCS(log_window_manifest))",
+        "projection_root_rule": "sha256(JCS(sorted projection refs))",
+        "side_effect_receipt_root_rule": "sha256(JCS(sorted side-effect receipt refs))"
+      },
+      "redaction": {
+        "mode": "hash-only",
+        "fields": ["raw_prompt", "raw_tool_args", "raw_output"]
+      },
+      "privacy_posture": "public-fixture",
+      "verifier_policy": {
+        "require_event_root": true,
+        "trusted_sources": ["reference.runtime-log"]
+      },
+      "created_at": "2026-06-14T00:00:00.000Z"
+    },
+    "compaction_events": [
+      {
+        "event_id": "evt-summary-001",
+        "position": "summary-1",
+        "kind": "compaction.summary",
+        "event_hash": "sha256:1e4788d96d2c43b36bff9d2677c92b14835c5356ba40f9d35d0f0fcd628422f1"
+      }
+    ]
+  },
+  "expected": {
+    "valid": false,
+    "issue_codes": ["compaction_event_root_mismatch"]
+  },
+  "privacy_expectation": {
+    "manifest_embeds_raw_runtime_bodies": false,
+    "redaction_mode": "hash-only",
+    "withheld_manifest_fields": ["raw_prompt", "raw_tool_args", "raw_output"]
+  },
+  "support_manifests": {
+    "source_manifest": {
+      "schema": "https://atrib.dev/schemas/runtime-log/log-window-manifest/v0",
+      "source": {
+        "id": "reference.runtime-log",
+        "kind": "jsonl-reference",
+        "version": "0.1.0"
+      },
+      "runtime": {
+        "name": "reference-runtime-log",
+        "version": "0.1.0",
+        "environment": "conformance"
+      },
+      "session": {
+        "id": "runtime-log-source-window",
+        "digest": "sha256:ca4c2292e94e2718001890ece0b71e6f5c38af4fdc530bcda260ca4a4ae814fb",
+        "format": "json",
+        "uri": "file://spec/conformance/runtime-log/session-definition.json"
+      },
+      "window": {
+        "start": 1,
+        "end": 4,
+        "label": "source-window"
+      },
+      "event_count": 4,
+      "event_root": "sha256:24122d91d6e97c0521e13931e7848b58281064847aa180b5914cd53fde9f27ac",
+      "canonicalization": {
+        "algorithm": "jcs-sha256-v0",
+        "event_hash_rule": "sha256(JCS(runtime event payload))",
+        "window_root_rule": "sha256(JCS(ordered event refs))",
+        "manifest_hash_rule": "sha256(JCS(log_window_manifest))",
+        "projection_root_rule": "sha256(JCS(sorted projection refs))",
+        "side_effect_receipt_root_rule": "sha256(JCS(sorted side-effect receipt refs))"
+      },
+      "redaction": {
+        "mode": "hash-only",
+        "fields": ["raw_prompt", "raw_tool_args", "raw_output"]
+      },
+      "privacy_posture": "public-fixture",
+      "verifier_policy": {
+        "require_event_root": true,
+        "trusted_sources": ["reference.runtime-log"]
+      },
+      "created_at": "2026-06-14T00:00:00.000Z"
+    }
+  }
+}
