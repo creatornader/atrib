@@ -18,6 +18,7 @@ overrides:
   '@cloudflare/vitest-pool-workers>zod': ^3.25.76
   vite: 8.0.16
   zod: ^4.4.3
+  '@browserbasehq/stagehand>ai': 5.0.196
 
 packageExtensionsChecksum: 6dfb93aa98d1314945409f7d8f6d32a5
 
