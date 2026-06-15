@@ -601,6 +601,8 @@ function checkPublicBoundaryWording() {
     { label: 'no outreach sent', pattern: /\bno outreach sent\b/i },
     { label: 'draft packet', pattern: /\bdraft packet\b/i },
     { label: 'operator-approved', pattern: /\boperator-approved\b/i },
+    { label: 'operator approves', pattern: /\boperator approves?\b/i },
+    { label: 'public packet body', pattern: /\bpublic packet body\b/i },
     { label: 'operator memory', pattern: /\btracked in operator memory\b/i },
     { label: 'partner pitch', pattern: /\b(?:partner|partnership) pitch\b/i },
     { label: 'maintainer engagement', pattern: /\bengag(?:e|ing)\b.*\bmaintainers?\b/i },
