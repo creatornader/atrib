@@ -86,6 +86,12 @@ interface GraphResponseLike {
   edges: GraphEdgeLike[]
 }
 
+interface Check {
+  name: string
+  ok: boolean
+  detail?: string
+}
+
 function recordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
 }
@@ -152,13 +158,40 @@ async function postJson<T>(
   throw new Error(`${url} failed: ${lastError}`)
 }
 
-async function runApproved(workerUrl: string, simulateError: boolean): Promise<TraceResponse> {
-  const runId = `${simulateError ? 'error' : 'approved'}-${crypto.randomUUID()}`
+async function postExpectStatus(
+  url: string,
+  body: unknown,
+  expectedStatus: number,
+  expectedBodySnippet: string,
+): Promise<Check> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const text = await response.text()
+  return {
+    name: `${url}: expected ${expectedStatus}`,
+    ok: response.status === expectedStatus && text.includes(expectedBodySnippet),
+    detail: `${response.status} ${text}`,
+  }
+}
+
+async function createRun(workerUrl: string, prefix: string): Promise<string> {
+  const runId = `${prefix}-${crypto.randomUUID()}`
   await postJson<TraceResponse>(`${workerUrl}/api/runs`, {
     run_id: runId,
     prompt:
       'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.',
   })
+  return runId
+}
+
+async function approveRun(
+  workerUrl: string,
+  runId: string,
+  simulateError: boolean,
+): Promise<TraceResponse> {
   return postJson<TraceResponse>(
     `${workerUrl}/api/runs/${runId}/approve`,
     {
@@ -169,13 +202,7 @@ async function runApproved(workerUrl: string, simulateError: boolean): Promise<T
   )
 }
 
-async function runRejected(workerUrl: string): Promise<TraceResponse> {
-  const runId = `rejected-${crypto.randomUUID()}`
-  await postJson<TraceResponse>(`${workerUrl}/api/runs`, {
-    run_id: runId,
-    prompt:
-      'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.',
-  })
+async function rejectRun(workerUrl: string, runId: string): Promise<TraceResponse> {
   return postJson<TraceResponse>(
     `${workerUrl}/api/runs/${runId}/reject`,
     {
@@ -183,6 +210,54 @@ async function runRejected(workerUrl: string): Promise<TraceResponse> {
     },
     { retryServerErrors: false },
   )
+}
+
+async function requestChanges(workerUrl: string, runId: string): Promise<TraceResponse> {
+  return postJson<TraceResponse>(
+    `${workerUrl}/api/runs/${runId}/request-changes`,
+    {
+      feedback:
+        'Keep the limiter scoped to /v1/report, lower the cap, and show me the revised proposal before any MCP write.',
+    },
+    { retryServerErrors: false },
+  )
+}
+
+async function runApproved(workerUrl: string, simulateError: boolean): Promise<TraceResponse> {
+  const runId = await createRun(workerUrl, simulateError ? 'error' : 'approved')
+  return approveRun(workerUrl, runId, simulateError)
+}
+
+async function runRejected(workerUrl: string): Promise<TraceResponse> {
+  const runId = await createRun(workerUrl, 'rejected')
+  return rejectRun(workerUrl, runId)
+}
+
+async function runChangesPending(workerUrl: string): Promise<{
+  trace: TraceResponse
+  duplicateConflict: Check
+}> {
+  const runId = await createRun(workerUrl, 'changes-pending')
+  const trace = await requestChanges(workerUrl, runId)
+  const duplicateConflict = await postExpectStatus(
+    `${workerUrl}/api/runs/${runId}/request-changes`,
+    { feedback: 'Please revise the revised proposal again.' },
+    409,
+    'already has a requested revision',
+  )
+  return { trace, duplicateConflict }
+}
+
+async function runChangesApproved(workerUrl: string): Promise<TraceResponse> {
+  const runId = await createRun(workerUrl, 'changes-approved')
+  await requestChanges(workerUrl, runId)
+  return approveRun(workerUrl, runId, false)
+}
+
+async function runChangesRejected(workerUrl: string): Promise<TraceResponse> {
+  const runId = await createRun(workerUrl, 'changes-rejected')
+  await requestChanges(workerUrl, runId)
+  return rejectRun(workerUrl, runId)
 }
 
 function refsEqual(actual: string[] | undefined, expected: string[]): boolean {
@@ -202,25 +277,27 @@ function hasGraphEdge(
   )
 }
 
-async function verifyTrace(
-  trace: TraceResponse,
-): Promise<Array<{ name: string; ok: boolean; detail?: string }>> {
-  const checks: Array<{ name: string; ok: boolean; detail?: string }> = []
+async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
+  const checks: Check[] = []
   const push = (name: string, ok: boolean, detail?: string) => checks.push({ name, ok, detail })
   const byLabel = new Map(trace.records.map((record) => [record.label, record]))
   const trigger = byLabel.get('trigger')
   const triage = byLabel.get('triage')
   const proposal = byLabel.get('proposal')
-  const approval = byLabel.get('approval') ?? byLabel.get('rejection')
+  const changeRequest = byLabel.get('change_request')
+  const revision = byLabel.get('revision')
+  const decision = byLabel.get('approval') ?? byLabel.get('rejection')
   const execution = byLabel.get('execution')
   const outcome = byLabel.get('outcome')
   const handoff = byLabel.get('handoff')
+  const decisionBase = revision ?? proposal
   const graph = (await buildGraph(
     trace.records.map((record) => record.record),
     [],
     { compactIntraSessionEdges: true },
   )) as GraphResponseLike
   const graphNodeIds = new Set(graph.nodes.map((node) => node.id))
+  const packetTimeline = trace.trace_packet.timeline
 
   for (const item of trace.records) {
     push(`${trace.run_id}:${item.label}: hash`, recordHash(item.record) === item.record_hash)
@@ -233,7 +310,28 @@ async function verifyTrace(
   push(`${trace.run_id}: trigger exists`, Boolean(trigger))
   push(`${trace.run_id}: triage exists`, Boolean(triage))
   push(`${trace.run_id}: proposal exists`, Boolean(proposal))
-  push(`${trace.run_id}: decision exists`, Boolean(approval))
+  if (trace.status === 'pending_approval') {
+    push(`${trace.run_id}: decision pending`, !decision)
+  } else {
+    push(`${trace.run_id}: decision exists`, Boolean(decision))
+  }
+  push(
+    `${trace.run_id}: packet timeline order matches records`,
+    JSON.stringify(packetTimeline.map((item) => item.label)) ===
+      JSON.stringify(trace.records.map((record) => record.label)),
+  )
+  push(
+    `${trace.run_id}: packet timeline mirrors record refs`,
+    packetTimeline.every((item) => {
+      const record = byLabel.get(item.label)
+      return (
+        record &&
+        item.signer === record.signer &&
+        item.record_hash === record.record_hash &&
+        refsEqual(item.informed_by, record.record.informed_by ?? [])
+      )
+    }),
+  )
   push(
     `${trace.run_id}: graph nodes cover records`,
     trace.records.every((record) => graphNodeIds.has(record.record_hash)),
@@ -268,17 +366,62 @@ async function verifyTrace(
       hasGraphEdge(graph, 'INFORMED_BY', proposal.record_hash, triage.record_hash),
     ),
   )
+  if (changeRequest || revision) {
+    push(`${trace.run_id}: change request exists`, Boolean(changeRequest))
+    push(`${trace.run_id}: revision exists`, Boolean(revision))
+    push(
+      `${trace.run_id}: change request points at proposal`,
+      Boolean(
+        proposal &&
+        changeRequest &&
+        refsEqual(changeRequest.record.informed_by, [proposal.record_hash]),
+      ),
+    )
+    push(
+      `${trace.run_id}: graph proposal-to-change-request edge`,
+      Boolean(
+        proposal &&
+        changeRequest &&
+        hasGraphEdge(graph, 'INFORMED_BY', changeRequest.record_hash, proposal.record_hash),
+      ),
+    )
+    push(
+      `${trace.run_id}: revision points at proposal and change request`,
+      Boolean(
+        proposal &&
+        changeRequest &&
+        revision &&
+        refsEqual(revision.record.informed_by, [proposal.record_hash, changeRequest.record_hash]),
+      ),
+    )
+    push(
+      `${trace.run_id}: graph revision edges`,
+      Boolean(
+        proposal &&
+        changeRequest &&
+        revision &&
+        hasGraphEdge(graph, 'INFORMED_BY', revision.record_hash, proposal.record_hash) &&
+        hasGraphEdge(graph, 'INFORMED_BY', revision.record_hash, changeRequest.record_hash),
+      ),
+    )
+  }
   push(
-    `${trace.run_id}: decision points at proposal`,
-    Boolean(proposal && refsEqual(approval?.record.informed_by, [proposal.record_hash])),
+    `${trace.run_id}: decision points at active proposal`,
+    trace.status === 'pending_approval'
+      ? !decision
+      : Boolean(
+          decisionBase && refsEqual(decision?.record.informed_by, [decisionBase.record_hash]),
+        ),
   )
   push(
     `${trace.run_id}: graph decision edge`,
-    Boolean(
-      proposal &&
-      approval &&
-      hasGraphEdge(graph, 'INFORMED_BY', approval.record_hash, proposal.record_hash),
-    ),
+    trace.status === 'pending_approval'
+      ? !decision
+      : Boolean(
+          decisionBase &&
+          decision &&
+          hasGraphEdge(graph, 'INFORMED_BY', decision.record_hash, decisionBase.record_hash),
+        ),
   )
   push(
     `${trace.run_id}: differentiators present`,
@@ -292,7 +435,7 @@ async function verifyTrace(
   )
 
   const agentKey = proposal?.record.creator_key
-  const humanKey = approval?.record.creator_key
+  const humanKey = (decision ?? changeRequest)?.record.creator_key
   const actionKey = execution?.record.creator_key
   push(
     `${trace.run_id}: agent and human signers differ`,
@@ -308,36 +451,49 @@ async function verifyTrace(
   if (trace.status === 'rejected') {
     push(`${trace.run_id}: rejected did not execute`, !execution && !outcome && !handoff)
     push(
+      `${trace.run_id}: rejected packet decision`,
+      trace.trace_packet.answer.decision === 'rejected',
+    )
+    push(
       `${trace.run_id}: rejected packet outcome`,
       trace.trace_packet.answer.outcome === 'not_run',
     )
+  } else if (trace.status === 'pending_approval') {
+    push(`${trace.run_id}: pending did not execute`, !execution && !outcome && !handoff)
+    push(`${trace.run_id}: pending packet decision`, trace.trace_packet.answer.decision === null)
+    push(`${trace.run_id}: pending packet outcome`, trace.trace_packet.answer.outcome === 'pending')
+    push(`${trace.run_id}: pending packet executed`, trace.trace_packet.answer.executed === false)
   } else {
     push(`${trace.run_id}: execution exists`, Boolean(execution))
     push(`${trace.run_id}: outcome exists`, Boolean(outcome))
     push(`${trace.run_id}: handoff exists`, Boolean(handoff))
     push(
+      `${trace.run_id}: approved packet decision`,
+      trace.trace_packet.answer.decision === 'approved',
+    )
+    push(
       `${trace.run_id}: execution points at approval`,
-      Boolean(approval && refsEqual(execution?.record.informed_by, [approval.record_hash])),
+      Boolean(decision && refsEqual(execution?.record.informed_by, [decision.record_hash])),
     )
     push(
       `${trace.run_id}: graph preview edge`,
       Boolean(
-        approval &&
+        decision &&
         byLabel.get('preview') &&
         hasGraphEdge(
           graph,
           'INFORMED_BY',
           byLabel.get('preview')!.record_hash,
-          approval.record_hash,
+          decision.record_hash,
         ),
       ),
     )
     push(
       `${trace.run_id}: graph execution edge`,
       Boolean(
-        approval &&
+        decision &&
         execution &&
-        hasGraphEdge(graph, 'INFORMED_BY', execution.record_hash, approval.record_hash),
+        hasGraphEdge(graph, 'INFORMED_BY', execution.record_hash, decision.record_hash),
       ),
     )
     push(
@@ -355,18 +511,18 @@ async function verifyTrace(
     push(
       `${trace.run_id}: handoff points at approval and outcome`,
       Boolean(
-        approval &&
+        decision &&
         outcome &&
-        refsEqual(handoff?.record.informed_by, [approval.record_hash, outcome.record_hash]),
+        refsEqual(handoff?.record.informed_by, [decision.record_hash, outcome.record_hash]),
       ),
     )
     push(
       `${trace.run_id}: graph handoff edges`,
       Boolean(
-        approval &&
+        decision &&
         outcome &&
         handoff &&
-        hasGraphEdge(graph, 'INFORMED_BY', handoff.record_hash, approval.record_hash) &&
+        hasGraphEdge(graph, 'INFORMED_BY', handoff.record_hash, decision.record_hash) &&
         hasGraphEdge(graph, 'INFORMED_BY', handoff.record_hash, outcome.record_hash),
       ),
     )
@@ -386,7 +542,7 @@ async function main() {
   const workerUrl = await runWranglerDeploy()
   await new Promise((resolve) => setTimeout(resolve, 1500))
   const page = await (await fetch(workerUrl)).text()
-  const checks: Array<{ name: string; ok: boolean; detail?: string }> = [
+  const checks: Check[] = [
     {
       name: 'interactive UI renders',
       ok:
@@ -397,14 +553,20 @@ async function main() {
         page.includes('write_file') &&
         page.includes('Record timeline') &&
         page.includes('Receipt inspector') &&
-        page.includes('Approve and resume'),
+        page.includes('Approve and resume') &&
+        page.includes('Request changes'),
     },
   ]
 
+  const revisionPending = await runChangesPending(workerUrl)
+  checks.push(revisionPending.duplicateConflict)
   const traces = [
+    revisionPending.trace,
     await runApproved(workerUrl, false),
     await runRejected(workerUrl),
     await runApproved(workerUrl, true),
+    await runChangesApproved(workerUrl),
+    await runChangesRejected(workerUrl),
   ]
   for (const trace of traces) checks.push(...(await verifyTrace(trace)))
 
