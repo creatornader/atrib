@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   canonicalRecord,
+  computeContentId,
   hexEncode,
   sha256,
   verifyRecord,
@@ -25,7 +26,7 @@ type WorkflowStatus =
   | 'executing'
   | 'succeeded'
   | 'failed'
-type SignerRole = 'agent' | 'human' | 'action_mcp'
+type SignerRole = 'agent' | 'human' | 'action_mcp' | 'codemode_runtime'
 
 interface TraceRecord {
   label: string
@@ -74,10 +75,7 @@ interface FetchHandler {
 
 interface RunReader {
   getRun(runId: string): Promise<TraceResponse>
-}
-
-interface ActionTargetReader {
-  getTargetRows(ruleId: string): Promise<Array<Record<string, unknown>>>
+  getRepositoryRows(filePath: string): Promise<Array<Record<string, unknown>>>
 }
 
 const worker = (workerExports as unknown as { default: FetchHandler }).default
@@ -154,17 +152,18 @@ async function expectSignedTrace(trace: TraceResponse): Promise<void> {
   }
 }
 
-async function createRun(runId: string): Promise<TraceResponse> {
+async function createRun(runId: string, simulateError = false): Promise<TraceResponse> {
   return postJson<TraceResponse>('/api/runs', {
     run_id: runId,
     prompt: defaultPrompt,
+    simulate_error: simulateError,
+    code_mode_executor: 'local-test',
   })
 }
 
-async function approveRun(runId: string, simulateError = false): Promise<TraceResponse> {
+async function approveRun(runId: string): Promise<TraceResponse> {
   return postJson<TraceResponse>(`/api/runs/${runId}/approve`, {
     reason: 'Payload matches the issue scope and expected Cloudflare repository target.',
-    simulate_error: simulateError,
   })
 }
 
@@ -187,11 +186,11 @@ async function getAgentRun(runId: string): Promise<TraceResponse> {
 
 async function getTargetRows(
   runId: string,
-  ruleId: string,
+  filePath: string,
 ): Promise<Array<Record<string, unknown>>> {
-  const stub = testEnv.ApprovalActionMcp.get(testEnv.ApprovalActionMcp.idFromName(`rpc:${runId}`))
+  const stub = testEnv.ApprovalTraceAgent.get(testEnv.ApprovalTraceAgent.idFromName(runId))
   return runInDurableObject(stub, (instance) =>
-    (instance as unknown as ActionTargetReader).getTargetRows(ruleId),
+    (instance as unknown as RunReader).getRepositoryRows(filePath),
   )
 }
 
@@ -254,7 +253,6 @@ describe('Cloudflare approval trace Worker', () => {
     const triage = records.get('triage')!
     const proposal = records.get('proposal')!
     const approval = records.get('approval')!
-    const preview = records.get('preview')!
     const execution = records.get('execution')!
     const outcome = records.get('outcome')!
     const handoff = records.get('handoff')!
@@ -265,7 +263,6 @@ describe('Cloudflare approval trace Worker', () => {
       'triage',
       'proposal',
       'approval',
-      'preview',
       'execution',
       'outcome',
       'handoff',
@@ -276,8 +273,9 @@ describe('Cloudflare approval trace Worker', () => {
     expect(sorted(triage.record.informed_by)).toEqual([trigger.record_hash])
     expect(sorted(proposal.record.informed_by)).toEqual([triage.record_hash])
     expect(sorted(approval.record.informed_by)).toEqual([proposal.record_hash])
-    expect(sorted(preview.record.informed_by)).toEqual([approval.record_hash])
-    expect(sorted(execution.record.informed_by)).toEqual([approval.record_hash])
+    expect(sorted(execution.record.informed_by)).toEqual(
+      [proposal.record_hash, approval.record_hash].sort(),
+    )
     expect(sorted(outcome.record.informed_by)).toEqual([execution.record_hash])
     expect(sorted(handoff.record.informed_by)).toEqual(
       [approval.record_hash, outcome.record_hash].sort(),
@@ -285,6 +283,26 @@ describe('Cloudflare approval trace Worker', () => {
 
     expect(proposal.record.creator_key).not.toBe(approval.record.creator_key)
     expect(approval.record.creator_key).not.toBe(execution.record.creator_key)
+    expect(execution.signer).toBe('codemode_runtime')
+    expect(outcome.signer).toBe('codemode_runtime')
+    expect(execution.record.content_id).toBe(
+      computeContentId('codemode://atrib-cloudflare-test/runtime', 'codemode_execution'),
+    )
+    expect(outcome.record.content_id).toBe(
+      computeContentId('codemode://atrib-cloudflare-test/runtime', 'record_outcome'),
+    )
+    expect(proposal.body).toMatchObject({
+      stable_connector_id: 'cloudflare-demo-codemode-runtime',
+      codemode: {
+        runtime: 'CodemodeRuntime',
+        executor: 'local-test',
+        execution_status: 'paused',
+        pending_action: expect.objectContaining({
+          connector: 'repository',
+          method: 'write_file',
+        }),
+      },
+    })
     expect(trace.trace_packet.answer).toMatchObject({
       decision: 'approved',
       executed: true,
@@ -299,8 +317,7 @@ describe('Cloudflare approval trace Worker', () => {
         'message:request',
         'submission:create',
         'tool:approval',
-        'mcp:client:connect',
-        'tool:result',
+        'codemode:execution_completed',
         'workflow:approved',
         'message:response',
       ]),
@@ -310,10 +327,13 @@ describe('Cloudflare approval trace Worker', () => {
     expect(targetRows).toEqual([
       expect.objectContaining({
         file: 'server/middleware/rate_limit.ts',
-        handler: 'reportHandler',
-        rate_limit: expect.objectContaining({
-          max: 100,
-          standard_headers: true,
+        repository: 'cloudflare/agents-demo',
+        operation: 'write_file',
+        state: expect.objectContaining({
+          rate_limit: expect.objectContaining({
+            max: 100,
+            standard_headers: true,
+          }),
         }),
       }),
     ])
@@ -326,7 +346,7 @@ describe('Cloudflare approval trace Worker', () => {
     expect(labels(httpRun)).toEqual(labels(trace))
   })
 
-  it('signs a rejection and does not execute the action MCP path', async () => {
+  it('signs a rejection and closes the pending Code Mode action', async () => {
     const runId = uniqueRunId('rejected-local-e2e')
     await createRun(runId)
     const trace = await rejectRun(runId)
@@ -335,13 +355,28 @@ describe('Cloudflare approval trace Worker', () => {
     const triage = records.get('triage')!
     const proposal = records.get('proposal')!
     const rejection = records.get('rejection')!
+    const runtimeRejection = records.get('runtime_rejection')!
 
     expect(trace.status).toBe('rejected')
-    expect(labels(trace)).toEqual(['trigger', 'triage', 'proposal', 'rejection'])
+    expect(labels(trace)).toEqual([
+      'trigger',
+      'triage',
+      'proposal',
+      'rejection',
+      'runtime_rejection',
+    ])
     await expectSignedTrace(trace)
     expect(sorted(triage.record.informed_by)).toEqual([trigger.record_hash])
     expect(sorted(proposal.record.informed_by)).toEqual([triage.record_hash])
     expect(sorted(rejection.record.informed_by)).toEqual([proposal.record_hash])
+    expect(sorted(runtimeRejection.record.informed_by)).toEqual([rejection.record_hash])
+    expect(runtimeRejection.signer).toBe('codemode_runtime')
+    expect(runtimeRejection.body).toMatchObject({
+      kind: 'codemode_runtime_rejection',
+      reason: 'rejected',
+      terminated: true,
+      execution_status: 'rejected',
+    })
     expect(trace.records.some((record) => record.signer === 'action_mcp')).toBe(false)
     expect(trace.trace_packet.answer).toMatchObject({
       decision: 'rejected',
@@ -359,12 +394,21 @@ describe('Cloudflare approval trace Worker', () => {
     const records = byLabel(trace)
     const proposal = records.get('proposal')!
     const feedback = records.get('change_request')!
+    const runtimeRejection = records.get('runtime_rejection')!
     const revision = records.get('revision')!
 
     expect(trace.status).toBe('pending_approval')
-    expect(labels(trace)).toEqual(['trigger', 'triage', 'proposal', 'change_request', 'revision'])
+    expect(labels(trace)).toEqual([
+      'trigger',
+      'triage',
+      'proposal',
+      'change_request',
+      'runtime_rejection',
+      'revision',
+    ])
     await expectSignedTrace(trace)
     expect(sorted(feedback.record.informed_by)).toEqual([proposal.record_hash])
+    expect(sorted(runtimeRejection.record.informed_by)).toEqual([feedback.record_hash])
     expect(sorted(revision.record.informed_by)).toEqual(
       [proposal.record_hash, feedback.record_hash].sort(),
     )
@@ -375,10 +419,25 @@ describe('Cloudflare approval trace Worker', () => {
       decision: 'changes_requested',
       next_step: 'agent_revision',
     })
+    expect(runtimeRejection.body).toMatchObject({
+      kind: 'codemode_runtime_rejection',
+      reason: 'changes_requested',
+      terminated: true,
+      execution_status: 'rejected',
+    })
     expect(revision.body).toMatchObject({
       kind: 'agent_revised_proposal',
       revision_number: 2,
       feedback_record_hash: feedback.record_hash,
+      codemode: expect.objectContaining({
+        runtime: 'CodemodeRuntime',
+        executor: 'local-test',
+        execution_status: 'paused',
+        pending_action: expect.objectContaining({
+          connector: 'repository',
+          method: 'write_file',
+        }),
+      }),
     })
     expect(trace.trace_packet.answer).toMatchObject({
       decision: null,
@@ -405,6 +464,7 @@ describe('Cloudflare approval trace Worker', () => {
       'triage',
       'proposal',
       'change_request',
+      'runtime_rejection',
       'revision',
     ])
     expect(afterDuplicate.status).toBe('pending_approval')
@@ -418,9 +478,9 @@ describe('Cloudflare approval trace Worker', () => {
       'triage',
       'proposal',
       'change_request',
+      'runtime_rejection',
       'revision',
       'approval',
-      'preview',
       'execution',
       'outcome',
       'handoff',
@@ -429,9 +489,11 @@ describe('Cloudflare approval trace Worker', () => {
     expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([
       expect.objectContaining({
         file: 'server/middleware/rate_limit.ts',
-        rate_limit: expect.objectContaining({
-          max: 60,
-          scope: '/v1/report',
+        state: expect.objectContaining({
+          rate_limit: expect.objectContaining({
+            max: 60,
+            scope: '/v1/report',
+          }),
         }),
       }),
     ])
@@ -445,6 +507,7 @@ describe('Cloudflare approval trace Worker', () => {
     const trace = await rejectRun(runId)
     const records = byLabel(trace)
     const rejection = records.get('rejection')!
+    const runtimeRejections = trace.records.filter((record) => record.label === 'runtime_rejection')
 
     expect(trace.status).toBe('rejected')
     expect(labels(trace)).toEqual([
@@ -452,11 +515,20 @@ describe('Cloudflare approval trace Worker', () => {
       'triage',
       'proposal',
       'change_request',
+      'runtime_rejection',
       'revision',
       'rejection',
+      'runtime_rejection',
     ])
     await expectSignedTrace(trace)
     expect(sorted(rejection.record.informed_by)).toEqual([revision.record_hash])
+    expect(runtimeRejections).toHaveLength(2)
+    expect(runtimeRejections[1]?.body).toMatchObject({
+      kind: 'codemode_runtime_rejection',
+      reason: 'rejected',
+      terminated: true,
+      execution_status: 'rejected',
+    })
     expect(trace.records.some((record) => record.signer === 'action_mcp')).toBe(false)
     expect(trace.trace_packet.answer).toMatchObject({
       decision: 'rejected',
@@ -469,8 +541,8 @@ describe('Cloudflare approval trace Worker', () => {
 
   it('records a diagnostic outcome when the approved action fails', async () => {
     const runId = uniqueRunId('error-local-e2e')
-    await createRun(runId)
-    const trace = await approveRun(runId, true)
+    await createRun(runId, true)
+    const trace = await approveRun(runId)
     const records = byLabel(trace)
     const execution = records.get('execution')!
     const outcome = records.get('outcome')!
@@ -481,7 +553,6 @@ describe('Cloudflare approval trace Worker', () => {
       'triage',
       'proposal',
       'approval',
-      'preview',
       'execution',
       'outcome',
       'handoff',

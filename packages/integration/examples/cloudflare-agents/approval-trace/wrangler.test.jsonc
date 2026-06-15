@@ -2,8 +2,9 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "atrib-cloudflare-test",
   "main": "src/index.ts",
-  "compatibility_date": "2026-05-27",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_date": "2026-06-10",
+  "compatibility_flags": ["nodejs_compat", "experimental"],
+  "worker_loaders": [{ "binding": "LOADER" }],
   "observability": {
     "enabled": true,
   },
@@ -22,13 +23,15 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["ApprovalTraceAgent", "ApprovalActionMcp"],
+      "new_sqlite_classes": ["ApprovalTraceAgent", "ApprovalActionMcp", "CodemodeRuntime"],
     },
   ],
   "vars": {
     "ATRIB_LOG_ENDPOINT": "",
     "ATRIB_AGENT_SERVER_URL": "mcp://atrib-cloudflare-test/agent",
     "ATRIB_ACTION_MCP_SERVER_URL": "mcp://atrib-cloudflare-test/action",
+    "ATRIB_CODEMODE_SERVER_URL": "codemode://atrib-cloudflare-test/runtime",
+    "ATRIB_CODEMODE_EXECUTOR": "local-test",
     "ATRIB_AGENT_PRIVATE_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE",
     "ATRIB_HUMAN_APPROVER_PRIVATE_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAI",
     "ATRIB_ACTION_MCP_PRIVATE_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM",

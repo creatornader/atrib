@@ -37,7 +37,7 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.locator('#receipts pre')).toContainText('"trace_id"')
   await expect(page.locator('#receiptSummary')).toContainText('Total records')
   await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeEnabled()
-  await expect(page.getByRole('button', { name: 'Reject' })).toBeEnabled()
+  await expect(page.locator('#reject')).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Request changes' })).toBeEnabled()
   await expect(page.locator('#timeline .event')).toHaveCount(4)
   const timelineColumns = await page.evaluate<
@@ -79,7 +79,7 @@ async function requestRevision(page: Page): Promise<void> {
   await page
     .locator('#reviewFeedback')
     .fill(
-      'Keep the limiter scoped to /v1/report, lower the cap, and show me a revised proposal before any MCP write.',
+      'Keep the limiter scoped to /v1/report, lower the cap, and show me a revised proposal before any Code Mode write.',
     )
   await page.locator('#requestChanges').click()
 
@@ -94,22 +94,23 @@ async function requestRevision(page: Page): Promise<void> {
   await expect(page.locator('#answer')).toContainText('Revised proposal generated')
   await expect(page.locator('#answer')).toContainText('Revised proposal halted')
   await expect(page.locator('#answer')).toContainText('review revised proposal')
-  await expect(page.locator('#timeline .event')).toHaveCount(6)
+  await expect(page.locator('#timeline .event')).toHaveCount(7)
   await expect(page.locator('#timeline')).toContainText('human.change_request.signed')
+  await expect(page.locator('#timeline')).toContainText('codemode.execution.rejected')
   await expect(page.locator('#timeline')).toContainText('proposal.revised')
   await expect(page.locator('#timeline')).toContainText('human.review.halted')
   await expect(page.locator('#timeline')).toContainText('Awaiting decision on revised proposal')
   await expect(page.locator('#timeline')).not.toContainText('human.rejection.signed')
   await expect(page.locator('#timeline')).not.toContainText('action_mcp')
-  await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText(
-    'Blocked',
+  await expect(page.locator('.signer-row').filter({ hasText: 'Code Mode' })).toContainText(
+    'Signed',
   )
   await expect(page.locator('#requestChanges')).toBeDisabled()
   await expect(page.locator('#requestChanges')).toContainText('Revision signed')
   await expect(page.locator('#requestChanges')).toContainText('Review final proposal')
   await expect(page.locator('#reviewFeedbackDrawer')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeEnabled()
-  await expect(page.getByRole('button', { name: 'Reject' })).toBeEnabled()
+  await expect(page.locator('#reject')).toBeEnabled()
 }
 
 async function openTimelineRecord(page: Page, label: string, receiptLabel = label): Promise<void> {
@@ -1712,20 +1713,21 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('[data-step="halt"]')).toContainText('Approved')
       await expect(page.locator('[data-step="halt"]')).not.toContainText('Awaiting review')
       await expectReviewPillMatchesRailBadge(page)
-      await expect(page.locator('#answer')).toContainText('Agent resumed through MCP')
+      await expect(page.locator('#answer')).toContainText('Agent resumed through Code Mode')
       await expect(page.locator('#answer')).toContainText('Audit ready')
       await expect(page.locator('#answer')).toContainText(
         'repo_files.server/middleware/rate_limit.ts',
       )
-      await expect(page.locator('#timeline .event')).toHaveCount(8)
+      await expect(page.locator('#timeline .event')).toHaveCount(7)
       await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeDisabled()
-      await expect(page.getByRole('button', { name: 'Reject' })).toBeDisabled()
+      await expect(page.locator('#reject')).toBeDisabled()
 
       await openTimelineRecord(page, 'execution')
-      await expect(page.locator('#receipts pre')).toContainText('"signer": "action_mcp"')
-      await expect(page.locator('#receipts pre')).toContainText('"tool_name": "write_file"')
+      await expect(page.locator('#receipts pre')).toContainText('"signer": "codemode_runtime"')
+      await expect(page.locator('#receipts pre')).toContainText('"tool_name": "codemode_execution"')
+      await expect(page.locator('#receipts pre')).toContainText('"method": "write_file"')
       await expect(page.locator('#receipts pre')).toContainText('"proof":')
-      await expectCopies(page.getByRole('button', { name: 'Copy Action MCP latest record' }))
+      await expectCopies(page.getByRole('button', { name: 'Copy Code Mode latest record' }))
       await expect(
         page.locator('#verification').getByRole('link', { name: 'View proof' }),
       ).toHaveAttribute('href', /log\.atrib\.dev|\/api\/runs\//)
@@ -1796,10 +1798,10 @@ test.describe('Cloudflare approval trace browser UI', () => {
     })
   })
 
-  test('clicks through rejection and shows no action MCP record', async ({ page }) => {
+  test('clicks through rejection and shows no repository write', async ({ page }) => {
     await expectCleanConsole(page, async () => {
       await createProposal(page)
-      await page.getByRole('button', { name: 'Reject' }).click()
+      await page.locator('#reject').click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Rejected')
       await expectReviewResultVisibleInProgressPanel(page)
@@ -1809,17 +1811,17 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
       await expect(page.locator('[data-step="audit"]')).not.toHaveClass(/done/)
       await expect(page.locator('#answer')).toContainText('not run')
-      await expect(page.locator('#answer')).toContainText('MCP execution skipped')
+      await expect(page.locator('#answer')).toContainText('Code Mode execution skipped')
       await expect(page.locator('#answer')).toContainText('Decision audit ready')
       await expect(page.locator('#answer')).not.toContainText('Audit ready')
       await expect(page.locator('#timeline .event')).toHaveCount(6)
-      await expect(page.locator('#timeline')).toContainText('mcp.execution.skipped')
+      await expect(page.locator('#timeline')).toContainText('codemode.execution.rejected')
       await expect(page.locator('#timeline')).toContainText('decision.audit.ready')
-      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText(
-        'Skipped',
+      await expect(page.locator('.signer-row').filter({ hasText: 'Code Mode' })).toContainText(
+        'Signed',
       )
       await expect(page.locator('#timeline')).not.toContainText('action_mcp')
-      await expect(page.locator('[data-step="resume"]')).toContainText('MCP execution skipped')
+      await expect(page.locator('[data-step="resume"]')).toContainText('Code Mode execution skipped')
       await expect(page.locator('[data-step="audit"]')).toContainText('Decision audit ready')
       await expect(page.locator('#receipts pre')).toContainText('"current_step": 3')
 
@@ -1849,11 +1851,11 @@ test.describe('Cloudflare approval trace browser UI', () => {
 
       await page.getByRole('button', { name: 'Approve and resume' }).click()
       await expect(page.locator('#statusTitle')).toHaveText('Trace complete')
-      await expect(page.locator('#answer')).toContainText('Agent resumed through MCP')
+      await expect(page.locator('#answer')).toContainText('Agent resumed through Code Mode')
       await expect(page.locator('#answer')).toContainText('Audit ready')
-      await expect(page.locator('#timeline')).toContainText('mcp.execution.resumed')
+      await expect(page.locator('#timeline')).toContainText('codemode.execution.resumed')
       await expect(page.locator('#timeline')).toContainText('audit.ready')
-      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText(
+      await expect(page.locator('.signer-row').filter({ hasText: 'Code Mode' })).toContainText(
         'Signed',
       )
     })
@@ -1863,7 +1865,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
     await expectCleanConsole(page, async () => {
       await createProposal(page)
       await requestRevision(page)
-      await page.getByRole('button', { name: 'Reject' }).click()
+      await page.locator('#reject').click()
 
       await expect(page.locator('#statusTitle')).toHaveText('Rejected')
       await expectReviewResultVisibleInProgressPanel(page)
@@ -1875,16 +1877,16 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#answer')).toContainText('Human review feedback sent')
       await expect(page.locator('#answer')).toContainText('Revised proposal generated')
       await expect(page.locator('#answer')).toContainText('not run')
-      await expect(page.locator('#answer')).toContainText('MCP execution skipped')
+      await expect(page.locator('#answer')).toContainText('Code Mode execution skipped')
       await expect(page.locator('#answer')).toContainText('Decision audit ready')
-      await expect(page.locator('#timeline .event')).toHaveCount(8)
+      await expect(page.locator('#timeline .event')).toHaveCount(9)
       await expect(page.locator('#timeline')).toContainText('human.change_request.signed')
       await expect(page.locator('#timeline')).toContainText('proposal.revised')
       await expect(page.locator('#timeline')).toContainText('human.rejection.signed')
-      await expect(page.locator('#timeline')).toContainText('mcp.execution.skipped')
+      await expect(page.locator('#timeline')).toContainText('codemode.execution.rejected')
       await expect(page.locator('#timeline')).toContainText('decision.audit.ready')
-      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText(
-        'Skipped',
+      await expect(page.locator('.signer-row').filter({ hasText: 'Code Mode' })).toContainText(
+        'Signed',
       )
       await expect(page.locator('#timeline')).not.toContainText('action_mcp')
 
@@ -1908,10 +1910,10 @@ test.describe('Cloudflare approval trace browser UI', () => {
       })
       await expect(page.locator('#answer')).toContainText('error')
       await expect(page.locator('#answer')).toContainText('none')
-      await expect(page.locator('#timeline .event')).toHaveCount(8)
+      await expect(page.locator('#timeline .event')).toHaveCount(7)
 
       await openTimelineRecord(page, 'outcome')
-      await expect(page.locator('#receipts pre')).toContainText('"signer": "action_mcp"')
+      await expect(page.locator('#receipts pre')).toContainText('"signer": "codemode_runtime"')
       await expect(page.locator('#receipts pre')).toContainText(
         '"error": "repository_file_version_conflict"',
       )

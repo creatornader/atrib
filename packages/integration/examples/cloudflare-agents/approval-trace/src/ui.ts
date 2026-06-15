@@ -3626,7 +3626,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           </svg>
           <div>
             <h1>Cloudflare Agent Trace</h1>
-            <p class="sub">Incoming alert to autonomous triage to human review to signed MCP execution.</p>
+            <p class="sub">Incoming alert to autonomous triage to human review to signed Code Mode execution.</p>
           </div>
         </div>
         <div class="header-meta">
@@ -3661,7 +3661,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>1. Trigger</strong><span data-step-time="trigger">Pending</span></span></span>
           <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>2. Autonomous triage</strong><span data-step-time="autonomous">Pending</span></span></span>
           <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong><span class="step-number-label">3. </span><span data-step-title="halt">Human review halted</span></strong><span class="step-meta-line"><span data-step-time="halt">Pending</span><span class="step-badge" data-step-badge="halt">Awaiting review</span></span></span></span>
-          <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong><span class="step-number-label">4. </span><span data-step-title="resume">MCP execution resumed</span></strong><span data-step-time="resume">Pending</span></span></span>
+          <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong><span class="step-number-label">4. </span><span data-step-title="resume">Code Mode execution resumed</span></strong><span data-step-time="resume">Pending</span></span></span>
           <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong><span class="step-number-label">5. </span><span data-step-title="audit">Audit ready</span></strong><span data-step-time="audit">Pending</span></span></span>
         </div>
       </section>
@@ -3771,7 +3771,7 @@ export function renderApp(options: { colo?: string } = {}): string {
       let selectedReceiptRecord = null;
       let selectedReceiptView = 'record';
       let selectedReceiptFormat = 'pretty';
-      const defaultFeedbackDraft = 'Please narrow this to the /v1/report route only and return a revised proposal before any MCP write.';
+      const defaultFeedbackDraft = 'Please narrow this to the /v1/report route only and return a revised proposal before Code Mode writes.';
       let feedbackDrawerOpen = false;
       let feedbackDraft = defaultFeedbackDraft;
 
@@ -3830,7 +3830,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         {
           key: 'halt',
           title: 'Human review halted',
-          detail: 'The workflow stopped before MCP execution and is waiting for a signed decision.',
+          detail: 'The workflow stopped before Code Mode execution and is waiting for a signed decision.',
           step: 'halt',
         },
       ];
@@ -3946,7 +3946,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         haltStep?.classList.remove('review-rejected', 'review-requested');
         resumeStep?.classList.remove('branch-skipped', 'branch-requested', 'branch-ready');
         auditStep?.classList.remove('branch-skipped', 'branch-requested', 'branch-ready');
-        if (resumeTitle) resumeTitle.textContent = 'MCP execution resumed';
+        if (resumeTitle) resumeTitle.textContent = 'Code Mode execution resumed';
         if (auditTitle) auditTitle.textContent = 'Audit ready';
         badge.hidden = false;
         if (!run) {
@@ -3969,7 +3969,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           haltStep?.classList.add('review-rejected');
           resumeStep?.classList.add('branch-skipped');
           auditStep?.classList.add('branch-ready');
-          if (resumeTitle) resumeTitle.textContent = 'MCP execution skipped';
+          if (resumeTitle) resumeTitle.textContent = 'Code Mode execution skipped';
           if (auditTitle) auditTitle.textContent = 'Decision audit ready';
           return;
         }
@@ -4132,7 +4132,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         if (title === 'Proposed action generated' || title === 'Initial proposal generated') return 'proposal';
         if (title === 'Revised proposal generated' || title === 'Revised proposal halted') return 'revision';
         if (title === 'Human review halted' || title === 'Human review recorded' || title === 'Human review feedback sent' || title === 'Human review rejected') return 'halt';
-        if (title === 'Agent resumed through MCP' || title === 'MCP execution skipped' || title === 'Feedback returned to agent') return 'resume';
+        if (title === 'Agent resumed through Code Mode' || title === 'Code Mode execution skipped' || title === 'Feedback returned to agent') return 'resume';
         if (title === 'Audit ready' || title === 'Decision audit ready' || title === 'Revised proposal pending') return 'audit';
         return '';
       }
@@ -4202,8 +4202,8 @@ export function renderApp(options: { colo?: string } = {}): string {
             selected: activeStage.key === 'halt',
           },
           {
-            key: 'mcp',
-            name: 'mcp.execution.resumed',
+            key: 'codemode',
+            name: 'codemode.execution.resumed',
             detail: reached('halt') ? 'Pending approval' : 'Waiting for human review',
             time: '-',
             marker: 'future',
@@ -4221,7 +4221,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         const bootSigners = [
           { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent', status: reached('proposal') ? 'Signed' : 'Pending', className: reached('proposal') ? 'signed' : 'pending mcp', sig: reached('proposal') && run ? signerLatestRecordDigest(run, 'agent') : '-' },
           { kind: 'human', name: 'Human', detail: 'alice@example.com', status: 'Pending', className: 'pending', sig: '-' },
-          { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', status: 'Pending', className: 'pending mcp', sig: '-' },
+          { kind: 'runtime', name: 'Code Mode', detail: 'CodemodeRuntime@0.4.0', status: 'Pending', className: 'pending mcp', sig: '-' },
         ];
         const merkleRoot = reached('trigger') ? run?.records[0]?.record_hash ?? '' : '';
         const logHash = reached('context') ? run?.records[1]?.record_hash ?? '' : '';
@@ -4385,8 +4385,9 @@ export function renderApp(options: { colo?: string } = {}): string {
         if (entry.label === 'approval') return 'Human approved payload';
         if (entry.label === 'rejection') return 'Human rejected payload';
         if (entry.label === 'change_request') return 'Human requested revision';
-        if (entry.label === 'preview') return 'MCP preview completed';
-        if (entry.label === 'execution') return run.status === 'failed' ? 'MCP execution attempted' : 'MCP execution resumed';
+        if (entry.label === 'preview') return 'Code Mode preview completed';
+        if (entry.label === 'execution') return run.status === 'failed' ? 'Code Mode execution attempted' : 'Code Mode execution resumed';
+        if (entry.label === 'runtime_rejection') return 'Code Mode pending action closed';
         if (entry.label === 'outcome') return run.status === 'failed' ? 'Diagnostic outcome signed' : 'Repository update signed';
         if (entry.label === 'handoff') return 'Audit handoff ready';
         return entry.informed_by.length ? 'Linked to prior signed record' : 'Genesis record';
@@ -4400,8 +4401,9 @@ export function renderApp(options: { colo?: string } = {}): string {
         if (entry.label === 'approval') return 'human.approval.signed';
         if (entry.label === 'rejection') return 'human.rejection.signed';
         if (entry.label === 'change_request') return 'human.change_request.signed';
-        if (entry.label === 'preview') return 'mcp.preview.completed';
-        if (entry.label === 'execution') return 'mcp.execution.resumed';
+        if (entry.label === 'preview') return 'codemode.preview.completed';
+        if (entry.label === 'execution') return 'codemode.execution.resumed';
+        if (entry.label === 'runtime_rejection') return 'codemode.execution.rejected';
         if (entry.label === 'outcome') return run.status === 'failed' ? 'diagnostic.signed' : 'repository.update.signed';
         if (entry.label === 'handoff') return 'audit.ready';
         return entry.label;
@@ -4426,9 +4428,12 @@ export function renderApp(options: { colo?: string } = {}): string {
           });
         }
         if (!labels.has('execution')) {
-          rows.push(rejected
-            ? {
-              name: 'mcp.execution.skipped',
+          if (rejected && labels.has('runtime_rejection')) {
+            // The signed runtime_rejection row is the clickable Code Mode closure.
+          } else {
+            rows.push(rejected
+              ? {
+              name: 'codemode.execution.skipped',
               detail: 'Blocked by signed rejection',
               marker: 'skipped',
               markerLabel: '4',
@@ -4439,7 +4444,8 @@ export function renderApp(options: { colo?: string } = {}): string {
             }
             : changesRequested
               ? { name: 'agent.feedback.returned', detail: 'Feedback queued revision', marker: 'done' }
-              : { name: 'mcp.execution.resumed', detail: 'Pending approval', marker: 'future', markerLabel: '4' });
+              : { name: 'codemode.execution.resumed', detail: 'Pending approval', marker: 'future', markerLabel: '4' });
+          }
         }
         if (!labels.has('handoff')) {
           rows.push(rejected
@@ -4463,8 +4469,8 @@ export function renderApp(options: { colo?: string } = {}): string {
         if (kind === 'human') {
           return '<span class="signer-icon human"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0" fill="currentColor"/></svg></span>';
         }
-        if (kind === 'mcp') {
-          return '<span class="signer-icon mcp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v4h2.2a2.3 2.3 0 1 1 0 4.6H15V16h-4.4v2.2a2.3 2.3 0 1 1-4.6 0V16H3v-5h3.2a2 2 0 0 0 0-4H3V3h6Z" fill="currentColor"/></svg></span>';
+        if (kind === 'mcp' || kind === 'runtime') {
+          return '<span class="signer-icon mcp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5A2.5 2.5 0 0 1 7 4h10a2.5 2.5 0 0 1 2.5 2.5v11A2.5 2.5 0 0 1 17 20H7a2.5 2.5 0 0 1-2.5-2.5v-11Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m9 9 2.5 2.5L9 14m4.5 0h3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span>';
         }
         return '<span class="signer-icon agent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4v3h-4V4Zm-2 4h8a3 3 0 0 1 3 3v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-4a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"/><path d="M9 12h.01M15 12h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.8"/><path d="M9 15h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span>';
       }
@@ -4473,12 +4479,14 @@ export function renderApp(options: { colo?: string } = {}): string {
         if (!record) return '';
         if (record.signer === 'human') return 'human';
         if (record.signer === 'action_mcp') return 'mcp';
+        if (record.signer === 'codemode_runtime') return 'runtime';
         return 'agent';
       }
 
       function signerLabelForKind(kind) {
         if (kind === 'human') return 'Human';
         if (kind === 'mcp') return 'Action MCP';
+        if (kind === 'runtime') return 'CodemodeRuntime';
         return 'Agent';
       }
 
@@ -4489,8 +4497,8 @@ export function renderApp(options: { colo?: string } = {}): string {
         if (kind === 'human') {
           return '<span class="event-signer-icon human" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0" fill="currentColor"/></svg></span>';
         }
-        if (kind === 'mcp') {
-          return '<span class="event-signer-icon mcp" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v4h2.2a2.3 2.3 0 1 1 0 4.6H15V16h-4.4v2.2a2.3 2.3 0 1 1-4.6 0V16H3v-5h3.2a2 2 0 0 0 0-4H3V3h6Z" fill="currentColor"/></svg></span>';
+        if (kind === 'mcp' || kind === 'runtime') {
+          return '<span class="event-signer-icon mcp" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5A2.5 2.5 0 0 1 7 4h10a2.5 2.5 0 0 1 2.5 2.5v11A2.5 2.5 0 0 1 17 20H7a2.5 2.5 0 0 1-2.5-2.5v-11Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m9 9 2.5 2.5L9 14m4.5 0h3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span>';
         }
         return '<span class="event-signer-icon agent" title="Signed by ' + label + '" aria-label="Signed by ' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4v3h-4V4Zm-2 4h8a3 3 0 0 1 3 3v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-4a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"/><path d="M9 12h.01M15 12h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.8"/><path d="M9 15h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span>';
       }
@@ -4551,14 +4559,14 @@ export function renderApp(options: { colo?: string } = {}): string {
 
       function signerStatusForRun(run, signer, recordCount) {
         if (recordCount > 0) return 'Signed';
-        if (signer.signer === 'action_mcp' && run.status === 'rejected') return 'Skipped';
-        if (signer.signer === 'action_mcp' && (run.status === 'changes_requested' || hasRevisedProposal(run))) return 'Blocked';
+        if ((signer.signer === 'action_mcp' || signer.signer === 'codemode_runtime') && run.status === 'rejected' && recordCount === 0) return 'Skipped';
+        if ((signer.signer === 'action_mcp' || signer.signer === 'codemode_runtime') && (run.status === 'changes_requested' || hasRevisedProposal(run)) && recordCount === 0) return 'Blocked';
         return 'Pending';
       }
 
       function signerStatusClass(signer) {
         const status = signer.status.toLowerCase();
-        return status + (signer.kind === 'mcp' ? ' mcp' : '');
+        return status + (signer.kind === 'mcp' || signer.kind === 'runtime' ? ' mcp' : '');
       }
 
       function traceIdFromRunId(runId) {
@@ -4649,8 +4657,8 @@ export function renderApp(options: { colo?: string } = {}): string {
         if (rowTitle === 'Human review recorded' || rowTitle === 'Human review rejected') {
           return latestHumanDecisionRecord(run) ?? latestProposalRecord(run);
         }
-        if (rowTitle === 'Agent resumed through MCP') return run.records.find((record) => record.label === 'execution');
-        if (rowTitle === 'MCP execution skipped' || rowTitle === 'Decision audit ready') {
+        if (rowTitle === 'Agent resumed through Code Mode') return run.records.find((record) => record.label === 'execution');
+        if (rowTitle === 'Code Mode execution skipped' || rowTitle === 'Decision audit ready') {
           return run.records.find((record) => record.label === 'rejection');
         }
         if (rowTitle === 'Feedback returned to agent' || rowTitle === 'Revised proposal pending') {
@@ -4956,12 +4964,12 @@ export function renderApp(options: { colo?: string } = {}): string {
             if (hasRevisedProposal(run)) {
               return {
                 title: 'Revised proposal ready for review',
-                detail: 'The agent incorporated signed feedback and halted again before MCP execution.',
+                detail: 'The agent incorporated signed feedback and halted again before Code Mode execution.',
               };
             }
             return {
               title: 'Halted for human review',
-              detail: 'The agent has stopped before publishing. Approval resumes execution through the action MCP.',
+              detail: 'The agent has stopped before publishing. Approval resumes execution through CodemodeRuntime.',
             };
           case 'succeeded':
             return {
@@ -4976,12 +4984,12 @@ export function renderApp(options: { colo?: string } = {}): string {
           case 'rejected':
             return {
               title: 'Rejected before execution',
-              detail: 'The human decision is signed. The agent did not run the MCP action.',
+              detail: 'The human decision is signed. The agent did not run the Code Mode action.',
             };
           case 'changes_requested':
             return {
               title: 'Revision requested before execution',
-              detail: 'The human feedback is signed. The agent must revise the payload before MCP execution can resume.',
+              detail: 'The human feedback is signed. The agent must revise the payload before Code Mode execution can resume.',
             };
           default:
             return {
@@ -4997,7 +5005,7 @@ export function renderApp(options: { colo?: string } = {}): string {
             hasRevisedProposal(run) ? 'Revised proposal ready for review' : 'Halted for human review',
             'pending',
             hasRevisedProposal(run)
-              ? 'The agent signed a revised payload from the requested changes. Review it before MCP execution can resume.'
+              ? 'The agent signed a revised payload from the requested changes. Review it before Code Mode execution can resume.'
               : 'Autonomous triage is complete. Review the payload before the agent can resume.',
             'halt',
           );
@@ -5016,7 +5024,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           return;
         }
         if (run.status === 'changes_requested') {
-          setStatus('Changes requested', 'pending', 'The human feedback is signed. MCP execution remains blocked until the agent revises the proposal.', 'halt');
+          setStatus('Changes requested', 'pending', 'The human feedback is signed. Code Mode execution remains blocked until the agent revises the proposal.', 'halt');
           return;
         }
         setStatus(run.status.replaceAll('_', ' '), 'pending', 'The workflow is still running.', 'resume');
@@ -5071,7 +5079,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           </div>
           <div class="risk-details" id="riskDetails" hidden>
             <strong>Human review gate</strong>
-            <span>This proposal changes repository code for a production Workers route. The agent must halt before the action MCP writes the file.</span>
+            <span>This proposal changes repository code for a production Workers route. The agent must halt before CodemodeRuntime writes the file.</span>
             <span>Approval signs the exact payload hash, connector id, and target file before execution resumes.</span>
           </div>
           \${feedbackRecord ? \`
@@ -5081,7 +5089,7 @@ export function renderApp(options: { colo?: string } = {}): string {
             </div>
           \` : ''}
           <div class="actions">
-            <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="button-label">Approve &amp; resume</span></span><small>Allow MCP execution to continue</small></span></span></button>
+            <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="button-label">Approve &amp; resume</span></span><small>Allow Code Mode execution to continue</small></span></span></button>
             <button class="danger" id="reject" aria-label="Reject" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span><span class="button-label">Reject</span></span><small>Cancel this proposed action</small></span></span></button>
             <button class="secondary" id="requestChanges" aria-label="Request changes" aria-expanded="\${showFeedbackDrawer ? 'true' : 'false'}" aria-controls="reviewFeedbackDrawer" \${disabled || !canAskForChanges ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="button-label">\${requestChangesLabel}</span></span><small>\${requestChangesDetail}</small></span></span></button>
           </div>
@@ -5124,7 +5132,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         document.querySelector('#approve')?.addEventListener('click', async () => {
           await transition({
             title: 'Agent resumed',
-            detail: 'The human approval is signed. The action MCP is applying the approved file update.',
+            detail: 'The human approval is signed. CodemodeRuntime is applying the approved file update.',
             step: 'resume',
             activeLabel: 'approve',
             fn: async () => post('/api/runs/' + run.run_id + '/approve', {
@@ -5200,7 +5208,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           },
           {
             title: 'Policy & intent analysis',
-            detail: labels.has('triage') ? 'Repository writes require human review before MCP execution.' : 'Waiting for policy analysis.',
+            detail: labels.has('triage') ? 'Repository writes require human review before Code Mode execution.' : 'Waiting for policy analysis.',
             done: labels.has('triage'),
           },
           {
@@ -5225,11 +5233,11 @@ export function renderApp(options: { colo?: string } = {}): string {
             halted: run.status === 'pending_approval',
           },
           {
-            title: answer.executed ? 'Agent resumed through MCP' : rejected ? 'MCP execution skipped' : changesRequested ? 'Feedback returned to agent' : 'Resume not started',
+            title: answer.executed ? 'Agent resumed through Code Mode' : rejected ? 'Code Mode execution skipped' : changesRequested ? 'Feedback returned to agent' : 'Resume not started',
             detail: answer.executed
-              ? 'The action MCP ran only after approval.'
+              ? 'CodemodeRuntime ran only after approval.'
               : rejected
-              ? 'The signed rejection closed the gate before any MCP write.'
+              ? 'The signed rejection closed the gate before any Code Mode write.'
               : changesRequested
               ? 'Signed feedback has been returned to the agent for revision.'
               : revised
@@ -5257,7 +5265,7 @@ export function renderApp(options: { colo?: string } = {}): string {
               <div class="progress-item \${progressRowClass(row, run)}">
                 <span class="dot \${row.done ? 'ok' : row.skipped ? 'skipped' : row.halted ? 'pending' : 'future'}"></span>
                 <div>
-                  <strong>\${row.title === 'Resume not started' ? 'MCP execution (pending)' : row.title === 'Audit assembling' ? 'Audit ready (pending)' : row.title}</strong>
+                  <strong>\${row.title === 'Resume not started' ? 'Code Mode execution (pending)' : row.title === 'Audit assembling' ? 'Audit ready (pending)' : row.title}</strong>
                   <span>\${row.detail}</span>
                 </div>
                 <span class="progress-time">\${progressDisplayTime(run, row.title, row.done || row.halted || row.skipped)}</span>
@@ -5284,7 +5292,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         const signers = [
           { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent' },
           { kind: 'human', name: 'Human', detail: 'alice@example.com', signer: 'human' },
-          { kind: 'mcp', name: 'Action MCP', detail: 'github.write@2.3.1', signer: 'action_mcp' },
+          { kind: 'runtime', name: 'Code Mode', detail: 'CodemodeRuntime@0.4.0', signer: 'codemode_runtime' },
         ].map((signer) => {
           const records = recordsForSigner(run, signer.signer);
           const recordCount = records.length;
@@ -5599,10 +5607,17 @@ export function renderApp(options: { colo?: string } = {}): string {
           receivedLabel.textContent = formatHeaderDate();
           clearReceiptInspector();
           renderBootProgress(0);
-          const run = await post('/api/runs', {
+          const createPayload = {
             run_id: runId,
             prompt: promptInput.value,
-          });
+            simulate_error: simulateErrorInput.checked,
+          };
+          if (['localhost', '127.0.0.1'].includes(window.location.hostname) || window.location.hostname.endsWith('.test')) {
+            createPayload.code_mode_executor = 'local-test';
+          } else {
+            createPayload.code_mode_executor = 'dynamic-worker';
+          }
+          const run = await post('/api/runs', createPayload);
           applyRunHeader(run);
           renderBootProgress(0, run);
           await sleep(1700);
