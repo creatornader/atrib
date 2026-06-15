@@ -13,11 +13,11 @@
   },
   "devDependencies": {
     "@atrib/verify": "workspace:*",
-    "@cloudflare/vitest-pool-workers": "^0.16.13",
-    "@cloudflare/workers-types": "^4.20260608.1",
-    "@types/node": "^25.9.2",
+    "@cloudflare/vitest-pool-workers": "^0.16.15",
+    "@cloudflare/workers-types": "^4.20260615.1",
+    "@types/node": "^25.9.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8",
-    "wrangler": "^4.98.0"
+    "wrangler": "^4.100.0"
   }
 }

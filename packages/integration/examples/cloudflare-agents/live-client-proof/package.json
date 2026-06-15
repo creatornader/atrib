@@ -17,10 +17,10 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260608.1",
-    "@types/node": "^25.9.2",
+    "@cloudflare/workers-types": "^4.20260615.1",
+    "@types/node": "^25.9.3",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "wrangler": "^4.98.0"
+    "wrangler": "^4.100.0"
   }
 }
