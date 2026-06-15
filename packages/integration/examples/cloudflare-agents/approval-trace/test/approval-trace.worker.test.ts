@@ -388,6 +388,27 @@ describe('Cloudflare approval trace Worker', () => {
     })
     expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])
 
+    const duplicateResponse = await dispatch(`/api/runs/${runId}/request-changes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        feedback: 'Try to request a second revision.',
+      }),
+    })
+    const duplicateBody = (await duplicateResponse.json()) as { error?: string }
+    const afterDuplicate = await getAgentRun(runId)
+
+    expect(duplicateResponse.status).toBe(409)
+    expect(duplicateBody.error).toMatch(/already has a requested revision/)
+    expect(labels(afterDuplicate)).toEqual([
+      'trigger',
+      'triage',
+      'proposal',
+      'change_request',
+      'revision',
+    ])
+    expect(afterDuplicate.status).toBe('pending_approval')
+
     const approved = await approveRun(runId)
     const approvedRecords = byLabel(approved)
     const approval = approvedRecords.get('approval')!
@@ -414,6 +435,36 @@ describe('Cloudflare approval trace Worker', () => {
         }),
       }),
     ])
+  })
+
+  it('lets a reviewer reject the revised proposal without MCP execution', async () => {
+    const runId = uniqueRunId('changes-rejected-local-e2e')
+    await createRun(runId)
+    const revised = await requestChanges(runId)
+    const revision = byLabel(revised).get('revision')!
+    const trace = await rejectRun(runId)
+    const records = byLabel(trace)
+    const rejection = records.get('rejection')!
+
+    expect(trace.status).toBe('rejected')
+    expect(labels(trace)).toEqual([
+      'trigger',
+      'triage',
+      'proposal',
+      'change_request',
+      'revision',
+      'rejection',
+    ])
+    await expectSignedTrace(trace)
+    expect(sorted(rejection.record.informed_by)).toEqual([revision.record_hash])
+    expect(trace.records.some((record) => record.signer === 'action_mcp')).toBe(false)
+    expect(trace.trace_packet.answer).toMatchObject({
+      decision: 'rejected',
+      executed: false,
+      outcome: 'not_run',
+      changed: [],
+    })
+    expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])
   })
 
   it('records a diagnostic outcome when the approved action fails', async () => {

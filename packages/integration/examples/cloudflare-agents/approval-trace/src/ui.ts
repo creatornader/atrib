@@ -3771,6 +3771,9 @@ export function renderApp(options: { colo?: string } = {}): string {
       let selectedReceiptRecord = null;
       let selectedReceiptView = 'record';
       let selectedReceiptFormat = 'pretty';
+      const defaultFeedbackDraft = 'Please narrow this to the /v1/report route only and return a revised proposal before any MCP write.';
+      let feedbackDrawerOpen = false;
+      let feedbackDraft = defaultFeedbackDraft;
 
       const statusDot = document.querySelector('#statusDot');
       const statusTitle = document.querySelector('#statusTitle');
@@ -4304,6 +4307,7 @@ export function renderApp(options: { colo?: string } = {}): string {
       function updateControls(activeLabel = '') {
         const hasRun = currentRun !== null;
         const hasPendingApproval = currentRun?.status === 'pending_approval';
+        const canAskForChanges = canRequestChanges(currentRun);
         const canSetFailureMode = !hasRun || hasPendingApproval;
         createButton.disabled = busy || hasRun;
         createButton.textContent = busy && activeLabel === 'create' ? 'Running trigger...' : 'Replay prior trigger';
@@ -4326,13 +4330,21 @@ export function renderApp(options: { colo?: string } = {}): string {
           if (label) label.textContent = busy && activeLabel === 'reject' ? 'Rejecting...' : 'Reject';
         }
         if (requestChanges) {
-          requestChanges.disabled = busy || !hasPendingApproval;
+          requestChanges.disabled = busy || !canAskForChanges;
           const drawerOpen = Boolean(reviewFeedbackDrawer && !reviewFeedbackDrawer.hidden);
           requestChanges.setAttribute('aria-expanded', String(drawerOpen));
           const label = requestChanges.querySelector('.button-label');
-          if (label) label.textContent = busy && activeLabel === 'request' ? 'Requesting...' : drawerOpen ? 'Sign feedback' : 'Request changes';
+          if (label) {
+            label.textContent = busy && activeLabel === 'request'
+              ? 'Requesting...'
+              : !canAskForChanges && hasRevisedProposal(currentRun)
+                ? 'Revision signed'
+                : drawerOpen
+                  ? 'Sign feedback'
+                  : 'Request changes';
+          }
         }
-        if (reviewFeedback) reviewFeedback.disabled = busy || !hasPendingApproval;
+        if (reviewFeedback) reviewFeedback.disabled = busy || !canAskForChanges;
         updateHeaderMenuControls();
         updateRunModeControls();
       }
@@ -4493,6 +4505,10 @@ export function renderApp(options: { colo?: string } = {}): string {
 
       function hasRevisedProposal(run = currentRun) {
         return Boolean(latestRecordByLabel(run, ['revision']));
+      }
+
+      function canRequestChanges(run = currentRun) {
+        return Boolean(run && run.status === 'pending_approval' && !hasRevisedProposal(run));
       }
 
       function signerLatestRecord(run, signer) {
@@ -4997,6 +5013,10 @@ export function renderApp(options: { colo?: string } = {}): string {
         const after = payload.after ?? {};
         const diff = payload.diff ?? pretty({ before, after });
         const disabled = run.status !== 'pending_approval';
+        const canAskForChanges = canRequestChanges(run);
+        const showFeedbackDrawer = feedbackDrawerOpen && canAskForChanges;
+        const requestChangesLabel = canAskForChanges ? 'Request changes' : 'Revision signed';
+        const requestChangesDetail = canAskForChanges ? 'Send feedback to agent' : 'Review final proposal';
         const state = runStateCopy(run);
         proposalEl.innerHTML = \`
           <div class="run-state proposal-state \${run.status === 'pending_approval' ? 'halt' : run.status === 'succeeded' ? 'ok' : ''}">
@@ -5045,12 +5065,12 @@ export function renderApp(options: { colo?: string } = {}): string {
           <div class="actions">
             <button class="primary" id="approve" aria-label="Approve and resume" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.2 6.5 11 12 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></span><span class="button-label">Approve &amp; resume</span></span><small>Allow MCP execution to continue</small></span></span></button>
             <button class="danger" id="reject" aria-label="Reject" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></span><span class="button-label">Reject</span></span><small>Cancel this proposed action</small></span></span></button>
-            <button class="secondary" id="requestChanges" aria-label="Request changes" aria-expanded="false" aria-controls="reviewFeedbackDrawer" \${disabled ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="button-label">Request changes</span></span><small>Send feedback to agent</small></span></span></button>
+            <button class="secondary" id="requestChanges" aria-label="Request changes" aria-expanded="\${showFeedbackDrawer ? 'true' : 'false'}" aria-controls="reviewFeedbackDrawer" \${disabled || !canAskForChanges ? 'disabled' : ''}><span class="button-content"><span class="action-copy"><span class="action-heading"><span class="button-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v6H7l-3 3V4Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="button-label">\${requestChangesLabel}</span></span><small>\${requestChangesDetail}</small></span></span></button>
           </div>
-          \${run.status === 'pending_approval' ? \`
-            <label class="review-feedback-drawer" id="reviewFeedbackDrawer" hidden>
+          \${canAskForChanges ? \`
+            <label class="review-feedback-drawer" id="reviewFeedbackDrawer" \${showFeedbackDrawer ? '' : 'hidden'}>
               <span class="label">Requested changes</span>
-              <textarea id="reviewFeedback" rows="3">Please narrow this to the /v1/report route only and return a revised proposal before any MCP write.</textarea>
+              <textarea id="reviewFeedback" rows="3">\${escapeHtml(feedbackDraft)}</textarea>
             </label>
           \` : ''}
         \`;
@@ -5080,6 +5100,9 @@ export function renderApp(options: { colo?: string } = {}): string {
             code.classList.toggle('wrap', wrap);
           }
         });
+        document.querySelector('#reviewFeedback')?.addEventListener('input', (event) => {
+          feedbackDraft = event.currentTarget.value;
+        });
         document.querySelector('#approve')?.addEventListener('click', async () => {
           await transition({
             title: 'Agent resumed',
@@ -5104,25 +5127,32 @@ export function renderApp(options: { colo?: string } = {}): string {
           });
         });
         document.querySelector('#requestChanges')?.addEventListener('click', async () => {
+          if (!canRequestChanges(currentRun)) return;
           const drawer = document.querySelector('#reviewFeedbackDrawer');
-          const input = document.querySelector('#reviewFeedback');
           if (drawer?.hidden) {
-            drawer.hidden = false;
+            feedbackDrawerOpen = true;
+            renderProposal(run);
             updateControls();
-            followPanelElement(drawer);
-            input?.focus();
+            const nextDrawer = document.querySelector('#reviewFeedbackDrawer');
+            followPanelElement(nextDrawer);
+            document.querySelector('#reviewFeedback')?.focus();
             return;
           }
-          const feedback = document.querySelector('#reviewFeedback')?.value?.trim()
-            || 'Please narrow this to the /v1/report route only and return a revised proposal before any MCP write.';
+          const feedback = document.querySelector('#reviewFeedback')?.value?.trim() || defaultFeedbackDraft;
+          feedbackDraft = feedback;
           await transition({
             title: 'Requesting changes',
             detail: 'The reviewer feedback is being signed. The agent will revise and return to human review.',
             step: 'halt',
             activeLabel: 'request',
-            fn: async () => post('/api/runs/' + run.run_id + '/request-changes', {
-              feedback,
-            }),
+            fn: async () => {
+              const nextRun = await post('/api/runs/' + run.run_id + '/request-changes', {
+                feedback,
+              });
+              feedbackDrawerOpen = false;
+              feedbackDraft = defaultFeedbackDraft;
+              return nextRun;
+            },
           });
         });
         updateControls();
