@@ -1,13 +1,13 @@
 # Cloudflare approval trace
 
 Interactive Cloudflare Agents example for atrib-signed human approval traces.
-The example is an approval-envelope proof for Code Mode-shaped side effects,
-not a native `@cloudflare/codemode` HITL implementation.
+The example is a native `@cloudflare/codemode` approval bridge wrapped in an
+atrib-signed receipt envelope.
 
 The app is a safe Cloudflare-shaped workflow:
 
 ```text
-prior trigger -> autonomous triage -> human approval halt -> MCP execution resumes -> signed outcome -> audit trace
+prior trigger -> autonomous triage -> human approval halt -> Code Mode execution resumes -> signed outcome -> audit trace
 ```
 
 The simulated target is a Durable Object SQLite table that looks like a
@@ -16,26 +16,26 @@ mutated.
 
 Code Mode is the problem context for the example: generated code can compress
 many side effects behind one execution boundary. This demo keeps the boundary
-explicit. The agent proposes an exact payload first, the workflow halts for a
-human decision, execution resumes only through a scoped `McpAgent` action path,
-and the proposal, decision, execution, outcome, and handoff are signed as
-separate records.
+explicit. The agent proposes an exact payload first, the generated code reaches
+a `requiresApproval` write through `CodemodeRuntime`, the workflow halts for a
+human decision, and approved execution resumes through runtime replay. The
+proposal, decision, Code Mode preview or execution, outcome, and handoff are
+signed as separate records.
 
-Cloudflare's current Code Mode runtime has its own durable approval and replay
-surface. This example does not replace that runtime. It shows the portable
-signed receipt envelope around the same boundary. A native follow-up should
-bind these records to `CodemodeRuntime` pending actions, approvals, rejections,
-and execution states directly.
+Cloudflare's current Code Mode runtime owns the durable approval and replay
+surface. This example does not replace that runtime. It adds a portable signed
+receipt envelope around the same boundary: pending action, exact payload,
+human decision, runtime approval or rejection, result, and audit handoff.
 
 ## What this shows
 
 - A prior trigger starts the agent before the browser approval gate appears.
-- A real browser approval or rejection halts or resumes the workflow.
+- A real browser approval or rejection halts or resumes the Code Mode workflow.
 - The approval is bound to the proposed payload, not to a vague "continue"
   action.
 - Agent, human reviewer, and action MCP records use distinct signing keys.
-- The action MCP record has an explicit `informed_by` edge to the human
-  approval record.
+- The Code Mode execution record has explicit `informed_by` edges to the
+  proposal and human approval records.
 - The outcome and handoff records make the async work auditable after the fact.
 - The UI keeps atrib details visible enough to explain the value without making
   the user read raw records first.
@@ -46,8 +46,9 @@ The important atrib differentiators are:
   follow-up that woke the agent.
 - **Decision context:** the reviewer sees exactly what the agent is asking to
   publish before approving.
-- **Signed decision chain:** proposal, approval, execution, outcome, and handoff
-  link to each other as signed records.
+- **Signed decision chain:** proposal, approval or rejection, Code Mode
+  execution or rejection, outcome, and handoff link to each other as signed
+  records.
 - **Trustless audit:** a later reviewer can verify the trace outside the Worker,
   Durable Object database, or transcript.
 - **Signer separation:** autonomous agent action, human decision, and execution
