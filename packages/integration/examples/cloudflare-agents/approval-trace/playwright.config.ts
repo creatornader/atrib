@@ -2,6 +2,13 @@
 
 import { defineConfig } from '@playwright/test'
 
+const browserPort = Number.parseInt(process.env.APPROVAL_TRACE_TEST_PORT ?? '8788', 10)
+if (!Number.isSafeInteger(browserPort) || browserPort <= 0) {
+  throw new Error(`invalid APPROVAL_TRACE_TEST_PORT: ${process.env.APPROVAL_TRACE_TEST_PORT}`)
+}
+
+const browserBaseUrl = `http://127.0.0.1:${browserPort}`
+
 export default defineConfig({
   testDir: './test/browser',
   fullyParallel: false,
@@ -12,14 +19,13 @@ export default defineConfig({
   },
   reporter: [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:8788',
+    baseURL: browserBaseUrl,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },
   webServer: {
-    command:
-      'pnpm exec wrangler dev --config wrangler.test.jsonc --ip 127.0.0.1 --port 8788 --persist-to .wrangler/browser-test-state --log-level error',
-    url: 'http://127.0.0.1:8788',
+    command: `pnpm exec wrangler dev --config wrangler.test.jsonc --ip 127.0.0.1 --port ${browserPort} --persist-to .wrangler/browser-test-state --log-level error`,
+    url: browserBaseUrl,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     stdout: 'pipe',

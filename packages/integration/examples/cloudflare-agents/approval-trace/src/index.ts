@@ -210,7 +210,8 @@ function errorJson(error: unknown): Response {
   const message = error instanceof Error ? error.message : String(error)
   const status = message.includes('not found')
     ? 404
-    : message.includes('not pending approval')
+    : message.includes('not pending approval') ||
+        message.includes('already has a requested revision')
       ? 409
       : 500
   return json({ ok: false, error: message }, { status })
@@ -1102,6 +1103,15 @@ export class ApprovalTraceAgent extends Agent<Env> {
     if (!workflow) throw new Error(`run not found: ${input.runId}`)
     if (workflow.status !== 'pending_approval') {
       throw new Error(`run is not pending approval: ${workflow.status}`)
+    }
+    const existingRevision = this.sql<{ count: number }>`
+      SELECT COUNT(*) AS count
+      FROM trace_records
+      WHERE run_id = ${input.runId}
+        AND (label = ${'change_request'} OR label = ${'revision'})
+    `
+    if ((existingRevision[0]?.count ?? 0) > 0) {
+      throw new Error(`run already has a requested revision: ${input.runId}`)
     }
     const feedbackTimestamp = runTimestamp(
       workflow.created_at,
@@ -2062,10 +2072,20 @@ export default {
         const runId = decodeURIComponent(requestChangesMatch[1]!)
         const body = (await request.json()) as { feedback?: string }
         const agent = await getTraceAgent(env, runId)
-        const current = (await agent.getRun(runId)) as { status: WorkflowStatus | null }
+        const current = (await agent.getRun(runId)) as {
+          status: WorkflowStatus | null
+          records?: Array<{ label: string }>
+        }
         if (current.status === null) return errorJson(new Error(`run not found: ${runId}`))
         if (current.status !== 'pending_approval') {
           return errorJson(new Error(`run is not pending approval: ${current.status}`))
+        }
+        if (
+          current.records?.some(
+            (record) => record.label === 'change_request' || record.label === 'revision',
+          )
+        ) {
+          return errorJson(new Error(`run already has a requested revision: ${runId}`))
         }
         return json(
           await agent.requestChanges({

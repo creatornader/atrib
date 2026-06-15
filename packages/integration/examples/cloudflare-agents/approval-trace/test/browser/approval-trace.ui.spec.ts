@@ -40,7 +40,9 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.getByRole('button', { name: 'Reject' })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Request changes' })).toBeEnabled()
   await expect(page.locator('#timeline .event')).toHaveCount(4)
-  const timelineColumns = await page.evaluate<string[]>(`Array.from(document.querySelector('#timeline .record-timeline')?.firstElementChild?.children ?? [])
+  const timelineColumns = await page.evaluate<
+    string[]
+  >(`Array.from(document.querySelector('#timeline .record-timeline')?.firstElementChild?.children ?? [])
     .slice(0, 2)
     .map((child) => String(child.className))`)
   expect(timelineColumns[0]).toContain('event-marker')
@@ -48,8 +50,13 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.locator('#timeline .event .event-cue')).toHaveCount(4)
   await expect(page.locator('#timeline .event .event-cue svg')).toHaveCount(4)
   await expect(page.locator('#timeline .event-future .event-cue')).toHaveCount(0)
-  await expect(page.locator('#timeline .event.current.selected')).toContainText('human.review.halted')
-  await expect(page.locator('#timeline .event.current.selected')).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('#timeline .event.current.selected')).toContainText(
+    'human.review.halted',
+  )
+  await expect(page.locator('#timeline .event.current.selected')).toHaveAttribute(
+    'aria-current',
+    'step',
+  )
   await expect
     .poll(async () => page.locator('#timeline .event-future .event-marker').allTextContents())
     .toEqual(['4', '5'])
@@ -61,6 +68,48 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expectReferenceLeftProgressTypography(page)
   await expectWorkflowStepTitlesBold(page)
   await expectReviewPillMatchesRailBadge(page)
+}
+
+async function requestRevision(page: Page): Promise<void> {
+  await expect(page.locator('#reviewFeedbackDrawer')).toBeHidden()
+  await page.getByRole('button', { name: 'Request changes' }).click()
+  await expect(page.locator('#reviewFeedback')).toBeVisible()
+  await expect(page.locator('#requestChanges')).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.locator('#requestChanges')).toContainText('Sign feedback')
+  await page
+    .locator('#reviewFeedback')
+    .fill(
+      'Keep the limiter scoped to /v1/report, lower the cap, and show me a revised proposal before any MCP write.',
+    )
+  await page.locator('#requestChanges').click()
+
+  await expect(page.locator('#statusTitle')).toHaveText('Revised proposal ready for review')
+  await expect(page.locator('#reviewStatePill')).toHaveText('PAUSED')
+  await expect(page.locator('[data-step="halt"]')).toContainText('Revised proposal halted')
+  await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
+  await expectReviewPillMatchesRailBadge(page)
+  await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
+  await expect(page.locator('[data-step="audit"]')).not.toHaveClass(/done/)
+  await expect(page.locator('#answer')).toContainText('Human review feedback sent')
+  await expect(page.locator('#answer')).toContainText('Revised proposal generated')
+  await expect(page.locator('#answer')).toContainText('Revised proposal halted')
+  await expect(page.locator('#answer')).toContainText('review revised proposal')
+  await expect(page.locator('#timeline .event')).toHaveCount(6)
+  await expect(page.locator('#timeline')).toContainText('human.change_request.signed')
+  await expect(page.locator('#timeline')).toContainText('proposal.revised')
+  await expect(page.locator('#timeline')).toContainText('human.review.halted')
+  await expect(page.locator('#timeline')).toContainText('Awaiting decision on revised proposal')
+  await expect(page.locator('#timeline')).not.toContainText('human.rejection.signed')
+  await expect(page.locator('#timeline')).not.toContainText('action_mcp')
+  await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText(
+    'Blocked',
+  )
+  await expect(page.locator('#requestChanges')).toBeDisabled()
+  await expect(page.locator('#requestChanges')).toContainText('Revision signed')
+  await expect(page.locator('#requestChanges')).toContainText('Review final proposal')
+  await expect(page.locator('#reviewFeedbackDrawer')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Reject' })).toBeEnabled()
 }
 
 async function openTimelineRecord(page: Page, label: string, receiptLabel = label): Promise<void> {
@@ -215,7 +264,11 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
 
 async function expectWorkflowOverviewVisible(page: Page): Promise<void> {
   await expect
-    .poll(async () => page.evaluate(`Math.round(document.querySelector('.hero')?.getBoundingClientRect().top ?? -999)`))
+    .poll(async () =>
+      page.evaluate(
+        `Math.round(document.querySelector('.hero')?.getBoundingClientRect().top ?? -999)`,
+      ),
+    )
     .toBeGreaterThanOrEqual(0)
   const overview = await page.evaluate<{
     firstRailStepTop: number
@@ -390,8 +443,10 @@ async function expectReviewResultVisibleInProgressPanel(page: Page): Promise<voi
           return { headerVisible: false, resultVisible: false, scrollTop: -1 }
         }
         return {
-          headerVisible: headerRect.top >= panelRect.top - 1 && headerRect.bottom <= panelRect.bottom,
-          resultVisible: resultRect.top >= headerRect.bottom + 4 && resultRect.bottom <= panelRect.bottom - 4,
+          headerVisible:
+            headerRect.top >= panelRect.top - 1 && headerRect.bottom <= panelRect.bottom,
+          resultVisible:
+            resultRect.top >= headerRect.bottom + 4 && resultRect.bottom <= panelRect.bottom - 4,
           scrollTop: Math.round(panel.scrollTop),
         }
       }),
@@ -886,7 +941,10 @@ async function expectPendingSignerHashReadable(page: Page): Promise<void> {
   expect(signature.visibleHashFits).toBe(true)
 }
 
-async function expectProposalProgressDot(page: Page, expected: 'pending' | 'complete'): Promise<void> {
+async function expectProposalProgressDot(
+  page: Page,
+  expected: 'pending' | 'complete',
+): Promise<void> {
   const proposalDot = await page.evaluate<{
     afterContent: string
     background: string
@@ -1256,9 +1314,7 @@ async function expectReferenceDesktopRailGeometry(page: Page): Promise<void> {
       }),
     }
   })()`)
-  const byStep = Object.fromEntries(
-    railGeometry.steps.map((geometry) => [geometry.step, geometry]),
-  )
+  const byStep = Object.fromEntries(railGeometry.steps.map((geometry) => [geometry.step, geometry]))
   expect(byStep.trigger.indexX).toBeGreaterThanOrEqual(51)
   expect(byStep.trigger.indexX).toBeLessThanOrEqual(53)
   expect(byStep.autonomous.indexX).toBeGreaterThanOrEqual(339)
@@ -1483,9 +1539,12 @@ test.describe('Cloudflare approval trace browser UI', () => {
       )
       await expectReferenceDesktopRiskTextFits(page)
       await expect(
-        page.locator('.risk-bar').evaluate((element) =>
-          element.ownerDocument.defaultView?.getComputedStyle(element).backgroundColor ?? '',
-        ),
+        page
+          .locator('.risk-bar')
+          .evaluate(
+            (element) =>
+              element.ownerDocument.defaultView?.getComputedStyle(element).backgroundColor ?? '',
+          ),
       ).resolves.toBe('rgb(255, 255, 255)')
       await expectWorkflowStepCopyHugsContent(page)
       await expectReferenceDesktopRailGeometry(page)
@@ -1506,9 +1565,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
         const response = await fetch('/api/runs/' + id)
         return (await response.json()) as BrowserTraceResponse
       }, runId ?? '')
-      const pendingTimestamps = pendingRun.records.map(
-        (record) => record.record.timestamp,
-      )
+      const pendingTimestamps = pendingRun.records.map((record) => record.record.timestamp)
       expect(new Set(pendingTimestamps).size).toBe(pendingTimestamps.length)
 
       await page.locator('#riskDetailsToggle').click()
@@ -1527,7 +1584,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('.diff-code')).toHaveClass(/wrap/)
       const threeLineDiffCount = await page.locator('.diff-line').count()
       await page.locator('#diffContext').selectOption('all')
-      await expect.poll(async () => page.locator('.diff-line').count()).toBeGreaterThan(threeLineDiffCount)
+      await expect
+        .poll(async () => page.locator('.diff-line').count())
+        .toBeGreaterThan(threeLineDiffCount)
       const allLineDiffCount = await page.locator('.diff-line').count()
       await expect(page.locator('.diff-line').last().locator('.diff-line-text')).not.toHaveText('')
       await expect(page.locator('.diff-code')).toContainText('reportAudit')
@@ -1535,7 +1594,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('.diff')).toHaveAttribute('data-context-lines', '6')
       await expect(page.locator('.diff-code')).toContainText('logRequest')
       await expect(page.locator('.diff-code')).not.toContainText('reportAudit')
-      await expect.poll(async () => page.locator('.diff-line').count()).toBeLessThan(allLineDiffCount)
+      await expect
+        .poll(async () => page.locator('.diff-line').count())
+        .toBeLessThan(allLineDiffCount)
       await expectDiffLineGutter(page)
 
       await page.locator('#headerMenu').click()
@@ -1554,26 +1615,44 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.getByRole('button', { name: 'Live run' }).click()
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'true')
       await expect(page.locator('#runModeActions')).toBeVisible()
-      await expect(page.locator('[data-run-mode-action="live"]')).toHaveAttribute('aria-checked', 'true')
+      await expect(page.locator('[data-run-mode-action="live"]')).toHaveAttribute(
+        'aria-checked',
+        'true',
+      )
       await expect(
-        page.locator('[data-run-mode-action="live"]').evaluate((element) =>
-          element.ownerDocument.defaultView?.getComputedStyle(element, '::before').content ?? '',
-        ),
+        page
+          .locator('[data-run-mode-action="live"]')
+          .evaluate(
+            (element) =>
+              element.ownerDocument.defaultView?.getComputedStyle(element, '::before').content ??
+              '',
+          ),
       ).resolves.toBe('"✓"')
-      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute('aria-checked', 'true')
-      await expect(page.locator('#runModeActions [data-run-mode-action="open-json"]')).toHaveCount(0)
+      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute(
+        'aria-checked',
+        'true',
+      )
+      await expect(page.locator('#runModeActions [data-run-mode-action="open-json"]')).toHaveCount(
+        0,
+      )
       await expect(page.locator('#runModeActions [data-run-mode-action="reset"]')).toHaveCount(0)
       await expectRunModeMenuAboveContent(page)
       await expectRunModeMenuLabelsContained(page)
       await page.locator('[data-run-mode-action="toggle-follow"]').click()
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
       await page.locator('#runModeMenu').click()
-      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute('aria-checked', 'false')
+      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute(
+        'aria-checked',
+        'false',
+      )
       await page.locator('[data-run-mode-action="toggle-follow"]').click()
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
       await page.locator('#runModeMenu').click()
       await expect(page.locator('#runModeActions')).toBeVisible()
-      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute('aria-checked', 'true')
+      await expect(page.locator('[data-run-mode-action="toggle-follow"]')).toHaveAttribute(
+        'aria-checked',
+        'true',
+      )
       await page.locator('[data-run-mode-action="live"]').click()
       await expect(page.locator('#runModeMenu')).toHaveAttribute('aria-expanded', 'false')
       await page.locator('#runModeMenu').click()
@@ -1604,19 +1683,22 @@ test.describe('Cloudflare approval trace browser UI', () => {
 
       await expectCopies(page.getByRole('button', { name: 'Copy trace ID' }))
       await expectCopies(page.getByRole('button', { name: 'Copy Agent latest record' }))
-      await expectCopies(page.locator('.trace-integrity').getByRole('button', { name: 'Copy Merkle root' }))
-      await expectCopies(page.getByRole('button', { name: 'Copy receipt' }))
-      await expect(page.locator('#verification').getByRole('link', { name: 'View proof' })).toHaveAttribute(
-        'href',
-        /log\.atrib\.dev|\/api\/runs\//,
+      await expectCopies(
+        page.locator('.trace-integrity').getByRole('button', { name: 'Copy Merkle root' }),
       )
+      await expectCopies(page.getByRole('button', { name: 'Copy receipt' }))
+      await expect(
+        page.locator('#verification').getByRole('link', { name: 'View proof' }),
+      ).toHaveAttribute('href', /log\.atrib\.dev|\/api\/runs\//)
       await expectReferenceVerificationRows(page)
       await page.locator('#verification').getByRole('button', { name: 'Verify' }).click()
       await expect(page.locator('#verificationResult')).toContainText('Record hash matches')
       await expect(page.locator('#verificationResult')).toContainText('Signature valid')
       await expect(page.locator('#verificationResult')).toContainText('Receipt verified')
       await expectVerificationResultRhythm(page)
-      await expect(page.locator('#verification').getByRole('button', { name: 'Verified' })).toBeVisible()
+      await expect(
+        page.locator('#verification').getByRole('button', { name: 'Verified' }),
+      ).toBeVisible()
       const pendingDownload = page.waitForEvent('download')
       await page.getByRole('button', { name: 'Download receipt' }).click()
       expect((await pendingDownload).suggestedFilename()).toContain('cloudflare-trace')
@@ -1632,7 +1714,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectReviewPillMatchesRailBadge(page)
       await expect(page.locator('#answer')).toContainText('Agent resumed through MCP')
       await expect(page.locator('#answer')).toContainText('Audit ready')
-      await expect(page.locator('#answer')).toContainText('repo_files.server/middleware/rate_limit.ts')
+      await expect(page.locator('#answer')).toContainText(
+        'repo_files.server/middleware/rate_limit.ts',
+      )
       await expect(page.locator('#timeline .event')).toHaveCount(8)
       await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeDisabled()
       await expect(page.getByRole('button', { name: 'Reject' })).toBeDisabled()
@@ -1642,10 +1726,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#receipts pre')).toContainText('"tool_name": "write_file"')
       await expect(page.locator('#receipts pre')).toContainText('"proof":')
       await expectCopies(page.getByRole('button', { name: 'Copy Action MCP latest record' }))
-      await expect(page.locator('#verification').getByRole('link', { name: 'View proof' })).toHaveAttribute(
-        'href',
-        /log\.atrib\.dev|\/api\/runs\//,
-      )
+      await expect(
+        page.locator('#verification').getByRole('link', { name: 'View proof' }),
+      ).toHaveAttribute('href', /log\.atrib\.dev|\/api\/runs\//)
       const executionDownload = page.waitForEvent('download')
       await page.locator('#verification').getByRole('button', { name: 'Download' }).click()
       expect((await executionDownload).suggestedFilename()).toContain('cloudflare-trace-execution')
@@ -1691,7 +1774,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectReferenceHeaderLogoGeometry(page)
       await expectWorkflowOverviewVisible(page)
 
-      const signerSpacing = await page.evaluate<boolean[]>(`Array.from(document.querySelectorAll('.signer-row'))
+      const signerSpacing = await page.evaluate<
+        boolean[]
+      >(`Array.from(document.querySelectorAll('.signer-row'))
         .map((row) => {
           const cells = Array.from(row.children).map((child) => child.getBoundingClientRect())
           const nameCell = cells[1]
@@ -1730,7 +1815,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#timeline .event')).toHaveCount(4)
       await expect(page.locator('#timeline')).toContainText('mcp.execution.skipped')
       await expect(page.locator('#timeline')).toContainText('decision.audit.ready')
-      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText('Skipped')
+      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText(
+        'Skipped',
+      )
       await expect(page.locator('#timeline')).not.toContainText('action_mcp')
       await expect(page.locator('[data-step="resume"]')).toContainText('MCP execution skipped')
       await expect(page.locator('[data-step="audit"]')).toContainText('Decision audit ready')
@@ -1745,36 +1832,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
   test('requests changes, shows a revised proposal, and approves it', async ({ page }) => {
     await expectCleanConsole(page, async () => {
       await createProposal(page)
-      await expect(page.locator('#reviewFeedbackDrawer')).toBeHidden()
-      await page.getByRole('button', { name: 'Request changes' }).click()
-      await expect(page.locator('#reviewFeedback')).toBeVisible()
-      await page.locator('#reviewFeedback').fill(
-        'Keep the limiter scoped to /v1/report, lower the cap, and show me a revised proposal before any MCP write.',
-      )
-      await expect(page.locator('#requestChanges')).toContainText('Sign feedback')
-      await page.locator('#requestChanges').click()
-
-      await expect(page.locator('#statusTitle')).toHaveText('Revised proposal ready for review')
-      await expect(page.locator('#reviewStatePill')).toHaveText('PAUSED')
-      await expect(page.locator('[data-step="halt"]')).toContainText('Revised proposal halted')
-      await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
-      await expectReviewPillMatchesRailBadge(page)
-      await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
-      await expect(page.locator('[data-step="audit"]')).not.toHaveClass(/done/)
-      await expect(page.locator('#answer')).toContainText('Human review feedback sent')
-      await expect(page.locator('#answer')).toContainText('Revised proposal generated')
-      await expect(page.locator('#answer')).toContainText('Revised proposal halted')
-      await expect(page.locator('#answer')).toContainText('review revised proposal')
-      await expect(page.locator('#timeline .event')).toHaveCount(6)
-      await expect(page.locator('#timeline')).toContainText('human.change_request.signed')
-      await expect(page.locator('#timeline')).toContainText('proposal.revised')
-      await expect(page.locator('#timeline')).toContainText('human.review.halted')
-      await expect(page.locator('#timeline')).toContainText('Awaiting decision on revised proposal')
-      await expect(page.locator('#timeline')).not.toContainText('human.rejection.signed')
-      await expect(page.locator('#timeline')).not.toContainText('action_mcp')
-      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText('Blocked')
-      await expect(page.locator('[data-step="resume"]')).toContainText('MCP execution resumed')
-      await expect(page.locator('[data-step="audit"]')).toContainText('Audit ready')
+      await requestRevision(page)
 
       await openTimelineRecord(page, 'change_request')
       await expect(page.locator('#receipts pre')).toContainText('"kind": "human_review_feedback"')
@@ -1791,7 +1849,44 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#answer')).toContainText('Audit ready')
       await expect(page.locator('#timeline')).toContainText('mcp.execution.resumed')
       await expect(page.locator('#timeline')).toContainText('audit.ready')
-      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText('Signed')
+      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText(
+        'Signed',
+      )
+    })
+  })
+
+  test('requests changes and rejects the revised proposal without execution', async ({ page }) => {
+    await expectCleanConsole(page, async () => {
+      await createProposal(page)
+      await requestRevision(page)
+      await page.getByRole('button', { name: 'Reject' }).click()
+
+      await expect(page.locator('#statusTitle')).toHaveText('Rejected')
+      await expectReviewResultVisibleInProgressPanel(page)
+      await expect(page.locator('#reviewStatePill')).toHaveText('REJECTED')
+      await expect(page.locator('[data-step="halt"]')).toContainText('Rejected')
+      await expectReviewPillMatchesRailBadge(page)
+      await expect(page.locator('[data-step="resume"]')).not.toHaveClass(/done/)
+      await expect(page.locator('[data-step="audit"]')).not.toHaveClass(/done/)
+      await expect(page.locator('#answer')).toContainText('Human review feedback sent')
+      await expect(page.locator('#answer')).toContainText('Revised proposal generated')
+      await expect(page.locator('#answer')).toContainText('not run')
+      await expect(page.locator('#answer')).toContainText('MCP execution skipped')
+      await expect(page.locator('#answer')).toContainText('Decision audit ready')
+      await expect(page.locator('#timeline .event')).toHaveCount(6)
+      await expect(page.locator('#timeline')).toContainText('human.change_request.signed')
+      await expect(page.locator('#timeline')).toContainText('proposal.revised')
+      await expect(page.locator('#timeline')).toContainText('human.rejection.signed')
+      await expect(page.locator('#timeline')).toContainText('mcp.execution.skipped')
+      await expect(page.locator('#timeline')).toContainText('decision.audit.ready')
+      await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText(
+        'Skipped',
+      )
+      await expect(page.locator('#timeline')).not.toContainText('action_mcp')
+
+      await openTimelineRecord(page, 'rejection')
+      await expect(page.locator('#receipts pre')).toContainText('"signer": "human"')
+      await expect(page.locator('#receipts pre')).toContainText('"decision": "rejected"')
     })
   })
 
