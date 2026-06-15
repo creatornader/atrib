@@ -70,7 +70,7 @@ atrib/
         cloudflare-agents/     # McpAgent + Agent examples
           live-worker-proof/   # Real Cloudflare Worker + Durable Object proof for server-side MCP signing and prior-action recall.
           live-client-proof/   # Real Cloudflare Agent.addMcpServer proof for client-side wrapping and fallback transaction signing.
-          approval-trace/      # Interactive Cloudflare Agents HITL example: proposal -> human approval -> MCP execution -> signed audit trace.
+          approval-trace/      # Interactive Cloudflare Agents HITL example: trigger -> CodemodeRuntime approval -> human decision -> signed audit trace.
           oauth-evidence-infra/ # Cloudflare Worker + Durable Object reference for DPoP replay cache and OAuth introspection evidence.
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example

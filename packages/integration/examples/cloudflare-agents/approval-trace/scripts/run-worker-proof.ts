@@ -27,10 +27,11 @@ type WorkflowStatus =
   | 'pending_approval'
   | 'approved'
   | 'rejected'
+  | 'changes_requested'
   | 'executing'
   | 'succeeded'
   | 'failed'
-type SignerRole = 'agent' | 'human' | 'action_mcp'
+type SignerRole = 'agent' | 'human' | 'action_mcp' | 'codemode_runtime'
 
 interface TraceRecord {
   label: string
@@ -51,7 +52,7 @@ interface TraceResponse {
     answer: {
       decision: 'approved' | 'rejected' | null
       executed: boolean
-      outcome: 'not_run' | 'success' | 'error' | 'pending'
+      outcome: 'not_run' | 'revision_requested' | 'success' | 'error' | 'pending'
       changed: string[]
     }
     differentiators: Array<{ name: string; evidence_labels: string[] }>
@@ -177,26 +178,27 @@ async function postExpectStatus(
   }
 }
 
-async function createRun(workerUrl: string, prefix: string): Promise<string> {
+async function createRun(
+  workerUrl: string,
+  prefix: string,
+  simulateError = false,
+): Promise<string> {
   const runId = `${prefix}-${crypto.randomUUID()}`
   await postJson<TraceResponse>(`${workerUrl}/api/runs`, {
     run_id: runId,
     prompt:
       'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.',
+    simulate_error: simulateError,
+    code_mode_executor: 'dynamic-worker',
   })
   return runId
 }
 
-async function approveRun(
-  workerUrl: string,
-  runId: string,
-  simulateError: boolean,
-): Promise<TraceResponse> {
+async function approveRun(workerUrl: string, runId: string): Promise<TraceResponse> {
   return postJson<TraceResponse>(
     `${workerUrl}/api/runs/${runId}/approve`,
     {
       reason: 'Payload matches the issue scope and expected Cloudflare repository target.',
-      simulate_error: simulateError,
     },
     { retryServerErrors: false },
   )
@@ -217,15 +219,15 @@ async function requestChanges(workerUrl: string, runId: string): Promise<TraceRe
     `${workerUrl}/api/runs/${runId}/request-changes`,
     {
       feedback:
-        'Keep the limiter scoped to /v1/report, lower the cap, and show me the revised proposal before any MCP write.',
+        'Keep the limiter scoped to /v1/report, lower the cap, and show me the revised proposal before any Code Mode write.',
     },
     { retryServerErrors: false },
   )
 }
 
 async function runApproved(workerUrl: string, simulateError: boolean): Promise<TraceResponse> {
-  const runId = await createRun(workerUrl, simulateError ? 'error' : 'approved')
-  return approveRun(workerUrl, runId, simulateError)
+  const runId = await createRun(workerUrl, simulateError ? 'error' : 'approved', simulateError)
+  return approveRun(workerUrl, runId)
 }
 
 async function runRejected(workerUrl: string): Promise<TraceResponse> {
@@ -251,7 +253,7 @@ async function runChangesPending(workerUrl: string): Promise<{
 async function runChangesApproved(workerUrl: string): Promise<TraceResponse> {
   const runId = await createRun(workerUrl, 'changes-approved')
   await requestChanges(workerUrl, runId)
-  return approveRun(workerUrl, runId, false)
+  return approveRun(workerUrl, runId)
 }
 
 async function runChangesRejected(workerUrl: string): Promise<TraceResponse> {
@@ -290,6 +292,8 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
   const execution = byLabel.get('execution')
   const outcome = byLabel.get('outcome')
   const handoff = byLabel.get('handoff')
+  const runtimeRejections = trace.records.filter((record) => record.label === 'runtime_rejection')
+  const latestRuntimeRejection = runtimeRejections[runtimeRejections.length - 1]
   const decisionBase = revision ?? proposal
   const graph = (await buildGraph(
     trace.records.map((record) => record.record),
@@ -369,6 +373,7 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
   if (changeRequest || revision) {
     push(`${trace.run_id}: change request exists`, Boolean(changeRequest))
     push(`${trace.run_id}: revision exists`, Boolean(revision))
+    push(`${trace.run_id}: change request closes first Code Mode action`, Boolean(runtimeRejections[0]))
     push(
       `${trace.run_id}: change request points at proposal`,
       Boolean(
@@ -383,6 +388,14 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
         proposal &&
         changeRequest &&
         hasGraphEdge(graph, 'INFORMED_BY', changeRequest.record_hash, proposal.record_hash),
+      ),
+    )
+    push(
+      `${trace.run_id}: runtime rejection points at change request`,
+      Boolean(
+        changeRequest &&
+          runtimeRejections[0] &&
+          refsEqual(runtimeRejections[0].record.informed_by, [changeRequest.record_hash]),
       ),
     )
     push(
@@ -436,20 +449,29 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
 
   const agentKey = proposal?.record.creator_key
   const humanKey = (decision ?? changeRequest)?.record.creator_key
-  const actionKey = execution?.record.creator_key
+  const runtimeKey = (execution ?? latestRuntimeRejection)?.record.creator_key
   push(
     `${trace.run_id}: agent and human signers differ`,
     Boolean(agentKey && humanKey && agentKey !== humanKey),
   )
-  if (actionKey) {
+  if (runtimeKey) {
     push(
-      `${trace.run_id}: human and action signers differ`,
-      Boolean(humanKey && humanKey !== actionKey),
+      `${trace.run_id}: human and Code Mode signers differ`,
+      Boolean(humanKey && humanKey !== runtimeKey),
     )
   }
 
   if (trace.status === 'rejected') {
     push(`${trace.run_id}: rejected did not execute`, !execution && !outcome && !handoff)
+    push(`${trace.run_id}: rejected closed Code Mode action`, Boolean(latestRuntimeRejection))
+    push(
+      `${trace.run_id}: rejected runtime closure points at decision`,
+      Boolean(
+        decision &&
+          latestRuntimeRejection &&
+          refsEqual(latestRuntimeRejection.record.informed_by, [decision.record_hash]),
+      ),
+    )
     push(
       `${trace.run_id}: rejected packet decision`,
       trace.trace_packet.answer.decision === 'rejected',
@@ -473,26 +495,23 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
     )
     push(
       `${trace.run_id}: execution points at approval`,
-      Boolean(decision && refsEqual(execution?.record.informed_by, [decision.record_hash])),
-    )
-    push(
-      `${trace.run_id}: graph preview edge`,
       Boolean(
+        decisionBase &&
         decision &&
-        byLabel.get('preview') &&
-        hasGraphEdge(
-          graph,
-          'INFORMED_BY',
-          byLabel.get('preview')!.record_hash,
-          decision.record_hash,
-        ),
+          execution &&
+          refsEqual(execution.record.informed_by, [
+            decisionBase.record_hash,
+            decision.record_hash,
+          ]),
       ),
     )
     push(
-      `${trace.run_id}: graph execution edge`,
+      `${trace.run_id}: graph execution edges`,
       Boolean(
+        decisionBase &&
         decision &&
         execution &&
+        hasGraphEdge(graph, 'INFORMED_BY', execution.record_hash, decisionBase.record_hash) &&
         hasGraphEdge(graph, 'INFORMED_BY', execution.record_hash, decision.record_hash),
       ),
     )

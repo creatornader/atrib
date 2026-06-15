@@ -2,9 +2,10 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "atrib-cloudflare",
   "main": "src/index.ts",
-  "compatibility_date": "2026-05-27",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_date": "2026-06-11",
+  "compatibility_flags": ["nodejs_compat", "experimental"],
   "workers_dev": true,
+  "worker_loaders": [{ "binding": "LOADER" }],
   "observability": {
     "enabled": true,
   },
@@ -23,13 +24,14 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["ApprovalTraceAgent", "ApprovalActionMcp"],
+      "new_sqlite_classes": ["ApprovalTraceAgent", "ApprovalActionMcp", "CodemodeRuntime"],
     },
   ],
   "vars": {
     "ATRIB_LOG_ENDPOINT": "https://log.atrib.dev/v1/entries",
     "ATRIB_AGENT_SERVER_URL": "mcp://atrib-cloudflare/agent",
     "ATRIB_ACTION_MCP_SERVER_URL": "mcp://atrib-cloudflare/action",
+    "ATRIB_CODEMODE_SERVER_URL": "codemode://atrib-cloudflare/runtime",
   },
   "secrets": {
     "required": [

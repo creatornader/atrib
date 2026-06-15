@@ -3,6 +3,21 @@
 import { Agent, getAgentByName } from 'agents'
 import { McpAgent, RPCClientTransport } from 'agents/mcp'
 import { genericObservability } from 'agents/observability'
+import {
+  CodemodeConnector,
+  CodemodeRuntime as CloudflareCodemodeRuntime,
+  DynamicWorkerExecutor,
+  createCodemodeRuntime,
+  type CodemodeRuntimeHandle,
+  type ConnectorTools,
+  type ExecuteOptions,
+  type ExecuteResult,
+  type ExecutionState,
+  type Executor,
+  type PendingAction,
+  type ProxyToolOutput,
+  type ResolvedProvider,
+} from '@cloudflare/codemode'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -36,7 +51,8 @@ type WorkflowStatus =
   | 'succeeded'
   | 'failed'
 type Decision = 'approved' | 'rejected' | 'changes_requested' | null
-type SignerRole = 'agent' | 'human' | 'action_mcp'
+type SignerRole = 'agent' | 'human' | 'action_mcp' | 'codemode_runtime'
+type CodeModeExecutorMode = 'dynamic-worker' | 'local-test'
 
 interface Env {
   ATRIB_AGENT_PRIVATE_KEY: string
@@ -45,9 +61,12 @@ interface Env {
   ATRIB_LOG_ENDPOINT?: string
   ATRIB_AGENT_SERVER_URL?: string
   ATRIB_ACTION_MCP_SERVER_URL?: string
+  ATRIB_CODEMODE_SERVER_URL?: string
   OPENAI_API_KEY?: string
   OPENAI_BASE_URL?: string
   OPENAI_MODEL?: string
+  ATRIB_CODEMODE_EXECUTOR?: string
+  LOADER: WorkerLoader
   ApprovalTraceAgent: DurableObjectNamespace<ApprovalTraceAgent>
   ApprovalActionMcp: DurableObjectNamespace<ApprovalActionMcp>
 }
@@ -174,6 +193,7 @@ interface ListedActionRecord {
 
 const TEXT_ENCODER = new TextEncoder()
 const STABLE_CONNECTOR_ID = 'cloudflare-demo-repository-write-mcp'
+const CODEMODE_RUNTIME_ID = 'cloudflare-demo-codemode-runtime'
 const LOG_BASE_URL = 'https://log.atrib.dev/v1'
 const DEFAULT_TRIGGER_PROMPT =
   'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.'
@@ -272,6 +292,9 @@ function randomParentId(): string {
 function serverUrl(env: Env, role: SignerRole): string {
   if (role === 'action_mcp') {
     return env.ATRIB_ACTION_MCP_SERVER_URL ?? 'mcp://atrib-cloudflare/action'
+  }
+  if (role === 'codemode_runtime') {
+    return env.ATRIB_CODEMODE_SERVER_URL ?? 'codemode://atrib-cloudflare/runtime'
   }
   return env.ATRIB_AGENT_SERVER_URL ?? 'mcp://atrib-cloudflare/agent'
 }
@@ -486,7 +509,7 @@ function revisedPlanFromFeedback(
     action: 'Prepare revised Code Mode-shaped repository side effect',
     summary:
       'Revise the repository file update after human feedback by keeping the guard scoped to the reported route.',
-    risk: 'Narrows the limiter to /v1/report and lowers the default cap before any MCP write runs.',
+    risk: 'Narrows the limiter to /v1/report and lowers the default cap before any Code Mode write runs.',
     payload: {
       ...priorPayload,
       version: priorPayload.version + 1,
@@ -669,7 +692,7 @@ function tracePacket(
       {
         name: 'Signer separation',
         evidence:
-          'Agent, human reviewer, and action MCP records use separate keys so autonomy and approval do not blur.',
+          'Agent, human reviewer, and CodemodeRuntime records use separate keys so autonomy and approval do not blur.',
         evidence_labels: [...new Set(parsed.map((entry) => entry.signer))],
       },
     ],
@@ -684,7 +707,7 @@ function tracePacket(
         'prior workflow trigger',
         'message lifecycle',
         'human approval gate',
-        'MCP tool execution',
+        'Code Mode tool execution',
         'tool result and diagnostic',
         'public verification',
       ],
@@ -698,6 +721,399 @@ function tracePacket(
     })),
   }
 }
+
+interface CodeModeRunInput {
+  runId: string
+  payload: PlannedAction['payload']
+  payloadHash: string
+  forceError?: boolean
+  executorMode?: CodeModeExecutorMode
+}
+
+interface StartedCodeModeRun {
+  output: ProxyToolOutput
+  pendingAction: PendingAction
+  executionState: ExecutionState | null
+  codeHash: string
+  executorMode: CodeModeExecutorMode
+}
+
+interface CodeModeToolArgs {
+  run_id: string
+  stable_connector_id: string
+  payload_digest: string
+  payload: PlannedAction['payload']
+  force_error?: boolean
+}
+
+interface CodeModeValidationError extends Record<string, unknown> {
+  status: 'error'
+  error: string
+  diagnostic: string
+  changed_rows: []
+}
+
+function codeModeScript(input: CodeModeRunInput): string {
+  const args = {
+    run_id: input.runId,
+    stable_connector_id: CODEMODE_RUNTIME_ID,
+    payload_digest: input.payloadHash.replace(/^sha256:/u, ''),
+    payload: input.payload,
+    force_error: input.forceError === true,
+  }
+  return `async () => {
+  const args = ${JSON.stringify(args, null, 2)};
+  const preview = await repository.preview_file_update(args);
+  if (preview.status !== "ready") {
+    throw new Error("Repository preview failed: " + JSON.stringify(preview));
+  }
+  const execution = await repository.write_file(args);
+  return {
+    preview,
+    execution,
+    changed_rows: execution.changed_rows ?? [],
+  };
+}`
+}
+
+function parseCodeModeScriptArgs(code: string): CodeModeToolArgs | null {
+  const match = code.match(/const args = ([\s\S]*?);\n\s*const preview/u)
+  if (!match?.[1]) return null
+  const parsed = JSON.parse(match[1]) as unknown
+  return isCodeModeToolArgs(parsed) ? parsed : null
+}
+
+function isCodeModeToolArgs(value: unknown): value is CodeModeToolArgs {
+  const args = value as Partial<CodeModeToolArgs>
+  return (
+    typeof args === 'object' &&
+    args !== null &&
+    typeof args.run_id === 'string' &&
+    typeof args.stable_connector_id === 'string' &&
+    typeof args.payload_digest === 'string' &&
+    typeof args.payload === 'object' &&
+    args.payload !== null
+  )
+}
+
+function isCodeModeValidationError(value: unknown): value is CodeModeValidationError {
+  return (value as { status?: unknown }).status === 'error'
+}
+
+function codeModeRuntimeName(runId: string): string {
+  return `approval-trace.${runId}`
+}
+
+function codeModeExecutorForRequest(
+  requestUrl: URL,
+  requestedMode?: CodeModeExecutorMode,
+): CodeModeExecutorMode {
+  if (requestedMode === 'dynamic-worker' || requestedMode === 'local-test') return requestedMode
+  return requestUrl.hostname.endsWith('.workers.dev') ? 'dynamic-worker' : 'local-test'
+}
+
+function codeModeLogSummary(state: ExecutionState | null): Array<Record<string, unknown>> {
+  return (state?.log ?? []).map((entry) => ({
+    seq: entry.seq,
+    connector: entry.connector,
+    method: entry.method,
+    state: entry.state,
+    requires_approval: entry.requiresApproval,
+    args_hash: hashUnknown(entry.args),
+    result_hash: entry.result === undefined ? null : hashUnknown(entry.result),
+  }))
+}
+
+function codeModePendingActionFromBody(body: unknown): PendingAction | null {
+  const pending = (body as { codemode?: { pending_action?: unknown } } | null)?.codemode
+    ?.pending_action
+  if (!pending || typeof pending !== 'object') return null
+  const candidate = pending as Partial<PendingAction>
+  if (
+    typeof candidate.executionId !== 'string' ||
+    typeof candidate.seq !== 'number' ||
+    typeof candidate.connector !== 'string' ||
+    typeof candidate.method !== 'string'
+  ) {
+    return null
+  }
+  return candidate as PendingAction
+}
+
+function codeModeResultBody(output: ProxyToolOutput): Record<string, unknown> {
+  if (output.status === 'completed') {
+    const result = output.result as { execution?: Record<string, unknown>; changed_rows?: unknown }
+    const execution = result?.execution
+    return {
+      status: execution?.status ?? 'success',
+      diagnostic:
+        execution?.diagnostic ??
+        'CodemodeRuntime resumed the approved repository update and completed.',
+      error: execution?.error ?? null,
+      changed_rows: Array.isArray(execution?.changed_rows)
+        ? execution.changed_rows
+        : Array.isArray(result?.changed_rows)
+          ? result.changed_rows
+          : [],
+      execution_result: result,
+    }
+  }
+  if (output.status === 'error') {
+    return {
+      status: 'error',
+      diagnostic: output.error,
+      changed_rows: [],
+      error: output.error,
+    }
+  }
+  return {
+    status: 'paused',
+    diagnostic: 'CodemodeRuntime paused again for another approval.',
+    changed_rows: [],
+    pending: output.pending,
+  }
+}
+
+class LocalCodeModeExecutor implements Executor {
+  async execute(
+    code: string,
+    _providersOrFns: ResolvedProvider[] | Record<string, (...args: unknown[]) => Promise<unknown>>,
+    options?: ExecuteOptions,
+  ): Promise<ExecuteResult> {
+    const repository = options?.connectors?.find((connector) => connector.name === 'repository')
+      ?.binding
+    if (!repository) return { result: undefined, error: 'repository connector unavailable' }
+    try {
+      const args = parseCodeModeScriptArgs(code)
+      if (!args) return { result: undefined, error: 'unsupported local Code Mode script' }
+      const preview = await repository.callTool('preview_file_update', args)
+      const previewControl = codeModeControl(preview)
+      if (previewControl === 'pause') return { result: undefined, error: '__CODEMODE_PAUSE__' }
+      if (previewControl === 'error') return { result: undefined, error: codeModeControlMessage(preview) }
+      const execution = await repository.callTool('write_file', args)
+      const executionControl = codeModeControl(execution)
+      if (executionControl === 'pause') return { result: undefined, error: '__CODEMODE_PAUSE__' }
+      if (executionControl === 'error') {
+        return { result: undefined, error: codeModeControlMessage(execution) }
+      }
+      return {
+        result: {
+          preview,
+          execution,
+          changed_rows:
+            typeof execution === 'object' &&
+            execution !== null &&
+            Array.isArray((execution as { changed_rows?: unknown }).changed_rows)
+              ? (execution as { changed_rows: unknown[] }).changed_rows
+              : [],
+        },
+        logs: ['local deterministic Code Mode executor'],
+      }
+    } catch (error) {
+      return {
+        result: undefined,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+}
+
+function codeModeControl(value: unknown): 'pause' | 'error' | null {
+  const control = (value as { __codemode_control__?: unknown } | null)?.__codemode_control__
+  if (control === 'pause' || control === 'error') return control
+  return null
+}
+
+function codeModeControlMessage(value: unknown): string {
+  const message = (value as { message?: unknown } | null)?.message
+  return typeof message === 'string' ? message : 'Code Mode connector returned an error'
+}
+
+class RepositoryCodeModeConnector extends CodemodeConnector<Env> {
+  name(): string {
+    return 'repository'
+  }
+
+  protected instructions(): string {
+    return [
+      'Use this connector for the demo repository file update.',
+      'Call preview_file_update before write_file.',
+      'write_file pauses for human approval through CodemodeRuntime before it mutates storage.',
+    ].join(' ')
+  }
+
+  protected tools(): ConnectorTools {
+    return {
+      preview_file_update: {
+        description: 'Preview the repository file update before the approval-required write.',
+        inputSchema: repositoryActionSchema(),
+        execute: (args) => this.previewFileUpdate(args),
+      },
+      write_file: {
+        description: 'Apply the approved repository file update to Durable Object SQLite.',
+        inputSchema: repositoryActionSchema(),
+        requiresApproval: true,
+        execute: (args, ctx) => this.writeFile(args, ctx?.executionId ?? 'unknown'),
+      },
+    }
+  }
+
+  private previewFileUpdate(args: unknown): Record<string, unknown> {
+    const validation = this.validateArgs(args)
+    if (isCodeModeValidationError(validation)) return validation
+    const p = validation.payload
+    return {
+      status: 'ready',
+      diagnostic: 'Preview confirms one repository file would change.',
+      changed_rows: [`repo_files.${p.target_file}`],
+      before: p.before,
+      after: p.after,
+      diff: p.diff,
+    }
+  }
+
+  private writeFile(args: unknown, executionId: string): Record<string, unknown> {
+    const validation = this.validateArgs(args)
+    if (isCodeModeValidationError(validation)) return validation
+    const workflow = this.workflow(validation.run_id)
+    if (!workflow) {
+      return {
+        status: 'error',
+        error: 'workflow_missing',
+        diagnostic: 'CodemodeRuntime could not find the workflow row for this run.',
+        changed_rows: [],
+      }
+    }
+    if (workflow.payload_hash !== `sha256:${validation.payload_digest}`) {
+      return {
+        status: 'error',
+        error: 'workflow_payload_hash_mismatch',
+        diagnostic: 'The workflow payload hash does not match the paused Code Mode action.',
+        changed_rows: [],
+        expected_hash: workflow.payload_hash,
+      }
+    }
+    if (!workflow.decision_record_hash || workflow.decision !== 'approved') {
+      return {
+        status: 'error',
+        error: 'approval_missing',
+        diagnostic: 'The repository write resumed before a human approval record existed.',
+        changed_rows: [],
+      }
+    }
+    if (validation.force_error === true) {
+      return {
+        status: 'error',
+        error: 'repository_file_version_conflict',
+        diagnostic: 'The repository file changed after approval.',
+        changed_rows: [],
+        approval_record_hash: workflow.decision_record_hash,
+        execution_id: executionId,
+      }
+    }
+    const p = validation.payload
+    this.ensureRepoSchema()
+    this.storage.exec(
+      `
+        INSERT OR REPLACE INTO repo_files
+          (file_path, repository, operation, state_json, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+      `,
+      p.target_file,
+      p.repository,
+      p.operation,
+      JSON.stringify(p.after),
+      Date.now(),
+    )
+    return {
+      status: 'success',
+      diagnostic: 'Durable Object SQLite demo repository file row updated.',
+      changed_rows: [`repo_files.${p.target_file}`],
+      approval_record_hash: workflow.decision_record_hash,
+      execution_id: executionId,
+      after: p.after,
+    }
+  }
+
+  private validateArgs(args: unknown):
+    | CodeModeToolArgs
+    | CodeModeValidationError {
+    if (!isCodeModeToolArgs(args)) {
+      return {
+        status: 'error',
+        error: 'invalid_args',
+        diagnostic: 'Code Mode repository action args did not match the expected schema.',
+        changed_rows: [],
+      }
+    }
+    if (args.stable_connector_id !== CODEMODE_RUNTIME_ID) {
+      return {
+        status: 'error',
+        error: 'stable_connector_mismatch',
+        diagnostic: 'The Code Mode connector id did not match the signed approval trace.',
+        changed_rows: [],
+      }
+    }
+    const expectedHash = hashUnknown(args.payload)
+    if (expectedHash.replace(/^sha256:/u, '') !== args.payload_digest) {
+      return {
+        status: 'error',
+        error: 'payload_hash_mismatch',
+        diagnostic: 'The payload no longer matches the paused Code Mode action.',
+        changed_rows: [],
+      }
+    }
+    return args
+  }
+
+  private workflow(runId: string): WorkflowRow | null {
+    const rows = this.storage
+      .exec<Record<string, SqlStorageValue>>(
+        `
+          SELECT *
+          FROM workflows
+          WHERE run_id = ?
+          LIMIT 1
+        `,
+        runId,
+      )
+      .toArray()
+    return (rows[0] as unknown as WorkflowRow | undefined) ?? null
+  }
+
+  private ensureRepoSchema(): void {
+    this.storage.exec(`
+      CREATE TABLE IF NOT EXISTS repo_files (
+        file_path TEXT PRIMARY KEY,
+        repository TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        state_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `)
+  }
+
+  private get storage(): SqlStorage {
+    return (this.ctx as unknown as DurableObjectState).storage.sql
+  }
+}
+
+function repositoryActionSchema(): Record<string, unknown> {
+  return {
+    type: 'object',
+    properties: {
+      run_id: { type: 'string' },
+      stable_connector_id: { type: 'string' },
+      payload_digest: { type: 'string' },
+      payload: { type: 'object' },
+      force_error: { type: 'boolean' },
+    },
+    required: ['run_id', 'stable_connector_id', 'payload_digest', 'payload'],
+    additionalProperties: false,
+  }
+}
+
+export class CodemodeRuntime extends CloudflareCodemodeRuntime {}
 
 export class ApprovalTraceAgent extends Agent<Env> {
   private ensureSchema(): void {
@@ -747,7 +1163,12 @@ export class ApprovalTraceAgent extends Agent<Env> {
     `
   }
 
-  async createProposal(input: { prompt: string; runId?: string }): Promise<unknown> {
+  async createProposal(input: {
+    prompt: string
+    runId?: string
+    forceError?: boolean
+    codeModeExecutor?: CodeModeExecutorMode
+  }): Promise<unknown> {
     this.ensureSchema()
     const runId = input.runId ?? crypto.randomUUID()
     const contextId = randomContextId()
@@ -857,6 +1278,13 @@ export class ApprovalTraceAgent extends Agent<Env> {
     })
     const plan = await planAction(this.env, input.prompt)
     const payloadHash = hashUnknown(plan.payload)
+    const codeMode = await this.startCodeModeExecution({
+      runId,
+      payload: plan.payload,
+      payloadHash,
+      forceError: input.forceError,
+      executorMode: input.codeModeExecutor,
+    })
     const body = {
       kind: 'agent_proposal',
       prompt: input.prompt,
@@ -865,11 +1293,21 @@ export class ApprovalTraceAgent extends Agent<Env> {
       action: plan.action,
       summary: plan.summary,
       risk: plan.risk,
-      stable_connector_id: STABLE_CONNECTOR_ID,
+      stable_connector_id: CODEMODE_RUNTIME_ID,
       proposed_payload_hash: payloadHash,
       proposed_payload: plan.payload,
+      codemode: {
+        runtime: 'CodemodeRuntime',
+        runtime_name: codeModeRuntimeName(runId),
+        execution_id: codeMode.output.executionId,
+        execution_status: codeMode.output.status,
+        executor: codeMode.executorMode,
+        pending_action: codeMode.pendingAction,
+        code_hash: codeMode.codeHash,
+        log: codeModeLogSummary(codeMode.executionState),
+      },
       approval_question:
-        'Should the agent write this repository file update and resume MCP execution?',
+        'Should the agent write this repository file update and resume Code Mode execution?',
     }
     this.saveNativeEvent(
       runId,
@@ -952,6 +1390,80 @@ export class ApprovalTraceAgent extends Agent<Env> {
     return this.getRun(runId)
   }
 
+  private codeModeRuntime(
+    runId: string,
+    executorMode: CodeModeExecutorMode = 'local-test',
+  ): CodemodeRuntimeHandle {
+    const executor =
+      executorMode === 'local-test'
+        ? new LocalCodeModeExecutor()
+        : new DynamicWorkerExecutor({ loader: this.env.LOADER })
+    return createCodemodeRuntime({
+      ctx: this.ctx,
+      name: codeModeRuntimeName(runId),
+      executor,
+      connectors: [new RepositoryCodeModeConnector(this.ctx, this.env)],
+    })
+  }
+
+  private async startCodeModeExecution(input: CodeModeRunInput): Promise<StartedCodeModeRun> {
+    const executorMode = input.executorMode ?? 'local-test'
+    const runtime = this.codeModeRuntime(input.runId, executorMode)
+    const code = codeModeScript(input)
+    const tool = runtime.tool({
+      connectorHints: {
+        repository: 'Preview and apply the Cloudflare Workers repository file update.',
+      },
+    }) as unknown as {
+      execute?: (args: { code: string }) => Promise<ProxyToolOutput>
+    }
+    if (!tool.execute) throw new Error('CodemodeRuntime tool execute function is unavailable')
+    const output = await tool.execute({ code })
+    if (output.status !== 'paused') {
+      throw new Error(`Code Mode run did not pause for approval: ${JSON.stringify(output)}`)
+    }
+    const pendingAction = output.pending.find(
+      (action) => action.connector === 'repository' && action.method === 'write_file',
+    )
+    if (!pendingAction) {
+      throw new Error(`Code Mode run paused without repository.write_file: ${JSON.stringify(output)}`)
+    }
+    return {
+      output,
+      pendingAction,
+      executionState: await this.getCodeModeExecution(runtime, output.executionId),
+      codeHash: hashUnknown(code),
+      executorMode,
+    }
+  }
+
+  private async getCodeModeExecution(
+    runtime: CodemodeRuntimeHandle,
+    executionId: string,
+  ): Promise<ExecutionState | null> {
+    const executions = await runtime.executions(25)
+    return executions.find((execution) => execution.id === executionId) ?? null
+  }
+
+  private currentProposalBody(workflow: WorkflowRow): Record<string, unknown> | null {
+    const row = this.getRecordRows(workflow.run_id).find(
+      (record) => record.record_hash === workflow.proposal_record_hash,
+    )
+    if (!row?.body_json) return null
+    return JSON.parse(row.body_json) as Record<string, unknown>
+  }
+
+  private currentCodeModePendingAction(workflow: WorkflowRow): PendingAction | null {
+    return codeModePendingActionFromBody(this.currentProposalBody(workflow))
+  }
+
+  private currentCodeModeExecutor(workflow: WorkflowRow): CodeModeExecutorMode {
+    const executor = (this.currentProposalBody(workflow) as {
+      codemode?: { executor?: unknown }
+    } | null)?.codemode?.executor
+    return executor === 'local-test' ? 'local-test' : 'dynamic-worker'
+  }
+
   async approveRun(input: { runId: string; reason: string }): Promise<ApprovalContext> {
     this.ensureSchema()
     const workflow = this.getWorkflowRow(input.runId)
@@ -970,7 +1482,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       decision: 'approved',
       reason: input.reason,
       approved_payload_hash: workflow.payload_hash,
-      stable_connector_id: STABLE_CONNECTOR_ID,
+      stable_connector_id: CODEMODE_RUNTIME_ID,
       expires_at: new Date(approvalTimestamp + 1000 * 60 * 30).toISOString(),
     }
     const record = await signObservation({
@@ -1030,6 +1542,175 @@ export class ApprovalTraceAgent extends Agent<Env> {
     }
   }
 
+  async executeApprovedCodeModeRun(input: { runId: string }): Promise<{ failed: boolean }> {
+    this.ensureSchema()
+    const workflow = this.getWorkflowRow(input.runId)
+    if (!workflow) throw new Error(`run not found: ${input.runId}`)
+    if (workflow.decision !== 'approved' || !workflow.decision_record_hash) {
+      throw new Error('run has no signed approval for Code Mode resume')
+    }
+    const pending = this.currentCodeModePendingAction(workflow)
+    if (!pending) throw new Error('run has no Code Mode pending action to approve')
+    const runtime = this.codeModeRuntime(input.runId, this.currentCodeModeExecutor(workflow))
+    const output = await runtime.approve({ executionId: pending.executionId })
+    const state = await this.getCodeModeExecution(runtime, pending.executionId)
+    const executionTimestamp = runTimestamp(workflow.updated_at, 125)
+    const executionBody = {
+      kind: 'codemode_execution_resumed',
+      runtime: 'CodemodeRuntime',
+      runtime_name: codeModeRuntimeName(input.runId),
+      execution_id: pending.executionId,
+      pending_action: pending,
+      approval_record_hash: workflow.decision_record_hash,
+      approved_payload_hash: workflow.payload_hash,
+      output,
+      execution_state: state
+        ? {
+            id: state.id,
+            status: state.status,
+            created_at: state.createdAt,
+            updated_at: state.updatedAt,
+            log: codeModeLogSummary(state),
+            error: state.error,
+          }
+        : null,
+    }
+    const executionRecord = await signObservation({
+      env: this.env,
+      role: 'codemode_runtime',
+      key: privateKey(this.env.ATRIB_ACTION_MCP_PRIVATE_KEY),
+      contextId: workflow.context_id,
+      chainRoot: workflow.decision_record_hash,
+      toolName: 'codemode_execution',
+      body: executionBody,
+      informedBy: [workflow.proposal_record_hash, workflow.decision_record_hash],
+      timestamp: executionTimestamp,
+    })
+    const executionHash = recordHash(executionRecord)
+    await this.saveTraceRecord({
+      runId: input.runId,
+      label: 'execution',
+      signer: 'codemode_runtime',
+      record: executionRecord,
+      body: executionBody,
+      args: pending.args,
+      result: output,
+      proof: await submitRecord(this.env, executionRecord),
+    })
+
+    const resultBody = codeModeResultBody(output)
+    const outcomeTimestamp = runTimestamp(executionTimestamp, 125)
+    const outcomeBody = {
+      kind: 'execution_outcome',
+      ...resultBody,
+      runtime: 'CodemodeRuntime',
+      execution_id: pending.executionId,
+      execution_record_hash: executionHash,
+    }
+    const outcomeRecord = await signObservation({
+      env: this.env,
+      role: 'codemode_runtime',
+      key: privateKey(this.env.ATRIB_ACTION_MCP_PRIVATE_KEY),
+      contextId: workflow.context_id,
+      chainRoot: executionHash,
+      toolName: 'record_outcome',
+      body: outcomeBody,
+      informedBy: [executionHash],
+      timestamp: outcomeTimestamp,
+    })
+    await this.saveTraceRecord({
+      runId: input.runId,
+      label: 'outcome',
+      signer: 'codemode_runtime',
+      record: outcomeRecord,
+      body: outcomeBody,
+      proof: await submitRecord(this.env, outcomeRecord),
+    })
+    this.saveNativeEvent(
+      input.runId,
+      emitNativeEvent({
+        channel: 'agents:codemode',
+        type: output.status === 'completed' ? 'codemode:execution_completed' : 'codemode:error',
+        agent: 'ApprovalTraceAgent',
+        name: input.runId,
+        payload: {
+          executionId: pending.executionId,
+          status: output.status,
+          executionRecordHash: executionHash,
+        },
+        timestamp: outcomeTimestamp,
+      }),
+    )
+    return {
+      failed: output.status !== 'completed' || resultBody.status === 'error',
+    }
+  }
+
+  async rejectCurrentCodeModeRun(input: {
+    runId: string
+    reason: 'rejected' | 'changes_requested'
+  }): Promise<void> {
+    this.ensureSchema()
+    const workflow = this.getWorkflowRow(input.runId)
+    if (!workflow) throw new Error(`run not found: ${input.runId}`)
+    if (!workflow.decision_record_hash) return
+    const pending = this.currentCodeModePendingAction(workflow)
+    if (!pending) return
+    const runtime = this.codeModeRuntime(input.runId, this.currentCodeModeExecutor(workflow))
+    const terminated = await runtime.reject({
+      executionId: pending.executionId,
+      seq: pending.seq,
+    })
+    const state = await this.getCodeModeExecution(runtime, pending.executionId)
+    const timestamp = runTimestamp(workflow.updated_at, 125)
+    const body = {
+      kind: 'codemode_runtime_rejection',
+      runtime: 'CodemodeRuntime',
+      runtime_name: codeModeRuntimeName(input.runId),
+      reason: input.reason,
+      terminated,
+      execution_id: pending.executionId,
+      pending_action: pending,
+      decision_record_hash: workflow.decision_record_hash,
+      execution_status: state?.status ?? (terminated ? 'rejected' : 'unknown'),
+      log: codeModeLogSummary(state),
+    }
+    const record = await signObservation({
+      env: this.env,
+      role: 'codemode_runtime',
+      key: privateKey(this.env.ATRIB_ACTION_MCP_PRIVATE_KEY),
+      contextId: workflow.context_id,
+      chainRoot: workflow.decision_record_hash,
+      toolName: 'codemode_reject',
+      body,
+      informedBy: [workflow.decision_record_hash],
+      timestamp,
+    })
+    await this.saveTraceRecord({
+      runId: input.runId,
+      label: 'runtime_rejection',
+      signer: 'codemode_runtime',
+      record,
+      body,
+      proof: await submitRecord(this.env, record),
+    })
+    this.saveNativeEvent(
+      input.runId,
+      emitNativeEvent({
+        channel: 'agents:codemode',
+        type: 'codemode:execution_rejected',
+        agent: 'ApprovalTraceAgent',
+        name: input.runId,
+        payload: {
+          executionId: pending.executionId,
+          terminated,
+          reason: input.reason,
+        },
+        timestamp,
+      }),
+    )
+  }
+
   async rejectRun(input: { runId: string; reason: string }): Promise<unknown> {
     this.ensureSchema()
     const workflow = this.getWorkflowRow(input.runId)
@@ -1048,7 +1729,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       decision: 'rejected',
       reason: input.reason,
       approved_payload_hash: workflow.payload_hash,
-      stable_connector_id: STABLE_CONNECTOR_ID,
+      stable_connector_id: CODEMODE_RUNTIME_ID,
     }
     const record = await signObservation({
       env: this.env,
@@ -1130,10 +1811,10 @@ export class ApprovalTraceAgent extends Agent<Env> {
       feedback,
       requested_changes: [
         'Keep the rate-limit guard, but narrow the change to /v1/report only.',
-        'Return a revised proposal before the action MCP writes repository files.',
+        'Return a revised proposal before Code Mode writes repository files.',
       ],
       approved_payload_hash: workflow.payload_hash,
-      stable_connector_id: STABLE_CONNECTOR_ID,
+      stable_connector_id: CODEMODE_RUNTIME_ID,
       next_step: 'agent_revision',
     }
     const record = await signObservation({
@@ -1172,9 +1853,25 @@ export class ApprovalTraceAgent extends Agent<Env> {
         timestamp: reviewFeedbackTimestamp,
       }),
     )
+    this.sql`
+      UPDATE workflows
+      SET status = ${'changes_requested'},
+          decision = ${'changes_requested'},
+          decision_reason = ${feedback},
+          decision_record_hash = ${feedbackHash},
+          updated_at = ${reviewFeedbackTimestamp}
+      WHERE run_id = ${input.runId}
+    `
+    await this.rejectCurrentCodeModeRun({ runId: input.runId, reason: 'changes_requested' })
     const priorPayload = JSON.parse(workflow.payload_json) as PlannedAction['payload']
     const revision = revisedPlanFromFeedback(priorPayload, feedback)
     const revisionPayloadHash = hashUnknown(revision.payload)
+    const codeMode = await this.startCodeModeExecution({
+      runId: input.runId,
+      payload: revision.payload,
+      payloadHash: revisionPayloadHash,
+      executorMode: this.currentCodeModeExecutor(workflow),
+    })
     const revisionTimestamp = Math.max(
       Date.now(),
       workflow.created_at + TRACE_RECORD_OFFSETS_MS.revision,
@@ -1191,11 +1888,21 @@ export class ApprovalTraceAgent extends Agent<Env> {
       action: revision.action,
       summary: revision.summary,
       risk: revision.risk,
-      stable_connector_id: STABLE_CONNECTOR_ID,
+      stable_connector_id: CODEMODE_RUNTIME_ID,
       proposed_payload_hash: revisionPayloadHash,
       proposed_payload: revision.payload,
+      codemode: {
+        runtime: 'CodemodeRuntime',
+        runtime_name: codeModeRuntimeName(input.runId),
+        execution_id: codeMode.output.executionId,
+        execution_status: codeMode.output.status,
+        executor: codeMode.executorMode,
+        pending_action: codeMode.pendingAction,
+        code_hash: codeMode.codeHash,
+        log: codeModeLogSummary(codeMode.executionState),
+      },
       approval_question:
-        'Should the agent write this revised repository file update and resume MCP execution?',
+        'Should the agent write this revised repository file update and resume Code Mode execution?',
     }
     const revisionRecord = await signObservation({
       env: this.env,
@@ -1250,9 +1957,11 @@ export class ApprovalTraceAgent extends Agent<Env> {
 
   async markExecuting(runId: string): Promise<void> {
     this.ensureSchema()
+    const now = Date.now()
     this.sql`
       UPDATE workflows
-      SET status = ${'executing'}, updated_at = ${Date.now()}
+      SET status = ${'executing'},
+          updated_at = CASE WHEN updated_at > ${now} THEN updated_at ELSE ${now} END
       WHERE run_id = ${runId}
     `
   }
@@ -1385,6 +2094,31 @@ export class ApprovalTraceAgent extends Agent<Env> {
     }
   }
 
+  getRepositoryRows(filePath: string): Array<Record<string, unknown>> {
+    this.ensureSchema()
+    this.ensureRepoSchema()
+    return [
+      ...this.sql<{
+        file_path: string
+        repository: string
+        operation: string
+        state_json: string
+        updated_at: number
+      }>`
+      SELECT file_path, repository, operation, state_json, updated_at
+      FROM repo_files
+      WHERE file_path = ${filePath}
+      ORDER BY updated_at ASC
+    `,
+    ].map((row) => ({
+      file: row.file_path,
+      repository: row.repository,
+      operation: row.operation,
+      state: JSON.parse(row.state_json),
+      updated_at: row.updated_at,
+    }))
+  }
+
   async getRun(runId: string): Promise<unknown> {
     this.ensureSchema()
     const workflow = this.getWorkflowRow(runId)
@@ -1429,6 +2163,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       FROM trace_records
       WHERE run_id = ${runId}
       ORDER BY
+        created_at ASC,
         CASE label
           WHEN 'trigger' THEN 1
           WHEN 'triage' THEN 2
@@ -1442,10 +2177,21 @@ export class ApprovalTraceAgent extends Agent<Env> {
           WHEN 'outcome' THEN 9
           WHEN 'handoff' THEN 10
           ELSE 99
-        END ASC,
-        created_at ASC
+        END ASC
     `,
     ]
+  }
+
+  private ensureRepoSchema(): void {
+    this.sql`
+      CREATE TABLE IF NOT EXISTS repo_files (
+        file_path TEXT PRIMARY KEY,
+        repository TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        state_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `
   }
 
   private currentProposalTimestamp(workflow: WorkflowRow): number {
@@ -1991,13 +2737,20 @@ export default {
       if (url.pathname.startsWith('/action-mcp')) return actionMcpHandler.fetch(request, env, ctx)
 
       if (url.pathname === '/api/runs' && request.method === 'POST') {
-        const body = (await request.json()) as { prompt?: string; run_id?: string }
+        const body = (await request.json()) as {
+          prompt?: string
+          run_id?: string
+          simulate_error?: boolean
+          code_mode_executor?: CodeModeExecutorMode
+        }
         const runId = body.run_id ?? crypto.randomUUID()
         const agent = await getTraceAgent(env, runId)
         return json(
           await agent.createProposal({
             runId,
             prompt: body.prompt ?? DEFAULT_TRIGGER_PROMPT,
+            forceError: body.simulate_error === true,
+            codeModeExecutor: codeModeExecutorForRequest(url, body.code_mode_executor),
           }),
         )
       }
@@ -2040,12 +2793,7 @@ export default {
           reason: body.reason ?? 'Approved in the browser approval gate.',
         })
         await agent.markExecuting(runId)
-        const executed = await executeThroughActionMcp({
-          env,
-          approval,
-          simulateError: body.simulate_error === true,
-        })
-        await agent.captureActionRecords({ runId, records: executed.records })
+        const executed = await agent.executeApprovedCodeModeRun({ runId: approval.run_id })
         return json(await agent.finishRun({ runId, failed: executed.failed }))
       }
 
@@ -2059,12 +2807,12 @@ export default {
         if (current.status !== 'pending_approval') {
           return errorJson(new Error(`run is not pending approval: ${current.status}`))
         }
-        return json(
-          await agent.rejectRun({
-            runId,
-            reason: body.reason ?? 'Rejected in the browser approval gate.',
-          }),
-        )
+        await agent.rejectRun({
+          runId,
+          reason: body.reason ?? 'Rejected in the browser approval gate.',
+        })
+        await agent.rejectCurrentCodeModeRun({ runId, reason: 'rejected' })
+        return json(await agent.getRun(runId))
       }
 
       const requestChangesMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/request-changes$/u)
