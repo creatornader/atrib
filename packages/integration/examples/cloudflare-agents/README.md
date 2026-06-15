@@ -17,7 +17,7 @@ Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectur
 
 In a Worker, import from `@atrib/mcp/worker`. The package root also exports Node-only helpers for stdio proxying, local mirror reads, and host-side instrumentation. The Worker subpath keeps those modules out of the Cloudflare bundle.
 
-`Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)` (verified at `agents@0.13.3`). The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs. Subsequent tool calls go through atrib's interceptor for context propagation, inbound attribution-token consumption, unsigned gap-node tracking, and agent-side fallback transaction emission when the response matches a known commerce close signal.
+`Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)`. The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs. Subsequent tool calls go through atrib's interceptor for context propagation, inbound attribution-token consumption, unsigned gap-node tracking, and agent-side fallback transaction emission when the response matches a known commerce close signal. The Cloudflare example packages currently target `agents@0.16.0`.
 
 See `DECISIONS.md` [D022](../../../../DECISIONS.md#d022-cloudflare-agents-adapter-mcpagent-server-side-is-zero-code-agent-client-side-uses-attributecloudflareagentmcp-not-createatribproxy) for the full architectural rationale.
 
@@ -241,6 +241,12 @@ gate, and the execution path uses an `McpAgent` action surface wrapped with
 human decision over that payload, scoped resumed execution, signed outcome, and
 handoff trace. The UI focuses on the parts a reviewer needs first: decision
 context, signed decision chain, trustless audit, and signer separation.
+
+Current Cloudflare Code Mode has its own durable runtime approval surface. A
+native follow-up proof should wrap `CodemodeRuntime` pending actions and
+execution states directly. This example stays one layer outside that runtime on
+purpose: it shows the portable signed receipt envelope around the same
+proposal, decision, execution, and audit boundary.
 
 Run it with:
 

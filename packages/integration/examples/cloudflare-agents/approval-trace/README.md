@@ -21,6 +21,12 @@ human decision, execution resumes only through a scoped `McpAgent` action path,
 and the proposal, decision, execution, outcome, and handoff are signed as
 separate records.
 
+Cloudflare's current Code Mode runtime has its own durable approval and replay
+surface. This example does not replace that runtime. It shows the portable
+signed receipt envelope around the same boundary. A native follow-up should
+bind these records to `CodemodeRuntime` pending actions, approvals, rejections,
+and execution states directly.
+
 ## What this shows
 
 - A prior trigger starts the agent before the browser approval gate appears.

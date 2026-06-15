@@ -17,8 +17,9 @@
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
+    "@cloudflare/codemode": "^0.4.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "agents": "^0.14.5",
+    "agents": "^0.16.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
