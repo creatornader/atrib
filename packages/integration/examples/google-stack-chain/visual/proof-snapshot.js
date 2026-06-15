@@ -178,7 +178,7 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
   value_add: [
     'AP2 authorization evidence, A2A handoff evidence, and ADK runtime evidence are linked through verifier-resolved informed_by records.',
     'Public records expose hashes and record metadata while local artifacts or sidecars keep payment, task, and tool payload material inspectable by the host.',
-    'A support reviewer can see what was authorized, what was handed off, and what runtime action was signed before asking for a maintainer or counterparty decision.',
+    'A support reviewer can see what was authorized, what was handed off, and what runtime action was signed before resolving a support or counterparty decision.',
   ],
   caveats: [
     'This is a local explicit informed_by bridge, not a deployed Google managed runtime run or one shared context_id.',

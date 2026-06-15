@@ -376,10 +376,10 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
       privacy_boundary:
         'Public records expose hashes and record metadata while local artifacts or sidecars keep payment, task, and tool payload material inspectable by the host.',
       support_and_dispute_use:
-        'A support reviewer can see what was authorized, what was handed off, and what runtime action was signed before asking for a maintainer or counterparty decision.',
+        'A support reviewer can see what was authorized, what was handed off, and what runtime action was signed before resolving a support or counterparty decision.',
     },
     next_chunks: [
-      'Turn the proof chain into a public packet body only after the operator approves one route: AP2, A2A #1902, or ADK #5090.',
+      'Turn the proof chain into public proof material only after the target surface is refreshed and the evidence still matches.',
     ],
     caveats: [
       'This is a local explicit informed_by bridge, not a deployed Google managed runtime run or one shared context_id.',
