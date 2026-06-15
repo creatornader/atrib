@@ -277,6 +277,9 @@ importers:
       '@atrib/mcp':
         specifier: workspace:*
         version: link:../../../../mcp
+      '@cloudflare/codemode':
+        specifier: ^0.4.0
+        version: 0.4.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(ai@6.0.197(zod@4.4.3))(zod@4.4.3)
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
