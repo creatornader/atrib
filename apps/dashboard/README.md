@@ -45,7 +45,7 @@ CORS is configured on log-node, graph-node, directory-node, and archive-node (`A
 
 ## What this is NOT
 
-- **Not a personal dashboard.** This shows everybody's public data, not your account. There is no "logged-in user" concept. A separate authenticated personal-dashboard product is queued for after public outreach starts (tracked in operator memory, not in the repo).
+- **Not a personal dashboard.** This shows everybody's public data, not your account. There is no "logged-in user" concept. An authenticated personal dashboard would need a separate route and access model.
 - **Not a build artifact.** No transpilation, no bundling, no dependencies. The HTML file is the dashboard.
 - **Auto-refreshes.** The overview polls `/v1/recent` + `/v1/stats` + `/v1/checkpoint` every few seconds and prepends new entries without disrupting the user's loaded-older state. Detail views (identity, session, action, trace, anchoring) soft-refresh every 60s by re-running `route()`, long enough to avoid flicker, short enough that newly-arrived records become visible without a manual reload. Refresh pauses when the tab is backgrounded.
 

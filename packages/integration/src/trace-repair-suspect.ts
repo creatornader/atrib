@@ -168,26 +168,26 @@ async function createFixture(logServer: LogServer, nowMs: number): Promise<Trace
   const trustedCreatorKey = await publicKey(TRACE_AGENT_SEED)
   const planBody: TraceRepairStepBody = {
     role: 'plan',
-    label: 'plan-route',
-    action: 'choose follow-up route from prior outreach notes',
+    label: 'plan-review',
+    action: 'choose follow-up review path from current support notes',
     status: 'ok',
-    observation: 'operator approval is required before any external post',
-    repair_hint: 'prefer a route-specific packet over a broad launch post',
+    observation: 'fresh evidence is required before any external claim',
+    repair_hint: 'prefer a target-specific proof artifact over a broad release claim',
   }
-  const plan = await makeFixtureRecord(logServer, 'plan-route', planBody, nowMs - 3_000)
+  const plan = await makeFixtureRecord(logServer, 'plan-review', planBody, nowMs - 3_000)
 
   const toolBody: TraceRepairStepBody = {
     role: 'tool_action',
-    label: 'read-stale-route-draft',
-    action: 'load prior route draft before refreshing the target packet',
+    label: 'read-stale-proof-draft',
+    action: 'load prior proof draft before refreshing the target artifact',
     status: 'failed',
-    observation: 'the draft still points at broad community posting before partner proof',
-    error: 'stale route source selected',
-    repair_hint: 'refresh the target-native packet and rerun its proof before sending',
+    observation: 'the draft still points at broad release wording before verifier proof',
+    error: 'stale proof source selected',
+    repair_hint: 'refresh the target-native artifact and rerun its proof before review',
   }
   const tool = await makeFixtureRecord(
     logServer,
-    'read-stale-route-draft',
+    'read-stale-proof-draft',
     toolBody,
     nowMs - 2_000,
     [plan.record_hash],
@@ -196,15 +196,15 @@ async function createFixture(logServer: LogServer, nowMs: number): Promise<Trace
 
   const failureBody: TraceRepairStepBody = {
     role: 'failure',
-    label: 'diagnose-outreach-risk',
-    action: 'decide whether the route is safe to use',
+    label: 'diagnose-stale-proof-risk',
+    action: 'decide whether the proof artifact is safe to use',
     status: 'failed',
     observation: 'the action would cite stale evidence and skip same-day proof refresh',
     repair_hint: 'block the send and inspect the failed tool action first',
   }
   const failure = await makeFixtureRecord(
     logServer,
-    'diagnose-outreach-risk',
+    'diagnose-stale-proof-risk',
     failureBody,
     nowMs - 1_000,
     [tool.record_hash],
@@ -213,13 +213,13 @@ async function createFixture(logServer: LogServer, nowMs: number): Promise<Trace
 
   const staleBody: TraceRepairStepBody = {
     role: 'stale_prior',
-    label: 'old-launch-advice',
-    action: 'reuse launch-day community post guidance',
+    label: 'old-release-advice',
+    action: 'reuse old release-note guidance',
     status: 'superseded',
-    observation: 'the old advice predates the approval-ready partner packets',
-    repair_hint: 'do not cite this packet for current send decisions',
+    observation: 'the old advice predates the current verifier proof',
+    repair_hint: 'do not cite this packet for current review decisions',
   }
-  const stale = await makeFixtureRecord(logServer, 'old-launch-advice', staleBody, nowMs - 120_000)
+  const stale = await makeFixtureRecord(logServer, 'old-release-advice', staleBody, nowMs - 120_000)
 
   return {
     plan,
@@ -322,7 +322,7 @@ async function signDiagnosticOutcome(args: {
     top_suspect_hash: args.topSuspect.record_hash,
     rejected_stale_hash: args.stale.record_hash,
     reason_codes: args.topSuspect.reason_codes,
-    repair_guidance: 'refresh the target-native packet and proof before retrying the send',
+    repair_guidance: 'refresh the target-native artifact and proof before retrying review',
     caveat: 'suspect ranking is derived analyzer output; base graph edges remain structural',
   }
   const bodyHash = hashMaterial(body)

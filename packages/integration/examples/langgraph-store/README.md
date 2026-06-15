@@ -21,6 +21,6 @@ What it does not prove yet:
 
 - Python LangGraph store or checkpointer parity.
 - A hosted LangGraph Platform deployment.
-- Outreach approval to post in LangChain or LangGraph channels.
+- A current LangChain or LangGraph review target.
 
 The integration point is intentionally narrow: wrap the store boundary, not the workflow. Existing LangGraph code keeps its storage backend and graph shape.

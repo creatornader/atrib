@@ -31,17 +31,17 @@ const FOLLOWUP_CONTEXT_ID = 'f'.repeat(32)
 const MAX_AGE_MS = 60_000
 
 const CURRENT_BODY = {
-  task: 'Classify a support outreach target from current strategy evidence.',
-  target: 'trace eval maintainer',
+  task: 'Classify a support review target from current proof evidence.',
+  target: 'trace eval reviewer',
   finding: 'current-packet-says-use-public-verifier-example',
-  decision: 'send artifact after operator approval',
+  decision: 'share artifact after proof review passes',
 }
 
 const STALE_BODY = {
-  task: 'Classify a support outreach target from stale launch evidence.',
-  target: 'generic launch list',
-  finding: 'stale-packet-says-use-broad-community-post',
-  decision: 'do not use for current outreach',
+  task: 'Classify a support review target from stale release evidence.',
+  target: 'generic release list',
+  finding: 'stale-packet-says-use-broad-release-post',
+  decision: 'do not use for current review',
 }
 
 export type EvidencePacketEvalArm =
@@ -211,7 +211,7 @@ function armSpecs(fixture: EvalFixture): ArmSpec[] {
       expected: 'reject',
       packet: evidencePacket(fixture.currentHash, fixture.currentRecord, fixture.currentProof, {
         ...CURRENT_BODY,
-        decision: 'send broad community post without approval',
+        decision: 'share broad release post without proof review',
       }),
       trustedCreatorKeys: [fixture.trustedCreatorKey],
       expectedRejectionReasons: ['body_hash_mismatch'],

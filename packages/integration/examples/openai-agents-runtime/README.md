@@ -43,4 +43,4 @@ OpenAI tracing export. The handoff receipt follows
 [D073](../../../../DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr)'s
 extension-URI path; it is not a promoted handoff event byte and not a Pattern 3
 verifier-gated handoff packet. Those need their own proof packets before
-outreach can claim them.
+public claims cite them.

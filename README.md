@@ -290,7 +290,6 @@ Store the output as `ATRIB_PRIVATE_KEY`. The public key is derived at runtime.
 - [Architecture and trust model](ARCHITECTURE.md)
 - [Prior art and standards map](PRIOR-ART.md)
 - [Decision log](DECISIONS.md)
-- [AAuth evidence outreach packet](docs/outreach/aauth-evidence-packet.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## License

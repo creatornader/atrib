@@ -256,7 +256,7 @@ export async function runGoogleAdkPythonPluginSmoke(
     caveats: [
       'This proves local google-adk Python InMemoryRunner plugin callbacks, not Agent Platform Runtime or Gemini Enterprise deployment.',
       'It signs the Python ADK tool callback boundary, not BigQuery Agent Analytics event export, Memory Bank, or trajectory evaluation.',
-      'It does not prove upstream acceptance, maintainer interest, a hosted model call, or a production Google Cloud run.',
+      'It does not prove upstream acceptance, external adoption, a hosted model call, or a production Google Cloud run.',
     ],
   }
 }

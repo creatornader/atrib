@@ -20,7 +20,7 @@ What it does not prove yet:
 
 - `VectorMemoryBlock` retrieval or an external vector database. In this package version, `SimpleVectorStore` is not enough for that proof because it does not store nodes directly.
 - A full LlamaIndex agent or workflow.
-- LLM calls, hosted persistence, or maintainer interest.
-- Outreach approval to post in LlamaIndex channels.
+- LLM calls, hosted persistence, or external adoption.
+- A current LlamaIndex review target.
 
 The integration point is intentionally narrow: sign the memory commands at the host boundary, keep LlamaIndex storage and retrieval semantics intact, and keep private memory material out of public records.

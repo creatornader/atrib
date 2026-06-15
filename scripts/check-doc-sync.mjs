@@ -28,7 +28,10 @@ function readWorkspaceGlobs() {
   const out = []
   let inPackages = false
   for (const line of text.split('\n')) {
-    if (/^packages:\s*$/.test(line)) { inPackages = true; continue }
+    if (/^packages:\s*$/.test(line)) {
+      inPackages = true
+      continue
+    }
     if (inPackages) {
       const m = line.match(/^\s*-\s*['"]?([^'"\s]+)['"]?\s*$/)
       if (m) out.push(m[1])
@@ -42,9 +45,27 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const JSON_MODE = process.argv.slice(2).includes('--json')
 
 const NUMBER_WORDS = [
-  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
-  'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen',
-  'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty',
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+  'eleven',
+  'twelve',
+  'thirteen',
+  'fourteen',
+  'fifteen',
+  'sixteen',
+  'seventeen',
+  'eighteen',
+  'nineteen',
+  'twenty',
 ]
 
 const findings = []
@@ -61,6 +82,89 @@ function read(rel) {
 
 function lines(text) {
   return text.split('\n')
+}
+
+function listMarkdownFiles() {
+  const skipDirs = new Set([
+    'node_modules',
+    'dist',
+    'build',
+    '.git',
+    '.next',
+    '.turbo',
+    'wasm',
+    'pkg',
+    'target',
+    'coverage',
+  ])
+
+  function walkMd(rel) {
+    const out = []
+    const entries = readdirSync(join(ROOT, rel), { withFileTypes: true })
+    for (const e of entries) {
+      if (skipDirs.has(e.name)) continue
+      if (e.name.startsWith('.') && e.name !== '.changeset') continue
+      const sub = rel ? `${rel}/${e.name}` : e.name
+      if (e.isDirectory()) {
+        out.push(...walkMd(sub))
+      } else if (e.isFile() && e.name.endsWith('.md')) {
+        out.push(sub)
+      }
+    }
+    return out
+  }
+
+  return walkMd('')
+}
+
+function listPublicBoundaryFiles() {
+  const skipDirs = new Set([
+    'node_modules',
+    'dist',
+    'build',
+    '.git',
+    '.next',
+    '.turbo',
+    'wasm',
+    'pkg',
+    'target',
+    'coverage',
+  ])
+  const allowedExts = new Set([
+    '.md',
+    '.mdx',
+    '.txt',
+    '.ts',
+    '.tsx',
+    '.js',
+    '.mjs',
+    '.cjs',
+    '.json',
+    '.yaml',
+    '.yml',
+  ])
+  const skipFiles = new Set(['pnpm-lock.yaml', 'scripts/check-doc-sync.mjs'])
+
+  function walk(rel) {
+    const out = []
+    const entries = readdirSync(join(ROOT, rel), { withFileTypes: true })
+    for (const e of entries) {
+      if (skipDirs.has(e.name)) continue
+      if (e.name.startsWith('.') && e.name !== '.changeset') continue
+      const sub = rel ? `${rel}/${e.name}` : e.name
+      if (e.isDirectory()) {
+        out.push(...walk(sub))
+      } else if (e.isFile()) {
+        if (skipFiles.has(sub)) continue
+        const dot = e.name.lastIndexOf('.')
+        const ext = dot === -1 ? '' : e.name.slice(dot)
+        if (allowedExts.has(ext)) out.push(sub)
+      }
+    }
+    return out
+  }
+
+  return walk('')
 }
 
 // Returns one entry per regex match per line; preserves capture groups
@@ -88,9 +192,7 @@ function findLineMatches(filePath, pattern) {
 function checkEdgeTypeCount() {
   const check = 'edge-type-count'
   const claude = read('CLAUDE.md')
-  const m = claude.match(
-    /\*\*([A-Z][a-z]+) edge types,[^*]*\*\*\s*([\s\S]*?)Two implementations/
-  )
+  const m = claude.match(/\*\*([A-Z][a-z]+) edge types,[^*]*\*\*\s*([\s\S]*?)Two implementations/)
   if (!m) {
     fail(check, 'CLAUDE.md "Key technical decisions" edge type enumeration not found')
     return
@@ -101,16 +203,18 @@ function checkEdgeTypeCount() {
   // or doc filename roots (DECISIONS).
   const NON_EDGE_NOISE = new Set(['DECISIONS', 'ARCHITECTURE', 'CLAUDE'])
   const tokens = [...enumeration.matchAll(/\b([A-Z][A-Z0-9_]*[A-Z0-9])\b/g)]
-    .map(x => x[1])
-    .filter(t => t.length >= 4 && !/^D\d/.test(t) && !NON_EDGE_NOISE.has(t))
+    .map((x) => x[1])
+    .filter((t) => t.length >= 4 && !/^D\d/.test(t) && !NON_EDGE_NOISE.has(t))
   const distinctEdges = [...new Set(tokens)]
   const actualCount = distinctEdges.length
   const expectedWord = NUMBER_WORDS[actualCount]
 
   if (claimedWord !== expectedWord) {
-    fail(check,
+    fail(
+      check,
       `CLAUDE.md self-inconsistent: claims "${claimedWord} edge types" but enumeration has ${actualCount} distinct identifiers`,
-      { claimedWord, actualCount, distinctEdges })
+      { claimedWord, actualCount, distinctEdges },
+    )
     return
   }
 
@@ -124,9 +228,17 @@ function checkEdgeTypeCount() {
     for (const m of matches) {
       const found = m.match[1].toLowerCase()
       if (found !== expectedWord) {
-        fail(check,
+        fail(
+          check,
           `${t}:${m.lineNo} says "${m.match[0]}", expected "${expectedWord} edge types" (CLAUDE.md ground truth)`,
-          { file: t, line: m.lineNo, found, expected: expectedWord, snippet: m.line.trim().slice(0, 200) })
+          {
+            file: t,
+            line: m.lineNo,
+            found,
+            expected: expectedWord,
+            snippet: m.line.trim().slice(0, 200),
+          },
+        )
         mismatchCount += 1
       }
     }
@@ -147,22 +259,22 @@ function checkEdgeTypeCount() {
 function checkNodeTypeCount() {
   const check = 'node-type-count'
   const arch = read('ARCHITECTURE.md')
-  const m = arch.match(
-    /directed property multigraph with ([a-z]+) node types\s*\(([^)]+)\)/
-  )
+  const m = arch.match(/directed property multigraph with ([a-z]+) node types\s*\(([^)]+)\)/)
   if (!m) {
     fail(check, 'ARCHITECTURE.md authoritative node-type enumeration not found')
     return
   }
   const claimedWord = m[1].toLowerCase()
-  const nodeIds = [...m[2].matchAll(/`([a-z_][a-z0-9_]*)`/g)].map(x => x[1])
+  const nodeIds = [...m[2].matchAll(/`([a-z_][a-z0-9_]*)`/g)].map((x) => x[1])
   const actualCount = nodeIds.length
   const expectedWord = NUMBER_WORDS[actualCount]
 
   if (claimedWord !== expectedWord) {
-    fail(check,
+    fail(
+      check,
       `ARCHITECTURE.md self-inconsistent: claims "${claimedWord} node types" but enumeration has ${actualCount} identifiers`,
-      { claimedWord, actualCount, nodeIds })
+      { claimedWord, actualCount, nodeIds },
+    )
     return
   }
 
@@ -175,9 +287,17 @@ function checkNodeTypeCount() {
     for (const m of matches) {
       const found = m.match[1].toLowerCase()
       if (found !== expectedWord) {
-        fail(check,
+        fail(
+          check,
           `${t}:${m.lineNo} says "${m.match[0]}", expected "${expectedWord} node types"`,
-          { file: t, line: m.lineNo, found, expected: expectedWord, snippet: m.line.trim().slice(0, 200) })
+          {
+            file: t,
+            line: m.lineNo,
+            found,
+            expected: expectedWord,
+            snippet: m.line.trim().slice(0, 200),
+          },
+        )
         mismatchCount += 1
       }
     }
@@ -200,11 +320,13 @@ function checkNodeTypeCount() {
 function checkDashboardViewCount() {
   const check = 'dashboard-view-count'
   const html = read('apps/dashboard/index.html')
-  const routePattern = /if \((?:routePath|hash)(?:\.startsWith\('\/([A-Za-z0-9_-]+)\/?'?\)|\s*===\s*'\/([A-Za-z0-9_-]+)')/g
+  const routePattern =
+    /if \((?:routePath|hash)(?:\.startsWith\('\/([A-Za-z0-9_-]+)\/?'?\)|\s*===\s*'\/([A-Za-z0-9_-]+)')/g
   const routes = new Set()
   // The default `/` overview route is matched separately by the
   // empty/`/`/`/overview` branch.
-  if (/(?:routePath|hash) === '\/overview'|(?:routePath|hash) === '\/'/.test(html)) routes.add('overview')
+  if (/(?:routePath|hash) === '\/overview'|(?:routePath|hash) === '\/'/.test(html))
+    routes.add('overview')
   for (const m of html.matchAll(routePattern)) {
     const r = m[1] || m[2]
     if (r && r !== 'about') routes.add(r)
@@ -218,9 +340,16 @@ function checkDashboardViewCount() {
     const claimedWord = aboutMatch[1].toLowerCase()
     if (claimedWord !== expectedWord) {
       const lineNo = html.slice(0, html.indexOf(aboutMatch[0])).split('\n').length
-      fail(check,
+      fail(
+        check,
         `apps/dashboard/index.html:${lineNo} about-page heading says "${aboutMatch[1]} views", expected "${capitalize(expectedWord)} views"`,
-        { file: 'apps/dashboard/index.html', line: lineNo, found: claimedWord, expected: expectedWord })
+        {
+          file: 'apps/dashboard/index.html',
+          line: lineNo,
+          found: claimedWord,
+          expected: expectedWord,
+        },
+      )
     }
   }
 
@@ -234,9 +363,13 @@ function checkDashboardViewCount() {
     for (const m of matches) {
       const found = m.match[1].toLowerCase()
       if (found !== expectedWord) {
-        fail(check,
-          `${t}:${m.lineNo} says "${m.match[0]}", expected "${expectedWord} views"`,
-          { file: t, line: m.lineNo, found, expected: expectedWord, snippet: m.line.trim().slice(0, 200) })
+        fail(check, `${t}:${m.lineNo} says "${m.match[0]}", expected "${expectedWord} views"`, {
+          file: t,
+          line: m.lineNo,
+          found,
+          expected: expectedWord,
+          snippet: m.line.trim().slice(0, 200),
+        })
         mismatchCount += 1
       }
     }
@@ -269,7 +402,9 @@ function checkWorkspacePackages() {
         try {
           const pkg = JSON.parse(read(`${dir}/${e.name}/package.json`))
           expanded.push({ dir: `${dir}/${e.name}`, name: pkg.name, private: !!pkg.private })
-        } catch (_) { /* not a package */ }
+        } catch (_) {
+          /* not a package */
+        }
       }
     } else {
       try {
@@ -295,9 +430,11 @@ function checkWorkspacePackages() {
     }
   }
   if (missing.length > 0) {
-    fail(check,
+    fail(
+      check,
       `${missing.length} workspace package(s) missing from CLAUDE.md repository-structure tree`,
-      { missing: missing.map(p => p.dir) })
+      { missing: missing.map((p) => p.dir) },
+    )
   } else {
     ok(check, `all ${expanded.length} workspace packages present in CLAUDE.md tree`)
   }
@@ -306,7 +443,7 @@ function checkWorkspacePackages() {
   // CLAUDE.md's framing groups bullets explicitly: count those bullets and
   // verify the number-word claim matches.
   const monorepoMatch = claude.match(
-    /monorepo with \*\*([a-z]+) workspace packages\*\*:\s*\n([\s\S]*?)\n\n/
+    /monorepo with \*\*([a-z]+) workspace packages\*\*:\s*\n([\s\S]*?)\n\n/,
   )
   if (monorepoMatch) {
     const claimedWord = monorepoMatch[1].toLowerCase()
@@ -315,9 +452,11 @@ function checkWorkspacePackages() {
     const enumerated = [...bulletBlock.matchAll(/`@atrib\/[a-z-]+`/g)].length
     const expectedWord = NUMBER_WORDS[enumerated]
     if (claimedWord !== expectedWord) {
-      fail(check,
+      fail(
+        check,
         `CLAUDE.md "Monorepo" paragraph claims "${claimedWord} workspace packages" but enumerates ${enumerated} packages in its own bullets`,
-        { claimedWord, expected: expectedWord, enumerated })
+        { claimedWord, expected: expectedWord, enumerated },
+      )
     }
   }
 }
@@ -350,7 +489,7 @@ function checkPublishedPackageCount() {
       } catch (_) {}
     }
   }
-  const publicCount = allPkgs.filter(p => !p.private).length
+  const publicCount = allPkgs.filter((p) => !p.private).length
   const expectedWord = NUMBER_WORDS[publicCount]
 
   const readme = read('README.md')
@@ -361,9 +500,11 @@ function checkPublishedPackageCount() {
   }
   const claimedWord = m[1].toLowerCase()
   if (claimedWord !== expectedWord) {
-    fail(check,
+    fail(
+      check,
       `README.md says "${m[0]}", expected "${capitalize(expectedWord)} designed-public packages" (count from package.json private flags)`,
-      { found: claimedWord, expected: expectedWord, publicCount })
+      { found: claimedWord, expected: expectedWord, publicCount },
+    )
   } else {
     ok(check, `${publicCount} public packages, README agrees`)
   }
@@ -411,9 +552,7 @@ function checkConformanceCorpusConsistency() {
       continue
     }
     const declared = Array.isArray(manifest.cases) ? manifest.cases.length : 0
-    const declaredFiles = new Set(
-      (manifest.cases || []).map((c) => c.file).filter(Boolean),
-    )
+    const declaredFiles = new Set((manifest.cases || []).map((c) => c.file).filter(Boolean))
     let actualCount = 0
     const actualFiles = new Set()
     try {
@@ -427,9 +566,11 @@ function checkConformanceCorpusConsistency() {
       // No cases/ dir; manifest count of 0 is fine
     }
     if (declared !== actualCount) {
-      fail(check,
+      fail(
+        check,
         `${manifestPath}: manifest declares ${declared} cases, cases/ contains ${actualCount}`,
-        { declared, actual: actualCount, root })
+        { declared, actual: actualCount, root },
+      )
       mismatches++
       continue
     }
@@ -442,6 +583,54 @@ function checkConformanceCorpusConsistency() {
   }
   if (mismatches === 0) {
     ok(check, `${corpusRoots.length} conformance corpora consistent (cases/*.json ↔ manifest.json)`)
+  }
+}
+
+// ─── public-boundary wording ───────────────────────────────────────────────
+// Public repo text can describe external issues, release claims, and proof
+// artifacts. It should not publish operator route planning, packet status,
+// private review gates, or relationship strategy.
+function checkPublicBoundaryWording() {
+  const check = 'public-boundary-wording'
+  const rules = [
+    { label: 'outreach', pattern: /\boutreach\b/i },
+    { label: 'route packet', pattern: /\broute packet\b/i },
+    { label: 'route plan', pattern: /\broute plan\b/i },
+    { label: 'route artifact', pattern: /\broute artifact\b/i },
+    { label: 'source-backed route', pattern: /\bsource-backed route\b/i },
+    { label: 'no outreach sent', pattern: /\bno outreach sent\b/i },
+    { label: 'draft packet', pattern: /\bdraft packet\b/i },
+    { label: 'operator-approved', pattern: /\boperator-approved\b/i },
+    { label: 'operator memory', pattern: /\btracked in operator memory\b/i },
+    { label: 'partner pitch', pattern: /\b(?:partner|partnership) pitch\b/i },
+    { label: 'maintainer engagement', pattern: /\bengag(?:e|ing)\b.*\bmaintainers?\b/i },
+    { label: 'maintainer engagement', pattern: /\bmaintainers?\b.*\bengag(?:e|ing)\b/i },
+    { label: 'maintainer interest', pattern: /\bmaintainer interest\b/i },
+    { label: 'maintainer signal', pattern: /\bmaintainer signal\b/i },
+    { label: 'maintainer review', pattern: /\bmaintainer review\b/i },
+  ]
+
+  const files = listPublicBoundaryFiles()
+  let count = 0
+  for (const file of files) {
+    const rawLines = lines(read(file))
+    for (let i = 0; i < rawLines.length; i += 1) {
+      const line = rawLines[i]
+      for (const rule of rules) {
+        if (!rule.pattern.test(line)) continue
+        count += 1
+        fail(check, `${file}:${i + 1} contains public-boundary wording "${rule.label}"`, {
+          file,
+          line: i + 1,
+          label: rule.label,
+          snippet: line.trim().slice(0, 200),
+        })
+      }
+    }
+  }
+
+  if (count === 0) {
+    ok(check, `${files.length} text file(s) avoid route-planning wording`)
   }
 }
 
@@ -467,26 +656,7 @@ function checkInlineLinks() {
   const check = 'inline-links'
   const sectionAnchors = mineSectionAnchors()
   const adrAnchors = mineAdrAnchors()
-  const skipDirs = new Set(['node_modules', 'dist', 'build', '.git', '.next',
-    '.turbo', 'wasm', 'pkg', 'target', 'coverage'])
-
-  function walkMd(rel) {
-    const out = []
-    const entries = readdirSync(join(ROOT, rel), { withFileTypes: true })
-    for (const e of entries) {
-      if (skipDirs.has(e.name)) continue
-      if (e.name.startsWith('.') && e.name !== '.changeset') continue
-      const sub = rel ? `${rel}/${e.name}` : e.name
-      if (e.isDirectory()) {
-        out.push(...walkMd(sub))
-      } else if (e.isFile() && e.name.endsWith('.md')) {
-        out.push(sub)
-      }
-    }
-    return out
-  }
-
-  const files = walkMd('')
+  const files = listMarkdownFiles()
   const drifted = []
   const unmapped = []
   for (const rel of files) {
@@ -504,12 +674,18 @@ function checkInlineLinks() {
 
   if (drifted.length > 0) {
     for (const d of drifted) {
-      fail(check, `${d.file}:${d.line} bare ref "${d.text}", anchor exists, should be inline-linked`,
-        { file: d.file, line: d.line, text: d.text, snippet: d.snippet })
+      fail(
+        check,
+        `${d.file}:${d.line} bare ref "${d.text}", anchor exists, should be inline-linked`,
+        { file: d.file, line: d.line, text: d.text, snippet: d.snippet },
+      )
     }
     return
   }
-  ok(check, `${files.length} markdown file(s) clean (${unmapped.length} unmapped, typo/speculative refs allowed)`)
+  ok(
+    check,
+    `${files.length} markdown file(s) clean (${unmapped.length} unmapped, typo/speculative refs allowed)`,
+  )
 }
 
 function mineSectionAnchors() {
@@ -518,7 +694,10 @@ function mineSectionAnchors() {
   let inFence = false
   for (const line of text.split('\n')) {
     const s = line.trimStart()
-    if (s.startsWith('```') || s.startsWith('~~~')) { inFence = !inFence; continue }
+    if (s.startsWith('```') || s.startsWith('~~~')) {
+      inFence = !inFence
+      continue
+    }
     if (inFence) continue
     const h = s.match(/^#{1,6}\s+(.+?)\s*$/)
     if (!h) continue
@@ -536,7 +715,10 @@ function mineAdrAnchors() {
   let inFence = false
   for (const line of text.split('\n')) {
     const s = line.trimStart()
-    if (s.startsWith('```') || s.startsWith('~~~')) { inFence = !inFence; continue }
+    if (s.startsWith('```') || s.startsWith('~~~')) {
+      inFence = !inFence
+      continue
+    }
     if (inFence) continue
     const h = s.match(/^#{1,6}\s+(D\d{3})\b.*$/)
     if (h) out[h[1].toUpperCase()] = slugifyForAnchor(s.replace(/^#{1,6}\s+/, ''))
@@ -596,7 +778,10 @@ function scanFileForBareRefs(text) {
       const end = start + m[0].length
       let masked = false
       for (let k = start; k < end; k += 1) {
-        if (mask[k]) { masked = true; break }
+        if (mask[k]) {
+          masked = true
+          break
+        }
       }
       if (masked) continue
       if (m[0].startsWith('§')) {
@@ -629,7 +814,10 @@ function buildLinkMask(line) {
         if (depth === 0) break
         j += 1
       }
-      if (depth !== 0 || line[j + 1] !== '(') { i += 1; continue }
+      if (depth !== 0 || line[j + 1] !== '(') {
+        i += 1
+        continue
+      }
       let k = j + 2
       let pdepth = 1
       while (k < line.length && pdepth > 0) {
@@ -638,7 +826,10 @@ function buildLinkMask(line) {
         if (pdepth === 0) break
         k += 1
       }
-      if (pdepth !== 0) { i += 1; continue }
+      if (pdepth !== 0) {
+        i += 1
+        continue
+      }
       for (let m = i; m <= k; m += 1) mask[m] = 1
       i = k + 1
     } else {
@@ -679,6 +870,7 @@ const checks = [
   checkWorkspacePackages,
   checkPublishedPackageCount,
   checkConformanceCorpusConsistency,
+  checkPublicBoundaryWording,
   checkInlineLinks,
 ]
 
@@ -690,14 +882,20 @@ for (const c of checks) {
   }
 }
 
-const fails = findings.filter(f => f.level === 'fail')
-const passes = findings.filter(f => f.level === 'ok')
+const fails = findings.filter((f) => f.level === 'fail')
+const passes = findings.filter((f) => f.level === 'ok')
 
 if (JSON_MODE) {
-  console.log(JSON.stringify({
-    summary: { passed: passes.length, failed: fails.length },
-    findings,
-  }, null, 2))
+  console.log(
+    JSON.stringify(
+      {
+        summary: { passed: passes.length, failed: fails.length },
+        findings,
+      },
+      null,
+      2,
+    ),
+  )
 } else {
   for (const p of passes) {
     console.log(`  ok  ${p.check}: ${p.message}`)

@@ -272,7 +272,7 @@ export async function runBriefDcbenchEvidenceSmoke(
       'This proof does not call Brief CLI or Brief MCP.',
       'This proof does not run Claude Code or Brief against every dcbench task.',
       'Use DCBENCH_REPO to read task metadata from a local brief-hq/dcbench checkout.',
-      'Outreach still needs operator approval and a route-specific draft.',
+      'External review still needs a fresh proof-specific draft.',
     ],
   }
 }

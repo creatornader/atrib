@@ -62,6 +62,6 @@ describe('Brief dcbench evidence proof', () => {
 
     expect(result.source.kind).toBe('fixture')
     expect(result.caveats.join(' ')).toContain('does not call Brief CLI or Brief MCP')
-    expect(result.caveats.join(' ')).toContain('Outreach still needs operator approval')
+    expect(result.caveats.join(' ')).toContain('fresh proof-specific draft')
   })
 })

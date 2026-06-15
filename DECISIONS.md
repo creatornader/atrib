@@ -2349,7 +2349,7 @@ The right shape is a unified explorer that composes from the public read APIs. T
 
 **What this DOESN'T solve.**
 
-- _Personal dashboard._ Out of scope. Tracked separately as a future product item; needed before public outreach to users (not before).
+- _Personal dashboard._ Out of scope. Tracked separately as a future product item; needed before a public user-facing launch.
 - _Real-time updates._ Option 1 + 2 are pull-on-load; option 3 may add WebSocket or SSE for live updates.
 - _Search indexing at scale._ Option 1 + 2 do client-side filtering against API responses. Option 3 may need a server-side search index when the log volume makes client-side impractical.
 - _Internationalization._ Out of scope for option 1. Option 2/3 may add when the user base warrants.
@@ -5442,11 +5442,11 @@ handles file operations and controls storage. The current TypeScript SDK exposes
 docs describe this as a backend-swappable surface and tell implementers to
 restrict operations to `/memories`.
 
-The outreach program needed a finished artifact for the Anthropic Memory Tool
-lane, not only a strategy note. The previous plan said `@atrib/memory-tool`
-would implement a storage backend itself. Source-reading the SDK showed a
-cleaner shape for TypeScript: wrap any existing `MemoryToolHandlers` object and
-sign the commands around it.
+The useful public artifact is a package that proves the integration boundary,
+not a storage backend. The previous plan said `@atrib/memory-tool` would
+implement a storage backend itself. Source-reading the SDK showed a cleaner
+shape for TypeScript: wrap any existing `MemoryToolHandlers` object and sign the
+commands around it.
 
 **Decision.** Add `@atrib/memory-tool` as a public package that exports
 `createAtribMemoryTool()` and `attributeMemoryTool()`. The package wraps
@@ -5497,7 +5497,7 @@ still succeeds or fails according to the host's handler.
 
 **Consequences.**
 
-- The Anthropic Memory Tool outreach lane now has a runnable package artifact.
+- The Anthropic Memory Tool integration now has a runnable package artifact.
 - The integration composes with `BetaLocalFilesystemMemoryTool` and any custom
   handler object.
 - The package depends on the public `@atrib/mcp` signing, hashing, submission,
@@ -5600,12 +5600,12 @@ and [D100](#d100-log-submission-can-be-disabled-while-still-signing-and-running-
 
 **Context.** The existing Google ADK example proved the TypeScript package:
 `@google/adk` `InMemoryRunner`, `BasePlugin`, and `FunctionTool` can emit a
-hash-only atrib record at the tool callback boundary. Route research for the
-Google ADK outreach lane showed the stronger public channel is currently
-`google/adk-python`, whose `Ideas` and `Show and tell` discussions already
-cover provenance exporters, Ed25519 receipts, compliance plugins, memory, and
-authority receipts. The TypeScript proof was useful, but the route and artifact
-did not match.
+hash-only atrib record at the tool callback boundary. Source reading showed that
+the Python package is a stronger compatibility target for agent-runtime
+provenance, because `google/adk-python` already exposes discussion and example
+surfaces around provenance exporters, Ed25519 receipts, compliance plugins,
+memory, and authority receipts. The TypeScript proof was useful, but a Python
+proof better matches the runtime surface being evaluated.
 
 **Decision.** Add a sibling Python ADK proof at
 [`packages/integration/examples/google-adk-python/`](packages/integration/examples/google-adk-python/).
@@ -5642,11 +5642,11 @@ The signed record uses:
 
 **Consequences.**
 
-- The ADK outreach lane now has a Python artifact that matches the higher-signal
-  ADK Python route.
+- The ADK Python integration now has an artifact that matches the stronger
+  runtime surface.
 - The proof stays local and credential-free. It does not claim Agent Platform
   Runtime, Gemini Enterprise, BigQuery Agent Analytics, Memory Bank, trajectory
-  evaluation, hosted model calls, upstream acceptance, or maintainer interest.
+  evaluation, hosted model calls, upstream acceptance, or external adoption.
 - A later managed Google proof can pair the same callback boundary with ADK
   telemetry, BigQuery Agent Analytics event ids, Cloud Trace ids, Memory Bank
   events, or Agent Platform Runtime deployment ids.
@@ -5682,7 +5682,7 @@ verification for received handoff claims.
 That separation made the common path too easy to implement partially. A child
 could inherit the context but start a split chain, chain to the parent but lack
 an explicit parent edge, or cite a temp smoke/hash artifact as `informed_by`
-without proving the target record exists. The live outreach-master session
+without proving the target record exists. A live multi-agent dogfood session
 showed this failure class: the session itself was valid, but some downstream
 records preserved unresolved `INFORMED_BY` claims from local proof outputs.
 
@@ -5901,7 +5901,7 @@ evidence about dogfood sessions.
 **Alternatives rejected.**
 
 - _Forbid examples from writing public records._ Rejected. Public proof records
-  are useful for demos, explorer QA, and partner-facing artifacts.
+  are useful for demos, explorer QA, and external verifier review.
 - _Treat every example record as normal dogfood memory._ Rejected. That would
   pollute recall and make operator health checks confuse scripted proof traffic
   with lived agent history.
@@ -6096,10 +6096,6 @@ agent/resource/auth token cases, signature verification, `cnf` binding,
 expiry failures, mission and R3 evidence, `AAuth-Access` authorization coverage,
 and missing actor claims.
 
-The outreach path is artifact-first. The draft packet lives at
-[`docs/outreach/aauth-evidence-packet.md`](docs/outreach/aauth-evidence-packet.md).
-No external outreach is implied by this ADR.
-
 **Alternatives rejected.**
 
 - _Create an `aauth_authorization` event type._ Rejected. AAuth authorization is
@@ -6114,8 +6110,6 @@ No external outreach is implied by this ADR.
 - _Persist raw AAuth JWTs by default._ Rejected. Sidecars and archive evidence
   should preserve verifier facts and hashes by default. Raw tokens remain
   caller-owned sensitive material.
-- _Lead with a partnership pitch._ Rejected. The useful first contact is a small
-  source-backed artifact tied to AAuth's audit and non-repudiation questions.
 
 **Consequences.**
 
@@ -6124,8 +6118,8 @@ No external outreach is implied by this ADR.
 - The integration point is stable even if AAuth SDK event names change: producers
   can map any verified callback, verification result, or audit event into the
   same `protocol: "aauth"` evidence shape.
-- atrib has a concrete artifact for engaging AAuth maintainers: a verifier
-  adapter, conformance corpus, producer capture helper, and route packet.
+- atrib has a public technical artifact set: a verifier adapter, conformance
+  corpus, and producer capture helper.
 - Future work should wire the helper into a runnable AAuth TypeScript or .NET
   example before any stronger public claim.
 
@@ -6143,8 +6137,6 @@ No external outreach is implied by this ADR.
   capture helper coverage.
 - [`spec/conformance/5.5.6/aauth/`](spec/conformance/5.5.6/aauth/), offline
   AAuth evidence corpus.
-- [`docs/outreach/aauth-evidence-packet.md`](docs/outreach/aauth-evidence-packet.md),
-  draft outreach packet.
 
 ## D120: Local substrate coordinator keeps startup-spawn sidecars wrapper-owned
 
@@ -6396,7 +6388,7 @@ exported event under the agent's atrib key.
   It renders static proof packets from ActiveGraph, reference JSONL, dogfood,
   LangGraph, and OpenInference manifests, plus one invalid packet that exposes
   named issue codes.
-- ActiveGraph outreach can stay proof-gated. The claim becomes "atrib can verify
+- ActiveGraph claims stay proof-gated. The claim becomes "atrib can verify
   exported runtime-log windows when the export supports this manifest contract,"
   not "ActiveGraph needs atrib."
 - BabyAGI's own record or trace graph can remain its runtime-owned graph. atrib

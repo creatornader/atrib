@@ -25,7 +25,7 @@ What it does not prove yet:
 - LangGraph Platform deployment behavior.
 - Postgres, Redis, or other production checkpointer backends.
 - LangChain model calls, external tools, or hosted persistence.
-- Outreach approval to post in LangChain or LangGraph channels.
+- A current LangChain or LangGraph review target.
 
 The integration point is intentionally narrow: sign the checkpointer boundary so
 a stateful agent can prove which checkpoint transitions happened without

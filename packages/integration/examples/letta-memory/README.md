@@ -54,7 +54,7 @@ Postgres/vector-store run, or a real external MCP server execution. The manager
 classes are fakes, so the proof covers Letta's memory dispatch boundary and
 privacy posture, not Letta's production storage behavior.
 
-Outreach to Letta maintainers still needs operator approval after a same-day
-route refresh. The first issue should ask whether this is the right boundary for
-a guide, extension hook, or fixture. It should not claim adoption, hosted Letta
-coverage, or maintainer interest.
+A future Letta-facing review should start from a same-day proof refresh.
+The first issue should ask whether this is the right boundary for a guide,
+extension hook, or fixture. It should not claim adoption, hosted Letta
+coverage, or external adoption.
