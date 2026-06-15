@@ -225,28 +225,32 @@ verified record:
 
 ### Interactive approval trace
 
-The runnable example at [`approval-trace/`](approval-trace/) turns the two
-Cloudflare surfaces into a human approval workflow. It is framed as an
-approval-envelope proof for Code Mode-shaped side effects, not as native
-`@cloudflare/codemode` HITL:
+The runnable example at [`approval-trace/`](approval-trace/) turns a Cloudflare
+trigger into a human approval workflow backed by Code Mode runtime semantics:
 
 ```text
-operator request -> agent proposal -> human approval -> MCP execution -> signed outcome -> audit trace
+incoming trigger -> autonomous triage -> CodemodeRuntime approval halt -> human decision -> replayed execution -> signed outcome -> audit trace
 ```
 
 It is intentionally Cloudflare-shaped. The target system is a Durable Object
-SQLite table that models one DDoS ruleset row, the browser approval is the HITL
-gate, and the execution path uses an `McpAgent` action surface wrapped with
-`@atrib/mcp/worker`. The point is the signed boundary: exact proposal payload,
-human decision over that payload, scoped resumed execution, signed outcome, and
-handoff trace. The UI focuses on the parts a reviewer needs first: decision
-context, signed decision chain, trustless audit, and signer separation.
+SQLite table that models a repository file update, and the review gate pauses a
+Code Mode connector method marked with `requiresApproval: true`. Tests use a
+deterministic local executor with the same `createCodemodeRuntime` handle,
+connector approval metadata, pending action shape, approve/reject calls, and
+replay path. Production configuration uses `CodemodeRuntime`,
+`DynamicWorkerExecutor`, and a Worker Loader binding.
 
-Current Cloudflare Code Mode has its own durable runtime approval surface. A
-native follow-up proof should wrap `CodemodeRuntime` pending actions and
-execution states directly. This example stays one layer outside that runtime on
-purpose: it shows the portable signed receipt envelope around the same
-proposal, decision, execution, and audit boundary.
+The signed boundary is the point: exact proposal payload, generated code digest,
+human decision over that payload, resumed execution, outcome, and handoff trace.
+The UI focuses on the parts a reviewer needs first: trigger context, live
+progress, review state, signed decision chain, receipt inspection, and signer
+separation.
+
+Production deploys require Cloudflare Dynamic Workers access because Worker
+Loader is used by `DynamicWorkerExecutor`. On accounts without that access,
+`proof:worker` fails before publishing with Cloudflare error 10195. Local Worker
+tests and deploy dry-runs still exercise the Code Mode approval bridge without
+mutating a real Cloudflare production resource.
 
 Run it with:
 
