@@ -220,7 +220,7 @@ export async function runLangGraphPythonCheckpointerSmoke(): Promise<SmokeResult
     caveats: [
       'This proves Python LangGraph StateGraph checkpointing with InMemorySaver, not a LangGraph Platform deployment.',
       'It signs the checkpointer boundary, not LangChain model calls, external tools, or hosted persistence.',
-      'It does not prove Postgres checkpointer, Redis checkpointer, production storage, or maintainer interest.',
+      'It does not prove Postgres checkpointer, Redis checkpointer, production storage, or external adoption.',
     ],
   }
 }

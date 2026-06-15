@@ -34,5 +34,5 @@ hosted OpenAI API.
 
 This is not a hosted OpenAI model proof. It also does not prove Responses
 computer use, streaming, MCP tools, OpenAI conversations or sessions, tracing
-export, the Python SDK, maintainer interest, or upstream acceptance. Those need
-their own proof packets before outreach can claim them.
+export, the Python SDK, upstream acceptance, or external adoption. Those need
+their own proof packets before public claims cite them.

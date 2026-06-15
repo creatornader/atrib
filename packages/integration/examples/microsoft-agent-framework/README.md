@@ -49,5 +49,4 @@ ATRIB_RUN_MICROSOFT_AGENT_FRAMEWORK_SMOKE=1 pnpm --filter @atrib/integration tes
 This is a local Python workflow proof, not Azure AI Foundry Agent Service, a
 hosted Microsoft control plane, a C# workflow, Durable Task hosting, model
 provider execution, an MCP server, memory persistence, or production
-deployment. Those remain separate build gates before any managed-cloud outreach
-claim.
+deployment. Those remain separate build gates before any managed-cloud claim.

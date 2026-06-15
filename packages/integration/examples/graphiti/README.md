@@ -73,5 +73,5 @@ The source read on 2026-06-02 used `getzep/graphiti` commit
 `34f56e65e0fe2096132c8d16f3a1a4ac9300a5f6`. At that commit, Graphiti core
 exposes `Graphiti.add_episode(...)`, while the MCP server registers the
 ingestion tool as `add_memory` and fact search as `search_memory_facts`. This
-example targets the MCP server code path because the first outreach route is an
-RFC issue about MCP-facing signed episode provenance.
+example targets the MCP server code path because that is where MCP-facing signed
+episode provenance can be evaluated.

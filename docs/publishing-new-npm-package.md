@@ -256,10 +256,9 @@ After npm and GitHub agree:
     README.md ARCHITECTURE.md CLAUDE.md DOC-SYNC-TRIGGERS.md docs packages services
   ```
 
-- Update private outreach trackers from local-artifact status to published npm
-  artifact status.
+- Update release trackers from local-artifact status to published npm artifact
+  status.
 - Rerun the local preflight checks.
 - If a failed release run exists from the first-publish gap, rerun it after the
   package exists and trusted publishing is configured.
-- Send or queue the outreach packet only after the public install command works
-  from npm.
+- Share public install instructions only after the command works from npm.

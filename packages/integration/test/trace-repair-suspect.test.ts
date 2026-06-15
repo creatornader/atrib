@@ -21,7 +21,7 @@ describe('trace repair suspect example', () => {
     const [topSuspect, secondSuspect] = result.ranked_suspects
     expect(topSuspect).toMatchObject({
       rank: 1,
-      label: 'read-stale-route-draft',
+      label: 'read-stale-proof-draft',
       role: 'tool_action',
     })
     expect(topSuspect?.reason_codes).toEqual([
@@ -33,7 +33,7 @@ describe('trace repair suspect example', () => {
     ])
     expect(secondSuspect).toMatchObject({
       rank: 2,
-      label: 'plan-route',
+      label: 'plan-review',
       role: 'plan',
     })
 

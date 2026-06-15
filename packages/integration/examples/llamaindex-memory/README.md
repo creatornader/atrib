@@ -20,6 +20,6 @@ What it does not prove yet:
 
 - The Python package path. Use [`../llamaindex-python-memory/`](../llamaindex-python-memory/) for `llama_index.core.memory.Memory`.
 - Vector-store memory blocks with an external database.
-- Outreach approval to post in LlamaIndex channels.
+- A current LlamaIndex review target.
 
 The integration point is intentionally narrow: wrap the memory object, not the agent or workflow. Existing LlamaIndex code keeps its memory backend and retrieval shape.

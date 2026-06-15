@@ -73,8 +73,8 @@ Every example has a `README.md` next to it explaining what's wired up and which 
 ## Demo Record Treatment
 
 Example-generated records fall into three classes. Keep these classes separate
-when reading the public log, writing examples, or turning demo output into
-outreach proof.
+when reading the public log, writing examples, or turning demo output into a
+public proof artifact.
 
 | Class                       | Examples                                                                                                    | Treatment                                                                                                                                                                                                                                     |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

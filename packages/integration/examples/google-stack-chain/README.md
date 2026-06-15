@@ -65,18 +65,12 @@ The visual snapshot lives at [`visual/proof-snapshot.json`](visual/proof-snapsho
 so the workbench can also run from `file://`. When the proof script's pinned
 hashes change, update both files and rerun
 `pnpm --filter @atrib/integration test -- google-stack-chain-visual` before using
-the workbench in an outreach packet.
+the workbench as public proof material.
 
-For a hosted preview, this should deploy as a static site. Vercel or Cloudflare
+For a hosted preview, this can deploy as a static site. Vercel or Cloudflare
 Pages is enough; the Cloudflare approval-trace example needs a Worker because it
 has live workflow state, but this Google stack workbench only serves static
-HTML, CSS, JavaScript, and fixture data. Keep the hosted URL private or
-operator-approved until the outreach route is chosen.
-
-Current hosted preview:
-[`https://atrib-google.vercel.app`](https://atrib-google.vercel.app).
-It was deployed from the static `visual/` files with `vercel.json` disabling
-install and build steps.
+HTML, CSS, JavaScript, and fixture data.
 
 ## What it proves
 
@@ -89,7 +83,7 @@ install and build steps.
   boundary that informs by the A2A receiver follow-up while local sidecars keep
   the raw ADK payload inspectable.
 - These surfaces can be presented as one verifier story for support, audit, or
-  maintainer review.
+  external review.
 
 ## What it does not prove yet
 
