@@ -4412,6 +4412,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         const rows = [];
         const rejected = run.status === 'rejected';
         const changesRequested = run.status === 'changes_requested';
+        const rejectionRecord = rejected ? latestRecordByLabel(run, ['rejection']) : null;
         if (run.status === 'pending_approval' || (!labels.has('approval') && !labels.has('rejection') && !labels.has('change_request'))) {
           const proposal = latestProposalRecord(run);
           rows.push({
@@ -4426,14 +4427,31 @@ export function renderApp(options: { colo?: string } = {}): string {
         }
         if (!labels.has('execution')) {
           rows.push(rejected
-            ? { name: 'mcp.execution.skipped', detail: 'Blocked by signed rejection', marker: 'skipped', markerLabel: '4' }
+            ? {
+              name: 'mcp.execution.skipped',
+              detail: 'Blocked by signed rejection',
+              marker: 'skipped',
+              markerLabel: '4',
+              record: rejectionRecord,
+              displayLabel: 'rejection',
+              timeLabel: 'rejection',
+              hash: rejectionRecord?.record_hash,
+            }
             : changesRequested
               ? { name: 'agent.feedback.returned', detail: 'Feedback queued revision', marker: 'done' }
               : { name: 'mcp.execution.resumed', detail: 'Pending approval', marker: 'future', markerLabel: '4' });
         }
         if (!labels.has('handoff')) {
           rows.push(rejected
-            ? { name: 'decision.audit.ready', detail: 'Rejection receipt ready', marker: 'done' }
+            ? {
+              name: 'decision.audit.ready',
+              detail: rejectionRecord ? 'Rejection receipt ready' : 'Rejection recorded',
+              marker: 'done',
+              record: rejectionRecord,
+              displayLabel: 'rejection',
+              timeLabel: 'rejection',
+              hash: rejectionRecord?.record_hash,
+            }
             : changesRequested
               ? { name: 'revised.proposal.pending', detail: 'Awaiting revised proposal', marker: 'future', markerLabel: '5' }
               : { name: 'audit.ready', detail: 'Pending', marker: 'future', markerLabel: '5' });
@@ -5298,9 +5316,9 @@ export function renderApp(options: { colo?: string } = {}): string {
             }).join('')}
             \${futureTraceRows(run).map((row) => {
               const isCurrent = row.marker === 'pending';
-              if (isCurrent && row.record && row.hash) {
+              if (row.record && row.hash) {
                 return \`
-                <button class="event current" data-hash="\${row.hash}" data-label="\${row.displayLabel ?? row.name}" aria-current="step" aria-label="View receipt details for \${escapeHtml(row.name)}">
+                <button class="event \${isCurrent ? 'current' : ''}" data-hash="\${row.hash}" data-label="\${row.displayLabel ?? row.name}" \${isCurrent ? 'aria-current="step"' : ''} aria-label="View receipt details for \${escapeHtml(row.name)}">
                   <span class="event-marker \${row.marker}">\${row.markerLabel ?? ''}</span>
                   <span class="event-time">\${displayRecordTime(row.record, row.timeLabel ?? row.displayLabel)}</span>
                   <span class="event-copy">

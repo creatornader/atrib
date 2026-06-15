@@ -1812,7 +1812,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#answer')).toContainText('MCP execution skipped')
       await expect(page.locator('#answer')).toContainText('Decision audit ready')
       await expect(page.locator('#answer')).not.toContainText('Audit ready')
-      await expect(page.locator('#timeline .event')).toHaveCount(4)
+      await expect(page.locator('#timeline .event')).toHaveCount(6)
       await expect(page.locator('#timeline')).toContainText('mcp.execution.skipped')
       await expect(page.locator('#timeline')).toContainText('decision.audit.ready')
       await expect(page.locator('.signer-row').filter({ hasText: 'Action MCP' })).toContainText(
@@ -1823,7 +1823,11 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('[data-step="audit"]')).toContainText('Decision audit ready')
       await expect(page.locator('#receipts pre')).toContainText('"current_step": 3')
 
-      await openTimelineRecord(page, 'rejection')
+      await openTimelineRecord(page, 'human.rejection.signed', 'rejection')
+      await expect(page.locator('#receipts pre')).toContainText('"signer": "human"')
+      await expect(page.locator('#receipts pre')).toContainText('"decision": "rejected"')
+
+      await openTimelineRecord(page, 'decision.audit.ready', 'rejection')
       await expect(page.locator('#receipts pre')).toContainText('"signer": "human"')
       await expect(page.locator('#receipts pre')).toContainText('"decision": "rejected"')
     })
@@ -1873,7 +1877,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#answer')).toContainText('not run')
       await expect(page.locator('#answer')).toContainText('MCP execution skipped')
       await expect(page.locator('#answer')).toContainText('Decision audit ready')
-      await expect(page.locator('#timeline .event')).toHaveCount(6)
+      await expect(page.locator('#timeline .event')).toHaveCount(8)
       await expect(page.locator('#timeline')).toContainText('human.change_request.signed')
       await expect(page.locator('#timeline')).toContainText('proposal.revised')
       await expect(page.locator('#timeline')).toContainText('human.rejection.signed')
@@ -1884,7 +1888,11 @@ test.describe('Cloudflare approval trace browser UI', () => {
       )
       await expect(page.locator('#timeline')).not.toContainText('action_mcp')
 
-      await openTimelineRecord(page, 'rejection')
+      await openTimelineRecord(page, 'human.rejection.signed', 'rejection')
+      await expect(page.locator('#receipts pre')).toContainText('"signer": "human"')
+      await expect(page.locator('#receipts pre')).toContainText('"decision": "rejected"')
+
+      await openTimelineRecord(page, 'decision.audit.ready', 'rejection')
       await expect(page.locator('#receipts pre')).toContainText('"signer": "human"')
       await expect(page.locator('#receipts pre')).toContainText('"decision": "rejected"')
     })
