@@ -1,5 +1,12 @@
 # @atrib/integration
 
+## 0.0.34
+
+### Patch Changes
+
+- Updated dependencies [9c2e567]
+  - @atrib/runtime-log@0.2.0
+
 ## 0.0.33
 
 ### Patch Changes
