@@ -53,7 +53,7 @@ atrib/
     directory-bridge/          # atrib-directory-bridge: Rust crate wrapping facebook/akd via wasm-bindgen. Source-only; build artifacts ship inside @atrib/directory.
     openinference/             # @atrib/openinference: OpenTelemetry SpanProcessor consuming OpenInference-shaped spans and emitting signed atrib records plus recall-readable local sidecar content. Reference impl of spec §9 Pattern #4. Mirrors @arizeai/openinference-vercel ergonomics so callers compose it alongside their OpenInference pipeline; one adapter transitively reaches every framework with OpenInference instrumentation (OpenAI Agents SDK, Claude Agent SDK, LangChain, Vercel AI, CrewAI, LlamaIndex, DSPy, MCP, Microsoft Agent Framework, Bedrock AgentCore, smolagents, Pydantic AI, Agno, +20 more). Peer deps on @opentelemetry/api + @opentelemetry/sdk-trace-base.
     memory-tool/               # @atrib/memory-tool: Anthropic Memory Tool handler wrapper (public). Wraps TypeScript Memory Tool handlers, signs create/replace/insert/delete/rename commands as atrib tool_call records, and keeps storage backend-owned by the host.
-    runtime-log/               # @atrib/runtime-log: Runtime-log proof helpers (public). Builds and verifies log_window_manifest objects for host-owned agent run windows per D121. Does not sign records, store raw logs, or replace host runtime state.
+    runtime-log/               # @atrib/runtime-log: Runtime-log proof helpers. Workspace/tarball-only until first npm publication. Builds and verifies log_window_manifest objects for host-owned agent run windows per D121. Does not sign records, store raw logs, or replace host runtime state.
     log-dev/                   # @atrib/log-dev: in-memory dev Merkle log stub (PRIVATE, dev only)
     integration/               # @atrib/integration: cross-package tests + runnable framework examples (private)
       demo-record-surfaces.json # Machine-readable D117 demo record treatment manifest. Classifies integration execution surfaces by record class (offline/local, public proof, live capture) and endpoint posture (local-only, public-read, public-write, upstream-capture); checked by pnpm doc-sync.
@@ -230,7 +230,7 @@ Read `DESIGN.md` before making visual, UI writing, explorer, website, share-imag
 
 This is a TypeScript monorepo with **twenty-eight workspace packages**:
 
-- **Nine public SDK and integration packages** (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`, `@atrib/cli`, `@atrib/mcp-wrap`, `@atrib/directory`, `@atrib/openinference`, `@atrib/memory-tool`, `@atrib/runtime-log`)
+- **Eight public SDK and integration packages, plus one pre-publication workspace package** (`@atrib/mcp`, `@atrib/agent`, `@atrib/verify`, `@atrib/cli`, `@atrib/mcp-wrap`, `@atrib/directory`, `@atrib/openinference`, `@atrib/memory-tool`; `@atrib/runtime-log` remains workspace/tarball-only until first npm publication)
 - **Seven cognitive-primitive MCP servers** (`@atrib/emit`, `@atrib/annotate`, `@atrib/revise`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`, `@atrib/verify-mcp`) - published to npm with binaries
 - **Two private test/example packages** (`@atrib/log-dev`, `@atrib/integration`)
 - **Four private deployable-service packages** (`@atrib/log-node`, `@atrib/graph-node`, `@atrib/directory-node`, `@atrib/archive-node`)

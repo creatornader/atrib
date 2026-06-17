@@ -10,13 +10,17 @@ window through a `log_window_manifest`.
 
 ## Install
 
-Post-publication:
+`@atrib/runtime-log` is a workspace/tarball package until the first npm
+publication is bootstrapped and the npm trusted publisher is configured for this
+package.
+
+After publication:
 
 ```bash
 pnpm add @atrib/runtime-log
 ```
 
-Before the first npm publish, test through the workspace or a packed tarball:
+Before publication, test through the workspace or a packed tarball:
 
 ```bash
 pnpm --filter @atrib/runtime-log build
