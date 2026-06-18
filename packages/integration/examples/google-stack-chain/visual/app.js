@@ -1,6 +1,8 @@
 const state = {
   data: null,
   selectedId: 'ap2',
+  runtimeUrl: '',
+  runtimeState: null,
 }
 
 const nodes = {
@@ -24,14 +26,25 @@ const nodes = {
   evidenceText: document.querySelector('#evidenceText'),
   valueText: document.querySelector('#valueText'),
   protocolBadge: document.querySelector('#protocolBadge'),
+  runtimeStatus: document.querySelector('#runtimeStatus'),
+  runtimeReason: document.querySelector('#runtimeReason'),
+  runtimeDecision: document.querySelector('#runtimeDecision'),
+  runtimeRecordHash: document.querySelector('#runtimeRecordHash'),
+  runtimeContentId: document.querySelector('#runtimeContentId'),
+  runtimeSource: document.querySelector('#runtimeSource'),
+  runtimeChecks: document.querySelector('#runtimeChecks'),
+  refreshRuntime: document.querySelector('#refreshRuntime'),
+  writeRuntimeAnalytics: document.querySelector('#writeRuntimeAnalytics'),
   toast: document.querySelector('#toast'),
 }
 
 async function init() {
   state.data = await loadSnapshot()
+  state.runtimeUrl = getRuntimeUrl()
   state.selectedId = state.data.nodes[0].id
   renderStatic()
   selectNode(state.selectedId)
+  initRuntime()
 }
 
 async function loadSnapshot() {
@@ -102,6 +115,9 @@ function renderStatic() {
       }
     })
   })
+
+  nodes.refreshRuntime.addEventListener('click', () => loadRuntimeState())
+  nodes.writeRuntimeAnalytics.addEventListener('click', () => writeRuntimeAnalytics())
 }
 
 function renderChainNode(item, index) {
@@ -141,7 +157,8 @@ function renderMobileTab(item) {
 
 function renderAnalyticsRow(row) {
   const tr = document.createElement('tr')
-  tr.dataset.nodeId = row.node_id
+  const nodeId = row.node_id ?? 'ap2'
+  tr.dataset.nodeId = nodeId
   tr.tabIndex = 0
   tr.setAttribute('role', 'button')
   tr.setAttribute('aria-label', `Inspect ${row.protocol} analytics row`)
@@ -152,13 +169,138 @@ function renderAnalyticsRow(row) {
     <td data-label="Trace"><code>${escapeHtml(shortTrace(row.trace_id))}</code></td>
     <td data-label="Record"><code>${shortHash(row.atrib_record_hash)}</code></td>
   `
-  tr.addEventListener('click', () => selectNode(row.node_id))
+  tr.addEventListener('click', () => selectNode(nodeId))
   tr.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
-    selectNode(row.node_id)
+    selectNode(nodeId)
   })
   return tr
+}
+
+function initRuntime() {
+  if (!state.runtimeUrl) {
+    renderRuntimeUnavailable(
+      'Static fallback',
+      'Add ?runtime=https://your-cloud-run-url or set runtime-config.js to show live verifier state.',
+    )
+    return
+  }
+  loadRuntimeState()
+}
+
+async function loadRuntimeState() {
+  if (!state.runtimeUrl) {
+    initRuntime()
+    return
+  }
+  renderRuntimePending('Checking runtime')
+  try {
+    const response = await fetch(`${state.runtimeUrl}/v1/runtime-state`, {
+      headers: { accept: 'application/json' },
+    })
+    if (!response.ok) throw new Error(`Runtime returned HTTP ${response.status}`)
+    const payload = await response.json()
+    state.runtimeState = payload
+    renderRuntimeState(payload)
+  } catch (error) {
+    renderRuntimeUnavailable(
+      'Runtime unavailable',
+      error instanceof Error ? error.message : String(error),
+    )
+  }
+}
+
+async function writeRuntimeAnalytics() {
+  if (!state.runtimeUrl) {
+    showToast('Runtime URL missing')
+    return
+  }
+  renderRuntimePending('Writing BigQuery row')
+  try {
+    const response = await fetch(`${state.runtimeUrl}/v1/analytics/write`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ mode: 'replay' }),
+    })
+    const payload = await response.json()
+    if (!response.ok || payload.ok !== true) {
+      throw new Error(payload.error ?? `Runtime returned HTTP ${response.status}`)
+    }
+    showToast('BigQuery row written')
+    await loadRuntimeState()
+  } catch (error) {
+    renderRuntimeUnavailable('Write failed', error instanceof Error ? error.message : String(error))
+  }
+}
+
+function renderRuntimeState(payload) {
+  const gate = payload.gate
+  if (!gate) {
+    renderRuntimeUnavailable(
+      'Runtime response missing gate',
+      'The runtime did not return verifier state.',
+    )
+    return
+  }
+  nodes.runtimeStatus.textContent = gate.allowed ? 'Allowed' : 'Blocked'
+  nodes.runtimeStatus.className = `runtime-chip ${gate.allowed ? 'good' : 'bad'}`
+  nodes.runtimeReason.textContent = gate.reason
+  nodes.runtimeDecision.textContent = formatEvent(gate.decision)
+  nodes.runtimeRecordHash.textContent = shortHash(gate.record_hash)
+  nodes.runtimeRecordHash.title = gate.record_hash
+  nodes.runtimeContentId.textContent = shortHash(gate.content_id ?? 'none')
+  nodes.runtimeContentId.title = gate.content_id ?? ''
+  nodes.runtimeSource.textContent = gate.packet_source
+  const writeEnabled = payload.capabilities?.analytics_write_enabled === true
+  nodes.writeRuntimeAnalytics.disabled = !writeEnabled
+  nodes.writeRuntimeAnalytics.textContent = writeEnabled
+    ? 'Write BigQuery row'
+    : 'Operator write only'
+  nodes.runtimeChecks.replaceChildren(
+    ...gate.checks.map((check) => {
+      const li = document.createElement('li')
+      li.className = check.ok ? 'ok' : 'bad'
+      li.textContent = `${formatEvent(check.key)}: ${check.detail}`
+      return li
+    }),
+  )
+  renderAnalyticsRowsWithRuntime(gate.analytics_row)
+}
+
+function renderRuntimePending(label) {
+  nodes.runtimeStatus.textContent = label
+  nodes.runtimeStatus.className = 'runtime-chip pending'
+  nodes.runtimeReason.textContent = 'Waiting for the verifier endpoint.'
+  nodes.runtimeDecision.textContent = 'checking'
+}
+
+function renderRuntimeUnavailable(label, reason) {
+  nodes.runtimeStatus.textContent = label
+  nodes.runtimeStatus.className = 'runtime-chip idle'
+  nodes.runtimeReason.textContent = reason
+  nodes.runtimeDecision.textContent = 'not connected'
+  nodes.runtimeRecordHash.textContent = 'pending'
+  nodes.runtimeContentId.textContent = 'pending'
+  nodes.runtimeSource.textContent = state.runtimeUrl || 'static snapshot'
+  nodes.runtimeChecks.replaceChildren()
+  nodes.writeRuntimeAnalytics.disabled = true
+  nodes.writeRuntimeAnalytics.textContent = 'Operator write only'
+  nodes.analyticsRows.replaceChildren(...state.data.analytics.rows.map(renderAnalyticsRow))
+}
+
+function renderAnalyticsRowsWithRuntime(runtimeRow) {
+  const runtimeRows = runtimeRow
+    ? [
+        {
+          ...runtimeRow,
+          node_id: 'ap2',
+        },
+      ]
+    : []
+  nodes.analyticsRows.replaceChildren(
+    ...[...runtimeRows, ...state.data.analytics.rows].map(renderAnalyticsRow),
+  )
 }
 
 function selectNode(id) {
@@ -207,6 +349,14 @@ function scrollToSection(element) {
 
 function getSelectedNode() {
   return state.data.nodes.find((item) => item.id === state.selectedId)
+}
+
+function getRuntimeUrl() {
+  const params = new URLSearchParams(window.location.search)
+  const fromQuery = params.get('runtime')
+  const fromConfig = window.GOOGLE_STACK_RUNTIME_URL
+  const value = (fromQuery || fromConfig || '').trim()
+  return value.endsWith('/') ? value.slice(0, -1) : value
 }
 
 async function copyText(value, message) {

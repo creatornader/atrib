@@ -173,7 +173,7 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
       },
     ],
     caveat:
-      'This is a local BigQuery Agent Analytics-shaped fixture, not a BigQuery Storage Write API export or a managed Google Cloud run.',
+      'Static rows are a local fixture. The runtime panel can write its AP2 gate row to BigQuery when Cloud Run or local credentials are configured.',
   },
   value_add: [
     'AP2 authorization evidence, A2A handoff evidence, and ADK runtime evidence are linked through verifier-resolved informed_by records.',
@@ -181,9 +181,9 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
     'A support reviewer can see what was authorized, what was handed off, and what runtime action was signed before resolving a support or counterparty decision.',
   ],
   caveats: [
-    'This is a local explicit informed_by bridge, not a deployed Google managed runtime run or one shared context_id.',
+    'The four-record chain is a local explicit informed_by bridge. The runtime panel separately verifies the AP2 replay through Cloud Run when configured.',
     'The AP2 artifacts come from committed AP2 / VI reference fixtures, not live payment credentials.',
     'The A2A proof is in-process JSON-RPC, not a public A2A server, TCK result, or upstream sample.',
-    'The ADK Python proof uses a local InMemoryRunner and transient google-adk==2.1.0 install, not Agent Platform Runtime, Gemini Enterprise, BigQuery Storage Write API export, or Memory Bank.',
+    'The ADK Python proof uses a local InMemoryRunner and transient google-adk==2.1.0 install, not Agent Platform Runtime, Gemini Enterprise, or Memory Bank.',
   ],
 }

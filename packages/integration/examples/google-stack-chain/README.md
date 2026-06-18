@@ -24,10 +24,11 @@ supports direct file opening through
 [`visual/index.html`](visual/index.html); the served path is better for normal
 review, while the file path is useful for quick local inspection.
 
-The workbench is a static UI over the current snapshot: it shows the four proof
-stages, lets the operator select each record, highlights the matching BigQuery
-Agent Analytics-shaped fixture row, and keeps the same claim limits visible on
-screen.
+The workbench loads a static proof snapshot first, then asks the Google evidence
+runtime for live AP2 verifier state when `runtime-config.js` or `?runtime=` is
+set. It shows the four proof stages, lets the operator select each record,
+highlights the matching BigQuery Agent Analytics-shaped row, and keeps the same
+claim limits visible on screen.
 
 The script prints a JSON summary with the AP2 transaction record hash, A2A
 remote and receiver follow-up hashes, and ADK Python tool-callback record hash.
@@ -58,7 +59,8 @@ ADK BigQuery Agent Analytics columns (`timestamp`, `event_type`, `agent`,
 `session_id`, `invocation_id`, `user_id`, `trace_id`, `span_id`,
 `parent_span_id`, `status`, `error_message`, `is_truncated`). It adds
 atrib-specific columns for record hash, parent record hashes, and protocol. This
-is a local fixture for review, not a BigQuery Storage Write API export.
+static chain output is a local fixture for review. The runtime can write its AP2
+gate row to BigQuery as an operator action with `BIGQUERY_WRITE_ENABLED=1`.
 
 The visual snapshot lives at [`visual/proof-snapshot.json`](visual/proof-snapshot.json).
 [`visual/proof-snapshot.js`](visual/proof-snapshot.js) is generated from the JSON
@@ -67,10 +69,57 @@ hashes change, update both files and rerun
 `pnpm --filter @atrib/integration test -- google-stack-chain-visual` before using
 the workbench as public proof material.
 
-For a hosted preview, this can deploy as a static site. Vercel or Cloudflare
-Pages is enough; the Cloudflare approval-trace example needs a Worker because it
-has live workflow state, but this Google stack workbench only serves static
-HTML, CSS, JavaScript, and fixture data.
+For a hosted preview, the visual can remain a static site while live verifier
+state comes from a separately deployed runtime. Vercel or Cloudflare Pages is
+enough for the visual; the Cloud Run runtime in [`runtime/`](runtime/) can be
+configured locally with [`visual/runtime-config.js`](visual/runtime-config.js)
+or with the `?runtime=` query parameter. Do not commit deployment-specific
+preview URLs to this public example.
+
+## Active runtime
+
+The Cloud Run runtime lives in [`runtime/`](runtime/) and serves:
+
+- `GET /v1/runtime-state`: live AP2 replay verifier state for the visual.
+- `POST /v1/verify-ap2`: inline AP2 packet verification for a merchant or
+  payment participant.
+- `POST /v1/analytics/write`: operator-only BigQuery row write when
+  `BIGQUERY_WRITE_ENABLED=1`.
+- `GET /v1/merchant-adapter`: the packet contract for "bring your AP2
+  merchant" integration.
+
+Public deployments leave `BIGQUERY_WRITE_ENABLED` unset, so the workbench can
+show live verifier state without exposing a public write endpoint.
+
+To run the same gate from official Google AP2 sample output, capture the sample
+packet and point the runtime at the generated files:
+
+```bash
+pnpm --filter @atrib/integration ap2-google-live-capture \
+  --out-dir /tmp/google-ap2-live \
+  --temp-db-dir /path/to/google-agentic-commerce/AP2/code/samples/python/scenarios/a2a/human-not-present/cards/.temp-db \
+  --context-id google-ap2-live-demo
+
+ATRIB_AP2_INTEROP_RESULT_JSON=/tmp/google-ap2-live/atrib-packet/ap2-result.json \
+ATRIB_AP2_INTEROP_EVIDENCE_JSON=/tmp/google-ap2-live/atrib-packet/ap2-vi-evidence.json \
+ATRIB_AP2_INTEROP_TRANSACTION_RECORD_JSON=/tmp/google-ap2-live/atrib-packet/atrib-transaction-record.json \
+pnpm --filter @atrib/integration google-evidence-runtime
+```
+
+Bring-your-AP2-merchant shape:
+
+```json
+{
+  "result": "AP2 result JSON",
+  "evidence": "AP2 / Verifiable Intent evidence bundle",
+  "transactionRecord": "atrib transaction record with counterparty signer",
+  "nowSeconds": 1779840000
+}
+```
+
+The runtime returns `allow_next_action` only after AP2 detection, AP2 / VI
+evidence verification, atrib record verification, and counterparty attestation
+all pass.
 
 ## What it proves
 
@@ -82,6 +131,8 @@ HTML, CSS, JavaScript, and fixture data.
 - Google ADK Python can sign a hash-only record from the plugin tool-callback
   boundary that informs by the A2A receiver follow-up while local sidecars keep
   the raw ADK payload inspectable.
+- The Cloud Run runtime can make the next-action decision from verified AP2
+  evidence and produce a BigQuery-shaped row tied to the atrib record hash.
 - These surfaces can be presented as one verifier story for support, audit, or
   external review.
 
@@ -91,6 +142,7 @@ This is a local explicit `informed_by` bridge, not a shared `context_id` across
 AP2, A2A, and ADK. The AP2, A2A, and ADK records still use their existing local
 proof contexts.
 
-It is also not a deployed Google managed runtime proof, an A2A TCK result, a live
-AP2 payment run, a Gemini Enterprise registration, a BigQuery Agent Analytics
-export, or a Cloud Marketplace listing.
+It is also not an Agent Platform Runtime proof, an A2A TCK result, a live AP2
+payment run, a Gemini Enterprise registration, or a Cloud Marketplace listing.
+The AP2 runtime is deployed on Cloud Run and uses official-sample replay or
+provided packet JSON; it is not a real external AP2 merchant or payment service.
