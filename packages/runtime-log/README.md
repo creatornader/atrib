@@ -10,9 +10,8 @@ window through a `log_window_manifest`.
 
 ## Install
 
-`@atrib/runtime-log` is a workspace/tarball package until the first npm
-publication is bootstrapped and the npm trusted publisher is configured for this
-package.
+`@atrib/runtime-log` is a publish target until the first manual npm publish
+creates the package and npm Trusted Publisher is configured for later releases.
 
 After publication:
 
