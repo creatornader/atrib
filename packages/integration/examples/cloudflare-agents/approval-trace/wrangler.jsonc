@@ -3,7 +3,7 @@
   "name": "atrib-cloudflare",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-11",
-  "compatibility_flags": ["nodejs_compat", "experimental"],
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "worker_loaders": [{ "binding": "LOADER" }],
   "observability": {

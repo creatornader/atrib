@@ -326,15 +326,16 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
   )
   push(
     `${trace.run_id}: packet timeline mirrors record refs`,
-    packetTimeline.every((item) => {
-      const record = byLabel.get(item.label)
-      return (
-        record &&
-        item.signer === record.signer &&
-        item.record_hash === record.record_hash &&
-        refsEqual(item.informed_by, record.record.informed_by ?? [])
-      )
-    }),
+    packetTimeline.length === trace.records.length &&
+      packetTimeline.every((item, index) => {
+        const record = trace.records[index]
+        return (
+          record &&
+          item.signer === record.signer &&
+          item.record_hash === record.record_hash &&
+          refsEqual(item.informed_by, record.record.informed_by ?? [])
+        )
+      }),
   )
   push(
     `${trace.run_id}: graph nodes cover records`,
@@ -373,7 +374,10 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
   if (changeRequest || revision) {
     push(`${trace.run_id}: change request exists`, Boolean(changeRequest))
     push(`${trace.run_id}: revision exists`, Boolean(revision))
-    push(`${trace.run_id}: change request closes first Code Mode action`, Boolean(runtimeRejections[0]))
+    push(
+      `${trace.run_id}: change request closes first Code Mode action`,
+      Boolean(runtimeRejections[0]),
+    )
     push(
       `${trace.run_id}: change request points at proposal`,
       Boolean(
@@ -394,8 +398,8 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
       `${trace.run_id}: runtime rejection points at change request`,
       Boolean(
         changeRequest &&
-          runtimeRejections[0] &&
-          refsEqual(runtimeRejections[0].record.informed_by, [changeRequest.record_hash]),
+        runtimeRejections[0] &&
+        refsEqual(runtimeRejections[0].record.informed_by, [changeRequest.record_hash]),
       ),
     )
     push(
@@ -468,8 +472,8 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
       `${trace.run_id}: rejected runtime closure points at decision`,
       Boolean(
         decision &&
-          latestRuntimeRejection &&
-          refsEqual(latestRuntimeRejection.record.informed_by, [decision.record_hash]),
+        latestRuntimeRejection &&
+        refsEqual(latestRuntimeRejection.record.informed_by, [decision.record_hash]),
       ),
     )
     push(
@@ -498,11 +502,8 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
       Boolean(
         decisionBase &&
         decision &&
-          execution &&
-          refsEqual(execution.record.informed_by, [
-            decisionBase.record_hash,
-            decision.record_hash,
-          ]),
+        execution &&
+        refsEqual(execution.record.informed_by, [decisionBase.record_hash, decision.record_hash]),
       ),
     )
     push(
