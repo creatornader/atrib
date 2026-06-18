@@ -29,13 +29,14 @@
     "directory": "packages/runtime-log"
   },
   "keywords": [
-    "atrib",
-    "runtime-log",
     "agent-runtime",
-    "verifiable",
-    "merkle-log",
+    "observability",
+    "audit-log",
     "provenance",
-    "agent-trace"
+    "trace",
+    "verifiable",
+    "atrib",
+    "runtime-log"
   ],
   "scripts": {
     "build": "rm -rf dist && tsc && chmod +x dist/cli.js",

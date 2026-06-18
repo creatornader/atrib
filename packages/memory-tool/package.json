@@ -21,13 +21,13 @@
     "access": "public"
   },
   "keywords": [
-    "atrib",
     "anthropic",
     "claude",
-    "memory-tool",
     "agent-memory",
+    "memory",
+    "memory-tool",
     "verifiable",
-    "merkle-log"
+    "atrib"
   ],
   "scripts": {
     "build": "tsc",
