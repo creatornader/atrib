@@ -17,6 +17,23 @@ pnpm add @atrib/runtime-log
 Version 0.2.0 was first-published manually. Later releases use npm Trusted
 Publisher through `release.yml`.
 
+## When to use it
+
+Use this package when a runtime already owns a run log and another agent,
+reviewer, evaluator, or auditor needs to verify a claim about a bounded window
+of that log.
+
+| Situation | Right surface |
+| --------- | ------------- |
+| You need to sign tool calls as they happen. | Use `@atrib/mcp`, `@atrib/mcp-wrap`, or `@atrib/agent`. |
+| You already emit OpenTelemetry or OpenInference spans. | Use `@atrib/openinference` beside your existing trace exporter. |
+| You need to prove a run window, fork, compaction, projection, or receipt root. | Use `@atrib/runtime-log`. |
+| You want a hosted trace dashboard, prompt analytics, cost charts, or eval UI. | Use Langfuse, Phoenix, LangSmith, Braintrust, or your existing observability stack. atrib can sign evidence that points back to those systems. |
+
+`@atrib/runtime-log` does not decide what a runtime should store. It gives the
+runtime a verifier object when the runtime wants to prove a specific slice of
+what it already stores.
+
 ## Basic use
 
 ```ts
