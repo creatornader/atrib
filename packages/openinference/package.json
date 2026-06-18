@@ -23,15 +23,13 @@
     "directory": "packages/openinference"
   },
   "keywords": [
-    "atrib",
-    "attribution",
-    "verifiable",
-    "opentelemetry",
     "openinference",
-    "span-processor",
+    "opentelemetry",
+    "observability",
+    "tracing",
     "agent-observability",
-    "signed-trace",
-    "merkle-log"
+    "provenance",
+    "atrib"
   ],
   "scripts": {
     "build": "tsc",
