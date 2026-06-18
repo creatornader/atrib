@@ -1,5 +1,11 @@
 # @atrib/openinference
 
+## 0.3.13
+
+### Patch Changes
+
+- 09448bd: Update npm keywords so package metadata favors ecosystem discovery terms and keeps atrib-specific terms for family grouping.
+
 ## 0.3.12
 
 ### Patch Changes

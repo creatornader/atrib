@@ -1,5 +1,11 @@
 # @atrib/memory-tool
 
+## 0.2.11
+
+### Patch Changes
+
+- 09448bd: Update npm keywords so package metadata favors ecosystem discovery terms and keeps atrib-specific terms for family grouping.
+
 ## 0.2.10
 
 ### Patch Changes
