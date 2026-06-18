@@ -88,7 +88,8 @@
       }
     },
     "patchedDependencies": {
-      "@ai-sdk/provider-utils@3.1.0-beta.9": "patches/@ai-sdk__provider-utils@3.1.0-beta.9.patch"
+      "@ai-sdk/provider-utils@3.1.0-beta.9": "patches/@ai-sdk__provider-utils@3.1.0-beta.9.patch",
+      "read-yaml-file@1.1.0": "patches/read-yaml-file@1.1.0.patch"
     }
   }
 }
