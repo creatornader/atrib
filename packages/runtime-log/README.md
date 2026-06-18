@@ -10,22 +10,12 @@ window through a `log_window_manifest`.
 
 ## Install
 
-`@atrib/runtime-log` is a publish target until the first manual npm publish
-creates the package and npm Trusted Publisher is configured for later releases.
-
-After publication:
-
 ```bash
 pnpm add @atrib/runtime-log
 ```
 
-Before publication, test through the workspace or a packed tarball:
-
-```bash
-pnpm --filter @atrib/runtime-log build
-cd packages/runtime-log
-pnpm pack --pack-destination /tmp
-```
+Version 0.2.0 was first-published manually. Later releases use npm Trusted
+Publisher through `release.yml`.
 
 ## Basic use
 
