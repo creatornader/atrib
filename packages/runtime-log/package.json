@@ -1,7 +1,6 @@
 {
   "name": "@atrib/runtime-log",
   "version": "0.2.0",
-  "private": true,
   "type": "module",
   "bin": {
     "atrib-runtime-log": "./dist/cli.js"
@@ -21,6 +20,9 @@
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/creatornader/atrib.git",
