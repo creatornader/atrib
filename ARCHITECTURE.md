@@ -238,6 +238,23 @@ This keeps the product boundary clean. Langfuse-style systems remain the right p
 
 `informed_by` is narrower than OTel parent-child nesting. Parent-child span structure says the runtime correlated two spans inside one trace. It does not prove that a later signed action depended on the earlier signed action's output. atrib only emits `informed_by` when an explicit rule can run before signing, such as the current LLM `tool_call.id` to matching TOOL `tool_call.id` rule.
 
+### Logs and traces reader map
+
+The integration target decides which atrib package belongs in the path.
+
+| Object | Owner | atrib surface | Boundary |
+| ------ | ----- | ------------- | -------- |
+| Tool call or SDK callback | Tool host or agent SDK | `@atrib/mcp`, `@atrib/mcp-wrap`, `@atrib/agent` | Sign the action when it happens. |
+| OpenTelemetry or OpenInference span tree | Observability pipeline | `@atrib/openinference` | Read spans as intake, then emit signed records plus local cognitive sidecars. |
+| Runtime log window | Runtime, workflow engine, checkpoint store, or job packet | `@atrib/runtime-log` | Verify roots, projections, receipts, forks, compactions, and redaction policy for one bounded window. |
+| Vendor-hosted session export | Hosted runtime vendor | Pattern 5 adapter, planned | Sign what the consumer observed from the vendor export. Do not claim vendor-internal truth. |
+| atrib trace or chain | atrib graph services | `/v1/trace`, `/v1/chain`, `@atrib/trace` | Read signed chronology and declared relationships. This is not the runtime's own run log. |
+
+This map keeps the docs from using "trace" as a bucket for every execution
+record. A span tree can explain timing and nested operations, a runtime log can
+reconstruct or resume a run, and an atrib trace can replay signed causality.
+They can point at each other, but each one keeps its own owner and proof claim.
+
 ### Runtime log boundary
 
 A runtime log is the host-owned execution record a runtime uses to reconstruct,

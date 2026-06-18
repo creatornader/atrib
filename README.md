@@ -44,6 +44,24 @@ One canonical harness pattern is signed diagnostic outcome + trace replay: sign 
 
 Derived evidence products sit above the protocol. A harness can build a prior-work packet, suspect report, or eval summary from signed records, body commitments, verifier checks, and inclusion proofs. Those products can decide which records are useful for a task, which stale records to avoid, and which risks remain open. They do not change the record format, the graph derivation rules, or the seven cognitive primitives.
 
+## Logs and traces
+
+Logs and traces are primary integration inputs for atrib, but the word "trace"
+can point at several different objects. The boundary matters.
+
+| What you already have | Use | What atrib adds |
+| --------------------- | --- | --------------- |
+| Tool calls through MCP or an SDK callback | [`@atrib/mcp`](packages/mcp/README.md), [`@atrib/mcp-wrap`](packages/mcp-wrap/README.md), or [`@atrib/agent`](packages/agent/README.md) | Signed action records with chain continuity and optional local sidecars. |
+| OpenTelemetry or OpenInference spans | [`@atrib/openinference`](packages/openinference/README.md) | Signed records and recall-readable sidecars from the span stream, while Langfuse, Phoenix, LangSmith, Braintrust, or another backend keeps the operations view. |
+| A host-owned run log, event stream, session history, checkpoint log, fork log, or compaction log | [`@atrib/runtime-log`](packages/runtime-log/README.md) | A `log_window_manifest` that commits to the bounded run window, roots, projections, receipts, and redaction policy without publishing raw log bodies by default. |
+| A hosted runtime API that exports session events after the fact | A future per-runtime adapter under [Pattern 5](ARCHITECTURE.md#runtime-integration-patterns) | Consumer-side attestation over what the vendor reported, not a claim that the vendor's private runtime state is itself true. |
+| A handoff, support investigation, or continuation packet | [`@atrib/verify`](packages/verify/README.md), `@atrib/verify-mcp`, and continuation packet patterns | Verifier-accepted record hashes that the receiving agent can cite through `informed_by`. |
+
+The short rule: observability tools inspect and debug live traces; runtime
+systems own logs that reconstruct or resume a run; atrib signs actions and
+verifies claims over selected windows. Those layers compose, but they should not
+collapse into one product.
+
 ## How it works
 
 - Each record is signed by the actor's Ed25519 key and JCS-canonicalized
@@ -108,6 +126,8 @@ Now that you've seen the demo, pick the install path that matches what you're do
 
 - Sign tool calls your MCP server handles: `@atrib/mcp` ([below](#sign-tool-calls-your-mcp-server))
 - Sign tool calls your agent makes: `@atrib/agent` ([below](#sign-tool-calls-your-agent))
+- Attach signed records to an existing OpenInference span stream: `@atrib/openinference`
+- Prove a bounded run window from a host-owned runtime log: `@atrib/runtime-log`
 - Verify records someone else produced: `@atrib/verify` ([below](#verify-records-any-third-party))
 
 ### Sign tool calls (your MCP server)
