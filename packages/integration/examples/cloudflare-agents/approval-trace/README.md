@@ -1,13 +1,14 @@
-# Cloudflare approval trace
+# Cloudflare Code Mode approval trace
 
-Interactive Cloudflare Agents example for atrib-signed human approval traces.
+Interactive Cloudflare Agents example for atrib-signed Code Mode approval
+traces.
 The example is a native `@cloudflare/codemode` approval bridge wrapped in an
 atrib-signed receipt envelope.
 
 The app is a safe Cloudflare-shaped workflow:
 
 ```text
-prior trigger -> autonomous triage -> human approval halt -> Code Mode execution resumes -> signed outcome -> audit trace
+prior trigger -> autonomous triage -> Code Mode approval halt -> human decision -> runtime replay or rejection -> signed audit trace
 ```
 
 The simulated target is a Durable Object SQLite table that looks like a
@@ -16,11 +17,11 @@ mutated.
 
 Code Mode is the problem context for the example: generated code can compress
 many side effects behind one execution boundary. This demo keeps the boundary
-explicit. The agent proposes an exact payload first, the generated code reaches
-a `requiresApproval` write through `CodemodeRuntime`, the workflow halts for a
-human decision, and approved execution resumes through runtime replay. The
-proposal, decision, Code Mode preview or execution, outcome, and handoff are
-signed as separate records.
+explicit. The agent proposes an exact payload first. The generated code reaches a
+`requiresApproval` write through `CodemodeRuntime`. The runtime pauses before the
+side effect. The human signs approve, reject, or request changes. Approved
+execution resumes through runtime replay. The proposal, decision, Code Mode
+preview or execution, outcome, and handoff are signed as separate records.
 
 Cloudflare's current Code Mode runtime owns the durable approval and replay
 surface. This example does not replace that runtime. It adds a portable signed
@@ -30,10 +31,11 @@ human decision, runtime approval or rejection, result, and audit handoff.
 ## What this shows
 
 - A prior trigger starts the agent before the browser approval gate appears.
-- A real browser approval or rejection halts or resumes the Code Mode workflow.
+- Code Mode reaches the `requiresApproval` side effect before any human decision.
+- A real browser approval or rejection resumes or closes the Code Mode workflow.
 - The approval is bound to the proposed payload, not to a vague "continue"
   action.
-- Agent, human reviewer, and action MCP records use distinct signing keys.
+- Agent, human reviewer, and Code Mode runtime records use distinct signing keys.
 - The Code Mode execution record has explicit `informed_by` edges to the
   proposal and human approval records.
 - The outcome and handoff records make the async work auditable after the fact.

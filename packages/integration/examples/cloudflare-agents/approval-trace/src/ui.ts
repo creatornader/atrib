@@ -3625,8 +3625,8 @@ export function renderApp(options: { colo?: string } = {}): string {
             <path fill="#f9ab41" d="M168.22,41.15q-1,0-2.1.06a.88.88,0,0,0-.32.07,1.17,1.17,0,0,0-.76.8l-3,10.26c-1.28,4.41-.81,8.48,1.34,11.48a11.65,11.65,0,0,0,9.24,4.57l16.11,1a1.44,1.44,0,0,1,1.14.62,1.5,1.5,0,0,1,.17,1.37,2,2,0,0,1-1.75,1.34l-16.73,1c-9.09.42-18.88,7.75-22.31,16.7l-1.21,3.16a.9.9,0,0,0,.79,1.22h57.63A1.55,1.55,0,0,0,208,93.63a41.34,41.34,0,0,0-39.76-52.48Z"/>
           </svg>
           <div>
-            <h1>Cloudflare Agent Trace</h1>
-            <p class="sub">Incoming alert to autonomous triage to human review to signed Code Mode execution.</p>
+            <h1>Code Mode Approval Trace</h1>
+            <p class="sub">Cloudflare Code Mode pauses the side effect; atrib signs the trigger, decision, replay, and audit trail.</p>
           </div>
         </div>
         <div class="header-meta">
@@ -3653,14 +3653,14 @@ export function renderApp(options: { colo?: string } = {}): string {
         <div class="rail-main">
           <span class="dot pending" id="statusDot"></span>
           <div>
-            <strong id="statusTitle">Loading triggered workflow</strong>
-            <p id="statusDetail">The demo starts at the incoming alert and shows the autonomous work before the human review gate.</p>
+            <strong id="statusTitle">Loading approval-boundary proof</strong>
+            <p id="statusDetail">The run starts at an incoming alert, reaches a Code Mode approval gate, then signs the human decision and result.</p>
           </div>
         </div>
         <div class="rail-stepper" id="workflowSteps">
           <span class="step active" data-step="trigger"><span class="step-index">1</span><span class="step-copy"><strong>1. Trigger</strong><span data-step-time="trigger">Pending</span></span></span>
           <span class="step" data-step="autonomous"><span class="step-index">2</span><span class="step-copy"><strong>2. Autonomous triage</strong><span data-step-time="autonomous">Pending</span></span></span>
-          <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong><span class="step-number-label">3. </span><span data-step-title="halt">Human review halted</span></strong><span class="step-meta-line"><span data-step-time="halt">Pending</span><span class="step-badge" data-step-badge="halt">Awaiting review</span></span></span></span>
+          <span class="step" data-step="halt"><span class="step-index">3</span><span class="step-copy"><strong><span class="step-number-label">3. </span><span data-step-title="halt">Code Mode approval halted</span></strong><span class="step-meta-line"><span data-step-time="halt">Pending</span><span class="step-badge" data-step-badge="halt">Awaiting review</span></span></span></span>
           <span class="step" data-step="resume"><span class="step-index">4</span><span class="step-copy"><strong><span class="step-number-label">4. </span><span data-step-title="resume">Code Mode execution resumed</span></strong><span data-step-time="resume">Pending</span></span></span>
           <span class="step" data-step="audit"><span class="step-index">5</span><span class="step-copy"><strong><span class="step-number-label">5. </span><span data-step-title="audit">Audit ready</span></strong><span data-step-time="audit">Pending</span></span></span>
         </div>
@@ -3693,7 +3693,7 @@ export function renderApp(options: { colo?: string } = {}): string {
             <div class="control-strip">
               <label class="toggle">
                 <input id="simulateError" type="checkbox" />
-                Simulate repository file change after approval
+                Simulate changed repository result after approval
               </label>
               <button class="primary" id="create">Replay prior trigger</button>
               <button class="secondary" id="reset">Reset</button>
@@ -3830,7 +3830,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         {
           key: 'halt',
           title: 'Human review halted',
-          detail: 'The workflow stopped before Code Mode execution and is waiting for a signed decision.',
+          detail: 'CodemodeRuntime reached a requiresApproval write_file action and is waiting for a signed human decision.',
           step: 'halt',
         },
       ];
@@ -3950,14 +3950,14 @@ export function renderApp(options: { colo?: string } = {}): string {
         if (auditTitle) auditTitle.textContent = 'Audit ready';
         badge.hidden = false;
         if (!run) {
-          title.textContent = 'Human review halted';
+          title.textContent = 'Code Mode approval halted';
           badge.textContent = 'Awaiting review';
           badge.classList.add('requested');
           badge.hidden = !haltStep?.classList.contains('halted');
           return;
         }
         if (run.status === 'pending_approval') {
-          title.textContent = hasRevisedProposal(run) ? 'Revised proposal halted' : 'Human review halted';
+          title.textContent = hasRevisedProposal(run) ? 'Revised proposal halted' : 'Code Mode approval halted';
           badge.textContent = 'Awaiting review';
           badge.classList.add('requested');
           return;
@@ -4131,7 +4131,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         if (title === 'Policy & intent analysis') return 'policy';
         if (title === 'Proposed action generated' || title === 'Initial proposal generated') return 'proposal';
         if (title === 'Revised proposal generated' || title === 'Revised proposal halted') return 'revision';
-        if (title === 'Human review halted' || title === 'Human review recorded' || title === 'Human review feedback sent' || title === 'Human review rejected') return 'halt';
+        if (title === 'Code Mode approval halted' || title === 'Human review halted' || title === 'Human review recorded' || title === 'Human review feedback sent' || title === 'Human review rejected') return 'halt';
         if (title === 'Agent resumed through Code Mode' || title === 'Code Mode execution skipped' || title === 'Feedback returned to agent') return 'resume';
         if (title === 'Audit ready' || title === 'Decision audit ready' || title === 'Revised proposal pending') return 'audit';
         return '';
@@ -4968,18 +4968,18 @@ export function renderApp(options: { colo?: string } = {}): string {
               };
             }
             return {
-              title: 'Halted for human review',
-              detail: 'The agent has stopped before publishing. Approval resumes execution through CodemodeRuntime.',
+              title: 'Code Mode approval halted',
+              detail: 'CodemodeRuntime paused the approval-required write. atrib signs the exact payload before any resume, rejection, or revision.',
             };
           case 'succeeded':
             return {
-              title: 'Execution resumed and completed',
-              detail: 'The trigger, proposal, approval, execution, outcome, and handoff are all signed below.',
+              title: 'Code Mode replay completed',
+              detail: 'The trigger, proposal, human approval, runtime replay, outcome, and handoff are all signed below.',
             };
           case 'failed':
             return {
-              title: 'Execution resumed and failed',
-              detail: 'The signed diagnostic record explains the changed repository file.',
+              title: 'Code Mode replay failed',
+              detail: 'The signed diagnostic record explains the runtime result and changed repository file.',
             };
           case 'rejected':
             return {
@@ -5002,11 +5002,11 @@ export function renderApp(options: { colo?: string } = {}): string {
       function setStatusForRun(run) {
         if (run.status === 'pending_approval') {
           setStatus(
-            hasRevisedProposal(run) ? 'Revised proposal ready for review' : 'Halted for human review',
+            hasRevisedProposal(run) ? 'Revised proposal ready for review' : 'Code Mode approval halted',
             'pending',
             hasRevisedProposal(run)
               ? 'The agent signed a revised payload from the requested changes. Review it before Code Mode execution can resume.'
-              : 'Autonomous triage is complete. Review the payload before the agent can resume.',
+              : 'Autonomous triage is complete. Code Mode is paused on the exact write_file payload until a signed decision exists.',
             'halt',
           );
           return;
@@ -5078,9 +5078,9 @@ export function renderApp(options: { colo?: string } = {}): string {
             <button class="risk-details-toggle" id="riskDetailsToggle" type="button" aria-expanded="false" aria-controls="riskDetails">Details <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></button>
           </div>
           <div class="risk-details" id="riskDetails" hidden>
-            <strong>Human review gate</strong>
-            <span>This proposal changes repository code for a production Workers route. The agent must halt before CodemodeRuntime writes the file.</span>
-            <span>Approval signs the exact payload hash, connector id, and target file before execution resumes.</span>
+            <strong>Code Mode approval gate</strong>
+            <span>This proposal changes repository code for a production Workers route. CodemodeRuntime pauses before the write_file side effect.</span>
+            <span>atrib signs the payload hash, connector id, human decision, runtime replay, and audit handoff as separate records.</span>
           </div>
           \${feedbackRecord ? \`
             <div class="feedback-summary">
@@ -5132,7 +5132,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         document.querySelector('#approve')?.addEventListener('click', async () => {
           await transition({
             title: 'Agent resumed',
-            detail: 'The human approval is signed. CodemodeRuntime is applying the approved file update.',
+            detail: 'The human approval is signed. CodemodeRuntime is replaying the approved file update.',
             step: 'resume',
             activeLabel: 'approve',
             fn: async () => post('/api/runs/' + run.run_id + '/approve', {
@@ -5208,7 +5208,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           },
           {
             title: 'Policy & intent analysis',
-            detail: labels.has('triage') ? 'Repository writes require human review before Code Mode execution.' : 'Waiting for policy analysis.',
+            detail: labels.has('triage') ? 'Repository writes require a signed decision before Code Mode can replay the action.' : 'Waiting for policy analysis.',
             done: labels.has('triage'),
           },
           {
@@ -5227,15 +5227,15 @@ export function renderApp(options: { colo?: string } = {}): string {
             done: true,
           }] : []),
           {
-            title: run.status === 'pending_approval' ? revised ? 'Revised proposal halted' : 'Human review halted' : rejected ? 'Human review rejected' : changesRequested ? 'Human review feedback sent' : 'Human review recorded',
-            detail: answer.decision ? 'Decision: ' + answer.decision : revised ? 'Execution is stopped again until a human signs the revised proposal.' : 'Execution is stopped until a human signs approval, rejection, or feedback.',
+            title: run.status === 'pending_approval' ? revised ? 'Revised proposal halted' : 'Code Mode approval halted' : rejected ? 'Human review rejected' : changesRequested ? 'Human review feedback sent' : 'Human review recorded',
+            detail: answer.decision ? 'Decision: ' + answer.decision : revised ? 'Code Mode is paused again until a human signs the revised proposal.' : 'Code Mode is paused until a human signs approval, rejection, or feedback.',
             done: Boolean(answer.decision),
             halted: run.status === 'pending_approval',
           },
           {
             title: answer.executed ? 'Agent resumed through Code Mode' : rejected ? 'Code Mode execution skipped' : changesRequested ? 'Feedback returned to agent' : 'Resume not started',
             detail: answer.executed
-              ? 'CodemodeRuntime ran only after approval.'
+              ? 'CodemodeRuntime replayed only after approval.'
               : rejected
               ? 'The signed rejection closed the gate before any Code Mode write.'
               : changesRequested
