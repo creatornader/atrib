@@ -347,6 +347,7 @@ describe('atrib-primitives MCP runtime', () => {
             context_id_policy?: string
             requires_explicit_context_id?: boolean
           }
+          sessions?: { active_http_requests?: number }
         }
       }
       expect(health.status).toBe('healthy')
@@ -360,6 +361,7 @@ describe('atrib-primitives MCP runtime', () => {
       expect(health.report?.profile?.agent).toBe('test-agent')
       expect(health.report?.profile?.context_id_policy).toBe('explicit-required')
       expect(health.report?.profile?.requires_explicit_context_id).toBe(true)
+      expect(health.report?.sessions?.active_http_requests).toBe(0)
 
       const client = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test')
       try {
@@ -398,7 +400,7 @@ describe('atrib-primitives MCP runtime', () => {
             mounted_primitive_count?: number
             tool_count?: number
           }
-          sessions?: { active?: number; opened?: number }
+          sessions?: { active?: number; opened?: number; active_http_requests?: number }
         }
       }
       expect(health.report?.primitive_runtime?.backend).toBe('shared')
@@ -406,6 +408,7 @@ describe('atrib-primitives MCP runtime', () => {
       expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
       expect(health.report?.sessions?.active).toBe(2)
       expect(health.report?.sessions?.opened).toBe(2)
+      expect(health.report?.sessions?.active_http_requests).toBeGreaterThanOrEqual(0)
 
       const [firstTools, secondTools] = await Promise.all([first.listTools(), second.listTools()])
       expect(firstTools.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
