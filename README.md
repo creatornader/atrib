@@ -49,18 +49,41 @@ Derived evidence products sit above the protocol. A harness can build a prior-wo
 Logs and traces are primary integration inputs for atrib, but the word "trace"
 can point at several different objects. The boundary matters.
 
-| What you already have | Use | What atrib adds |
-| --------------------- | --- | --------------- |
-| Tool calls through MCP or an SDK callback | [`@atrib/mcp`](packages/mcp/README.md), [`@atrib/mcp-wrap`](packages/mcp-wrap/README.md), or [`@atrib/agent`](packages/agent/README.md) | Signed action records with chain continuity and optional local sidecars. |
-| OpenTelemetry or OpenInference spans | [`@atrib/openinference`](packages/openinference/README.md) | Signed records and recall-readable sidecars from the span stream, while Langfuse, Phoenix, LangSmith, Braintrust, or another backend keeps the operations view. |
-| A host-owned run log, event stream, session history, checkpoint log, fork log, or compaction log | [`@atrib/runtime-log`](packages/runtime-log/README.md) | A `log_window_manifest` that commits to the bounded run window, roots, projections, receipts, and redaction policy without publishing raw log bodies by default. |
-| A hosted runtime API that exports session events after the fact | A future per-runtime adapter under [Pattern 5](ARCHITECTURE.md#runtime-integration-patterns) | Consumer-side attestation over what the vendor reported, not a claim that the vendor's private runtime state is itself true. |
-| A handoff, support investigation, or continuation packet | [`@atrib/verify`](packages/verify/README.md), `@atrib/verify-mcp`, and continuation packet patterns | Verifier-accepted record hashes that the receiving agent can cite through `informed_by`. |
+| What you already have                                                                            | Use                                                                                                                                     | What atrib adds                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool calls through MCP or an SDK callback                                                        | [`@atrib/mcp`](packages/mcp/README.md), [`@atrib/mcp-wrap`](packages/mcp-wrap/README.md), or [`@atrib/agent`](packages/agent/README.md) | Signed action records with chain continuity and optional local sidecars.                                                                                         |
+| OpenTelemetry or OpenInference spans                                                             | [`@atrib/openinference`](packages/openinference/README.md)                                                                              | Signed records and recall-readable sidecars from the span stream, while Langfuse, Phoenix, LangSmith, Braintrust, or another backend keeps the operations view.  |
+| A host-owned run log, event stream, session history, checkpoint log, fork log, or compaction log | [`@atrib/runtime-log`](packages/runtime-log/README.md)                                                                                  | A `log_window_manifest` that commits to the bounded run window, roots, projections, receipts, and redaction policy without publishing raw log bodies by default. |
+| A hosted runtime API that exports session events after the fact                                  | A future per-runtime adapter under [Pattern 5](ARCHITECTURE.md#runtime-integration-patterns)                                            | Consumer-side attestation over what the vendor reported, not a claim that the vendor's private runtime state is itself true.                                     |
+| A handoff, support investigation, or continuation packet                                         | [`@atrib/verify`](packages/verify/README.md), `@atrib/verify-mcp`, and continuation packet patterns                                     | Verifier-accepted record hashes that the receiving agent can cite through `informed_by`.                                                                         |
 
 The short rule: observability tools inspect and debug live traces; runtime
 systems own logs that reconstruct or resume a run; atrib signs actions and
 verifies claims over selected windows. Those layers compose, but they should not
 collapse into one product.
+
+## Frameworks and host runtimes
+
+The "any agent framework" claim is about tool-call middleware, not every host
+runtime feature. It covers SDK and MCP surfaces where application code owns the
+agent loop: raw MCP SDK, Claude Agent SDK, Cloudflare Agents, Vercel AI SDK,
+LangChain JS, and similar SDKs. Those integrations live in `@atrib/agent`,
+`@atrib/mcp`, and `@atrib/mcp-wrap`.
+
+Host runtime adapters cover a different shell: Claude Code, Codex, OpenClaw,
+Hermes, Cursor, Goose, hosted runtimes, or another harness that owns sessions,
+lifecycle hooks, approvals, subagents, checkpoints, telemetry, and run logs.
+Those adapters compose existing packages: `@atrib/mcp-wrap` for MCP tool calls,
+host-specific signing code for native tool hooks, `@atrib/openinference` for
+OpenInference-shaped span intake, `@atrib/runtime-log` for bounded run windows,
+`@atrib/verify` for accepted handoff claims, and `atrib-emit-cli` or the local
+substrate for hook-class observations.
+
+The implementation rule: one host event has one signing owner. If an MCP wrapper
+already signs a tool call, the host adapter should correlate ids and skip a
+second `tool_call` record. The private integration package pins this rule in
+[`packages/integration/src/host-runtime-proof.ts`](packages/integration/src/host-runtime-proof.ts)
+so future OpenClaw, Hermes, and other host proofs share the same vocabulary.
 
 ## How it works
 
@@ -205,6 +228,11 @@ This positioning keeps the claim honest. See spec [§3](atrib-spec.md#3-graph-qu
 
 ## Framework support
 
+This table covers framework tool-call middleware, not full host runtime
+integration. Host runtime work has its own boundary in
+[Architecture](ARCHITECTURE.md#agent-framework-vs-host-runtime-adapters) and in
+the [OpenClaw/Hermes map](docs/concepts/15-openclaw-hermes-integration-map.md).
+
 | Framework                                  | Adapter                                                           | Status     |
 | ------------------------------------------ | ----------------------------------------------------------------- | ---------- |
 | **Raw `@modelcontextprotocol/sdk`**        | `wrapMcpClient(client, interceptor, { serverUrl? })`              | ✅ Shipped |
@@ -243,7 +271,7 @@ atrib detects transaction events from all six simultaneously. It does not move m
 | [`@atrib/directory`](packages/directory/README.md)                 | AKD-backed identity-claim directory SDK. Bundles WASM artifacts from the Rust bridge.                                                                                                                                                                                                                                    |
 | [`@atrib/openinference`](packages/openinference/README.md)         | OpenTelemetry SpanProcessor consuming OpenInference-shaped spans and emitting signed atrib records plus recall-readable local sidecar content. Reference impl of spec [§9](atrib-spec.md#9-runtime-integration-patterns) Pattern #4; one adapter transitively covers every framework with OpenInference instrumentation. |
 | [`@atrib/memory-tool`](packages/memory-tool/README.md)             | Anthropic Memory Tool handler wrapper. Signs memory commands as atrib records while the host keeps its own storage backend.                                                                                                                                                                                              |
-| [`@atrib/runtime-log`](packages/runtime-log/README.md)             | Runtime-log proof helpers. Builds and verifies `log_window_manifest` objects for host-owned agent run windows.                                                                                                                                   |
+| [`@atrib/runtime-log`](packages/runtime-log/README.md)             | Runtime-log proof helpers. Builds and verifies `log_window_manifest` objects for host-owned agent run windows.                                                                                                                                                                                                           |
 | [`@atrib/emit`](services/atrib-emit/README.md)                     | Cognitive-primitive MCP server: signs observations, annotations, revisions the wrapper doesn't auto-capture.                                                                                                                                                                                                             |
 | [`@atrib/annotate`](services/atrib-annotate/README.md)             | Cognitive-primitive MCP server: marks past records' importance, topics, and summary.                                                                                                                                                                                                                                     |
 | [`@atrib/revise`](services/atrib-revise/README.md)                 | Cognitive-primitive MCP server: supersedes a prior position with a stated reason.                                                                                                                                                                                                                                        |

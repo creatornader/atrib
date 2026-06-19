@@ -9,6 +9,23 @@ This package exists for two purposes:
 
 If you're a customer trying to figure out how to plug atrib in, the examples here are the answer. If you're contributing to atrib, the tests here are how the cross-package contract is enforced.
 
+## Adapter family contract
+
+Integration proofs now separate framework tool-call middleware from host runtime
+adapters.
+
+Framework middleware covers MCP and SDK call paths where application code owns
+the agent loop. Host runtime adapters cover harness-owned events such as native
+tool hooks, lifecycle hooks, approvals, subagents, span intake, runtime-log
+windows, and hosted exports.
+
+The shared helper for host proofs lives at
+[`src/host-runtime-proof.ts`](src/host-runtime-proof.ts). It classifies a host
+surface, creates a schema-pinned proof envelope, and checks that one host event
+has only one `tool_call` signing owner. OpenClaw, Hermes, and future harness
+proofs should use that vocabulary before they become package or upstream PR
+candidates.
+
 ## Try the end-to-end demo
 
 The fastest way to see atrib working end-to-end in a single process:

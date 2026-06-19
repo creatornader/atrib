@@ -6427,6 +6427,98 @@ exported event under the agent's atrib key.
 - [§9](atrib-spec.md#9-runtime-integration-patterns), runtime integration
   patterns.
 
+---
+
+## D122: Host runtime adapters stay distinct from agent framework adapters
+
+**Date:** 2026-06-19
+
+**Status:** Accepted
+
+**Extends:** [D069](#d069-runtime-integration-patterns--first-class-peers-no-canonical-path), [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape), [D108](#d108-observability-span-trees-are-intake-local-sidecars-are-cognitive-payload), [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned), and [D121](#d121-runtime-log-proof-manifests-verify-host-owned-run-windows).
+
+**Context.** The OpenClaw and Hermes integration work exposed a product and
+package-boundary risk. The phrase "any agent framework" currently points at
+MCP and SDK tool-call middleware. OpenClaw, Hermes, Claude Code, Codex, Cursor,
+Goose, and hosted runtimes expose a different shell: sessions, lifecycle hooks,
+native tool execution, approvals, subagents, exec env, telemetry, checkpoints,
+trajectory files, and hosted session exports.
+
+Putting all of those surfaces under `@atrib/agent` would make one package carry
+two unrelated jobs. It would also make proof claims vague: a tool-call
+interceptor, a span processor, a runtime-log manifest, and a hosted export
+attestation do not prove the same thing.
+
+**Decision.** Keep agent framework adapters and host runtime adapters as two
+separate adapter families.
+
+Agent framework adapters stay focused on application-owned call paths:
+outbound MCP calls, in-process MCP server wrapping, SDK tool callbacks, and
+payment-response fallback detection. Those surfaces belong to `@atrib/agent`,
+`@atrib/mcp`, and `@atrib/mcp-wrap`.
+
+Host runtime adapters cover harness-owned runtime surfaces: native tool hooks,
+lifecycle hooks, approvals, subagents, exec env propagation, span intake,
+runtime-log windows, and hosted session exports. Those adapters start as
+proof-kit code under `@atrib/integration` and compose existing surfaces:
+`@atrib/mcp-wrap` for MCP tool calls, host-specific signing code for native
+tool hooks, `@atrib/openinference` for OpenInference-shaped span intake,
+`@atrib/runtime-log` for bounded run windows, `@atrib/verify` for accepted
+handoff claims, and `atrib-emit-cli` or the local substrate for hook-class
+observations.
+
+Do not create public `@atrib/openclaw`, `@atrib/hermes`, or generic
+`@atrib/host` packages until repeated implementations prove that the package
+boundary reduces maintenance.
+
+One host event gets one signing owner. If a host observes a tool call that
+`@atrib/mcp-wrap` already signed, the host adapter records correlation material
+and skips a second `tool_call` record.
+
+**Alternatives considered.**
+
+- _Fold host runtime adapters into `@atrib/agent`._ Rejected. It would blur
+  framework middleware with harness lifecycle, runtime logs, approvals, and
+  hosted exports.
+- _Create a generic public `@atrib/host` package now._ Rejected. OpenClaw and
+  Hermes are good forcing functions, but two planned proofs are not enough to
+  freeze a public package surface.
+- _Treat OpenClaw and Hermes as OpenInference-only integrations._ Rejected.
+  Spans are useful intake and correlation material, but both hosts expose
+  stronger direct tool and runtime surfaces.
+- _Sign every host-observed event as a new record even when another atrib
+  wrapper signed the same tool call._ Rejected. Duplicate signing makes trace
+  review noisy and weakens the claim that each record has a clear producer.
+
+**Consequences.**
+
+- README and architecture docs must show two matrices: framework tool-call
+  middleware and host runtime adapters.
+- OpenClaw and Hermes start as external plugin proofs with fixture tests and
+  recorded proof output before any upstream PR.
+- Host proofs must state producer ownership, privacy posture, and skip rules
+  for calls already signed by `@atrib/mcp-wrap`.
+- `@atrib/openinference` remains span intake. Use it for OpenInference-shaped
+  spans or correlation, not as the default proof boundary when direct tool hooks
+  exist.
+- `@atrib/runtime-log` remains the proof object for trajectories, transcripts,
+  session logs, checkpoint logs, job windows, forks, and compactions.
+- Future hosts are classified by boundary, not brand.
+- `packages/integration/src/host-runtime-proof.ts` pins the private proof
+  envelope and duplicate-signing check for OpenClaw, Hermes, and future host
+  proofs.
+
+**Cross-references.**
+
+- [`README.md#frameworks-and-host-runtimes`](README.md#frameworks-and-host-runtimes),
+  top-level product boundary.
+- [`ARCHITECTURE.md#agent-framework-vs-host-runtime-adapters`](ARCHITECTURE.md#agent-framework-vs-host-runtime-adapters),
+  adapter family map and signing owner rules.
+- [`docs/concepts/15-openclaw-hermes-integration-map.md`](docs/concepts/15-openclaw-hermes-integration-map.md),
+  host-specific mechanics map.
+- [`packages/integration/src/host-runtime-proof.ts`](packages/integration/src/host-runtime-proof.ts),
+  private proof envelope and duplicate owner check.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
