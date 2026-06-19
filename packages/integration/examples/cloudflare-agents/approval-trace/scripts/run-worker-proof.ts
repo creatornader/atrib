@@ -580,7 +580,7 @@ async function main() {
       name: 'interactive UI renders',
       ok:
         page.includes('data-testid="approval-trace-app"') &&
-        page.includes('Code Mode Approval Trace') &&
+        page.includes('Cloudflare Agent Trace') &&
         page.includes('Code Mode approval halted') &&
         page.includes('Trigger &amp; progress') &&
         page.includes('write_file') &&
