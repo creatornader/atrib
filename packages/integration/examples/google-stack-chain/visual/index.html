@@ -20,26 +20,8 @@
         </div>
       </header>
 
-      <section
-        class="workflow-rail"
-        id="workflowRail"
-        aria-label="active runtime progress"
-        aria-live="polite"
-      >
-        <div class="rail-main">
-          <span class="status-dot pending" id="runtimeStatusDot" aria-hidden="true"></span>
-          <div>
-            <strong id="runtimeRailTitle">Runtime waiting</strong>
-            <p class="runtime-reason" id="runtimeReason">
-              Start a run to verify the AP2 replay packet, then sign fresh A2A and ADK records.
-            </p>
-          </div>
-        </div>
-        <ol class="runtime-flow" id="runtimeFlow" aria-label="active runtime flow"></ol>
-      </section>
-
-      <section class="layout">
-        <aside class="artifact-rail" aria-label="artifact summary">
+      <section class="workbench-grid">
+        <aside class="run-rail" aria-label="runtime controls">
           <section class="panel compact run-control-card">
             <div class="panel-head">
               <h2>Runtime control</h2>
@@ -53,7 +35,9 @@ Continue only if the AP2 evidence verifies, then quote the next atlas-kit action
             </label>
             <div class="runtime-actions">
               <button class="primary-action" id="startRuntimeRun" type="button">Start run</button>
-              <button class="secondary-action" id="refreshRuntime" type="button">Refresh</button>
+              <button class="secondary-action" id="resetRuntimeView" type="button" disabled>
+                Reset view
+              </button>
               <button class="secondary-action" id="writeRuntimeAnalytics" type="button">
                 Write rows
               </button>
@@ -88,57 +72,6 @@ Continue only if the AP2 evidence verifies, then quote the next atlas-kit action
             </dl>
             <ul class="check-list runtime-checks" id="runtimeChecks"></ul>
           </section>
-
-          <section class="panel compact artifact-card">
-            <div class="panel-head">
-              <h2>Reference artifact</h2>
-            </div>
-            <button class="command" id="copyCommand" type="button" aria-label="Copy proof command">
-              <span>Copy command</span>
-              <code id="commandText"
-                >pnpm --filter @atrib/integration google-stack-chain-proof</code
-              >
-            </button>
-            <dl class="facts">
-              <div>
-                <dt>Reference</dt>
-                <dd id="proofStatus">Loading&hellip;</dd>
-              </div>
-              <div>
-                <dt>Strategy</dt>
-                <dd id="strategyText">atrib-google-stack-chain-proof-v2</dd>
-              </div>
-              <div>
-                <dt>Snapshot</dt>
-                <dd>
-                  <span id="snapshotSchema">atrib-google-stack-chain.snapshot.v1</span>
-                  <span class="fact-subtle" id="snapshotLabel">Reading local snapshot&hellip;</span>
-                </dd>
-              </div>
-              <div>
-                <dt>Bridge</dt>
-                <dd>explicit informed_by</dd>
-              </div>
-            </dl>
-            <div class="reference-actions" aria-label="proof view mode">
-              <button
-                class="secondary-action active"
-                id="viewLiveRun"
-                type="button"
-                aria-pressed="true"
-              >
-                Live run
-              </button>
-              <button
-                class="secondary-action"
-                id="viewReferenceSnapshot"
-                type="button"
-                aria-pressed="false"
-              >
-                Reference
-              </button>
-            </div>
-          </section>
         </aside>
 
         <section class="proof-stage panel">
@@ -147,20 +80,34 @@ Continue only if the AP2 evidence verifies, then quote the next atlas-kit action
               <h2 id="stageTitle">Live proof chain</h2>
               <p id="stageMode">Start a runtime run to populate AP2, A2A, and ADK records.</p>
             </div>
-            <div class="segmented" aria-label="view mode">
-              <button class="segment active" type="button" data-view="live" aria-pressed="true">
-                Live
-              </button>
-              <button class="segment" type="button" data-view="reference" aria-pressed="false">
-                Reference
-              </button>
-              <button class="segment" type="button" data-view="analytics" aria-pressed="false">
-                Analytics
-              </button>
-              <button class="segment" type="button" data-view="limits" aria-pressed="false">
-                Limits
-              </button>
+            <div class="stage-actions">
+              <div class="segmented" aria-label="proof view mode">
+                <button class="segment active" type="button" data-view="live" aria-pressed="true">
+                  Live run
+                </button>
+                <button class="segment" type="button" data-view="reference" aria-pressed="false">
+                  Example run
+                </button>
+              </div>
             </div>
+          </div>
+
+          <div
+            class="runtime-strip"
+            id="workflowRail"
+            aria-label="active runtime progress"
+            aria-live="polite"
+          >
+            <div class="rail-main">
+              <span class="status-dot pending" id="runtimeStatusDot" aria-hidden="true"></span>
+              <div>
+                <strong id="runtimeRailTitle">Runtime waiting</strong>
+                <p class="runtime-reason" id="runtimeReason">
+                  Start a run to verify the AP2 replay packet, then sign fresh A2A and ADK records.
+                </p>
+              </div>
+            </div>
+            <ol class="runtime-flow" id="runtimeFlow" aria-label="active runtime flow"></ol>
           </div>
 
           <div class="chain" id="chain" aria-label="proof chain"></div>
@@ -209,6 +156,22 @@ Continue only if the AP2 evidence verifies, then quote the next atlas-kit action
               >
                 <code id="selectedHash"></code>
               </button>
+              <div class="record-actions" aria-label="selected record actions">
+                <button class="secondary-action" id="copySelectedHash" type="button" disabled>
+                  Copy hash
+                </button>
+                <button class="secondary-action" id="copySelectedJson" type="button" disabled>
+                  Copy JSON
+                </button>
+                <button
+                  class="secondary-action record-link"
+                  id="viewSelectedRecord"
+                  type="button"
+                  disabled
+                >
+                  View full JSON
+                </button>
+              </div>
             </div>
             <div>
               <p class="field-label">Parents</p>
@@ -216,7 +179,13 @@ Continue only if the AP2 evidence verifies, then quote the next atlas-kit action
             </div>
             <div>
               <p class="field-label">Verifier checks</p>
-              <ul class="check-list" id="checkList"></ul>
+              <div class="verify-control">
+                <button class="secondary-action" id="verifySelectedRecord" type="button" disabled>
+                  Verify selected
+                </button>
+                <p class="verify-status neutral" id="verifyStatus">Select a record to verify.</p>
+              </div>
+              <ul class="check-list verifier-check-list" id="checkList"></ul>
             </div>
             <div>
               <p class="field-label">Evidence read</p>
@@ -230,7 +199,56 @@ Continue only if the AP2 evidence verifies, then quote the next atlas-kit action
         </aside>
       </section>
 
-      <section class="support-grid" aria-label="outreach proof framing">
+      <section class="evidence-grid" aria-label="outreach proof framing">
+        <section class="panel compact artifact-card reference-panel">
+          <div class="panel-head">
+            <h2>Reference artifact</h2>
+          </div>
+          <button class="command" id="copyCommand" type="button" aria-label="Copy proof command">
+            <span>Copy command</span>
+            <code id="commandText">pnpm --filter @atrib/integration google-stack-chain-proof</code>
+          </button>
+          <dl class="facts">
+            <div>
+              <dt>Reference</dt>
+              <dd id="proofStatus">Loading&hellip;</dd>
+            </div>
+            <div>
+              <dt>Strategy</dt>
+              <dd id="strategyText">atrib-google-stack-chain-proof-v2</dd>
+            </div>
+            <div>
+              <dt>Snapshot</dt>
+              <dd>
+                <span id="snapshotSchema">atrib-google-stack-chain.snapshot.v1</span>
+                <span class="fact-subtle" id="snapshotLabel">Reading local snapshot&hellip;</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Bridge</dt>
+              <dd>explicit informed_by</dd>
+            </div>
+          </dl>
+          <div class="reference-actions" aria-label="proof view mode">
+            <button
+              class="secondary-action active"
+              id="viewLiveRun"
+              type="button"
+              aria-pressed="true"
+            >
+              Live run
+            </button>
+            <button
+              class="secondary-action"
+              id="viewReferenceSnapshot"
+              type="button"
+              aria-pressed="false"
+            >
+              Example run
+            </button>
+          </div>
+        </section>
+
         <section class="panel compact">
           <div class="panel-head">
             <h2>What it gives Google</h2>
@@ -246,6 +264,21 @@ Continue only if the AP2 evidence verifies, then quote the next atlas-kit action
         </section>
       </section>
     </main>
+    <dialog class="record-dialog" id="recordDialog" aria-labelledby="recordDialogTitle">
+      <section class="dialog-panel">
+        <div class="dialog-head">
+          <div>
+            <p class="field-label">Record JSON</p>
+            <h2 id="recordDialogTitle">Selected record</h2>
+          </div>
+          <button class="secondary-action" id="closeRecordDialog" type="button">Close</button>
+        </div>
+        <pre class="record-json"><code id="recordDialogJson"></code></pre>
+        <div class="dialog-actions">
+          <button class="secondary-action" id="copyDialogJson" type="button">Copy JSON</button>
+        </div>
+      </section>
+    </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="./proof-snapshot.js"></script>
     <script src="./runtime-config.js"></script>
