@@ -26,6 +26,7 @@ export const LOCAL_SUBSTRATE_RESPONSE_SCHEMA = 'atrib.local-substrate-coordinato
 export const LOCAL_SUBSTRATE_HEALTH_SCHEMA = 'atrib.local-substrate-coordinator.health.v0'
 export const LOCAL_SUBSTRATE_HTTP_DEFAULT_PATH = '/atrib/local-substrate'
 export const LOCAL_SUBSTRATE_HTTP_DEFAULT_HEALTH_PATH = '/atrib/local-substrate/health'
+export const LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS = 1500
 
 export const LOCAL_SUBSTRATE_HARNESS_CLASSES = [
   'startup-spawn',
@@ -838,9 +839,10 @@ function rejectedLocalSubstrateResponse(
   }
 }
 
-function localSubstrateHttpPaths(
-  options: LocalSubstrateCoordinatorHttpOptions = {},
-): { endpointPath: string; healthPath: string } {
+function localSubstrateHttpPaths(options: LocalSubstrateCoordinatorHttpOptions = {}): {
+  endpointPath: string
+  healthPath: string
+} {
   return {
     endpointPath: options.endpointPath ?? LOCAL_SUBSTRATE_HTTP_DEFAULT_PATH,
     healthPath: options.healthPath ?? LOCAL_SUBSTRATE_HTTP_DEFAULT_HEALTH_PATH,
@@ -922,7 +924,7 @@ export async function tryLocalSubstrateCoordinator(
     }
   }
 
-  const timeoutMs = Math.max(1, options.timeoutMs ?? 500)
+  const timeoutMs = Math.max(1, options.timeoutMs ?? LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS)
   let rawResponse: unknown
   try {
     rawResponse = await callWithTimeout(options.transport, request, timeoutMs)
@@ -1027,7 +1029,7 @@ export async function handleLocalSubstrateCoordinatorHttpRequest(
   let rawResponse: unknown
   try {
     rawResponse = await coordinator.transport(request, {
-      timeoutMs: Math.max(1, options.timeoutMs ?? 500),
+      timeoutMs: Math.max(1, options.timeoutMs ?? LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS),
     })
   } catch (error) {
     return jsonHttpResult(503, {

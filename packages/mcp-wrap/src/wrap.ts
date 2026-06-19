@@ -147,6 +147,7 @@ export function buildRecordReferenceResolver(
   log: LogFn = () => {},
 ): AtribOptions['recordReferenceResolver'] {
   return async (candidate) => {
+    const startedAt = Date.now()
     if (
       recordFile &&
       (await recordHashExistsInMirror({ path: recordFile, recordHash: candidate.recordHash }))
@@ -166,6 +167,8 @@ export function buildRecordReferenceResolver(
       source: candidate.source,
       tool_name: candidate.toolName,
       resolution,
+      lookup_elapsed_ms: Date.now() - startedAt,
+      local_lookup_timeout_ms: RECORD_REFERENCE_LOCAL_LOOKUP_TIMEOUT_MS,
     })
     return false
   }

@@ -345,7 +345,7 @@ function buildDescription(): CliDescription {
       },
       {
         name: 'ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS',
-        description: 'Optional per local-substrate attempt timeout in ms; defaults to 500.',
+        description: 'Optional per local-substrate attempt timeout in ms; defaults to 1500.',
         required: false,
       },
       {
