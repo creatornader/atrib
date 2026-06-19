@@ -562,7 +562,7 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
   })`)
   for (const geometry of buttonGeometry) {
     expect(geometry.buttonDisplay).toBe('flex')
-    expect(geometry.buttonInsideActions).toBe(true)
+    expect(geometry.buttonInsideActions, JSON.stringify(geometry)).toBe(true)
     expect(geometry.justify).toBe('center')
     expect(geometry.contentDisplay).toBe('grid')
     expect(geometry.contentJustifyItems).toBe('center')
