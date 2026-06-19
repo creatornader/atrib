@@ -428,7 +428,7 @@ function fixturePlan(prompt: string): PlannedAction {
  }`
   return {
     planner: 'fixture',
-    action: 'Prepare Code Mode-shaped repository side effect',
+    action: 'Update file in repository',
     summary:
       'Respond to a GitHub issue webhook by preparing a small repository file update that adds request limiting to the reported route.',
     risk: 'Introduces rate limiting which may impact client traffic if misconfigured.',
@@ -506,7 +506,7 @@ function revisedPlanFromFeedback(
  }`
   return {
     planner: 'fixture',
-    action: 'Prepare revised Code Mode-shaped repository side effect',
+    action: 'Update revised file in repository',
     summary:
       'Revise the repository file update after human feedback by keeping the guard scoped to the reported route.',
     risk: 'Narrows the limiter to /v1/report and lowers the default cap before any Code Mode write runs.',
@@ -880,8 +880,9 @@ class LocalCodeModeExecutor implements Executor {
     _providersOrFns: ResolvedProvider[] | Record<string, (...args: unknown[]) => Promise<unknown>>,
     options?: ExecuteOptions,
   ): Promise<ExecuteResult> {
-    const repository = options?.connectors?.find((connector) => connector.name === 'repository')
-      ?.binding
+    const repository = options?.connectors?.find(
+      (connector) => connector.name === 'repository',
+    )?.binding
     if (!repository) return { result: undefined, error: 'repository connector unavailable' }
     try {
       const args = parseCodeModeScriptArgs(code)
@@ -889,7 +890,8 @@ class LocalCodeModeExecutor implements Executor {
       const preview = await repository.callTool('preview_file_update', args)
       const previewControl = codeModeControl(preview)
       if (previewControl === 'pause') return { result: undefined, error: '__CODEMODE_PAUSE__' }
-      if (previewControl === 'error') return { result: undefined, error: codeModeControlMessage(preview) }
+      if (previewControl === 'error')
+        return { result: undefined, error: codeModeControlMessage(preview) }
       const execution = await repository.callTool('write_file', args)
       const executionControl = codeModeControl(execution)
       if (executionControl === 'pause') return { result: undefined, error: '__CODEMODE_PAUSE__' }
@@ -1035,9 +1037,7 @@ class RepositoryCodeModeConnector extends CodemodeConnector<Env> {
     }
   }
 
-  private validateArgs(args: unknown):
-    | CodeModeToolArgs
-    | CodeModeValidationError {
+  private validateArgs(args: unknown): CodeModeToolArgs | CodeModeValidationError {
     if (!isCodeModeToolArgs(args)) {
       return {
         status: 'error',
@@ -1426,7 +1426,9 @@ export class ApprovalTraceAgent extends Agent<Env> {
       (action) => action.connector === 'repository' && action.method === 'write_file',
     )
     if (!pendingAction) {
-      throw new Error(`Code Mode run paused without repository.write_file: ${JSON.stringify(output)}`)
+      throw new Error(
+        `Code Mode run paused without repository.write_file: ${JSON.stringify(output)}`,
+      )
     }
     return {
       output,
@@ -1458,9 +1460,11 @@ export class ApprovalTraceAgent extends Agent<Env> {
   }
 
   private currentCodeModeExecutor(workflow: WorkflowRow): CodeModeExecutorMode {
-    const executor = (this.currentProposalBody(workflow) as {
-      codemode?: { executor?: unknown }
-    } | null)?.codemode?.executor
+    const executor = (
+      this.currentProposalBody(workflow) as {
+        codemode?: { executor?: unknown }
+      } | null
+    )?.codemode?.executor
     return executor === 'local-test' ? 'local-test' : 'dynamic-worker'
   }
 

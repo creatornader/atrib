@@ -2161,6 +2161,37 @@ export function renderApp(options: { colo?: string } = {}): string {
         display: none;
       }
 
+      .native-runtime-inline {
+        align-items: center;
+        display: inline-flex;
+        flex-wrap: nowrap;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .native-runtime-badge {
+        align-items: center;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 999px;
+        color: #1d4ed8;
+        display: inline-flex;
+        font-size: 10px;
+        font-weight: 800;
+        gap: 5px;
+        line-height: 1.2;
+        padding: 2px 6px;
+        white-space: nowrap;
+      }
+
+      .native-runtime-badge::before {
+        background: #2563eb;
+        border-radius: 999px;
+        content: "";
+        height: 6px;
+        width: 6px;
+      }
+
       .feedback-summary,
       .review-feedback-drawer {
         background: #f8fafc;
@@ -4221,7 +4252,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         const bootSigners = [
           { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent', status: reached('proposal') ? 'Signed' : 'Pending', className: reached('proposal') ? 'signed' : 'pending mcp', sig: reached('proposal') && run ? signerLatestRecordDigest(run, 'agent') : '-' },
           { kind: 'human', name: 'Human', detail: 'alice@example.com', status: 'Pending', className: 'pending', sig: '-' },
-          { kind: 'runtime', name: 'Code Mode', detail: 'CodemodeRuntime@0.4.0', status: 'Pending', className: 'pending mcp', sig: '-' },
+          { kind: 'runtime', name: 'Code Mode', detail: codeModeRuntimeVersionLabel(), status: 'Pending', className: 'pending mcp', sig: '-' },
         ];
         const merkleRoot = reached('trigger') ? run?.records[0]?.record_hash ?? '' : '';
         const logHash = reached('context') ? run?.records[1]?.record_hash ?? '' : '';
@@ -4519,6 +4550,40 @@ export function renderApp(options: { colo?: string } = {}): string {
 
       function latestProposalRecord(run = currentRun) {
         return latestRecordByLabel(run, ['revision', 'proposal']);
+      }
+
+      function codeModeRuntimeVersionLabel() {
+        return 'CodemodeRuntime@0.4.1';
+      }
+
+      function codeModeSummaryFromProposal(proposal) {
+        const codemode = proposal?.body?.codemode ?? {};
+        const pending = codemode.pending_action ?? {};
+        const log = Array.isArray(codemode.log) ? codemode.log : [];
+        const pendingEntry = log.find((entry) => entry.connector === pending.connector && entry.method === pending.method)
+          ?? log.find((entry) => entry.requires_approval)
+          ?? {};
+        return {
+          version: codeModeRuntimeVersionLabel(),
+          executor: codemode.executor ?? 'dynamic-worker',
+          executionId: codemode.execution_id ?? pending.executionId ?? 'pending',
+          executionStatus: codemode.execution_status ?? 'pending',
+          seq: pending.seq ?? pendingEntry.seq ?? '-',
+          connector: pending.connector ?? pendingEntry.connector ?? 'repository',
+          method: pending.method ?? pendingEntry.method ?? 'write_file',
+          requiresApproval: pendingEntry.requires_approval ?? true,
+          argsHash: pendingEntry.args_hash ?? '-',
+        };
+      }
+
+      function renderCodeModeRuntimeInline(proposal) {
+        const runtime = codeModeSummaryFromProposal(proposal);
+        return \`
+          <span class="native-runtime-inline" title="\${escapeHtml(runtime.executionId)}">
+            <span class="native-runtime-badge">Code Mode \${escapeHtml(runtime.version.replace('CodemodeRuntime@', ''))}</span>
+            <span class="visually-hidden">Native Code Mode runtime \${escapeHtml(runtime.version)}. Status \${escapeHtml(runtime.executionStatus)}. Pending method \${escapeHtml(runtime.connector)}.\${escapeHtml(runtime.method)}. Approval gate seq \${escapeHtml(runtime.seq)} requiresApproval. Cloudflare owns durable pause, replay, approve, and reject. atrib signs the proposal, human decision, runtime resolution, and audit handoff around that lifecycle. Args hash \${escapeHtml(runtime.argsHash)}. Executor \${escapeHtml(runtime.executor)}.</span>
+          </span>
+        \`;
       }
 
       function latestChangeRequestRecord(run = currentRun) {
@@ -5051,7 +5116,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           </div>
           <div class="metric">
             <span class="label">Proposed action</span>
-            <span class="value"><span class="pill">\${payload.operation ?? 'write_file'}</span> \${body.action ?? 'No action'}</span>
+            <span class="value"><span class="pill">\${payload.operation ?? 'write_file'}</span> \${body.action ?? 'No action'} \${renderCodeModeRuntimeInline(proposal)}</span>
           </div>
           <div class="metric">
             <span class="label">Target</span>
@@ -5292,7 +5357,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         const signers = [
           { kind: 'agent', name: 'Agent', detail: 'agents/triage@1.4.2', signer: 'agent' },
           { kind: 'human', name: 'Human', detail: 'alice@example.com', signer: 'human' },
-          { kind: 'runtime', name: 'Code Mode', detail: 'CodemodeRuntime@0.4.0', signer: 'codemode_runtime' },
+          { kind: 'runtime', name: 'Code Mode', detail: codeModeRuntimeVersionLabel(), signer: 'codemode_runtime' },
         ].map((signer) => {
           const records = recordsForSigner(run, signer.signer);
           const recordCount = records.length;

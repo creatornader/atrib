@@ -33,6 +33,11 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.locator('#answer')).toContainText('Proposed action generated')
   await expect(page.locator('#answer')).toContainText('Code Mode approval halted')
   await expect(page.locator('#proposal')).toContainText('Proposed action')
+  await expect(page.locator('#proposal')).toContainText('Native Code Mode runtime')
+  await expect(page.locator('#proposal')).toContainText('CodemodeRuntime@0.4.1')
+  await expect(page.locator('#proposal')).toContainText('repository.write_file')
+  await expect(page.locator('#proposal')).toContainText('requiresApproval')
+  await expect(page.locator('#proposal')).toContainText('Cloudflare owns durable pause')
   await expect(page.locator('#proposal')).toContainText('Diff (unified)')
   await expect(page.locator('#receipts pre')).toContainText('"trace_id"')
   await expect(page.locator('#receiptSummary')).toContainText('Total records')
@@ -102,9 +107,7 @@ async function requestRevision(page: Page): Promise<void> {
   await expect(page.locator('#timeline')).toContainText('Awaiting decision on revised proposal')
   await expect(page.locator('#timeline')).not.toContainText('human.rejection.signed')
   await expect(page.locator('#timeline')).not.toContainText('action_mcp')
-  await expect(page.locator('.signer-row').filter({ hasText: 'Code Mode' })).toContainText(
-    'Signed',
-  )
+  await expect(page.locator('.signer-row').filter({ hasText: 'Code Mode' })).toContainText('Signed')
   await expect(page.locator('#requestChanges')).toBeDisabled()
   await expect(page.locator('#requestChanges')).toContainText('Revision signed')
   await expect(page.locator('#requestChanges')).toContainText('Review final proposal')
@@ -1821,7 +1824,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
         'Signed',
       )
       await expect(page.locator('#timeline')).not.toContainText('action_mcp')
-      await expect(page.locator('[data-step="resume"]')).toContainText('Code Mode execution skipped')
+      await expect(page.locator('[data-step="resume"]')).toContainText(
+        'Code Mode execution skipped',
+      )
       await expect(page.locator('[data-step="audit"]')).toContainText('Decision audit ready')
       await expect(page.locator('#receipts pre')).toContainText('"current_step": 3')
 
