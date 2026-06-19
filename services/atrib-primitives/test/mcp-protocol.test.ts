@@ -8,9 +8,12 @@ import { join, resolve } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   bindAtribPrimitivesHttpHost,
+  createAtribPrimitivesBackend,
   type AtribPrimitivesBackend,
+  type AtribPrimitivesDiagnostics,
 } from '../src/index.js'
 
 const BINARY = resolve(__dirname, '..', 'dist', 'index.js')
@@ -51,6 +54,19 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
 }
 
+function emptyDiagnostics(toolTimeoutMs = 45_000): AtribPrimitivesDiagnostics {
+  return {
+    tool_timeout_ms: toolTimeoutMs,
+    active_tool_calls: 0,
+    calls_started: 0,
+    calls_succeeded: 0,
+    calls_failed: 0,
+    calls_timed_out: 0,
+    calls_settled_after_timeout: 0,
+    in_flight_tool_calls: [],
+  }
+}
+
 function fakeBackend(): AtribPrimitivesBackend {
   return {
     tools: [],
@@ -59,6 +75,7 @@ function fakeBackend(): AtribPrimitivesBackend {
     callTool: async () => {
       throw new Error('fake backend has no tools')
     },
+    diagnostics: () => emptyDiagnostics(),
     flush: async () => {},
     close: async () => {},
   }
@@ -321,6 +338,83 @@ describe('atrib-primitives MCP runtime', () => {
       }
       throw new Error('backend did not report healthy')
     } finally {
+      await host.close()
+    }
+  })
+
+  it('times out hung primitive calls and exposes in-flight diagnostics', async () => {
+    let releaseTool!: () => void
+    const toolGate = new Promise<void>((resolveTool) => {
+      releaseTool = resolveTool
+    })
+    const backend = await createAtribPrimitivesBackend({
+      toolTimeoutMs: 25,
+      primitives: [
+        [
+          'slow',
+          () => {
+            const mcp = new McpServer({ name: 'slow-primitive', version: '0.0.0' })
+            mcp.registerTool(
+              'slow_tool',
+              {
+                description: 'Slow test tool',
+                inputSchema: {},
+              },
+              async () => {
+                await toolGate
+                return { content: [{ type: 'text', text: 'released' }] }
+              },
+            )
+            return { mcp }
+          },
+        ],
+      ],
+    })
+    const host = await bindAtribPrimitivesHttpHost({
+      port: 0,
+      backendFactory: async () => backend,
+      toolTimeoutMs: 25,
+    })
+    const client = await connectHttpClient(host.endpoint, 'atrib-primitives-timeout-test')
+
+    try {
+      const startedAt = Date.now()
+      await expect(client.callTool({ name: 'slow_tool', arguments: {} })).rejects.toThrow(
+        /slow_tool timed out after 25ms/,
+      )
+      expect(Date.now() - startedAt).toBeLessThan(1000)
+
+      const degraded = (await (await fetch(host.healthEndpoint)).json()) as {
+        status?: string
+        report?: {
+          tool_calls?: AtribPrimitivesDiagnostics
+        }
+      }
+      expect(degraded.status).toBe('degraded')
+      expect(degraded.report?.tool_calls?.active_tool_calls).toBe(1)
+      expect(degraded.report?.tool_calls?.calls_timed_out).toBe(1)
+      expect(degraded.report?.tool_calls?.in_flight_tool_calls[0]?.tool).toBe('slow_tool')
+      expect(degraded.report?.tool_calls?.in_flight_tool_calls[0]?.timed_out).toBe(true)
+
+      releaseTool()
+      for (let i = 0; i < 20; i += 1) {
+        const health = (await (await fetch(host.healthEndpoint)).json()) as {
+          status?: string
+          report?: {
+            tool_calls?: AtribPrimitivesDiagnostics
+          }
+        }
+        if (health.report?.tool_calls?.active_tool_calls === 0) {
+          expect(health.status).toBe('healthy')
+          expect(health.report.tool_calls.calls_settled_after_timeout).toBe(1)
+          return
+        }
+        await delay(10)
+      }
+      throw new Error('timed-out primitive call did not settle')
+    } finally {
+      releaseTool()
+      await client.close().catch(() => {})
       await host.close()
     }
   })

@@ -28,6 +28,7 @@ node services/atrib-primitives/dist/index.js \
   --host 127.0.0.1 \
   --port 8796 \
   --path /mcp \
+  --tool-timeout-ms 45000 \
   --json
 ```
 
@@ -39,6 +40,8 @@ Streamable HTTP mode keeps one host-owned process alive and lets MCP clients for
 The HTTP host creates one mounted primitive backend per host process, gives each MCP client its own Streamable HTTP session transport, closes idle sessions after 12 hours by default, and never spawns the seven standalone primitive binaries.
 
 The HTTP listener binds before the backend finishes mounting. During that window the health endpoint returns HTTP 503 with `status: "starting"` and `primitive_runtime.backend: "starting"` instead of refusing the connection. Once the seven primitive packages are mounted, health returns HTTP 200 with `status: "healthy"` and `primitive_runtime.backend: "shared"`. The `--json` ready line is still printed only after the shared backend is ready.
+
+Each primitive tool dispatch has a runtime deadline. The default is 45 seconds and can be changed with `--tool-timeout-ms` or `ATRIB_PRIMITIVES_TOOL_TIMEOUT_MS`. If a child primitive call crosses the deadline, the runtime returns an MCP timeout before the client-level deadline, logs a structured `tool_call_timed_out` event on stderr, and keeps the underlying call visible in health until it settles. During that window health stays HTTP 200 but reports `status: "degraded"` with `report.tool_calls.active_tool_calls`, `calls_timed_out`, and `in_flight_tool_calls`.
 
 The health report includes the profile's context policy. Set `ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID=1` on hosts that should refuse write-primitive calls when neither the caller nor the harness can provide a `context_id`. The write primitives then return a warnings-only response instead of signing a synthesized orphan context.
 
@@ -52,10 +55,12 @@ node services/atrib-primitives/dist/index.js \
 
 Proxy mode speaks MCP over stdio to the client, connects to the host-owned Streamable HTTP endpoint, lists the upstream tools, and forwards tool calls. It does not mount the primitive packages itself. Use it for stdio-only clients such as Claude Desktop or Claude Code when the real primitive backend should stay in one launchd-owned HTTP process.
 
+Proxy mode uses the same tool timeout setting as the host runtime. The shared host should normally return first, but the proxy will also return a clean MCP timeout if it points at an older or wedged endpoint.
+
 ## Test
 
 ```sh
 pnpm --filter @atrib/primitives-runtime test
 ```
 
-The protocol test lists all 15 tools over stdio, routes a recall call through the combined server, repeats the path through Streamable HTTP, checks the stdio proxy path, verifies that two HTTP sessions share one mounted primitive backend, checks the starting health state, and asserts the health contract for explicit-context profiles.
+The protocol test lists all 15 tools over stdio, routes a recall call through the combined server, repeats the path through Streamable HTTP, checks the stdio proxy path, verifies that two HTTP sessions share one mounted primitive backend, checks the starting health state, asserts the health contract for explicit-context profiles, and proves a hung child primitive returns a bounded timeout while health reports the stuck in-flight call.

@@ -1,5 +1,11 @@
 # @atrib/primitives-runtime
 
+## 0.1.10
+
+### Patch Changes
+
+- Bound primitive tool dispatch with runtime-level timeouts and exposed in-flight timeout diagnostics through HTTP health.
+
 ## 0.1.9
 
 ### Patch Changes

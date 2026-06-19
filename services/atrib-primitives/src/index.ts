@@ -38,14 +38,14 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
-interface PrimitiveHandle {
+export interface AtribPrimitiveHandle {
   mcp: McpServer
   flush?: (() => Promise<void>) | undefined
 }
 
 interface MountedPrimitive {
   name: string
-  handle: PrimitiveHandle
+  handle: AtribPrimitiveHandle
   client: Client
   tools: Tool[]
 }
@@ -55,11 +55,41 @@ interface ToolRoute {
   client: Client
 }
 
+interface InFlightToolCall {
+  id: string
+  primitive: string
+  tool: string
+  startedAt: number
+  timedOutAt?: number
+}
+
+export interface AtribPrimitivesToolCallDiagnostic {
+  id: string
+  primitive: string
+  tool: string
+  started_at: string
+  elapsed_ms: number
+  timed_out: boolean
+  timed_out_at?: string
+}
+
+export interface AtribPrimitivesDiagnostics {
+  tool_timeout_ms: number
+  active_tool_calls: number
+  calls_started: number
+  calls_succeeded: number
+  calls_failed: number
+  calls_timed_out: number
+  calls_settled_after_timeout: number
+  in_flight_tool_calls: AtribPrimitivesToolCallDiagnostic[]
+}
+
 export interface AtribPrimitivesBackend {
   tools: Tool[]
   toolNames: string[]
   mountedPrimitiveCount: number
   callTool(request: CallToolRequest['params']): Promise<CallToolResult>
+  diagnostics(): AtribPrimitivesDiagnostics
   flush(): Promise<void>
   close(): Promise<void>
 }
@@ -72,7 +102,10 @@ export interface AtribPrimitivesRuntime {
   close(): Promise<void>
 }
 
-type PrimitiveFactory = () => Promise<PrimitiveHandle> | PrimitiveHandle
+export interface AtribPrimitivesRuntimeOptions {
+  toolTimeoutMs?: number
+}
+
 type TransportMode = 'stdio' | 'streamable-http' | 'stdio-http-proxy'
 
 interface CliOptions {
@@ -83,6 +116,7 @@ interface CliOptions {
   endpoint: string
   json: boolean
   sessionIdleMs: number
+  toolTimeoutMs: number
   help: boolean
 }
 
@@ -108,6 +142,7 @@ export interface AtribPrimitivesHttpHostOptions {
   path?: string
   jsonReady?: boolean
   sessionIdleMs?: number
+  toolTimeoutMs?: number
   backendFactory?: () => Promise<AtribPrimitivesBackend>
 }
 
@@ -133,9 +168,18 @@ const DEFAULT_HTTP_HOST = '127.0.0.1'
 const DEFAULT_HTTP_PORT = 8796
 const DEFAULT_HTTP_PATH = '/mcp'
 const DEFAULT_SESSION_IDLE_MS = 12 * 60 * 60 * 1000
+const DEFAULT_TOOL_TIMEOUT_MS = 45_000
 const MAX_JSON_BODY_BYTES = 1024 * 1024
+const MCP_REQUEST_TIMEOUT_CODE = -32001
 
-const PRIMITIVES: readonly [string, PrimitiveFactory][] = [
+export type AtribPrimitiveFactory = () => Promise<AtribPrimitiveHandle> | AtribPrimitiveHandle
+
+export interface AtribPrimitivesBackendOptions {
+  toolTimeoutMs?: number
+  primitives?: readonly [string, AtribPrimitiveFactory][]
+}
+
+const PRIMITIVES: readonly [string, AtribPrimitiveFactory][] = [
   ['emit', async () => (await import('@atrib/emit')).createAtribEmitServer()],
   ['annotate', async () => (await import('@atrib/annotate')).createAtribAnnotateServer()],
   ['revise', async () => (await import('@atrib/revise')).createAtribReviseServer()],
@@ -163,7 +207,88 @@ function readPackageVersion(): string {
   }
 }
 
-async function mountPrimitive(name: string, factory: PrimitiveFactory): Promise<MountedPrimitive> {
+function logToolCall(event: Record<string, unknown>): void {
+  try {
+    process.stderr.write(
+      `${JSON.stringify({
+        ts: new Date().toISOString(),
+        component: 'atrib-primitives',
+        ...event,
+      })}\n`,
+    )
+  } catch {
+    // Diagnostics must not interfere with the MCP transport.
+  }
+}
+
+function toolTimeoutError(tool: string, timeoutMs: number): McpError {
+  return new McpError(
+    MCP_REQUEST_TIMEOUT_CODE,
+    `atrib primitive tool ${tool} timed out after ${timeoutMs}ms`,
+  )
+}
+
+async function callWithToolTimeout(
+  tool: string,
+  timeoutMs: number,
+  run: () => Promise<CallToolResult>,
+): Promise<CallToolResult> {
+  let timeoutHandle: NodeJS.Timeout | undefined
+  let timedOut = false
+  const startedAt = Date.now()
+  const call = run()
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      timedOut = true
+      reject(toolTimeoutError(tool, timeoutMs))
+    }, timeoutMs)
+    timeoutHandle.unref?.()
+  })
+  try {
+    return await Promise.race([call, timeout])
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle)
+    if (timedOut) {
+      void call.catch((error: unknown) => {
+        logToolCall({
+          event: 'proxy_tool_call_failed_after_timeout',
+          tool,
+          elapsed_ms: Date.now() - startedAt,
+          error: errorMessage(error),
+        })
+      })
+    }
+  }
+}
+
+function serializeInFlightToolCall(
+  call: InFlightToolCall,
+  now = Date.now(),
+): AtribPrimitivesToolCallDiagnostic {
+  const serialized: AtribPrimitivesToolCallDiagnostic = {
+    id: call.id,
+    primitive: call.primitive,
+    tool: call.tool,
+    started_at: new Date(call.startedAt).toISOString(),
+    elapsed_ms: Math.max(0, now - call.startedAt),
+    timed_out: call.timedOutAt !== undefined,
+  }
+  if (call.timedOutAt !== undefined) {
+    serialized.timed_out_at = new Date(call.timedOutAt).toISOString()
+  }
+  return serialized
+}
+
+function toolCallDiagnosticsDegraded(diagnostics: AtribPrimitivesDiagnostics): boolean {
+  return diagnostics.in_flight_tool_calls.some(
+    (call) => call.timed_out || call.elapsed_ms >= diagnostics.tool_timeout_ms,
+  )
+}
+
+async function mountPrimitive(
+  name: string,
+  factory: AtribPrimitiveFactory,
+): Promise<MountedPrimitive> {
   const handle = await factory()
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   await handle.mcp.connect(serverTransport)
@@ -178,13 +303,23 @@ async function mountPrimitive(name: string, factory: PrimitiveFactory): Promise<
   return { name, handle, client, tools: listed.tools }
 }
 
-async function createAtribPrimitivesBackend(): Promise<AtribPrimitivesBackend> {
+export async function createAtribPrimitivesBackend(
+  options: AtribPrimitivesBackendOptions = {},
+): Promise<AtribPrimitivesBackend> {
+  const toolTimeoutMs = options.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
+  const primitives = options.primitives ?? PRIMITIVES
   const mounted: MountedPrimitive[] = []
-  for (const [name, factory] of PRIMITIVES) {
+  for (const [name, factory] of primitives) {
     mounted.push(await mountPrimitive(name, factory))
   }
   const routeByTool = new Map<string, ToolRoute>()
   const tools: Tool[] = []
+  const inFlightToolCalls = new Map<string, InFlightToolCall>()
+  let callsStarted = 0
+  let callsSucceeded = 0
+  let callsFailed = 0
+  let callsTimedOut = 0
+  let callsSettledAfterTimeout = 0
 
   for (const primitive of mounted) {
     for (const tool of primitive.tools) {
@@ -213,7 +348,118 @@ async function createAtribPrimitivesBackend(): Promise<AtribPrimitivesBackend> {
           `unknown atrib primitive tool: ${request.name}`,
         )
       }
-      return route.client.callTool(request) as Promise<CallToolResult>
+      const id = randomUUID()
+      const startedAt = Date.now()
+      const call: InFlightToolCall = {
+        id,
+        primitive: route.primitive,
+        tool: request.name,
+        startedAt,
+      }
+      callsStarted += 1
+      inFlightToolCalls.set(id, call)
+      logToolCall({
+        event: 'tool_call_started',
+        id,
+        primitive: route.primitive,
+        tool: request.name,
+      })
+
+      let timeoutHandle: NodeJS.Timeout | undefined
+      let timedOut = false
+      const toolCall = route.client.callTool(request) as Promise<CallToolResult>
+      const timeout = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          timedOut = true
+          call.timedOutAt = Date.now()
+          callsTimedOut += 1
+          logToolCall({
+            event: 'tool_call_timed_out',
+            id,
+            primitive: route.primitive,
+            tool: request.name,
+            timeout_ms: toolTimeoutMs,
+            elapsed_ms: call.timedOutAt - startedAt,
+          })
+          reject(toolTimeoutError(request.name, toolTimeoutMs))
+        }, toolTimeoutMs)
+        timeoutHandle.unref?.()
+      })
+
+      try {
+        const result = await Promise.race([toolCall, timeout])
+        if (timeoutHandle) clearTimeout(timeoutHandle)
+        callsSucceeded += 1
+        inFlightToolCalls.delete(id)
+        logToolCall({
+          event: 'tool_call_completed',
+          id,
+          primitive: route.primitive,
+          tool: request.name,
+          elapsed_ms: Date.now() - startedAt,
+        })
+        return result
+      } catch (error) {
+        if (timeoutHandle) clearTimeout(timeoutHandle)
+        if (timedOut) {
+          void toolCall
+            .then(
+              () => {
+                callsSettledAfterTimeout += 1
+                logToolCall({
+                  event: 'tool_call_settled_after_timeout',
+                  id,
+                  primitive: route.primitive,
+                  tool: request.name,
+                  outcome: 'succeeded',
+                  elapsed_ms: Date.now() - startedAt,
+                })
+              },
+              (lateError: unknown) => {
+                callsSettledAfterTimeout += 1
+                logToolCall({
+                  event: 'tool_call_settled_after_timeout',
+                  id,
+                  primitive: route.primitive,
+                  tool: request.name,
+                  outcome: 'failed',
+                  elapsed_ms: Date.now() - startedAt,
+                  error: errorMessage(lateError),
+                })
+              },
+            )
+            .finally(() => {
+              inFlightToolCalls.delete(id)
+            })
+          throw error
+        }
+        callsFailed += 1
+        inFlightToolCalls.delete(id)
+        logToolCall({
+          event: 'tool_call_failed',
+          id,
+          primitive: route.primitive,
+          tool: request.name,
+          elapsed_ms: Date.now() - startedAt,
+          error: errorMessage(error),
+        })
+        throw error
+      }
+    },
+    diagnostics: () => {
+      const now = Date.now()
+      return {
+        tool_timeout_ms: toolTimeoutMs,
+        active_tool_calls: inFlightToolCalls.size,
+        calls_started: callsStarted,
+        calls_succeeded: callsSucceeded,
+        calls_failed: callsFailed,
+        calls_timed_out: callsTimedOut,
+        calls_settled_after_timeout: callsSettledAfterTimeout,
+        in_flight_tool_calls: [...inFlightToolCalls.values()].map((call) =>
+          serializeInFlightToolCall(call, now),
+        ),
+      }
     },
     flush: async () => {
       await Promise.all(mounted.map((primitive) => primitive.handle.flush?.() ?? Promise.resolve()))
@@ -290,8 +536,19 @@ function createOuterServer(getBackend: () => Promise<AtribPrimitivesBackend>): S
   return server
 }
 
-export async function createAtribPrimitivesRuntime(): Promise<AtribPrimitivesRuntime> {
-  const backendProvider = createBackendProvider()
+export async function createAtribPrimitivesRuntime(
+  options: AtribPrimitivesRuntimeOptions = {},
+): Promise<AtribPrimitivesRuntime> {
+  const toolTimeoutMs =
+    options.toolTimeoutMs ??
+    parseOptionalPositiveInt(
+      process.env.ATRIB_PRIMITIVES_TOOL_TIMEOUT_MS,
+      'ATRIB_PRIMITIVES_TOOL_TIMEOUT_MS',
+    ) ??
+    DEFAULT_TOOL_TIMEOUT_MS
+  const backendProvider = createBackendProvider(() =>
+    createAtribPrimitivesBackend({ toolTimeoutMs }),
+  )
   const backend = await backendProvider.get()
   const server = createOuterServer(backendProvider.get)
 
@@ -310,7 +567,15 @@ export async function createAtribPrimitivesRuntime(): Promise<AtribPrimitivesRun
 
 export async function createAtribPrimitivesHttpProxyRuntime(
   endpoint: string,
+  options: AtribPrimitivesRuntimeOptions = {},
 ): Promise<AtribPrimitivesRuntime> {
+  const toolTimeoutMs =
+    options.toolTimeoutMs ??
+    parseOptionalPositiveInt(
+      process.env.ATRIB_PRIMITIVES_TOOL_TIMEOUT_MS,
+      'ATRIB_PRIMITIVES_TOOL_TIMEOUT_MS',
+    ) ??
+    DEFAULT_TOOL_TIMEOUT_MS
   const upstreamTransport = new StreamableHTTPClientTransport(new URL(endpoint))
   const upstream = new Client({
     name: 'atrib-primitives-stdio-http-proxy',
@@ -332,7 +597,11 @@ export async function createAtribPrimitivesHttpProxyRuntime(
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: listed.tools }))
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    return upstream.callTool(request.params) as Promise<CallToolResult>
+    return callWithToolTimeout(
+      request.params.name,
+      toolTimeoutMs,
+      () => upstream.callTool(request.params) as Promise<CallToolResult>,
+    )
   })
 
   return {
@@ -457,8 +726,15 @@ function parseCliOptions(argv: readonly string[]): CliOptions {
       httpEndpoint(DEFAULT_HTTP_HOST, DEFAULT_HTTP_PORT, DEFAULT_HTTP_PATH),
     json: false,
     sessionIdleMs:
-      parseOptionalPositiveInt(process.env.ATRIB_PRIMITIVES_SESSION_IDLE_MS) ??
-      DEFAULT_SESSION_IDLE_MS,
+      parseOptionalPositiveInt(
+        process.env.ATRIB_PRIMITIVES_SESSION_IDLE_MS,
+        'ATRIB_PRIMITIVES_SESSION_IDLE_MS',
+      ) ?? DEFAULT_SESSION_IDLE_MS,
+    toolTimeoutMs:
+      parseOptionalPositiveInt(
+        process.env.ATRIB_PRIMITIVES_TOOL_TIMEOUT_MS,
+        'ATRIB_PRIMITIVES_TOOL_TIMEOUT_MS',
+      ) ?? DEFAULT_TOOL_TIMEOUT_MS,
     help: false,
   }
 
@@ -489,6 +765,11 @@ function parseCliOptions(argv: readonly string[]): CliOptions {
         requireArg(argv, ++i, '--session-idle-ms'),
         '--session-idle-ms',
       )
+    } else if (arg === '--tool-timeout-ms') {
+      options.toolTimeoutMs = parsePositiveInt(
+        requireArg(argv, ++i, '--tool-timeout-ms'),
+        '--tool-timeout-ms',
+      )
     } else {
       throw new Error(`unknown argument: ${arg}`)
     }
@@ -513,6 +794,7 @@ Options:
   --port <port>                  HTTP bind port. Defaults to 8796. Use 0 for ephemeral.
   --path <path>                  HTTP MCP path. Defaults to /mcp.
   --session-idle-ms <ms>         Close idle HTTP sessions. Defaults to 12 hours.
+  --tool-timeout-ms <ms>         Bound each primitive tool call. Defaults to 45000.
   --json                         Print a JSON ready line in HTTP mode.
   --help                         Print this help.
 `
@@ -537,9 +819,9 @@ function parsePort(raw: string): number {
   return n
 }
 
-function parseOptionalPositiveInt(raw: string | undefined): number | undefined {
+function parseOptionalPositiveInt(raw: string | undefined, name: string): number | undefined {
   if (raw === undefined || raw === '') return undefined
-  return parsePositiveInt(raw, 'ATRIB_PRIMITIVES_SESSION_IDLE_MS')
+  return parsePositiveInt(raw, name)
 }
 
 function normalizeHttpEndpoint(raw: string, flag: string): string {
@@ -565,7 +847,10 @@ function parsePositiveInt(raw: string, name: string): number {
 export async function bindAtribPrimitivesHttpHost(
   options: AtribPrimitivesHttpHostOptions = {},
 ): Promise<AtribPrimitivesHttpHost> {
-  const backendProvider = createBackendProvider(options.backendFactory)
+  const toolTimeoutMs = options.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
+  const backendProvider = createBackendProvider(
+    options.backendFactory ?? (() => createAtribPrimitivesBackend({ toolTimeoutMs })),
+  )
   const host = options.host ?? DEFAULT_HTTP_HOST
   const port = options.port ?? DEFAULT_HTTP_PORT
   const mcpPath = normalizeMcpPath(options.path ?? DEFAULT_HTTP_PATH)
@@ -644,8 +929,10 @@ export async function bindAtribPrimitivesHttpHost(
         return
       }
       const backend = backendStatus.backend
+      const toolCalls = backend.diagnostics()
+      const status = toolCallDiagnosticsDegraded(toolCalls) ? 'degraded' : 'healthy'
       sendJson(res, 200, {
-        status: 'healthy',
+        status,
         report: {
           primitive_runtime: {
             name: 'atrib-primitives',
@@ -675,6 +962,7 @@ export async function bindAtribPrimitivesHttpHost(
             active_http_requests: activeHttpRequests,
             idle_timeout_ms: sessionIdleMs,
           },
+          tool_calls: toolCalls,
         },
       })
       return
@@ -833,6 +1121,7 @@ async function main(): Promise<void> {
       path: options.path,
       jsonReady: options.json,
       sessionIdleMs: options.sessionIdleMs,
+      toolTimeoutMs: options.toolTimeoutMs,
     })
     const shutdown = async () => {
       try {
@@ -851,8 +1140,10 @@ async function main(): Promise<void> {
 
   const runtime =
     options.transport === 'stdio-http-proxy'
-      ? await createAtribPrimitivesHttpProxyRuntime(options.endpoint)
-      : await createAtribPrimitivesRuntime()
+      ? await createAtribPrimitivesHttpProxyRuntime(options.endpoint, {
+          toolTimeoutMs: options.toolTimeoutMs,
+        })
+      : await createAtribPrimitivesRuntime({ toolTimeoutMs: options.toolTimeoutMs })
   const shutdown = async () => {
     try {
       await runtime.close()
