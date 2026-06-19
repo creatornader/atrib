@@ -240,9 +240,17 @@ connector approval metadata, pending action shape, approve/reject calls, and
 approval-continuation path. Production configuration uses `CodemodeRuntime`,
 `DynamicWorkerExecutor`, and a Worker Loader binding.
 
+This proof uses the lower-level `@cloudflare/codemode@0.4.1` runtime surface:
+`CodemodeRuntime`, `createCodemodeRuntime`, `pending()`, `approve()`,
+`reject()`, and `rollback()`. Cloudflare's public `createCodeTool` guide still
+routes approval-gated AI SDK tools through the standard HITL path instead of the
+simple Codemode tool path. The example is evidence around the runtime boundary,
+not a claim that approval-gated `createCodeTool` usage is the documented happy
+path.
+
 The signed boundary is the point: exact proposal payload, generated code digest,
-human decision over that payload, resumed execution, outcome, and handoff trace.
-The UI focuses on the parts a reviewer needs first: trigger context, live
+human decision over that payload, approved execution, outcome, and handoff trace.
+The UI focuses on the parts a human reviewer needs first: trigger context, live
 progress, review state, signed decision chain, receipt inspection, and signer
 separation.
 
