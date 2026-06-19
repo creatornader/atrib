@@ -135,6 +135,10 @@ export const ATRIB_RECALL_TAU_DAYS = parseFloat(process.env.ATRIB_RECALL_TAU_DAY
 // defended as innovation, not assumed convention. See ADR D085 + D086.
 // Set the env var to 0 to disable entirely.
 export const ATRIB_RECALL_NOISE_FLOOR = parseFloat(process.env.ATRIB_RECALL_NOISE_FLOOR ?? '0.6')
+export const ATRIB_RECALL_CONTENT_MAX_RECORDS = parseInt(
+  process.env.ATRIB_RECALL_CONTENT_MAX_RECORDS ?? '5000',
+  10,
+)
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -152,9 +156,11 @@ import {
   parkScore,
   buildBM25Index,
   bm25Score,
+  bm25ScoresForQuery,
   tokenize,
   indexableTokensForRecord,
 } from './scoring.js'
+import type { BM25Index } from './scoring.js'
 import { buildLocalGraph, shortestDistances, walkFrom } from './graph.js'
 import type { EdgeType } from './graph.js'
 import { synthesizeDisplaySummary, resolveDisplayProducer, formatAge } from './legibility.js'
@@ -167,6 +173,133 @@ const ATRIB_LOG_ORIGIN = process.env.ATRIB_LOG_ORIGIN ?? 'log.atrib.dev'
 // (D078 ATRIB_CONTEXT_ID + D083 harness-discovery precedence). Per-run
 // declaration; changing the env mid-process is not supported.
 const ATRIB_CONTEXT_ID_DEFAULT = resolveEnvContextId()
+
+type MirrorFileStat = {
+  path: string
+  size: number
+  mtimeMs: number
+}
+
+type MirrorFingerprint = {
+  files: string[]
+  signature: string
+}
+
+type LoadedMirrorSnapshot = {
+  signature: string
+  loaded: LoadedRecord[]
+  loadedByHash: Map<string, LoadedRecord>
+  newestLoaded: LoadedRecord[]
+  files: string[]
+  annotationsByRecord: Map<string, AggAnnotationSummary>
+  revisionsByRecord: Map<string, string[]>
+  bm25IndexesByNewestLimit: Map<number, BM25Index>
+}
+
+let loadedMirrorSnapshot: LoadedMirrorSnapshot | undefined
+
+export function clearRecallMirrorCache(): void {
+  loadedMirrorSnapshot = undefined
+}
+
+function readMirrorFingerprint(recordFile?: string): MirrorFingerprint {
+  const envFile = process.env.ATRIB_RECORD_FILE
+  const envDir = process.env.ATRIB_MIRROR_DIR ?? join(process.env.HOME ?? '', '.atrib', 'records')
+  const explicit = recordFile ?? envFile
+  if (explicit) {
+    const stat = statMirrorFile(explicit)
+    return {
+      files: [explicit],
+      signature: JSON.stringify({
+        mode: 'file',
+        file: explicit,
+        stat,
+      }),
+    }
+  }
+
+  if (!existsSync(envDir)) {
+    return {
+      files: [],
+      signature: JSON.stringify({ mode: 'dir', dir: envDir, missing: true }),
+    }
+  }
+
+  let entries: string[] = []
+  try {
+    entries = readdirSync(envDir)
+      .filter((name) => name.endsWith('.jsonl'))
+      .sort()
+  } catch {
+    return {
+      files: [],
+      signature: JSON.stringify({ mode: 'dir', dir: envDir, unreadable: true }),
+    }
+  }
+
+  const stats: MirrorFileStat[] = []
+  for (const name of entries) {
+    const full = join(envDir, name)
+    const stat = statMirrorFile(full)
+    if (stat) stats.push(stat)
+  }
+  return {
+    files: stats.map((stat) => stat.path),
+    signature: JSON.stringify({ mode: 'dir', dir: envDir, stats }),
+  }
+}
+
+function statMirrorFile(path: string): MirrorFileStat | null {
+  try {
+    const stat = statSync(path)
+    if (!stat.isFile()) return null
+    return { path, size: stat.size, mtimeMs: stat.mtimeMs }
+  } catch {
+    return null
+  }
+}
+
+function getLoadedMirrorSnapshot(recordFile?: string): LoadedMirrorSnapshot {
+  const fingerprint = readMirrorFingerprint(recordFile)
+  if (loadedMirrorSnapshot?.signature === fingerprint.signature) return loadedMirrorSnapshot
+
+  const { loaded, files } = discoverLoaded(recordFile)
+  const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+  const revisionsByRecord = aggregateRevisionsByRecord(loaded)
+  loadedMirrorSnapshot = {
+    signature: fingerprint.signature,
+    loaded,
+    loadedByHash: new Map(loaded.map((lr) => [lr.record_hash, lr])),
+    newestLoaded: loaded.slice().sort((a, b) => b.record.timestamp - a.record.timestamp),
+    files,
+    annotationsByRecord,
+    revisionsByRecord,
+    bm25IndexesByNewestLimit: new Map(),
+  }
+  return loadedMirrorSnapshot
+}
+
+function getBm25IndexForNewestLimit(snapshot: LoadedMirrorSnapshot, limit: number): BM25Index {
+  const boundedLimit = Math.max(1, Math.min(snapshot.newestLoaded.length, limit))
+  const cached = snapshot.bm25IndexesByNewestLimit.get(boundedLimit)
+  if (cached) return cached
+  const corpus = snapshot.newestLoaded.slice(0, boundedLimit).map((lr) => ({
+    id: lr.record_hash,
+    tokens: indexableTokensForRecord(lr, snapshot.annotationsByRecord.get(lr.record_hash)),
+  }))
+  const index = buildBM25Index(corpus)
+  snapshot.bm25IndexesByNewestLimit.set(boundedLimit, index)
+  return index
+}
+
+function resolveContentSearchLimit(requested: unknown, totalRecords: number): number {
+  const raw =
+    typeof requested === 'number' && Number.isFinite(requested)
+      ? requested
+      : ATRIB_RECALL_CONTENT_MAX_RECORDS
+  const bounded = Math.max(1, Math.min(50000, Math.floor(raw)))
+  return Math.min(totalRecords, bounded)
+}
 
 /**
  * Pull the inner AtribRecord out of either on-disk shape (D062 envelope or
@@ -517,6 +650,7 @@ function rankByRelevance(
   filtered: LoadedRecord[],
   annotationsByRecord: Map<string, AnnotationSummary>,
   rankAnchor: string | undefined,
+  bm25Index?: BM25Index,
 ): number {
   const now = Date.now()
   // Treat rank_anchor as a free-form query unless it parses as a record_hash
@@ -527,16 +661,14 @@ function rankByRelevance(
     typeof rankAnchor === 'string' && /^sha256:[0-9a-f]{64}$/.test(rankAnchor)
   const queryTokens = rankAnchor && !looksLikeRecordHash ? tokenize(rankAnchor) : []
 
-  // Build the BM25 index over the filtered set's indexable text. Per
-  // D086, indexable text is per-event_type record content (from the D062
-  // sidecar) augmented by any annotation summary + topics when present.
-  // Index construction is O(total token count); for Layer 1 corpus sizes
-  // (a few hundred records × tens of tokens each) this is negligible.
-  const corpus = filtered.map((lr) => ({
-    id: lr.record_hash,
-    tokens: indexableTokensForRecord(lr, annotationsByRecord.get(lr.record_hash)),
-  }))
-  const idx = buildBM25Index(corpus)
+  const idx =
+    bm25Index ??
+    buildBM25Index(
+      filtered.map((lr) => ({
+        id: lr.record_hash,
+        tokens: indexableTokensForRecord(lr, annotationsByRecord.get(lr.record_hash)),
+      })),
+    )
 
   const scores = new Map<string, number>()
   let topScore = 0
@@ -756,9 +888,8 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
   const compact = args.compact !== false
   const includeUnverified = args.include_unverified === true
 
-  const { loaded: all, files } = discoverLoaded(recordFile)
-  const annotationsByRecord = aggregateAnnotationsByRecord(all)
-  const revisionsByRecord = aggregateRevisionsByRecord(all)
+  const snapshot = getLoadedMirrorSnapshot(recordFile)
+  const { loaded: all, files, annotationsByRecord, revisionsByRecord } = snapshot
 
   // Apply ATRIB_CONTEXT_ID env-var default when the caller omits the
   // context_id filter. Lets Inspect-style harnesses scope recall to a
@@ -1150,7 +1281,7 @@ export function registerAtribRecallTools(server: McpServer): void {
         'recall_walk',
         args,
         async () => {
-          const { loaded } = discoverLoaded()
+          const { loaded, annotationsByRecord } = getLoadedMirrorSnapshot()
           const graph = buildLocalGraph(loaded)
           const edgeTypes = args.edge_types ? new Set(args.edge_types as EdgeType[]) : undefined
           const depth = typeof args.depth === 'number' ? args.depth : 3
@@ -1161,7 +1292,6 @@ export function registerAtribRecallTools(server: McpServer): void {
           // O(N) lookup across the walk; for typical walks (depth=3, k<50)
           // this is fast.
           const byHash = new Map(loaded.map((lr) => [lr.record_hash, lr]))
-          const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
           const now = Date.now()
           const enriched = walk.map((step) => {
             // walk derives from graph (built from `loaded`); byHash always has a hit.
@@ -1223,8 +1353,7 @@ export function registerAtribRecallTools(server: McpServer): void {
         'recall_annotations',
         args,
         async () => {
-          const { loaded } = discoverLoaded()
-          const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+          const { annotationsByRecord } = getLoadedMirrorSnapshot()
           const summary = annotationsByRecord.get(args.record_hash) ?? null
           return {
             content: [
@@ -1261,10 +1390,9 @@ export function registerAtribRecallTools(server: McpServer): void {
         'recall_revisions',
         args,
         async () => {
-          const { loaded } = discoverLoaded()
+          const { loaded, revisionsByRecord } = getLoadedMirrorSnapshot()
           const byHash = new Map<string, LoadedRecord>()
           for (const lr of loaded) byHash.set(lr.record_hash, lr)
-          const revisionsByRecord = aggregateRevisionsByRecord(loaded)
           // Walk the chain forward: the input record may be revised by R1;
           // R1 may be revised by R2; collect them in order. Bounded by the
           // mirror size (no cycles since timestamps are monotonic per
@@ -1357,6 +1485,12 @@ export function registerAtribRecallTools(server: McpServer): void {
           .describe(
             'Top-k results to return (default 10, max 50). Final ordering uses Park et al. weighted-sum scoring: alpha*recency + beta*importance + gamma*BM25_relevance. Weights are tunable via ATRIB_RECALL_ALPHA/BETA/GAMMA env vars.',
           ),
+        max_records: z
+          .number()
+          .optional()
+          .describe(
+            'Maximum newest-first records to search before BM25 candidate scoring. Default ATRIB_RECALL_CONTENT_MAX_RECORDS or 5000, max 50000. Raise for explicit archival sweeps.',
+          ),
       },
     },
     async (args) =>
@@ -1364,19 +1498,24 @@ export function registerAtribRecallTools(server: McpServer): void {
         'recall_by_content',
         args,
         async () => {
-          const { loaded } = discoverLoaded()
-          const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+          const snapshot = getLoadedMirrorSnapshot()
+          const { loaded, loadedByHash, annotationsByRecord } = snapshot
+          const searchLimit = resolveContentSearchLimit(args.max_records, loaded.length)
+          const bm25Index = getBm25IndexForNewestLimit(snapshot, searchLimit)
           const queryTokens = tokenize(args.query)
-          const corpus = loaded.map((lr) => ({
-            id: lr.record_hash,
-            tokens: indexableTokensForRecord(lr, annotationsByRecord.get(lr.record_hash)),
-          }))
-          const idx = buildBM25Index(corpus)
+          const relevanceByHash = bm25ScoresForQuery(bm25Index, queryTokens)
           const now = Date.now()
-          const scored = loaded.map((lr) => {
+          const searchPool =
+            queryTokens.length > 0
+              ? Array.from(relevanceByHash.keys())
+                  .map((hash) => loadedByHash.get(hash))
+                  .filter((lr): lr is LoadedRecord => lr !== undefined)
+              : snapshot.newestLoaded.slice(0, searchLimit)
+          const scored = searchPool.map((lr) => {
             const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS)
             const i = importanceScore(annotationsByRecord.get(lr.record_hash))
-            const rel = queryTokens.length > 0 ? bm25Score(idx, lr.record_hash, queryTokens) : 0
+            const rawRel = queryTokens.length > 0 ? (relevanceByHash.get(lr.record_hash) ?? 0) : 0
+            const rel = Math.min(rawRel, 1)
             const score = parkScore(
               r,
               i,
@@ -1401,6 +1540,10 @@ export function registerAtribRecallTools(server: McpServer): void {
                   {
                     query: args.query,
                     k,
+                    total_records: loaded.length,
+                    searched_records: searchLimit,
+                    candidate_records: searchPool.length,
+                    truncated_corpus: searchLimit < loaded.length,
                     count: top.length,
                     results: top.map(({ lr, score, recency, importance, relevance }) => {
                       const ann = annotationsByRecord.get(lr.record_hash)
@@ -1487,8 +1630,7 @@ export function registerAtribRecallTools(server: McpServer): void {
               ],
             }
           }
-          const { loaded } = discoverLoaded()
-          const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+          const { loaded, annotationsByRecord } = getLoadedMirrorSnapshot()
           const filtered = loaded
             .filter((lr) => lr.record.context_id === ctx)
             .sort((a, b) => a.record.timestamp - b.record.timestamp)
@@ -1592,7 +1734,7 @@ export function registerAtribRecallTools(server: McpServer): void {
         'recall_orphans',
         args,
         async () => {
-          const { loaded } = discoverLoaded()
+          const { loaded, annotationsByRecord } = getLoadedMirrorSnapshot()
           // Build the set of all record_hashes that appear in any record's
           // informed_by field. Anything in `loaded` whose record_hash is
           // NOT in this set is an orphan.
@@ -1617,7 +1759,6 @@ export function registerAtribRecallTools(server: McpServer): void {
           orphans.sort((a, b) => b.record.timestamp - a.record.timestamp)
           const limit = Math.max(1, Math.min(500, args.limit ?? 50))
           const sliced = orphans.slice(0, limit)
-          const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
           const now = Date.now()
           return {
             content: [
@@ -1676,7 +1817,7 @@ export function registerAtribRecallTools(server: McpServer): void {
         'recall_by_signer',
         args,
         async () => {
-          const { loaded } = discoverLoaded()
+          const { loaded } = getLoadedMirrorSnapshot()
           type SignerStat = {
             creator_key: string
             count: number

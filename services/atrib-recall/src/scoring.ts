@@ -84,6 +84,7 @@ export type BM25Doc = {
  */
 export type BM25Index = {
   docs: Map<string, { length: number; tf: Map<string, number> }>
+  postings: Map<string, Map<string, number>>
   idf: Map<string, number>
   avgdl: number
   k1: number
@@ -102,6 +103,7 @@ export type BM25Index = {
 export function buildBM25Index(corpus: BM25Doc[], k1 = 1.5, b = 0.75): BM25Index {
   const docs = new Map<string, { length: number; tf: Map<string, number> }>()
   const df = new Map<string, number>()
+  const postings = new Map<string, Map<string, number>>()
   let totalLength = 0
   for (const d of corpus) {
     const tf = new Map<string, number>()
@@ -113,6 +115,11 @@ export function buildBM25Index(corpus: BM25Doc[], k1 = 1.5, b = 0.75): BM25Index
     for (const tok of new Set(d.tokens)) {
       df.set(tok, (df.get(tok) ?? 0) + 1)
     }
+    for (const [tok, count] of tf) {
+      const posting = postings.get(tok) ?? new Map<string, number>()
+      posting.set(d.id, count)
+      postings.set(tok, posting)
+    }
   }
   const N = corpus.length
   const avgdl = N > 0 ? totalLength / N : 0
@@ -123,7 +130,7 @@ export function buildBM25Index(corpus: BM25Doc[], k1 = 1.5, b = 0.75): BM25Index
     // corpus. Returns ln((N - df + 0.5) / (df + 0.5) + 1).
     idf.set(tok, Math.log((N - count + 0.5) / (count + 0.5) + 1))
   }
-  return { docs, idf, avgdl, k1, b }
+  return { docs, postings, idf, avgdl, k1, b }
 }
 
 /**
@@ -147,6 +154,31 @@ export function bm25Score(index: BM25Index, docId: string, queryTokens: string[]
     score += idf * (numerator / denominator)
   }
   return score
+}
+
+/**
+ * Compute BM25 scores for every document that contains at least one query
+ * token. This walks the inverted postings lists for the query terms instead
+ * of scanning every document in the corpus, which keeps interactive content
+ * search bounded once local mirrors grow past the original few-hundred-record
+ * Layer 1 assumption.
+ */
+export function bm25ScoresForQuery(index: BM25Index, queryTokens: string[]): Map<string, number> {
+  const scores = new Map<string, number>()
+  if (queryTokens.length === 0 || index.avgdl === 0) return scores
+  for (const qt of new Set(queryTokens)) {
+    const posting = index.postings.get(qt)
+    if (!posting) continue
+    const idf = index.idf.get(qt) ?? 0
+    for (const [docId, tf] of posting) {
+      const doc = index.docs.get(docId)
+      if (!doc) continue
+      const numerator = tf * (index.k1 + 1)
+      const denominator = tf + index.k1 * (1 - index.b + index.b * (doc.length / index.avgdl))
+      scores.set(docId, (scores.get(docId) ?? 0) + idf * (numerator / denominator))
+    }
+  }
+  return scores
 }
 
 /**
