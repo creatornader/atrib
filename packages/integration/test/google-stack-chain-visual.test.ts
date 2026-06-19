@@ -70,18 +70,27 @@ describe('Google stack chain visual workbench', () => {
     await expect.poll(() => page.locator('.node').count()).toBe(0)
     await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(1)
     await page.locator('#viewReferenceSnapshot').click()
-    await expect.poll(() => page.locator('#stageTitle').textContent()).toBe('Reference artifact')
+    await expect.poll(() => page.locator('#stageTitle').textContent()).toBe('Example run')
     await expect.poll(() => page.locator('.node').count()).toBe(4)
     await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(4)
     await expect
       .poll(() => page.locator('#proofStatus').textContent())
       .toBe('reference snapshot ready')
     await expect.poll(() => page.locator('#selectedTitle').textContent()).toBe('AP2 transaction')
+    await expect.poll(() => page.locator('#protocolBadge').getAttribute('class')).toContain('AP2')
+    await expect
+      .poll(() => page.locator('#verifySelectedRecord').textContent())
+      .toBe('Fixture check')
+    await page.getByRole('button', { name: 'Fixture check' }).click()
+    await expect
+      .poll(() => page.locator('#verifyStatus').textContent())
+      .toContain('Fixture checked')
 
     await page.getByRole('button', { name: 'Inspect ADK Python callback' }).click()
     await expect
       .poll(() => page.locator('#selectedTitle').textContent())
       .toBe('ADK Python callback')
+    await expect.poll(() => page.locator('#protocolBadge').getAttribute('class')).toContain('ADK')
     await expect
       .poll(() => page.locator('#selectedHash').textContent())
       .toContain('sha256:70d0bb2c3e38194b065a1872bbf96861b8f9f0802d323c837ede32609b548a79')
@@ -126,6 +135,8 @@ describe('Google stack chain visual workbench', () => {
     await page.goto(`${baseUrl}?runtime=${encodeURIComponent(`${baseUrl}/runtime`)}`)
     await expect.poll(() => page.locator('#runtimeStatus').textContent()).toBe('Ready')
     await expect.poll(() => page.locator('#runtimeFlow .runtime-flow-step').count()).toBe(3)
+    await expect.poll(() => page.locator('.segment').count()).toBe(2)
+    await expect.poll(() => page.locator('[data-jump]').count()).toBe(0)
     await expect.poll(() => page.locator('.node').count()).toBe(0)
     await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(1)
     await page.getByRole('button', { name: 'Start run' }).click()
@@ -135,7 +146,7 @@ describe('Google stack chain visual workbench', () => {
     await expect
       .poll(() => page.locator('#runtimeFlow .runtime-flow-step.complete').count())
       .toBe(3)
-    await expect.poll(() => page.locator('.runtime-node').count()).toBe(3)
+    await expect.poll(() => page.locator('.runtime-node').count()).toBe(4)
     await expect
       .poll(() => page.locator('.source-badge').first().textContent())
       .toBe('verified replay packet')
@@ -149,6 +160,64 @@ describe('Google stack chain visual workbench', () => {
     await expect
       .poll(() => page.locator('#analyticsRows tr').last().textContent())
       .toContain('ADK JS')
+    await page.locator('#analyticsRows tr').nth(1).click()
+    await expect
+      .poll(() => page.locator('#selectedTitle').textContent())
+      .toBe('A2A remote evidence accepted')
+    await page.locator('#analyticsRows tr').nth(2).click()
+    await expect
+      .poll(() => page.locator('#selectedTitle').textContent())
+      .toBe('A2A receiver follow-up')
+    await page.locator('#analyticsRows tr').last().click()
+    await expect
+      .poll(() => page.locator('#selectedTitle').textContent())
+      .toBe('ADK JS tool callback')
+    await expect.poll(() => page.locator('#resetRuntimeView').isEnabled()).toBe(true)
+    await expect.poll(() => page.locator('#copySelectedHash').isEnabled()).toBe(true)
+    await expect.poll(() => page.locator('#copySelectedJson').isEnabled()).toBe(true)
+    await expect.poll(() => page.locator('#viewSelectedRecord').isEnabled()).toBe(true)
+    await expect.poll(() => page.locator('#verifySelectedRecord').textContent()).toBe('Live verify')
+    await expect.poll(() => page.locator('#checkList .check-state').count()).toBeGreaterThan(0)
+    await expect
+      .poll(() => page.locator('#checkList .check-state').first().textContent())
+      .toBe('Accepted')
+    await expect
+      .poll(() => page.locator('#checkList strong').first().textContent())
+      .toBe('A2A receiver informs ADK callback')
+    await page.getByRole('button', { name: 'Live verify' }).click()
+    await expect.poll(() => page.locator('#verifyStatus').textContent()).toContain('Live verified')
+    await expect
+      .poll(() => page.locator('#runtimeChecks').evaluate((element) => element.scrollHeight))
+      .toBeLessThanOrEqual(
+        await page.locator('#runtimeChecks').evaluate((element) => element.clientHeight + 1),
+      )
+    await page.getByRole('button', { name: 'View full JSON' }).click()
+    await expect
+      .poll(() =>
+        page.locator('#recordDialog').evaluate((dialog) => (dialog as HTMLDialogElement).open),
+      )
+      .toBe(true)
+    await expect
+      .poll(() => page.locator('#recordDialogJson').textContent())
+      .toContain(
+        '"record_hash": "sha256:adk0000000000000000000000000000000000000000000000000000000000000"',
+      )
+    await page.getByRole('button', { name: 'Close' }).click()
+    await expect
+      .poll(() =>
+        page.locator('#recordDialog').evaluate((dialog) => (dialog as HTMLDialogElement).open),
+      )
+      .toBe(false)
+    await expect.poll(() => page.locator('.runtime-state-badge.complete').count()).toBe(0)
+    await page.getByRole('button', { name: 'Reset view' }).click()
+    await expect.poll(() => page.locator('#runtimeStatus').textContent()).toBe('Ready')
+    await expect.poll(() => page.locator('.node').count()).toBe(0)
+    await expect
+      .poll(() => page.locator('#selectedTitle').textContent())
+      .toBe('No live record selected')
+    await expect.poll(() => page.locator('#resetRuntimeView').isDisabled()).toBe(true)
+    await expect.poll(() => page.locator('#viewSelectedRecord').isDisabled()).toBe(true)
+    await expect.poll(() => page.locator('#verifySelectedRecord').isDisabled()).toBe(true)
     expect(consoleErrors).toEqual([])
     await page.close()
   })
@@ -162,14 +231,16 @@ describe('Google stack chain visual workbench', () => {
 
     await page.goto(baseUrl)
     const audit = await page.evaluate(() => {
-      const controls = [...document.querySelectorAll('button,[role="button"]')].map((element) => {
-        const rect = element.getBoundingClientRect()
-        return {
-          height: rect.height,
-          text: (element.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 80),
-          width: rect.width,
-        }
-      })
+      const controls = [...document.querySelectorAll('button,[role="button"]')]
+        .map((element) => {
+          const rect = element.getBoundingClientRect()
+          return {
+            height: rect.height,
+            text: (element.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 80),
+            width: rect.width,
+          }
+        })
+        .filter((control) => control.width > 0 && control.height > 0)
       const visibleText = [
         ...document.querySelectorAll('p,li,td,th,button,h1,h2,h3,strong,span,dt,dd'),
       ]
@@ -181,6 +252,10 @@ describe('Google stack chain visual workbench', () => {
 
       return {
         clientWidth: document.documentElement.clientWidth,
+        emptyAnalyticsFits: (() => {
+          const cell = document.querySelector('#analyticsRows .empty-row td')
+          return cell ? cell.scrollWidth <= cell.clientWidth + 1 : false
+        })(),
         minVisibleFont: Math.min(...visibleText),
         smallControls: controls.filter((control) => control.width < 44 || control.height < 44),
         scrollWidth: document.documentElement.scrollWidth,
@@ -188,6 +263,7 @@ describe('Google stack chain visual workbench', () => {
     })
 
     expect(audit.smallControls).toEqual([])
+    expect(audit.emptyAnalyticsFits).toBe(true)
     expect(audit.minVisibleFont).toBeGreaterThanOrEqual(12)
     expect(audit.scrollWidth).toBe(audit.clientWidth)
     await page.close()
