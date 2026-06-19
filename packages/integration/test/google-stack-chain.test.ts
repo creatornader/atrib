@@ -27,7 +27,7 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
           a2a_receiver_followup:
             'sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2',
           adk_python_tool_callback:
-            'sha256:70d0bb2c3e38194b065a1872bbf96861b8f9f0802d323c837ede32609b548a79',
+            'sha256:15801af402108603b899b8773b59aa68af71d9e34ee50ec18103afea141f31ed',
         },
       })
       expect(result.snapshot.resolved_edges).toHaveLength(3)
@@ -83,7 +83,7 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
       expect(result.layers.adk_python).toMatchObject({
         protocol: 'ADK Python',
         package: 'google-adk',
-        version: '2.1.0',
+        version: '2.3.0',
         runtime: 'InMemoryRunner',
         plugin: 'BasePlugin',
         operation: 'google.adk.python.tool.quote_price',
