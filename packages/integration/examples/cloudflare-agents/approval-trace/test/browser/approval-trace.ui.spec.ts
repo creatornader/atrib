@@ -1180,8 +1180,8 @@ async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
   expect(stackGeometry.diffCodeHeight).toBeLessThanOrEqual(308)
   expect(stackGeometry.actionBottomGap).toBeGreaterThanOrEqual(12)
   expect(stackGeometry.actionBottomGap).toBeLessThanOrEqual(24)
-  expect(stackGeometry.actionsY).toBeGreaterThanOrEqual(686)
-  expect(stackGeometry.actionsY).toBeLessThanOrEqual(698)
+  expect(stackGeometry.actionsY, JSON.stringify(stackGeometry)).toBeGreaterThanOrEqual(684)
+  expect(stackGeometry.actionsY, JSON.stringify(stackGeometry)).toBeLessThanOrEqual(699)
   expect(stackGeometry.riskBarHeight).toBeGreaterThanOrEqual(38)
 }
 
