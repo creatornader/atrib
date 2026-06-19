@@ -2,7 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 /* global process */
 
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -32,6 +41,37 @@ function readJson(path) {
 
 function fail(message) {
   failures.push(message)
+}
+
+function withFakeOpenClawConfig(dir, endpoint, fn) {
+  const binDir = join(dir, 'bin')
+  mkdirSync(binDir)
+  const openclawPath = join(binDir, 'openclaw')
+  writeFileSync(
+    openclawPath,
+    [
+      '#!/usr/bin/env node',
+      "if (process.argv.slice(2).join(' ') === 'config get env --json') {",
+      `  process.stdout.write(${
+        JSON.stringify(JSON.stringify({ vars: { ATRIB_LOCAL_SUBSTRATE_ENDPOINT: endpoint } }))
+      })`,
+      '  process.exit(0)',
+      '}',
+      'process.exit(1)',
+    ].join('\n'),
+  )
+  chmodSync(openclawPath, 0o755)
+  const previousPath = process.env.PATH
+  process.env.PATH = `${binDir}:${previousPath ?? ''}`
+  try {
+    return fn()
+  } finally {
+    if (previousPath === undefined) {
+      delete process.env.PATH
+    } else {
+      process.env.PATH = previousPath
+    }
+  }
 }
 
 function checkFixture(path) {
@@ -204,6 +244,54 @@ function checkRouteRegistryNormalization() {
     }
   } finally {
     rmSync(dir, { recursive: true, force: true })
+  }
+
+  const openClawDir = mkdtempSync(join(tmpdir(), 'atrib-topology-openclaw-'))
+  try {
+    const envPath = join(openClawDir, 'openclaw.env')
+    const registryPath = join(openClawDir, 'routes.json')
+    writeFileSync(
+      envPath,
+      [
+        "export OPENCLAW_LAUNCHD_LABEL='ai.openclaw.gateway'",
+        'SECRET_TOKEN=must-not-leak',
+      ].join('\n'),
+    )
+    writeFileSync(
+      registryPath,
+      JSON.stringify({
+        schema: 'atrib.local-substrate-route-registry.v0',
+        routes: [
+          {
+            kind: 'long-lived-agent',
+            label: 'ai.openclaw.gateway',
+            agent: 'openclaw',
+            env_file: envPath,
+          },
+        ],
+      }),
+    )
+
+    const openClawRoutes = withFakeOpenClawConfig(
+      openClawDir,
+      'http://127.0.0.1:8789/atrib/local-substrate',
+      () => collectRegisteredLongLivedAgents(registryPath),
+    )
+    const route = openClawRoutes[0]
+    const serialized = JSON.stringify(openClawRoutes)
+    if (openClawRoutes.length !== 1) {
+      fail(
+        `route registry openclaw config: expected 1 normalized route, got ${openClawRoutes.length}`,
+      )
+    } else if (route.agent !== 'openclaw') {
+      fail(`route registry openclaw config: expected openclaw agent, got ${route.agent}`)
+    } else if (route.endpoint !== 'http://127.0.0.1:8789/atrib/local-substrate') {
+      fail('route registry openclaw config: endpoint was not read from openclaw config')
+    } else if (serialized.includes('must-not-leak') || serialized.includes('SECRET_TOKEN')) {
+      fail('route registry openclaw config: unsafe env value leaked into normalized route')
+    }
+  } finally {
+    rmSync(openClawDir, { recursive: true, force: true })
   }
 }
 
