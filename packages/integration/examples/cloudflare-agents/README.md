@@ -249,10 +249,10 @@ separation.
 The current hosted proof is at
 `https://atrib-cloudflare.nagala.workers.dev/`.
 The latest verified refresh passed `proof:worker` with `391/391` checks at
-`2026-06-19T16:33:44.297Z` from the public commit used for that proof:
-[`386050d59844f5dcd46b9d74374183e062be9f28`](https://github.com/creatornader/atrib/commit/386050d59844f5dcd46b9d74374183e062be9f28).
+`2026-06-19T19:54:36.878Z` from the public commit used for that proof:
+[`8fb3820628d4a3b156816d65a3e507ac8b76481e`](https://github.com/creatornader/atrib/commit/8fb3820628d4a3b156816d65a3e507ac8b76481e).
 The deployed Worker version for that run was
-`4f91ae21-7507-450f-8f9e-53ed02a20fa3`.
+`d25746f8-7f4e-4f69-9970-8774b983bb9b`.
 
 Third-party production redeploys may require Cloudflare Dynamic Workers access
 because Worker Loader is used by `DynamicWorkerExecutor`. On accounts without
