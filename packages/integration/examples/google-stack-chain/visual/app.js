@@ -187,7 +187,7 @@ function renderChainNode(item, index) {
     <span class="node-index">${index + 1}</span>
     <div>
       <h3>${escapeHtml(item.label)}</h3>
-      <p>${escapeHtml(item.actor)}</p>
+      <p title="${escapeHtml(item.actor)}">${escapeHtml(displayAgentName(item.actor))}</p>
     </div>
     <code class="node-hash">${shortHash(item.record_hash)}</code>
     <p>${escapeHtml(item.evidence)}</p>
@@ -221,7 +221,7 @@ function renderAnalyticsRow(row) {
   tr.innerHTML = `
     <td data-label="Protocol">${escapeHtml(row.protocol)}</td>
     <td data-label="Event" title="${escapeHtml(row.event_type)}">${escapeHtml(formatEvent(row.event_type))}</td>
-    <td data-label="Agent">${escapeHtml(row.agent)}</td>
+    <td data-label="Agent" title="${escapeHtml(row.agent)}">${escapeHtml(displayAgentName(row.agent))}</td>
     <td data-label="Trace"><code>${escapeHtml(shortTrace(row.trace_id))}</code></td>
     <td data-label="Record"><code>${shortHash(row.atrib_record_hash)}</code></td>
   `
@@ -437,7 +437,7 @@ function renderRuntimeState(payload) {
   nodes.runtimeAdkHash.title = ''
   nodes.runtimeSource.textContent = gate.packet_source
   nodes.writeRuntimeAnalytics.disabled = !state.runtimeCanWrite
-  nodes.writeRuntimeAnalytics.textContent = state.runtimeCanWrite ? 'Write rows' : 'Operator write only'
+  nodes.writeRuntimeAnalytics.textContent = state.runtimeCanWrite ? 'Write rows' : 'Write locked'
   renderRuntimeFlow()
   nodes.runtimeChecks.replaceChildren(...renderRuntimePreflightChecks(gate))
   nodes.analyticsRows.replaceChildren(...state.data.analytics.rows.map(renderAnalyticsRow))
@@ -459,7 +459,7 @@ function renderActiveRuntimeRun(run, analyticsWrite) {
   nodes.runtimeAdkHash.title = adkStep?.record_hash ?? ''
   nodes.runtimeSource.textContent = run.mode === 'replay' ? 'Cloud Run replay' : 'provided packet'
   nodes.writeRuntimeAnalytics.disabled = !state.runtimeCanWrite
-  nodes.writeRuntimeAnalytics.textContent = state.runtimeCanWrite ? 'Write rows' : 'Operator write only'
+  nodes.writeRuntimeAnalytics.textContent = state.runtimeCanWrite ? 'Write rows' : 'Write locked'
   state.runtimeSteps = run.steps
   state.runtimeCurrentKey = null
   renderRuntimeFlow()
@@ -728,7 +728,7 @@ function renderRuntimeUnavailable(label, reason) {
   nodes.runtimeFlow.replaceChildren()
   nodes.runtimeChecks.replaceChildren()
   nodes.writeRuntimeAnalytics.disabled = true
-  nodes.writeRuntimeAnalytics.textContent = 'Operator write only'
+  nodes.writeRuntimeAnalytics.textContent = 'Write locked'
   renderChainCollection(state.data.nodes)
   selectNode(state.data.nodes[0].id)
   nodes.analyticsRows.replaceChildren(...state.data.analytics.rows.map(renderAnalyticsRow))
@@ -847,6 +847,12 @@ function showToast(message) {
 function shortHash(value) {
   if (!value.startsWith('sha256:')) return value
   return `${value.slice(0, 18)}\u2026${value.slice(-12)}`
+}
+
+function displayAgentName(value) {
+  return String(value)
+    .replace('atrib-google-evidence-runtime', 'atrib-google-runtime')
+    .replace('google_adk_atrib_smoke_agent', 'google-adk-smoke-agent')
 }
 
 function tinyHash(value) {
