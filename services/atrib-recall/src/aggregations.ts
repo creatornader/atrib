@@ -31,7 +31,15 @@ import {
   deriveLocalContentFromSidecar,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  statSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import type { ImportanceLabel } from './index.js'
 import { IMPORTANCE_NUMERIC } from './index.js'
@@ -156,8 +164,42 @@ function extractLoaded(
  */
 export function loadLoaded(path: string): LoadedRecord[] {
   if (!existsSync(path)) return []
+  return parseLoadedJsonl(readFileSync(path, 'utf8'))
+}
+
+export function loadLoadedAppend(path: string, startOffset: number): LoadedRecord[] {
+  if (!existsSync(path)) return []
+  let size = 0
+  try {
+    const stat = statSync(path)
+    if (!stat.isFile()) return []
+    size = stat.size
+  } catch {
+    return []
+  }
+  if (startOffset >= size) return []
+  const readStart = startOffset > 0 ? startOffset - 1 : 0
+  const length = size - readStart
+  const fd = openSync(path, 'r')
+  try {
+    const buffer = Buffer.allocUnsafe(length)
+    const bytesRead = readSync(fd, buffer, 0, length, readStart)
+    let raw = buffer.subarray(0, bytesRead).toString('utf8')
+    if (readStart > 0) {
+      const firstNewline = raw.indexOf('\n')
+      if (firstNewline < 0) return []
+      raw = raw.slice(firstNewline + 1)
+    }
+    return parseLoadedJsonl(raw)
+  } catch {
+    return []
+  } finally {
+    closeSync(fd)
+  }
+}
+
+function parseLoadedJsonl(raw: string): LoadedRecord[] {
   const out: LoadedRecord[] = []
-  const raw = readFileSync(path, 'utf8')
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed) continue

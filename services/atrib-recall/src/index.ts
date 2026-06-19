@@ -148,6 +148,7 @@ import {
   aggregateAnnotationsByRecord,
   aggregateRevisionsByRecord,
   discoverLoaded,
+  loadLoadedAppend,
 } from './aggregations.js'
 import type { AnnotationSummary as AggAnnotationSummary, LoadedRecord } from './aggregations.js'
 import {
@@ -182,11 +183,13 @@ type MirrorFileStat = {
 
 type MirrorFingerprint = {
   files: string[]
+  stats: MirrorFileStat[]
   signature: string
 }
 
 type LoadedMirrorSnapshot = {
   signature: string
+  stats: MirrorFileStat[]
   loaded: LoadedRecord[]
   loadedByHash: Map<string, LoadedRecord>
   newestLoaded: LoadedRecord[]
@@ -210,6 +213,7 @@ function readMirrorFingerprint(recordFile?: string): MirrorFingerprint {
     const stat = statMirrorFile(explicit)
     return {
       files: [explicit],
+      stats: stat ? [stat] : [],
       signature: JSON.stringify({
         mode: 'file',
         file: explicit,
@@ -221,6 +225,7 @@ function readMirrorFingerprint(recordFile?: string): MirrorFingerprint {
   if (!existsSync(envDir)) {
     return {
       files: [],
+      stats: [],
       signature: JSON.stringify({ mode: 'dir', dir: envDir, missing: true }),
     }
   }
@@ -233,6 +238,7 @@ function readMirrorFingerprint(recordFile?: string): MirrorFingerprint {
   } catch {
     return {
       files: [],
+      stats: [],
       signature: JSON.stringify({ mode: 'dir', dir: envDir, unreadable: true }),
     }
   }
@@ -245,6 +251,7 @@ function readMirrorFingerprint(recordFile?: string): MirrorFingerprint {
   }
   return {
     files: stats.map((stat) => stat.path),
+    stats,
     signature: JSON.stringify({ mode: 'dir', dir: envDir, stats }),
   }
 }
@@ -262,12 +269,15 @@ function statMirrorFile(path: string): MirrorFileStat | null {
 function getLoadedMirrorSnapshot(recordFile?: string): LoadedMirrorSnapshot {
   const fingerprint = readMirrorFingerprint(recordFile)
   if (loadedMirrorSnapshot?.signature === fingerprint.signature) return loadedMirrorSnapshot
+  const refreshed = tryAppendRefreshLoadedMirrorSnapshot(loadedMirrorSnapshot, fingerprint)
+  if (refreshed) return refreshed
 
   const { loaded, files } = discoverLoaded(recordFile)
   const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
   const revisionsByRecord = aggregateRevisionsByRecord(loaded)
   loadedMirrorSnapshot = {
     signature: fingerprint.signature,
+    stats: fingerprint.stats,
     loaded,
     loadedByHash: new Map(loaded.map((lr) => [lr.record_hash, lr])),
     newestLoaded: loaded.slice().sort((a, b) => b.record.timestamp - a.record.timestamp),
@@ -277,6 +287,57 @@ function getLoadedMirrorSnapshot(recordFile?: string): LoadedMirrorSnapshot {
     bm25IndexesByNewestLimit: new Map(),
   }
   return loadedMirrorSnapshot
+}
+
+function tryAppendRefreshLoadedMirrorSnapshot(
+  previous: LoadedMirrorSnapshot | undefined,
+  fingerprint: MirrorFingerprint,
+): LoadedMirrorSnapshot | undefined {
+  if (!previous) return undefined
+  if (!sameMirrorFiles(previous.stats, fingerprint.stats)) return undefined
+
+  const previousByPath = new Map(previous.stats.map((stat) => [stat.path, stat]))
+  const appended: LoadedRecord[] = []
+  for (const current of fingerprint.stats) {
+    const prior = previousByPath.get(current.path)
+    if (!prior) return undefined
+    if (current.size < prior.size) return undefined
+    if (current.size > prior.size) {
+      appended.push(...loadLoadedAppend(current.path, prior.size))
+    }
+  }
+
+  if (appended.length === 0) {
+    previous.signature = fingerprint.signature
+    previous.stats = fingerprint.stats
+    return previous
+  }
+
+  const loaded = previous.loaded.concat(appended)
+  const loadedByHash = new Map(previous.loadedByHash)
+  for (const lr of appended) loadedByHash.set(lr.record_hash, lr)
+  const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+  const revisionsByRecord = aggregateRevisionsByRecord(loaded)
+  loadedMirrorSnapshot = {
+    signature: fingerprint.signature,
+    stats: fingerprint.stats,
+    loaded,
+    loadedByHash,
+    newestLoaded: loaded.slice().sort((a, b) => b.record.timestamp - a.record.timestamp),
+    files: fingerprint.files,
+    annotationsByRecord,
+    revisionsByRecord,
+    bm25IndexesByNewestLimit: new Map(),
+  }
+  return loadedMirrorSnapshot
+}
+
+function sameMirrorFiles(a: MirrorFileStat[], b: MirrorFileStat[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i]!.path !== b[i]!.path) return false
+  }
+  return true
 }
 
 function getBm25IndexForNewestLimit(snapshot: LoadedMirrorSnapshot, limit: number): BM25Index {
