@@ -248,12 +248,17 @@ separation.
 
 The current hosted proof is at
 `https://atrib-cloudflare.nagala.workers.dev/`.
+The latest verified refresh passed `proof:worker` with `391/391` checks at
+`2026-06-19T06:26:47.961Z` from the public commit used for that proof:
+[`4676ef40608b9a10a6701354d91772e24c529366`](https://github.com/creatornader/atrib/commit/4676ef40608b9a10a6701354d91772e24c529366).
+The deployed Worker version for that run was
+`34297846-9402-45e4-81ad-93712c0cfbdb`.
 
-Production deploys require Cloudflare Dynamic Workers access because Worker
-Loader is used by `DynamicWorkerExecutor`. On accounts without that access,
-`proof:worker` fails before publishing with Cloudflare error 10195. Local Worker
-tests and deploy dry-runs still exercise the Code Mode approval bridge without
-mutating a real Cloudflare production resource.
+Third-party production redeploys may require Cloudflare Dynamic Workers access
+because Worker Loader is used by `DynamicWorkerExecutor`. On accounts without
+that access, `proof:worker` can fail before publishing with Cloudflare error
+10195. Local Worker tests and deploy dry-runs still exercise the Code Mode
+approval bridge without mutating a real Cloudflare production resource.
 
 Run it with:
 
