@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { createGoogleActiveRuntimeRun } from '../examples/google-stack-chain/runtime/active-runtime.js'
 import {
   DEFAULT_RUNTIME_CONTEXT_ID,
   buildGoogleEvidenceGate,
@@ -34,6 +35,63 @@ describe('Google evidence runtime', () => {
     })
     expect(gate.checks.every((check) => check.ok)).toBe(true)
   })
+
+  it('runs the active Google stack after AP2 verification', async () => {
+    const packet = await buildReplayPacket({
+      resultJson: join(fixtureDir, 'ap2-vi-reference-result.json'),
+      evidenceJson: join(fixtureDir, 'ap2-vi-reference-evidence.json'),
+    })
+
+    const events: string[] = []
+    const run = await createGoogleActiveRuntimeRun({
+      runId: 'google-active-test-run',
+      packet,
+      prompt: 'Quote the next atlas-kit action after AP2 verification.',
+      nowMs: 1_779_840_000_000,
+      onEvent: (event) => {
+        events.push('key' in event ? `${event.type}:${event.key}` : event.type)
+      },
+    })
+
+    expect(run.ok).toBe(true)
+    expect(run.status).toBe('complete')
+    expect(run.steps.map((step) => step.key)).toEqual([
+      'ap2_gate',
+      'a2a_handoff',
+      'adk_tool_callback',
+    ])
+    expect(run.chain).toEqual({
+      ap2_informs_a2a_remote: true,
+      a2a_remote_informs_receiver: true,
+      a2a_receiver_informs_adk_js: true,
+    })
+    expect(run.a2a?.evidence.remote_informed_by_resolved).toEqual([run.gate.record_hash])
+    expect(run.adk_js?.chain.parent_informed_by_resolved).toEqual([run.a2a?.followup.record_hash])
+    expect(run.analytics_rows.map((row) => row.event_type)).toEqual([
+      'atrib.ap2.next_action_allowed',
+      'atrib.a2a.remote_evidence_accepted',
+      'atrib.a2a.receiver_followup_signed',
+      'atrib.adk_js.tool_callback_signed',
+    ])
+    expect(run.analytics_rows.map((row) => row.atrib_record_hash)).toEqual([
+      run.gate.record_hash,
+      run.a2a?.evidence.remote_record_hash,
+      run.a2a?.followup.record_hash,
+      run.adk_js?.record_hashes[0],
+    ])
+    expect(run.analytics_rows[3]?.protocol).toBe('ADK JS')
+    expect(run.caveats.join(' ')).toContain('committed replay fixture')
+    expect(events).toEqual([
+      'run_started',
+      'step_started:ap2_gate',
+      'step_completed',
+      'step_started:a2a_handoff',
+      'step_completed',
+      'step_started:adk_tool_callback',
+      'step_completed',
+      'run_completed',
+    ])
+  }, 30000)
 
   it('documents the bring-your-AP2-merchant packet shape', () => {
     expect(merchantAdapterContract()).toMatchObject({

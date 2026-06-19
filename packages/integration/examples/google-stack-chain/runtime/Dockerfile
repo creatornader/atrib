@@ -11,6 +11,8 @@ COPY services/ services/
 
 RUN pnpm install --frozen-lockfile --filter @atrib/integration...
 RUN pnpm --filter @atrib/mcp build
+RUN pnpm --filter @atrib/directory build
+RUN pnpm --filter @atrib/log-node build
 RUN pnpm --filter @atrib/verify build
 RUN pnpm --filter @atrib/agent build
 

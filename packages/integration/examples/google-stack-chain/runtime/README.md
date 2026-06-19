@@ -13,6 +13,9 @@ Run locally:
 ```bash
 pnpm --filter @atrib/integration google-evidence-runtime
 curl http://127.0.0.1:8080/v1/runtime-state
+curl -X POST http://127.0.0.1:8080/api/runs \
+  -H 'content-type: application/json' \
+  -d '{"mode":"replay","prompt":"Continue only after AP2 verification."}'
 ```
 
 The default replay uses the committed AP2 / VI reference fixture. Point the
@@ -28,6 +31,9 @@ pnpm --filter @atrib/integration google-evidence-runtime
 Endpoints:
 
 - `GET /health`: service liveness.
+- `GET /api/runs`: recent active runtime runs, held in memory.
+- `POST /api/runs`: creates one verifier-gated AP2 -> A2A -> ADK JS run.
+- `GET /api/runs/:runId`: returns one active run.
 - `GET /v1/runtime-state`: replay verifier state for the visual workbench.
 - `POST /v1/replay/google-ap2-sample`: explicit replay trigger.
 - `POST /v1/verify-ap2`: accepts inline AP2 `result`, `evidence`, and
@@ -52,7 +58,8 @@ curl -X POST http://127.0.0.1:8080/v1/analytics/write \
 ```
 
 Public deployments should leave `BIGQUERY_WRITE_ENABLED` unset. The runtime can
-show live verifier state without exposing a public BigQuery write endpoint.
+show live verifier state and active run rows without exposing a public BigQuery
+write endpoint.
 
 Deploy:
 

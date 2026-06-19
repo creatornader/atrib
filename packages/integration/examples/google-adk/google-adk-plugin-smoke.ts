@@ -11,7 +11,9 @@ import {
   version as adkVersion,
 } from '@google/adk'
 import type { BaseLlmConnection, LlmRequest, LlmResponse } from '@google/adk'
-import { canonicalRecord, hexEncode, sha256, verifyRecord } from '@atrib/mcp'
+import { canonicalRecord, hexEncode, resolveChainRoot, sha256, verifyRecord } from '@atrib/mcp'
+import type { AtribRecord } from '@atrib/mcp'
+import { verifyRecord as verifyAtribRecord } from '@atrib/verify'
 import { AtribAdkPlugin } from '../../src/google-adk-attribution.js'
 
 const contextId = '676f6f676c652d61646b2d70726f6f66'
@@ -21,6 +23,25 @@ const privateKey = Buffer.from(
 )
 const privatePhrase = 'orchid order note stays local'
 const baseTimestamp = 1_779_840_000_000
+
+export interface GoogleAdkPluginSmokeOptions {
+  contextId?: string
+  parentRecordHash?: string
+  parentRecord?: AtribRecord
+  prompt?: string
+  nowMs?: number
+}
+
+type GoogleAdkOperationalIds = {
+  trace_id: string
+  span_id: string
+  adk_invocation_id: string
+  adk_session_id: string
+  adk_function_call_id: string | null
+  adk_agent_name: string
+  source: 'local-adk-sidecar'
+  trace_projection: 'deterministic-local'
+}
 
 type SmokeResult = {
   ok: true
@@ -36,6 +57,13 @@ type SmokeResult = {
   signed_records: number
   operations: string[]
   record_hashes: string[]
+  google_operational_ids: GoogleAdkOperationalIds[]
+  chain: {
+    first_record_is_genesis: boolean
+    parent_informed_by: string | null
+    parent_informed_by_resolved: string[]
+    parent_informed_by_dangling: string[]
+  }
   final_text: string
   event_counts: {
     yielded_events: number
@@ -96,14 +124,18 @@ class ScriptedAdkModel extends BaseLlm {
   }
 }
 
-export async function runGoogleAdkPluginSmoke(): Promise<SmokeResult> {
+export async function runGoogleAdkPluginSmoke(
+  options: GoogleAdkPluginSmokeOptions = {},
+): Promise<SmokeResult> {
   setLogger(null)
+  const smokeContextId = options.contextId ?? contextId
   const plugin = new AtribAdkPlugin({
     privateKey,
-    contextId,
+    contextId: smokeContextId,
     serverUrl: 'adk://atrib-google-adk-smoke',
     logSubmission: 'disabled',
-    now: timestampClock(baseTimestamp),
+    now: timestampClock(options.nowMs ?? baseTimestamp),
+    parentRecordHashes: options.parentRecordHash ? [options.parentRecordHash] : [],
   })
 
   const quotePrice = new FunctionTool({
@@ -138,7 +170,7 @@ export async function runGoogleAdkPluginSmoke(): Promise<SmokeResult> {
     userId: 'atrib-smoke-user',
     newMessage: {
       role: 'user',
-      parts: [{ text: 'Quote two atlas kits.' }],
+      parts: [{ text: options.prompt ?? 'Quote two atlas kits.' }],
     },
   })) {
     events.push(event)
@@ -171,6 +203,20 @@ export async function runGoogleAdkPluginSmoke(): Promise<SmokeResult> {
   const recordHashes = records.map(
     (record) => `sha256:${hexEncode(sha256(canonicalRecord(record)))}`,
   )
+  const parentVerification =
+    options.parentRecord && records[0]
+      ? await verifyAtribRecord(records[0], { informedByCandidates: [options.parentRecord] })
+      : undefined
+  const googleOperationalIds = sidecars.map((sidecar) => ({
+    trace_id: digestHex(`${smokeContextId}:${sidecar.invocation_id}`, 32),
+    span_id: digestHex(`${sidecar.record_hash}:span`, 16),
+    adk_invocation_id: sidecar.invocation_id,
+    adk_session_id: sidecar.session_id,
+    adk_function_call_id: sidecar.function_call_id ?? null,
+    adk_agent_name: sidecar.agent_name,
+    source: 'local-adk-sidecar' as const,
+    trace_projection: 'deterministic-local' as const,
+  }))
 
   return {
     ok: true,
@@ -182,10 +228,18 @@ export async function runGoogleAdkPluginSmoke(): Promise<SmokeResult> {
       plugin: 'BasePlugin',
       tool: 'FunctionTool',
     },
-    context_id: contextId,
+    context_id: smokeContextId,
     signed_records: records.length,
     operations: records.map((record) => record.tool_name ?? ''),
     record_hashes: recordHashes,
+    google_operational_ids: googleOperationalIds,
+    chain: {
+      first_record_is_genesis:
+        records[0]?.chain_root === resolveChainRoot({ contextId: smokeContextId }),
+      parent_informed_by: options.parentRecordHash ?? null,
+      parent_informed_by_resolved: parentVerification?.informed_by_resolution?.resolved ?? [],
+      parent_informed_by_dangling: parentVerification?.informed_by_resolution?.dangling ?? [],
+    },
     final_text: finalText,
     event_counts: {
       yielded_events: events.length,
@@ -203,6 +257,10 @@ export async function runGoogleAdkPluginSmoke(): Promise<SmokeResult> {
 function timestampClock(start: number): () => number {
   let offset = 0
   return () => start + offset++
+}
+
+function digestHex(value: string, length: number): string {
+  return hexEncode(sha256(new TextEncoder().encode(value))).slice(0, length)
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

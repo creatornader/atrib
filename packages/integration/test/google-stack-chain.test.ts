@@ -107,7 +107,7 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
       )
       expect(result.value_add.privacy_boundary).toContain('hashes')
       expect(result.next_chunks[0]).toContain('public proof material')
-      expect(result.caveats.join(' ')).toContain('not a deployed Google managed runtime run')
+      expect(result.caveats.join(' ')).toContain('trust-transfer layer')
     })
   },
 )

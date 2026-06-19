@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { createServer, type Server } from 'node:http'
+import { createServer, type Server, type ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -20,6 +20,15 @@ describe('Google stack chain visual workbench', () => {
       try {
         const url = new URL(req.url ?? '/', 'http://127.0.0.1')
         const pathname = url.pathname === '/' ? '/index.html' : url.pathname
+        if (pathname.startsWith('/runtime/')) {
+          writeRuntimeMock(pathname, res)
+          return
+        }
+        if (pathname === '/runtime-config.js') {
+          res.setHeader('Content-Type', 'text/javascript; charset=utf-8')
+          res.end("window.GOOGLE_STACK_RUNTIME_URL = ''\n")
+          return
+        }
         const filePath = join(root, pathname)
         const body = await readFile(filePath)
         res.setHeader('Content-Type', contentType(filePath))
@@ -41,9 +50,9 @@ describe('Google stack chain visual workbench', () => {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()))
     })
-  })
+  }, 30_000)
 
-  it('renders the selectable proof chain and analytics fixture', async () => {
+  it('loads with an empty live chain and exposes the reference fixture on request', async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 920 } })
     const consoleErrors: string[] = []
     page.on('console', (message) => {
@@ -54,9 +63,19 @@ describe('Google stack chain visual workbench', () => {
     await page.goto(baseUrl)
     await expect.poll(() => page.title()).toBe('Google stack proof chain')
     await expect.poll(() => page.getByTestId('google-stack-visual').isVisible()).toBe(true)
+    await expect.poll(() => page.locator('#stageTitle').textContent()).toBe('Live proof chain')
+    await expect
+      .poll(() => page.locator('.empty-chain').textContent())
+      .toContain('Runtime records will appear here')
+    await expect.poll(() => page.locator('.node').count()).toBe(0)
+    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(1)
+    await page.locator('#viewReferenceSnapshot').click()
+    await expect.poll(() => page.locator('#stageTitle').textContent()).toBe('Reference artifact')
     await expect.poll(() => page.locator('.node').count()).toBe(4)
     await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(4)
-    await expect.poll(() => page.locator('#proofStatus').textContent()).toBe('local proof ready')
+    await expect
+      .poll(() => page.locator('#proofStatus').textContent())
+      .toBe('reference snapshot ready')
     await expect.poll(() => page.locator('#selectedTitle').textContent()).toBe('AP2 transaction')
 
     await page.getByRole('button', { name: 'Inspect ADK Python callback' }).click()
@@ -82,9 +101,54 @@ describe('Google stack chain visual workbench', () => {
     page.on('pageerror', (error) => consoleErrors.push(error.message))
 
     await page.goto(pathToFileURL(join(root, 'index.html')).href)
-    await expect.poll(() => page.locator('#proofStatus').textContent()).toBe('local proof ready')
+    await expect
+      .poll(() => page.locator('#proofStatus').textContent())
+      .toBe('reference snapshot ready')
+    await expect
+      .poll(() => page.locator('.empty-chain').textContent())
+      .toContain('Runtime records will appear here')
+    await expect.poll(() => page.locator('.node').count()).toBe(0)
+    await page.locator('#viewReferenceSnapshot').click()
     await expect.poll(() => page.locator('.node').count()).toBe(4)
     await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(4)
+    expect(consoleErrors).toEqual([])
+    await page.close()
+  })
+
+  it('starts an active runtime run from the workbench', async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 920 } })
+    const consoleErrors: string[] = []
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text())
+    })
+    page.on('pageerror', (error) => consoleErrors.push(error.message))
+
+    await page.goto(`${baseUrl}?runtime=${encodeURIComponent(`${baseUrl}/runtime`)}`)
+    await expect.poll(() => page.locator('#runtimeStatus').textContent()).toBe('Ready')
+    await expect.poll(() => page.locator('#runtimeFlow .runtime-flow-step').count()).toBe(3)
+    await expect.poll(() => page.locator('.node').count()).toBe(0)
+    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(1)
+    await page.getByRole('button', { name: 'Start run' }).click()
+    await expect.poll(() => page.locator('#runtimeStatus').textContent()).toBe('Complete')
+    await expect.poll(() => page.locator('#runtimeRunId').textContent()).toBe('mock-active-run')
+    await expect.poll(() => page.locator('#runtimeAdkHash').textContent()).toContain('sha256:adk')
+    await expect
+      .poll(() => page.locator('#runtimeFlow .runtime-flow-step.complete').count())
+      .toBe(3)
+    await expect.poll(() => page.locator('.runtime-node').count()).toBe(3)
+    await expect
+      .poll(() => page.locator('.source-badge').first().textContent())
+      .toBe('verified replay packet')
+    await expect
+      .poll(() => page.locator('#selectedTitle').textContent())
+      .toBe('ADK JS tool callback')
+    await expect
+      .poll(() => page.locator('#stageMode').textContent())
+      .toContain('Active runtime path')
+    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(4)
+    await expect
+      .poll(() => page.locator('#analyticsRows tr').last().textContent())
+      .toContain('ADK JS')
     expect(consoleErrors).toEqual([])
     await page.close()
   })
@@ -169,5 +233,231 @@ function contentType(filePath: string): string {
       return 'application/json; charset=utf-8'
     default:
       return 'application/octet-stream'
+  }
+}
+
+function writeRuntimeMock(pathname: string, res: ServerResponse): void {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8')
+  if (pathname === '/runtime/v1/runtime-state') {
+    res.end(
+      JSON.stringify({
+        ok: true,
+        capabilities: { analytics_write_enabled: false },
+        gate: mockGate(),
+      }),
+    )
+    return
+  }
+  if (pathname === '/runtime/api/runs/stream') {
+    const run = mockRun()
+    const [ap2Step, a2aStep, adkStep] = run.steps
+    if (!ap2Step || !a2aStep || !adkStep) throw new Error('mock run is missing runtime steps')
+    res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
+    res.end(
+      [
+        {
+          ok: true,
+          event: {
+            type: 'run_started',
+            run_id: run.run_id,
+            mode: run.mode,
+            prompt: run.prompt,
+            timestamp: run.created_at,
+          },
+        },
+        {
+          ok: true,
+          event: {
+            type: 'step_started',
+            key: 'ap2_gate',
+            protocol: 'AP2',
+            label: 'AP2 evidence gate',
+            timestamp: run.created_at,
+          },
+        },
+        { ok: true, event: { type: 'step_completed', step: ap2Step, timestamp: run.created_at } },
+        {
+          ok: true,
+          event: {
+            type: 'step_started',
+            key: 'a2a_handoff',
+            protocol: 'A2A',
+            label: 'A2A verifier handoff',
+            timestamp: a2aStep.timestamp,
+          },
+        },
+        {
+          ok: true,
+          event: { type: 'step_completed', step: a2aStep, timestamp: a2aStep.timestamp },
+        },
+        {
+          ok: true,
+          event: {
+            type: 'step_started',
+            key: 'adk_tool_callback',
+            protocol: 'ADK JS',
+            label: 'ADK tool callback',
+            timestamp: adkStep.timestamp,
+          },
+        },
+        {
+          ok: true,
+          event: { type: 'step_completed', step: adkStep, timestamp: adkStep.timestamp },
+        },
+        { ok: true, event: { type: 'run_completed', run, timestamp: run.updated_at } },
+        {
+          ok: true,
+          event: { type: 'analytics_write', analytics_write: null, timestamp: run.updated_at },
+        },
+      ]
+        .map((event) => JSON.stringify(event))
+        .join('\n') + '\n',
+    )
+    return
+  }
+  if (pathname === '/runtime/api/runs' || pathname === '/runtime/api/runs/mock-active-run') {
+    res.end(JSON.stringify({ ok: true, run: mockRun(), analytics_write: null }))
+    return
+  }
+  res.statusCode = 404
+  res.end(JSON.stringify({ ok: false, error: 'not_found' }))
+}
+
+function mockGate() {
+  return {
+    allowed: true,
+    decision: 'allow_next_action',
+    reason: 'Verified AP2 evidence can become executable context for the next agent action.',
+    packet_source: 'mock runtime replay fixture',
+    content_id: 'sha256:content0000000000000000000000000000000000000000000000000000000000',
+    record_hash: 'sha256:ap20000000000000000000000000000000000000000000000000000000000000',
+    checks: [
+      { key: 'ap2_transaction_detected', ok: true, detail: 'AP2 content id present.' },
+      {
+        key: 'ap2_vi_evidence_verified',
+        ok: true,
+        detail: 'AP2 receipt and VI evidence verified.',
+      },
+    ],
+    verifier_errors: [],
+    analytics_row: mockAnalyticsRow({
+      event_type: 'atrib.ap2.next_action_allowed',
+      atrib_record_hash: 'sha256:ap20000000000000000000000000000000000000000000000000000000000000',
+      protocol: 'AP2',
+    }),
+    next_action_context: {
+      protocol: 'AP2',
+      atrib_content_id: 'sha256:content0000000000000000000000000000000000000000000000000000000000',
+      informed_by: ['sha256:ap20000000000000000000000000000000000000000000000000000000000000'],
+      runtime_decision: 'allow_next_action',
+    },
+  }
+}
+
+function mockRun() {
+  return {
+    ok: true,
+    run_id: 'mock-active-run',
+    status: 'complete',
+    mode: 'replay',
+    prompt: 'Continue only if the AP2 evidence verifies.',
+    created_at: '2026-06-18T00:00:00.000Z',
+    updated_at: '2026-06-18T00:00:02.000Z',
+    duration_ms: 2000,
+    gate: mockGate(),
+    steps: [
+      {
+        key: 'ap2_gate',
+        protocol: 'AP2',
+        status: 'complete',
+        label: 'AP2 evidence gate',
+        detail: 'AP2 gate accepted.',
+        timestamp: '2026-06-18T00:00:00.000Z',
+        record_hash: 'sha256:ap20000000000000000000000000000000000000000000000000000000000000',
+      },
+      {
+        key: 'a2a_handoff',
+        protocol: 'A2A',
+        status: 'complete',
+        label: 'A2A verifier handoff',
+        detail: 'A2A handoff accepted.',
+        timestamp: '2026-06-18T00:00:01.000Z',
+        record_hash: 'sha256:a2a0000000000000000000000000000000000000000000000000000000000000',
+      },
+      {
+        key: 'adk_tool_callback',
+        protocol: 'ADK JS',
+        status: 'complete',
+        label: 'ADK tool callback',
+        detail: 'ADK callback signed.',
+        timestamp: '2026-06-18T00:00:02.000Z',
+        record_hash: 'sha256:adk0000000000000000000000000000000000000000000000000000000000000',
+      },
+    ],
+    chain: {
+      ap2_informs_a2a_remote: true,
+      a2a_remote_informs_receiver: true,
+      a2a_receiver_informs_adk_js: true,
+    },
+    analytics_rows: [
+      mockAnalyticsRow({
+        event_type: 'atrib.ap2.next_action_allowed',
+        atrib_record_hash:
+          'sha256:ap20000000000000000000000000000000000000000000000000000000000000',
+        protocol: 'AP2',
+      }),
+      mockAnalyticsRow({
+        event_type: 'atrib.a2a.remote_evidence_accepted',
+        atrib_record_hash:
+          'sha256:a2aremote000000000000000000000000000000000000000000000000000000000',
+        protocol: 'A2A',
+      }),
+      mockAnalyticsRow({
+        event_type: 'atrib.a2a.receiver_followup_signed',
+        atrib_record_hash:
+          'sha256:a2a0000000000000000000000000000000000000000000000000000000000000',
+        protocol: 'A2A',
+      }),
+      mockAnalyticsRow({
+        event_type: 'atrib.adk_js.tool_callback_signed',
+        atrib_record_hash:
+          'sha256:adk0000000000000000000000000000000000000000000000000000000000000',
+        protocol: 'ADK JS',
+      }),
+    ],
+    value_add: {
+      pre_action_trust_transfer: 'The ADK tool action receives verified AP2 and A2A evidence.',
+      runtime_gate: 'The next action is blocked unless AP2 evidence passes.',
+      analytics_join: 'Rows carry atrib hashes.',
+    },
+    caveats: [],
+  }
+}
+
+function mockAnalyticsRow({
+  event_type,
+  atrib_record_hash,
+  protocol,
+}: {
+  event_type: string
+  atrib_record_hash: string
+  protocol: string
+}) {
+  return {
+    timestamp: '2026-06-18T00:00:00.000Z',
+    event_type,
+    agent: protocol === 'ADK JS' ? 'google_adk_atrib_smoke_agent' : 'mock-agent',
+    session_id: 'mock-session',
+    invocation_id: 'mock-invocation',
+    user_id: 'google-stack-demo-operator',
+    trace_id: '11111111111111111111111111111111',
+    span_id: '2222222222222222',
+    parent_span_id: '',
+    status: 'OK',
+    error_message: '',
+    is_truncated: false,
+    atrib_record_hash,
+    atrib_parent_record_hashes: '[]',
+    protocol,
   }
 }

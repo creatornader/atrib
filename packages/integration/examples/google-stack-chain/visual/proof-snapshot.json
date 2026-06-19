@@ -1,7 +1,7 @@
 {
   "schema": "atrib-google-stack-chain.visual.v1",
   "title": "Google stack proof chain",
-  "status": "local proof ready",
+  "status": "reference snapshot ready",
   "strategy": "atrib-google-stack-chain-proof-v2",
   "command": "pnpm --filter @atrib/integration google-stack-chain-proof",
   "snapshot": {
@@ -176,9 +176,9 @@
     "A support reviewer can see what was authorized, what was handed off, and what runtime action was signed before resolving a support or counterparty decision."
   ],
   "caveats": [
-    "The four-record chain is a local explicit informed_by bridge. The runtime panel separately verifies the AP2 replay through Cloud Run when configured.",
-    "The AP2 artifacts come from committed AP2 / VI reference fixtures, not live payment credentials.",
-    "The A2A proof is in-process JSON-RPC, not a public A2A server, TCK result, or upstream sample.",
-    "The ADK Python proof uses a local InMemoryRunner and transient google-adk==2.1.0 install, not Agent Platform Runtime, Gemini Enterprise, or Memory Bank."
+    "Boundary: atrib is the trust-transfer layer here. AP2 evidence is accepted first, A2A receives that signed parent, and ADK signs from the A2A parent.",
+    "AP2 source: committed AP2 / VI fixtures or merchant-supplied packet JSON. This demo does not use live payment credentials or move funds.",
+    "A2A source: in-process JSON-RPC with signed receiving-agent follow-up. It proves verifier-gated handoff, not an A2A TCK result or public server deployment.",
+    "ADK source: InMemoryRunner callback proofs in Python snapshot and JS runtime. The claim is callback-boundary signing, not managed Agent Platform Runtime, Gemini Enterprise, or Memory Bank coverage."
   ]
 }
