@@ -644,20 +644,18 @@ async function expectDiffLineGutter(page: Page): Promise<void> {
 
 async function expectDiffRowsFillReferenceFrame(page: Page): Promise<void> {
   const rhythm = await page.evaluate<{
-    bottomGap: number
+    isScrollable: boolean
     lineHeight: number
     topGap: number
   }>(`(() => {
-    const code = document.querySelector('.diff-code')?.getBoundingClientRect()
+    const codeEl = document.querySelector('.diff-code')
+    const code = codeEl?.getBoundingClientRect()
     const rows = Array.from(document.querySelectorAll('.diff-line'))
     const first = rows[0]?.getBoundingClientRect()
-    const last = rows[rows.length - 1]?.getBoundingClientRect()
-    const style = document.querySelector('.diff-code')
-      ? getComputedStyle(document.querySelector('.diff-code'))
-      : null
-    if (!code || !first || !last || !style) return { bottomGap: 999, lineHeight: 0, topGap: 999 }
+    const style = codeEl ? getComputedStyle(codeEl) : null
+    if (!codeEl || !code || !first || !style) return { isScrollable: false, lineHeight: 0, topGap: 999 }
     return {
-      bottomGap: Math.round((code.bottom - last.bottom) * 100) / 100,
+      isScrollable: codeEl.scrollHeight > codeEl.clientHeight,
       lineHeight: Number.parseFloat(style.lineHeight),
       topGap: Math.round((first.top - code.top) * 100) / 100,
     }
@@ -666,8 +664,7 @@ async function expectDiffRowsFillReferenceFrame(page: Page): Promise<void> {
   expect(rhythm.lineHeight).toBeLessThanOrEqual(14.4)
   expect(rhythm.topGap).toBeGreaterThanOrEqual(7)
   expect(rhythm.topGap).toBeLessThanOrEqual(11)
-  expect(rhythm.bottomGap).toBeGreaterThanOrEqual(7)
-  expect(rhythm.bottomGap).toBeLessThanOrEqual(11)
+  expect(rhythm.isScrollable).toBe(true)
 }
 
 async function expectDiffCopyControlUsesReferencePlacement(page: Page): Promise<void> {
@@ -1577,7 +1574,10 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#riskDetails')).toContainText('Code Mode approval gate')
       await expect(page.locator('.diff-code')).toContainText('verifyCheckoutSession')
       await expect(page.locator('.diff-code')).toContainText('missing_cart')
+      await expect(page.locator('.diff-code')).toContainText('checkoutId')
+      await expect(page.locator('.diff-code')).toContainText('checkoutRouteName')
       await expect(page.locator('.diff-code')).not.toContainText('paymentIntent')
+      await expect(page.locator('#diffContext')).toHaveCount(0)
       await expectDiffLineGutter(page)
       await expectDiffRowsFillReferenceFrame(page)
       await expectDiffCopyControlUsesReferencePlacement(page)
@@ -1586,20 +1586,8 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.locator('#diffWrapToggle').click()
       await expect(page.locator('#diffWrapToggle')).toHaveAttribute('aria-pressed', 'true')
       await expect(page.locator('.diff-code')).toHaveClass(/wrap/)
-      const threeLineDiffCount = await page.locator('.diff-line').count()
-      await page.locator('#diffContext').selectOption('all')
-      await expect
-        .poll(async () => page.locator('.diff-line').count())
-        .toBeGreaterThan(threeLineDiffCount)
-      const allLineDiffCount = await page.locator('.diff-line').count()
       await expect(page.locator('.diff-line').last().locator('.diff-line-text')).not.toHaveText('')
-      await expect(page.locator('.diff-code')).toContainText('checkoutId')
-      await page.locator('#diffContext').selectOption('6')
-      await expect(page.locator('.diff')).toHaveAttribute('data-context-lines', '6')
       await expect(page.locator('.diff-code')).toContainText('normalizeCartId')
-      await expect
-        .poll(async () => page.locator('.diff-line').count())
-        .toBeLessThan(allLineDiffCount)
       await expectDiffLineGutter(page)
 
       await page.locator('#headerMenu').click()
