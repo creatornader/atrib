@@ -222,7 +222,7 @@ what they did (event_type), when (timestamp), what came before what in the
 chronology plane, and what the signer claimed informed, anchored, annotated, or
 revised the action in the declared-relationship plane.
 
-atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. The substrate is content-preserving (commitments, not content) and disclosure-configurable: harnesses pick how much each record reveals via the privacy postures in spec [§8](atrib-spec.md#8-privacy-postures).
+atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. A signature proves who committed to a claim, never that the claim is true. The first two limits are intrinsic to signed claims. The third narrows when another party signs its own evidence: the tool signs its response, a counterparty co-signs a transaction, an evaluator signs a diagnostic, or a witness attests the outcome. Those signatures corroborate the action, not the agent's reasoning. The substrate is content-preserving (commitments, not content) and disclosure-configurable: harnesses pick how much each record reveals via the privacy postures in spec [§8](atrib-spec.md#8-privacy-postures).
 
 This positioning keeps the claim honest. See spec [§3](atrib-spec.md#3-graph-query-interface) "What atrib chains, what it does not" for the detailed enumeration and spec [§7.6](atrib-spec.md#76-outcome-verification-patterns) for the outcome-verification patterns that close the tool-response gap.
 
