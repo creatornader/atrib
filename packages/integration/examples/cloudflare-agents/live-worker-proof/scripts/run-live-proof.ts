@@ -43,7 +43,7 @@ interface ParsedCheckpoint {
   rootHash: string
 }
 
-function base64url(bytes: Uint8Array): string {
+export function base64url(bytes: Uint8Array): string {
   return Buffer.from(bytes)
     .toString('base64')
     .replaceAll('+', '-')
@@ -51,11 +51,11 @@ function base64url(bytes: Uint8Array): string {
     .replace(/=+$/u, '')
 }
 
-function recordHash(record: AtribRecord): string {
+export function recordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
 }
 
-function parseTextContent(result: unknown): string {
+export function parseTextContent(result: unknown): string {
   const content = (result as { content?: Array<{ type?: string; text?: string }> }).content
   const text = content?.find((item) => item.type === 'text')?.text
   if (!text) {
@@ -64,7 +64,7 @@ function parseTextContent(result: unknown): string {
   return text
 }
 
-function parseCheckpoint(checkpoint: string): ParsedCheckpoint {
+export function parseCheckpoint(checkpoint: string): ParsedCheckpoint {
   const body = checkpoint.split('\n\n')[0]
   const lines = body?.trimEnd().split('\n') ?? []
   const treeSize = Number(lines[1])
@@ -75,7 +75,7 @@ function parseCheckpoint(checkpoint: string): ParsedCheckpoint {
   return { treeSize, rootHash }
 }
 
-async function ensureSecretFile(serverUrl?: string): Promise<boolean> {
+export async function ensureSecretFile(serverUrl?: string): Promise<boolean> {
   let secrets: Record<string, string> = {}
   try {
     secrets = JSON.parse(await readFile(SECRETS_PATH, 'utf8')) as Record<string, string>
@@ -101,7 +101,7 @@ async function ensureSecretFile(serverUrl?: string): Promise<boolean> {
   return true
 }
 
-async function runWranglerDeploy(): Promise<string> {
+export async function runWranglerDeploy(): Promise<string> {
   const { stdout, stderr } = await execFile(
     'pnpm',
     ['exec', 'wrangler', 'deploy', '--secrets-file', '.tmp/secrets.json'],
@@ -119,7 +119,7 @@ async function runWranglerDeploy(): Promise<string> {
   return workerUrl.replace(/\/$/u, '')
 }
 
-async function connectClient(workerUrl: string): Promise<Client> {
+export async function connectClient(workerUrl: string): Promise<Client> {
   const client = new Client(
     { name: 'atrib-cloudflare-live-proof-runner', version: '1.0.0' },
     { capabilities: {} },
@@ -129,7 +129,7 @@ async function connectClient(workerUrl: string): Promise<Client> {
   return client
 }
 
-async function submitForProof(record: AtribRecord): Promise<ProofBundle> {
+export async function submitForProof(record: AtribRecord): Promise<ProofBundle> {
   const response = await fetch(`${LOG_ENDPOINT}/entries`, {
     method: 'POST',
     headers: {
@@ -139,28 +139,34 @@ async function submitForProof(record: AtribRecord): Promise<ProofBundle> {
     body: JSON.stringify(record),
   })
   if (!response.ok) {
-    throw new Error(`POST /v1/entries failed for ${recordHash(record)}: ${response.status} ${await response.text()}`)
+    throw new Error(
+      `POST /v1/entries failed for ${recordHash(record)}: ${response.status} ${await response.text()}`,
+    )
   }
   return (await response.json()) as ProofBundle
 }
 
-function verifyProof(proof: ProofBundle): boolean {
+export function verifyProof(proof: ProofBundle): boolean {
   const checkpoint = parseCheckpoint(proof.checkpoint)
   const rootHash = new Uint8Array(Buffer.from(checkpoint.rootHash, 'base64'))
   const leafHash = new Uint8Array(Buffer.from(proof.leaf_hash, 'base64'))
-  const proofHashes = proof.inclusion_proof.map((item) => new Uint8Array(Buffer.from(item, 'base64')))
+  const proofHashes = proof.inclusion_proof.map(
+    (item) => new Uint8Array(Buffer.from(item, 'base64')),
+  )
   return verifyInclusion(proof.log_index, checkpoint.treeSize, leafHash, proofHashes, rootHash)
 }
 
-async function fetchContextEntries(contextId: string): Promise<unknown> {
+export async function fetchContextEntries(contextId: string): Promise<unknown> {
   const response = await fetch(`${LOG_ENDPOINT}/by-context/${contextId}`)
   if (!response.ok) {
-    throw new Error(`GET /v1/by-context/${contextId} failed: ${response.status} ${await response.text()}`)
+    throw new Error(
+      `GET /v1/by-context/${contextId} failed: ${response.status} ${await response.text()}`,
+    )
   }
   return response.json()
 }
 
-async function main() {
+export async function main() {
   await ensureSecretFile()
   let workerUrl = await runWranglerDeploy()
   const mcpUrl = `${workerUrl}/mcp`
@@ -199,13 +205,17 @@ async function main() {
     for (const item of parsed.records) {
       const expectedHash = recordHash(item.record)
       if (expectedHash !== item.record_hash) {
-        throw new Error(`Record hash mismatch for ${item.tool_name}: ${item.record_hash} != ${expectedHash}`)
+        throw new Error(
+          `Record hash mismatch for ${item.tool_name}: ${item.record_hash} != ${expectedHash}`,
+        )
       }
       const signatureOk = await verifyRecord(item.record)
       const proof = await submitForProof(item.record)
       const inclusionOk = verifyProof(proof)
       if (!signatureOk || !inclusionOk) {
-        throw new Error(`Verification failed for ${item.record_hash}: signature=${signatureOk} inclusion=${inclusionOk}`)
+        throw new Error(
+          `Verification failed for ${item.record_hash}: signature=${signatureOk} inclusion=${inclusionOk}`,
+        )
       }
       verifications.push({
         record_hash: item.record_hash,
@@ -229,7 +239,10 @@ async function main() {
     }
 
     await mkdir(RUNS_DIR, { recursive: true })
-    const outPath = resolve(RUNS_DIR, `${new Date().toISOString().replaceAll(':', '').replaceAll('.', '')}.json`)
+    const outPath = resolve(
+      RUNS_DIR,
+      `${new Date().toISOString().replaceAll(':', '').replaceAll('.', '')}.json`,
+    )
     await writeFile(outPath, `${JSON.stringify(run, null, 2)}\n`)
 
     console.log(JSON.stringify(run, null, 2))
@@ -239,7 +252,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error)
-  process.exitCode = 1
-})
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error) => {
+    console.error(error)
+    process.exitCode = 1
+  })
+}
