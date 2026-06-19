@@ -8,6 +8,10 @@ import { join, resolve } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import {
+  bindAtribPrimitivesHttpHost,
+  type AtribPrimitivesBackend,
+} from '../src/index.js'
 
 const BINARY = resolve(__dirname, '..', 'dist', 'index.js')
 const EXPECTED_TOOL_NAMES = [
@@ -41,6 +45,23 @@ function processEnvWith(env: NodeJS.ProcessEnv): Record<string, string> {
     if (typeof value === 'string') merged[key] = value
   }
   return merged
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
+}
+
+function fakeBackend(): AtribPrimitivesBackend {
+  return {
+    tools: [],
+    toolNames: [],
+    mountedPrimitiveCount: 0,
+    callTool: async () => {
+      throw new Error('fake backend has no tools')
+    },
+    flush: async () => {},
+    close: async () => {},
+  }
 }
 
 async function connectStdioClient(env: NodeJS.ProcessEnv): Promise<Client> {
@@ -256,6 +277,49 @@ describe('atrib-primitives MCP runtime', () => {
       } finally {
         await client.close()
       }
+    } finally {
+      await host.close()
+    }
+  })
+
+  it('answers health while the shared HTTP backend is still mounting', async () => {
+    let releaseBackend!: () => void
+    const backendGate = new Promise<void>((resolveBackend) => {
+      releaseBackend = resolveBackend
+    })
+    const host = await bindAtribPrimitivesHttpHost({
+      port: 0,
+      backendFactory: async () => {
+        await backendGate
+        return fakeBackend()
+      },
+    })
+    try {
+      const starting = await fetch(host.healthEndpoint)
+      expect(starting.status).toBe(503)
+      const startingPayload = (await starting.json()) as {
+        status?: string
+        report?: { primitive_runtime?: { backend?: string; tool_count?: number } }
+      }
+      expect(startingPayload.status).toBe('starting')
+      expect(startingPayload.report?.primitive_runtime?.backend).toBe('starting')
+      expect(startingPayload.report?.primitive_runtime?.tool_count).toBe(0)
+
+      releaseBackend()
+      for (let i = 0; i < 20; i += 1) {
+        const ready = await fetch(host.healthEndpoint)
+        if (ready.ok) {
+          const readyPayload = (await ready.json()) as {
+            status?: string
+            report?: { primitive_runtime?: { backend?: string } }
+          }
+          expect(readyPayload.status).toBe('healthy')
+          expect(readyPayload.report?.primitive_runtime?.backend).toBe('shared')
+          return
+        }
+        await delay(10)
+      }
+      throw new Error('backend did not report healthy')
     } finally {
       await host.close()
     }

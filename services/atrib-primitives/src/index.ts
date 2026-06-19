@@ -36,13 +36,6 @@ import {
   type Tool,
   isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js'
-import { createAtribEmitServer } from '@atrib/emit'
-import { createAtribAnnotateServer } from '@atrib/annotate'
-import { createAtribReviseServer } from '@atrib/revise'
-import { createAtribRecallServer } from '@atrib/recall'
-import { createAtribTraceServer } from '@atrib/trace'
-import { createAtribSummarizeServer } from '@atrib/summarize'
-import { createAtribVerifyServer } from '@atrib/verify-mcp'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 interface PrimitiveHandle {
@@ -62,7 +55,7 @@ interface ToolRoute {
   client: Client
 }
 
-interface AtribPrimitivesBackend {
+export interface AtribPrimitivesBackend {
   tools: Tool[]
   toolNames: string[]
   mountedPrimitiveCount: number
@@ -115,7 +108,26 @@ export interface AtribPrimitivesHttpHostOptions {
   path?: string
   jsonReady?: boolean
   sessionIdleMs?: number
+  backendFactory?: () => Promise<AtribPrimitivesBackend>
 }
+
+type BackendStatus =
+  | {
+      state: 'starting'
+      startedAt: number
+    }
+  | {
+      state: 'ready'
+      startedAt: number
+      readyAt: number
+      backend: AtribPrimitivesBackend
+    }
+  | {
+      state: 'error'
+      startedAt: number
+      errorAt: number
+      error: unknown
+    }
 
 const DEFAULT_HTTP_HOST = '127.0.0.1'
 const DEFAULT_HTTP_PORT = 8796
@@ -124,13 +136,13 @@ const DEFAULT_SESSION_IDLE_MS = 12 * 60 * 60 * 1000
 const MAX_JSON_BODY_BYTES = 1024 * 1024
 
 const PRIMITIVES: readonly [string, PrimitiveFactory][] = [
-  ['emit', createAtribEmitServer],
-  ['annotate', createAtribAnnotateServer],
-  ['revise', createAtribReviseServer],
-  ['recall', createAtribRecallServer],
-  ['trace', createAtribTraceServer],
-  ['summarize', createAtribSummarizeServer],
-  ['verify', createAtribVerifyServer],
+  ['emit', async () => (await import('@atrib/emit')).createAtribEmitServer()],
+  ['annotate', async () => (await import('@atrib/annotate')).createAtribAnnotateServer()],
+  ['revise', async () => (await import('@atrib/revise')).createAtribReviseServer()],
+  ['recall', async () => (await import('@atrib/recall')).createAtribRecallServer()],
+  ['trace', async () => (await import('@atrib/trace')).createAtribTraceServer()],
+  ['summarize', async () => (await import('@atrib/summarize')).createAtribSummarizeServer()],
+  ['verify', async () => (await import('@atrib/verify-mcp')).createAtribVerifyServer()],
 ]
 
 const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
@@ -167,9 +179,10 @@ async function mountPrimitive(name: string, factory: PrimitiveFactory): Promise<
 }
 
 async function createAtribPrimitivesBackend(): Promise<AtribPrimitivesBackend> {
-  const mounted = await Promise.all(
-    PRIMITIVES.map(([name, factory]) => mountPrimitive(name, factory)),
-  )
+  const mounted: MountedPrimitive[] = []
+  for (const [name, factory] of PRIMITIVES) {
+    mounted.push(await mountPrimitive(name, factory))
+  }
   const routeByTool = new Map<string, ToolRoute>()
   const tools: Tool[] = []
 
@@ -215,7 +228,42 @@ async function createAtribPrimitivesBackend(): Promise<AtribPrimitivesBackend> {
   }
 }
 
-function createOuterServer(backend: AtribPrimitivesBackend): Server {
+function createBackendProvider(
+  factory: () => Promise<AtribPrimitivesBackend> = createAtribPrimitivesBackend,
+): {
+  get(): Promise<AtribPrimitivesBackend>
+  status(): BackendStatus
+  close(): Promise<void>
+} {
+  const startedAt = Date.now()
+  let status: BackendStatus = { state: 'starting', startedAt }
+  const ready = factory().then(
+    (backend) => {
+      status = { state: 'ready', startedAt, readyAt: Date.now(), backend }
+      return backend
+    },
+    (error: unknown) => {
+      status = { state: 'error', startedAt, errorAt: Date.now(), error }
+      throw error
+    },
+  )
+  void ready.catch(() => {})
+
+  return {
+    get: () => ready,
+    status: () => status,
+    close: async () => {
+      const backend = status.state === 'ready' ? status.backend : await ready.catch(() => undefined)
+      await backend?.close()
+    },
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function createOuterServer(getBackend: () => Promise<AtribPrimitivesBackend>): Server {
   const server = new Server(
     {
       name: 'atrib-primitives',
@@ -229,9 +277,13 @@ function createOuterServer(backend: AtribPrimitivesBackend): Server {
     },
   )
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: backend.tools }))
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    const backend = await getBackend()
+    return { tools: backend.tools }
+  })
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const backend = await getBackend()
     return backend.callTool(request.params)
   })
 
@@ -239,8 +291,9 @@ function createOuterServer(backend: AtribPrimitivesBackend): Server {
 }
 
 export async function createAtribPrimitivesRuntime(): Promise<AtribPrimitivesRuntime> {
-  const backend = await createAtribPrimitivesBackend()
-  const server = createOuterServer(backend)
+  const backendProvider = createBackendProvider()
+  const backend = await backendProvider.get()
+  const server = createOuterServer(backendProvider.get)
 
   return {
     server,
@@ -250,7 +303,7 @@ export async function createAtribPrimitivesRuntime(): Promise<AtribPrimitivesRun
     close: async () => {
       await backend.flush()
       await server.close()
-      await backend.close()
+      await backendProvider.close()
     },
   }
 }
@@ -512,7 +565,7 @@ function parsePositiveInt(raw: string, name: string): number {
 export async function bindAtribPrimitivesHttpHost(
   options: AtribPrimitivesHttpHostOptions = {},
 ): Promise<AtribPrimitivesHttpHost> {
-  const backend = await createAtribPrimitivesBackend()
+  const backendProvider = createBackendProvider(options.backendFactory)
   const host = options.host ?? DEFAULT_HTTP_HOST
   const port = options.port ?? DEFAULT_HTTP_PORT
   const mcpPath = normalizeMcpPath(options.path ?? DEFAULT_HTTP_PATH)
@@ -546,6 +599,50 @@ export async function bindAtribPrimitivesHttpHost(
   const server = createServer(async (req, res) => {
     const path = requestPath(req)
     if (path === healthPath || path === '/health') {
+      const backendStatus = backendProvider.status()
+      if (backendStatus.state === 'starting') {
+        sendJson(res, 503, {
+          status: 'starting',
+          report: {
+            primitive_runtime: {
+              name: 'atrib-primitives',
+              version,
+              pid: process.pid,
+              transport: 'streamable-http',
+              backend: 'starting',
+              session_model: 'per-session-transport-shared-backend',
+              endpoint,
+              health_endpoint: healthEndpoint,
+              tool_count: 0,
+              mounted_primitive_count: 0,
+              backend_started_at: backendStatus.startedAt,
+            },
+          },
+        })
+        return
+      }
+      if (backendStatus.state === 'error') {
+        sendJson(res, 500, {
+          status: 'error',
+          report: {
+            primitive_runtime: {
+              name: 'atrib-primitives',
+              version,
+              pid: process.pid,
+              transport: 'streamable-http',
+              backend: 'error',
+              session_model: 'per-session-transport-shared-backend',
+              endpoint,
+              health_endpoint: healthEndpoint,
+              error: errorMessage(backendStatus.error),
+              backend_started_at: backendStatus.startedAt,
+              backend_error_at: backendStatus.errorAt,
+            },
+          },
+        })
+        return
+      }
+      const backend = backendStatus.backend
       sendJson(res, 200, {
         status: 'healthy',
         report: {
@@ -629,7 +726,7 @@ export async function bindAtribPrimitivesHttpHost(
 
       let session: HttpSession | undefined
       try {
-        const sessionServer = createOuterServer(backend)
+        const sessionServer = createOuterServer(backendProvider.get)
         session = {
           server: sessionServer,
           transport: new StreamableHTTPServerTransport({
@@ -668,7 +765,7 @@ export async function bindAtribPrimitivesHttpHost(
     await listen(server, host, port)
   } catch (error) {
     clearInterval(sweepTimer)
-    await backend.close().catch(() => {})
+    await backendProvider.close().catch(() => {})
     throw error
   }
   const boundPort = actualPort(server)
@@ -676,17 +773,26 @@ export async function bindAtribPrimitivesHttpHost(
   healthEndpoint = httpEndpoint(host, boundPort, healthPath)
 
   if (options.jsonReady) {
-    process.stdout.write(
-      `${JSON.stringify({
-        status: 'ready',
-        name: 'atrib-primitives',
-        version,
-        pid: process.pid,
-        transport: 'streamable-http',
-        endpoint,
-        health_endpoint: healthEndpoint,
-      })}\n`,
-    )
+    void backendProvider
+      .get()
+      .then((backend) => {
+        process.stdout.write(
+          `${JSON.stringify({
+            status: 'ready',
+            name: 'atrib-primitives',
+            version,
+            pid: process.pid,
+            transport: 'streamable-http',
+            endpoint,
+            health_endpoint: healthEndpoint,
+            tool_count: backend.toolNames.length,
+            mounted_primitive_count: backend.mountedPrimitiveCount,
+          })}\n`,
+        )
+      })
+      .catch((error: unknown) => {
+        process.stderr.write(`atrib-primitives: backend failed: ${errorMessage(error)}\n`)
+      })
   }
 
   return {
@@ -700,7 +806,7 @@ export async function bindAtribPrimitivesHttpHost(
       try {
         await closeHttpServer(server)
       } finally {
-        await backend.close()
+        await backendProvider.close()
       }
     },
   }
