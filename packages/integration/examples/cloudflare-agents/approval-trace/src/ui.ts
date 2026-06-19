@@ -6,7 +6,7 @@ export function renderApp(options: { colo?: string } = {}): string {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cloudflare Agent Trace</title>
+    <title>Code Mode Approval Trace</title>
     <style>
       :root {
         color-scheme: light;
@@ -3829,7 +3829,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         },
         {
           key: 'halt',
-          title: 'Human review halted',
+          title: 'Code Mode approval halted',
           detail: 'CodemodeRuntime reached a requiresApproval write_file action and is waiting for a signed human decision.',
           step: 'halt',
         },
@@ -4648,7 +4648,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         }
         if (rowTitle === 'Proposed action generated' || rowTitle === 'Initial proposal generated') return run.records.find((record) => record.label === 'proposal');
         if (rowTitle === 'Revised proposal generated') return latestProposalRecord(run);
-        if (rowTitle === 'Human review halted' || rowTitle === 'Revised proposal halted') {
+        if (rowTitle === 'Code Mode approval halted' || rowTitle === 'Human review halted' || rowTitle === 'Revised proposal halted') {
           return latestProposalRecord(run);
         }
         if (rowTitle === 'Human review feedback sent') {

@@ -18,20 +18,20 @@ async function expectCleanConsole(page: Page, action: () => Promise<void>): Prom
 
 async function createProposal(page: Page, path = '/'): Promise<void> {
   await page.goto(path)
-  await expect(page).toHaveTitle('Cloudflare Agent Trace')
+  await expect(page).toHaveTitle('Code Mode Approval Trace')
   await expect(page.getByTestId('approval-trace-app')).toBeVisible()
   await expect(page.locator('#coloLabel')).toHaveText(/^[A-Z0-9-]{2,12}$/)
   await expect(page.locator('#runIdLabel')).not.toHaveText('pending')
   await expect(page.locator('#runIdLabel')).toHaveText(/^run_[A-Z0-9]+/)
   await expect(page.locator('#runIdLabel')).toHaveAttribute('data-run-id', /.+/)
   await expect(page.locator('#answer')).toContainText('Trigger received')
-  await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
+  await expect(page.locator('#statusTitle')).toHaveText('Code Mode approval halted', {
     timeout: 15_000,
   })
   await expect(page.locator('#answer')).toContainText('Context gathered')
   await expect(page.locator('#answer')).toContainText('Policy & intent analysis')
   await expect(page.locator('#answer')).toContainText('Proposed action generated')
-  await expect(page.locator('#answer')).toContainText('Human review halted')
+  await expect(page.locator('#answer')).toContainText('Code Mode approval halted')
   await expect(page.locator('#proposal')).toContainText('Proposed action')
   await expect(page.locator('#proposal')).toContainText('Diff (unified)')
   await expect(page.locator('#receipts pre')).toContainText('"trace_id"')
@@ -60,8 +60,8 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect
     .poll(async () => page.locator('#timeline .event-future .event-marker').allTextContents())
     .toEqual(['4', '5'])
-  await expect(page.locator('#answer')).toContainText('Human review halted')
-  await expect(page.locator('#answer')).toContainText('Execution is stopped')
+  await expect(page.locator('#answer')).toContainText('Code Mode approval halted')
+  await expect(page.locator('#answer')).toContainText('Code Mode is paused')
   await expectProposalProgressDot(page, 'pending')
   await expectPendingSignerHashReadable(page)
   await expectReferenceSignerIconTreatment(page)
@@ -220,7 +220,7 @@ async function expectReferenceLeftProgressTypography(page: Page): Promise<void> 
   expect(progress.receivedText).toMatch(/^[A-Z][a-z]{2} \d{1,2}, \d{4} \d{2}:\d{2}:\d{2} UTC$/)
   expect(progress.detailWeights.every((weight) => weight <= 400)).toBe(true)
   for (const row of progress.rowWeights) {
-    if (row.text === 'Human review halted') {
+    if (row.text === 'Code Mode approval halted') {
       expect(row.weight).toBe(700)
     } else {
       expect(row.weight).toBe(400)
@@ -1571,7 +1571,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
 
       await page.locator('#riskDetailsToggle').click()
       await expect(page.locator('#riskDetails')).toBeVisible()
-      await expect(page.locator('#riskDetails')).toContainText('Human review gate')
+      await expect(page.locator('#riskDetails')).toContainText('Code Mode approval gate')
       await expect(page.locator('.diff-code')).toContainText('const config = getConfig();')
       await expect(page.locator('.diff-code')).toContainText('next();')
       await expect(page.locator('.diff-code')).not.toContainText('logRequest')
@@ -1741,11 +1741,11 @@ test.describe('Cloudflare approval trace browser UI', () => {
     await expectCleanConsole(page, async () => {
       await page.setViewportSize({ width: 1280, height: 720 })
       await page.goto('/')
-      await expect(page).toHaveTitle('Cloudflare Agent Trace')
+      await expect(page).toHaveTitle('Code Mode Approval Trace')
       await expect(page.getByTestId('approval-trace-app')).toBeVisible()
       await expectNoHorizontalOverflow(page)
 
-      await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
+      await expect(page.locator('#statusTitle')).toHaveText('Code Mode approval halted', {
         timeout: 15_000,
       })
       await expect(page.locator('[data-step="halt"]')).toContainText('Awaiting review')
@@ -1768,7 +1768,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expect(page.locator('#runIdLabel')).toHaveAttribute('data-run-id', /.+/)
       await expect.poll(async () => page.locator('#runIdLabel').textContent()).not.toBe(firstRunId)
       await expect(page.locator('#answer')).toContainText('Trigger received')
-      await expect(page.locator('#statusTitle')).toHaveText('Halted for human review', {
+      await expect(page.locator('#statusTitle')).toHaveText('Code Mode approval halted', {
         timeout: 15_000,
       })
       await expectProgressPanelAtTop(page)
