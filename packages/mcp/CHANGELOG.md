@@ -1,5 +1,11 @@
 # @atrib/mcp
 
+## 0.18.1
+
+### Patch Changes
+
+- 44bc84d: Raise the local-substrate coordinator default timeout to 1500 ms and reuse cached local mirror hash scans across repeated unresolved reference checks. `@atrib/mcp-wrap` now includes lookup timing fields when it drops unresolved `informed_by` candidates.
+
 ## 0.18.0
 
 ### Minor Changes

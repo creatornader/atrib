@@ -1,5 +1,12 @@
 # @atrib/cloudflare-approval-trace
 
+## 0.0.16
+
+### Patch Changes
+
+- Updated dependencies [44bc84d]
+  - @atrib/mcp@0.18.1
+
 ## 0.0.15
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @atrib/graph-node
 
+## 0.1.33
+
+### Patch Changes
+
+- Updated dependencies [44bc84d]
+  - @atrib/mcp@0.18.1
+  - @atrib/verify@0.7.10
+
 ## 0.1.32
 
 ### Patch Changes
