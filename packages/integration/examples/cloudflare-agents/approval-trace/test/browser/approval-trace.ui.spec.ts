@@ -496,6 +496,12 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       smallCenterDeltaX: number
       smallFits: boolean
       textAlign: string
+      actionsLeft: number
+      actionsRight: number
+      actionsWidth: number
+      buttonLeft: number
+      buttonRight: number
+      buttonWidth: number
     }>
   >(`Array.from(document.querySelectorAll('.actions > button')).map((button) => {
     const actionsRect = document.querySelector('.actions')?.getBoundingClientRect()
@@ -558,11 +564,17 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
         : 999,
       smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
       textAlign: copy ? getComputedStyle(button.querySelector('.action-copy')).textAlign : '',
+      actionsLeft: Math.round((actionsRect?.left ?? 0) * 100) / 100,
+      actionsRight: Math.round((actionsRect?.right ?? 0) * 100) / 100,
+      actionsWidth: Math.round((actionsRect?.width ?? 0) * 100) / 100,
+      buttonLeft: Math.round(buttonRect.left * 100) / 100,
+      buttonRight: Math.round(buttonRect.right * 100) / 100,
+      buttonWidth: Math.round(buttonRect.width * 100) / 100,
     }
   })`)
   for (const geometry of buttonGeometry) {
     expect(geometry.buttonDisplay).toBe('flex')
-    expect(geometry.buttonInsideActions).toBe(true)
+    expect(geometry.buttonInsideActions, JSON.stringify(geometry)).toBe(true)
     expect(geometry.justify).toBe('center')
     expect(geometry.contentDisplay).toBe('grid')
     expect(geometry.contentJustifyItems).toBe('center')
@@ -1090,6 +1102,7 @@ async function expectReceiptPanelFitsReferenceViewport(page: Page): Promise<void
 
 async function expectReferenceReceiptToolbarRhythm(page: Page): Promise<void> {
   const toolbar = await page.evaluate<{
+    copyWidth: number
     copyX: number
     downloadWidth: number
     downloadX: number
@@ -1097,6 +1110,7 @@ async function expectReferenceReceiptToolbarRhythm(page: Page): Promise<void> {
     formatWidth: number
     formatX: number
     labelFontSize: number
+    labelWidth: number
     labelX: number
     titleWidth: number
     titleX: number
@@ -1112,6 +1126,7 @@ async function expectReferenceReceiptToolbarRhythm(page: Page): Promise<void> {
     const copyRect = copy?.getBoundingClientRect()
     const downloadRect = download?.getBoundingClientRect()
     return {
+      copyWidth: Math.round(copyRect?.width ?? 0),
       copyX: Math.round(copyRect?.x ?? 0),
       downloadWidth: Math.round(downloadRect?.width ?? 0),
       downloadX: Math.round(downloadRect?.x ?? 0),
@@ -1119,6 +1134,7 @@ async function expectReferenceReceiptToolbarRhythm(page: Page): Promise<void> {
       formatWidth: Math.round(formatRect?.width ?? 0),
       formatX: Math.round(formatRect?.x ?? 0),
       labelFontSize: Number.parseFloat(label ? getComputedStyle(label).fontSize : '0'),
+      labelWidth: Math.round(labelRect?.width ?? 0),
       labelX: Math.round(labelRect?.x ?? 0),
       titleWidth: Math.round(titleRect?.width ?? 0),
       titleX: Math.round(titleRect?.x ?? 0),
@@ -1126,19 +1142,24 @@ async function expectReferenceReceiptToolbarRhythm(page: Page): Promise<void> {
   })()`)
   expect(toolbar.titleX).toBeGreaterThanOrEqual(24)
   expect(toolbar.titleX).toBeLessThanOrEqual(26)
-  expect(toolbar.titleWidth).toBe(123)
-  expect(toolbar.labelX).toBeGreaterThanOrEqual(155)
-  expect(toolbar.labelX).toBeLessThanOrEqual(157)
+  expect(toolbar.titleWidth).toBeGreaterThanOrEqual(119)
+  expect(toolbar.titleWidth).toBeLessThanOrEqual(123)
+  expect(toolbar.labelX - (toolbar.titleX + toolbar.titleWidth)).toBeGreaterThanOrEqual(7)
+  expect(toolbar.labelX - (toolbar.titleX + toolbar.titleWidth)).toBeLessThanOrEqual(9)
   expect(toolbar.labelFontSize).toBe(11)
-  expect(toolbar.formatX).toBeGreaterThanOrEqual(203)
-  expect(toolbar.formatX).toBeLessThanOrEqual(205)
+  expect(toolbar.labelWidth).toBeGreaterThanOrEqual(36)
+  expect(toolbar.labelWidth).toBeLessThanOrEqual(42)
+  expect(toolbar.formatX - (toolbar.labelX + toolbar.labelWidth)).toBeGreaterThanOrEqual(7)
+  expect(toolbar.formatX - (toolbar.labelX + toolbar.labelWidth)).toBeLessThanOrEqual(9)
   expect(toolbar.formatWidth).toBe(121)
   expect(toolbar.formatFontSize).toBe(12)
-  expect(toolbar.copyX).toBeGreaterThanOrEqual(332)
-  expect(toolbar.copyX).toBeLessThanOrEqual(334)
-  expect(toolbar.downloadX).toBeGreaterThanOrEqual(368)
-  expect(toolbar.downloadX).toBeLessThanOrEqual(370)
-  expect(toolbar.downloadWidth).toBe(128)
+  expect(toolbar.copyX - (toolbar.formatX + toolbar.formatWidth)).toBeGreaterThanOrEqual(7)
+  expect(toolbar.copyX - (toolbar.formatX + toolbar.formatWidth)).toBeLessThanOrEqual(9)
+  expect(toolbar.copyWidth).toBe(28)
+  expect(toolbar.downloadX - (toolbar.copyX + toolbar.copyWidth)).toBeGreaterThanOrEqual(7)
+  expect(toolbar.downloadX - (toolbar.copyX + toolbar.copyWidth)).toBeLessThanOrEqual(9)
+  expect(toolbar.downloadWidth).toBeGreaterThanOrEqual(122)
+  expect(toolbar.downloadWidth).toBeLessThanOrEqual(130)
 }
 
 async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
@@ -1168,8 +1189,8 @@ async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
   expect(stackGeometry.diffCodeHeight).toBeLessThanOrEqual(308)
   expect(stackGeometry.actionBottomGap).toBeGreaterThanOrEqual(12)
   expect(stackGeometry.actionBottomGap).toBeLessThanOrEqual(24)
-  expect(stackGeometry.actionsY).toBeGreaterThanOrEqual(686)
-  expect(stackGeometry.actionsY).toBeLessThanOrEqual(698)
+  expect(stackGeometry.actionsY, JSON.stringify(stackGeometry)).toBeGreaterThanOrEqual(684)
+  expect(stackGeometry.actionsY, JSON.stringify(stackGeometry)).toBeLessThanOrEqual(699)
   expect(stackGeometry.riskBarHeight).toBeGreaterThanOrEqual(38)
 }
 

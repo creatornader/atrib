@@ -49,4 +49,6 @@ jobs:
 
       - run: pnpm -r test
 
+      - run: APPROVAL_TRACE_TEST_PORT=8799 pnpm --filter @atrib/cloudflare-approval-trace test:browser
+
       - run: pnpm doc-sync

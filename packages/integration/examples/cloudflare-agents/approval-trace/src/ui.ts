@@ -1560,7 +1560,7 @@ export function renderApp(options: { colo?: string } = {}): string {
       .grid {
         gap: 10px;
         align-items: start;
-        grid-template-columns: minmax(318px, 363px) minmax(500px, 610px) minmax(340px, 523px);
+        grid-template-columns: minmax(318px, 350px) minmax(500px, 630px) minmax(340px, 516px);
         justify-content: center;
         margin: 0 10px;
       }
@@ -2224,15 +2224,24 @@ export function renderApp(options: { colo?: string } = {}): string {
       }
 
       .actions .primary {
+        box-sizing: border-box;
         grid-column: 1;
+        min-width: 0;
+        width: 100%;
       }
 
       .actions .danger {
+        box-sizing: border-box;
         grid-column: 3;
+        min-width: 0;
+        width: 100%;
       }
 
       .actions .secondary {
+        box-sizing: border-box;
         grid-column: 5;
+        min-width: 0;
+        width: 100%;
       }
 
       .button-content {
@@ -2690,7 +2699,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         background: #fff;
         border-radius: 0;
         gap: 2px 7px;
-        grid-template-columns: 24px minmax(76px, 1fr) minmax(52px, auto) minmax(124px, 138px) 16px;
+        grid-template-columns: 24px minmax(64px, 1fr) minmax(52px, auto) minmax(148px, 158px) 16px;
         min-height: 42px;
         padding: 5px 8px;
         box-shadow: none;
@@ -2812,7 +2821,9 @@ export function renderApp(options: { colo?: string } = {}): string {
       .signature-slot {
         align-self: center;
         color: var(--muted);
+        display: inline-flex;
         font-size: 11px;
+        gap: 2px;
         grid-column: 4;
         grid-row: 1;
         justify-self: end;
@@ -2830,7 +2841,7 @@ export function renderApp(options: { colo?: string } = {}): string {
       .signature-slot .hash {
         display: inline-block;
         font-size: 10px;
-        max-width: calc(100% - 38px);
+        max-width: 104px;
         overflow: hidden;
         text-overflow: ellipsis;
         vertical-align: bottom;
@@ -3474,7 +3485,7 @@ export function renderApp(options: { colo?: string } = {}): string {
 
         .signer-row {
           gap: 2px 7px;
-          grid-template-columns: 22px minmax(54px, 1fr) minmax(48px, auto) minmax(108px, 116px) 14px;
+          grid-template-columns: 22px minmax(48px, 1fr) minmax(48px, auto) minmax(114px, 124px) 14px;
           min-height: 42px;
           padding: 5px 7px;
         }
