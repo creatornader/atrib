@@ -3626,7 +3626,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           </svg>
           <div>
             <h1>Cloudflare Agent Trace</h1>
-            <p class="sub">Workers Observability and Browser Run surface the incident; Code Mode pauses the patch; atrib signs the decision, replay, and audit trail.</p>
+            <p class="sub">Workers Observability and Browser Run surface the incident; Code Mode pauses the patch; atrib signs the decision, execution, and audit trail.</p>
           </div>
         </div>
         <div class="header-meta">
@@ -3681,7 +3681,7 @@ export function renderApp(options: { colo?: string } = {}): string {
             <div class="trigger-details">
               <div class="detail-row"><span>Repository</span><strong>cloudflare/agents-commerce-demo</strong></div>
               <div class="detail-row"><span>Alert</span><strong>#482 Checkout 500s after deploy</strong></div>
-              <div class="detail-row"><span>Evidence</span><strong>Browser Run checkout smoke</strong></div>
+              <div class="detail-row"><span>Evidence</span><strong>Browser Run checkout evidence</strong></div>
               <div class="detail-row"><span>Workspace</span><strong>Think incident workspace</strong></div>
               <div class="detail-row"><span>Event</span><strong>workers.observability.alert</strong></div>
               <div class="detail-row"><span>Received</span><strong id="receivedLabel">waiting</strong></div>
@@ -3697,7 +3697,7 @@ export function renderApp(options: { colo?: string } = {}): string {
                 <input id="simulateError" type="checkbox" />
                 Simulate changed checkout file after approval
               </label>
-              <button class="primary" id="create">Replay prior trigger</button>
+              <button class="primary" id="create">Run prior trigger</button>
               <button class="secondary" id="reset">Reset</button>
             </div>
           </div>
@@ -4312,7 +4312,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         const canAskForChanges = canRequestChanges(currentRun);
         const canSetFailureMode = !hasRun || hasPendingApproval;
         createButton.disabled = busy || hasRun;
-        createButton.textContent = busy && activeLabel === 'create' ? 'Running trigger...' : 'Replay prior trigger';
+        createButton.textContent = busy && activeLabel === 'create' ? 'Running trigger...' : 'Run prior trigger';
         resetButton.disabled = busy || !hasRun;
         promptInput.disabled = busy || hasRun;
         simulateErrorInput.disabled = busy || !canSetFailureMode;
@@ -4552,7 +4552,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         return \`
           <span class="native-runtime-inline" title="\${escapeHtml(runtime.executionId)}">
             <span class="native-runtime-badge">Code Mode \${escapeHtml(runtime.version.replace('CodemodeRuntime@', ''))}</span>
-            <span class="visually-hidden">Native Code Mode runtime \${escapeHtml(runtime.version)}. Status \${escapeHtml(runtime.executionStatus)}. Pending method \${escapeHtml(runtime.connector)}.\${escapeHtml(runtime.method)}. Approval gate seq \${escapeHtml(runtime.seq)} requiresApproval. Cloudflare owns durable pause, replay, approve, and reject. atrib signs the proposal, human decision, runtime resolution, and audit handoff around that lifecycle. Args hash \${escapeHtml(runtime.argsHash)}. Executor \${escapeHtml(runtime.executor)}.</span>
+            <span class="visually-hidden">Native Code Mode runtime \${escapeHtml(runtime.version)}. Status \${escapeHtml(runtime.executionStatus)}. Pending method \${escapeHtml(runtime.connector)}.\${escapeHtml(runtime.method)}. Approval gate seq \${escapeHtml(runtime.seq)} requiresApproval. Cloudflare owns durable pause, approve, reject, rollback, and execution history. atrib signs the proposal, human decision, runtime resolution, and audit handoff around that lifecycle. Args hash \${escapeHtml(runtime.argsHash)}. Executor \${escapeHtml(runtime.executor)}.</span>
           </span>
         \`;
       }
@@ -4990,12 +4990,12 @@ export function renderApp(options: { colo?: string } = {}): string {
             };
           case 'succeeded':
             return {
-              title: 'Code Mode replay completed',
-              detail: 'The trigger, proposal, human approval, runtime replay, outcome, and handoff are all signed below.',
+              title: 'Code Mode execution completed',
+              detail: 'The trigger, proposal, human approval, runtime execution, outcome, and handoff are all signed below.',
             };
           case 'failed':
             return {
-              title: 'Code Mode replay failed',
+              title: 'Code Mode execution failed',
               detail: 'The signed diagnostic record explains the runtime result and changed Workers checkout file.',
             };
           case 'rejected':
@@ -5123,7 +5123,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         document.querySelector('#approve')?.addEventListener('click', async () => {
           await transition({
             title: 'Agent resumed',
-            detail: 'The human approval is signed. CodemodeRuntime is replaying the approved checkout patch.',
+            detail: 'The human approval is signed. CodemodeRuntime is executing the approved checkout patch.',
             step: 'resume',
             activeLabel: 'approve',
             fn: async () => post('/api/runs/' + run.run_id + '/approve', {
@@ -5199,7 +5199,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           },
           {
             title: 'Policy & intent analysis',
-            detail: labels.has('triage') ? 'Payment-impacting Workers writes require a signed decision before Code Mode can replay the action.' : 'Waiting for policy analysis.',
+            detail: labels.has('triage') ? 'Payment-impacting Workers writes require a signed decision before Code Mode can execute the action.' : 'Waiting for policy analysis.',
             done: labels.has('triage'),
           },
           {
@@ -5226,7 +5226,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           {
             title: answer.executed ? 'Agent resumed through Code Mode' : rejected ? 'Code Mode execution skipped' : changesRequested ? 'Feedback returned to agent' : 'Resume not started',
             detail: answer.executed
-              ? 'CodemodeRuntime replayed only after approval.'
+              ? 'CodemodeRuntime executed the write only after approval.'
               : rejected
               ? 'The signed rejection closed the gate before any Code Mode write.'
               : changesRequested
