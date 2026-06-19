@@ -58,7 +58,7 @@ interface ParsedCheckpoint {
   rootHash: string
 }
 
-function base64url(bytes: Uint8Array): string {
+export function base64url(bytes: Uint8Array): string {
   return Buffer.from(bytes)
     .toString('base64')
     .replaceAll('+', '-')
@@ -66,11 +66,11 @@ function base64url(bytes: Uint8Array): string {
     .replace(/=+$/u, '')
 }
 
-function recordHash(record: AtribRecord): string {
+export function recordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
 }
 
-function parseCheckpoint(checkpoint: string): ParsedCheckpoint {
+export function parseCheckpoint(checkpoint: string): ParsedCheckpoint {
   const body = checkpoint.split('\n\n')[0]
   const lines = body?.trimEnd().split('\n') ?? []
   const treeSize = Number(lines[1])
@@ -81,7 +81,7 @@ function parseCheckpoint(checkpoint: string): ParsedCheckpoint {
   return { treeSize, rootHash }
 }
 
-async function ensureSecretFile(): Promise<void> {
+export async function ensureSecretFile(): Promise<void> {
   let secrets: Record<string, string>
   try {
     secrets = JSON.parse(await readFile(SECRETS_PATH, 'utf8')) as Record<string, string>
@@ -98,7 +98,7 @@ async function ensureSecretFile(): Promise<void> {
   await writeFile(SECRETS_PATH, `${JSON.stringify(secrets, null, 2)}\n`, { mode: 0o600 })
 }
 
-async function runWranglerDeploy(): Promise<string> {
+export async function runWranglerDeploy(): Promise<string> {
   const { stdout, stderr } = await execFile(
     'pnpm',
     ['exec', 'wrangler', 'deploy', '--secrets-file', '.tmp/secrets.json'],
@@ -116,7 +116,7 @@ async function runWranglerDeploy(): Promise<string> {
   return workerUrl.replace(/\/$/u, '')
 }
 
-async function runClientProof(workerUrl: string): Promise<ProofResponse> {
+export async function runClientProof(workerUrl: string): Promise<ProofResponse> {
   const response = await fetch(`${workerUrl}/run-client-proof`, { method: 'POST' })
   if (!response.ok) {
     throw new Error(`POST /run-client-proof failed: ${response.status} ${await response.text()}`)
@@ -124,7 +124,7 @@ async function runClientProof(workerUrl: string): Promise<ProofResponse> {
   return (await response.json()) as ProofResponse
 }
 
-function verifyProof(proof: ProofBundle): boolean {
+export function verifyProof(proof: ProofBundle): boolean {
   const checkpoint = parseCheckpoint(proof.checkpoint)
   const rootHash = new Uint8Array(Buffer.from(checkpoint.rootHash, 'base64'))
   const leafHash = new Uint8Array(Buffer.from(proof.leaf_hash, 'base64'))
@@ -134,7 +134,7 @@ function verifyProof(proof: ProofBundle): boolean {
   return verifyInclusion(proof.log_index, checkpoint.treeSize, leafHash, proofHashes, rootHash)
 }
 
-async function fetchContextEntries(contextId: string): Promise<unknown> {
+export async function fetchContextEntries(contextId: string): Promise<unknown> {
   const response = await fetch(`${LOG_ENDPOINT}/by-context/${contextId}`)
   if (!response.ok) {
     throw new Error(
@@ -144,7 +144,7 @@ async function fetchContextEntries(contextId: string): Promise<unknown> {
   return response.json()
 }
 
-async function main() {
+export async function main() {
   await ensureSecretFile()
   const workerUrl = await runWranglerDeploy()
   const proof = await runClientProof(workerUrl)
@@ -220,7 +220,9 @@ async function main() {
   console.error(`wrote ${outPath}`)
 }
 
-main().catch((error) => {
-  console.error(error)
-  process.exitCode = 1
-})
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error) => {
+    console.error(error)
+    process.exitCode = 1
+  })
+}

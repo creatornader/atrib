@@ -7,7 +7,8 @@
   "scripts": {
     "build": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/agent build && tsc --noEmit",
     "deploy": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/agent build && wrangler deploy --secrets-file .tmp/secrets.json",
-    "proof": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/agent build && tsx scripts/run-live-client-proof.ts"
+    "proof": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/agent build && tsx scripts/run-live-client-proof.ts",
+    "test": "pnpm --filter @atrib/cloudflare-live-client-proof build && vitest run"
   },
   "dependencies": {
     "@atrib/agent": "workspace:*",
@@ -21,6 +22,7 @@
     "@types/node": "^25.9.3",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.8",
     "wrangler": "^4.100.0"
   }
 }
