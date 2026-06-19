@@ -18,7 +18,13 @@ import {
   EVENT_TYPE_DIRECTORY_ANCHOR_URI,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
-import { loadRecords, loadRecordsFromDir, discoverRecords, recall } from '../src/index.js'
+import {
+  loadRecords,
+  loadRecordsFromDir,
+  discoverRecords,
+  recall,
+  clearRecallMirrorCache,
+} from '../src/index.js'
 
 const KEY = new Uint8Array(32).fill(7)
 const CTX = 'a'.repeat(32)
@@ -63,6 +69,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  clearRecallMirrorCache()
   rmSync(tmp, { recursive: true, force: true })
 })
 
@@ -149,6 +156,20 @@ describe('recall', () => {
     expect(result.records[0]!.timestamp).toBe(5)
     expect(result.records[1]!.timestamp).toBe(3)
     expect(result.records[2]!.timestamp).toBe(1)
+  })
+
+  it('refreshes the loaded mirror cache when a record file changes', async () => {
+    const first = await makeSigned({ timestamp: 1, content_id: `sha256:${'a'.repeat(64)}` })
+    const second = await makeSigned({ timestamp: 2, content_id: `sha256:${'b'.repeat(64)}` })
+    writeFileSync(recordFile, JSON.stringify(first))
+
+    expect((await recall({}, recordFile)).total).toBe(1)
+
+    writeFileSync(recordFile, [JSON.stringify(first), JSON.stringify(second)].join('\n'))
+
+    const refreshed = await recall({}, recordFile)
+    expect(refreshed.total).toBe(2)
+    expect(refreshed.records.map((r) => r.timestamp)).toEqual([2, 1])
   })
 
   it('filters by context_id', async () => {
