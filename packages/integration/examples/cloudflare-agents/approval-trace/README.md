@@ -1,7 +1,7 @@
 # Cloudflare Code Mode approval trace
 
-Interactive Cloudflare Agents example for atrib-signed Code Mode approval
-traces.
+Interactive Cloudflare Agents example for atrib-signed Code Mode approval and
+execution receipts.
 The example is a native `@cloudflare/codemode` approval bridge wrapped in an
 atrib-signed receipt envelope.
 
@@ -16,13 +16,21 @@ Cloudflare Workers checkout incident workspace. No real Cloudflare account state
 is mutated.
 
 Code Mode is the problem context for the example: generated code can compress
-many side effects behind one execution boundary. This demo keeps the boundary
-explicit. The agent proposes an exact payload first. The generated code reaches a
-`requiresApproval` write through `CodemodeRuntime`. The runtime pauses before the
-side effect. The human signs approve, reject, or request changes. On approval,
-the runtime continues the paused run and executes the approved write. The
-proposal, decision, Code Mode preview or execution, outcome, and handoff are
-signed as separate records.
+many writes or API actions behind one execution boundary. This demo keeps the
+boundary explicit. The agent proposes an exact payload first. The generated code
+reaches a `requiresApproval` repository write through `CodemodeRuntime`. The
+runtime pauses before it mutates storage. The human signs approve, reject, or
+request changes. On approval, the runtime continues the paused run and executes
+the approved write. The proposal, decision, Code Mode preview or execution,
+outcome, and handoff are signed as separate records.
+
+This uses the lower-level runtime surface exported by
+`@cloudflare/codemode@0.4.1`: `CodemodeRuntime`, `createCodemodeRuntime`,
+`pending()`, `approve()`, `reject()`, and `rollback()`. Cloudflare's public
+`createCodeTool` guide still says AI SDK tools with `needsApproval` are excluded
+from the simple Codemode tool path. This example is therefore a runtime-boundary
+proof, not a claim that approval-gated `createCodeTool` usage is the documented
+happy path.
 
 Cloudflare's current Code Mode runtime owns durable approvals, execution
 history, and rollback. This example does not replace that runtime. It adds a
@@ -33,7 +41,8 @@ handoff.
 ## What this shows
 
 - A prior trigger starts the agent before the browser approval gate appears.
-- Code Mode reaches the `requiresApproval` side effect before any human decision.
+- Code Mode reaches the `requiresApproval` repository write before any human
+  decision.
 - A real browser approval or rejection resumes or closes the Code Mode workflow.
 - The approval is bound to the proposed payload, not to a vague "continue"
   action.
@@ -49,12 +58,12 @@ The important atrib differentiators are:
 
 - **Autonomous trigger context:** the audit starts at the Workers Observability
   alert, Browser Run evidence, and incident workspace that woke the agent.
-- **Decision context:** the reviewer sees exactly what the agent is asking to
-  publish before approving.
+- **Decision context:** the human sees exactly what the agent is asking to write
+  before approving.
 - **Signed decision chain:** proposal, approval or rejection, Code Mode
   execution or rejection, outcome, and handoff link to each other as signed
   records.
-- **Trustless audit:** a later reviewer can verify the trace outside the Worker,
+- **Trustless audit:** a later audit can verify the trace outside the Worker,
   Durable Object database, or transcript.
 - **Signer separation:** autonomous agent action, human decision, and execution
   surface are distinct identities.
@@ -64,11 +73,11 @@ The important atrib differentiators are:
 The current hosted Worker is `https://atrib-cloudflare.nagala.workers.dev/`.
 
 Latest verified proof: `pnpm --filter @atrib/cloudflare-approval-trace
-proof:worker` passed `391/391` checks at `2026-06-19T16:33:44.297Z` from
+proof:worker` passed `391/391` checks at `2026-06-19T19:54:36.878Z` from
 the public commit used for that proof:
-[`386050d59844f5dcd46b9d74374183e062be9f28`](https://github.com/creatornader/atrib/commit/386050d59844f5dcd46b9d74374183e062be9f28).
+[`8fb3820628d4a3b156816d65a3e507ac8b76481e`](https://github.com/creatornader/atrib/commit/8fb3820628d4a3b156816d65a3e507ac8b76481e).
 The deployed Worker version for that run was
-`4f91ae21-7507-450f-8f9e-53ed02a20fa3`.
+`d25746f8-7f4e-4f69-9970-8774b983bb9b`.
 
 Open the hosted Worker, start a run, then approve, reject, or request changes.
 When a run finishes, the UI exposes receipt details, trace JSON, and public log
