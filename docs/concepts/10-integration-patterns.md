@@ -30,4 +30,5 @@ The six patterns, briefly:
 - Spec: [§9](../../atrib-spec.md#9-harness-integration-patterns)
 - Decisions: [D069 Six runtime integration patterns](../../DECISIONS.md), [D021-D024](../../DECISIONS.md) (specific framework adapter decisions)
 - Concepts: [Records & signing](01-records-and-signing.md) (what atrib does once it has the call)
+- Concepts: [OpenClaw and Hermes integration map](15-openclaw-hermes-integration-map.md) (worked mechanics map for two long-lived agent hosts)
 - Packages: `packages/mcp`, `packages/mcp-wrap`, `packages/agent`, `packages/openinference`
