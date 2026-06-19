@@ -246,6 +246,9 @@ The UI focuses on the parts a reviewer needs first: trigger context, live
 progress, review state, signed decision chain, receipt inspection, and signer
 separation.
 
+The current hosted proof is at
+`https://atrib-cloudflare.nagala.workers.dev/`.
+
 Production deploys require Cloudflare Dynamic Workers access because Worker
 Loader is used by `DynamicWorkerExecutor`. On accounts without that access,
 `proof:worker` fails before publishing with Cloudflare error 10195. Local Worker

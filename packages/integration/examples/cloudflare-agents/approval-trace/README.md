@@ -56,6 +56,12 @@ The important atrib differentiators are:
 - **Signer separation:** autonomous agent action, human decision, and execution
   surface are distinct identities.
 
+## Live proof
+
+The current hosted Worker is `https://atrib-cloudflare.nagala.workers.dev/`.
+It uses demo-only signing keys and a simulated checkout incident. It does not
+mutate a real Cloudflare account or create real Artifacts resources.
+
 ## Run locally
 
 ```sh
