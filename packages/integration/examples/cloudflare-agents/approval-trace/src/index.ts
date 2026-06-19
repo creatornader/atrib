@@ -78,7 +78,7 @@ interface PlannedAction {
   risk: string
   payload: {
     operation: 'write_file'
-    issue_id: string
+    incident_id: string
     repository: string
     labels: string[]
     target_file: string
@@ -196,7 +196,7 @@ const STABLE_CONNECTOR_ID = 'cloudflare-demo-repository-write-mcp'
 const CODEMODE_RUNTIME_ID = 'cloudflare-demo-codemode-runtime'
 const LOG_BASE_URL = 'https://log.atrib.dev/v1'
 const DEFAULT_TRIGGER_PROMPT =
-  'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.'
+  'Workers Observability detected checkout 500s after deploy; Browser Run reproduced the failure and Code Mode proposed a guarded Workers patch.'
 const TRACE_RECORD_OFFSETS_MS = {
   trigger: 0,
   triage: 275,
@@ -390,73 +390,99 @@ function emitNativeEvent(input: {
 }
 
 function fixturePlan(prompt: string): PlannedAction {
-  const diff = `@@ -1,17 +1,27 @@
- import { NextFunction, Request, Response } from 'express';
- import { getConfig } from '../config';
+  const diff = `@@ -1,34 +1,44 @@
+import { verifyCheckoutSession } from '../lib/checkout';
+import { recordMetric } from '../observability';
+import { json } from '../responses';
+import type { Env } from '../types';
 
- import { logRequest } from '../observability/logging';
- import { reportMetrics } from '../observability/metrics';
- import { resolveTenant } from '../tenant';
+const CHECKOUT_ROUTE = '/checkout';
 
-+import rateLimit from 'express-rate-limit';
+function isCheckoutPost(request: Request): boolean {
+  return request.method === 'POST' && new URL(request.url).pathname === CHECKOUT_ROUTE;
+}
+
+function checkoutHeaders(env: Env): HeadersInit {
+  return {
+    'cache-control': 'no-store',
+    'x-checkout-region': env.CF_COLO ?? 'unknown',
+  };
+}
+
++import { normalizeCartId } from '../lib/cart';
 +
-+const limiter = rateLimit({
-+  windowMs: 60 * 1000,
-+  max: 100,
-+  standardHeaders: true,
-+  legacyHeaders: false,
-+});
++const CHECKOUT_RECOVERY_SOURCE = 'browser-run-checkout-smoke';
 
- const config = getConfig();
+export async function checkoutHandler(request: Request, env: Env) {
+  if (!isCheckoutPost(request)) {
+    return json({ error: 'method_not_allowed' }, { status: 405 });
+  }
 
--export function reportHandler(req: Request, res: Response, next: NextFunction) {
-+export const reportHandler = [limiter, (req: Request, res: Response, next: NextFunction) => {
-   // existing logic
-   next();
--}
-+}];
+  const session = await verifyCheckoutSession(request, env);
 
- export function reportHealth(req: Request, res: Response) {
-   const tenant = resolveTenant(req);
-   reportMetrics('report.health', { tenant });
-   res.json({ ok: true, tenant });
- }
++  const cartId = normalizeCartId(session.cartId);
++  if (!cartId) {
++    recordMetric('checkout.recovered_missing_cart', {
++      source: CHECKOUT_RECOVERY_SOURCE,
++    });
++    return json({ error: 'missing_cart' }, { status: 400, headers: checkoutHeaders(env) });
++  }
 
- export function reportAudit(req: Request, res: Response) {
-   logRequest(req, 'report.audit');
-   res.status(204).end();
- }`
+  return json({
+    ok: true,
++    cartId,
+    checkoutId: session.checkoutId,
+    region: env.CF_COLO,
+  }, {
+    headers: checkoutHeaders(env),
+  });
+}
+
+export function checkoutRouteName(): string {
+  return CHECKOUT_ROUTE;
+}`
   return {
     planner: 'fixture',
     action: 'Update file in repository',
     summary:
-      'Respond to a GitHub issue webhook by preparing a small repository file update that adds request limiting to the reported route.',
-    risk: 'Introduces rate limiting which may impact client traffic if misconfigured.',
+      'Respond to a Workers Observability alert by preparing a guarded checkout-route patch from Browser Run evidence and Think workspace context.',
+    risk: 'Changes checkout error handling for a payment-impacting Workers route.',
     payload: {
       operation: 'write_file',
-      issue_id: 'workers-issue-4821',
-      repository: 'cloudflare/agents-demo',
-      labels: ['bug', 'workers', 'help'],
-      target_file: 'server/middleware/rate_limit.ts',
+      incident_id: 'obs-alert-4821',
+      repository: 'cloudflare/agents-commerce-demo',
+      labels: ['workers', 'browser-run', 'codemode', 'checkout'],
+      target_file: 'workers/checkout/session.ts',
       version: 4,
       before: {
-        file: 'server/middleware/rate_limit.ts',
-        imports: ['NextFunction', 'Request', 'Response', 'getConfig'],
-        handler: 'reportHandler',
-        rate_limit: null,
-        issue: prompt.slice(0, 120),
+        file: 'workers/checkout/session.ts',
+        imports: ['verifyCheckoutSession', 'recordMetric', 'json'],
+        handler: 'checkoutHandler',
+        browser_run: {
+          session: 'brw_checkout_smoke_4821',
+          finding: 'checkout POST returned 500 after deploy',
+        },
+        ai_search: {
+          corpus: 'workers-checkout-runbooks',
+          match: 'missing cart id should return 400 before payment intent creation',
+        },
+        think_workspace: 'think_checkout_incident_4821',
+        alert_summary: prompt.slice(0, 120),
       },
       after: {
-        file: 'server/middleware/rate_limit.ts',
-        imports: ['NextFunction', 'Request', 'Response', 'getConfig', 'rateLimit'],
-        handler: 'reportHandler',
-        rate_limit: {
-          window_ms: 60_000,
-          max: 100,
-          standard_headers: true,
-          legacy_headers: false,
+        file: 'workers/checkout/session.ts',
+        imports: ['verifyCheckoutSession', 'recordMetric', 'json', 'normalizeCartId'],
+        handler: 'checkoutHandler',
+        checkout_guard: {
+          missing_cart_response: 400,
+          metric: 'checkout.recovered_missing_cart',
+          source: 'browser-run-checkout-smoke',
         },
-        note: 'Approved for this demo repository file only.',
+        artifact: {
+          kind: 'think_workspace_handoff',
+          id: 'art_checkout_incident_4821',
+        },
+        note: 'Approved for this demo Workers checkout file only.',
       },
       diff,
     },
@@ -467,60 +493,74 @@ function revisedPlanFromFeedback(
   priorPayload: PlannedAction['payload'],
   feedback: string,
 ): PlannedAction {
-  const diff = `@@ -1,17 +1,30 @@
- import { NextFunction, Request, Response } from 'express';
- import { getConfig } from '../config';
+  const diff = `@@ -1,34 +1,47 @@
+import { verifyCheckoutSession } from '../lib/checkout';
+import { recordMetric } from '../observability';
+import { json } from '../responses';
+import type { Env } from '../types';
 
- import { logRequest } from '../observability/logging';
- import { reportMetrics } from '../observability/metrics';
- import { resolveTenant } from '../tenant';
+const CHECKOUT_ROUTE = '/checkout';
 
-+import rateLimit from 'express-rate-limit';
+function isCheckoutPost(request: Request): boolean {
+  return request.method === 'POST' && new URL(request.url).pathname === CHECKOUT_ROUTE;
+}
+
+function checkoutHeaders(env: Env): HeadersInit {
+  return {
+    'cache-control': 'no-store',
+    'x-checkout-region': env.CF_COLO ?? 'unknown',
+  };
+}
+
++import { normalizeCartId } from '../lib/cart';
 +
-+const reportLimiter = rateLimit({
-+  windowMs: 60 * 1000,
-+  max: 60,
-+  standardHeaders: true,
-+  legacyHeaders: false,
-+  skip: (req) => req.path !== '/v1/report',
-+});
++const CHECKOUT_RECOVERY_SOURCE = 'browser-run-checkout-smoke';
 
- const config = getConfig();
+export async function checkoutHandler(request: Request, env: Env) {
+  if (!isCheckoutPost(request)) {
+    return json({ error: 'method_not_allowed' }, { status: 405 });
+  }
 
--export function reportHandler(req: Request, res: Response, next: NextFunction) {
-+export const reportHandler = [reportLimiter, (req: Request, res: Response, next: NextFunction) => {
-   // existing logic
-   next();
--}
-+}];
+  const session = await verifyCheckoutSession(request, env);
 
- export function reportHealth(req: Request, res: Response) {
-   const tenant = resolveTenant(req);
-   reportMetrics('report.health', { tenant });
-   res.json({ ok: true, tenant });
- }
++  const cartId = normalizeCartId(session.cartId);
++  if (!cartId) {
++    recordMetric('checkout.recovered_missing_cart', {
++      source: CHECKOUT_RECOVERY_SOURCE,
++      browserRunId: 'brw_checkout_smoke_4821',
++    });
++    return json({ error: 'missing_cart' }, { status: 400, headers: checkoutHeaders(env) });
++  }
 
- export function reportAudit(req: Request, res: Response) {
-   logRequest(req, 'report.audit');
-   res.status(204).end();
- }`
+  return json({
+    ok: true,
++    cartId,
+    checkoutId: session.checkoutId,
+    region: env.CF_COLO,
+  }, {
+    headers: checkoutHeaders(env),
+  });
+}
+
+export function checkoutRouteName(): string {
+  return CHECKOUT_ROUTE;
+}`
   return {
     planner: 'fixture',
     action: 'Update revised file in repository',
     summary:
-      'Revise the repository file update after human feedback by keeping the guard scoped to the reported route.',
-    risk: 'Narrows the limiter to /v1/report and lowers the default cap before any Code Mode write runs.',
+      'Revise the Workers checkout patch after human feedback while preserving the Browser Run evidence and Think workspace handoff.',
+    risk: 'Narrows the checkout guard before Code Mode writes the payment-impacting route.',
     payload: {
       ...priorPayload,
       version: priorPayload.version + 1,
       after: {
         ...priorPayload.after,
-        rate_limit: {
-          window_ms: 60_000,
-          max: 60,
-          standard_headers: true,
-          legacy_headers: false,
-          scope: '/v1/report',
+        checkout_guard: {
+          missing_cart_response: 400,
+          metric: 'checkout.recovered_missing_cart',
+          source: 'browser-run-checkout-smoke',
+          browser_run_id: 'brw_checkout_smoke_4821',
         },
         note: `Revised after human feedback: ${feedback.slice(0, 140)}`,
       },
@@ -546,7 +586,7 @@ async function planAction(env: Env, prompt: string): Promise<PlannedAction> {
           {
             role: 'system',
             content:
-              'Return compact JSON for a safe Cloudflare Workers repository file-change approval proposal. Do not include markdown.',
+              'Return compact JSON for a safe Cloudflare Workers checkout incident approval proposal. Do not include markdown.',
           },
           {
             role: 'user',
@@ -666,7 +706,7 @@ function tracePacket(
       {
         name: 'Autonomous trigger context',
         evidence:
-          'The trace starts with the issue or schedule trigger that caused the agent to work before human review.',
+          'The trace starts with the Workers Observability alert, Browser Run evidence, and incident workspace that caused the agent to work before human review.',
         evidence_labels: [trigger ? 'trigger' : null, triage ? 'triage' : null].filter(
           Boolean,
         ) as string[],
@@ -938,7 +978,7 @@ class RepositoryCodeModeConnector extends CodemodeConnector<Env> {
 
   protected instructions(): string {
     return [
-      'Use this connector for the demo repository file update.',
+      'Use this connector for the demo Workers checkout patch.',
       'Call preview_file_update before write_file.',
       'write_file pauses for human approval through CodemodeRuntime before it mutates storage.',
     ].join(' ')
@@ -947,12 +987,12 @@ class RepositoryCodeModeConnector extends CodemodeConnector<Env> {
   protected tools(): ConnectorTools {
     return {
       preview_file_update: {
-        description: 'Preview the repository file update before the approval-required write.',
+        description: 'Preview the Workers checkout patch before the approval-required write.',
         inputSchema: repositoryActionSchema(),
         execute: (args) => this.previewFileUpdate(args),
       },
       write_file: {
-        description: 'Apply the approved repository file update to Durable Object SQLite.',
+        description: 'Apply the approved Workers checkout patch to Durable Object SQLite.',
         inputSchema: repositoryActionSchema(),
         requiresApproval: true,
         execute: (args, ctx) => this.writeFile(args, ctx?.executionId ?? 'unknown'),
@@ -966,7 +1006,7 @@ class RepositoryCodeModeConnector extends CodemodeConnector<Env> {
     const p = validation.payload
     return {
       status: 'ready',
-      diagnostic: 'Preview confirms one repository file would change.',
+      diagnostic: 'Preview confirms one Workers checkout file would change.',
       changed_rows: [`repo_files.${p.target_file}`],
       before: p.before,
       after: p.after,
@@ -1007,7 +1047,7 @@ class RepositoryCodeModeConnector extends CodemodeConnector<Env> {
       return {
         status: 'error',
         error: 'repository_file_version_conflict',
-        diagnostic: 'The repository file changed after approval.',
+        diagnostic: 'The Workers checkout file changed after approval.',
         changed_rows: [],
         approval_record_hash: workflow.decision_record_hash,
         execution_id: executionId,
@@ -1029,7 +1069,7 @@ class RepositoryCodeModeConnector extends CodemodeConnector<Env> {
     )
     return {
       status: 'success',
-      diagnostic: 'Durable Object SQLite demo repository file row updated.',
+      diagnostic: 'Durable Object SQLite demo checkout file row updated.',
       changed_rows: [`repo_files.${p.target_file}`],
       approval_record_hash: workflow.decision_record_hash,
       execution_id: executionId,
@@ -1178,20 +1218,26 @@ export class ApprovalTraceAgent extends Agent<Env> {
     const proposalTimestamp = runTimestamp(runStartedAt, TRACE_RECORD_OFFSETS_MS.proposal)
     const triggerBody = {
       kind: 'workflow_trigger',
-      source: 'github_issue_webhook',
-      scheduled_task: 'agent.follow_up_after_triage',
+      source: 'workers_observability_alert',
+      scheduled_task: 'workflow.checkout_recovery_triage',
       event: {
-        repository: 'cloudflare/agents-demo',
-        issue_id: 'workers-issue-4821',
-        labels: ['bug', 'workers', 'help'],
+        repository: 'cloudflare/agents-commerce-demo',
+        alert_id: 'obs-alert-4821',
+        labels: ['workers', 'browser-run', 'codemode', 'checkout'],
         title: input.prompt,
+        alert: 'checkout_5xx_rate_spike',
+        affected_route: '/checkout',
+        browser_run_id: 'brw_checkout_smoke_4821',
+        think_workspace_id: 'think_checkout_incident_4821',
       },
       autonomous_phase: [
-        'classified issue intent',
-        'checked the affected Workers route',
-        'prepared a repository file update',
+        'correlated Workers Observability alert',
+        'reviewed Browser Run failure evidence',
+        'searched the checkout runbook with AI Search',
+        'opened a Think workspace for the incident',
+        'prepared a Code Mode repository patch',
       ],
-      halt_condition: 'writing repository code requires human approval',
+      halt_condition: 'writing payment-impacting Workers code requires human approval',
     }
     this.saveNativeEvent(
       runId,
@@ -1202,7 +1248,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
         name: runId,
         payload: {
           source: triggerBody.source,
-          issueId: triggerBody.event.issue_id,
+          alertId: triggerBody.event.alert_id,
           haltCondition: triggerBody.halt_condition,
         },
         timestamp: triggerTimestamp,
@@ -1230,15 +1276,17 @@ export class ApprovalTraceAgent extends Agent<Env> {
     const triageBody = {
       kind: 'autonomous_triage',
       trigger_record_hash: triggerHash,
-      repository: 'cloudflare/agents-demo',
-      issue_id: 'workers-issue-4821',
-      route: '/v1/report',
-      intent: 'add rate limiting',
+      repository: 'cloudflare/agents-commerce-demo',
+      alert_id: 'obs-alert-4821',
+      route: '/checkout',
+      intent: 'fix checkout 500s before payment intent creation',
       policy_result: 'human_review_required',
       gathered_context: [
-        'GitHub issue webhook payload',
-        'Cloudflare Workers route target',
-        'repository write policy',
+        'Workers Observability alert payload',
+        'Browser Run screenshot and network failure summary',
+        'AI Search checkout runbook match',
+        'Think workspace incident notes',
+        'Code Mode repository write policy',
       ],
     }
     this.saveNativeEvent(
@@ -1307,7 +1355,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
         log: codeModeLogSummary(codeMode.executionState),
       },
       approval_question:
-        'Should the agent write this repository file update and resume Code Mode execution?',
+        'Should the agent write this Workers checkout patch and resume Code Mode execution?',
     }
     this.saveNativeEvent(
       runId,
@@ -1412,7 +1460,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
     const code = codeModeScript(input)
     const tool = runtime.tool({
       connectorHints: {
-        repository: 'Preview and apply the Cloudflare Workers repository file update.',
+        repository: 'Preview and apply the Cloudflare Workers checkout patch.',
       },
     }) as unknown as {
       execute?: (args: { code: string }) => Promise<ProxyToolOutput>
@@ -1807,15 +1855,15 @@ export class ApprovalTraceAgent extends Agent<Env> {
       feedbackTimestamp,
       proposalTimestamp + TRACE_RECORD_OFFSETS_MS.reviewDecisionDelay,
     )
-    const feedback = input.feedback.trim() || 'Request a narrower repository file update.'
+    const feedback = input.feedback.trim() || 'Request a narrower Workers checkout patch.'
     const body = {
       kind: 'human_review_feedback',
       reviewer_id: 'browser-demo-human',
       decision: 'changes_requested',
       feedback,
       requested_changes: [
-        'Keep the rate-limit guard, but narrow the change to /v1/report only.',
-        'Return a revised proposal before Code Mode writes repository files.',
+        'Keep the checkout guard scoped to missing cart ids only.',
+        'Return a revised proposal before Code Mode writes the Workers checkout file.',
       ],
       approved_payload_hash: workflow.payload_hash,
       stable_connector_id: CODEMODE_RUNTIME_ID,
@@ -1906,7 +1954,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
         log: codeModeLogSummary(codeMode.executionState),
       },
       approval_question:
-        'Should the agent write this revised repository file update and resume Code Mode execution?',
+        'Should the agent write this revised Workers checkout patch and resume Code Mode execution?',
     }
     const revisionRecord = await signObservation({
       env: this.env,
@@ -2295,7 +2343,7 @@ export class ApprovalActionMcp extends McpAgent<Env> {
     this.server.registerTool(
       'preview_file_update',
       {
-        description: 'Preview the approved Cloudflare repository file update before mutation.',
+        description: 'Preview the approved Cloudflare Workers checkout patch before mutation.',
         inputSchema: {
           approval_record_hash: z.string(),
           stable_connector_id: z.string(),
@@ -2343,7 +2391,7 @@ export class ApprovalActionMcp extends McpAgent<Env> {
               type: 'text',
               text: jsonText({
                 status: 'ready',
-                diagnostic: 'Preview confirms one repository file would change.',
+                diagnostic: 'Preview confirms one Workers checkout file would change.',
                 approval_record_hash,
                 changed_rows: [`repo_files.${p.target_file}`],
                 before: p.before,
@@ -2360,7 +2408,7 @@ export class ApprovalActionMcp extends McpAgent<Env> {
       'write_file',
       {
         description:
-          'Apply the approved Cloudflare repository file update to Durable Object SQLite.',
+          'Apply the approved Cloudflare Workers checkout patch to Durable Object SQLite.',
         inputSchema: {
           approval_record_hash: z.string(),
           stable_connector_id: z.string(),
@@ -2417,7 +2465,7 @@ export class ApprovalActionMcp extends McpAgent<Env> {
                 text: jsonText({
                   status: 'error',
                   error: 'repository_file_version_conflict',
-                  diagnostic: 'The repository file changed after approval.',
+                  diagnostic: 'The Workers checkout file changed after approval.',
                   changed_rows: [],
                   approval_record_hash,
                 }),
@@ -2437,7 +2485,7 @@ export class ApprovalActionMcp extends McpAgent<Env> {
               type: 'text',
               text: jsonText({
                 status: 'success',
-                diagnostic: 'Durable Object SQLite demo repository file row updated.',
+                diagnostic: 'Durable Object SQLite demo checkout file row updated.',
                 changed_rows: [`repo_files.${p.target_file}`],
                 approval_record_hash,
                 after: p.after,
@@ -2842,7 +2890,7 @@ export default {
         return json(
           await agent.requestChanges({
             runId,
-            feedback: body.feedback ?? 'Request a narrower repository file update.',
+            feedback: body.feedback ?? 'Request a narrower Workers checkout patch.',
           }),
         )
       }

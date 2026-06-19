@@ -187,7 +187,7 @@ async function createRun(
   await postJson<TraceResponse>(`${workerUrl}/api/runs`, {
     run_id: runId,
     prompt:
-      'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.',
+      'Workers Observability detected checkout 500s after deploy; Browser Run reproduced the failure and Code Mode proposed a guarded Workers patch.',
     simulate_error: simulateError,
     code_mode_executor: 'dynamic-worker',
   })
@@ -198,7 +198,8 @@ async function approveRun(workerUrl: string, runId: string): Promise<TraceRespon
   return postJson<TraceResponse>(
     `${workerUrl}/api/runs/${runId}/approve`,
     {
-      reason: 'Payload matches the issue scope and expected Cloudflare repository target.',
+      reason:
+        'Payload matches the observability alert, Browser Run evidence, and expected Workers checkout target.',
     },
     { retryServerErrors: false },
   )
@@ -208,7 +209,7 @@ async function rejectRun(workerUrl: string, runId: string): Promise<TraceRespons
   return postJson<TraceResponse>(
     `${workerUrl}/api/runs/${runId}/reject`,
     {
-      reason: 'The reviewer decided this repository file update should not be applied.',
+      reason: 'The reviewer decided this Workers checkout patch should not be applied.',
     },
     { retryServerErrors: false },
   )
@@ -219,7 +220,7 @@ async function requestChanges(workerUrl: string, runId: string): Promise<TraceRe
     `${workerUrl}/api/runs/${runId}/request-changes`,
     {
       feedback:
-        'Keep the limiter scoped to /v1/report, lower the cap, and show me the revised proposal before any Code Mode write.',
+        'Keep the checkout guard scoped to missing cart ids, preserve Browser Run evidence, and show me the revised proposal before any Code Mode write.',
     },
     { retryServerErrors: false },
   )

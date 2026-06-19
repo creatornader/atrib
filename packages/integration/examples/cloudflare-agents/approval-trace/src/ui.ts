@@ -6,7 +6,7 @@ export function renderApp(options: { colo?: string } = {}): string {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Code Mode Approval Trace</title>
+    <title>Cloudflare Agent Trace</title>
     <style>
       :root {
         color-scheme: light;
@@ -3656,8 +3656,8 @@ export function renderApp(options: { colo?: string } = {}): string {
             <path fill="#f9ab41" d="M168.22,41.15q-1,0-2.1.06a.88.88,0,0,0-.32.07,1.17,1.17,0,0,0-.76.8l-3,10.26c-1.28,4.41-.81,8.48,1.34,11.48a11.65,11.65,0,0,0,9.24,4.57l16.11,1a1.44,1.44,0,0,1,1.14.62,1.5,1.5,0,0,1,.17,1.37,2,2,0,0,1-1.75,1.34l-16.73,1c-9.09.42-18.88,7.75-22.31,16.7l-1.21,3.16a.9.9,0,0,0,.79,1.22h57.63A1.55,1.55,0,0,0,208,93.63a41.34,41.34,0,0,0-39.76-52.48Z"/>
           </svg>
           <div>
-            <h1>Code Mode Approval Trace</h1>
-            <p class="sub">Cloudflare Code Mode pauses the side effect; atrib signs the trigger, decision, replay, and audit trail.</p>
+            <h1>Cloudflare Agent Trace</h1>
+            <p class="sub">Workers Observability and Browser Run surface the incident; Code Mode pauses the patch; atrib signs the decision, replay, and audit trail.</p>
           </div>
         </div>
         <div class="header-meta">
@@ -3685,7 +3685,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           <span class="dot pending" id="statusDot"></span>
           <div>
             <strong id="statusTitle">Loading approval-boundary proof</strong>
-            <p id="statusDetail">The run starts at an incoming alert, reaches a Code Mode approval gate, then signs the human decision and result.</p>
+            <p id="statusDetail">The run starts from a Workers Observability alert, uses Browser Run evidence, reaches a Code Mode approval gate, then signs the human decision and result.</p>
           </div>
         </div>
         <div class="rail-stepper" id="workflowSteps">
@@ -3706,13 +3706,15 @@ export function renderApp(options: { colo?: string } = {}): string {
               <svg class="github-mark" viewBox="-1 -1 18 18" aria-hidden="true">
                 <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 3.87c.68 0 1.36.09 2 .26 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
               </svg>
-              <span>GitHub issue webhook</span>
+              <span>Workers Observability alert</span>
               <span class="pill">Verified</span>
             </div>
             <div class="trigger-details">
-              <div class="detail-row"><span>Repository</span><strong>cloudflare/agents-demo</strong></div>
-              <div class="detail-row"><span>Issue</span><strong>#482 Add rate limit to /v1/report</strong></div>
-              <div class="detail-row"><span>Event</span><strong>issues.opened</strong></div>
+              <div class="detail-row"><span>Repository</span><strong>cloudflare/agents-commerce-demo</strong></div>
+              <div class="detail-row"><span>Alert</span><strong>#482 Checkout 500s after deploy</strong></div>
+              <div class="detail-row"><span>Evidence</span><strong>Browser Run checkout smoke</strong></div>
+              <div class="detail-row"><span>Workspace</span><strong>Think incident workspace</strong></div>
+              <div class="detail-row"><span>Event</span><strong>workers.observability.alert</strong></div>
               <div class="detail-row"><span>Received</span><strong id="receivedLabel">waiting</strong></div>
             </div>
           </div>
@@ -3720,11 +3722,11 @@ export function renderApp(options: { colo?: string } = {}): string {
             <p class="empty">Waiting for the incoming alert.</p>
           </div>
           <div class="prompt compact">
-            <textarea class="visually-hidden" id="prompt">A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.</textarea>
+            <textarea class="visually-hidden" id="prompt">Workers Observability detected checkout 500s after deploy; Browser Run reproduced the failure and Code Mode proposed a guarded Workers patch.</textarea>
             <div class="control-strip">
               <label class="toggle">
                 <input id="simulateError" type="checkbox" />
-                Simulate changed repository result after approval
+                Simulate changed checkout file after approval
               </label>
               <button class="primary" id="create">Replay prior trigger</button>
               <button class="secondary" id="reset">Reset</button>
@@ -3802,7 +3804,7 @@ export function renderApp(options: { colo?: string } = {}): string {
       let selectedReceiptRecord = null;
       let selectedReceiptView = 'record';
       let selectedReceiptFormat = 'pretty';
-      const defaultFeedbackDraft = 'Please narrow this to the /v1/report route only and return a revised proposal before Code Mode writes.';
+      const defaultFeedbackDraft = 'Please keep this scoped to missing cart ids, preserve the Browser Run evidence, and return a revised proposal before Code Mode writes.';
       let feedbackDrawerOpen = false;
       let feedbackDraft = defaultFeedbackDraft;
 
@@ -3837,25 +3839,25 @@ export function renderApp(options: { colo?: string } = {}): string {
         {
           key: 'trigger',
           title: 'Trigger received',
-          detail: 'GitHub issue webhook opened the run and supplied the initial Workers route alert.',
+          detail: 'Workers Observability opened the run after Browser Run reproduced checkout failures.',
           step: 'trigger',
         },
         {
           key: 'context',
           title: 'Context gathered',
-          detail: 'The agent loaded repository, issue, and route context before planning a change.',
+          detail: 'The agent loaded Browser Run evidence, AI Search runbook context, and Think workspace notes.',
           step: 'autonomous',
         },
         {
           key: 'policy',
           title: 'Policy & intent analysis',
-          detail: 'The agent classified the request as a repository write that must stop for review.',
+          detail: 'The agent classified the checkout patch as payment-impacting code that must stop for review.',
           step: 'autonomous',
         },
         {
           key: 'proposal',
           title: 'Proposed action generated',
-          detail: 'The agent prepared a write_file payload, diff, risk note, and payload hash.',
+          detail: 'The agent prepared a Code Mode write_file payload, diff, risk note, and payload hash.',
           step: 'autonomous',
         },
         {
@@ -4203,7 +4205,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           {
             key: 'trigger',
             name: 'trigger.received',
-            detail: 'GitHub issue webhook',
+            detail: 'Workers Observability alert',
             time: stageDisplayTimes.trigger,
             marker: reached('trigger') ? 'done' : 'future',
             selected: activeStage.key === 'trigger',
@@ -4211,7 +4213,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           {
             key: 'context',
             name: 'triage.completed',
-            detail: 'Intent: add rate limiting',
+            detail: 'Intent: fix checkout 500s',
             time: stageDisplayTimes.context ?? stageDisplayTimes.policy,
             marker: reached('context') ? 'done' : 'future',
             selected: ['context', 'policy'].includes(activeStage.key),
@@ -4409,8 +4411,8 @@ export function renderApp(options: { colo?: string } = {}): string {
       }
 
       function timelineDetail(entry, run) {
-        if (entry.label === 'trigger') return 'GitHub issue webhook';
-        if (entry.label === 'triage') return 'Intent: add rate limiting';
+        if (entry.label === 'trigger') return 'Workers Observability alert';
+        if (entry.label === 'triage') return 'Browser Run + AI Search triage';
         if (entry.label === 'proposal') return 'write_file proposal';
         if (entry.label === 'revision') return 'Revised write_file proposal';
         if (entry.label === 'approval') return 'Human approved payload';
@@ -5044,7 +5046,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           case 'failed':
             return {
               title: 'Code Mode replay failed',
-              detail: 'The signed diagnostic record explains the runtime result and changed repository file.',
+              detail: 'The signed diagnostic record explains the runtime result and changed Workers checkout file.',
             };
           case 'rejected':
             return {
@@ -5144,7 +5146,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           </div>
           <div class="risk-details" id="riskDetails" hidden>
             <strong>Code Mode approval gate</strong>
-            <span>This proposal changes repository code for a production Workers route. CodemodeRuntime pauses before the write_file side effect.</span>
+            <span>This proposal changes code for a payment-impacting Workers checkout route. CodemodeRuntime pauses before the write_file side effect.</span>
             <span>atrib signs the payload hash, connector id, human decision, runtime replay, and audit handoff as separate records.</span>
           </div>
           \${feedbackRecord ? \`
@@ -5197,11 +5199,11 @@ export function renderApp(options: { colo?: string } = {}): string {
         document.querySelector('#approve')?.addEventListener('click', async () => {
           await transition({
             title: 'Agent resumed',
-            detail: 'The human approval is signed. CodemodeRuntime is replaying the approved file update.',
+            detail: 'The human approval is signed. CodemodeRuntime is replaying the approved checkout patch.',
             step: 'resume',
             activeLabel: 'approve',
             fn: async () => post('/api/runs/' + run.run_id + '/approve', {
-              reason: 'Payload matches the issue scope and expected Cloudflare repository target.',
+              reason: 'Payload matches the observability alert, Browser Run evidence, and expected Workers checkout target.',
               simulate_error: simulateErrorInput.checked,
             }),
           });
@@ -5213,7 +5215,7 @@ export function renderApp(options: { colo?: string } = {}): string {
             step: 'halt',
             activeLabel: 'reject',
             fn: async () => post('/api/runs/' + run.run_id + '/reject', {
-              reason: 'This repository file update should not be applied.',
+              reason: 'This Workers checkout patch should not be applied.',
             }),
           });
         });
@@ -5263,17 +5265,17 @@ export function renderApp(options: { colo?: string } = {}): string {
         const stageRows = [
           {
             title: 'Trigger received',
-            detail: labels.has('trigger') ? 'GitHub issue webhook or scheduled follow-up woke the agent.' : 'Waiting for trigger.',
+            detail: labels.has('trigger') ? 'Workers Observability woke the agent with Browser Run checkout evidence.' : 'Waiting for trigger.',
             done: labels.has('trigger'),
           },
           {
             title: 'Context gathered',
-            detail: labels.has('triage') ? 'Repository, issue, and Workers route context loaded.' : 'Waiting for context.',
+            detail: labels.has('triage') ? 'Observability alert, Browser Run evidence, and Workers checkout context loaded.' : 'Waiting for context.',
             done: labels.has('triage'),
           },
           {
             title: 'Policy & intent analysis',
-            detail: labels.has('triage') ? 'Repository writes require a signed decision before Code Mode can replay the action.' : 'Waiting for policy analysis.',
+            detail: labels.has('triage') ? 'Payment-impacting Workers writes require a signed decision before Code Mode can replay the action.' : 'Waiting for policy analysis.',
             done: labels.has('triage'),
           },
           {
