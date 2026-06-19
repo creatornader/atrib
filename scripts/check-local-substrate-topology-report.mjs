@@ -482,9 +482,7 @@ function checkIdleActiveSessionStateGate() {
       `idle active-session gate: expected 3 ready context profiles, got ${report.summary.active_session_profiles_ready}`,
     )
   }
-  const claudeCodeRuntime = report.primitive_runtimes.find(
-    (item) => item.agent === 'claude-code',
-  )
+  const claudeCodeRuntime = report.primitive_runtimes.find((item) => item.agent === 'claude-code')
   if (claudeCodeRuntime?.active_http_requests !== 0) {
     fail('idle active-session gate: expected claude-code active_http_requests=0')
   }
@@ -544,6 +542,74 @@ function checkRetainedSessionWithLiveRequestGate() {
   const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
   if (broadGate?.status !== 'fail') {
     fail('retained live-request gate: expected broad-default-readiness=fail')
+  }
+}
+
+function checkPrimitiveToolDispatchGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  const target = snapshot.primitive_runtime_health.find(
+    (item) => item.report?.profile?.agent === 'claude-code',
+  )
+  if (!target) {
+    fail('primitive tool dispatch gate: expected claude-code primitive health fixture')
+    return
+  }
+  target.status = 'degraded'
+  target.report.tool_calls = {
+    tool_timeout_ms: 25,
+    active_tool_calls: 1,
+    calls_started: 1,
+    calls_succeeded: 0,
+    calls_failed: 0,
+    calls_timed_out: 1,
+    calls_settled_after_timeout: 0,
+    in_flight_tool_calls: [
+      {
+        id: 'call-1',
+        primitive: 'recall',
+        tool: 'recall_by_content',
+        started_at: '2026-06-10T22:59:59.000Z',
+        elapsed_ms: 1000,
+        timed_out: true,
+        timed_out_at: '2026-06-10T22:59:59.025Z',
+      },
+    ],
+  }
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'mixed') {
+    fail(`primitive tool dispatch gate: expected status mixed, got ${report.summary.status}`)
+  }
+  if (report.summary.primitive_runtime_tool_calls_active !== 1) {
+    fail('primitive tool dispatch gate: expected one active primitive tool call')
+  }
+  if (report.summary.primitive_runtime_tool_calls_active_timed_out !== 1) {
+    fail('primitive tool dispatch gate: expected one active timed-out primitive tool call')
+  }
+  if (report.summary.primitive_runtime_tool_calls_timed_out !== 1) {
+    fail('primitive tool dispatch gate: expected one timed-out primitive tool call total')
+  }
+  const dispatchGate = report.gates.find((gate) => gate.name === 'primitive-runtime-tool-dispatch')
+  if (dispatchGate?.status !== 'warn') {
+    fail('primitive tool dispatch gate: expected primitive-runtime-tool-dispatch=warn')
+  }
+  const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (broadGate?.status !== 'fail') {
+    fail('primitive tool dispatch gate: expected broad-default-readiness=fail')
+  }
+  const runtime = report.primitive_runtimes.find((item) => item.agent === 'claude-code')
+  if (runtime?.active_tool_calls !== 1 || runtime?.calls_timed_out !== 1) {
+    fail('primitive tool dispatch gate: expected primitive runtime summary to expose call counters')
+  }
+  if (
+    !report.recommendations.includes(
+      'inspect primitive runtime health tool_calls and restart any host with active timed-out tool dispatches after preserving evidence',
+    )
+  ) {
+    fail('primitive tool dispatch gate: expected dispatch recommendation')
   }
 }
 
@@ -1410,6 +1476,7 @@ function main() {
   checkStaleActiveSessionStateGate()
   checkIdleActiveSessionStateGate()
   checkRetainedSessionWithLiveRequestGate()
+  checkPrimitiveToolDispatchGate()
   checkKnowledgeBaseReceiptJoinGate()
   checkKnowledgeBaseWatcherActivityGate()
   checkKnowledgeBaseReceiptCollector()

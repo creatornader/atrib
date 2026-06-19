@@ -1917,6 +1917,10 @@ function primitiveRuntimeHealthSummary(items) {
       active_sessions: report.sessions?.active,
       opened_sessions: report.sessions?.opened,
       active_http_requests: report.sessions?.active_http_requests,
+      active_tool_calls: report.tool_calls?.active_tool_calls,
+      calls_timed_out: report.tool_calls?.calls_timed_out,
+      calls_settled_after_timeout: report.tool_calls?.calls_settled_after_timeout,
+      in_flight_tool_calls: report.tool_calls?.in_flight_tool_calls,
       reason: item.reason,
       http_status: item.http_status,
     }
@@ -1924,8 +1928,7 @@ function primitiveRuntimeHealthSummary(items) {
 }
 
 function expectedRuntimeVersion(expectedRuntimeVersions, key) {
-  return typeof expectedRuntimeVersions?.[key] === 'string' &&
-    expectedRuntimeVersions[key].trim()
+  return typeof expectedRuntimeVersions?.[key] === 'string' && expectedRuntimeVersions[key].trim()
     ? expectedRuntimeVersions[key].trim()
     : undefined
 }
@@ -1988,6 +1991,35 @@ function primitiveRuntimeHasNoLiveClientSessions(item) {
   return Number(sessions?.active) === 0 && Number(sessions?.opened) === 0
 }
 
+function primitiveRuntimeActiveToolCalls(item) {
+  const active = Number(item?.report?.tool_calls?.active_tool_calls)
+  return Number.isFinite(active) ? active : 0
+}
+
+function primitiveRuntimeTimedOutToolCallTotal(item) {
+  const timedOut = Number(item?.report?.tool_calls?.calls_timed_out)
+  return Number.isFinite(timedOut) ? timedOut : 0
+}
+
+function primitiveRuntimeActiveTimedOutToolCalls(item) {
+  const toolCalls = item?.report?.tool_calls
+  const timeoutMs = Number(toolCalls?.tool_timeout_ms)
+  return Array.isArray(toolCalls?.in_flight_tool_calls)
+    ? toolCalls.in_flight_tool_calls.filter((call) => {
+        if (call?.timed_out === true) return true
+        const elapsedMs = Number(call?.elapsed_ms)
+        return Number.isFinite(timeoutMs) && Number.isFinite(elapsedMs) && elapsedMs >= timeoutMs
+      })
+    : []
+}
+
+function primitiveRuntimeToolDispatchProblem(item) {
+  return (
+    item.reachable === true &&
+    (item.status === 'degraded' || primitiveRuntimeActiveTimedOutToolCalls(item).length > 0)
+  )
+}
+
 function activeSessionStateAgeMs(item) {
   if (Number.isFinite(item?.age_ms)) return Math.max(0, Math.round(item.age_ms))
   if (Number.isFinite(item?.mtime_ms)) return Math.max(0, Math.round(Date.now() - item.mtime_ms))
@@ -2027,8 +2059,8 @@ function activeSessionCoverage(primitiveHealth, activeSessionState) {
   const validStateProfiles = runtimeProfiles.filter(
     (profile) => activeSessionStateByProfile.get(profile)?.valid_context_id,
   )
-  const freshStateProfiles = runtimeProfiles.filter(
-    (profile) => hasFreshActiveSessionState(activeSessionStateByProfile.get(profile)),
+  const freshStateProfiles = runtimeProfiles.filter((profile) =>
+    hasFreshActiveSessionState(activeSessionStateByProfile.get(profile)),
   )
   const idleProfiles = runtimeProfiles.filter((profile) =>
     primitiveRuntimeHasNoLiveClientSessions(primitiveHttpByProfile.get(profile)),
@@ -2190,12 +2222,12 @@ function summarizeLongLivedActivity(longLivedAgents, activityReport) {
       activity?.submission === 'local_substrate_delegated'
     const activityOk = Boolean(
       reportClean &&
-        activity &&
-        activity.status === 'ok' &&
-        activity.stale !== true &&
-        activity.record_hash &&
-        routeEndpointMatches &&
-        delegatedCommit,
+      activity &&
+      activity.status === 'ok' &&
+      activity.stale !== true &&
+      activity.record_hash &&
+      routeEndpointMatches &&
+      delegatedCommit,
     )
     return withoutUndefinedValues({
       label: agent.label,
@@ -2392,13 +2424,7 @@ function buildGates({
       : expectedCoordinatorVersion
         ? `${stale.length} healthy coordinator endpoint(s) do not report @atrib/emit ${expectedCoordinatorVersion}`
         : 'checked-out @atrib/emit package version could not be read'
-    gates.push(
-      gate(
-        'coordinator-version-freshness',
-        ok ? 'pass' : 'fail',
-        detail,
-      ),
-    )
+    gates.push(gate('coordinator-version-freshness', ok ? 'pass' : 'fail', detail))
   }
 
   if (
@@ -2472,13 +2498,7 @@ function buildGates({
       : expectedPrimitiveVersion
         ? `${stale.length} healthy primitive HTTP endpoint(s) do not report @atrib/primitives-runtime ${expectedPrimitiveVersion}`
         : 'checked-out @atrib/primitives-runtime package version could not be read'
-    gates.push(
-      gate(
-        'primitive-runtime-version-freshness',
-        ok ? 'pass' : 'fail',
-        detail,
-      ),
-    )
+    gates.push(gate('primitive-runtime-version-freshness', ok ? 'pass' : 'fail', detail))
   }
   const healthyPrimitiveHttpByEndpoint = new Map(
     healthyPrimitiveHttp.map((item) => [item.endpoint, item]),
@@ -2569,6 +2589,29 @@ function buildGates({
         'host-owned-primitives-http',
         'fail',
         'no agent-scoped primitive HTTP runtime is running or configured',
+      ),
+    )
+  }
+
+  const primitiveDispatchProblems = primitiveHealth.filter(primitiveRuntimeToolDispatchProblem)
+  const activeTimedOutToolCalls = primitiveDispatchProblems.reduce(
+    (sum, item) => sum + primitiveRuntimeActiveTimedOutToolCalls(item).length,
+    0,
+  )
+  if (primitiveDispatchProblems.length === 0) {
+    gates.push(
+      gate(
+        'primitive-runtime-tool-dispatch',
+        'pass',
+        'no active timed-out primitive tool dispatches reported',
+      ),
+    )
+  } else {
+    gates.push(
+      gate(
+        'primitive-runtime-tool-dispatch',
+        'warn',
+        `${primitiveDispatchProblems.length} primitive HTTP endpoint(s) degraded by tool dispatch; ${activeTimedOutToolCalls} active timed-out call(s)`,
       ),
     )
   }
@@ -3088,6 +3131,18 @@ function buildReport(input, options = {}) {
       primitive_proxy_processes: processSummary.primitive_proxy_processes,
       primitive_proxy_stdio_processes: processSummary.primitive_proxy_stdio_processes,
       primitive_runtime_http_shared: sharedPrimitiveHttp.length,
+      primitive_runtime_tool_calls_active: primitiveHealth.reduce(
+        (sum, item) => sum + primitiveRuntimeActiveToolCalls(item),
+        0,
+      ),
+      primitive_runtime_tool_calls_timed_out: primitiveHealth.reduce(
+        (sum, item) => sum + primitiveRuntimeTimedOutToolCallTotal(item),
+        0,
+      ),
+      primitive_runtime_tool_calls_active_timed_out: primitiveHealth.reduce(
+        (sum, item) => sum + primitiveRuntimeActiveTimedOutToolCalls(item).length,
+        0,
+      ),
       standalone_primitive_processes: processSummary.standalone_primitive_processes,
       standalone_primitive_generations: processSummary.standalone_primitive_generations,
       complete_standalone_primitive_generations:
@@ -3224,6 +3279,11 @@ function recommendationsFor({ status, gates, processSummary }) {
       'start or restart one loopback atrib-primitives Streamable HTTP host with a shared primitive backend per startup-spawn agent profile before broad process-sharing rollout',
     )
   }
+  if (gates.find((item) => item.name === 'primitive-runtime-tool-dispatch')?.status !== 'pass') {
+    recommendations.push(
+      'inspect primitive runtime health tool_calls and restart any host with active timed-out tool dispatches after preserving evidence',
+    )
+  }
   if (
     gates.find((item) => item.name === 'primitive-runtime-version-freshness')?.status === 'fail'
   ) {
@@ -3298,6 +3358,7 @@ function formatTextReport(report) {
     `runtime versions: coordinator=${report.summary.coordinator_version_expected ?? 'unchecked'} mismatches=${report.summary.coordinator_version_mismatches ?? 0}, primitive=${report.summary.primitive_runtime_version_expected ?? 'unchecked'} mismatches=${report.summary.primitive_runtime_version_mismatches ?? 0}`,
     `route registry: ${report.summary.route_registry_status}`,
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, direct-stdio=${report.summary.primitive_runtime_stdio_processes}, proxy=${report.summary.primitive_proxy_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
+    `primitive tool dispatch: active=${report.summary.primitive_runtime_tool_calls_active ?? 0}, active-timed-out=${report.summary.primitive_runtime_tool_calls_active_timed_out ?? 0}, timed-out-total=${report.summary.primitive_runtime_tool_calls_timed_out ?? 0}`,
     `bridge processes: runtimes=${report.summary.bridge_runtime_processes} (http=${report.summary.bridge_runtime_http_processes}, proxy=${report.summary.bridge_proxy_processes}, stdio-proxy=${report.summary.bridge_proxy_stdio_processes}), legacy-wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
     `context routing profiles: ready=${report.summary.active_session_profiles_ready}/${report.summary.active_session_profiles}, active-session=${report.summary.active_session_profiles_valid}, fresh=${report.summary.active_session_profiles_fresh}, idle=${report.summary.active_session_profiles_idle}, explicit-required=${report.summary.active_session_profiles_explicit_required}`,
