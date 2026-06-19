@@ -1917,6 +1917,7 @@ function primitiveRuntimeHealthSummary(items) {
       active_sessions: report.sessions?.active,
       opened_sessions: report.sessions?.opened,
       active_http_requests: report.sessions?.active_http_requests,
+      active_http_connections: report.sessions?.active_http_connections,
       active_tool_calls: report.tool_calls?.active_tool_calls,
       calls_timed_out: report.tool_calls?.calls_timed_out,
       calls_settled_after_timeout: report.tool_calls?.calls_settled_after_timeout,
@@ -1986,6 +1987,8 @@ function hasExplicitContextIdPolicy(item) {
 
 function primitiveRuntimeHasNoLiveClientSessions(item) {
   const sessions = item?.report?.sessions
+  const activeHttpConnections = Number(sessions?.active_http_connections)
+  if (Number.isFinite(activeHttpConnections)) return activeHttpConnections === 0
   const activeHttpRequests = Number(sessions?.active_http_requests)
   if (Number.isFinite(activeHttpRequests)) return activeHttpRequests === 0
   return Number(sessions?.active) === 0 && Number(sessions?.opened) === 0

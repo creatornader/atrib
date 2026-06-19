@@ -18,7 +18,7 @@ import {
   type Server as HttpServer,
   type ServerResponse,
 } from 'node:http'
-import type { AddressInfo } from 'node:net'
+import type { AddressInfo, Socket } from 'node:net'
 import { pathToFileURL } from 'node:url'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -857,6 +857,7 @@ export async function bindAtribPrimitivesHttpHost(
   const healthPath = healthPathFor(mcpPath)
   const sessionIdleMs = options.sessionIdleMs ?? DEFAULT_SESSION_IDLE_MS
   const sessions = new Map<string, HttpSession>()
+  const sockets = new Set<Socket>()
   const version = readPackageVersion()
   let openedSessions = 0
   let closedSessions = 0
@@ -931,6 +932,10 @@ export async function bindAtribPrimitivesHttpHost(
       const backend = backendStatus.backend
       const toolCalls = backend.diagnostics()
       const status = toolCallDiagnosticsDegraded(toolCalls) ? 'degraded' : 'healthy'
+      let activeHttpConnections = 0
+      for (const socket of sockets) {
+        if (!socket.destroyed && socket !== req.socket) activeHttpConnections += 1
+      }
       sendJson(res, 200, {
         status,
         report: {
@@ -960,6 +965,7 @@ export async function bindAtribPrimitivesHttpHost(
             opened: openedSessions,
             closed: closedSessions,
             active_http_requests: activeHttpRequests,
+            active_http_connections: activeHttpConnections,
             idle_timeout_ms: sessionIdleMs,
           },
           tool_calls: toolCalls,
@@ -1054,6 +1060,12 @@ export async function bindAtribPrimitivesHttpHost(
     } finally {
       activeHttpRequests = Math.max(0, activeHttpRequests - 1)
     }
+  })
+  server.on('connection', (socket: Socket) => {
+    sockets.add(socket)
+    socket.on('close', () => {
+      sockets.delete(socket)
+    })
   })
 
   try {

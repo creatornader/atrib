@@ -453,6 +453,7 @@ function checkIdleActiveSessionStateGate() {
       active: 2,
       opened: 4,
       active_http_requests: 0,
+      active_http_connections: 0,
     }
   }
 
@@ -486,6 +487,9 @@ function checkIdleActiveSessionStateGate() {
   if (claudeCodeRuntime?.active_http_requests !== 0) {
     fail('idle active-session gate: expected claude-code active_http_requests=0')
   }
+  if (claudeCodeRuntime?.active_http_connections !== 0) {
+    fail('idle active-session gate: expected claude-code active_http_connections=0')
+  }
   const activeSessionGate = report.gates.find(
     (gate) => gate.name === 'host-owned-active-session-context',
   )
@@ -509,12 +513,14 @@ function checkRetainedSessionWithLiveRequestGate() {
   }
   for (const item of snapshot.primitive_runtime_health ?? []) {
     if (item.report?.profile?.agent !== 'claude-code') continue
-    item.report.sessions = {
+    const sessions = {
       ...(item.report.sessions ?? {}),
       active: 2,
       opened: 4,
       active_http_requests: 1,
     }
+    delete sessions.active_http_connections
+    item.report.sessions = sessions
   }
 
   const report = buildReport(snapshot, {
@@ -542,6 +548,54 @@ function checkRetainedSessionWithLiveRequestGate() {
   const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
   if (broadGate?.status !== 'fail') {
     fail('retained live-request gate: expected broad-default-readiness=fail')
+  }
+}
+
+function checkRetainedSessionWithLiveConnectionGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  for (const item of snapshot.active_session_state ?? []) {
+    if (item.profile !== 'claude-code') continue
+    item.mtime_ms = FIXTURE_NOW_MS - 5 * 3_600_000
+    delete item.age_ms
+    delete item.fresh_context_id
+  }
+  for (const item of snapshot.primitive_runtime_health ?? []) {
+    if (item.report?.profile?.agent !== 'claude-code') continue
+    item.report.sessions = {
+      ...(item.report.sessions ?? {}),
+      active: 2,
+      opened: 4,
+      active_http_requests: 0,
+      active_http_connections: 1,
+    }
+  }
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'mixed') {
+    fail(`retained live-connection gate: expected status mixed, got ${report.summary.status}`)
+  }
+  if (report.summary.active_session_profiles_idle !== 0) {
+    fail(
+      `retained live-connection gate: expected 0 idle active-session profiles, got ${report.summary.active_session_profiles_idle}`,
+    )
+  }
+  if (report.summary.active_session_profiles_ready !== 2) {
+    fail(
+      `retained live-connection gate: expected 2 ready context profiles, got ${report.summary.active_session_profiles_ready}`,
+    )
+  }
+  const activeSessionGate = report.gates.find(
+    (gate) => gate.name === 'host-owned-active-session-context',
+  )
+  if (activeSessionGate?.status !== 'warn') {
+    fail('retained live-connection gate: expected host-owned-active-session-context=warn')
+  }
+  const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (broadGate?.status !== 'fail') {
+    fail('retained live-connection gate: expected broad-default-readiness=fail')
   }
 }
 
@@ -1476,6 +1530,7 @@ function main() {
   checkStaleActiveSessionStateGate()
   checkIdleActiveSessionStateGate()
   checkRetainedSessionWithLiveRequestGate()
+  checkRetainedSessionWithLiveConnectionGate()
   checkPrimitiveToolDispatchGate()
   checkKnowledgeBaseReceiptJoinGate()
   checkKnowledgeBaseWatcherActivityGate()
