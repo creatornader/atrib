@@ -148,7 +148,9 @@ import {
   aggregateAnnotationsByRecord,
   aggregateRevisionsByRecord,
   discoverLoaded,
+  loadLoaded,
   loadLoadedAppend,
+  loadNewestLoadedFromDir,
 } from './aggregations.js'
 import type { AnnotationSummary as AggAnnotationSummary, LoadedRecord } from './aggregations.js'
 import {
@@ -197,12 +199,16 @@ type LoadedMirrorSnapshot = {
   annotationsByRecord: Map<string, AggAnnotationSummary>
   revisionsByRecord: Map<string, string[]>
   bm25IndexesByNewestLimit: Map<number, BM25Index>
+  maxLoadedRecords?: number
+  partial: boolean
 }
 
 let loadedMirrorSnapshot: LoadedMirrorSnapshot | undefined
+let contentSearchMirrorSnapshot: LoadedMirrorSnapshot | undefined
 
 export function clearRecallMirrorCache(): void {
   loadedMirrorSnapshot = undefined
+  contentSearchMirrorSnapshot = undefined
 }
 
 function readMirrorFingerprint(recordFile?: string): MirrorFingerprint {
@@ -285,13 +291,64 @@ function getLoadedMirrorSnapshot(recordFile?: string): LoadedMirrorSnapshot {
     annotationsByRecord,
     revisionsByRecord,
     bm25IndexesByNewestLimit: new Map(),
+    partial: false,
   }
   return loadedMirrorSnapshot
+}
+
+function getContentSearchMirrorSnapshot(maxRecords: number): LoadedMirrorSnapshot {
+  const fingerprint = readMirrorFingerprint()
+  if (loadedMirrorSnapshot?.signature === fingerprint.signature) return loadedMirrorSnapshot
+  if (
+    contentSearchMirrorSnapshot?.signature === fingerprint.signature &&
+    contentSearchMirrorSnapshot.maxLoadedRecords === maxRecords
+  ) {
+    return contentSearchMirrorSnapshot
+  }
+  const refreshed = tryAppendRefreshLoadedMirrorSnapshot(
+    contentSearchMirrorSnapshot,
+    fingerprint,
+    maxRecords,
+  )
+  if (refreshed) return refreshed
+
+  const { loaded, files } = discoverNewestLoaded(maxRecords)
+  const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
+  const revisionsByRecord = aggregateRevisionsByRecord(loaded)
+  contentSearchMirrorSnapshot = {
+    signature: fingerprint.signature,
+    stats: fingerprint.stats,
+    loaded,
+    loadedByHash: new Map(loaded.map((lr) => [lr.record_hash, lr])),
+    newestLoaded: loaded.slice().sort((a, b) => b.record.timestamp - a.record.timestamp),
+    files,
+    annotationsByRecord,
+    revisionsByRecord,
+    bm25IndexesByNewestLimit: new Map(),
+    maxLoadedRecords: maxRecords,
+    partial: true,
+  }
+  return contentSearchMirrorSnapshot
+}
+
+function discoverNewestLoaded(maxRecords: number): { loaded: LoadedRecord[]; files: string[] } {
+  const envFile = process.env.ATRIB_RECORD_FILE
+  const envDir = process.env.ATRIB_MIRROR_DIR ?? join(process.env.HOME ?? '', '.atrib', 'records')
+  if (envFile) {
+    return {
+      loaded: loadLoaded(envFile)
+        .sort((a, b) => b.record.timestamp - a.record.timestamp)
+        .slice(0, maxRecords),
+      files: [envFile],
+    }
+  }
+  return loadNewestLoadedFromDir(envDir, maxRecords)
 }
 
 function tryAppendRefreshLoadedMirrorSnapshot(
   previous: LoadedMirrorSnapshot | undefined,
   fingerprint: MirrorFingerprint,
+  maxLoadedRecords?: number,
 ): LoadedMirrorSnapshot | undefined {
   if (!previous) return undefined
   if (!sameMirrorFiles(previous.stats, fingerprint.stats)) return undefined
@@ -313,12 +370,16 @@ function tryAppendRefreshLoadedMirrorSnapshot(
     return previous
   }
 
-  const loaded = previous.loaded.concat(appended)
-  const loadedByHash = new Map(previous.loadedByHash)
-  for (const lr of appended) loadedByHash.set(lr.record_hash, lr)
+  let loaded = previous.loaded.concat(appended)
+  if (maxLoadedRecords !== undefined) {
+    loaded = loaded
+      .sort((a, b) => b.record.timestamp - a.record.timestamp)
+      .slice(0, maxLoadedRecords)
+  }
+  const loadedByHash = new Map(loaded.map((lr) => [lr.record_hash, lr]))
   const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
   const revisionsByRecord = aggregateRevisionsByRecord(loaded)
-  loadedMirrorSnapshot = {
+  const refreshed: LoadedMirrorSnapshot = {
     signature: fingerprint.signature,
     stats: fingerprint.stats,
     loaded,
@@ -328,8 +389,15 @@ function tryAppendRefreshLoadedMirrorSnapshot(
     annotationsByRecord,
     revisionsByRecord,
     bm25IndexesByNewestLimit: new Map(),
+    maxLoadedRecords,
+    partial: previous.partial,
   }
-  return loadedMirrorSnapshot
+  if (previous.partial) {
+    contentSearchMirrorSnapshot = refreshed
+  } else {
+    loadedMirrorSnapshot = refreshed
+  }
+  return refreshed
 }
 
 function sameMirrorFiles(a: MirrorFileStat[], b: MirrorFileStat[]): boolean {
@@ -1559,9 +1627,13 @@ export function registerAtribRecallTools(server: McpServer): void {
         'recall_by_content',
         args,
         async () => {
-          const snapshot = getLoadedMirrorSnapshot()
+          const requestedLimit = resolveContentSearchLimit(
+            args.max_records,
+            Number.MAX_SAFE_INTEGER,
+          )
+          const snapshot = getContentSearchMirrorSnapshot(requestedLimit)
           const { loaded, loadedByHash, annotationsByRecord } = snapshot
-          const searchLimit = resolveContentSearchLimit(args.max_records, loaded.length)
+          const searchLimit = Math.min(requestedLimit, loaded.length)
           const bm25Index = getBm25IndexForNewestLimit(snapshot, searchLimit)
           const queryTokens = tokenize(args.query)
           const relevanceByHash = bm25ScoresForQuery(bm25Index, queryTokens)
@@ -1601,10 +1673,10 @@ export function registerAtribRecallTools(server: McpServer): void {
                   {
                     query: args.query,
                     k,
-                    total_records: loaded.length,
+                    total_records: snapshot.partial ? null : loaded.length,
                     searched_records: searchLimit,
                     candidate_records: searchPool.length,
-                    truncated_corpus: searchLimit < loaded.length,
+                    truncated_corpus: snapshot.partial || searchLimit < loaded.length,
                     count: top.length,
                     results: top.map(({ lr, score, recency, importance, relevance }) => {
                       const ann = annotationsByRecord.get(lr.record_hash)

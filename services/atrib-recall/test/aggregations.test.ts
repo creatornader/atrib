@@ -19,6 +19,8 @@ import {
   loadLoaded,
   loadLoadedAppend,
   loadLoadedFromDir,
+  loadLoadedTail,
+  loadNewestLoadedFromDir,
   aggregateAnnotationsByRecord,
   aggregateRevisionsByRecord,
 } from '../src/aggregations.js'
@@ -230,6 +232,21 @@ describe('loadLoadedAppend', () => {
   })
 })
 
+describe('loadLoadedTail', () => {
+  it('loads only the newest records from the end of a jsonl file', async () => {
+    const records = [
+      await makeSigned({ timestamp: 1, content_id: `sha256:${'a'.repeat(64)}` }),
+      await makeSigned({ timestamp: 2, content_id: `sha256:${'b'.repeat(64)}` }),
+      await makeSigned({ timestamp: 3, content_id: `sha256:${'c'.repeat(64)}` }),
+    ]
+    writeFileSync(file, records.map((r) => JSON.stringify(r)).join('\n') + '\n')
+
+    const tail = loadLoadedTail(file, 2)
+
+    expect(tail.map((lr) => lr.record.timestamp)).toEqual([2, 3])
+  })
+})
+
 describe('loadLoadedFromDir', () => {
   it('returns empty + empty file list when directory missing', () => {
     expect(loadLoadedFromDir(join(tmp, 'missing'))).toEqual({
@@ -248,6 +265,21 @@ describe('loadLoadedFromDir', () => {
     expect(out.loaded).toHaveLength(2)
     expect(out.files).toHaveLength(2)
     expect(out.files.every((f) => f.endsWith('.jsonl'))).toBe(true)
+  })
+})
+
+describe('loadNewestLoadedFromDir', () => {
+  it('loads newest records across jsonl files without reading every line', async () => {
+    const old = await makeSigned({ timestamp: 1, content_id: `sha256:${'a'.repeat(64)}` })
+    const mid = await makeSigned({ timestamp: 2, content_id: `sha256:${'b'.repeat(64)}` })
+    const newest = await makeSigned({ timestamp: 3, content_id: `sha256:${'c'.repeat(64)}` })
+    writeFileSync(join(tmp, 'one.jsonl'), JSON.stringify(old) + '\n')
+    writeFileSync(join(tmp, 'two.jsonl'), [JSON.stringify(mid), JSON.stringify(newest)].join('\n'))
+
+    const out = loadNewestLoadedFromDir(tmp, 2)
+
+    expect(out.files).toHaveLength(2)
+    expect(out.loaded.map((lr) => lr.record.timestamp)).toEqual([3, 2])
   })
 })
 

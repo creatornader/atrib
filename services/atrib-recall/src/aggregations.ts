@@ -198,6 +198,49 @@ export function loadLoadedAppend(path: string, startOffset: number): LoadedRecor
   }
 }
 
+export function loadLoadedTail(path: string, maxRecords: number): LoadedRecord[] {
+  if (maxRecords <= 0 || !existsSync(path)) return []
+  let size = 0
+  try {
+    const stat = statSync(path)
+    if (!stat.isFile()) return []
+    size = stat.size
+  } catch {
+    return []
+  }
+  if (size === 0) return []
+
+  const fd = openSync(path, 'r')
+  try {
+    const chunks: Buffer[] = []
+    const chunkSize = 64 * 1024
+    let position = size
+    let newlineCount = 0
+    while (position > 0 && newlineCount <= maxRecords) {
+      const readSize = Math.min(chunkSize, position)
+      position -= readSize
+      const buffer = Buffer.allocUnsafe(readSize)
+      const bytesRead = readSync(fd, buffer, 0, readSize, position)
+      const chunk = buffer.subarray(0, bytesRead)
+      chunks.unshift(chunk)
+      for (let i = 0; i < chunk.length; i += 1) {
+        if (chunk[i] === 10) newlineCount += 1
+      }
+    }
+    const raw = Buffer.concat(chunks).toString('utf8')
+    const lines = raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .slice(-maxRecords)
+    return parseLoadedJsonl(lines.join('\n'))
+  } catch {
+    return []
+  } finally {
+    closeSync(fd)
+  }
+}
+
 function parseLoadedJsonl(raw: string): LoadedRecord[] {
   const out: LoadedRecord[] = []
   for (const line of raw.split('\n')) {
@@ -251,6 +294,37 @@ export function loadLoadedFromDir(dir: string): { loaded: LoadedRecord[]; files:
     if (partial.length > 0) loaded.push(...partial)
   }
   return { loaded, files }
+}
+
+export function loadNewestLoadedFromDir(
+  dir: string,
+  maxRecords: number,
+): { loaded: LoadedRecord[]; files: string[] } {
+  if (!existsSync(dir)) return { loaded: [], files: [] }
+  let entries: string[] = []
+  try {
+    entries = readdirSync(dir)
+      .filter((name) => name.endsWith('.jsonl'))
+      .sort()
+  } catch {
+    return { loaded: [], files: [] }
+  }
+  const loaded: LoadedRecord[] = []
+  const files: string[] = []
+  for (const name of entries) {
+    const full = join(dir, name)
+    try {
+      const stat = statSync(full)
+      if (!stat.isFile()) continue
+    } catch {
+      continue
+    }
+    files.push(full)
+    const partial = loadLoadedTail(full, maxRecords)
+    if (partial.length > 0) loaded.push(...partial)
+  }
+  loaded.sort((a, b) => b.record.timestamp - a.record.timestamp)
+  return { loaded: loaded.slice(0, maxRecords), files }
 }
 
 /**
