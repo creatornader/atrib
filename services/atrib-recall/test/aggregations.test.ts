@@ -17,6 +17,7 @@ import type { AtribRecord } from '@atrib/mcp'
 import {
   computeRecordHash,
   loadLoaded,
+  loadLoadedAppend,
   loadLoadedFromDir,
   aggregateAnnotationsByRecord,
   aggregateRevisionsByRecord,
@@ -202,6 +203,30 @@ describe('loadLoaded', () => {
       ].join('\n'),
     )
     expect(loadLoaded(file)).toEqual([])
+  })
+})
+
+describe('loadLoadedAppend', () => {
+  it('returns appended records after a known byte offset', async () => {
+    const first = await makeSigned({ timestamp: 1, content_id: `sha256:${'a'.repeat(64)}` })
+    const second = await makeSigned({ timestamp: 2, content_id: `sha256:${'b'.repeat(64)}` })
+    const firstLine = JSON.stringify(first) + '\n'
+    writeFileSync(file, firstLine + envelope(second, { tag: 'new' }) + '\n')
+
+    const appended = loadLoadedAppend(file, Buffer.byteLength(firstLine))
+
+    expect(appended).toHaveLength(1)
+    expect(appended[0]!.record.timestamp).toBe(2)
+    expect(appended[0]!.content).toEqual({ tag: 'new' })
+  })
+
+  it('returns empty when the offset is at or beyond the current file size', async () => {
+    const first = await makeSigned()
+    const line = JSON.stringify(first) + '\n'
+    writeFileSync(file, line)
+
+    expect(loadLoadedAppend(file, Buffer.byteLength(line))).toEqual([])
+    expect(loadLoadedAppend(file, Buffer.byteLength(line) + 10)).toEqual([])
   })
 })
 
