@@ -77,7 +77,7 @@ type SmokeResult = {
     plugin: 'BasePlugin'
     tool: 'FunctionTool'
     model: 'BaseLlm'
-    transient_python_packages: ['google-adk==2.1.0']
+    transient_python_packages: ['google-adk==2.3.0']
   }
   context_id: string
   signed_records: number
@@ -228,7 +228,7 @@ export async function runGoogleAdkPythonPluginSmoke(
       plugin: proof.runtime.plugin,
       tool: proof.runtime.tool,
       model: proof.runtime.model,
-      transient_python_packages: ['google-adk==2.1.0'],
+      transient_python_packages: ['google-adk==2.3.0'],
     },
     context_id: contextId,
     signed_records: records.length,
@@ -266,7 +266,7 @@ function runPythonProof(): GoogleAdkPythonProof {
   const pythonScript = join(exampleDir, 'google-adk-python-proof.py')
   const result = spawnSync(
     'uv',
-    ['run', '--quiet', '--with', 'google-adk==2.1.0', 'python', pythonScript],
+    ['run', '--quiet', '--with', 'google-adk==2.3.0', 'python', pythonScript],
     {
       cwd: exampleDir,
       env: { ...process.env, PYTHONWARNINGS: 'ignore' },
@@ -279,7 +279,7 @@ function runPythonProof(): GoogleAdkPythonProof {
     throw new Error(
       [
         'Google ADK Python proof failed.',
-        'The smoke requires uv plus transient Python package google-adk==2.1.0.',
+        'The smoke requires uv plus transient Python package google-adk==2.3.0.',
         'stdout:',
         result.stdout.trim(),
         'stderr:',

@@ -68,7 +68,7 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
       protocol: 'ADK Python',
       actor: 'google_adk_python_atrib_smoke_agent',
       event_type: 'atrib.adk_python.tool_callback_signed',
-      record_hash: 'sha256:70d0bb2c3e38194b065a1872bbf96861b8f9f0802d323c837ede32609b548a79',
+      record_hash: 'sha256:15801af402108603b899b8773b59aa68af71d9e34ee50ec18103afea141f31ed',
       parents: ['sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2'],
       verifier: '@atrib/verify',
       checks: ['BasePlugin callback reached', 'hash-only public record', 'A2A parent resolved'],
@@ -165,7 +165,7 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
         parent_span_id: '1d6154dbc8bded9a',
         status: 'OK',
         atrib_record_hash:
-          'sha256:70d0bb2c3e38194b065a1872bbf96861b8f9f0802d323c837ede32609b548a79',
+          'sha256:15801af402108603b899b8773b59aa68af71d9e34ee50ec18103afea141f31ed',
         atrib_parent_record_hashes: [
           'sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2',
         ],
