@@ -18,6 +18,7 @@ import { join } from 'node:path'
 import {
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
+  LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS,
   LOCAL_SUBSTRATE_REQUEST_SCHEMA,
   canonicalRecord,
   createHttpLocalSubstrateTransport,
@@ -304,8 +305,6 @@ const DEFAULT_LOCAL_SUBSTRATE_COMMIT_DEGRADATION: LocalSubstrateDegradationPolic
   if_unavailable: 'sign locally in producer and continue without coordinator receipt',
   primary_path_blocking: false,
 }
-
-const DEFAULT_LOCAL_SUBSTRATE_TIMEOUT_MS = 500
 
 export interface AtribEmitServer {
   /** Underlying McpServer; expose for testing or composition. */
@@ -891,7 +890,7 @@ function dispatchEmitLocalSubstrateShadow(input: {
 
   return tryLocalSubstrateCoordinator(request, {
     transport: input.localSubstrate.transport,
-    timeoutMs: input.localSubstrate.timeoutMs ?? DEFAULT_LOCAL_SUBSTRATE_TIMEOUT_MS,
+    timeoutMs: input.localSubstrate.timeoutMs ?? LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS,
     expectedHarnessClass: producer.harness_class,
     directRecordBody: input.recordBody,
   })
@@ -991,7 +990,7 @@ async function dispatchEmitLocalSubstrateCommit(input: {
 
   const result = await tryLocalSubstrateCoordinator(request, {
     transport: input.localSubstrate.transport,
-    timeoutMs: input.localSubstrate.timeoutMs ?? DEFAULT_LOCAL_SUBSTRATE_TIMEOUT_MS,
+    timeoutMs: input.localSubstrate.timeoutMs ?? LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS,
     expectedHarnessClass: producer.harness_class,
     directRecordBody: input.recordBody,
   })

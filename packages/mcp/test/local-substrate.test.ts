@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS,
   LOCAL_SUBSTRATE_REQUEST_MODES,
   LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
   base64urlEncode,
@@ -292,6 +293,25 @@ describe('local substrate coordinator contract', () => {
     expect(called).toBe(false)
   })
 
+  it('uses the shared default coordinator timeout when caller omits one', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const request = fixture.input.coordinator_request
+
+    const result = await tryLocalSubstrateCoordinator(request, {
+      transport: async (_request, options) => {
+        expect(options.timeoutMs).toBe(LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS)
+        return {
+          schema: LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
+          operation: request.operation,
+          status: 'accepted',
+          record_hash: `sha256:${'2'.repeat(64)}`,
+        }
+      },
+    })
+
+    expect(result.ok).toBe(true)
+  })
+
   it('classifies accepted, rejected, invalid, and unavailable coordinator attempts', async () => {
     const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
     const request = fixture.input.coordinator_request
@@ -494,9 +514,9 @@ describe('local substrate coordinator contract', () => {
       expect(result.status).toBe('accepted')
       expect(observed).toHaveLength(1)
       expect(health.status).toBe(200)
-      expect(((await health.json()) as ReturnType<typeof coordinator.health>).report.coordinator.pid).toBe(
-        888,
-      )
+      expect(
+        ((await health.json()) as ReturnType<typeof coordinator.health>).report.coordinator.pid,
+      ).toBe(888)
       expect(missing.status).toBe(404)
       expect(await missing.json()).toEqual({ error: 'not_found' })
       expect(head.status).toBe(200)

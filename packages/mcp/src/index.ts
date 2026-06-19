@@ -76,6 +76,7 @@ export type { ChainContext } from './mirror.js'
 export {
   clearRecordReferenceResolverCacheForTests,
   defaultRecordReferenceResolver,
+  recordReferenceResolverCacheStatsForTests,
 } from './record-reference.js'
 export type {
   DefaultRecordReferenceResolverOptions,
@@ -143,6 +144,7 @@ export type {
   LocalSubstrateNodeServerOptions,
 } from './local-substrate-node.js'
 export {
+  LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS,
   LOCAL_SUBSTRATE_CREATOR_KEY_POLICIES,
   LOCAL_SUBSTRATE_HARNESS_CLASSES,
   LOCAL_SUBSTRATE_HEALTH_SCHEMA,

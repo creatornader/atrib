@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createReadStream } from 'node:fs'
-import { readdir } from 'node:fs/promises'
+import { open, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import * as readline from 'node:readline'
@@ -27,7 +27,19 @@ export type LocalRecordReferenceResolver = (
   recordHash: string,
 ) => RecordReferenceResolution | Promise<RecordReferenceResolution>
 
+interface LocalMirrorFileCacheEntry {
+  size: number
+  mtimeMs: number
+  hashes: Set<string>
+  endedWithNewline: boolean
+}
+
 let localRecordHashCache: Set<string> | undefined
+let localRecordHashCacheLoad: Promise<Set<string>> | undefined
+let localMirrorFileCaches = new Map<string, LocalMirrorFileCacheEntry>()
+let localMirrorFullFileScansForTests = 0
+let localMirrorAppendFileScansForTests = 0
+let localMirrorReusedFileCachesForTests = 0
 
 /**
  * Resolve a record_hash against local mirrors first, then the public log.
@@ -65,37 +77,107 @@ export async function defaultRecordReferenceResolver(
 }
 
 async function hasLocalRecordHash(recordHash: string): Promise<boolean> {
-  localRecordHashCache ??= await loadLocalRecordHashes()
+  localRecordHashCache ??= await refreshLocalRecordHashCache()
   if (localRecordHashCache.has(recordHash)) return true
 
-  localRecordHashCache = await loadLocalRecordHashes()
+  localRecordHashCache = await refreshLocalRecordHashCache()
   return localRecordHashCache.has(recordHash)
+}
+
+async function refreshLocalRecordHashCache(): Promise<Set<string>> {
+  localRecordHashCacheLoad ??= loadLocalRecordHashes()
+    .then((hashes) => {
+      localRecordHashCache = hashes
+      return hashes
+    })
+    .finally(() => {
+      localRecordHashCacheLoad = undefined
+    })
+  return localRecordHashCacheLoad
 }
 
 async function loadLocalRecordHashes(): Promise<Set<string>> {
   const hashes = new Set<string>()
   const files = await localMirrorFiles()
+  const nextFileCaches = new Map<string, LocalMirrorFileCacheEntry>()
 
   for (const file of files) {
     try {
-      const stream = createReadStream(file, { encoding: 'utf8' })
-      const rl = readline.createInterface({ input: stream, crlfDelay: Infinity })
-      for await (const line of rl) {
-        const trimmed = line.trim()
-        if (!trimmed) continue
-        try {
-          const parsed = JSON.parse(trimmed) as unknown
-          collectMirrorHashes(parsed, hashes)
-        } catch {
-          continue
+      const fileStat = await stat(file)
+      const previous = localMirrorFileCaches.get(file)
+      let entry: LocalMirrorFileCacheEntry
+
+      if (previous && previous.size === fileStat.size && previous.mtimeMs === fileStat.mtimeMs) {
+        entry = previous
+        localMirrorReusedFileCachesForTests += 1
+      } else if (previous && fileStat.size >= previous.size && previous.endedWithNewline) {
+        const appendedHashes =
+          fileStat.size === previous.size
+            ? new Set<string>()
+            : await loadLocalRecordHashesFromFile(file, previous.size)
+        const combined = new Set(previous.hashes)
+        for (const hash of appendedHashes) combined.add(hash)
+        entry = {
+          size: fileStat.size,
+          mtimeMs: fileStat.mtimeMs,
+          hashes: combined,
+          endedWithNewline: await fileEndsWithNewline(file, fileStat.size),
         }
+        localMirrorAppendFileScansForTests += 1
+      } else {
+        entry = {
+          size: fileStat.size,
+          mtimeMs: fileStat.mtimeMs,
+          hashes: await loadLocalRecordHashesFromFile(file),
+          endedWithNewline: await fileEndsWithNewline(file, fileStat.size),
+        }
+        localMirrorFullFileScansForTests += 1
       }
+
+      nextFileCaches.set(file, entry)
+      for (const hash of entry.hashes) hashes.add(hash)
     } catch {
       continue
     }
   }
 
+  localMirrorFileCaches = nextFileCaches
   return hashes
+}
+
+async function loadLocalRecordHashesFromFile(file: string, start = 0): Promise<Set<string>> {
+  const hashes = new Set<string>()
+  const stream = createReadStream(file, {
+    encoding: 'utf8',
+    ...(start > 0 ? { start } : {}),
+  })
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity })
+  for await (const line of rl) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    try {
+      const parsed = JSON.parse(trimmed) as unknown
+      collectMirrorHashes(parsed, hashes)
+    } catch {
+      continue
+    }
+  }
+  return hashes
+}
+
+async function fileEndsWithNewline(file: string, size: number): Promise<boolean> {
+  if (size === 0) return true
+  let handle: Awaited<ReturnType<typeof open>> | undefined
+  try {
+    handle = await open(file, 'r')
+    const byte = new Uint8Array(1)
+    await handle.read(byte, 0, 1, size - 1)
+    return byte[0] === 10
+  } catch {
+    return false
+  } finally {
+    if (handle) await handle.close().catch(() => {})
+  }
 }
 
 async function localMirrorFiles(): Promise<string[]> {
@@ -197,4 +279,25 @@ async function withOptionalTimeout<T>(
 
 export function clearRecordReferenceResolverCacheForTests(): void {
   localRecordHashCache = undefined
+  localRecordHashCacheLoad = undefined
+  localMirrorFileCaches = new Map()
+  localMirrorFullFileScansForTests = 0
+  localMirrorAppendFileScansForTests = 0
+  localMirrorReusedFileCachesForTests = 0
+}
+
+export function recordReferenceResolverCacheStatsForTests(): {
+  cached_file_count: number
+  cached_record_hash_count: number
+  full_file_scans: number
+  append_file_scans: number
+  reused_file_caches: number
+} {
+  return {
+    cached_file_count: localMirrorFileCaches.size,
+    cached_record_hash_count: localRecordHashCache?.size ?? 0,
+    full_file_scans: localMirrorFullFileScansForTests,
+    append_file_scans: localMirrorAppendFileScansForTests,
+    reused_file_caches: localMirrorReusedFileCachesForTests,
+  }
 }
