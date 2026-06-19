@@ -4664,33 +4664,14 @@ export function renderApp(options: { colo?: string } = {}): string {
         return '<button class="copy-icon" type="button" aria-label="Copy ' + escapeHtml(label) + '" data-copy-value="' + escapeHtml(normalized) + '" ' + (disabled ? 'disabled' : '') + '><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button>';
       }
 
-      function visibleDiffLines(diff, context = '3') {
+      function visibleDiffLines(diff) {
         const lines = String(diff).split('\\n');
         while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
-        if (context === 'all') return lines;
-        const contextLines = Number.parseInt(context, 10);
-        if (!Number.isFinite(contextLines)) return lines;
-        const isChangedLine = (line) => (line.startsWith('+') && !line.startsWith('+++'))
-          || (line.startsWith('-') && !line.startsWith('---'))
-          || line.startsWith('@@');
-        const lastChangedIndex = lines.reduce((lastIndex, line, index) => (
-          isChangedLine(line) ? index : lastIndex
-        ), -1);
-        let shownContextAfterChange = 0;
-        return lines.filter((line, index) => {
-          const changed = isChangedLine(line);
-          if (changed) {
-            shownContextAfterChange = 0;
-            return true;
-          }
-          if (contextLines <= 3 && index > lastChangedIndex) return false;
-          shownContextAfterChange += 1;
-          return shownContextAfterChange <= contextLines;
-        });
+        return lines;
       }
 
-      function renderDiff(diff, context = '3') {
-        return visibleDiffLines(diff, context).map((line, index) => {
+      function renderDiff(diff) {
+        return visibleDiffLines(diff).map((line, index) => {
           const kind = line.startsWith('+') && !line.startsWith('+++')
             ? 'add'
             : line.startsWith('-') && !line.startsWith('---')
@@ -5124,17 +5105,16 @@ export function renderApp(options: { colo?: string } = {}): string {
             <span class="label">Target</span>
             <span class="value"><span class="meta-code">\${payload.target_file ?? 'missing'}</span></span>
           </div>
-          <div class="diff" data-context-lines="3">
+          <div class="diff">
             <div>
               <div class="diff-head">
                 <span class="label">Diff (unified)</span>
                 <span class="diff-tools">
-                  <label>Context <select id="diffContext" aria-label="Diff context"><option value="3">3 lines</option><option value="6">6 lines</option><option value="all">All</option></select></label>
                   <button type="button" id="diffWrapToggle" aria-pressed="false">Wrap</button>
                   <button type="button" class="diff-copy-button" id="copyDiff" aria-label="Copy diff" data-copy-diff><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h5A1.5 1.5 0 0 1 13 3.5v5A1.5 1.5 0 0 1 11.5 10H10v1.5A1.5 1.5 0 0 1 8.5 13h-5A1.5 1.5 0 0 1 2 11.5v-5A1.5 1.5 0 0 1 3.5 5H5Zm1.5 0h2A1.5 1.5 0 0 1 10 6.5v2h1.5V3.5h-5V5Zm-3 1.5v5h5v-5h-5Z" fill="currentColor"/></svg></button>
                 </span>
               </div>
-              <div class="diff-code">\${renderDiff(diff, '3')}</div>
+              <div class="diff-code">\${renderDiff(diff)}</div>
             </div>
           </div>
           <div class="risk-heading">Risk assessment</div>
@@ -5181,17 +5161,6 @@ export function renderApp(options: { colo?: string } = {}): string {
           const pressed = button.getAttribute('aria-pressed') === 'true';
           button.setAttribute('aria-pressed', String(!pressed));
           code?.classList.toggle('wrap', !pressed);
-        });
-        document.querySelector('#diffContext')?.addEventListener('change', (event) => {
-          const context = event.currentTarget.value;
-          const diffRoot = document.querySelector('.diff');
-          const code = document.querySelector('.diff-code');
-          const wrap = document.querySelector('#diffWrapToggle')?.getAttribute('aria-pressed') === 'true';
-          diffRoot?.setAttribute('data-context-lines', context);
-          if (code) {
-            code.innerHTML = renderDiff(diff, context);
-            code.classList.toggle('wrap', wrap);
-          }
         });
         document.querySelector('#reviewFeedback')?.addEventListener('input', (event) => {
           feedbackDraft = event.currentTarget.value;
