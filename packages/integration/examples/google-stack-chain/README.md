@@ -46,7 +46,7 @@ Current snapshot record hashes:
 - A2A receiver follow-up:
   `sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2`
 - ADK Python tool callback:
-  `sha256:70d0bb2c3e38194b065a1872bbf96861b8f9f0802d323c837ede32609b548a79`
+  `sha256:15801af402108603b899b8773b59aa68af71d9e34ee50ec18103afea141f31ed`
 
 The script also writes a local AP2 artifact bundle under `/tmp`.
 

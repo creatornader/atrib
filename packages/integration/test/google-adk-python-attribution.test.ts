@@ -64,12 +64,12 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_ADK_PYTHON_SMOKE !== '1')(
       expect(result.ok).toBe(true)
       expect(result.google_adk_python).toEqual({
         python_package: 'google-adk',
-        version: '2.1.0',
+        version: '2.3.0',
         runner: 'InMemoryRunner',
         plugin: 'BasePlugin',
         tool: 'FunctionTool',
         model: 'BaseLlm',
-        transient_python_packages: ['google-adk==2.1.0'],
+        transient_python_packages: ['google-adk==2.3.0'],
       })
       expect(result.signed_records).toBe(1)
       expect(result.operations).toEqual(['google.adk.python.tool.quote_price'])
@@ -86,6 +86,9 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_ADK_PYTHON_SMOKE !== '1')(
         first_record_is_genesis: true,
         subsequent_records_chain: true,
         subsequent_records_inform_by_previous: true,
+        parent_informed_by: null,
+        parent_informed_by_resolved: [],
+        parent_informed_by_dangling: [],
       })
       expect(result.privacy).toEqual({
         public_records_hash_only: true,

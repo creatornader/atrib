@@ -96,7 +96,7 @@ describe('Google stack chain visual workbench', () => {
     await expect.poll(() => page.locator('#protocolBadge').getAttribute('class')).toContain('ADK')
     await expect
       .poll(() => page.locator('#selectedHash').textContent())
-      .toContain('sha256:70d0bb2c3e38194b065a1872bbf96861b8f9f0802d323c837ede32609b548a79')
+      .toContain('sha256:15801af402108603b899b8773b59aa68af71d9e34ee50ec18103afea141f31ed')
     await expect
       .poll(() => page.locator('#analyticsRows tr.selected').textContent())
       .toContain('ADK Python')
@@ -301,7 +301,7 @@ describe('Google stack chain visual workbench', () => {
       'sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db',
       'sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9',
       'sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2',
-      'sha256:70d0bb2c3e38194b065a1872bbf96861b8f9f0802d323c837ede32609b548a79',
+      'sha256:15801af402108603b899b8773b59aa68af71d9e34ee50ec18103afea141f31ed',
     ])
     expect(
       fixture.analytics.rows.map((row: { trace_id: string | null; span_id: string | null }) => [

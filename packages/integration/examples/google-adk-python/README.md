@@ -1,7 +1,7 @@
 # Google ADK Python plugin attribution example
 
 This example targets Google ADK Python's plugin lifecycle. It runs a real
-`google-adk==2.1.0` `InMemoryRunner`, registers a Python `BasePlugin`, lets a
+`google-adk==2.3.0` `InMemoryRunner`, registers a Python `BasePlugin`, lets a
 scripted ADK model call a real `FunctionTool`, captures the tool callback, and
 then signs one hash-only atrib record for that Python tool outcome.
 
@@ -11,7 +11,7 @@ Run:
 pnpm --filter @atrib/integration google-adk-python-plugin-smoke
 ```
 
-The smoke uses `uv` to install `google-adk==2.1.0` transiently. It does not use a
+The smoke uses `uv` to install `google-adk==2.3.0` transiently. It does not use a
 live model connection.
 
 What this proves:
