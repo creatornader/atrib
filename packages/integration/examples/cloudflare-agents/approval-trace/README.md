@@ -61,11 +61,11 @@ The important atrib differentiators are:
 The current hosted Worker is `https://atrib-cloudflare.nagala.workers.dev/`.
 
 Latest verified proof: `pnpm --filter @atrib/cloudflare-approval-trace
-proof:worker` passed `391/391` checks at `2026-06-19T06:26:47.961Z` from
+proof:worker` passed `391/391` checks at `2026-06-19T16:33:44.297Z` from
 the public commit used for that proof:
-[`4676ef40608b9a10a6701354d91772e24c529366`](https://github.com/creatornader/atrib/commit/4676ef40608b9a10a6701354d91772e24c529366).
+[`386050d59844f5dcd46b9d74374183e062be9f28`](https://github.com/creatornader/atrib/commit/386050d59844f5dcd46b9d74374183e062be9f28).
 The deployed Worker version for that run was
-`34297846-9402-45e4-81ad-93712c0cfbdb`.
+`4f91ae21-7507-450f-8f9e-53ed02a20fa3`.
 
 Open the hosted Worker, start a run, then approve, reject, or request changes.
 When a run finishes, the UI exposes receipt details, trace JSON, and public log
