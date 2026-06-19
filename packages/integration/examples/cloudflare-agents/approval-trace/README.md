@@ -88,8 +88,8 @@ The demo does not publish to the graph or directory services. It keeps the
 runtime proof small: records are signed, submitted to the public log, persisted
 in the demo's trace store, and then checked with the same graph derivation
 function graph-node serves. Directory publication is the next layer when the demo
-needs public capability envelopes for the agent, human approver, or action MCP
-signers.
+needs public capability envelopes for the agent, human approver, or Code Mode
+runtime signers.
 
 For local development:
 
