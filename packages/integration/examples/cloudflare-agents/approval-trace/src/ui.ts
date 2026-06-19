@@ -1560,7 +1560,7 @@ export function renderApp(options: { colo?: string } = {}): string {
       .grid {
         gap: 10px;
         align-items: start;
-        grid-template-columns: minmax(318px, 363px) minmax(500px, 610px) minmax(340px, 523px);
+        grid-template-columns: minmax(318px, 350px) minmax(500px, 630px) minmax(340px, 516px);
         justify-content: center;
         margin: 0 10px;
       }
@@ -1682,8 +1682,8 @@ export function renderApp(options: { colo?: string } = {}): string {
 
       .proposal,
       .timeline {
-        padding-left: 10px;
-        padding-right: 10px;
+        padding-left: 12px;
+        padding-right: 12px;
       }
 
       .proposal {
@@ -2224,15 +2224,24 @@ export function renderApp(options: { colo?: string } = {}): string {
       }
 
       .actions .primary {
+        box-sizing: border-box;
         grid-column: 1;
+        min-width: 0;
+        width: 100%;
       }
 
       .actions .danger {
+        box-sizing: border-box;
         grid-column: 3;
+        min-width: 0;
+        width: 100%;
       }
 
       .actions .secondary {
+        box-sizing: border-box;
         grid-column: 5;
+        min-width: 0;
+        width: 100%;
       }
 
       .button-content {
