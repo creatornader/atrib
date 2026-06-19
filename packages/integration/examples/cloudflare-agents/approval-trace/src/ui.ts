@@ -1682,8 +1682,8 @@ export function renderApp(options: { colo?: string } = {}): string {
 
       .proposal,
       .timeline {
-        padding-left: 12px;
-        padding-right: 12px;
+        padding-left: 10px;
+        padding-right: 10px;
       }
 
       .proposal {
