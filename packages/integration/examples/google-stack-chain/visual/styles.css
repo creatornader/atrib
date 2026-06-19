@@ -66,8 +66,8 @@ code {
   padding: 9px 11px;
   position: absolute;
   text-decoration: none;
-  top: 12px;
-  transform: translateY(-120%);
+  top: 0;
+  transform: translateY(calc(-100% - 12px));
   transition: transform 160ms ease;
   z-index: 20;
 }
@@ -75,7 +75,7 @@ code {
 .skip-link:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
-  transform: translateY(0);
+  transform: translateY(12px);
 }
 
 .shell {

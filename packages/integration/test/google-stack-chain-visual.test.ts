@@ -63,6 +63,9 @@ describe('Google stack chain visual workbench', () => {
     await page.goto(baseUrl)
     await expect.poll(() => page.title()).toBe('Google stack proof chain')
     await expect.poll(() => page.getByTestId('google-stack-visual').isVisible()).toBe(true)
+    await expect
+      .poll(() => page.locator('.skip-link').evaluate((element) => element.getBoundingClientRect().bottom))
+      .toBeLessThanOrEqual(0)
     await expect.poll(() => page.locator('#stageTitle').textContent()).toBe('Live proof chain')
     await expect
       .poll(() => page.locator('.empty-chain').textContent())
