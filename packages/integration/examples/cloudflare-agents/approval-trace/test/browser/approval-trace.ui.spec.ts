@@ -787,28 +787,26 @@ async function expectReferenceDesktopPrimaryCaption(page: Page): Promise<void> {
 async function expectReferenceDesktopRiskTextFits(page: Page): Promise<void> {
   const riskGeometry = await page.evaluate<{
     gap: number
-    detailsInside: boolean
-    visualGap: number
+    valueInside: boolean
     textOverflow: string
+    whiteSpace: string
   }>(`(() => {
     const bar = document.querySelector('.risk-bar')
     const value = bar?.querySelector('.value')
-    const details = bar?.querySelector('.risk-details-toggle')
     const style = value ? getComputedStyle(value) : null
     const barRect = bar?.getBoundingClientRect()
     const valueRect = value?.getBoundingClientRect()
-    const detailsRect = details?.getBoundingClientRect()
     return {
       gap: bar ? Number.parseFloat(getComputedStyle(bar).columnGap) : 0,
-      detailsInside: Boolean(barRect && detailsRect && detailsRect.right <= barRect.right + 1),
-      visualGap: valueRect && detailsRect ? Math.round(detailsRect.left - valueRect.right) : -999,
+      valueInside: Boolean(barRect && valueRect && valueRect.bottom <= barRect.bottom + 1),
       textOverflow: style?.textOverflow ?? '',
+      whiteSpace: style?.whiteSpace ?? '',
     }
   })()`)
-  expect(riskGeometry.gap).toBeLessThanOrEqual(7)
-  expect(riskGeometry.textOverflow).toBe('ellipsis')
-  expect(riskGeometry.visualGap).toBeGreaterThanOrEqual(4)
-  expect(riskGeometry.detailsInside).toBe(true)
+  expect(riskGeometry.gap).toBeLessThanOrEqual(8)
+  expect(riskGeometry.textOverflow).toBe('clip')
+  expect(riskGeometry.whiteSpace).toBe('normal')
+  expect(riskGeometry.valueInside).toBe(true)
 }
 
 async function expectReferenceVerificationRows(page: Page): Promise<void> {
@@ -1166,11 +1164,11 @@ async function expectReferenceDesktopCenterStack(page: Page): Promise<void> {
       riskBarHeight: Math.round(riskBar.height),
     }
   })()`)
-  expect(stackGeometry.diffCodeHeight).toBeGreaterThanOrEqual(313)
-  expect(stackGeometry.diffCodeHeight).toBeLessThanOrEqual(316)
+  expect(stackGeometry.diffCodeHeight).toBeGreaterThanOrEqual(305)
+  expect(stackGeometry.diffCodeHeight).toBeLessThanOrEqual(308)
   expect(stackGeometry.actionBottomGap).toBeGreaterThanOrEqual(12)
-  expect(stackGeometry.actionBottomGap).toBeLessThanOrEqual(18)
-  expect(stackGeometry.actionsY).toBeGreaterThanOrEqual(690)
+  expect(stackGeometry.actionBottomGap).toBeLessThanOrEqual(24)
+  expect(stackGeometry.actionsY).toBeGreaterThanOrEqual(686)
   expect(stackGeometry.actionsY).toBeLessThanOrEqual(698)
   expect(stackGeometry.riskBarHeight).toBeGreaterThanOrEqual(38)
 }
@@ -1569,9 +1567,8 @@ test.describe('Cloudflare approval trace browser UI', () => {
       const pendingTimestamps = pendingRun.records.map((record) => record.record.timestamp)
       expect(new Set(pendingTimestamps).size).toBe(pendingTimestamps.length)
 
-      await page.locator('#riskDetailsToggle').click()
-      await expect(page.locator('#riskDetails')).toBeVisible()
-      await expect(page.locator('#riskDetails')).toContainText('Code Mode approval gate')
+      await expect(page.locator('#riskDetailsToggle')).toHaveCount(0)
+      await expect(page.locator('#riskDetails')).toHaveCount(0)
       await expect(page.locator('.diff-code')).toContainText('verifyCheckoutSession')
       await expect(page.locator('.diff-code')).toContainText('missing_cart')
       await expect(page.locator('.diff-code')).toContainText('checkoutId')

@@ -2020,7 +2020,7 @@ export function renderApp(options: { colo?: string } = {}): string {
       .diff pre {
         font-size: 10px;
         line-height: 14.2px;
-        max-height: 315px;
+        max-height: 307px;
       }
 
       .diff-code {
@@ -2032,9 +2032,9 @@ export function renderApp(options: { colo?: string } = {}): string {
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 10px;
         line-height: 14.2px;
-        max-height: 315px;
+        max-height: 307px;
         max-width: 100%;
-        height: 315px;
+        height: 307px;
         overflow: auto;
         padding: 8px 0;
         width: 100%;
@@ -2088,10 +2088,10 @@ export function renderApp(options: { colo?: string } = {}): string {
         border: 1px solid #ffd09a;
         border-radius: 8px;
         display: grid;
-        gap: 7px;
-        grid-template-columns: auto auto minmax(0, 1fr) minmax(42px, auto);
+        gap: 8px;
+        grid-template-columns: auto auto minmax(0, 1fr);
         min-width: 0;
-        padding: 8px 10px;
+        padding: 8px 9px;
       }
 
       .risk-icon {
@@ -2118,47 +2118,10 @@ export function renderApp(options: { colo?: string } = {}): string {
 
       .risk-bar .value {
         font-size: 12px;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .risk-details-toggle {
-        align-items: center;
-        background: transparent;
-        border: 0;
-        color: var(--muted);
-        cursor: pointer;
-        display: inline-flex;
-        font-size: 12px;
-        gap: 4px;
-        padding: 0;
-        white-space: nowrap;
-      }
-
-      .risk-details-toggle:hover,
-      .risk-details-toggle:focus-visible {
-        color: var(--blue);
-        outline: 0;
-        text-decoration: underline;
-      }
-
-      .risk-details {
-        background: #fffaf3;
-        border: 1px solid #ffd09a;
-        border-radius: 8px;
-        color: var(--ink);
-        display: grid;
-        font-size: 12px;
-        gap: 5px;
         line-height: 1.35;
-        margin-top: -2px;
-        padding: 8px 10px;
-      }
-
-      .risk-details[hidden] {
-        display: none;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        white-space: normal;
       }
 
       .native-runtime-inline {
@@ -3436,11 +3399,6 @@ export function renderApp(options: { colo?: string } = {}): string {
         font-weight: 750;
         justify-content: space-between;
         margin: 0 0 -4px;
-      }
-
-      .risk-details-toggle svg {
-        height: 12px;
-        width: 12px;
       }
 
       @keyframes verifyPulse {
@@ -5122,12 +5080,6 @@ export function renderApp(options: { colo?: string } = {}): string {
             <span class="risk-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 15 14H1L8 1.5Zm0 4v4m0 2.5h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></span>
             <span class="risk-level">Medium</span>
             <span class="value">\${body.risk ?? 'requires_human_approval'}</span>
-            <button class="risk-details-toggle" id="riskDetailsToggle" type="button" aria-expanded="false" aria-controls="riskDetails">Details <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg></button>
-          </div>
-          <div class="risk-details" id="riskDetails" hidden>
-            <strong>Code Mode approval gate</strong>
-            <span>This proposal changes code for a payment-impacting Workers checkout route. CodemodeRuntime pauses before the write_file side effect.</span>
-            <span>atrib signs the payload hash, connector id, human decision, runtime replay, and audit handoff as separate records.</span>
           </div>
           \${feedbackRecord ? \`
             <div class="feedback-summary">
@@ -5147,14 +5099,6 @@ export function renderApp(options: { colo?: string } = {}): string {
             </label>
           \` : ''}
         \`;
-        document.querySelector('#riskDetailsToggle')?.addEventListener('click', (event) => {
-          const button = event.currentTarget;
-          const details = document.querySelector('#riskDetails');
-          if (!details) return;
-          const expanded = button.getAttribute('aria-expanded') === 'true';
-          button.setAttribute('aria-expanded', String(!expanded));
-          details.hidden = expanded;
-        });
         document.querySelector('#diffWrapToggle')?.addEventListener('click', (event) => {
           const button = event.currentTarget;
           const code = document.querySelector('.diff-code');
