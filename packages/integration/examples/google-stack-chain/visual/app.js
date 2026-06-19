@@ -1,6 +1,7 @@
 const state = {
   data: null,
-  selectedId: 'ap2',
+  selectedId: null,
+  viewMode: 'live',
   runtimeUrl: '',
   runtimeState: null,
   activeRun: null,
@@ -17,6 +18,7 @@ const runtimeStages = [
     protocol: 'AP2',
     label: 'AP2 evidence gate',
     actor: 'atrib-google-evidence-runtime',
+    source: 'verified replay packet',
     waiting: 'Waiting for AP2 receipt, VI evidence, and counterparty checks.',
     running: 'Verifying the AP2 packet before any downstream action runs.',
     complete: 'AP2 evidence accepted. Its atrib record can now become parent context.',
@@ -27,6 +29,7 @@ const runtimeStages = [
     protocol: 'A2A',
     label: 'A2A verifier handoff',
     actor: 'a2a-receiving-agent',
+    source: 'fresh signed handoff',
     waiting: 'Waiting for verified AP2 parent evidence.',
     running: 'Creating the A2A handoff from the accepted AP2 record.',
     complete: 'A2A receiver signed a follow-up that cites the verified handoff evidence.',
@@ -37,6 +40,7 @@ const runtimeStages = [
     protocol: 'ADK JS',
     label: 'ADK JS tool callback',
     actor: 'google_adk_atrib_smoke_agent',
+    source: 'fresh signed callback',
     waiting: 'Waiting for the A2A receiver record.',
     running: 'Running the ADK FunctionTool callback with the A2A parent record.',
     complete: 'ADK callback signed a record that cites the A2A receiver follow-up.',
@@ -57,6 +61,7 @@ const nodes = {
   caveatList: document.querySelector('#caveatList'),
   analyticsRows: document.querySelector('#analyticsRows'),
   analyticsCaveat: document.querySelector('#analyticsCaveat'),
+  analyticsTitle: document.querySelector('#analyticsTitle'),
   stageMode: document.querySelector('#stageMode'),
   selectedTitle: document.querySelector('#selectedTitle'),
   selectedHash: document.querySelector('#selectedHash'),
@@ -72,21 +77,24 @@ const nodes = {
   runtimeRecordHash: document.querySelector('#runtimeRecordHash'),
   runtimeAdkHash: document.querySelector('#runtimeAdkHash'),
   runtimeSource: document.querySelector('#runtimeSource'),
+  runtimeRailTitle: document.querySelector('#runtimeRailTitle'),
+  runtimeStatusDot: document.querySelector('#runtimeStatusDot'),
   runtimeFlow: document.querySelector('#runtimeFlow'),
   runtimeChecks: document.querySelector('#runtimeChecks'),
   runtimePrompt: document.querySelector('#runtimePrompt'),
   startRuntimeRun: document.querySelector('#startRuntimeRun'),
   refreshRuntime: document.querySelector('#refreshRuntime'),
   writeRuntimeAnalytics: document.querySelector('#writeRuntimeAnalytics'),
+  viewLiveRun: document.querySelector('#viewLiveRun'),
+  viewReferenceSnapshot: document.querySelector('#viewReferenceSnapshot'),
+  stageTitle: document.querySelector('#stageTitle'),
   toast: document.querySelector('#toast'),
 }
 
 async function init() {
   state.data = await loadSnapshot()
   state.runtimeUrl = getRuntimeUrl()
-  state.selectedId = state.data.nodes[0].id
   renderStatic()
-  selectNode(state.selectedId)
   initRuntime()
 }
 
@@ -109,11 +117,12 @@ async function loadSnapshot() {
 function renderStatic() {
   const data = state.data
   nodes.status.textContent = data.status
-  nodes.snapshotLabel.textContent = `${data.snapshot.schema}, ${data.nodes.length} records`
+  nodes.snapshotLabel.textContent = `reference snapshot loaded, ${data.nodes.length} records`
   nodes.strategyText.textContent = data.strategy
   nodes.snapshotSchema.textContent = data.snapshot.schema
   nodes.commandText.textContent = data.command
-  nodes.analyticsCaveat.textContent = data.analytics.caveat
+  nodes.analyticsCaveat.textContent =
+    'Runtime rows appear after Start run. The pinned fixture is available in Reference view.'
 
   nodes.valueList.replaceChildren(
     ...data.value_add.map((item) => {
@@ -131,10 +140,8 @@ function renderStatic() {
     }),
   )
 
-  renderChainCollection(data.nodes)
-  nodes.stageMode.textContent =
-    'Pinned local snapshot. Start the active runtime to replace this with one Cloud Run e2e path.'
-  nodes.analyticsRows.replaceChildren(...data.analytics.rows.map(renderAnalyticsRow))
+  renderRuntimeFlow()
+  renderLiveWaiting()
 
   nodes.copyCommand.addEventListener('click', () => copyText(data.command, 'Command copied'))
   nodes.copyHash.addEventListener('click', () => {
@@ -151,11 +158,14 @@ function renderStatic() {
       button.classList.add('active')
       button.setAttribute('aria-pressed', 'true')
       const view = button.dataset.view
+      if (view === 'live' || view === 'reference') {
+        setViewMode(view)
+      }
       if (view === 'analytics') {
         scrollToSection(document.querySelector('#analyticsBand'))
       }
       if (view === 'limits') {
-        scrollToSection(document.querySelector('.muted-panel'))
+        scrollToSection(document.querySelector('#proofBoundaries'))
       }
     })
   })
@@ -163,9 +173,126 @@ function renderStatic() {
   nodes.startRuntimeRun.addEventListener('click', () => startRuntimeRun(false))
   nodes.refreshRuntime.addEventListener('click', () => refreshRuntimePanel())
   nodes.writeRuntimeAnalytics.addEventListener('click', () => startRuntimeRun(true))
+  nodes.viewLiveRun.addEventListener('click', () => setViewMode('live'))
+  nodes.viewReferenceSnapshot.addEventListener('click', () => setViewMode('reference'))
+}
+
+function setViewMode(mode) {
+  state.viewMode = mode
+  updateViewButtons()
+  if (mode === 'reference') {
+    renderReferenceSnapshot()
+    return
+  }
+  if (state.activeRun || state.runtimeSteps.length || state.runtimeCurrentKey) {
+    renderRuntimeChainFromProgress(state.activeRun)
+    const selected = getSelectedNode()
+    selectNode(selected?.id ?? (state.activeRun?.ok ? 'runtime-adk-js' : 'runtime-ap2'))
+    renderRuntimeAnalyticsRows()
+    return
+  }
+  renderLiveWaiting()
+}
+
+function updateViewButtons() {
+  const live = state.viewMode === 'live'
+  nodes.viewLiveRun.classList.toggle('active', live)
+  nodes.viewReferenceSnapshot.classList.toggle('active', !live)
+  nodes.viewLiveRun.setAttribute('aria-pressed', String(live))
+  nodes.viewReferenceSnapshot.setAttribute('aria-pressed', String(!live))
+
+  document.querySelectorAll('.segment').forEach((button) => {
+    const active = button.dataset.view === state.viewMode
+    button.classList.toggle('active', active)
+    button.setAttribute('aria-pressed', String(active))
+  })
+}
+
+function renderLiveWaiting() {
+  state.selectedId = null
+  state.runtimeChainNodes = null
+  nodes.stageTitle.textContent = 'Live proof chain'
+  nodes.stageMode.textContent =
+    'Start a runtime run to populate the verifier chain. The AP2 packet is replayed; A2A and ADK records are freshly signed during the run.'
+  renderChainEmpty(
+    'Runtime records will appear here',
+    'The reference artifact stays available, but this main chain remains empty until Cloud Run returns a run.',
+  )
+  renderInspectorEmpty(
+    'No live record selected',
+    'Start run to inspect the AP2 gate, A2A handoff, and ADK callback records.',
+  )
+  renderAnalyticsEmpty('Runtime analytics rows appear after Start run.')
+}
+
+function renderReferenceSnapshot() {
+  state.selectedId = state.data.nodes[0].id
+  state.runtimeChainNodes = null
+  nodes.stageTitle.textContent = 'Reference artifact'
+  nodes.stageMode.textContent =
+    'Pinned local AP2, A2A, and ADK Python proof snapshot. It is inspectable evidence, not the active Cloud Run run.'
+  renderChainCollection(state.data.nodes)
+  nodes.analyticsTitle.textContent = 'Reference analytics fixture'
+  nodes.analyticsCaveat.textContent = state.data.analytics.caveat
+  nodes.analyticsRows.replaceChildren(...state.data.analytics.rows.map(renderAnalyticsRow))
+  selectNode(state.selectedId)
+}
+
+function renderChainEmpty(title, detail) {
+  const empty = document.createElement('div')
+  empty.className = 'empty-chain'
+  empty.innerHTML = `
+    <span class="empty-icon" aria-hidden="true"></span>
+    <div>
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeHtml(detail)}</p>
+    </div>
+  `
+  nodes.chain.classList.add('is-empty')
+  nodes.chain.replaceChildren(empty)
+  nodes.mobileTabs.replaceChildren()
+}
+
+function renderInspectorEmpty(title, detail) {
+  nodes.protocolBadge.textContent = 'Live'
+  nodes.selectedTitle.textContent = title
+  nodes.selectedHash.textContent = 'pending'
+  nodes.copyHash.disabled = true
+  nodes.parentList.replaceChildren(emptyText('No parent record yet.'))
+  nodes.checkList.replaceChildren(emptyListItem('Waiting for runtime evidence.'))
+  nodes.evidenceText.textContent = detail
+  nodes.valueText.textContent =
+    'atrib turns accepted prior evidence into parent context for the next agent action.'
+  document.querySelectorAll('[data-node-id]').forEach((item) => {
+    item.classList.remove('active')
+    if (item.matches('button')) item.setAttribute('aria-pressed', 'false')
+  })
+}
+
+function renderAnalyticsEmpty(message) {
+  nodes.analyticsTitle.textContent = 'Runtime analytics rows'
+  nodes.analyticsCaveat.textContent = message
+  const tr = document.createElement('tr')
+  tr.className = 'empty-row'
+  tr.innerHTML = `<td colspan="5">${escapeHtml(message)}</td>`
+  nodes.analyticsRows.replaceChildren(tr)
+}
+
+function emptyText(text) {
+  const span = document.createElement('span')
+  span.textContent = text
+  return span
+}
+
+function emptyListItem(text) {
+  const li = document.createElement('li')
+  li.className = 'neutral'
+  li.textContent = text
+  return li
 }
 
 function renderChainCollection(items) {
+  nodes.chain.classList.remove('is-empty')
   nodes.chain.replaceChildren(...items.map(renderChainNode))
   nodes.mobileTabs.replaceChildren(...items.map(renderMobileTab))
 }
@@ -183,6 +310,9 @@ function renderChainNode(item, index) {
         formatEvent(item.runtime_status),
       )}</span>`
     : `<span class="badge">${escapeHtml(item.verifier)}</span>`
+  const sourceBadge = item.source
+    ? `<span class="badge source-badge">${escapeHtml(item.source)}</span>`
+    : ''
   button.innerHTML = `
     <span class="node-index">${index + 1}</span>
     <div>
@@ -193,6 +323,7 @@ function renderChainNode(item, index) {
     <p>${escapeHtml(item.evidence)}</p>
     <div class="node-footer">
       <span class="protocol-pill ${protocolClass(item.protocol)}">${escapeHtml(item.protocol)}</span>
+      ${sourceBadge}
       ${statusBadge}
     </div>
   `
@@ -275,9 +406,12 @@ async function refreshRuntimePanel() {
   }
   try {
     renderRuntimePending('Refreshing run')
-    const response = await fetch(`${state.runtimeUrl}/api/runs/${encodeURIComponent(state.activeRun.run_id)}`, {
-      headers: { accept: 'application/json' },
-    })
+    const response = await fetch(
+      `${state.runtimeUrl}/api/runs/${encodeURIComponent(state.activeRun.run_id)}`,
+      {
+        headers: { accept: 'application/json' },
+      },
+    )
     const payload = await response.json()
     if (!response.ok || payload.ok !== true) {
       throw new Error(payload.error ?? `Runtime returned HTTP ${response.status}`)
@@ -285,7 +419,10 @@ async function refreshRuntimePanel() {
     state.activeRun = payload.run
     renderActiveRuntimeRun(payload.run, null)
   } catch (error) {
-    renderRuntimeUnavailable('Refresh failed', error instanceof Error ? error.message : String(error))
+    renderRuntimeUnavailable(
+      'Refresh failed',
+      error instanceof Error ? error.message : String(error),
+    )
   }
 }
 
@@ -376,7 +513,8 @@ function handleRuntimeStreamMessage(message) {
     state.runtimeCurrentKey = 'ap2_gate'
     nodes.runtimeRunId.textContent = event.run_id
     nodes.runtimeRunId.title = event.run_id
-    nodes.runtimeSource.textContent = event.mode === 'replay' ? 'Cloud Run replay' : 'provided packet'
+    nodes.runtimeSource.textContent =
+      event.mode === 'replay' ? 'Cloud Run replay' : 'provided packet'
     renderRuntimeFlow()
     renderRuntimeChainFromProgress()
     selectNode('runtime-ap2')
@@ -416,15 +554,12 @@ function renderRuntimeState(payload) {
   state.runtimeSteps = []
   state.runtimeCurrentKey = null
   state.runtimeChainNodes = null
-  renderChainCollection(state.data.nodes)
-  if (!getSelectedNode()) state.selectedId = state.data.nodes[0].id
-  selectNode(state.selectedId)
-  nodes.stageMode.textContent =
-    'Pinned local snapshot. Start the active runtime to replace this with one Cloud Run e2e path.'
+  if (state.viewMode === 'live') renderLiveWaiting()
   nodes.runtimeStatus.textContent = gate.allowed ? 'Ready' : 'Blocked'
   nodes.runtimeStatus.className = `runtime-chip ${gate.allowed ? 'ready' : 'bad'}`
+  setRuntimeRail(gate.allowed ? 'Runtime ready' : 'Runtime blocked', gate.allowed ? 'ready' : 'bad')
   nodes.runtimeReason.textContent = gate.allowed
-    ? 'Cloud Run is connected. Start a run to verify AP2, hand off through A2A, then execute the ADK JS callback from that parent evidence.'
+    ? 'Cloud Run is connected. Start a run to verify the AP2 replay packet, then sign fresh A2A and ADK records.'
     : gate.reason
   nodes.startRuntimeRun.disabled = false
   nodes.startRuntimeRun.textContent = 'Start run'
@@ -440,13 +575,18 @@ function renderRuntimeState(payload) {
   nodes.writeRuntimeAnalytics.textContent = state.runtimeCanWrite ? 'Write rows' : 'Write locked'
   renderRuntimeFlow()
   nodes.runtimeChecks.replaceChildren(...renderRuntimePreflightChecks(gate))
-  nodes.analyticsRows.replaceChildren(...state.data.analytics.rows.map(renderAnalyticsRow))
+  if (state.viewMode === 'live')
+    renderAnalyticsEmpty('Runtime analytics rows appear after Start run.')
 }
 
 function renderActiveRuntimeRun(run, analyticsWrite) {
   const adkStep = run.steps.find((step) => step.key === 'adk_tool_callback')
   nodes.runtimeStatus.textContent = run.status === 'complete' ? 'Complete' : 'Blocked'
   nodes.runtimeStatus.className = `runtime-chip ${run.ok ? 'good' : 'bad'}`
+  setRuntimeRail(
+    run.status === 'complete' ? 'Runtime complete' : 'Runtime blocked',
+    run.ok ? 'good' : 'bad',
+  )
   nodes.runtimeReason.textContent = run.value_add?.pre_action_trust_transfer ?? run.gate.reason
   nodes.startRuntimeRun.disabled = false
   nodes.startRuntimeRun.textContent = 'Run again'
@@ -463,11 +603,13 @@ function renderActiveRuntimeRun(run, analyticsWrite) {
   state.runtimeSteps = run.steps
   state.runtimeCurrentKey = null
   renderRuntimeFlow()
+  state.viewMode = 'live'
+  updateViewButtons()
   renderRuntimeChainFromProgress(run)
   nodes.runtimeChecks.replaceChildren(...run.steps.map(renderRuntimeStep))
-  nodes.analyticsRows.replaceChildren(...run.analytics_rows.map(renderRuntimeAnalyticsRow))
+  renderRuntimeAnalyticsRows()
   nodes.stageMode.textContent =
-    'Active Cloud Run path. These cards come from the run returned by the runtime API.'
+    'Active runtime path. AP2 is a verified replay packet; A2A and ADK are freshly signed for this run.'
   selectNode(run.ok ? 'runtime-adk-js' : 'runtime-ap2')
   if (analyticsWrite?.error) showToast(formatEvent(analyticsWrite.error))
 }
@@ -476,8 +618,11 @@ function renderRuntimeStarted(writeAnalytics) {
   state.activeRun = null
   state.runtimeSteps = []
   state.runtimeCurrentKey = 'ap2_gate'
+  state.viewMode = 'live'
+  updateViewButtons()
   nodes.runtimeStatus.textContent = 'Running'
   nodes.runtimeStatus.className = 'runtime-chip pending'
+  setRuntimeRail('Runtime running', 'pending')
   nodes.runtimeReason.textContent = writeAnalytics
     ? 'Streaming the AP2 to A2A to ADK path, then attempting the analytics write.'
     : 'Streaming the AP2 to A2A to ADK path from the runtime API.'
@@ -492,7 +637,7 @@ function renderRuntimeStarted(writeAnalytics) {
   nodes.runtimeAdkHash.title = ''
   nodes.runtimeSource.textContent = 'Cloud Run stream'
   nodes.stageMode.textContent =
-    'Active runtime stream. The chain updates when each real runtime step completes.'
+    'Active runtime stream. The chain updates as runtime evidence arrives.'
   nodes.runtimeChecks.replaceChildren()
   renderRuntimeFlow()
   renderRuntimeChainFromProgress()
@@ -503,6 +648,7 @@ function renderRuntimeStepStarted(event) {
   const stage = runtimeStageByKey(event.key)
   nodes.runtimeStatus.textContent = 'Running'
   nodes.runtimeStatus.className = 'runtime-chip pending'
+  setRuntimeRail(`Running ${event.protocol}`, 'pending')
   nodes.runtimeReason.textContent = stage?.running ?? event.label
   nodes.startRuntimeRun.textContent =
     event.key === 'a2a_handoff'
@@ -516,10 +662,9 @@ function renderRuntimeStepStarted(event) {
 }
 
 function renderRuntimeStepCompleted(step) {
-  state.runtimeSteps = [
-    ...state.runtimeSteps.filter((item) => item.key !== step.key),
-    step,
-  ].sort((left, right) => runtimeStageIndex(left.key) - runtimeStageIndex(right.key))
+  state.runtimeSteps = [...state.runtimeSteps.filter((item) => item.key !== step.key), step].sort(
+    (left, right) => runtimeStageIndex(left.key) - runtimeStageIndex(right.key),
+  )
   state.runtimeCurrentKey = null
   nodes.runtimeReason.textContent = step.detail
   if (step.key === 'ap2_gate') {
@@ -554,13 +699,20 @@ function renderRuntimeFlow() {
       li.className = `runtime-flow-step ${status}`
       const detail =
         step?.detail ??
-        (status === 'running' ? stage.running : status === 'complete' ? stage.complete : stage.waiting)
-      const hash = step?.record_hash ? `<code>${escapeHtml(shortHash(step.record_hash))}</code>` : ''
+        (status === 'running'
+          ? stage.running
+          : status === 'complete'
+            ? stage.complete
+            : stage.waiting)
+      const hash = step?.record_hash
+        ? `<code>${escapeHtml(shortHash(step.record_hash))}</code>`
+        : ''
       li.innerHTML = `
         <span class="flow-dot" aria-hidden="true"></span>
         <div>
           <strong>${escapeHtml(stage.label)}</strong>
-          <p>${escapeHtml(detail)}</p>
+          <p>${escapeHtml(stage.source)}</p>
+          <span class="flow-detail">${escapeHtml(detail)}</span>
           ${hash}
         </div>
         <span class="flow-state">${escapeHtml(formatEvent(status))}</span>
@@ -601,8 +753,22 @@ function renderRuntimeChainFromProgress(run = state.activeRun) {
   renderChainCollection(state.runtimeChainNodes)
 }
 
+function renderRuntimeAnalyticsRows() {
+  if (!state.activeRun?.analytics_rows?.length) {
+    renderAnalyticsEmpty('Runtime analytics rows appear as AP2, A2A, and ADK stages complete.')
+    return
+  }
+  nodes.analyticsTitle.textContent = 'Runtime analytics rows'
+  nodes.analyticsCaveat.textContent =
+    'Rows come from the active runtime response and carry atrib record hashes plus parent hashes.'
+  nodes.analyticsRows.replaceChildren(
+    ...state.activeRun.analytics_rows.map(renderRuntimeAnalyticsRow),
+  )
+}
+
 function buildRuntimeChainNodes(run) {
-  const ap2Step = runtimeStepByKey('ap2_gate') ?? run?.steps?.find((step) => step.key === 'ap2_gate')
+  const ap2Step =
+    runtimeStepByKey('ap2_gate') ?? run?.steps?.find((step) => step.key === 'ap2_gate')
   const a2aStep =
     runtimeStepByKey('a2a_handoff') ?? run?.steps?.find((step) => step.key === 'a2a_handoff')
   const adkStep =
@@ -627,14 +793,27 @@ function buildRuntimeChainNodes(run) {
       record_hash: recordHash,
       evidence:
         step?.detail ??
-        (status === 'running' ? stage.running : status === 'complete' ? stage.complete : stage.waiting),
+        (status === 'running'
+          ? stage.running
+          : status === 'complete'
+            ? stage.complete
+            : stage.waiting),
       parents: parentsForRuntimeNode(stage.key, step, run),
       checks,
       verifier: 'runtime stream',
       value: valueForRuntimeStage(stage.key),
+      source: sourceForRuntimeStage(stage.key, run),
       runtime_status: status,
     }
   })
+}
+
+function sourceForRuntimeStage(key, run) {
+  if (key === 'ap2_gate') {
+    return run?.mode === 'provided_packet' ? 'provided AP2 packet' : 'verified replay packet'
+  }
+  if (key === 'a2a_handoff') return 'fresh signed handoff'
+  return 'fresh signed callback'
 }
 
 function checksForRuntimeNode(key, step, run) {
@@ -667,7 +846,9 @@ function parentsForRuntimeNode(key, step, run) {
 
 function runtimeActorForStage(stage, run) {
   if (stage.key === 'adk_tool_callback') {
-    return run?.analytics_rows?.find((row) => row.event_type.includes('adk_js'))?.agent ?? stage.actor
+    return (
+      run?.analytics_rows?.find((row) => row.event_type.includes('adk_js'))?.agent ?? stage.actor
+    )
   }
   return stage.actor
 }
@@ -704,6 +885,7 @@ function runtimeStatusForStage(stage, step = runtimeStepByKey(stage.key)) {
 function renderRuntimePending(label) {
   nodes.runtimeStatus.textContent = label
   nodes.runtimeStatus.className = 'runtime-chip pending'
+  setRuntimeRail(label, 'pending')
   nodes.runtimeReason.textContent = 'Waiting for the verifier endpoint.'
   nodes.startRuntimeRun.disabled = true
   nodes.startRuntimeRun.textContent = label
@@ -717,6 +899,7 @@ function renderRuntimeUnavailable(label, reason) {
   state.runtimeChainNodes = null
   nodes.runtimeStatus.textContent = label
   nodes.runtimeStatus.className = 'runtime-chip idle'
+  setRuntimeRail(label, 'idle')
   nodes.runtimeReason.textContent = reason
   nodes.runtimeDecision.textContent = 'not connected'
   nodes.startRuntimeRun.disabled = !state.runtimeUrl
@@ -729,9 +912,12 @@ function renderRuntimeUnavailable(label, reason) {
   nodes.runtimeChecks.replaceChildren()
   nodes.writeRuntimeAnalytics.disabled = true
   nodes.writeRuntimeAnalytics.textContent = 'Write locked'
-  renderChainCollection(state.data.nodes)
-  selectNode(state.data.nodes[0].id)
-  nodes.analyticsRows.replaceChildren(...state.data.analytics.rows.map(renderAnalyticsRow))
+  if (state.viewMode === 'live') renderLiveWaiting()
+}
+
+function setRuntimeRail(title, status) {
+  nodes.runtimeRailTitle.textContent = title
+  nodes.runtimeStatusDot.className = `status-dot ${status}`
 }
 
 function renderRuntimeAnalyticsRow(row) {
@@ -770,10 +956,17 @@ function nodeIdForRuntimeRow(row) {
 function selectNode(id) {
   state.selectedId = id
   const selected = getSelectedNode() ?? getDisplayedNodes()[0]
-  if (!selected) return
+  if (!selected) {
+    renderInspectorEmpty(
+      state.viewMode === 'reference' ? 'No reference record selected' : 'No live record selected',
+      'Select a record once the current view has records.',
+    )
+    return
+  }
   state.selectedId = selected.id
   nodes.selectedTitle.textContent = selected.label
   nodes.selectedHash.textContent = selected.record_hash
+  nodes.copyHash.disabled = false
   nodes.protocolBadge.textContent = selected.protocol
   nodes.evidenceText.textContent = selected.evidence
   nodes.valueText.textContent = selected.value
@@ -818,7 +1011,8 @@ function getSelectedNode() {
 }
 
 function getDisplayedNodes() {
-  return state.runtimeChainNodes?.length ? state.runtimeChainNodes : state.data.nodes
+  if (state.viewMode === 'reference') return state.data.nodes
+  return state.runtimeChainNodes?.length ? state.runtimeChainNodes : []
 }
 
 function getRuntimeUrl() {

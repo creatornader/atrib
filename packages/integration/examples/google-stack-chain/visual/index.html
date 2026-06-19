@@ -14,125 +14,145 @@
           <p class="eyebrow">AP2 / A2A / ADK proof workbench</p>
           <h1>Google stack proof chain</h1>
           <p class="subline">
-            AP2 evidence becomes signed parent context for A2A, then ADK JS signs
-            the next tool callback from that verified chain.
+            AP2 evidence becomes signed parent context for A2A, then ADK JS signs the next tool
+            callback from that verified chain.
           </p>
-        </div>
-        <div class="run-strip" aria-label="proof status">
-          <span class="status-dot" aria-hidden="true"></span>
-          <div>
-            <strong id="proofStatus">Loading&hellip;</strong>
-            <span id="snapshotLabel">Reading local snapshot&hellip;</span>
-          </div>
         </div>
       </header>
 
-      <section class="panel compact runtime-card" aria-label="live runtime verifier">
-        <div class="runtime-control">
-          <div class="panel-head">
-            <h2>Active runtime</h2>
-            <span class="runtime-chip idle" id="runtimeStatus" aria-live="polite">Idle</span>
-          </div>
-          <p class="runtime-reason" id="runtimeReason">
-            Waiting for Cloud Run.
-          </p>
-          <label class="runtime-prompt">
-            <span>Prompt</span>
-            <textarea id="runtimePrompt" rows="2">Continue only if the AP2 evidence verifies, then quote the next atlas-kit action.</textarea>
-          </label>
-          <div class="runtime-actions">
-            <button class="primary-action" id="startRuntimeRun" type="button">
-              Start run
-            </button>
-            <button class="secondary-action" id="refreshRuntime" type="button">
-              Refresh
-            </button>
-            <button class="secondary-action" id="writeRuntimeAnalytics" type="button">
-              Write rows
-            </button>
+      <section
+        class="workflow-rail"
+        id="workflowRail"
+        aria-label="active runtime progress"
+        aria-live="polite"
+      >
+        <div class="rail-main">
+          <span class="status-dot pending" id="runtimeStatusDot" aria-hidden="true"></span>
+          <div>
+            <strong id="runtimeRailTitle">Runtime waiting</strong>
+            <p class="runtime-reason" id="runtimeReason">
+              Start a run to verify the AP2 replay packet, then sign fresh A2A and ADK records.
+            </p>
           </div>
         </div>
         <ol class="runtime-flow" id="runtimeFlow" aria-label="active runtime flow"></ol>
-        <div class="runtime-meta">
-          <dl class="facts runtime-facts">
-            <div>
-              <dt>Run</dt>
-              <dd><code id="runtimeRunId">not started</code></dd>
-            </div>
-            <div>
-              <dt>Decision</dt>
-              <dd id="runtimeDecision">not connected</dd>
-            </div>
-            <div>
-              <dt>AP2 record</dt>
-              <dd><code id="runtimeRecordHash">pending</code></dd>
-            </div>
-            <div>
-              <dt>ADK record</dt>
-              <dd><code id="runtimeAdkHash">pending</code></dd>
-            </div>
-            <div>
-              <dt>Source</dt>
-              <dd id="runtimeSource">static snapshot</dd>
-            </div>
-          </dl>
-          <ul class="check-list runtime-checks" id="runtimeChecks"></ul>
-        </div>
       </section>
 
       <section class="layout">
         <aside class="artifact-rail" aria-label="artifact summary">
+          <section class="panel compact run-control-card">
+            <div class="panel-head">
+              <h2>Runtime control</h2>
+              <span class="runtime-chip idle" id="runtimeStatus" aria-live="polite">Idle</span>
+            </div>
+            <label class="runtime-prompt">
+              <span>Prompt</span>
+              <textarea id="runtimePrompt" rows="3">
+Continue only if the AP2 evidence verifies, then quote the next atlas-kit action.</textarea
+              >
+            </label>
+            <div class="runtime-actions">
+              <button class="primary-action" id="startRuntimeRun" type="button">Start run</button>
+              <button class="secondary-action" id="refreshRuntime" type="button">Refresh</button>
+              <button class="secondary-action" id="writeRuntimeAnalytics" type="button">
+                Write rows
+              </button>
+            </div>
+          </section>
+
+          <section class="panel compact run-facts-card">
+            <div class="panel-head">
+              <h2>Run details</h2>
+            </div>
+            <dl class="facts runtime-facts">
+              <div>
+                <dt>Run</dt>
+                <dd><code id="runtimeRunId">not started</code></dd>
+              </div>
+              <div>
+                <dt>Decision</dt>
+                <dd id="runtimeDecision">not connected</dd>
+              </div>
+              <div>
+                <dt>AP2 record</dt>
+                <dd><code id="runtimeRecordHash">pending</code></dd>
+              </div>
+              <div>
+                <dt>ADK record</dt>
+                <dd><code id="runtimeAdkHash">pending</code></dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd id="runtimeSource">not started</dd>
+              </div>
+            </dl>
+            <ul class="check-list runtime-checks" id="runtimeChecks"></ul>
+          </section>
+
           <section class="panel compact artifact-card">
             <div class="panel-head">
-              <h2>Run artifact</h2>
+              <h2>Reference artifact</h2>
             </div>
             <button class="command" id="copyCommand" type="button" aria-label="Copy proof command">
               <span>Copy command</span>
-              <code id="commandText">pnpm --filter @atrib/integration google-stack-chain-proof</code>
+              <code id="commandText"
+                >pnpm --filter @atrib/integration google-stack-chain-proof</code
+              >
             </button>
             <dl class="facts">
+              <div>
+                <dt>Reference</dt>
+                <dd id="proofStatus">Loading&hellip;</dd>
+              </div>
               <div>
                 <dt>Strategy</dt>
                 <dd id="strategyText">atrib-google-stack-chain-proof-v2</dd>
               </div>
               <div>
                 <dt>Snapshot</dt>
-                <dd id="snapshotSchema">atrib-google-stack-chain.snapshot.v1</dd>
+                <dd>
+                  <span id="snapshotSchema">atrib-google-stack-chain.snapshot.v1</span>
+                  <span class="fact-subtle" id="snapshotLabel">Reading local snapshot&hellip;</span>
+                </dd>
               </div>
               <div>
                 <dt>Bridge</dt>
                 <dd>explicit informed_by</dd>
               </div>
             </dl>
-          </section>
-
-          <section class="panel compact">
-            <div class="panel-head">
-              <h2>What it gives Google</h2>
+            <div class="reference-actions" aria-label="proof view mode">
+              <button
+                class="secondary-action active"
+                id="viewLiveRun"
+                type="button"
+                aria-pressed="true"
+              >
+                Live run
+              </button>
+              <button
+                class="secondary-action"
+                id="viewReferenceSnapshot"
+                type="button"
+                aria-pressed="false"
+              >
+                Reference
+              </button>
             </div>
-            <ul class="value-list" id="valueList"></ul>
-          </section>
-
-          <section class="panel compact muted-panel">
-            <div class="panel-head">
-              <h2>Claim limits</h2>
-            </div>
-            <ul class="caveat-list" id="caveatList"></ul>
           </section>
         </aside>
 
         <section class="proof-stage panel">
           <div class="stage-head">
             <div>
-              <h2>Verifier-resolved chain</h2>
-              <p id="stageMode">
-                Select a stage to inspect its parent records, checks, and analytics
-                row.
-              </p>
+              <h2 id="stageTitle">Live proof chain</h2>
+              <p id="stageMode">Start a runtime run to populate AP2, A2A, and ADK records.</p>
             </div>
             <div class="segmented" aria-label="view mode">
-              <button class="segment active" type="button" data-view="proof" aria-pressed="true">
-                Proof
+              <button class="segment active" type="button" data-view="live" aria-pressed="true">
+                Live
+              </button>
+              <button class="segment" type="button" data-view="reference" aria-pressed="false">
+                Reference
               </button>
               <button class="segment" type="button" data-view="analytics" aria-pressed="false">
                 Analytics
@@ -149,7 +169,7 @@
 
           <div class="analytics-band" id="analyticsBand">
             <div class="band-title">
-              <h3>BigQuery Agent Analytics-shaped fixture</h3>
+              <h3 id="analyticsTitle">Runtime analytics rows</h3>
               <p id="analyticsCaveat"></p>
             </div>
             <div class="table-wrap">
@@ -181,7 +201,12 @@
             </div>
             <div>
               <p class="field-label">Record hash</p>
-              <button class="hash-box" id="copyHash" type="button" aria-label="Copy selected record hash">
+              <button
+                class="hash-box"
+                id="copyHash"
+                type="button"
+                aria-label="Copy selected record hash"
+              >
                 <code id="selectedHash"></code>
               </button>
             </div>
@@ -203,6 +228,22 @@
             </div>
           </div>
         </aside>
+      </section>
+
+      <section class="support-grid" aria-label="outreach proof framing">
+        <section class="panel compact">
+          <div class="panel-head">
+            <h2>What it gives Google</h2>
+          </div>
+          <ul class="value-list" id="valueList"></ul>
+        </section>
+
+        <section class="panel compact muted-panel" id="proofBoundaries">
+          <div class="panel-head">
+            <h2>Proof boundaries</h2>
+          </div>
+          <ul class="caveat-list" id="caveatList"></ul>
+        </section>
       </section>
     </main>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

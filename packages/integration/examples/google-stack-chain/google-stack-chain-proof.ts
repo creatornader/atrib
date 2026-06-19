@@ -382,10 +382,10 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
       'Turn the proof chain into public proof material only after the target surface is refreshed and the evidence still matches.',
     ],
     caveats: [
-      'This is a local explicit informed_by bridge, not a deployed Google managed runtime run or one shared context_id.',
-      'The AP2 artifacts come from committed AP2 / VI reference fixtures, not live payment credentials.',
-      'The A2A proof is in-process JSON-RPC, not a public A2A server, TCK result, or upstream sample.',
-      'The ADK Python proof uses a local InMemoryRunner and transient google-adk==2.1.0 install, not Agent Platform Runtime, Gemini Enterprise, BigQuery Storage Write API export, or Memory Bank.',
+      'Boundary: atrib is the trust-transfer layer here. AP2 evidence is accepted first, A2A receives that signed parent, and ADK signs from the A2A parent.',
+      'AP2 source: committed AP2 / VI fixtures or merchant-supplied packet JSON. This proof does not use live payment credentials or move funds.',
+      'A2A source: in-process JSON-RPC with signed receiving-agent follow-up. It proves verifier-gated handoff, not an A2A TCK result or public server deployment.',
+      'ADK source: InMemoryRunner callback proof. The claim is callback-boundary signing, not managed Agent Platform Runtime, Gemini Enterprise, BigQuery Storage Write API export, or Memory Bank coverage.',
     ],
   }
 }

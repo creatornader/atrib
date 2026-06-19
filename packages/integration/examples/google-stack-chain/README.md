@@ -24,11 +24,12 @@ supports direct file opening through
 [`visual/index.html`](visual/index.html); the served path is better for normal
 review, while the file path is useful for quick local inspection.
 
-The workbench loads a static proof snapshot first, then asks the Google evidence
-runtime for live AP2 verifier state when `runtime-config.js` or `?runtime=` is
-set. It shows the four proof stages, lets the operator select each record,
-highlights the matching BigQuery Agent Analytics-shaped row, and keeps the same
-claim limits visible on screen.
+The workbench opens on the live runtime path first. The main proof chain stays
+empty until the runtime returns records. The pinned four-record snapshot remains
+available from the Reference view. When `runtime-config.js` or `?runtime=` is
+set, the page asks the Google evidence runtime for live AP2 verifier state,
+shows the AP2 -> A2A -> ADK run as records arrive, highlights matching
+BigQuery Agent Analytics-shaped rows, and keeps proof boundaries visible.
 
 The script prints a JSON summary with the AP2 transaction record hash, A2A
 remote and receiver follow-up hashes, and ADK Python tool-callback record hash.
@@ -71,7 +72,7 @@ the workbench as public proof material.
 
 For a hosted preview, the visual can remain a static site while live verifier
 state comes from a separately deployed runtime. Vercel or Cloudflare Pages is
-enough for the visual; the Cloud Run runtime in [`runtime/`](runtime/) can be
+enough for the visual. The Cloud Run runtime in [`runtime/`](runtime/) can be
 configured locally with [`visual/runtime-config.js`](visual/runtime-config.js)
 or with the `?runtime=` query parameter. Do not commit deployment-specific
 preview URLs to this public example.
