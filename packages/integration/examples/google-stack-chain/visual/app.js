@@ -1191,11 +1191,12 @@ function selectNode(id) {
 
 function renderVerifierCheck(check) {
   const li = document.createElement('li')
-  const { label, detail, tone } = verifierCheckParts(check)
+  const { label, detail, tone, stateText } = verifierCheckParts(check)
   li.className = tone
   const state = document.createElement('span')
   state.className = 'check-state'
-  state.textContent = tone === 'neutral' ? 'Pending' : tone === 'bad' ? 'Failed' : 'Accepted'
+  state.textContent =
+    stateText ?? (tone === 'neutral' ? 'Pending' : tone === 'bad' ? 'Failed' : 'Accepted')
   const strong = document.createElement('strong')
   strong.textContent = label
   const paragraph = document.createElement('p')
@@ -1205,6 +1206,14 @@ function renderVerifierCheck(check) {
 }
 
 function verifierCheckParts(check) {
+  if (check && typeof check === 'object') {
+    return {
+      label: check.label ?? 'Verification check',
+      detail: check.detail ?? 'No detail returned.',
+      tone: check.tone ?? 'neutral',
+      stateText: check.stateText,
+    }
+  }
   const text = String(check)
   const separator = text.indexOf(':')
   const waiting = /^waiting/i.test(text)
@@ -1331,9 +1340,17 @@ async function verifySelectedRecord() {
   }
   if (!state.runtimeUrl) {
     renderVerifyStatus('bad', 'Live verify needs a runtime URL.')
+    renderLiveVerificationChecks([
+      {
+        label: 'Runtime URL configured',
+        detail: 'No runtime URL is available for the live verifier refetch.',
+        tone: 'bad',
+      },
+    ])
     return
   }
   renderVerifyStatus('pending', `Checking ${state.activeRun.run_id} against Cloud Run...`)
+  renderLiveVerificationChecks(liveVerificationPendingChecks(selected, state.activeRun.run_id))
   try {
     const response = await fetch(
       `${state.runtimeUrl}/api/runs/${encodeURIComponent(state.activeRun.run_id)}`,
@@ -1347,22 +1364,45 @@ async function verifySelectedRecord() {
     }
     const result = verifySelectedAgainstRun(selected, payload.run)
     renderVerifyStatus(result.ok ? 'ok' : 'bad', result.detail)
+    renderLiveVerificationChecks(result.checks)
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown runtime error'
     renderVerifyStatus(
       'bad',
-      error instanceof Error ? `Live verify failed: ${error.message}` : 'Live verify failed.',
+      `Live verify failed: ${message}`,
     )
+    renderLiveVerificationChecks([
+      {
+        label: 'Cloud Run run refetched',
+        detail: message,
+        tone: 'bad',
+      },
+      ...liveVerificationPendingChecks(selected, state.activeRun.run_id).slice(1),
+    ])
   }
 }
 
 function verifySelectedAgainstRun(selected, run) {
   const chainStage = runtimeChainStageByNodeId(selected.id)
   const stage = runtimeStageForNodeId(selected.id)
+  const refetchedCheck = {
+    label: 'Cloud Run run refetched',
+    detail: `Run ${run.run_id} returned from the runtime API.`,
+    tone: 'ok',
+  }
   const step = stage ? run.steps?.find((item) => item.key === stage.key) : null
   if (!step) {
     return {
       ok: false,
       detail: `Live verify failed: ${selected.label} was not present in run ${run.run_id}.`,
+      checks: [
+        refetchedCheck,
+        {
+          label: 'Runtime stage present',
+          detail: `No runtime step was returned for ${selected.label}.`,
+          tone: 'bad',
+        },
+      ],
     }
   }
   const expectedHash = chainStage
@@ -1370,15 +1410,139 @@ function verifySelectedAgainstRun(selected, run) {
     : step.record_hash
   const recordMatches = expectedHash === selected.record_hash
   const complete = step.status === 'complete'
-  const parentMatches = selected.parents.every((parent) => runtimeRunRecordRefs(run).has(parent))
-  const ok = recordMatches && complete && parentMatches
+  const runtimeRefs = runtimeRunRecordRefs(run)
+  const matchedParents = selected.parents.filter((parent) => runtimeRefs.has(parent))
+  const parentMatches = matchedParents.length === selected.parents.length
+  const chainCheck = liveChainCheckForSelected(selected, run)
+  const ok = recordMatches && complete && parentMatches && chainCheck.ok
+  const checks = [
+    refetchedCheck,
+    {
+      label: 'Runtime stage present',
+      detail: `${stage.key} returned for ${selected.label}.`,
+      tone: 'ok',
+    },
+    {
+      label: 'Record hash matches',
+      detail: recordMatches
+        ? `${shortHash(selected.record_hash)} matches the runtime record.`
+        : `Expected ${shortHash(expectedHash)} but selected ${shortHash(selected.record_hash)}.`,
+      tone: recordMatches ? 'ok' : 'bad',
+    },
+    {
+      label: 'Stage complete',
+      detail: complete ? `${stage.key} status is complete.` : `${stage.key} status is ${step.status}.`,
+      tone: complete ? 'ok' : 'bad',
+    },
+    {
+      label: 'Parent context present',
+      detail: selected.parents.length
+        ? `${matchedParents.length}/${selected.parents.length} parent hashes appear in runtime steps, A2A evidence, or analytics rows.`
+        : 'No parent hash is required for this genesis record.',
+      tone: parentMatches ? 'ok' : 'bad',
+    },
+    {
+      label: 'Chain relationship accepted',
+      detail: chainCheck.detail,
+      tone: chainCheck.ok ? 'ok' : 'bad',
+    },
+  ]
   return {
     ok,
     detail: ok
       ? `Live verified: Cloud Run returned ${selected.label} with matching record hash and parent context.`
       : `Live verify failed: hash=${String(recordMatches)}, complete=${String(
           complete,
-        )}, parents=${String(parentMatches)}.`,
+        )}, parents=${String(parentMatches)}, chain=${String(chainCheck.ok)}.`,
+    checks,
+  }
+}
+
+function liveVerificationPendingChecks(selected, runId) {
+  return [
+    {
+      label: 'Cloud Run run refetched',
+      detail: `Fetching run ${runId} from the runtime API.`,
+      tone: 'neutral',
+      stateText: 'Checking',
+    },
+    {
+      label: 'Runtime stage present',
+      detail: `Looking up the runtime step for ${selected.label}.`,
+      tone: 'neutral',
+      stateText: 'Checking',
+    },
+    {
+      label: 'Record hash matches',
+      detail: `Comparing ${shortHash(selected.record_hash)} against the runtime response.`,
+      tone: 'neutral',
+      stateText: 'Checking',
+    },
+    {
+      label: 'Stage complete',
+      detail: 'Checking the selected runtime step status.',
+      tone: 'neutral',
+      stateText: 'Checking',
+    },
+    {
+      label: 'Parent context present',
+      detail: selected.parents.length
+        ? `Checking ${selected.parents.length} parent hash reference(s).`
+        : 'Checking that this selected record needs no parent hash.',
+      tone: 'neutral',
+      stateText: 'Checking',
+    },
+    {
+      label: 'Chain relationship accepted',
+      detail: 'Checking the AP2 to A2A to ADK chain flag for this record.',
+      tone: 'neutral',
+      stateText: 'Checking',
+    },
+  ]
+}
+
+function renderLiveVerificationChecks(checks) {
+  nodes.checkList.replaceChildren(...checks.map((check) => renderVerifierCheck(check)))
+}
+
+function liveChainCheckForSelected(selected, run) {
+  if (selected.id === 'runtime-ap2') {
+    const allowed = run.gate?.allowed === true || run.gate?.decision === 'allow_next_action'
+    return {
+      ok: allowed,
+      detail: allowed
+        ? `AP2 gate decision is ${formatEvent(run.gate?.decision ?? 'allow_next_action')}.`
+        : `AP2 gate decision is ${formatEvent(run.gate?.decision ?? 'unknown')}.`,
+    }
+  }
+  const byNodeId = {
+    'runtime-a2a-remote': {
+      key: 'ap2_informs_a2a_remote',
+      label: 'AP2 informs A2A remote',
+    },
+    'runtime-a2a-receiver': {
+      key: 'a2a_remote_informs_receiver',
+      label: 'A2A remote informs receiver',
+    },
+    'runtime-adk-js': {
+      key: 'a2a_receiver_informs_adk_js',
+      label: 'A2A receiver informs ADK JS',
+    },
+  }
+  const chain = byNodeId[selected.id]
+  if (!chain) {
+    return {
+      ok: false,
+      detail: `No live chain check is mapped for ${selected.label}.`,
+    }
+  }
+  const value = run.chain?.[chain.key]
+  return {
+    ok: value === true,
+    detail:
+      value === true
+        ? `${chain.label} is true in the runtime response.`
+        : `${chain.label} is ${String(value)} in the runtime response.`,
   }
 }
 
