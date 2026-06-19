@@ -3,6 +3,8 @@ const state = {
   selectedId: 'ap2',
   runtimeUrl: '',
   runtimeState: null,
+  activeRun: null,
+  runtimeCanWrite: false,
 }
 
 const nodes = {
@@ -29,10 +31,13 @@ const nodes = {
   runtimeStatus: document.querySelector('#runtimeStatus'),
   runtimeReason: document.querySelector('#runtimeReason'),
   runtimeDecision: document.querySelector('#runtimeDecision'),
+  runtimeRunId: document.querySelector('#runtimeRunId'),
   runtimeRecordHash: document.querySelector('#runtimeRecordHash'),
-  runtimeContentId: document.querySelector('#runtimeContentId'),
+  runtimeAdkHash: document.querySelector('#runtimeAdkHash'),
   runtimeSource: document.querySelector('#runtimeSource'),
   runtimeChecks: document.querySelector('#runtimeChecks'),
+  runtimePrompt: document.querySelector('#runtimePrompt'),
+  startRuntimeRun: document.querySelector('#startRuntimeRun'),
   refreshRuntime: document.querySelector('#refreshRuntime'),
   writeRuntimeAnalytics: document.querySelector('#writeRuntimeAnalytics'),
   toast: document.querySelector('#toast'),
@@ -116,8 +121,9 @@ function renderStatic() {
     })
   })
 
-  nodes.refreshRuntime.addEventListener('click', () => loadRuntimeState())
-  nodes.writeRuntimeAnalytics.addEventListener('click', () => writeRuntimeAnalytics())
+  nodes.startRuntimeRun.addEventListener('click', () => startRuntimeRun(false))
+  nodes.refreshRuntime.addEventListener('click', () => refreshRuntimePanel())
+  nodes.writeRuntimeAnalytics.addEventListener('click', () => startRuntimeRun(true))
 }
 
 function renderChainNode(item, index) {
@@ -202,6 +208,7 @@ async function loadRuntimeState() {
     if (!response.ok) throw new Error(`Runtime returned HTTP ${response.status}`)
     const payload = await response.json()
     state.runtimeState = payload
+    state.runtimeCanWrite = payload.capabilities?.analytics_write_enabled === true
     renderRuntimeState(payload)
   } catch (error) {
     renderRuntimeUnavailable(
@@ -211,26 +218,52 @@ async function loadRuntimeState() {
   }
 }
 
-async function writeRuntimeAnalytics() {
-  if (!state.runtimeUrl) {
-    showToast('Runtime URL missing')
+async function refreshRuntimePanel() {
+  if (!state.activeRun) {
+    await loadRuntimeState()
     return
   }
-  renderRuntimePending('Writing BigQuery row')
   try {
-    const response = await fetch(`${state.runtimeUrl}/v1/analytics/write`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ mode: 'replay' }),
+    renderRuntimePending('Refreshing run')
+    const response = await fetch(`${state.runtimeUrl}/api/runs/${encodeURIComponent(state.activeRun.run_id)}`, {
+      headers: { accept: 'application/json' },
     })
     const payload = await response.json()
     if (!response.ok || payload.ok !== true) {
       throw new Error(payload.error ?? `Runtime returned HTTP ${response.status}`)
     }
-    showToast('BigQuery row written')
-    await loadRuntimeState()
+    state.activeRun = payload.run
+    renderActiveRuntimeRun(payload.run, null)
   } catch (error) {
-    renderRuntimeUnavailable('Write failed', error instanceof Error ? error.message : String(error))
+    renderRuntimeUnavailable('Refresh failed', error instanceof Error ? error.message : String(error))
+  }
+}
+
+async function startRuntimeRun(writeAnalytics) {
+  if (!state.runtimeUrl) {
+    showToast('Runtime URL missing')
+    return
+  }
+  renderRuntimePending(writeAnalytics ? 'Writing rows' : 'Starting run')
+  try {
+    const response = await fetch(`${state.runtimeUrl}/api/runs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        mode: 'replay',
+        prompt: nodes.runtimePrompt.value,
+        writeAnalytics,
+      }),
+    })
+    const payload = await response.json()
+    if (!response.ok || !payload.run) {
+      throw new Error(payload.error ?? `Runtime returned HTTP ${response.status}`)
+    }
+    state.activeRun = payload.run
+    renderActiveRuntimeRun(payload.run, payload.analytics_write)
+    showToast(writeAnalytics ? 'Runtime run finished' : 'Run complete')
+  } catch (error) {
+    renderRuntimeUnavailable('Run failed', error instanceof Error ? error.message : String(error))
   }
 }
 
@@ -246,17 +279,17 @@ function renderRuntimeState(payload) {
   nodes.runtimeStatus.textContent = gate.allowed ? 'Allowed' : 'Blocked'
   nodes.runtimeStatus.className = `runtime-chip ${gate.allowed ? 'good' : 'bad'}`
   nodes.runtimeReason.textContent = gate.reason
+  nodes.startRuntimeRun.disabled = false
+  nodes.startRuntimeRun.textContent = 'Start run'
+  nodes.runtimeRunId.textContent = 'state check'
   nodes.runtimeDecision.textContent = formatEvent(gate.decision)
   nodes.runtimeRecordHash.textContent = shortHash(gate.record_hash)
   nodes.runtimeRecordHash.title = gate.record_hash
-  nodes.runtimeContentId.textContent = shortHash(gate.content_id ?? 'none')
-  nodes.runtimeContentId.title = gate.content_id ?? ''
+  nodes.runtimeAdkHash.textContent = 'not run'
+  nodes.runtimeAdkHash.title = ''
   nodes.runtimeSource.textContent = gate.packet_source
-  const writeEnabled = payload.capabilities?.analytics_write_enabled === true
-  nodes.writeRuntimeAnalytics.disabled = !writeEnabled
-  nodes.writeRuntimeAnalytics.textContent = writeEnabled
-    ? 'Write BigQuery row'
-    : 'Operator write only'
+  nodes.writeRuntimeAnalytics.disabled = !state.runtimeCanWrite
+  nodes.writeRuntimeAnalytics.textContent = state.runtimeCanWrite ? 'Write rows' : 'Operator write only'
   nodes.runtimeChecks.replaceChildren(
     ...gate.checks.map((check) => {
       const li = document.createElement('li')
@@ -268,10 +301,43 @@ function renderRuntimeState(payload) {
   renderAnalyticsRowsWithRuntime(gate.analytics_row)
 }
 
+function renderActiveRuntimeRun(run, analyticsWrite) {
+  const adkStep = run.steps.find((step) => step.key === 'adk_tool_callback')
+  nodes.runtimeStatus.textContent = run.status === 'complete' ? 'Complete' : 'Blocked'
+  nodes.runtimeStatus.className = `runtime-chip ${run.ok ? 'good' : 'bad'}`
+  nodes.runtimeReason.textContent = run.value_add?.pre_action_trust_transfer ?? run.gate.reason
+  nodes.startRuntimeRun.disabled = false
+  nodes.startRuntimeRun.textContent = 'Run again'
+  nodes.runtimeRunId.textContent = run.run_id
+  nodes.runtimeRunId.title = run.run_id
+  nodes.runtimeDecision.textContent = formatEvent(run.gate.decision)
+  nodes.runtimeRecordHash.textContent = shortHash(run.gate.record_hash)
+  nodes.runtimeRecordHash.title = run.gate.record_hash
+  nodes.runtimeAdkHash.textContent = shortHash(adkStep?.record_hash ?? 'pending')
+  nodes.runtimeAdkHash.title = adkStep?.record_hash ?? ''
+  nodes.runtimeSource.textContent = run.mode === 'replay' ? 'Cloud Run replay' : 'provided packet'
+  nodes.writeRuntimeAnalytics.disabled = !state.runtimeCanWrite
+  nodes.writeRuntimeAnalytics.textContent = state.runtimeCanWrite ? 'Write rows' : 'Operator write only'
+  nodes.runtimeChecks.replaceChildren(...run.steps.map(renderRuntimeStep))
+  nodes.analyticsRows.replaceChildren(...run.analytics_rows.map(renderRuntimeAnalyticsRow))
+  if (analyticsWrite?.error) showToast(formatEvent(analyticsWrite.error))
+}
+
+function renderRuntimeStep(step) {
+  const li = document.createElement('li')
+  li.className = step.status === 'complete' ? 'ok' : 'bad'
+  const hash = step.record_hash ? ` ${tinyHash(step.record_hash)}` : ''
+  li.textContent = `${step.protocol}: ${step.label}.${hash}`
+  return li
+}
+
 function renderRuntimePending(label) {
   nodes.runtimeStatus.textContent = label
   nodes.runtimeStatus.className = 'runtime-chip pending'
   nodes.runtimeReason.textContent = 'Waiting for the verifier endpoint.'
+  nodes.startRuntimeRun.disabled = true
+  nodes.startRuntimeRun.textContent = label
+  nodes.runtimeRunId.textContent = state.activeRun?.run_id ?? 'pending'
   nodes.runtimeDecision.textContent = 'checking'
 }
 
@@ -280,13 +346,23 @@ function renderRuntimeUnavailable(label, reason) {
   nodes.runtimeStatus.className = 'runtime-chip idle'
   nodes.runtimeReason.textContent = reason
   nodes.runtimeDecision.textContent = 'not connected'
+  nodes.startRuntimeRun.disabled = !state.runtimeUrl
+  nodes.startRuntimeRun.textContent = 'Start run'
+  nodes.runtimeRunId.textContent = 'not started'
   nodes.runtimeRecordHash.textContent = 'pending'
-  nodes.runtimeContentId.textContent = 'pending'
+  nodes.runtimeAdkHash.textContent = 'pending'
   nodes.runtimeSource.textContent = state.runtimeUrl || 'static snapshot'
   nodes.runtimeChecks.replaceChildren()
   nodes.writeRuntimeAnalytics.disabled = true
   nodes.writeRuntimeAnalytics.textContent = 'Operator write only'
   nodes.analyticsRows.replaceChildren(...state.data.analytics.rows.map(renderAnalyticsRow))
+}
+
+function renderRuntimeAnalyticsRow(row) {
+  return renderAnalyticsRow({
+    ...row,
+    node_id: nodeIdForRuntimeRow(row),
+  })
 }
 
 function renderAnalyticsRowsWithRuntime(runtimeRow) {
@@ -301,6 +377,13 @@ function renderAnalyticsRowsWithRuntime(runtimeRow) {
   nodes.analyticsRows.replaceChildren(
     ...[...runtimeRows, ...state.data.analytics.rows].map(renderAnalyticsRow),
   )
+}
+
+function nodeIdForRuntimeRow(row) {
+  if (row.event_type.includes('a2a.remote')) return 'a2a-remote'
+  if (row.event_type.includes('a2a.receiver')) return 'a2a-receiver'
+  if (row.event_type.includes('adk')) return 'adk-python'
+  return 'ap2'
 }
 
 function selectNode(id) {
@@ -379,6 +462,11 @@ function shortHash(value) {
   return `${value.slice(0, 18)}\u2026${value.slice(-12)}`
 }
 
+function tinyHash(value) {
+  if (!value.startsWith('sha256:')) return value
+  return `${value.slice(7, 15)}\u2026${value.slice(-6)}`
+}
+
 function shortTrace(value) {
   if (!value) return 'local-only'
   if (value.length <= 18) return value
@@ -390,12 +478,13 @@ function formatEvent(value) {
     .replace(/^atrib\./, '')
     .replace(/^ap2\./, '')
     .replace(/^a2a\./, '')
+    .replace(/^adk_js\./, '')
     .replace(/^adk_python\./, '')
     .replaceAll('_', ' ')
 }
 
 function protocolClass(protocol) {
-  if (protocol === 'ADK Python') return 'ADK'
+  if (protocol.startsWith('ADK')) return 'ADK'
   return protocol
 }
 

@@ -15,8 +15,9 @@
           <h1>Google stack proof chain</h1>
           <p class="subline">
             Inspect the local proof chain that links AP2 authorization evidence, A2A
-            handoff evidence, and a Google ADK Python callback through verified
-            <code>informed_by</code> records.
+            handoff evidence, and Google ADK callback evidence through verified
+            <code>informed_by</code> records. The pinned snapshot uses ADK Python;
+            the active runtime uses ADK JS.
           </p>
         </div>
         <div class="run-strip" aria-label="proof status">
@@ -56,24 +57,32 @@
 
           <section class="panel compact runtime-card" aria-label="live runtime verifier">
             <div class="panel-head">
-              <h2>Live runtime</h2>
-              <span class="runtime-chip idle" id="runtimeStatus">Static</span>
+              <h2>Active runtime</h2>
+              <span class="runtime-chip idle" id="runtimeStatus">Idle</span>
             </div>
             <p class="runtime-reason" id="runtimeReason">
-              Configure a runtime URL to verify the AP2 replay through Cloud Run.
+              Waiting for Cloud Run.
             </p>
+            <label class="runtime-prompt">
+              <span>Prompt</span>
+              <textarea id="runtimePrompt" rows="3">Continue only if the AP2 evidence verifies, then quote the next atlas-kit action.</textarea>
+            </label>
             <dl class="facts runtime-facts">
+              <div>
+                <dt>Run</dt>
+                <dd><code id="runtimeRunId">not started</code></dd>
+              </div>
               <div>
                 <dt>Decision</dt>
                 <dd id="runtimeDecision">not connected</dd>
               </div>
               <div>
-                <dt>Record</dt>
+                <dt>AP2 record</dt>
                 <dd><code id="runtimeRecordHash">pending</code></dd>
               </div>
               <div>
-                <dt>Content</dt>
-                <dd><code id="runtimeContentId">pending</code></dd>
+                <dt>ADK record</dt>
+                <dd><code id="runtimeAdkHash">pending</code></dd>
               </div>
               <div>
                 <dt>Source</dt>
@@ -82,11 +91,14 @@
             </dl>
             <ul class="check-list runtime-checks" id="runtimeChecks"></ul>
             <div class="runtime-actions">
+              <button class="primary-action" id="startRuntimeRun" type="button">
+                Start run
+              </button>
               <button class="secondary-action" id="refreshRuntime" type="button">
                 Refresh
               </button>
               <button class="secondary-action" id="writeRuntimeAnalytics" type="button">
-                Write BigQuery row
+                Write rows
               </button>
             </div>
           </section>

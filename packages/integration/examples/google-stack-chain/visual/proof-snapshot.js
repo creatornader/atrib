@@ -184,6 +184,6 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
     'The four-record chain is a local explicit informed_by bridge. The runtime panel separately verifies the AP2 replay through Cloud Run when configured.',
     'The AP2 artifacts come from committed AP2 / VI reference fixtures, not live payment credentials.',
     'The A2A proof is in-process JSON-RPC, not a public A2A server, TCK result, or upstream sample.',
-    'The ADK Python proof uses a local InMemoryRunner and transient google-adk==2.1.0 install, not Agent Platform Runtime, Gemini Enterprise, or Memory Bank.',
+    'The pinned snapshot uses ADK Python with a local InMemoryRunner. The active runtime uses ADK JS with a local InMemoryRunner. Neither path proves Agent Platform Runtime, Gemini Enterprise, or Memory Bank.',
   ],
 }

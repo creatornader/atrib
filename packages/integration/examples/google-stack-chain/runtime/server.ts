@@ -14,6 +14,7 @@ import {
   type GoogleEvidenceGate,
   type GoogleEvidencePacket,
 } from '../../../src/google-evidence-runtime.js'
+import { createGoogleActiveRuntimeRun, type GoogleActiveRuntimeRun } from './active-runtime.js'
 
 const runtimeDir = dirname(fileURLToPath(import.meta.url))
 const integrationDir = resolve(runtimeDir, '../../..')
@@ -22,8 +23,10 @@ const defaultResultJson = join(fixtureDir, 'ap2-vi-reference-result.json')
 const defaultEvidenceJson = join(fixtureDir, 'ap2-vi-reference-evidence.json')
 const serviceName = 'atrib-google-evidence-runtime'
 const port = Number(process.env.PORT ?? '8080')
+const maxStoredRuns = 25
 
 let replayPacketPromise: Promise<GoogleEvidencePacket> | undefined
+const activeRuns = new Map<string, GoogleActiveRuntimeRun>()
 
 const server = createServer((request, response) => {
   void handleRequest(request, response)
@@ -51,6 +54,46 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (request.method === 'GET' && url.pathname === '/v1/runtime-state') {
       const gate = await buildDefaultGate()
       writeJson(response, 200, runtimeState(gate))
+      return
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/runs') {
+      writeJson(response, 200, {
+        ok: true,
+        runs: [...activeRuns.values()]
+          .sort((left, right) => right.created_at.localeCompare(left.created_at))
+          .map(summarizeRun),
+      })
+      return
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/runs') {
+      const body = await readJsonBody(request)
+      const packet = await packetFromRunBody(body)
+      const run = await createGoogleActiveRuntimeRun({
+        runId: runIdFromBody(body),
+        packet,
+        mode: runModeFromBody(body),
+        prompt: promptFromBody(body),
+      })
+      rememberRun(run)
+      const analyticsWrite = await maybeWriteRuntimeAnalytics(body, run.analytics_rows)
+      writeJson(response, 200, {
+        ok: run.ok,
+        run,
+        analytics_write: analyticsWrite,
+      })
+      return
+    }
+
+    const apiRunId = runIdFromPath(url.pathname)
+    if (request.method === 'GET' && apiRunId) {
+      const run = activeRuns.get(apiRunId)
+      if (!run) {
+        writeJson(response, 404, { ok: false, error: 'run_not_found', run_id: apiRunId })
+        return
+      }
+      writeJson(response, 200, { ok: true, run })
       return
     }
 
@@ -116,6 +159,9 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       error: 'not_found',
       endpoints: [
         'GET /health',
+        'GET /api/runs',
+        'POST /api/runs',
+        'GET /api/runs/:runId',
         'GET /v1/runtime-state',
         'POST /v1/replay/google-ap2-sample',
         'POST /v1/verify-ap2',
@@ -141,12 +187,88 @@ function runtimeState(gate: GoogleEvidenceGate): Record<string, unknown> {
     },
     gate,
     endpoints: {
+      runs: '/api/runs',
+      run: '/api/runs/:runId',
       verify: '/v1/verify-ap2',
       replay: '/v1/replay/google-ap2-sample',
       analytics_write: '/v1/analytics/write',
       merchant_adapter: '/v1/merchant-adapter',
     },
   }
+}
+
+function rememberRun(run: GoogleActiveRuntimeRun): void {
+  activeRuns.set(run.run_id, run)
+  const sorted = [...activeRuns.values()].sort((left, right) =>
+    right.created_at.localeCompare(left.created_at),
+  )
+  for (const stale of sorted.slice(maxStoredRuns)) {
+    activeRuns.delete(stale.run_id)
+  }
+}
+
+function summarizeRun(run: GoogleActiveRuntimeRun): Record<string, unknown> {
+  return {
+    run_id: run.run_id,
+    ok: run.ok,
+    status: run.status,
+    mode: run.mode,
+    created_at: run.created_at,
+    updated_at: run.updated_at,
+    prompt: run.prompt,
+    steps: run.steps.map((step) => ({
+      key: step.key,
+      protocol: step.protocol,
+      status: step.status,
+      record_hash: step.record_hash,
+    })),
+  }
+}
+
+function runIdFromBody(body: unknown): string {
+  if (isRecord(body) && typeof body.runId === 'string' && body.runId.length > 0) {
+    return body.runId
+  }
+  return `google-active-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 8)}`
+}
+
+function promptFromBody(body: unknown): string | undefined {
+  if (isRecord(body) && typeof body.prompt === 'string' && body.prompt.trim().length > 0) {
+    return body.prompt.trim()
+  }
+  return undefined
+}
+
+function runModeFromBody(body: unknown): 'replay' | 'provided_packet' {
+  if (
+    !isRecord(body) ||
+    body.mode === 'replay' ||
+    (!('result' in body) && !isRecord(body.files))
+  ) {
+    return 'replay'
+  }
+  return 'provided_packet'
+}
+
+function runIdFromPath(pathname: string): string | null {
+  const prefix = '/api/runs/'
+  if (!pathname.startsWith(prefix)) return null
+  const encoded = pathname.slice(prefix.length)
+  if (!encoded) return null
+  return decodeURIComponent(encoded)
+}
+
+async function maybeWriteRuntimeAnalytics(
+  body: unknown,
+  rows: GoogleAgentAnalyticsRow[],
+): Promise<unknown> {
+  if (!isRecord(body) || body.writeAnalytics !== true) return null
+  if (!canWriteAnalytics()) return { ok: false, error: 'bigquery_write_disabled' }
+  const writes = []
+  for (const row of rows) {
+    writes.push(await writeAnalyticsRowToBigQuery(row))
+  }
+  return { ok: true, rows_written: writes.length, writes }
 }
 
 async function buildDefaultGate(): Promise<GoogleEvidenceGate> {
@@ -187,10 +309,6 @@ async function packetFromBody(body: unknown): Promise<GoogleEvidencePacket> {
     return defaultPacket()
   }
 
-  if (!('result' in body) || !('evidence' in body)) {
-    throw new Error('POST /v1/verify-ap2 requires result and evidence, or { "mode": "replay" }')
-  }
-
   if (isRecord(body.files)) {
     return loadPacketFromFiles({
       resultJson: stringField(body.files, 'resultJson'),
@@ -199,6 +317,10 @@ async function packetFromBody(body: unknown): Promise<GoogleEvidencePacket> {
       source: 'request file packet',
       nowSeconds: numberField(body, 'nowSeconds') ?? DEFAULT_RUNTIME_NOW_SECONDS,
     })
+  }
+
+  if (!('result' in body) || !('evidence' in body)) {
+    throw new Error('POST /v1/verify-ap2 requires result and evidence, or { "mode": "replay" }')
   }
 
   if (!isRecord(body.transactionRecord)) {
@@ -212,6 +334,17 @@ async function packetFromBody(body: unknown): Promise<GoogleEvidencePacket> {
     source: 'request inline packet',
     nowSeconds: numberField(body, 'nowSeconds') ?? DEFAULT_RUNTIME_NOW_SECONDS,
   }
+}
+
+async function packetFromRunBody(body: unknown): Promise<GoogleEvidencePacket> {
+  if (
+    !isRecord(body) ||
+    body.mode === 'replay' ||
+    (!('result' in body) && !isRecord(body.files))
+  ) {
+    return defaultPacket()
+  }
+  return packetFromBody(body)
 }
 
 function normalizeAnalyticsRow(row: Record<string, unknown>): GoogleAgentAnalyticsRow {

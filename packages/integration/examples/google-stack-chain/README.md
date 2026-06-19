@@ -81,6 +81,9 @@ preview URLs to this public example.
 The Cloud Run runtime lives in [`runtime/`](runtime/) and serves:
 
 - `GET /v1/runtime-state`: live AP2 replay verifier state for the visual.
+- `GET /api/runs`: recent active runtime runs, held in memory.
+- `POST /api/runs`: verifier-gated AP2 -> A2A -> ADK JS run creation.
+- `GET /api/runs/:runId`: one active run with timeline and analytics rows.
 - `POST /v1/verify-ap2`: inline AP2 packet verification for a merchant or
   payment participant.
 - `POST /v1/analytics/write`: operator-only BigQuery row write when
@@ -121,6 +124,13 @@ The runtime returns `allow_next_action` only after AP2 detection, AP2 / VI
 evidence verification, atrib record verification, and counterparty attestation
 all pass.
 
+The active `/api/runs` path uses that gate as the first decision, then runs the
+local A2A handoff proof with the accepted AP2 record as parent evidence. It then
+runs the JavaScript ADK smoke through `@google/adk` and signs the ADK tool
+callback with the A2A follow-up as parent evidence. The visual workbench calls
+this endpoint to show the current run state instead of only replaying the pinned
+snapshot.
+
 ## What it proves
 
 - AP2 authorization and receipt evidence can produce a signed atrib transaction
@@ -132,7 +142,8 @@ all pass.
   boundary that informs by the A2A receiver follow-up while local sidecars keep
   the raw ADK payload inspectable.
 - The Cloud Run runtime can make the next-action decision from verified AP2
-  evidence and produce a BigQuery-shaped row tied to the atrib record hash.
+  evidence, run the A2A and ADK JS follow-up, and produce BigQuery-shaped rows
+  tied to atrib record hashes.
 - These surfaces can be presented as one verifier story for support, audit, or
   external review.
 

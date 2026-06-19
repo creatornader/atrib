@@ -49,6 +49,7 @@ export interface AtribAdkToolSidecar {
   user_id: string
   args: unknown
   record_hash: string
+  informed_by?: string[]
   status: 'ok' | 'error'
   result?: unknown
   error?: { name: string; message: string }
@@ -70,6 +71,8 @@ export interface AtribAdkPluginOptions {
   logSubmission?: 'enabled' | 'disabled'
   /** Observe records for local mirrors, tests, or demos. Never blocks ADK. */
   onRecord?: (record: AtribRecord, sidecar: AtribAdkToolSidecar) => MaybePromise<void>
+  /** Parent atrib record hashes that justify the first ADK tool action. */
+  parentRecordHashes?: string[]
   /** Injected clock for deterministic tests. */
   now?: () => number
   /** Injected queue for advanced hosts. */
@@ -97,6 +100,7 @@ export class AtribAdkPlugin extends BasePlugin implements AtribAdkPluginState {
   private readonly now: () => number
   private readonly queue: SubmissionQueue | undefined
   private readonly onRecord: AtribAdkPluginOptions['onRecord'] | undefined
+  private readonly parentRecordHashes: string[]
   private readonly records: AtribRecord[] = []
   private readonly sidecars: AtribAdkToolSidecar[] = []
   private readonly errorSignedCalls = new Set<string>()
@@ -110,6 +114,7 @@ export class AtribAdkPlugin extends BasePlugin implements AtribAdkPluginState {
     this.serverUrl = options.serverUrl ?? DEFAULT_SERVER_URL
     this.now = options.now ?? Date.now
     this.onRecord = options.onRecord
+    this.parentRecordHashes = normalizeRecordHashes(options.parentRecordHashes ?? [])
 
     if (!this.privateKey || options.logSubmission === 'disabled') {
       this.queue = options.submissionQueue
@@ -190,6 +195,9 @@ export class AtribAdkPlugin extends BasePlugin implements AtribAdkPluginState {
     try {
       await this.init()
       const operation = `google.adk.tool.${tool.name}`
+      const informedBy = this.lastRecordHashHex
+        ? [`sha256:${this.lastRecordHashHex}`]
+        : this.parentRecordHashes
       const record: AtribRecord = {
         spec_version: 'atrib/1.0',
         content_id: computeContentId(this.serverUrl, operation),
@@ -205,6 +213,7 @@ export class AtribAdkPlugin extends BasePlugin implements AtribAdkPluginState {
         args_hash: hashCanonical(argsSnapshot),
         result_hash: hashCanonical(outcomeSnapshot),
         tool_name: operation,
+        ...(informedBy.length > 0 ? { informed_by: informedBy } : {}),
       }
       const signed = await signRecord(record, privateKey)
       const recordHashHex = hexEncode(sha256(canonicalRecord(signed)))
@@ -216,6 +225,7 @@ export class AtribAdkPlugin extends BasePlugin implements AtribAdkPluginState {
         args: argsSnapshot,
         outcome: outcomeSnapshot,
         recordHash: `sha256:${recordHashHex}`,
+        informedBy,
       })
       this.lastRecordHashHex = recordHashHex
       this.records.push(signed)
@@ -260,6 +270,7 @@ function buildSidecar({
   args,
   outcome,
   recordHash,
+  informedBy,
 }: {
   pluginName: string
   operation: string
@@ -268,6 +279,7 @@ function buildSidecar({
   args: unknown
   outcome: AtribAdkToolOutcome
   recordHash: string
+  informedBy: string[]
 }): AtribAdkToolSidecar {
   const base = {
     framework: 'google-adk' as const,
@@ -281,6 +293,7 @@ function buildSidecar({
     user_id: toolContext.userId,
     args,
     record_hash: recordHash,
+    ...(informedBy.length > 0 ? { informed_by: informedBy } : {}),
   }
   const callScoped =
     toolContext.functionCallId === undefined
@@ -317,6 +330,17 @@ function snapshotCanonical(value: unknown): unknown | undefined {
   } catch {
     return undefined
   }
+}
+
+function normalizeRecordHashes(values: string[]): string[] {
+  const unique = new Set<string>()
+  for (const value of values) {
+    if (!/^sha256:[0-9a-f]{64}$/.test(value)) {
+      throw new Error('atrib ADK plugin: parentRecordHashes must be sha256:<64 lowercase hex>')
+    }
+    unique.add(value)
+  }
+  return [...unique].sort()
 }
 
 function randomContextId(): string {

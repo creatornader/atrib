@@ -170,7 +170,7 @@ h1 {
   align-items: start;
   display: grid;
   gap: 16px;
-  grid-template-columns: 300px minmax(660px, 1fr) 370px;
+  grid-template-columns: 340px minmax(620px, 1fr) 370px;
 }
 
 .artifact-rail,
@@ -199,6 +199,7 @@ h1 {
 
 .runtime-card {
   border-color: #c5d1e4;
+  order: -1;
 }
 
 .panel-head {
@@ -335,6 +336,39 @@ tbody tr:focus-visible {
   text-wrap: pretty;
 }
 
+.runtime-prompt {
+  display: grid;
+  gap: 6px;
+}
+
+.runtime-prompt span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.runtime-prompt textarea {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  min-height: 68px;
+  padding: 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+.runtime-prompt textarea:focus {
+  border-color: #87a3ef;
+  box-shadow: 0 0 0 4px rgba(36, 88, 211, 0.12);
+  outline: 0;
+}
+
 .runtime-chip {
   align-items: center;
   border-radius: 999px;
@@ -370,7 +404,18 @@ tbody tr:focus-visible {
 }
 
 .runtime-facts {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.runtime-facts div:last-child {
+  grid-column: 1 / -1;
+}
+
+.runtime-checks {
+  order: 2;
+  max-height: 188px;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .runtime-checks li.ok::before {
@@ -384,7 +429,35 @@ tbody tr:focus-visible {
 .runtime-actions {
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  order: 1;
+}
+
+.primary-action {
+  background: var(--blue);
+  border: 1px solid var(--blue);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 780;
+  grid-column: 1 / -1;
+  min-height: 46px;
+  padding: 10px;
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.primary-action:hover {
+  background: #1f49ae;
+  transform: translateY(-1px);
+}
+
+.primary-action:disabled {
+  background: #9aa5b5;
+  border-color: #9aa5b5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .secondary-action {
@@ -661,7 +734,7 @@ tbody tr:focus-visible {
 table {
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 700px;
+  min-width: 760px;
   table-layout: fixed;
   width: 100%;
 }
@@ -718,10 +791,10 @@ td:nth-child(3) {
 
 th:nth-child(1),
 td:nth-child(1) {
-  min-width: 108px;
+  min-width: 132px;
   overflow-wrap: normal;
   white-space: nowrap;
-  width: 108px;
+  width: 132px;
 }
 
 th:nth-child(2),
@@ -845,6 +918,16 @@ td:nth-child(5) {
   100% {
     opacity: 0;
     transform: scaleX(1);
+  }
+}
+
+@media (max-width: 1360px) {
+  .layout {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+
+  .inspector {
+    grid-column: 1 / -1;
   }
 }
 
