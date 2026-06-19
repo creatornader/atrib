@@ -8,7 +8,7 @@ atrib-signed receipt envelope.
 The app is a safe Cloudflare-shaped workflow:
 
 ```text
-prior trigger -> autonomous triage -> Code Mode approval halt -> human decision -> runtime replay or rejection -> signed audit trace
+prior trigger -> autonomous triage -> Code Mode approval halt -> human decision -> approved execution or rejection -> signed audit trace
 ```
 
 The simulated target is a Durable Object SQLite table that looks like a
@@ -19,14 +19,16 @@ Code Mode is the problem context for the example: generated code can compress
 many side effects behind one execution boundary. This demo keeps the boundary
 explicit. The agent proposes an exact payload first. The generated code reaches a
 `requiresApproval` write through `CodemodeRuntime`. The runtime pauses before the
-side effect. The human signs approve, reject, or request changes. Approved
-execution resumes through runtime replay. The proposal, decision, Code Mode
-preview or execution, outcome, and handoff are signed as separate records.
+side effect. The human signs approve, reject, or request changes. On approval,
+the runtime continues the paused run and executes the approved write. The
+proposal, decision, Code Mode preview or execution, outcome, and handoff are
+signed as separate records.
 
-Cloudflare's current Code Mode runtime owns the durable approval and replay
-surface. This example does not replace that runtime. It adds a portable signed
-receipt envelope around the same boundary: pending action, exact payload,
-human decision, runtime approval or rejection, result, and audit handoff.
+Cloudflare's current Code Mode runtime owns durable approvals, execution
+history, and rollback. This example does not replace that runtime. It adds a
+portable signed receipt envelope around the same boundary: pending action,
+exact payload, human decision, runtime approval or rejection, result, and audit
+handoff.
 
 ## What this shows
 
@@ -38,7 +40,8 @@ human decision, runtime approval or rejection, result, and audit handoff.
 - Agent, human reviewer, and Code Mode runtime records use distinct signing keys.
 - The Code Mode execution record has explicit `informed_by` edges to the
   proposal and human approval records.
-- The outcome and handoff records make the async work auditable after the fact.
+- The outcome and handoff records make the async work auditable after the run
+  finishes.
 - The UI keeps atrib details visible enough to explain the value without making
   the user read raw records first.
 

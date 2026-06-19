@@ -229,7 +229,7 @@ The runnable example at [`approval-trace/`](approval-trace/) turns a Cloudflare
 trigger into a human approval workflow backed by Code Mode runtime semantics:
 
 ```text
-incoming trigger -> autonomous triage -> CodemodeRuntime approval halt -> human decision -> replayed execution -> signed outcome -> audit trace
+incoming trigger -> autonomous triage -> CodemodeRuntime approval halt -> human decision -> approved execution -> signed outcome -> audit trace
 ```
 
 It is intentionally Cloudflare-shaped. The target system is a Durable Object
@@ -237,7 +237,7 @@ SQLite table that models a repository file update, and the review gate pauses a
 Code Mode connector method marked with `requiresApproval: true`. Tests use a
 deterministic local executor with the same `createCodemodeRuntime` handle,
 connector approval metadata, pending action shape, approve/reject calls, and
-replay path. Production configuration uses `CodemodeRuntime`,
+approval-continuation path. Production configuration uses `CodemodeRuntime`,
 `DynamicWorkerExecutor`, and a Worker Loader binding.
 
 The signed boundary is the point: exact proposal payload, generated code digest,
@@ -249,10 +249,10 @@ separation.
 The current hosted proof is at
 `https://atrib-cloudflare.nagala.workers.dev/`.
 The latest verified refresh passed `proof:worker` with `391/391` checks at
-`2026-06-19T06:26:47.961Z` from the public commit used for that proof:
-[`4676ef40608b9a10a6701354d91772e24c529366`](https://github.com/creatornader/atrib/commit/4676ef40608b9a10a6701354d91772e24c529366).
+`2026-06-19T16:33:44.297Z` from the public commit used for that proof:
+[`386050d59844f5dcd46b9d74374183e062be9f28`](https://github.com/creatornader/atrib/commit/386050d59844f5dcd46b9d74374183e062be9f28).
 The deployed Worker version for that run was
-`34297846-9402-45e4-81ad-93712c0cfbdb`.
+`4f91ae21-7507-450f-8f9e-53ed02a20fa3`.
 
 Third-party production redeploys may require Cloudflare Dynamic Workers access
 because Worker Loader is used by `DynamicWorkerExecutor`. On accounts without
