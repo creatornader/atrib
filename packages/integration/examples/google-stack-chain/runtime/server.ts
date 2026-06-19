@@ -203,10 +203,7 @@ function runtimeState(gate: GoogleEvidenceGate): Record<string, unknown> {
   }
 }
 
-async function streamRuntimeRun(
-  request: IncomingMessage,
-  response: ServerResponse,
-): Promise<void> {
+async function streamRuntimeRun(request: IncomingMessage, response: ServerResponse): Promise<void> {
   response.writeHead(200, {
     'content-type': 'application/x-ndjson; charset=utf-8',
     'cache-control': 'no-store',
@@ -290,11 +287,7 @@ function promptFromBody(body: unknown): string | undefined {
 }
 
 function runModeFromBody(body: unknown): 'replay' | 'provided_packet' {
-  if (
-    !isRecord(body) ||
-    body.mode === 'replay' ||
-    (!('result' in body) && !isRecord(body.files))
-  ) {
+  if (!isRecord(body) || body.mode === 'replay' || (!('result' in body) && !isRecord(body.files))) {
     return 'replay'
   }
   return 'provided_packet'
@@ -387,11 +380,7 @@ async function packetFromBody(body: unknown): Promise<GoogleEvidencePacket> {
 }
 
 async function packetFromRunBody(body: unknown): Promise<GoogleEvidencePacket> {
-  if (
-    !isRecord(body) ||
-    body.mode === 'replay' ||
-    (!('result' in body) && !isRecord(body.files))
-  ) {
+  if (!isRecord(body) || body.mode === 'replay' || (!('result' in body) && !isRecord(body.files))) {
     return defaultPacket()
   }
   return packetFromBody(body)

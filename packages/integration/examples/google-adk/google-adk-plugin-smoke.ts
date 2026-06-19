@@ -234,7 +234,8 @@ export async function runGoogleAdkPluginSmoke(
     record_hashes: recordHashes,
     google_operational_ids: googleOperationalIds,
     chain: {
-      first_record_is_genesis: records[0]?.chain_root === resolveChainRoot({ contextId: smokeContextId }),
+      first_record_is_genesis:
+        records[0]?.chain_root === resolveChainRoot({ contextId: smokeContextId }),
       parent_informed_by: options.parentRecordHash ?? null,
       parent_informed_by_resolved: parentVerification?.informed_by_resolution?.resolved ?? [],
       parent_informed_by_dangling: parentVerification?.informed_by_resolution?.dangling ?? [],

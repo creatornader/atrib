@@ -66,9 +66,7 @@ describe('Google evidence runtime', () => {
       a2a_receiver_informs_adk_js: true,
     })
     expect(run.a2a?.evidence.remote_informed_by_resolved).toEqual([run.gate.record_hash])
-    expect(run.adk_js?.chain.parent_informed_by_resolved).toEqual([
-      run.a2a?.followup.record_hash,
-    ])
+    expect(run.adk_js?.chain.parent_informed_by_resolved).toEqual([run.a2a?.followup.record_hash])
     expect(run.analytics_rows.map((row) => row.event_type)).toEqual([
       'atrib.ap2.next_action_allowed',
       'atrib.a2a.remote_evidence_accepted',
