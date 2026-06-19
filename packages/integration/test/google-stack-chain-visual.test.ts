@@ -187,6 +187,22 @@ describe('Google stack chain visual workbench', () => {
     await page.getByRole('button', { name: 'Live verify' }).click()
     await expect.poll(() => page.locator('#verifyStatus').textContent()).toContain('Live verified')
     await expect
+      .poll(() => page.locator('#checkList strong').allTextContents())
+      .toEqual([
+        'Cloud Run run refetched',
+        'Runtime stage present',
+        'Record hash matches',
+        'Stage complete',
+        'Parent context present',
+        'Chain relationship accepted',
+      ])
+    await expect
+      .poll(() => page.locator('#checkList .check-state').allTextContents())
+      .toEqual(['Accepted', 'Accepted', 'Accepted', 'Accepted', 'Accepted', 'Accepted'])
+    await expect
+      .poll(() => page.locator('#checkList').textContent())
+      .toContain('A2A receiver informs ADK JS is true')
+    await expect
       .poll(() => page.locator('#runtimeChecks').evaluate((element) => element.scrollHeight))
       .toBeLessThanOrEqual(
         await page.locator('#runtimeChecks').evaluate((element) => element.clientHeight + 1),
