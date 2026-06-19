@@ -298,9 +298,19 @@ describe('Cloudflare approval trace Worker', () => {
         executor: 'local-test',
         execution_status: 'paused',
         pending_action: expect.objectContaining({
+          seq: expect.any(Number),
           connector: 'repository',
           method: 'write_file',
         }),
+        log: expect.arrayContaining([
+          expect.objectContaining({
+            connector: 'repository',
+            method: 'write_file',
+            state: 'pending',
+            requires_approval: true,
+            args_hash: expect.stringMatching(/^sha256:/),
+          }),
+        ]),
       },
     })
     expect(trace.trace_packet.answer).toMatchObject({

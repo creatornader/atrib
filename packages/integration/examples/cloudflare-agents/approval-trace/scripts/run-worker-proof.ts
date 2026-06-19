@@ -331,12 +331,24 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
         const record = trace.records[index]
         return (
           record &&
+          item.label === record.label &&
           item.signer === record.signer &&
           item.record_hash === record.record_hash &&
           refsEqual(item.informed_by, record.record.informed_by ?? [])
         )
       }),
   )
+  if (trace.run_id.startsWith('changes-rejected-')) {
+    const runtimeRejections = trace.records.filter((record) => record.label === 'runtime_rejection')
+    push(
+      `${trace.run_id}: packet preserves both Code Mode rejection records`,
+      runtimeRejections.length === 2 &&
+        packetTimeline.filter((item) => item.label === 'runtime_rejection').length === 2 &&
+        runtimeRejections.every((record) =>
+          packetTimeline.some((item) => item.record_hash === record.record_hash),
+        ),
+    )
+  }
   push(
     `${trace.run_id}: graph nodes cover records`,
     trace.records.every((record) => graphNodeIds.has(record.record_hash)),
