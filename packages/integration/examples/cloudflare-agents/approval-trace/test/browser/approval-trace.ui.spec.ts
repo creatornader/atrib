@@ -496,6 +496,12 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
       smallCenterDeltaX: number
       smallFits: boolean
       textAlign: string
+      actionsLeft: number
+      actionsRight: number
+      actionsWidth: number
+      buttonLeft: number
+      buttonRight: number
+      buttonWidth: number
     }>
   >(`Array.from(document.querySelectorAll('.actions > button')).map((button) => {
     const actionsRect = document.querySelector('.actions')?.getBoundingClientRect()
@@ -558,6 +564,12 @@ async function expectActionButtonsUseReferenceLayout(page: Page): Promise<void> 
         : 999,
       smallFits: small ? small.left >= buttonRect.left && small.right <= buttonRect.right : false,
       textAlign: copy ? getComputedStyle(button.querySelector('.action-copy')).textAlign : '',
+      actionsLeft: Math.round((actionsRect?.left ?? 0) * 100) / 100,
+      actionsRight: Math.round((actionsRect?.right ?? 0) * 100) / 100,
+      actionsWidth: Math.round((actionsRect?.width ?? 0) * 100) / 100,
+      buttonLeft: Math.round(buttonRect.left * 100) / 100,
+      buttonRight: Math.round(buttonRect.right * 100) / 100,
+      buttonWidth: Math.round(buttonRect.width * 100) / 100,
     }
   })`)
   for (const geometry of buttonGeometry) {
