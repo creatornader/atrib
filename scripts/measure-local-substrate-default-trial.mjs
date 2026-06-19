@@ -171,12 +171,17 @@ function profileCoverageFromReport(report) {
   const contextReadyProfiles = primitiveRuntimes
     .filter((runtime) => {
       const activeState = activeSessionByProfile.get(runtime.agent)
-      const noOpenedSessions =
-        Number(runtime.active_sessions) === 0 && Number(runtime.opened_sessions) === 0
+      const activeHttpConnections = Number(runtime.active_http_connections)
+      const activeHttpRequests = Number(runtime.active_http_requests)
+      const noLiveClientSessions = Number.isFinite(activeHttpConnections)
+        ? activeHttpConnections === 0
+        : Number.isFinite(activeHttpRequests)
+          ? activeHttpRequests === 0
+          : Number(runtime.active_sessions) === 0 && Number(runtime.opened_sessions) === 0
       return (
         activeState?.fresh_context_id === true ||
         runtime.requires_explicit_context_id === true ||
-        noOpenedSessions
+        noLiveClientSessions
       )
     })
     .map((runtime) => runtime.agent)
