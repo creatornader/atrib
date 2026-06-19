@@ -12,8 +12,8 @@ prior trigger -> autonomous triage -> Code Mode approval halt -> human decision 
 ```
 
 The simulated target is a Durable Object SQLite table that looks like a
-Cloudflare Workers issue-triage queue. No real Cloudflare account state is
-mutated.
+Cloudflare Workers checkout incident workspace. No real Cloudflare account state
+is mutated.
 
 Code Mode is the problem context for the example: generated code can compress
 many side effects behind one execution boundary. This demo keeps the boundary
@@ -44,8 +44,8 @@ human decision, runtime approval or rejection, result, and audit handoff.
 
 The important atrib differentiators are:
 
-- **Autonomous trigger context:** the audit starts at the webhook or scheduled
-  follow-up that woke the agent.
+- **Autonomous trigger context:** the audit starts at the Workers Observability
+  alert, Browser Run evidence, and incident workspace that woke the agent.
 - **Decision context:** the reviewer sees exactly what the agent is asking to
   publish before approving.
 - **Signed decision chain:** proposal, approval or rejection, Code Mode
@@ -113,4 +113,4 @@ wrangler secret put OPENAI_API_KEY
 ```
 
 The model must return JSON. If it fails, the app falls back to the deterministic
-Cloudflare issue-triage plan and records `planner: fixture`.
+Cloudflare checkout incident plan and records `planner: fixture`.

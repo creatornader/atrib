@@ -18,7 +18,7 @@ async function expectCleanConsole(page: Page, action: () => Promise<void>): Prom
 
 async function createProposal(page: Page, path = '/'): Promise<void> {
   await page.goto(path)
-  await expect(page).toHaveTitle('Code Mode Approval Trace')
+  await expect(page).toHaveTitle('Cloudflare Agent Trace')
   await expect(page.getByTestId('approval-trace-app')).toBeVisible()
   await expect(page.locator('#coloLabel')).toHaveText(/^[A-Z0-9-]{2,12}$/)
   await expect(page.locator('#runIdLabel')).not.toHaveText('pending')
@@ -84,7 +84,7 @@ async function requestRevision(page: Page): Promise<void> {
   await page
     .locator('#reviewFeedback')
     .fill(
-      'Keep the limiter scoped to /v1/report, lower the cap, and show me a revised proposal before any Code Mode write.',
+      'Keep the checkout guard scoped to missing cart ids, preserve Browser Run evidence, and show me a revised proposal before any Code Mode write.',
     )
   await page.locator('#requestChanges').click()
 
@@ -1539,7 +1539,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectReferenceDesktopPrimaryCaption(page)
       await expectReferenceDesktopCenterStack(page)
       await expect(page.locator('.risk-bar .value')).toHaveText(
-        'Introduces rate limiting which may impact client traffic if misconfigured.',
+        'Changes checkout error handling for a payment-impacting Workers route.',
       )
       await expectReferenceDesktopRiskTextFits(page)
       await expect(
@@ -1575,9 +1575,9 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await page.locator('#riskDetailsToggle').click()
       await expect(page.locator('#riskDetails')).toBeVisible()
       await expect(page.locator('#riskDetails')).toContainText('Code Mode approval gate')
-      await expect(page.locator('.diff-code')).toContainText('const config = getConfig();')
-      await expect(page.locator('.diff-code')).toContainText('next();')
-      await expect(page.locator('.diff-code')).not.toContainText('logRequest')
+      await expect(page.locator('.diff-code')).toContainText('verifyCheckoutSession')
+      await expect(page.locator('.diff-code')).toContainText('missing_cart')
+      await expect(page.locator('.diff-code')).not.toContainText('paymentIntent')
       await expectDiffLineGutter(page)
       await expectDiffRowsFillReferenceFrame(page)
       await expectDiffCopyControlUsesReferencePlacement(page)
@@ -1593,11 +1593,10 @@ test.describe('Cloudflare approval trace browser UI', () => {
         .toBeGreaterThan(threeLineDiffCount)
       const allLineDiffCount = await page.locator('.diff-line').count()
       await expect(page.locator('.diff-line').last().locator('.diff-line-text')).not.toHaveText('')
-      await expect(page.locator('.diff-code')).toContainText('reportAudit')
+      await expect(page.locator('.diff-code')).toContainText('checkoutId')
       await page.locator('#diffContext').selectOption('6')
       await expect(page.locator('.diff')).toHaveAttribute('data-context-lines', '6')
-      await expect(page.locator('.diff-code')).toContainText('logRequest')
-      await expect(page.locator('.diff-code')).not.toContainText('reportAudit')
+      await expect(page.locator('.diff-code')).toContainText('normalizeCartId')
       await expect
         .poll(async () => page.locator('.diff-line').count())
         .toBeLessThan(allLineDiffCount)
@@ -1718,9 +1717,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectReviewPillMatchesRailBadge(page)
       await expect(page.locator('#answer')).toContainText('Agent resumed through Code Mode')
       await expect(page.locator('#answer')).toContainText('Audit ready')
-      await expect(page.locator('#answer')).toContainText(
-        'repo_files.server/middleware/rate_limit.ts',
-      )
+      await expect(page.locator('#answer')).toContainText('repo_files.workers/checkout/session.ts')
       await expect(page.locator('#timeline .event')).toHaveCount(7)
       await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeDisabled()
       await expect(page.locator('#reject')).toBeDisabled()
@@ -1744,7 +1741,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
     await expectCleanConsole(page, async () => {
       await page.setViewportSize({ width: 1280, height: 720 })
       await page.goto('/')
-      await expect(page).toHaveTitle('Code Mode Approval Trace')
+      await expect(page).toHaveTitle('Cloudflare Agent Trace')
       await expect(page.getByTestId('approval-trace-app')).toBeVisible()
       await expectNoHorizontalOverflow(page)
 
@@ -1923,7 +1920,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
         '"error": "repository_file_version_conflict"',
       )
       await expect(page.locator('#receipts pre')).toContainText(
-        '"diagnostic": "The repository file changed after approval."',
+        '"diagnostic": "The Workers checkout file changed after approval."',
       )
     })
   })

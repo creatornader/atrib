@@ -81,7 +81,7 @@ interface RunReader {
 const worker = (workerExports as unknown as { default: FetchHandler }).default
 const testEnv = env as unknown as TestEnv
 const defaultPrompt =
-  'A GitHub issue webhook reported that /v1/report needs rate limiting before the next traffic spike.'
+  'Workers Observability detected checkout 500s after deploy; Browser Run reproduced the failure and Code Mode proposed a guarded Workers patch.'
 
 beforeEach(async () => {
   await reset()
@@ -163,19 +163,20 @@ async function createRun(runId: string, simulateError = false): Promise<TraceRes
 
 async function approveRun(runId: string): Promise<TraceResponse> {
   return postJson<TraceResponse>(`/api/runs/${runId}/approve`, {
-    reason: 'Payload matches the issue scope and expected Cloudflare repository target.',
+    reason:
+      'Payload matches the observability alert, Browser Run evidence, and expected Workers checkout target.',
   })
 }
 
 async function rejectRun(runId: string): Promise<TraceResponse> {
   return postJson<TraceResponse>(`/api/runs/${runId}/reject`, {
-    reason: 'The reviewer decided this issue reply should not be published.',
+    reason: 'The reviewer decided this Workers checkout patch should not be applied.',
   })
 }
 
 async function requestChanges(runId: string): Promise<TraceResponse> {
   return postJson<TraceResponse>(`/api/runs/${runId}/request-changes`, {
-    feedback: 'The reviewer requested a smaller repository file update.',
+    feedback: 'The reviewer requested a narrower checkout guard.',
   })
 }
 
@@ -317,7 +318,7 @@ describe('Cloudflare approval trace Worker', () => {
       decision: 'approved',
       executed: true,
       outcome: 'success',
-      changed: ['repo_files.server/middleware/rate_limit.ts'],
+      changed: ['repo_files.workers/checkout/session.ts'],
     })
 
     const eventTypes = trace.native_observability.map((event) => event.type)
@@ -333,16 +334,16 @@ describe('Cloudflare approval trace Worker', () => {
       ]),
     )
 
-    const targetRows = await getTargetRows(runId, 'server/middleware/rate_limit.ts')
+    const targetRows = await getTargetRows(runId, 'workers/checkout/session.ts')
     expect(targetRows).toEqual([
       expect.objectContaining({
-        file: 'server/middleware/rate_limit.ts',
-        repository: 'cloudflare/agents-demo',
+        file: 'workers/checkout/session.ts',
+        repository: 'cloudflare/agents-commerce-demo',
         operation: 'write_file',
         state: expect.objectContaining({
-          rate_limit: expect.objectContaining({
-            max: 100,
-            standard_headers: true,
+          checkout_guard: expect.objectContaining({
+            missing_cart_response: 400,
+            source: 'browser-run-checkout-smoke',
           }),
         }),
       }),
@@ -394,7 +395,7 @@ describe('Cloudflare approval trace Worker', () => {
       outcome: 'not_run',
       changed: [],
     })
-    expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])
+    expect(await getTargetRows(runId, 'workers/checkout/session.ts')).toEqual([])
   })
 
   it('signs requested changes, revises, and waits for second approval', async () => {
@@ -455,7 +456,7 @@ describe('Cloudflare approval trace Worker', () => {
       outcome: 'pending',
       changed: [],
     })
-    expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])
+    expect(await getTargetRows(runId, 'workers/checkout/session.ts')).toEqual([])
 
     const duplicateResponse = await dispatch(`/api/runs/${runId}/request-changes`, {
       method: 'POST',
@@ -496,13 +497,13 @@ describe('Cloudflare approval trace Worker', () => {
       'handoff',
     ])
     expect(sorted(approval.record.informed_by)).toEqual([revision.record_hash])
-    expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([
+    expect(await getTargetRows(runId, 'workers/checkout/session.ts')).toEqual([
       expect.objectContaining({
-        file: 'server/middleware/rate_limit.ts',
+        file: 'workers/checkout/session.ts',
         state: expect.objectContaining({
-          rate_limit: expect.objectContaining({
-            max: 60,
-            scope: '/v1/report',
+          checkout_guard: expect.objectContaining({
+            missing_cart_response: 400,
+            browser_run_id: 'brw_checkout_smoke_4821',
           }),
         }),
       }),
@@ -546,7 +547,7 @@ describe('Cloudflare approval trace Worker', () => {
       outcome: 'not_run',
       changed: [],
     })
-    expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])
+    expect(await getTargetRows(runId, 'workers/checkout/session.ts')).toEqual([])
   })
 
   it('records a diagnostic outcome when the approved action fails', async () => {
@@ -579,10 +580,10 @@ describe('Cloudflare approval trace Worker', () => {
       executed: true,
       outcome: 'error',
       changed: [],
-      diagnostic: 'The repository file changed after approval.',
+      diagnostic: 'The Workers checkout file changed after approval.',
     })
     expect(trace.native_observability.map((event) => event.type)).toContain('workflow:terminated')
-    expect(await getTargetRows(runId, 'server/middleware/rate_limit.ts')).toEqual([])
+    expect(await getTargetRows(runId, 'workers/checkout/session.ts')).toEqual([])
   })
 
   it('rejects stale approval attempts after the run leaves pending review', async () => {
