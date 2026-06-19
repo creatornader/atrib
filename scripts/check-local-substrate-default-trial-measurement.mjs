@@ -299,6 +299,53 @@ function checkRequiredNamedProfiles() {
   }
 }
 
+function checkIdleContextReadyProfile() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  for (const state of snapshot.active_session_state) {
+    if (state.profile !== 'claude-code') continue
+    state.mtime_ms = FIXTURE_NOW_MS - 14_400_001
+  }
+  for (const runtime of snapshot.primitive_runtime_health) {
+    if (runtime.report?.profile?.agent !== 'claude-code') continue
+    runtime.report.sessions.active = 1
+    runtime.report.sessions.opened = 1
+    runtime.report.sessions.active_http_requests = 0
+  }
+
+  const idleMeasurement = buildDefaultTrialMeasurement(
+    buildReport(snapshot, { generatedAt: GENERATED_AT }),
+    {
+      generatedAt: GENERATED_AT,
+      requiredStartupProfiles: ['claude-code'],
+    },
+  )
+  if (idleMeasurement.status !== 'ready_for_default_trial') {
+    fail(`idle context-ready profile: expected ready, got ${idleMeasurement.status}`)
+  }
+  if (!idleMeasurement.profile_coverage.context_ready_profiles.includes('claude-code')) {
+    fail('idle context-ready profile: expected claude-code context coverage')
+  }
+
+  for (const runtime of snapshot.primitive_runtime_health) {
+    if (runtime.report?.profile?.agent !== 'claude-code') continue
+    runtime.report.sessions.active_http_requests = 1
+  }
+  const activeMeasurement = buildDefaultTrialMeasurement(
+    buildReport(snapshot, { generatedAt: GENERATED_AT }),
+    {
+      generatedAt: GENERATED_AT,
+      requiredStartupProfiles: ['claude-code'],
+    },
+  )
+  if (activeMeasurement.status !== 'not_ready') {
+    fail(`active stale context-ready profile: expected not_ready, got ${activeMeasurement.status}`)
+  }
+  if (statusFor(activeMeasurement, 'required-startup-profiles') !== 'fail') {
+    fail('active stale context-ready profile: expected required-startup-profiles=fail')
+  }
+}
+
 function checkRegisteredFutureHarnessProfiles() {
   const futureStartup = buildDefaultTrialMeasurement(
     fixtureReport('registered-future-startup-spawn-config.json'),
@@ -468,6 +515,7 @@ function main() {
   checkLongLivedGapFailsMeasurement()
   checkLongLivedActivityFailsMeasurement()
   checkRequiredNamedProfiles()
+  checkIdleContextReadyProfile()
   checkRegisteredFutureHarnessProfiles()
 
   if (failures.length > 0) {
