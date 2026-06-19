@@ -28,6 +28,37 @@ export interface GoogleActiveRuntimeStep {
   checks?: RuntimeCheck[]
 }
 
+export type GoogleActiveRuntimeEvent =
+  | {
+      type: 'run_started'
+      run_id: string
+      mode: 'replay' | 'provided_packet'
+      prompt: string
+      timestamp: string
+    }
+  | {
+      type: 'step_started'
+      key: GoogleActiveRuntimeStepKey
+      protocol: GoogleActiveRuntimeStep['protocol']
+      label: string
+      timestamp: string
+    }
+  | {
+      type: 'step_completed'
+      step: GoogleActiveRuntimeStep
+      timestamp: string
+    }
+  | {
+      type: 'run_blocked'
+      run: GoogleActiveRuntimeRun
+      timestamp: string
+    }
+  | {
+      type: 'run_completed'
+      run: GoogleActiveRuntimeRun
+      timestamp: string
+    }
+
 export interface GoogleActiveRuntimeRun {
   ok: boolean
   run_id: string
@@ -61,6 +92,7 @@ export interface GoogleActiveRuntimeRunOptions {
   mode?: 'replay' | 'provided_packet'
   prompt?: string
   nowMs?: number
+  onEvent?: (event: GoogleActiveRuntimeEvent) => void | Promise<void>
 }
 
 const DEFAULT_ACTIVE_PROMPT =
@@ -72,6 +104,26 @@ export async function createGoogleActiveRuntimeRun(
   const prompt = options.prompt ?? DEFAULT_ACTIVE_PROMPT
   const createdMs = options.nowMs ?? Date.now()
   const createdAt = new Date(createdMs).toISOString()
+  const mode = options.mode ?? 'replay'
+  const emit = async (event: GoogleActiveRuntimeEvent): Promise<void> => {
+    await options.onEvent?.(event)
+  }
+
+  await emit({
+    type: 'run_started',
+    run_id: options.runId,
+    mode,
+    prompt,
+    timestamp: createdAt,
+  })
+  await emit({
+    type: 'step_started',
+    key: 'ap2_gate',
+    protocol: 'AP2',
+    label: 'AP2 evidence gate',
+    timestamp: createdAt,
+  })
+
   const gate = await buildGoogleEvidenceGate(options.packet)
   const steps: GoogleActiveRuntimeStep[] = [
     {
@@ -86,13 +138,18 @@ export async function createGoogleActiveRuntimeRun(
       checks: gate.checks,
     },
   ]
+  await emit({
+    type: 'step_completed',
+    step: steps[0]!,
+    timestamp: createdAt,
+  })
 
   if (!gate.allowed) {
-    return {
+    const blockedRun: GoogleActiveRuntimeRun = {
       ok: false,
       run_id: options.runId,
       status: 'blocked',
-      mode: options.mode ?? 'replay',
+      mode,
       prompt,
       created_at: createdAt,
       updated_at: createdAt,
@@ -108,9 +165,22 @@ export async function createGoogleActiveRuntimeRun(
       value_add: runtimeValueAdd(),
       caveats: runtimeCaveats(),
     }
+    await emit({
+      type: 'run_blocked',
+      run: blockedRun,
+      timestamp: createdAt,
+    })
+    return blockedRun
   }
 
   const a2aIds = idsForRun(options.runId)
+  await emit({
+    type: 'step_started',
+    key: 'a2a_handoff',
+    protocol: 'A2A',
+    label: 'A2A verifier handoff',
+    timestamp: new Date(createdMs + 1_000).toISOString(),
+  })
   const a2a = await runA2aHandoffProof({
     nowMs: createdMs + 1_000,
     remoteInformedBy: [gate.record_hash],
@@ -148,7 +218,19 @@ export async function createGoogleActiveRuntimeRun(
       },
     ],
   })
+  await emit({
+    type: 'step_completed',
+    step: steps[1]!,
+    timestamp: new Date(createdMs + 1_000).toISOString(),
+  })
 
+  await emit({
+    type: 'step_started',
+    key: 'adk_tool_callback',
+    protocol: 'ADK JS',
+    label: 'ADK tool callback',
+    timestamp: new Date(createdMs + 2_000).toISOString(),
+  })
   const adkJs = await runGoogleAdkPluginSmoke({
     contextId: digestHex(`adk-js:${options.runId}`, 32),
     parentRecordHash: a2a.followup.record_hash,
@@ -180,6 +262,11 @@ export async function createGoogleActiveRuntimeRun(
       },
     ],
   })
+  await emit({
+    type: 'step_completed',
+    step: steps[2]!,
+    timestamp: new Date(createdMs + 2_000).toISOString(),
+  })
 
   const analyticsRows = buildRuntimeAnalyticsRows({
     runId: options.runId,
@@ -190,11 +277,11 @@ export async function createGoogleActiveRuntimeRun(
   })
   const updatedAt = new Date(createdMs + 2_000).toISOString()
 
-  return {
+  const run: GoogleActiveRuntimeRun = {
     ok: true,
     run_id: options.runId,
     status: 'complete',
-    mode: options.mode ?? 'replay',
+    mode,
     prompt,
     created_at: createdAt,
     updated_at: updatedAt,
@@ -216,6 +303,12 @@ export async function createGoogleActiveRuntimeRun(
     value_add: runtimeValueAdd(),
     caveats: runtimeCaveats(),
   }
+  await emit({
+    type: 'run_completed',
+    run,
+    timestamp: updatedAt,
+  })
+  return run
 }
 
 function buildRuntimeAnalyticsRows({

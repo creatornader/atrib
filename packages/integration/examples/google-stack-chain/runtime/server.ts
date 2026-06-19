@@ -86,6 +86,11 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       return
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/runs/stream') {
+      await streamRuntimeRun(request, response)
+      return
+    }
+
     const apiRunId = runIdFromPath(url.pathname)
     if (request.method === 'GET' && apiRunId) {
       const run = activeRuns.get(apiRunId)
@@ -161,6 +166,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
         'GET /health',
         'GET /api/runs',
         'POST /api/runs',
+        'POST /api/runs/stream',
         'GET /api/runs/:runId',
         'GET /v1/runtime-state',
         'POST /v1/replay/google-ap2-sample',
@@ -194,6 +200,50 @@ function runtimeState(gate: GoogleEvidenceGate): Record<string, unknown> {
       analytics_write: '/v1/analytics/write',
       merchant_adapter: '/v1/merchant-adapter',
     },
+  }
+}
+
+async function streamRuntimeRun(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  response.writeHead(200, {
+    'content-type': 'application/x-ndjson; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+  })
+
+  const writeLine = (value: unknown): void => {
+    response.write(`${JSON.stringify(value)}\n`)
+  }
+
+  try {
+    const body = await readJsonBody(request)
+    const packet = await packetFromRunBody(body)
+    const run = await createGoogleActiveRuntimeRun({
+      runId: runIdFromBody(body),
+      packet,
+      mode: runModeFromBody(body),
+      prompt: promptFromBody(body),
+      onEvent: (event) => writeLine({ ok: true, event }),
+    })
+    rememberRun(run)
+    const analyticsWrite = await maybeWriteRuntimeAnalytics(body, run.analytics_rows)
+    writeLine({
+      ok: true,
+      event: {
+        type: 'analytics_write',
+        analytics_write: analyticsWrite,
+        timestamp: new Date().toISOString(),
+      },
+    })
+  } catch (error) {
+    writeLine({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  } finally {
+    response.end()
   }
 }
 

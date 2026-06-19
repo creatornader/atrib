@@ -107,11 +107,17 @@ describe('Google stack chain visual workbench', () => {
     page.on('pageerror', (error) => consoleErrors.push(error.message))
 
     await page.goto(`${baseUrl}?runtime=${encodeURIComponent(`${baseUrl}/runtime`)}`)
-    await expect.poll(() => page.locator('#runtimeStatus').textContent()).toBe('Allowed')
+    await expect.poll(() => page.locator('#runtimeStatus').textContent()).toBe('Ready')
+    await expect.poll(() => page.locator('#runtimeFlow .runtime-flow-step').count()).toBe(3)
+    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(4)
     await page.getByRole('button', { name: 'Start run' }).click()
     await expect.poll(() => page.locator('#runtimeStatus').textContent()).toBe('Complete')
     await expect.poll(() => page.locator('#runtimeRunId').textContent()).toBe('mock-active-run')
     await expect.poll(() => page.locator('#runtimeAdkHash').textContent()).toContain('sha256:adk')
+    await expect.poll(() => page.locator('#runtimeFlow .runtime-flow-step.complete').count()).toBe(3)
+    await expect.poll(() => page.locator('.runtime-node').count()).toBe(3)
+    await expect.poll(() => page.locator('#selectedTitle').textContent()).toBe('ADK JS tool callback')
+    await expect.poll(() => page.locator('#stageMode').textContent()).toContain('Active Cloud Run path')
     await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(4)
     await expect.poll(() => page.locator('#analyticsRows tr').last().textContent()).toContain('ADK JS')
     expect(consoleErrors).toEqual([])
@@ -205,6 +211,73 @@ function writeRuntimeMock(pathname: string, res: ServerResponse): void {
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   if (pathname === '/runtime/v1/runtime-state') {
     res.end(JSON.stringify({ ok: true, capabilities: { analytics_write_enabled: false }, gate: mockGate() }))
+    return
+  }
+  if (pathname === '/runtime/api/runs/stream') {
+    const run = mockRun()
+    const [ap2Step, a2aStep, adkStep] = run.steps
+    if (!ap2Step || !a2aStep || !adkStep) throw new Error('mock run is missing runtime steps')
+    res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
+    res.end(
+      [
+        {
+          ok: true,
+          event: {
+            type: 'run_started',
+            run_id: run.run_id,
+            mode: run.mode,
+            prompt: run.prompt,
+            timestamp: run.created_at,
+          },
+        },
+        {
+          ok: true,
+          event: {
+            type: 'step_started',
+            key: 'ap2_gate',
+            protocol: 'AP2',
+            label: 'AP2 evidence gate',
+            timestamp: run.created_at,
+          },
+        },
+        { ok: true, event: { type: 'step_completed', step: ap2Step, timestamp: run.created_at } },
+        {
+          ok: true,
+          event: {
+            type: 'step_started',
+            key: 'a2a_handoff',
+            protocol: 'A2A',
+            label: 'A2A verifier handoff',
+            timestamp: a2aStep.timestamp,
+          },
+        },
+        {
+          ok: true,
+          event: { type: 'step_completed', step: a2aStep, timestamp: a2aStep.timestamp },
+        },
+        {
+          ok: true,
+          event: {
+            type: 'step_started',
+            key: 'adk_tool_callback',
+            protocol: 'ADK JS',
+            label: 'ADK tool callback',
+            timestamp: adkStep.timestamp,
+          },
+        },
+        {
+          ok: true,
+          event: { type: 'step_completed', step: adkStep, timestamp: adkStep.timestamp },
+        },
+        { ok: true, event: { type: 'run_completed', run, timestamp: run.updated_at } },
+        {
+          ok: true,
+          event: { type: 'analytics_write', analytics_write: null, timestamp: run.updated_at },
+        },
+      ]
+        .map((event) => JSON.stringify(event))
+        .join('\n') + '\n',
+    )
     return
   }
   if (pathname === '/runtime/api/runs' || pathname === '/runtime/api/runs/mock-active-run') {

@@ -42,11 +42,15 @@ describe('Google evidence runtime', () => {
       evidenceJson: join(fixtureDir, 'ap2-vi-reference-evidence.json'),
     })
 
+    const events: string[] = []
     const run = await createGoogleActiveRuntimeRun({
       runId: 'google-active-test-run',
       packet,
       prompt: 'Quote the next atlas-kit action after AP2 verification.',
       nowMs: 1_779_840_000_000,
+      onEvent: (event) => {
+        events.push('key' in event ? `${event.type}:${event.key}` : event.type)
+      },
     })
 
     expect(run.ok).toBe(true)
@@ -79,6 +83,16 @@ describe('Google evidence runtime', () => {
     ])
     expect(run.analytics_rows[3]?.protocol).toBe('ADK JS')
     expect(run.caveats.join(' ')).toContain('committed replay fixture')
+    expect(events).toEqual([
+      'run_started',
+      'step_started:ap2_gate',
+      'step_completed',
+      'step_started:a2a_handoff',
+      'step_completed',
+      'step_started:adk_tool_callback',
+      'step_completed',
+      'run_completed',
+    ])
   }, 30000)
 
   it('documents the bring-your-AP2-merchant packet shape', () => {
