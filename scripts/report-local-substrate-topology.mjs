@@ -1916,6 +1916,7 @@ function primitiveRuntimeHealthSummary(items) {
       requires_explicit_context_id: report.profile?.requires_explicit_context_id,
       active_sessions: report.sessions?.active,
       opened_sessions: report.sessions?.opened,
+      active_http_requests: report.sessions?.active_http_requests,
       reason: item.reason,
       http_status: item.http_status,
     }
@@ -1980,8 +1981,10 @@ function hasExplicitContextIdPolicy(item) {
   )
 }
 
-function primitiveRuntimeHasNoSessions(item) {
+function primitiveRuntimeHasNoLiveClientSessions(item) {
   const sessions = item?.report?.sessions
+  const activeHttpRequests = Number(sessions?.active_http_requests)
+  if (Number.isFinite(activeHttpRequests)) return activeHttpRequests === 0
   return Number(sessions?.active) === 0 && Number(sessions?.opened) === 0
 }
 
@@ -2028,7 +2031,7 @@ function activeSessionCoverage(primitiveHealth, activeSessionState) {
     (profile) => hasFreshActiveSessionState(activeSessionStateByProfile.get(profile)),
   )
   const idleProfiles = runtimeProfiles.filter((profile) =>
-    primitiveRuntimeHasNoSessions(primitiveHttpByProfile.get(profile)),
+    primitiveRuntimeHasNoLiveClientSessions(primitiveHttpByProfile.get(profile)),
   )
   const idleProfileSet = new Set(idleProfiles)
   const readyProfiles = runtimeProfiles.filter(

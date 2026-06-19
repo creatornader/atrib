@@ -575,6 +575,7 @@ export async function bindAtribPrimitivesHttpHost(
   const version = readPackageVersion()
   let openedSessions = 0
   let closedSessions = 0
+  let activeHttpRequests = 0
   let endpoint = ''
   let healthEndpoint = ''
 
@@ -671,6 +672,7 @@ export async function bindAtribPrimitivesHttpHost(
             active: sessions.size,
             opened: openedSessions,
             closed: closedSessions,
+            active_http_requests: activeHttpRequests,
             idle_timeout_ms: sessionIdleMs,
           },
         },
@@ -688,76 +690,81 @@ export async function bindAtribPrimitivesHttpHost(
       return
     }
 
-    sweepIdleSessions()
-    const sessionId = parseSessionIdHeader(req)
-
+    activeHttpRequests += 1
     try {
-      let body: unknown
-      if (req.method === 'POST') {
-        try {
-          body = await readJsonBody(req)
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          sendJsonRpcError(res, 400, -32700, `invalid JSON body: ${message}`)
-          return
-        }
-      }
+      sweepIdleSessions()
+      const sessionId = parseSessionIdHeader(req)
 
-      if (sessionId) {
-        const session = sessions.get(sessionId)
-        if (!session) {
-          sendJsonRpcError(res, 404, -32000, 'Session not found')
-          return
-        }
-        session.lastSeenAt = Date.now()
-        await session.transport.handleRequest(req, res, body)
-        return
-      }
-
-      if (req.method !== 'POST' || !isInitializeRequest(body)) {
-        sendJsonRpcError(
-          res,
-          400,
-          -32000,
-          'Bad Request: initialize first or provide mcp-session-id',
-        )
-        return
-      }
-
-      let session: HttpSession | undefined
       try {
-        const sessionServer = createOuterServer(backendProvider.get)
-        session = {
-          server: sessionServer,
-          transport: new StreamableHTTPServerTransport({
-            sessionIdGenerator: () => randomUUID(),
-            onsessioninitialized: (newSessionId) => {
-              if (!session) return
-              session.sessionId = newSessionId
-              session.lastSeenAt = Date.now()
-              sessions.set(newSessionId, session)
-            },
-          }),
-          createdAt: Date.now(),
-          lastSeenAt: Date.now(),
-          closing: false,
+        let body: unknown
+        if (req.method === 'POST') {
+          try {
+            body = await readJsonBody(req)
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            sendJsonRpcError(res, 400, -32700, `invalid JSON body: ${message}`)
+            return
+          }
         }
-        session.transport.onclose = () => {
-          if (session) void closeSession(session)
+
+        if (sessionId) {
+          const session = sessions.get(sessionId)
+          if (!session) {
+            sendJsonRpcError(res, 404, -32000, 'Session not found')
+            return
+          }
+          session.lastSeenAt = Date.now()
+          await session.transport.handleRequest(req, res, body)
+          return
         }
-        await sessionServer.connect(session.transport)
-        openedSessions += 1
-        await session.transport.handleRequest(req, res, body)
-      } finally {
-        if (session && !session.sessionId && !session.closing) {
-          await closeSession(session)
+
+        if (req.method !== 'POST' || !isInitializeRequest(body)) {
+          sendJsonRpcError(
+            res,
+            400,
+            -32000,
+            'Bad Request: initialize first or provide mcp-session-id',
+          )
+          return
+        }
+
+        let session: HttpSession | undefined
+        try {
+          const sessionServer = createOuterServer(backendProvider.get)
+          session = {
+            server: sessionServer,
+            transport: new StreamableHTTPServerTransport({
+              sessionIdGenerator: () => randomUUID(),
+              onsessioninitialized: (newSessionId) => {
+                if (!session) return
+                session.sessionId = newSessionId
+                session.lastSeenAt = Date.now()
+                sessions.set(newSessionId, session)
+              },
+            }),
+            createdAt: Date.now(),
+            lastSeenAt: Date.now(),
+            closing: false,
+          }
+          session.transport.onclose = () => {
+            if (session) void closeSession(session)
+          }
+          await sessionServer.connect(session.transport)
+          openedSessions += 1
+          await session.transport.handleRequest(req, res, body)
+        } finally {
+          if (session && !session.sessionId && !session.closing) {
+            await closeSession(session)
+          }
+        }
+      } catch (error) {
+        if (!res.headersSent) {
+          const message = error instanceof Error ? error.message : String(error)
+          sendJsonRpcError(res, 500, -32603, `Internal server error: ${message}`)
         }
       }
-    } catch (error) {
-      if (!res.headersSent) {
-        const message = error instanceof Error ? error.message : String(error)
-        sendJsonRpcError(res, 500, -32603, `Internal server error: ${message}`)
-      }
+    } finally {
+      activeHttpRequests = Math.max(0, activeHttpRequests - 1)
     }
   })
 

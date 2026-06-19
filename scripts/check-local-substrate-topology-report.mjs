@@ -450,8 +450,9 @@ function checkIdleActiveSessionStateGate() {
     if (item.report?.profile?.agent !== 'claude-code') continue
     item.report.sessions = {
       ...(item.report.sessions ?? {}),
-      active: 0,
-      opened: 0,
+      active: 2,
+      opened: 4,
+      active_http_requests: 0,
     }
   }
 
@@ -481,6 +482,12 @@ function checkIdleActiveSessionStateGate() {
       `idle active-session gate: expected 3 ready context profiles, got ${report.summary.active_session_profiles_ready}`,
     )
   }
+  const claudeCodeRuntime = report.primitive_runtimes.find(
+    (item) => item.agent === 'claude-code',
+  )
+  if (claudeCodeRuntime?.active_http_requests !== 0) {
+    fail('idle active-session gate: expected claude-code active_http_requests=0')
+  }
   const activeSessionGate = report.gates.find(
     (gate) => gate.name === 'host-owned-active-session-context',
   )
@@ -490,6 +497,53 @@ function checkIdleActiveSessionStateGate() {
   const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
   if (broadGate?.status !== 'pass') {
     fail('idle active-session gate: expected broad-default-readiness=pass')
+  }
+}
+
+function checkRetainedSessionWithLiveRequestGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  for (const item of snapshot.active_session_state ?? []) {
+    if (item.profile !== 'claude-code') continue
+    item.mtime_ms = FIXTURE_NOW_MS - 5 * 3_600_000
+    delete item.age_ms
+    delete item.fresh_context_id
+  }
+  for (const item of snapshot.primitive_runtime_health ?? []) {
+    if (item.report?.profile?.agent !== 'claude-code') continue
+    item.report.sessions = {
+      ...(item.report.sessions ?? {}),
+      active: 2,
+      opened: 4,
+      active_http_requests: 1,
+    }
+  }
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'mixed') {
+    fail(`retained live-request gate: expected status mixed, got ${report.summary.status}`)
+  }
+  if (report.summary.active_session_profiles_idle !== 0) {
+    fail(
+      `retained live-request gate: expected 0 idle active-session profiles, got ${report.summary.active_session_profiles_idle}`,
+    )
+  }
+  if (report.summary.active_session_profiles_ready !== 2) {
+    fail(
+      `retained live-request gate: expected 2 ready context profiles, got ${report.summary.active_session_profiles_ready}`,
+    )
+  }
+  const activeSessionGate = report.gates.find(
+    (gate) => gate.name === 'host-owned-active-session-context',
+  )
+  if (activeSessionGate?.status !== 'warn') {
+    fail('retained live-request gate: expected host-owned-active-session-context=warn')
+  }
+  const broadGate = report.gates.find((gate) => gate.name === 'broad-default-readiness')
+  if (broadGate?.status !== 'fail') {
+    fail('retained live-request gate: expected broad-default-readiness=fail')
   }
 }
 
@@ -1355,6 +1409,7 @@ function main() {
   checkExplicitContextPolicyGate()
   checkStaleActiveSessionStateGate()
   checkIdleActiveSessionStateGate()
+  checkRetainedSessionWithLiveRequestGate()
   checkKnowledgeBaseReceiptJoinGate()
   checkKnowledgeBaseWatcherActivityGate()
   checkKnowledgeBaseReceiptCollector()
