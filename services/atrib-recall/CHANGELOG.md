@@ -1,5 +1,13 @@
 # @atrib/recall
 
+## 0.12.19
+
+### Patch Changes
+
+- bc2daf3: Refresh cached recall mirrors from appended JSONL bytes so wrapper-signed read calls do not force a full mirror reload on the next query.
+- e96057d: Tail-load the default content-search window on cold start so recall_by_content does not need to parse the full local mirror before answering interactive queries.
+- 2659564: Cache loaded mirror snapshots and bound default content search to a newest-first corpus so large local mirrors do not make read primitives time out.
+
 ## 0.12.18
 
 ### Patch Changes
