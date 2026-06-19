@@ -803,12 +803,14 @@ function parseLongLivedAgent(path) {
         : {}
     const envFile = longLivedEnvFileFromProgramArguments(args)
     const fileEnv = envFile ? readSafeEnvFile(envFile) : {}
-    const endpoint =
-      firstEnvValue(env, SAFE_ENDPOINT_ENV_KEYS) ?? firstEnvValue(fileEnv, SAFE_ENDPOINT_ENV_KEYS)
     const agent =
       firstEnvValue(env, SAFE_AGENT_ENV_KEYS) ??
       firstEnvValue(fileEnv, SAFE_AGENT_ENV_KEYS) ??
       agentNameFromLongLivedLabel(label)
+    const endpoint =
+      firstEnvValue(env, SAFE_ENDPOINT_ENV_KEYS) ??
+      firstEnvValue(fileEnv, SAFE_ENDPOINT_ENV_KEYS) ??
+      openClawEndpointFor(label, agent)
     const isKnownLongLivedAgent = LONG_LIVED_AGENT_LABELS.has(label)
     const isSelfDeclaredLongLivedAgent = Boolean(endpoint && agent)
     if (!isKnownLongLivedAgent && !isSelfDeclaredLongLivedAgent) return undefined
@@ -867,6 +869,27 @@ function readSafeEnvFile(path) {
     out[match[1]] = unquoteEnvValue(match[2].trim())
   }
   return out
+}
+
+function loopbackEndpoint(value) {
+  const endpoints = endpointList(value)
+  return endpoints[0]
+}
+
+function readOpenClawConfigEndpoint() {
+  const stdout = run('openclaw', ['config', 'get', 'env', '--json'])
+  if (!stdout) return undefined
+  try {
+    return loopbackEndpoint(JSON.parse(stdout)?.vars?.ATRIB_LOCAL_SUBSTRATE_ENDPOINT)
+  } catch {
+    return undefined
+  }
+}
+
+function openClawEndpointFor(label, agent) {
+  return label === 'ai.openclaw.gateway' || agent === 'openclaw'
+    ? readOpenClawConfigEndpoint()
+    : undefined
 }
 
 function unquoteEnvValue(value) {
@@ -1432,10 +1455,14 @@ function normalizeRegistryLongLivedAgent(route, { index, registryPath } = {}) {
   const rawEnvFile = stringValue(route.env_file) ?? stringValue(route.envFile)
   const envFile = rawEnvFile ? expandHomePath(rawEnvFile) : undefined
   const fileEnv = envFile && existsSync(envFile) ? readSafeEnvFile(envFile) : {}
-  const endpoint = stringValue(route.endpoint) ?? firstEnvValue(fileEnv, SAFE_ENDPOINT_ENV_KEYS)
   const agent = stringValue(route.agent) ?? firstEnvValue(fileEnv, SAFE_AGENT_ENV_KEYS)
+  const routeLabel = stringValue(route.label)
+  const endpoint =
+    stringValue(route.endpoint) ??
+    firstEnvValue(fileEnv, SAFE_ENDPOINT_ENV_KEYS) ??
+    openClawEndpointFor(routeLabel, agent)
   const label =
-    stringValue(route.label) ??
+    routeLabel ??
     (agent ? `registry:${agent}` : undefined) ??
     (endpoint ? `registry:${endpoint}` : undefined) ??
     `registry:${index + 1}`

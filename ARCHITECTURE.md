@@ -242,18 +242,53 @@ This keeps the product boundary clean. Langfuse-style systems remain the right p
 
 The integration target decides which atrib package belongs in the path.
 
-| Object | Owner | atrib surface | Boundary |
-| ------ | ----- | ------------- | -------- |
-| Tool call or SDK callback | Tool host or agent SDK | `@atrib/mcp`, `@atrib/mcp-wrap`, `@atrib/agent` | Sign the action when it happens. |
-| OpenTelemetry or OpenInference span tree | Observability pipeline | `@atrib/openinference` | Read spans as intake, then emit signed records plus local cognitive sidecars. |
-| Runtime log window | Runtime, workflow engine, checkpoint store, or job packet | `@atrib/runtime-log` | Verify roots, projections, receipts, forks, compactions, and redaction policy for one bounded window. |
-| Vendor-hosted session export | Hosted runtime vendor | Pattern 5 adapter, planned | Sign what the consumer observed from the vendor export. Do not claim vendor-internal truth. |
-| atrib trace or chain | atrib graph services | `/v1/trace`, `/v1/chain`, `@atrib/trace` | Read signed chronology and declared relationships. This is not the runtime's own run log. |
+| Object                                   | Owner                                                     | atrib surface                                   | Boundary                                                                                              |
+| ---------------------------------------- | --------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Tool call or SDK callback                | Tool host or agent SDK                                    | `@atrib/mcp`, `@atrib/mcp-wrap`, `@atrib/agent` | Sign the action when it happens.                                                                      |
+| OpenTelemetry or OpenInference span tree | Observability pipeline                                    | `@atrib/openinference`                          | Read spans as intake, then emit signed records plus local cognitive sidecars.                         |
+| Runtime log window                       | Runtime, workflow engine, checkpoint store, or job packet | `@atrib/runtime-log`                            | Verify roots, projections, receipts, forks, compactions, and redaction policy for one bounded window. |
+| Vendor-hosted session export             | Hosted runtime vendor                                     | Pattern 5 adapter, planned                      | Sign what the consumer observed from the vendor export. Do not claim vendor-internal truth.           |
+| atrib trace or chain                     | atrib graph services                                      | `/v1/trace`, `/v1/chain`, `@atrib/trace`        | Read signed chronology and declared relationships. This is not the runtime's own run log.             |
 
 This map keeps the docs from using "trace" as a bucket for every execution
 record. A span tree can explain timing and nested operations, a runtime log can
 reconstruct or resume a run, and an atrib trace can replay signed causality.
 They can point at each other, but each one keeps its own owner and proof claim.
+
+### Agent framework vs host runtime adapters
+
+atrib has two adapter families that should not be merged.
+
+| Family                   | Owner                        | Typical surfaces                                                                             | Primary packages                                                                                                                                     |
+| ------------------------ | ---------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent framework adapters | Application code or SDK user | MCP client/server calls, SDK tool callbacks, payment-response flow                           | `@atrib/agent`, `@atrib/mcp`, `@atrib/mcp-wrap`                                                                                                      |
+| Host runtime adapters    | Harness or runtime operator  | Lifecycle hooks, native tool hooks, approvals, subagents, exec env, run logs, hosted exports | Host-specific proof code plus `@atrib/mcp-wrap`, `@atrib/openinference`, `@atrib/runtime-log`, `@atrib/verify`, `atrib-emit-cli`, or local substrate |
+
+The distinction is architectural, not naming preference. `@atrib/agent` covers
+the agent application's tool-call path and commerce fallback path. It should not
+become the package that owns host sessions, daemon lifecycle, approval UIs,
+checkpoint stores, or trajectory exports.
+
+Host runtime adapters start as proof-kit code under `@atrib/integration` until
+repeated implementations prove a public package boundary. Each host surface maps
+to an existing proof role:
+
+| Host surface                     | Signing or proof owner                                                    |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| MCP tool call                    | `@atrib/mcp-wrap` owns the `tool_call` record.                            |
+| Host-native tool hook            | Host runtime adapter owns the `tool_call` record.                         |
+| SDK tool callback                | `@atrib/agent` owns the client-side middleware path.                      |
+| Lifecycle hook                   | `atrib-emit-cli` or local substrate owns the observation.                 |
+| OpenInference-shaped span intake | `@atrib/openinference` owns span-derived records or correlation sidecars. |
+| Plain OTel span intake           | Host-specific ingest adapter, only after the span contract is explicit.   |
+| Runtime log window               | `@atrib/runtime-log` owns the manifest proof.                             |
+| Handoff claim                    | `@atrib/verify` owns acceptance before `informed_by` linking.             |
+
+One host event gets one signing owner. If a host observes a tool call that
+`@atrib/mcp-wrap` already signed, the host adapter records correlation material
+and skips a second `tool_call` record. The private helper
+[`packages/integration/src/host-runtime-proof.ts`](packages/integration/src/host-runtime-proof.ts)
+pins this rule for OpenClaw, Hermes, and future host proofs.
 
 ### Runtime log boundary
 

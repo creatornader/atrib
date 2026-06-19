@@ -249,6 +249,7 @@ describe('Google stack chain visual workbench', () => {
     })
 
     await page.goto(baseUrl)
+    await expect.poll(() => page.locator('#analyticsRows .empty-row td').count()).toBe(1)
     const audit = await page.evaluate(() => {
       const controls = [...document.querySelectorAll('button,[role="button"]')]
         .map((element) => {
