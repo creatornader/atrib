@@ -316,6 +316,7 @@ function getContentSearchMirrorSnapshot(maxRecords: number): LoadedMirrorSnapsho
   if (refreshed) return refreshed
 
   const { loaded, files } = discoverNewestLoaded(maxRecords)
+  const partial = loaded.length >= maxRecords
   const annotationsByRecord = aggregateAnnotationsByRecord(loaded)
   const revisionsByRecord = aggregateRevisionsByRecord(loaded)
   contentSearchMirrorSnapshot = {
@@ -329,7 +330,7 @@ function getContentSearchMirrorSnapshot(maxRecords: number): LoadedMirrorSnapsho
     revisionsByRecord,
     bm25IndexesByNewestLimit: new Map(),
     maxLoadedRecords: maxRecords,
-    partial: true,
+    partial,
   }
   return contentSearchMirrorSnapshot
 }
@@ -354,6 +355,13 @@ function tryAppendRefreshLoadedMirrorSnapshot(
   maxLoadedRecords?: number,
 ): LoadedMirrorSnapshot | undefined {
   if (!previous) return undefined
+  if (
+    maxLoadedRecords !== undefined &&
+    previous.maxLoadedRecords !== undefined &&
+    previous.maxLoadedRecords !== maxLoadedRecords
+  ) {
+    return undefined
+  }
   if (!sameMirrorFiles(previous.stats, fingerprint.stats)) return undefined
 
   const previousByPath = new Map(previous.stats.map((stat) => [stat.path, stat]))
@@ -374,7 +382,9 @@ function tryAppendRefreshLoadedMirrorSnapshot(
   }
 
   let loaded = previous.loaded.concat(appended)
+  let partial = previous.partial
   if (maxLoadedRecords !== undefined) {
+    partial = previous.partial || loaded.length > maxLoadedRecords
     loaded = loaded
       .sort((a, b) => b.record.timestamp - a.record.timestamp)
       .slice(0, maxLoadedRecords)
@@ -393,7 +403,7 @@ function tryAppendRefreshLoadedMirrorSnapshot(
     revisionsByRecord,
     bm25IndexesByNewestLimit: new Map(),
     maxLoadedRecords,
-    partial: previous.partial,
+    partial,
   }
   if (previous.partial) {
     contentSearchMirrorSnapshot = refreshed
