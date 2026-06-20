@@ -30,7 +30,7 @@
 import type { ImportanceLabel } from './index.js'
 import { IMPORTANCE_NUMERIC } from './index.js'
 import type { AnnotationSummary, LoadedRecord } from './aggregations.js'
-import { extractIndexableText } from '@atrib/mcp'
+import { EVENT_TYPE_TOOL_CALL_URI, extractIndexableText } from '@atrib/mcp'
 
 /**
  * Exponential-decay recency score. timestamp is milliseconds; tau is in
@@ -66,6 +66,105 @@ export function tokenize(text: string): string[] {
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((t) => t.length > 0)
+}
+
+const LIFECYCLE_COMPACTION_PRODUCER = 'claude-hooks-lifecycle-precompact'
+const LIFECYCLE_SESSIONEND_PRODUCER = 'claude-hooks-lifecycle-sessionend'
+const LIFECYCLE_QUERY_TOKENS = new Set([
+  'compact',
+  'compaction',
+  'lifecycle',
+  'precompact',
+  'sessionend',
+])
+const LIFECYCLE_EVENTS = new Set(['precompact', 'sessionend'])
+const LIFECYCLE_HOOK_EVENTS = new Set(['PreCompact', 'SessionEnd'])
+const RAW_TOOL_CALL_SCORE_FACTOR = 0.15
+
+/**
+ * Lifecycle records are session anchors, not decision memories.
+ * Keep them searchable for explicit lifecycle debugging, but do not let
+ * their high importance and query-rich topics dominate normal content recall.
+ */
+export function shouldSuppressLifecycleAnchorForQuery(
+  loaded: LoadedRecord,
+  annotation: AnnotationSummary | undefined,
+  queryTokens: string[],
+): boolean {
+  if (queryMentionsLifecycle(queryTokens)) return false
+  return hasLifecycleSignal(loaded, annotation)
+}
+
+function queryMentionsLifecycle(queryTokens: string[]): boolean {
+  return queryTokens.some((token) => LIFECYCLE_QUERY_TOKENS.has(token))
+}
+
+function hasLifecycleSignal(
+  loaded: LoadedRecord,
+  annotation: AnnotationSummary | undefined,
+): boolean {
+  if (loaded.producer === LIFECYCLE_COMPACTION_PRODUCER) return true
+  if (loaded.producer === LIFECYCLE_SESSIONEND_PRODUCER) return true
+  if (summaryLooksLikeLifecycleAnchor(annotation?.summary)) return true
+
+  const content = objectFromUnknown(loaded.content)
+  if (!content) return false
+
+  const triggerEnvelope = objectFromUnknown(content.trigger_envelope)
+  const producer = stringField(content, 'producer')
+  const lifecycleEvent = stringField(content, 'lifecycle_event')
+  const hookEventName = stringField(triggerEnvelope, 'hook_event_name')
+  return (
+    producer === LIFECYCLE_COMPACTION_PRODUCER ||
+    producer === LIFECYCLE_SESSIONEND_PRODUCER ||
+    (lifecycleEvent !== undefined && LIFECYCLE_EVENTS.has(lifecycleEvent)) ||
+    (hookEventName !== undefined && LIFECYCLE_HOOK_EVENTS.has(hookEventName)) ||
+    summaryLooksLikeLifecycleAnchor(stringField(content, 'summary'))
+  )
+}
+
+function summaryLooksLikeLifecycleAnchor(summary: string | undefined): boolean {
+  if (typeof summary !== 'string') return false
+  const normalized = summary.toLowerCase()
+  return (
+    normalized.startsWith('session compaction at ') ||
+    normalized.startsWith('session ended at ')
+  )
+}
+
+function objectFromUnknown(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
+}
+
+function stringField(obj: Record<string, unknown> | undefined, field: string): string | undefined {
+  const value = obj?.[field]
+  return typeof value === 'string' ? value : undefined
+}
+
+/**
+ * Raw tool calls are audit evidence. They often repeat the user's query in
+ * args, so a recent recall/search/edit wrapper can look like the best answer
+ * to "what do I know about X?" Keep annotated calls at full weight because
+ * curation turns the call into semantic memory.
+ */
+export function operationalToolCallScoreFactor(
+  loaded: LoadedRecord,
+  annotation: AnnotationSummary | undefined,
+): number {
+  if (loaded.record.event_type !== EVENT_TYPE_TOOL_CALL_URI) return 1
+  if (hasSemanticAnnotation(annotation)) return 1
+  return RAW_TOOL_CALL_SCORE_FACTOR
+}
+
+function hasSemanticAnnotation(annotation: AnnotationSummary | undefined): boolean {
+  if (!annotation) return false
+  return Boolean(
+    annotation.summary ||
+      (annotation.topics && annotation.topics.length > 0) ||
+      annotation.max_importance,
+  )
 }
 
 /**
@@ -154,6 +253,39 @@ export function bm25Score(index: BM25Index, docId: string, queryTokens: string[]
     score += idf * (numerator / denominator)
   }
   return score
+}
+
+/**
+ * Normalize raw BM25 into the bounded Park relevance component. Raw BM25 can
+ * saturate from one rare token in a long query, which makes a single overlap
+ * look as relevant as a full topic match. Scale the clamped raw score by the
+ * share of unique query tokens present in the document.
+ */
+export function normalizedBm25Relevance(
+  index: BM25Index,
+  docId: string,
+  queryTokens: string[],
+  rawScore = bm25Score(index, docId, queryTokens),
+): number {
+  if (rawScore <= 0) return 0
+  const coverage = queryTokenCoverage(index, docId, queryTokens)
+  return Math.min(rawScore, 1) * coverage
+}
+
+export function queryTokenCoverage(
+  index: BM25Index,
+  docId: string,
+  queryTokens: string[],
+): number {
+  const doc = index.docs.get(docId)
+  if (!doc) return 0
+  const uniqueQueryTokens = Array.from(new Set(queryTokens))
+  if (uniqueQueryTokens.length === 0) return 0
+  let matched = 0
+  for (const token of uniqueQueryTokens) {
+    if (doc.tf.has(token)) matched += 1
+  }
+  return matched / uniqueQueryTokens.length
 }
 
 /**
