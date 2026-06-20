@@ -7,9 +7,13 @@ import {
   tokenize,
   buildBM25Index,
   bm25Score,
+  normalizedBm25Relevance,
+  operationalToolCallScoreFactor,
+  queryTokenCoverage,
   parkScore,
   indexableTextFromAnnotation,
   indexableTokensForRecord,
+  shouldSuppressLifecycleAnchorForQuery,
 } from '../src/scoring.js'
 import type { LoadedRecord } from '../src/aggregations.js'
 import type { AtribRecord } from '@atrib/mcp'
@@ -106,6 +110,107 @@ describe('tokenize', () => {
   })
 })
 
+describe('shouldSuppressLifecycleAnchorForQuery', () => {
+  it('suppresses precompact lifecycle records for normal content queries', () => {
+    const lr = makeLoaded(EVENT_TYPE_ANNOTATION_URI, {
+      lifecycle_event: 'precompact',
+      summary: 'session compaction at 2026-06-20 10:00:00Z (trigger=auto)',
+      topics: ['scheduler', 'editor'],
+    })
+    expect(
+      shouldSuppressLifecycleAnchorForQuery(lr, undefined, tokenize('scheduler goal')),
+    ).toBe(true)
+  })
+
+  it('keeps precompact lifecycle records for explicit lifecycle queries', () => {
+    const lr = makeLoaded(EVENT_TYPE_ANNOTATION_URI, {
+      lifecycle_event: 'precompact',
+      summary: 'session compaction at 2026-06-20 10:00:00Z (trigger=auto)',
+    })
+    expect(
+      shouldSuppressLifecycleAnchorForQuery(lr, undefined, tokenize('precompact lifecycle')),
+    ).toBe(false)
+  })
+
+  it('suppresses session-end lifecycle records for normal content queries', () => {
+    const lr = makeLoaded(EVENT_TYPE_ANNOTATION_URI, {
+      lifecycle_event: 'sessionend',
+      summary: 'session ended at 2026-06-20 10:00:00Z (reason=other)',
+      topics: ['scheduler', 'editor'],
+    })
+    expect(
+      shouldSuppressLifecycleAnchorForQuery(lr, undefined, tokenize('scheduler goal')),
+    ).toBe(true)
+  })
+
+  it('suppresses records whose attached annotation is a compaction summary', () => {
+    const lr = makeLoaded(EVENT_TYPE_TOOL_CALL_URI, {
+      tool_name: 'Bash',
+      args: { command: 'true' },
+    })
+    expect(
+      shouldSuppressLifecycleAnchorForQuery(
+        lr,
+        {
+          max_importance: 'high',
+          summary: 'session compaction at 2026-06-20 10:00:00Z (trigger=auto)',
+          topics: ['scheduler'],
+        },
+        tokenize('scheduler'),
+      ),
+    ).toBe(true)
+  })
+
+  it('suppresses records whose attached annotation is a session-end summary', () => {
+    const lr = makeLoaded(EVENT_TYPE_TOOL_CALL_URI, {
+      tool_name: 'Bash',
+      args: { command: 'true' },
+    })
+    expect(
+      shouldSuppressLifecycleAnchorForQuery(
+        lr,
+        {
+          max_importance: 'high',
+          summary: 'session ended at 2026-06-20 10:00:00Z (reason=other)',
+          topics: ['scheduler'],
+        },
+        tokenize('scheduler'),
+      ),
+    ).toBe(true)
+  })
+})
+
+describe('operationalToolCallScoreFactor', () => {
+  it('demotes unannotated tool calls', () => {
+    const lr = makeLoaded(EVENT_TYPE_TOOL_CALL_URI, {
+      tool_name: 'mcp__atrib_primitives__recall_by_content',
+      args: { query: 'agent loop control center' },
+    })
+    expect(operationalToolCallScoreFactor(lr, undefined)).toBeLessThan(1)
+  })
+
+  it('keeps annotated tool calls at full weight', () => {
+    const lr = makeLoaded(EVENT_TYPE_TOOL_CALL_URI, {
+      tool_name: 'Bash',
+      args: { command: 'pnpm test' },
+    })
+    expect(
+      operationalToolCallScoreFactor(lr, {
+        max_importance: 'high',
+        summary: 'test failure that changed the fix',
+        topics: ['recall-quality'],
+      }),
+    ).toBe(1)
+  })
+
+  it('keeps observations at full weight', () => {
+    const lr = makeLoaded(EVENT_TYPE_OBSERVATION_URI, {
+      what: 'packet first control center decision',
+    })
+    expect(operationalToolCallScoreFactor(lr, undefined)).toBe(1)
+  })
+})
+
 describe('BM25', () => {
   const corpus = [
     { id: 'a', tokens: tokenize('security audit found an issue') },
@@ -152,6 +257,20 @@ describe('BM25', () => {
     const single = bm25Score(index, 'c', tokenize('audit'))
     const multi = bm25Score(index, 'c', tokenize('audit security'))
     expect(multi).toBeGreaterThan(single)
+  })
+
+  it('scales normalized relevance by unique query-token coverage', () => {
+    const idx = buildBM25Index([
+      { id: 'narrow', tokens: tokenize('review') },
+      { id: 'broad', tokens: tokenize('scheduler goal knowledge base review') },
+    ])
+    const query = tokenize('scheduler goal knowledge base review')
+    expect(queryTokenCoverage(idx, 'narrow', query)).toBeCloseTo(1 / 5, 10)
+    expect(queryTokenCoverage(idx, 'broad', query)).toBe(1)
+    expect(normalizedBm25Relevance(idx, 'narrow', query)).toBeLessThan(
+      normalizedBm25Relevance(idx, 'broad', query),
+    )
+    expect(normalizedBm25Relevance(idx, 'narrow', query)).toBeLessThanOrEqual(0.2)
   })
 })
 

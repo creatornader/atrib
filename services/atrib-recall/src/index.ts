@@ -160,8 +160,11 @@ import {
   buildBM25Index,
   bm25Score,
   bm25ScoresForQuery,
+  normalizedBm25Relevance,
+  operationalToolCallScoreFactor,
   tokenize,
   indexableTokensForRecord,
+  shouldSuppressLifecycleAnchorForQuery,
 } from './scoring.js'
 import type { BM25Index } from './scoring.js'
 import { buildLocalGraph, shortestDistances, walkFrom } from './graph.js'
@@ -802,18 +805,28 @@ function rankByRelevance(
   const scores = new Map<string, number>()
   let topScore = 0
   for (const lr of filtered) {
-    const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS)
-    const i = importanceScore(annotationsByRecord.get(lr.record_hash))
-    // Raw bm25Score is unbounded (idf * tf-saturation per query term;
-    // can exceed 1.0 for queries with many matching terms against short
-    // docs). Clamp to [0, 1] so the Park-component bound documented in
-    // the scoring module is actually honored. Pre-D086 the annotation-
-    // only corpus made this clamp moot (most records produced 0); D086
-    // extends BM25 over record content so high-relevance hits routinely
-    // exceed 1.0 and would otherwise dominate parkScore and invalidate
-    // the noise-floor calibration.
-    const rawRel = queryTokens.length > 0 ? bm25Score(idx, lr.record_hash, queryTokens) : 0
-    const rel = Math.min(rawRel, 1)
+    const ann = annotationsByRecord.get(lr.record_hash)
+    const suppressLifecycleAnchor = shouldSuppressLifecycleAnchorForQuery(
+      lr,
+      ann,
+      queryTokens,
+    )
+    const toolCallScoreFactor = operationalToolCallScoreFactor(lr, ann)
+    const r =
+      recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS) * toolCallScoreFactor
+    const i = suppressLifecycleAnchor ? 0 : importanceScore(ann)
+    // Raw BM25 is unbounded and can saturate from one rare term in a long
+    // query. Convert it to the bounded Park relevance component by clamping
+    // the raw score and scaling it by unique query-token coverage.
+    const rawRel =
+      !suppressLifecycleAnchor && queryTokens.length > 0
+        ? bm25Score(idx, lr.record_hash, queryTokens)
+        : 0
+    const rel =
+      !suppressLifecycleAnchor && queryTokens.length > 0
+        ? normalizedBm25Relevance(idx, lr.record_hash, queryTokens, rawRel) *
+          toolCallScoreFactor
+        : 0
     const s = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
     scores.set(lr.record_hash, s)
     if (s > topScore) topScore = s
@@ -1601,7 +1614,7 @@ export function registerAtribRecallTools(server: McpServer): void {
     'recall_by_content',
     {
       description:
-        "Free-form text search over the agent's signed past. Returns top-k records by hybrid retrieval: BM25 over each record's per-event_type indexable text (observation `what + why_noted + intent + rationale + topics`; tool_call `tool_name + args + result`; annotation `summary + topics`; revision `prior_position + new_position + reason + topics`; transaction counterparty + memo; directory_anchor tree_root; extension URIs via generic recursive string-walk per D086/D118) plus the annotation summary + topics when present as a curator-quality lift. Reranked by Park et al. weighted-sum scoring with annotation-derived importance and recency signals; BM25 contribution clamped to [0, 1] so the documented Park-component bound is honored. Layer 2 (sqlite-vec sidecar, separate ship) extends with embedding similarity. Useful when the agent has no specific filter and needs to ask 'what do I know about X?'.",
+        "Free-form text search over the agent's signed past. Returns top-k records by hybrid retrieval: BM25 over each record's per-event_type indexable text (observation `what + why_noted + intent + rationale + topics`; tool_call `tool_name + args + result`; annotation `summary + topics`; revision `prior_position + new_position + reason + topics`; transaction counterparty + memo; directory_anchor tree_root; extension URIs via generic recursive string-walk per D086/D118) plus the annotation summary + topics when present as a curator-quality lift. Reranked by Park et al. weighted-sum scoring with annotation-derived importance and recency signals. Raw unannotated tool_call records are score-demoted so operation logs do not dominate substantive memory. BM25 contribution is clamped to [0, 1] before coverage scaling so the documented Park-component bound is honored. Layer 2 (sqlite-vec sidecar, separate ship) extends with embedding similarity. Useful when the agent has no specific filter and needs to ask 'what do I know about X?'.",
       inputSchema: {
         query: z
           .string()
@@ -1644,11 +1657,35 @@ export function registerAtribRecallTools(server: McpServer): void {
                   .map((hash) => loadedByHash.get(hash))
                   .filter((lr): lr is LoadedRecord => lr !== undefined)
               : snapshot.newestLoaded.slice(0, searchLimit)
-          const scored = searchPool.map((lr) => {
-            const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS)
-            const i = importanceScore(annotationsByRecord.get(lr.record_hash))
-            const rawRel = queryTokens.length > 0 ? (relevanceByHash.get(lr.record_hash) ?? 0) : 0
-            const rel = Math.min(rawRel, 1)
+          const filteredSearchPool = searchPool.filter(
+            (lr) =>
+              !shouldSuppressLifecycleAnchorForQuery(
+                lr,
+                annotationsByRecord.get(lr.record_hash),
+                queryTokens,
+              ),
+          )
+          const scored = filteredSearchPool.map((lr) => {
+            const ann = annotationsByRecord.get(lr.record_hash)
+            const suppressLifecycleAnchor = shouldSuppressLifecycleAnchorForQuery(
+              lr,
+              ann,
+              queryTokens,
+            )
+            const toolCallScoreFactor = operationalToolCallScoreFactor(lr, ann)
+            const r =
+              recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS) *
+              toolCallScoreFactor
+            const i = suppressLifecycleAnchor ? 0 : importanceScore(ann)
+            const rawRel =
+              !suppressLifecycleAnchor && queryTokens.length > 0
+                ? (relevanceByHash.get(lr.record_hash) ?? 0)
+                : 0
+            const rel =
+              !suppressLifecycleAnchor && queryTokens.length > 0
+                ? normalizedBm25Relevance(bm25Index, lr.record_hash, queryTokens, rawRel) *
+                  toolCallScoreFactor
+                : 0
             const score = parkScore(
               r,
               i,
@@ -1675,7 +1712,7 @@ export function registerAtribRecallTools(server: McpServer): void {
                     k,
                     total_records: snapshot.partial ? null : loaded.length,
                     searched_records: searchLimit,
-                    candidate_records: searchPool.length,
+                    candidate_records: filteredSearchPool.length,
                     truncated_corpus: snapshot.partial || searchLimit < loaded.length,
                     count: top.length,
                     results: top.map(({ lr, score, recency, importance, relevance }) => {

@@ -22,6 +22,7 @@ import {
   genesisChainRoot,
   EVENT_TYPE_OBSERVATION_URI,
   EVENT_TYPE_TOOL_CALL_URI,
+  EVENT_TYPE_ANNOTATION_URI,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 
@@ -52,6 +53,13 @@ async function makeSignedEvent(
     signature: '',
   }
   return signRecord(record as AtribRecord, KEY)
+}
+
+function envelope(record: AtribRecord, content: unknown, producer?: string): string {
+  return JSON.stringify({
+    record,
+    _local: { content, ...(producer ? { producer } : {}) },
+  })
 }
 
 interface JsonRpcResponse {
@@ -453,6 +461,104 @@ describe('MCP protocol surface', () => {
       expect(top?.display_summary).toBe('authentication bypass found')
       expect(typeof top?.display_producer).toBe('string')
       expect(typeof top?.age).toBe('string')
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_by_content suppresses lifecycle anchors for normal queries', async () => {
+    const { computeRecordHash } = await import('../src/aggregations.js')
+    const now = Date.now()
+    const decision = await makeSignedEvent(now, EVENT_TYPE_OBSERVATION_URI)
+    const decisionHash = computeRecordHash(decision)
+    const compactionTarget = await makeSignedEvent(now + 1, EVENT_TYPE_TOOL_CALL_URI)
+    const compactionTargetHash = computeRecordHash(compactionTarget)
+    const compactionAnnotation = await makeSignedEvent(now + 2, EVENT_TYPE_ANNOTATION_URI)
+    const compactionAnnotationHash = computeRecordHash(compactionAnnotation)
+    const sessionEndTarget = await makeSignedEvent(now + 3, EVENT_TYPE_TOOL_CALL_URI)
+    const sessionEndTargetHash = computeRecordHash(sessionEndTarget)
+    const sessionEndAnnotation = await makeSignedEvent(now + 4, EVENT_TYPE_ANNOTATION_URI)
+    const sessionEndAnnotationHash = computeRecordHash(sessionEndAnnotation)
+    const rawRecallToolCall = await makeSignedEvent(now + 5, EVENT_TYPE_TOOL_CALL_URI)
+    const rawRecallToolCallHash = computeRecordHash(rawRecallToolCall)
+
+    writeFileSync(
+      recordFile,
+      [
+        envelope(decision, {
+          what:
+            'packet first control center scheduler goal knowledge base checker workflow review',
+        }),
+        envelope(compactionTarget, {
+          tool_name: 'Bash',
+          args: { command: 'true' },
+        }),
+        envelope(sessionEndTarget, {
+          tool_name: 'Edit',
+          args: { file_path: 'README.md' },
+        }),
+        envelope(
+          compactionAnnotation,
+          {
+            annotates: compactionTargetHash,
+            lifecycle_event: 'precompact',
+            importance: 'high',
+            summary: 'session compaction at 2026-06-20 10:00:00Z (trigger=auto)',
+            topic_tags: ['scheduler', 'editor', 'knowledge-base', 'workflow', 'review'],
+          },
+          'claude-hooks-lifecycle-precompact',
+        ),
+        envelope(
+          sessionEndAnnotation,
+          {
+            annotates: sessionEndTargetHash,
+            lifecycle_event: 'sessionend',
+            importance: 'high',
+            summary: 'session ended at 2026-06-20 10:00:00Z (reason=other)',
+            topic_tags: ['scheduler', 'editor', 'knowledge-base', 'workflow', 'review'],
+          },
+          'claude-hooks-lifecycle-sessionend',
+        ),
+        envelope(rawRecallToolCall, {
+          tool_name: 'mcp__atrib_primitives__recall_by_content',
+          args: {
+            query:
+              'scheduler goal knowledge base checker workflow review',
+          },
+        }),
+      ].join('\n'),
+    )
+
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query: 'scheduler goal knowledge base checker workflow review',
+            k: 5,
+          },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        count: number
+        results: Array<{ record_hash: string; display_summary?: string }>
+      }
+
+      expect(payload.results[0]?.record_hash).toBe(decisionHash)
+      const resultHashes = payload.results.map((r) => r.record_hash)
+      expect(resultHashes).not.toContain(compactionTargetHash)
+      expect(resultHashes).not.toContain(compactionAnnotationHash)
+      expect(resultHashes).not.toContain(sessionEndTargetHash)
+      expect(resultHashes).not.toContain(sessionEndAnnotationHash)
+      expect(payload.results[0]?.record_hash).not.toBe(rawRecallToolCallHash)
+      expect(payload.results[0]?.display_summary).not.toContain('session compaction')
+      expect(payload.results[0]?.display_summary).not.toContain('session ended')
     } finally {
       client.close()
     }

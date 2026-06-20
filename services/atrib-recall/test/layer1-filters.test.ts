@@ -12,6 +12,7 @@ import {
   genesisChainRoot,
   EVENT_TYPE_TOOL_CALL_URI,
   EVENT_TYPE_TRANSACTION_URI,
+  EVENT_TYPE_OBSERVATION_URI,
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
 } from '@atrib/mcp'
@@ -334,6 +335,87 @@ describe('rank_by=relevance', () => {
     )
     expect((result.records[1] as { content_id: string }).content_id).toBe(
       `sha256:${'2'.repeat(64)}`,
+    )
+  })
+
+  it('does not let lifecycle anchors outrank decision content', async () => {
+    const now = Date.now() + 60_000
+    const decision = await makeSigned({
+      event_type: EVENT_TYPE_OBSERVATION_URI,
+      timestamp: now,
+      content_id: `sha256:${'1'.repeat(64)}`,
+    })
+    const compactionTarget = await makeSigned({
+      timestamp: now,
+      content_id: `sha256:${'2'.repeat(64)}`,
+    })
+    const compactionTargetHash = computeRecordHash(compactionTarget)
+    const compactionAnnotation = await makeSigned({
+      event_type: EVENT_TYPE_ANNOTATION_URI,
+      timestamp: now + 1,
+      content_id: `sha256:${'a'.repeat(64)}`,
+    })
+    const sessionEndTarget = await makeSigned({
+      timestamp: now + 2,
+      content_id: `sha256:${'3'.repeat(64)}`,
+    })
+    const sessionEndTargetHash = computeRecordHash(sessionEndTarget)
+    const sessionEndAnnotation = await makeSigned({
+      event_type: EVENT_TYPE_ANNOTATION_URI,
+      timestamp: now + 3,
+      content_id: `sha256:${'b'.repeat(64)}`,
+    })
+    const rawRecallToolCall = await makeSigned({
+      timestamp: now + 4,
+      content_id: `sha256:${'4'.repeat(64)}`,
+      tool_name: 'mcp__atrib_primitives__recall_by_content',
+    })
+
+    writeFileSync(
+      file,
+      [
+        envelope(decision, {
+          what:
+            'packet first control center scheduler goal knowledge base checker workflow review',
+        }),
+        JSON.stringify(compactionTarget),
+        envelope(compactionAnnotation, {
+          annotates: compactionTargetHash,
+          lifecycle_event: 'precompact',
+          importance: 'high',
+          summary: 'session compaction at 2026-06-20 10:00:00Z (trigger=auto)',
+          topic_tags: ['scheduler', 'editor', 'knowledge-base', 'workflow', 'review'],
+        }),
+        JSON.stringify(sessionEndTarget),
+        envelope(sessionEndAnnotation, {
+          annotates: sessionEndTargetHash,
+          lifecycle_event: 'sessionend',
+          importance: 'high',
+          summary: 'session ended at 2026-06-20 10:00:00Z (reason=other)',
+          topic_tags: ['scheduler', 'editor', 'knowledge-base', 'workflow', 'review'],
+        }),
+        envelope(rawRecallToolCall, {
+          tool_name: 'mcp__atrib_primitives__recall_by_content',
+          args: {
+            query:
+              'scheduler goal knowledge base checker workflow review',
+          },
+        }),
+      ].join('\n'),
+    )
+
+    const result = await recall(
+      {
+        rank_by: 'relevance',
+        rank_anchor: 'scheduler goal knowledge base checker workflow review',
+        compact: false,
+      },
+      file,
+    )
+
+    expect(result.returned).toBeGreaterThan(0)
+    expect((result.records[0] as { content_id: string }).content_id).toBe(
+      `sha256:${'1'.repeat(64)}`,
     )
   })
 
