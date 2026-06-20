@@ -1,5 +1,11 @@
 # @atrib/recall
 
+## 0.13.0
+
+### Minor Changes
+
+- 53f1d06: Add `evidence_mode` to `recall_by_content`. The default bounded mode keeps casual search fast, while `require_complete` searches the full mirror when it fits and refuses partial evidence with `fallback_required` when a cap would truncate the corpus.
+
 ## 0.12.21
 
 ### Patch Changes
