@@ -540,8 +540,18 @@ export function loadRecordsFromDir(dir: string): { records: AtribRecord[]; files
   return { records, files }
 }
 
+type ContextScope = 'all' | 'env'
+
 interface RecallArgs {
   context_id?: string
+  /**
+   * Controls whether omitted context_id means cross-context recall or the
+   * D078/D083 env-derived current context. Base recall defaults to `all`
+   * because it is the cross-session memory lookup surface. Harnesses that
+   * need per-arm isolation without plumbing context_id can pass `env`.
+   * Explicit context_id always wins.
+   */
+  context_scope?: ContextScope
   /**
    * Optional exact match on `record.creator_key` (Ed25519 public key,
    * base64url-encoded). Filters the local mirror to records signed by
@@ -1045,11 +1055,12 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
   const snapshot = getLoadedMirrorSnapshot(recordFile)
   const { loaded: all, files, annotationsByRecord, revisionsByRecord } = snapshot
 
-  // Apply ATRIB_CONTEXT_ID env-var default when the caller omits the
-  // context_id filter. Lets Inspect-style harnesses scope recall to a
-  // per-arm context_id without threading it through every tool call;
-  // an explicit args.context_id always wins (explicit beats implicit).
-  const effectiveContextId = args.context_id ?? ATRIB_CONTEXT_ID_DEFAULT
+  // Base recall is the broad "what do I know about X?" surface, so omitted
+  // context_id defaults to cross-context history. D078/D083 env scoping remains
+  // available for harness isolation via context_scope='env'. Explicit
+  // context_id always wins.
+  const effectiveContextId =
+    args.context_id ?? (args.context_scope === 'env' ? ATRIB_CONTEXT_ID_DEFAULT : undefined)
 
   let filtered = all
   if (effectiveContextId)
@@ -1235,7 +1246,8 @@ export function registerAtribRecallTools(server: McpServer): void {
         'includes only records that passed signature verification; both can be opted out of with ' +
         'compact=false and include_unverified=true respectively. Local signature verification proves ' +
         '"this record was signed by that creator_key"; it does NOT prove log inclusion (fetch a log ' +
-        'inclusion proof to confirm). Filter by context_id (specific trace), event_type ' +
+        'inclusion proof to confirm). Filter by context_id (specific trace), context_scope ' +
+        "('all' by default, or 'env' to honor D078/D083 env scoping), event_type " +
         '(tool_call|transaction|observation|annotation|revision|directory_anchor or a full URI), content_id (specific tool on specific server), tool_name (disclosed ' +
         'name per §8.2), or args_hash (canonical-args commitment per §8.3). Filters are AND-combined; ' +
         'omit all of them for cross-trace history. Results are sorted newest-first. Pagination uses ' +
@@ -1249,6 +1261,13 @@ export function registerAtribRecallTools(server: McpServer): void {
           .describe(
             'Optional trace identifier (32 hex chars). Limits results to records signed within this trace. ' +
               'Omit for cross-trace recall.',
+          ),
+        context_scope: z
+          .enum(['all', 'env'])
+          .optional()
+          .describe(
+            "How to treat an omitted context_id. Default 'all' searches cross-context history. " +
+              "'env' applies the D078/D083 env-derived current context. Explicit context_id wins.",
           ),
         creator_key: z
           .string()

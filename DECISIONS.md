@@ -6577,6 +6577,47 @@ In wrapped MCP hosts, the read tool call and its JSON response are signed as a `
 - [`services/atrib-recall/README.md`](services/atrib-recall/README.md), operator-facing recall contract.
 - [`skills/atrib/SKILL.md`](skills/atrib/SKILL.md), agent-facing critical-path recall guidance.
 
+## D124: Base recall makes context scope explicit
+
+**Date:** 2026-06-20
+
+**Status:** Accepted
+
+**Extends:** [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default), [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers), [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), and [D123](#d123-critical-path-content-recall-requires-complete-evidence-or-explicit-fallback).
+
+**Context.** A topic-filter recall for `agent-loop-control` returned zero records while fresh loop-control records existed in the local mirror. Passing the old session `context_id` made the records appear. The failure came from hidden scope: `recall_my_attribution_history` silently applied the [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) / [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) env-derived current context when the caller omitted `context_id`.
+
+That behavior helped Inspect-style harnesses isolate per-arm records, but it hurt the base recall use case. Agents often use topic, importance, creator, event type, or tool-name filters to ask "what do I know about this across prior work?" A hidden current-context filter turns that into "what did this exact process know?", and an empty result looks like absence of memory rather than a scope miss.
+
+**Decision.** Change base `recall_my_attribution_history` so omitted `context_id` searches cross-context history by default. Add `context_scope` with two values:
+
+- `all` is the default. It ignores env-derived context and searches every loaded record that matches the other filters.
+- `env` preserves the [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) / [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) behavior. When `context_id` is omitted, recall applies the env-derived current context.
+
+An explicit `context_id` always wins over `context_scope`.
+
+`recall_session_chain` keeps its env fallback when `context_id` is omitted, because that tool is specifically a session-chain reader.
+
+**Alternatives considered.**
+
+- _Keep the hidden env default and document it harder._ Rejected. The bug was not lack of prose alone. The response shape let a broad topic query fail silently.
+- _Auto-retry cross-context only when an env-scoped query returns zero._ Rejected. That would violate harness isolation in the exact zero-result case [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) was meant to protect.
+- _Add only a response warning._ Rejected. It would explain the miss after the damage, but it would not make broad recall work.
+- _Remove env scoping entirely._ Rejected. Harnesses still need a no-plumbing way to scope per-arm calls. The new `context_scope: "env"` keeps that path explicit.
+
+**Consequences.**
+
+- Base topic recall now finds records from prior sessions unless callers ask for env scope or pass a concrete `context_id`.
+- [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) / [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) remain available, but no longer surprise broad memory lookups.
+- The MCP schema and README now teach `context_scope`.
+- Regression coverage proves three cases: omitted context searches all records despite env, `context_scope: "env"` scopes to the env context, and explicit `context_id` wins.
+
+**Cross-references.**
+
+- [`services/atrib-recall/src/index.ts`](services/atrib-recall/src/index.ts), `context_scope` implementation.
+- [`services/atrib-recall/test/context-scope.test.ts`](services/atrib-recall/test/context-scope.test.ts), regression coverage.
+- [`services/atrib-recall/README.md`](services/atrib-recall/README.md), operator-facing recall contract.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
