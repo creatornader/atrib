@@ -1,5 +1,12 @@
 # @atrib/primitives-runtime
 
+## 0.1.12
+
+### Patch Changes
+
+- Updated dependencies [6d7c462]
+  - @atrib/recall@0.12.21
+
 ## 0.1.11
 
 ### Patch Changes
