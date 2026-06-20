@@ -414,6 +414,116 @@ function writeReady(handle: LocalSubstrateHostHandle, jsonOutput: boolean): void
   }
 }
 
+export interface KeyRetryOptions {
+  /** Key resolver; defaults to resolveKey. Injectable for tests. */
+  resolve?: () => Promise<ResolvedKey | null>
+  /** First backoff delay in ms. */
+  initialDelayMs?: number
+  /** Backoff cap in ms. */
+  maxDelayMs?: number
+  /** Total budget in ms; 0 (default) waits indefinitely. */
+  maxWaitMs?: number
+  /** Clock; injectable for tests. */
+  now?: () => number
+  /** Sleep; injectable for tests. */
+  sleep?: (ms: number) => Promise<void>
+  /** Log sink; defaults to stderr. */
+  log?: (message: string) => void
+}
+
+/**
+ * Resolve the signing key, polling with exponential backoff instead of failing
+ * on the first miss.
+ *
+ * A login-managed host can start before the login Keychain is unlocked, so the
+ * first resolveKey() returns null. Exiting there makes the process crash-loop
+ * under a KeepAlive supervisor, and any dependent that waits on the substrate
+ * hangs. Instead we stay alive and retry until the Keychain unlocks and the key
+ * resolves, so a reboot self-heals with no manual restart.
+ *
+ * Returns null only when a finite ATRIB_KEY_RETRY_MAX_MS budget is exhausted
+ * (default 0 = wait indefinitely), preserving an explicit-failure escape hatch.
+ */
+export async function resolveSigningKeyWithRetry(
+  options: KeyRetryOptions = {},
+): Promise<ResolvedKey | null> {
+  const resolve = options.resolve ?? resolveKey
+  const initialDelayMs = options.initialDelayMs ?? 2_000
+  const maxDelayMs = Math.max(options.maxDelayMs ?? 30_000, initialDelayMs)
+  const maxWaitMs = options.maxWaitMs ?? 0
+  const now = options.now ?? ((): number => Date.now())
+  const sleep =
+    options.sleep ??
+    ((ms: number): Promise<void> => new Promise<void>((resolveSleep) => setTimeout(resolveSleep, ms)))
+  const log = options.log ?? ((message: string): void => void process.stderr.write(message))
+
+  const startedAt = now()
+  let attempt = 0
+  let delay = initialDelayMs
+
+  for (;;) {
+    attempt += 1
+    let key: ResolvedKey | null = null
+    try {
+      key = await resolve()
+    } catch (error) {
+      // A throw here (e.g. a transient ATRIB_KEY_FILE read) is treated like a
+      // miss and retried, but logged each time so a genuine misconfiguration
+      // stays visible instead of silently looping.
+      log(
+        `atrib-local-substrate: key resolution error on attempt ${attempt}: ${
+          error instanceof Error ? error.message : String(error)
+        }\n`,
+      )
+    }
+
+    if (key) {
+      if (attempt > 1) {
+        const waitedSec = Math.round((now() - startedAt) / 1_000)
+        log(
+          `atrib-local-substrate: signing key resolved after ${attempt} attempts (~${waitedSec}s)\n`,
+        )
+      }
+      return key
+    }
+
+    if (maxWaitMs > 0 && now() - startedAt >= maxWaitMs) return null
+
+    if (attempt === 1) {
+      log(
+        'atrib-local-substrate: no signing key yet (the login Keychain may be locked at boot); ' +
+          'waiting and retrying with backoff. Set ATRIB_KEY_RETRY_MAX_MS to cap the wait.\n',
+      )
+    }
+
+    await sleep(delay)
+    delay = Math.min(delay * 2, maxDelayMs)
+  }
+}
+
+function keyRetryOptionsFromEnv(): KeyRetryOptions {
+  const options: KeyRetryOptions = {}
+  const initial = parseOptionalPositiveInt(
+    process.env['ATRIB_KEY_RETRY_INTERVAL_MS'],
+    'ATRIB_KEY_RETRY_INTERVAL_MS',
+  )
+  if (initial !== undefined) options.initialDelayMs = initial
+  const maxDelay = parseOptionalPositiveInt(
+    process.env['ATRIB_KEY_RETRY_MAX_INTERVAL_MS'],
+    'ATRIB_KEY_RETRY_MAX_INTERVAL_MS',
+  )
+  if (maxDelay !== undefined) options.maxDelayMs = maxDelay
+  const maxWaitRaw = process.env['ATRIB_KEY_RETRY_MAX_MS']
+  if (maxWaitRaw !== undefined && maxWaitRaw.trim() !== '') {
+    const n = Number(maxWaitRaw)
+    if (!Number.isInteger(n) || n < 0) {
+      throw new Error('ATRIB_KEY_RETRY_MAX_MS must be a non-negative integer')
+    }
+    options.maxWaitMs = n
+  }
+  return options
+}
+
 async function main(): Promise<void> {
   let args: ParsedArgs
   try {
@@ -438,10 +548,10 @@ async function main(): Promise<void> {
     return
   }
 
-  const key = await resolveKey()
+  const key = await resolveSigningKeyWithRetry(keyRetryOptionsFromEnv())
   if (!key) {
     process.stderr.write(
-      'atrib-local-substrate: no signing key resolved; set ATRIB_PRIVATE_KEY, ATRIB_KEY_FILE, or an atrib Keychain entry\n',
+      'atrib-local-substrate: no signing key resolved within ATRIB_KEY_RETRY_MAX_MS; set ATRIB_PRIVATE_KEY, ATRIB_KEY_FILE, or an atrib Keychain entry\n',
     )
     process.exit(1)
   }
@@ -491,4 +601,5 @@ export const __test_only__ = {
   buildDescription,
   parseArgs,
   startLocalSubstrateHost,
+  resolveSigningKeyWithRetry,
 }
