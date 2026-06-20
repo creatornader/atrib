@@ -1,5 +1,13 @@
 # @atrib/recall
 
+## 0.12.21
+
+### Patch Changes
+
+- 6d7c462: Fix content-search snapshot truncation reporting when a broad mirror load is
+  exhaustive, and reload cached tail snapshots when a later query asks for a
+  larger window.
+
 ## 0.12.20
 
 ### Patch Changes
