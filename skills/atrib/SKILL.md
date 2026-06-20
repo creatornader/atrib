@@ -141,7 +141,7 @@ The section above covers what to do WHEN records are surfaced to you. It does no
 
 - **Planning or synthesizing between tool calls.** You are deciding the shape of a multi-step approach before any tool fires. No PreToolUse event, no surfacing. Pull your own context with `mcp__atrib-recall__recall_my_attribution_history` filtered by topics or by `context_id`.
 - **Walking a specific record's lineage.** You saw a `sha256:<hash>` surfaced in the injection or in the SessionStart block, but you need the ancestry chain, not just the one node. Use `mcp__atrib-trace__trace` from the record_hash.
-- **Cross-session deep dives.** "What did past-me think about X across multiple sessions?" The decision-guidance hook only scores against current local mirror records that share tokens with the current tool input. Cross-session memory needs `recall_my_attribution_history` without a `context_id` filter, or `recall_by_content` for content-shape matches.
+- **Cross-session deep dives.** "What did past-me think about X across multiple sessions?" The decision-guidance hook only scores against current local mirror records that share tokens with the current tool input. Cross-session memory needs `recall_my_attribution_history` without a `context_id` filter, or `recall_by_content` for content-shape matches. For critical-path audits, call `recall_by_content` with `evidence_mode: "require_complete"`.
 - **Verifying or expanding a truncated surfaced record.** The injection shows a 24-char hash prefix and ~140-char summary. If you need the full record (creator_key, signature, full content), `recall_walk` from the full record_hash gives you the node and its neighbors. Surfaced summaries are signal, not the record itself.
 - **Targeted annotation or revision queries.** `recall_annotations` to find every annotation on a target record (decide whether the existing annotations already cover what you would emit); `recall_revisions` to check whether a position has been revised since you saw it.
 - **Resuming a long context_id with many records.** Read individually is overkill; `mcp__atrib-summarize__summarize` produces a digest across N records.
@@ -176,7 +176,8 @@ The decision tree at each moment of substantive work:
 
 - Starting any consequential decision: "have I done this before? what shaped it?"
 - Searching for records by `context_id`, `creator_key`, `event_type`, `content_id`, `tool_name`, `args_hash`, annotation importance, topic tags, signer count, or rank mode.
-- Resolving a `record_hash` reference into the actual record body via the `recall_by_content` sibling tool, or walking from one via `recall_walk`.
+- Resolving a `record_hash` reference into its local neighborhood or body through `recall_walk` and related sibling tools.
+- Running a critical-path audit where missing evidence would change the answer. Use `recall_by_content({ query, evidence_mode: "require_complete" })`; if it returns `evidence_status: "incomplete"` or `fallback_required: true`, do not use the partial result. Emit an observation naming the incomplete recall and rerun without `max_records`, raise `max_records` to `total_records` when it is <= 50000, or partition by `context_id`, `event_type`, signer, or time window and rerun each partition with `require_complete`.
 
 **`atrib-trace`** (LINEAGE): you have a record and want to walk its causal chain. Use it when:
 
@@ -310,7 +311,7 @@ The `atrib-recall` primitive ships as eight sibling tools, each for a different 
 | Tool                            | Query shape                                | Use case                                                         |
 | ------------------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
 | `recall_my_attribution_history` | filters over your full record set          | "What did I do recently / in this trace / matching this filter?" |
-| `recall_by_content`             | exact match on `content_id`                | "Find every record about this specific tool-call shape"          |
+| `recall_by_content`             | free-form content search                   | "What do I know about this topic across records?"                |
 | `recall_walk`                   | walk forward / backward from a record_hash | "Trace neighbors via informed_by / annotates / revises edges"    |
 | `recall_annotations`            | annotations pointing at a target           | "What did past-me / others say about this record's importance?"  |
 | `recall_revisions`              | revisions superseding a target             | "Has this position been revised since?"                          |
@@ -319,6 +320,11 @@ The `atrib-recall` primitive ships as eight sibling tools, each for a different 
 | `recall_by_signer`              | aggregate mirror records by creator_key    | "Who else has records in this mirror?"                           |
 
 All eight read your local signed-record mirror, verify each Ed25519 signature, and return records newest-first by default unless the tool shape says otherwise.
+
+`recall_by_content` has two evidence modes:
+
+- `bounded` is the default. It searches the newest `max_records` window so casual recall stays fast. If the corpus is larger, the response carries `evidence_status: "bounded"`, `truncated_corpus: true`, and `total_records: null`.
+- `require_complete` is for critical-path audits. It loads the full mirror and searches every loaded record when the corpus fits under the 50000 hard cap. If a caller sets `max_records` below `total_records`, or the corpus is larger than the cap, the response carries `evidence_status: "incomplete"`, `fallback_required: true`, `truncated_corpus: true`, and no results. Treat that as an evidence failure, not as "nothing matched." The MCP result itself is signed in wrapped hosts; emit an observation before taking the deterministic fallback so future-you can find the gap and the retry path.
 
 Filters on `recall_my_attribution_history`:
 

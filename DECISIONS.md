@@ -6535,6 +6535,48 @@ and skips a second `tool_call` record.
 - [`packages/integration/src/host-runtime-proof.ts`](packages/integration/src/host-runtime-proof.ts),
   private proof envelope and duplicate owner check.
 
+## D123: Critical-path content recall requires complete evidence or explicit fallback
+
+**Date:** 2026-06-20
+
+**Status:** Accepted
+
+**Extends:** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion), [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), [D085](#d085-recall-calibration-defaults-survey-grounded-rationale), and [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content).
+
+**Context.** `recall_by_content` serves two different jobs. Casual recall should stay fast, bounded, and cheap enough for agents to use often. Critical-path audits have a different failure mode: a caller can pass `max_records` below the mirror size, get plausible top hits, and accidentally treat a partial corpus as complete evidence.
+
+The local mirror on 2026-06-20 had about 50000 records. A full `max_records=50000` content search returned `truncated_corpus=false`; a smaller `max_records=20000` call correctly returned `truncated_corpus=true`. That means the structural false-truncation bug was fixed, but the raw primitive was still too easy to misuse.
+
+**Decision.** Add `evidence_mode` to `recall_by_content` with two modes:
+
+- `bounded` is the default. It preserves the existing newest-first `max_records` window, exposes `evidence_status: "bounded"` when the corpus is larger than the searched window, and keeps returning results for casual recall.
+- `require_complete` is the critical-path mode. It loads the full mirror and searches every loaded record when the corpus fits under the 50000 hard cap. If `max_records` is below `total_records`, or the corpus exceeds the hard cap, it returns no hits and sets `evidence_status: "incomplete"`, `fallback_required: true`, `truncated_corpus: true`, `total_records`, `searched_records: 0`, and `search_cap`.
+
+The deterministic fallback is part of the API contract: rerun without `max_records` when the corpus fits, raise `max_records` to `total_records` when safe, or partition by `context_id`, `event_type`, signer, or time window and rerun each partition with `require_complete`.
+
+In wrapped MCP hosts, the read tool call and its JSON response are signed as a `tool_call` record. An incomplete critical-path recall therefore becomes signed evidence that the caller saw `fallback_required: true`. Agents should emit an observation naming the incomplete status and selected fallback before they continue.
+
+**Alternatives considered.**
+
+- _Make full-corpus content search the default._ Rejected. Prior runs showed `recall_by_content` can be slow enough to look failed under shorter client deadlines. Defaulting every casual query to full-corpus work would make agents less likely to use recall.
+- _Only document `truncated_corpus` more strongly._ Rejected. The field already existed. The gap was that agents could ignore it while still receiving plausible results.
+- _Auto-partition partial searches immediately._ Deferred. Partitioning needs caller intent: time windows, signer, event type, and context boundaries change the meaning of the audit. Returning `fallback_required` with deterministic options is safer than guessing the partition.
+- _Create a new read primitive for complete recall._ Rejected. This is a strength setting on content recall, not a new cognitive verb. [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) and [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion) keep it inside the existing recall surface.
+
+**Consequences.**
+
+- `recall_by_content` responses now carry `evidence_mode`, `evidence_status`, and `fallback_required`.
+- Existing callers that omit `evidence_mode` keep bounded behavior and bounded latency.
+- Critical audits have a machine-readable stop condition instead of partial hits.
+- The atrib skill and `@atrib/recall` README teach agents to use `require_complete` for critical-path audits and to emit the fallback decision when incomplete evidence is returned.
+- MCP protocol tests include a small corpus that exceeds a tiny default cap, proving bounded mode marks truncation, complete mode searches all records, and complete mode refuses partial `max_records`.
+
+**Cross-references.**
+
+- [`services/atrib-recall/src/index.ts`](services/atrib-recall/src/index.ts), `recall_by_content` evidence-mode implementation.
+- [`services/atrib-recall/README.md`](services/atrib-recall/README.md), operator-facing recall contract.
+- [`skills/atrib/SKILL.md`](skills/atrib/SKILL.md), agent-facing critical-path recall guidance.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
