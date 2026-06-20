@@ -139,6 +139,7 @@ export const ATRIB_RECALL_CONTENT_MAX_RECORDS = parseInt(
   process.env.ATRIB_RECALL_CONTENT_MAX_RECORDS ?? '5000',
   10,
 )
+const ATRIB_RECALL_CONTENT_HARD_MAX_RECORDS = 50000
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -434,12 +435,19 @@ function getBm25IndexForNewestLimit(snapshot: LoadedMirrorSnapshot, limit: numbe
   return index
 }
 
-function resolveContentSearchLimit(requested: unknown, totalRecords: number): number {
+function resolveBoundedContentSearchLimit(requested: unknown, totalRecords: number): number {
   const raw =
     typeof requested === 'number' && Number.isFinite(requested)
       ? requested
       : ATRIB_RECALL_CONTENT_MAX_RECORDS
-  const bounded = Math.max(1, Math.min(50000, Math.floor(raw)))
+  const bounded = Math.max(1, Math.min(ATRIB_RECALL_CONTENT_HARD_MAX_RECORDS, Math.floor(raw)))
+  return Math.min(totalRecords, bounded)
+}
+
+function resolveCompleteContentSearchLimit(requested: unknown, totalRecords: number): number {
+  if (totalRecords <= 0) return 0
+  const raw = typeof requested === 'number' && Number.isFinite(requested) ? requested : totalRecords
+  const bounded = Math.max(1, Math.min(ATRIB_RECALL_CONTENT_HARD_MAX_RECORDS, Math.floor(raw)))
   return Math.min(totalRecords, bounded)
 }
 
@@ -816,14 +824,9 @@ function rankByRelevance(
   let topScore = 0
   for (const lr of filtered) {
     const ann = annotationsByRecord.get(lr.record_hash)
-    const suppressLifecycleAnchor = shouldSuppressLifecycleAnchorForQuery(
-      lr,
-      ann,
-      queryTokens,
-    )
+    const suppressLifecycleAnchor = shouldSuppressLifecycleAnchorForQuery(lr, ann, queryTokens)
     const toolCallScoreFactor = operationalToolCallScoreFactor(lr, ann)
-    const r =
-      recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS) * toolCallScoreFactor
+    const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS) * toolCallScoreFactor
     const i = suppressLifecycleAnchor ? 0 : importanceScore(ann)
     // Raw BM25 is unbounded and can saturate from one rare term in a long
     // query. Convert it to the bounded Park relevance component by clamping
@@ -834,8 +837,7 @@ function rankByRelevance(
         : 0
     const rel =
       !suppressLifecycleAnchor && queryTokens.length > 0
-        ? normalizedBm25Relevance(idx, lr.record_hash, queryTokens, rawRel) *
-          toolCallScoreFactor
+        ? normalizedBm25Relevance(idx, lr.record_hash, queryTokens, rawRel) * toolCallScoreFactor
         : 0
     const s = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
     scores.set(lr.record_hash, s)
@@ -1643,6 +1645,15 @@ export function registerAtribRecallTools(server: McpServer): void {
           .describe(
             'Maximum newest-first records to search before BM25 candidate scoring. Default ATRIB_RECALL_CONTENT_MAX_RECORDS or 5000, max 50000. Raise for explicit archival sweeps.',
           ),
+        evidence_mode: z
+          .enum(['bounded', 'require_complete'])
+          .optional()
+          .describe(
+            'Default bounded keeps recall_by_content fast by searching the newest max_records window. ' +
+              'Use require_complete for critical-path audits: it loads the full mirror, searches every ' +
+              'loaded record when total_records <= 50000, and refuses partial results with ' +
+              'evidence_status=incomplete plus fallback_required=true when max_records is below total_records.',
+          ),
       },
     },
     async (args) =>
@@ -1650,13 +1661,57 @@ export function registerAtribRecallTools(server: McpServer): void {
         'recall_by_content',
         args,
         async () => {
-          const requestedLimit = resolveContentSearchLimit(
-            args.max_records,
-            Number.MAX_SAFE_INTEGER,
-          )
-          const snapshot = getContentSearchMirrorSnapshot(requestedLimit)
+          const evidenceMode =
+            args.evidence_mode === 'require_complete' ? 'require_complete' : 'bounded'
+          const snapshot =
+            evidenceMode === 'require_complete'
+              ? getLoadedMirrorSnapshot()
+              : getContentSearchMirrorSnapshot(
+                  resolveBoundedContentSearchLimit(args.max_records, Number.MAX_SAFE_INTEGER),
+                )
           const { loaded, loadedByHash, annotationsByRecord } = snapshot
-          const searchLimit = Math.min(requestedLimit, loaded.length)
+          const totalRecords = snapshot.partial ? null : loaded.length
+          const searchLimit =
+            evidenceMode === 'require_complete'
+              ? resolveCompleteContentSearchLimit(args.max_records, loaded.length)
+              : Math.min(
+                  resolveBoundedContentSearchLimit(args.max_records, Number.MAX_SAFE_INTEGER),
+                  loaded.length,
+                )
+          if (evidenceMode === 'require_complete' && searchLimit < loaded.length) {
+            const k = Math.max(1, Math.min(50, args.k ?? 10))
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(
+                    {
+                      query: args.query,
+                      k,
+                      evidence_mode: evidenceMode,
+                      evidence_status: 'incomplete',
+                      fallback_required: true,
+                      fallback_reason:
+                        `require_complete refused a partial corpus: search_cap=${searchLimit}, ` +
+                        `total_records=${loaded.length}.`,
+                      fallback:
+                        'Rerun without max_records, raise max_records to total_records when it is <= 50000, ' +
+                        'or partition by context_id, event_type, signer, or time window and rerun each partition with require_complete.',
+                      total_records: loaded.length,
+                      searched_records: 0,
+                      search_cap: searchLimit,
+                      candidate_records: 0,
+                      truncated_corpus: true,
+                      count: 0,
+                      results: [],
+                    },
+                    null,
+                    2,
+                  ),
+                },
+              ],
+            }
+          }
           const bm25Index = getBm25IndexForNewestLimit(snapshot, searchLimit)
           const queryTokens = tokenize(args.query)
           const relevanceByHash = bm25ScoresForQuery(bm25Index, queryTokens)
@@ -1684,8 +1739,7 @@ export function registerAtribRecallTools(server: McpServer): void {
             )
             const toolCallScoreFactor = operationalToolCallScoreFactor(lr, ann)
             const r =
-              recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS) *
-              toolCallScoreFactor
+              recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS) * toolCallScoreFactor
             const i = suppressLifecycleAnchor ? 0 : importanceScore(ann)
             const rawRel =
               !suppressLifecycleAnchor && queryTokens.length > 0
@@ -1720,7 +1774,11 @@ export function registerAtribRecallTools(server: McpServer): void {
                   {
                     query: args.query,
                     k,
-                    total_records: snapshot.partial ? null : loaded.length,
+                    evidence_mode: evidenceMode,
+                    evidence_status:
+                      snapshot.partial || searchLimit < loaded.length ? 'bounded' : 'complete',
+                    fallback_required: false,
+                    total_records: totalRecords,
                     searched_records: searchLimit,
                     candidate_records: filteredSearchPool.length,
                     truncated_corpus: snapshot.partial || searchLimit < loaded.length,

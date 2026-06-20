@@ -62,6 +62,20 @@ function envelope(record: AtribRecord, content: unknown, producer?: string): str
   })
 }
 
+async function makeContentSearchCorpus(count: number): Promise<string[]> {
+  const lines: string[] = []
+  for (let i = 0; i < count; i += 1) {
+    const record = await makeSignedEvent(1700000100000 + i, EVENT_TYPE_OBSERVATION_URI)
+    lines.push(
+      envelope(record, {
+        what: `critical path recall truncation complete corpus needle ${i}`,
+        topics: ['recall-truncation'],
+      }),
+    )
+  }
+  return lines
+}
+
 interface JsonRpcResponse {
   jsonrpc: '2.0'
   id: number
@@ -466,6 +480,172 @@ describe('MCP protocol surface', () => {
     }
   })
 
+  it('recall_by_content marks the default bounded search as incomplete when the corpus exceeds the default cap', async () => {
+    writeFileSync(recordFile, (await makeContentSearchCorpus(6)).join('\n'))
+    const client = new McpClient({
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_RECALL_CONTENT_MAX_RECORDS: '3',
+    })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: { query: 'critical path recall truncation', k: 10 },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        evidence_mode: string
+        evidence_status: string
+        fallback_required: boolean
+        total_records: number | null
+        searched_records: number
+        truncated_corpus: boolean
+        count: number
+      }
+      expect(payload.evidence_mode).toBe('bounded')
+      expect(payload.evidence_status).toBe('bounded')
+      expect(payload.fallback_required).toBe(false)
+      expect(payload.total_records).toBeNull()
+      expect(payload.searched_records).toBe(3)
+      expect(payload.truncated_corpus).toBe(true)
+      expect(payload.count).toBe(3)
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_by_content marks bounded search complete when the cap exceeds the corpus', async () => {
+    writeFileSync(recordFile, (await makeContentSearchCorpus(6)).join('\n'))
+    const client = new McpClient({
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_RECALL_CONTENT_MAX_RECORDS: '10',
+    })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: { query: 'critical path recall truncation', k: 10 },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        evidence_mode: string
+        evidence_status: string
+        fallback_required: boolean
+        total_records: number | null
+        searched_records: number
+        truncated_corpus: boolean
+        count: number
+      }
+      expect(payload.evidence_mode).toBe('bounded')
+      expect(payload.evidence_status).toBe('complete')
+      expect(payload.fallback_required).toBe(false)
+      expect(payload.total_records).toBe(6)
+      expect(payload.searched_records).toBe(6)
+      expect(payload.truncated_corpus).toBe(false)
+      expect(payload.count).toBe(6)
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_by_content require_complete searches the full corpus when it fits the hard cap', async () => {
+    writeFileSync(recordFile, (await makeContentSearchCorpus(6)).join('\n'))
+    const client = new McpClient({
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_RECALL_CONTENT_MAX_RECORDS: '3',
+    })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query: 'critical path recall truncation',
+            k: 10,
+            evidence_mode: 'require_complete',
+          },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        evidence_mode: string
+        evidence_status: string
+        fallback_required: boolean
+        total_records: number | null
+        searched_records: number
+        truncated_corpus: boolean
+        count: number
+      }
+      expect(payload.evidence_mode).toBe('require_complete')
+      expect(payload.evidence_status).toBe('complete')
+      expect(payload.fallback_required).toBe(false)
+      expect(payload.total_records).toBe(6)
+      expect(payload.searched_records).toBe(6)
+      expect(payload.truncated_corpus).toBe(false)
+      expect(payload.count).toBe(6)
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_by_content require_complete refuses partial max_records evidence', async () => {
+    writeFileSync(recordFile, (await makeContentSearchCorpus(6)).join('\n'))
+    const client = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query: 'critical path recall truncation',
+            k: 10,
+            max_records: 3,
+            evidence_mode: 'require_complete',
+          },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        evidence_status: string
+        fallback_required: boolean
+        fallback_reason?: string
+        total_records: number
+        searched_records: number
+        search_cap: number
+        truncated_corpus: boolean
+        count: number
+        results: unknown[]
+      }
+      expect(payload.evidence_status).toBe('incomplete')
+      expect(payload.fallback_required).toBe(true)
+      expect(payload.fallback_reason).toContain('search_cap=3')
+      expect(payload.total_records).toBe(6)
+      expect(payload.searched_records).toBe(0)
+      expect(payload.search_cap).toBe(3)
+      expect(payload.truncated_corpus).toBe(true)
+      expect(payload.count).toBe(0)
+      expect(payload.results).toEqual([])
+    } finally {
+      client.close()
+    }
+  })
+
   it('recall_by_content suppresses lifecycle anchors for normal queries', async () => {
     const { computeRecordHash } = await import('../src/aggregations.js')
     const now = Date.now()
@@ -486,8 +666,7 @@ describe('MCP protocol surface', () => {
       recordFile,
       [
         envelope(decision, {
-          what:
-            'packet first control center scheduler goal knowledge base checker workflow review',
+          what: 'packet first control center scheduler goal knowledge base checker workflow review',
         }),
         envelope(compactionTarget, {
           tool_name: 'Bash',
@@ -522,8 +701,7 @@ describe('MCP protocol surface', () => {
         envelope(rawRecallToolCall, {
           tool_name: 'mcp__atrib_primitives__recall_by_content',
           args: {
-            query:
-              'scheduler goal knowledge base checker workflow review',
+            query: 'scheduler goal knowledge base checker workflow review',
           },
         }),
       ].join('\n'),
