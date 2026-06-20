@@ -240,7 +240,7 @@ The `atrib()` middleware accepts an opt-in `localSubstrate` shadow option for th
 
 `createInProcessLocalSubstrateCoordinator()` is the first opt-in prototype for startup-spawn, long-lived-agent, and watcher-WAL trials. It exposes a coordinator transport without creating a daemon, signs only when the unsigned body's `creator_key` matches the coordinator signer, returns the real `record_hash` and receipt token, accepts caller-owned health counters, and leaves log submission optional for tests. Its default harness scope is still `startup-spawn`; watcher-WAL callers opt in through `supportedHarnessClasses: ['watcher-wal']` and use `operation: 'enqueue_record_and_join_receipt'` so receipt join metadata stays explicit. Long-lived emit callers can opt into `sign_record` commit through `@atrib/emit` by setting `ATRIB_LOCAL_SUBSTRATE_MODE=commit`.
 
-`buildLocalSubstrateHealthReport()` and `probeLocalSubstrateHealth()` build read-only rollout-gate reports for queue depth, WAL join state, active contexts, wrapper counts, and stale child counts. Probe warnings are advisory. They do not change signing, submission, or primary tool-call behavior.
+`buildLocalSubstrateHealthReport()` and `probeLocalSubstrateHealth()` build read-only rollout-gate reports for queue depth, WAL join state, active contexts, wrapper counts, and stale child counts. `contexts.active` is a bounded sample; `contexts.active_count` carries the full active-context count, and `contexts.active_truncated` marks clipped samples. Probe warnings are advisory. They do not change signing, submission, or primary tool-call behavior.
 
 ### `createAtribProxy(options): Promise<AtribProxy>`
 
