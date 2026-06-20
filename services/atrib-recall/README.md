@@ -16,6 +16,8 @@ The base filter-rank-page tool over the local mirror.
 mcp__atrib-recall__recall_my_attribution_history({
   // All optional
   context_id?: string,           // 32-hex. Filter to records signed under this trace.
+  context_scope?: 'all' | 'env', // Default 'all'. Set 'env' to apply the D078/D083
+                                 // env-derived current context when context_id is omitted.
   creator_key?: string,          // Ed25519 public key, base64url. Filter to records signed by this
                                  // specific creator. The tool's name says "my history" but the local
                                  // mirror may hold records from other signers (multi-agent flows,
@@ -64,6 +66,8 @@ mcp__atrib-recall__recall_my_attribution_history({
                                  // for SessionStart auto-injected scaffolds.
 })
 ```
+
+Omitting `context_id` searches cross-context history by default. This keeps topic, importance, creator, event type, and tool-name recall useful as memory lookups across sessions. Harnesses that need the old [D078](../../DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default) / [D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) env-derived current-context behavior should pass `context_scope: 'env'`. An explicit `context_id` always wins over `context_scope`.
 
 Returns `{ total, returned, filtered_out_by_verification, record_files, record_file, log_origin, pagination_caveat, records }`. Each record carries `record_hash` (always, per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), so the result is chainable into other primitives without a verbose-mode round-trip), `annotations` (when annotation records point at it), and `superseded_by` (when revision records point at it).
 
