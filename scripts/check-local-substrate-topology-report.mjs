@@ -422,6 +422,110 @@ function checkPrimitiveBackendContractGate() {
   }
 }
 
+function checkProfileRoutedPrimitiveSupervisorGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  const endpoint = 'http://127.0.0.1:8796/mcp'
+  snapshot.processes = (snapshot.processes ?? []).filter(
+    (row) => row.service !== 'atrib-primitives' || row.pid === 110,
+  )
+  for (const config of snapshot.configs ?? []) {
+    config.primitive_http_endpoints = [endpoint]
+  }
+  const host = (snapshot.primitive_runtime_health ?? []).find((item) => item.endpoint === endpoint)
+  if (!host) {
+    fail('profile-routed primitive supervisor gate: expected fixture host endpoint')
+    return
+  }
+  snapshot.primitive_runtime_health = [host]
+  host.report.primitive_runtime.backend = 'profile-routed'
+  host.report.primitive_runtime.session_model = 'per-session-transport-profile-routed-backend'
+  host.report.primitive_runtime.mounted_primitive_count = 21
+  delete host.report.profile
+  host.report.profile_routing = {
+    mode: 'explicit',
+    isolated_backends: true,
+    profiles: [
+      {
+        agent: 'codex',
+        mirror_file: '~/.atrib/records/atrib-emit-codex.jsonl',
+        local_substrate_endpoint: 'http://127.0.0.1:8797/atrib/local-substrate',
+      },
+      {
+        agent: 'claude-code',
+        mirror_file: '~/.atrib/records/atrib-emit-claude-code.jsonl',
+        local_substrate_endpoint: 'http://127.0.0.1:8788/atrib/local-substrate',
+      },
+      {
+        agent: 'claude-desktop',
+        mirror_file: '~/.atrib/records/atrib-emit-claude-desktop.jsonl',
+        local_substrate_endpoint: 'http://127.0.0.1:8786/atrib/local-substrate',
+        context_id_policy: 'explicit-required',
+        requires_explicit_context_id: true,
+      },
+    ],
+  }
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'ready_for_default_trial') {
+    fail(`profile-routed primitive supervisor gate: expected ready, got ${report.summary.status}`)
+  }
+  if (report.summary.primitive_runtime_processes !== 1) {
+    fail(
+      `profile-routed primitive supervisor gate: expected one primitive process, got ${report.summary.primitive_runtime_processes}`,
+    )
+  }
+  if (report.summary.primitive_runtime_http_profile_routed !== 1) {
+    fail('profile-routed primitive supervisor gate: expected one profile-routed endpoint')
+  }
+  if (report.summary.active_session_profiles !== 3) {
+    fail(
+      `profile-routed primitive supervisor gate: expected three routed profiles, got ${report.summary.active_session_profiles}`,
+    )
+  }
+  const primitiveGate = report.gates.find((gate) => gate.name === 'host-owned-primitives-http')
+  if (primitiveGate?.status !== 'pass') {
+    fail('profile-routed primitive supervisor gate: expected host-owned-primitives-http=pass')
+  }
+  const activeSessionGate = report.gates.find(
+    (gate) => gate.name === 'host-owned-active-session-context',
+  )
+  if (activeSessionGate?.status !== 'pass') {
+    fail(
+      'profile-routed primitive supervisor gate: expected host-owned-active-session-context=pass',
+    )
+  }
+  const claudeDesktop = report.config_surfaces.find((config) => config.name === 'claude-desktop')
+  if (
+    !claudeDesktop?.local_substrate_endpoint_evidence.some(
+      (item) =>
+        item.source === 'primitive-runtime-profile-routing' &&
+        item.profile === 'claude-desktop' &&
+        item.endpoint === 'http://127.0.0.1:8786/atrib/local-substrate',
+    )
+  ) {
+    fail('profile-routed primitive supervisor gate: expected profile-routed endpoint evidence')
+  }
+
+  delete host.report.profile_routing.isolated_backends
+  const unsafeReport = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (unsafeReport.summary.status !== 'mixed') {
+    fail(
+      `profile-routed primitive supervisor gate: expected unsafe routing to stay mixed, got ${unsafeReport.summary.status}`,
+    )
+  }
+  const unsafePrimitiveGate = unsafeReport.gates.find(
+    (gate) => gate.name === 'host-owned-primitives-http',
+  )
+  if (unsafePrimitiveGate?.status !== 'warn') {
+    fail('profile-routed primitive supervisor gate: expected unsafe routing to warn')
+  }
+}
+
 function checkExplicitContextPolicyGate() {
   const fixture = readJson(join(FIXTURE_DIR, 'missing-active-session-profile-state.json'))
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
@@ -1614,6 +1718,7 @@ function main() {
   checkRouteRegistryDiagnosticsGate()
   checkConfigSurfaceEndpointEvidence()
   checkPrimitiveBackendContractGate()
+  checkProfileRoutedPrimitiveSupervisorGate()
   checkExplicitContextPolicyGate()
   checkStaleActiveSessionStateGate()
   checkIdleActiveSessionStateGate()
