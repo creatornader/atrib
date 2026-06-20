@@ -29,6 +29,7 @@ The complete protocol specification is in `atrib-spec.md` ([§0](atrib-spec.md#0
 atrib/
   .github/
     scripts/check-log-smoke.mjs # Shared public log smoke checker for deploy and scheduled workflows. Checks response shape plus TTFB/total latency budgets for pubkey, stats, recent, feed, explorer shell, and live marketing/explorer asset parity.
+    scripts/check-pr-concerns.mjs # PR-concern guard run by the pr-concerns workflow. Fails a PR whose branch spans multiple lead concerns (feat/fix/refactor/perf/revert) so a squash merge does not fold unrelated work into one commit. Self-contained classifier; honors [allow-mixed] in the PR title.
   README.md                    # Public-facing project description (customer entry point)
   CLAUDE.md                    # THIS FILE: hub doc, conventions, invariants
   DESIGN.md                    # Product design system source of truth: current state, target state, tokens, components, surface backlog

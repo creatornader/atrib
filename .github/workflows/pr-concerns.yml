@@ -1,0 +1,32 @@
+name: PR concerns
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  concerns:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Need both the base and the head commit to walk base..head.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Check that the branch carries one concern
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          node .github/scripts/check-pr-concerns.mjs \
+            --base "$PR_BASE_SHA" \
+            --head "$PR_HEAD_SHA" \
+            --title "$PR_TITLE"
