@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS,
+  LOCAL_SUBSTRATE_HEALTH_ACTIVE_CONTEXT_LIMIT,
   LOCAL_SUBSTRATE_REQUEST_MODES,
   LOCAL_SUBSTRATE_RESPONSE_SCHEMA,
   base64urlEncode,
@@ -808,5 +809,26 @@ describe('local substrate coordinator contract', () => {
     expect(probe.ok).toBe(false)
     expect(probe.status).toBe('degraded')
     expect(probe.warnings).toEqual(['stale child process count is 1', 'orphan receipt count is 1'])
+  })
+
+  it('caps active context samples in health reports', () => {
+    const activeContextIds = Array.from({ length: 30 }, (_, index) =>
+      index.toString(16).padStart(32, '0'),
+    )
+
+    const report = buildLocalSubstrateHealthReport({
+      coordinator: {
+        pid: 101,
+        version: '0.0.0-test',
+        transport: 'unix:/tmp/atrib-substrate.sock',
+      },
+      activeContextIds,
+    })
+
+    expect(report.contexts.active).toHaveLength(LOCAL_SUBSTRATE_HEALTH_ACTIVE_CONTEXT_LIMIT)
+    expect(report.contexts.active_count).toBe(activeContextIds.length)
+    expect(report.contexts.active_truncated).toBe(true)
+    expect(report.contexts.active[0]).toBe('00000000000000000000000000000000')
+    expect(validateLocalSubstrateHealthReport(report).ok).toBe(true)
   })
 })

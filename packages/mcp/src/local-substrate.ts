@@ -27,6 +27,7 @@ export const LOCAL_SUBSTRATE_HEALTH_SCHEMA = 'atrib.local-substrate-coordinator.
 export const LOCAL_SUBSTRATE_HTTP_DEFAULT_PATH = '/atrib/local-substrate'
 export const LOCAL_SUBSTRATE_HTTP_DEFAULT_HEALTH_PATH = '/atrib/local-substrate/health'
 export const LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS = 1500
+export const LOCAL_SUBSTRATE_HEALTH_ACTIVE_CONTEXT_LIMIT = 25
 
 export const LOCAL_SUBSTRATE_HARNESS_CLASSES = [
   'startup-spawn',
@@ -123,6 +124,8 @@ export interface LocalSubstrateHealthReport {
   }
   contexts: {
     active: string[]
+    active_count?: number
+    active_truncated?: boolean
   }
   processes: {
     active_wrappers?: number
@@ -715,6 +718,12 @@ export function validateLocalSubstrateHealthReport(
   ) {
     push(issues, 'contexts.active', 'must contain 32-lowerhex context ids')
   }
+  if (contexts.active_count !== undefined && !isNonNegativeInteger(contexts.active_count)) {
+    push(issues, 'contexts.active_count', 'must be a non-negative integer when present')
+  }
+  if (contexts.active_truncated !== undefined && typeof contexts.active_truncated !== 'boolean') {
+    push(issues, 'contexts.active_truncated', 'must be a boolean when present')
+  }
 
   const processes = isObject(report.processes) ? report.processes : {}
   if (!isObject(report.processes)) push(issues, 'processes', 'must be an object')
@@ -1098,6 +1107,8 @@ export function buildLocalSubstrateHealthReport(
   input: BuildLocalSubstrateHealthReportInput,
 ): LocalSubstrateHealthReport {
   const activeContexts = [...new Set(input.activeContextIds ?? [])].sort()
+  const activeContextSample = activeContexts.slice(0, LOCAL_SUBSTRATE_HEALTH_ACTIVE_CONTEXT_LIMIT)
+  const activeContextTruncated = activeContexts.length > activeContextSample.length
   const activeWrappers = input.activeWrappers ?? input.activeWrapperPids?.length
   const staleChildren = input.staleChildren ?? input.staleChildPids?.length ?? 0
 
@@ -1123,7 +1134,9 @@ export function buildLocalSubstrateHealthReport(
       orphan_receipts: input.wal?.orphanReceipts ?? 0,
     },
     contexts: {
-      active: activeContexts,
+      active: activeContextSample,
+      active_count: activeContexts.length,
+      ...(activeContextTruncated ? { active_truncated: true } : {}),
     },
     processes: {
       ...(activeWrappers !== undefined ? { active_wrappers: activeWrappers } : {}),
