@@ -6231,6 +6231,22 @@ join-back metadata is source-targeted and belongs with the WAL drain.
   runtime is a process-count adapter. It does not own signer policy, WAL
   commit, receipt join-back, queue health, or cross-harness supervision.
 
+**Update 2026-06-20: one-process supervisor boundary.** The rejected global
+coordinator is not the same as a host supervisor that owns several isolated
+profile runtimes inside one OS process. That future shape is allowed only when
+health reports expose explicit profile routing, isolated per-profile backends,
+per-profile local-substrate endpoints, and per-profile context policy.
+
+A single env-bound primitive backend remains invalid for multi-profile use.
+`@atrib/emit`, `@atrib/annotate`, and `@atrib/revise` resolve signing keys,
+mirror paths, local-substrate endpoints, and active-session profile fallback
+from process state. Read primitives also resolve mirror and context defaults
+from process or call state. Sharing that backend across profiles would blur the
+same boundaries this ADR rejected. The topology report now accepts a
+profile-routed primitive supervisor only when it advertises
+`profile_routing.mode: "explicit"` and `profile_routing.isolated_backends:
+true`; a single endpoint without that contract remains `mixed`.
+
 **Consequences.**
 
 - [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)

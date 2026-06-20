@@ -1925,6 +1925,7 @@ function healthSummary(items) {
 function primitiveRuntimeHealthSummary(items) {
   return items.map((item) => {
     const report = item.report ?? {}
+    const profileRoutes = primitiveRuntimeProfileRoutes(item)
     return {
       endpoint: item.endpoint,
       reachable: Boolean(item.reachable),
@@ -1941,6 +1942,9 @@ function primitiveRuntimeHealthSummary(items) {
       local_substrate_endpoint: report.profile?.local_substrate_endpoint,
       context_id_policy: report.profile?.context_id_policy,
       requires_explicit_context_id: report.profile?.requires_explicit_context_id,
+      profile_routing_mode: report.profile_routing?.mode,
+      profile_routing_isolated_backends: report.profile_routing?.isolated_backends,
+      profile_routing_profiles: unique(profileRoutes.map((route) => route.agent)),
       active_sessions: report.sessions?.active,
       opened_sessions: report.sessions?.opened,
       active_http_requests: report.sessions?.active_http_requests,
@@ -1993,7 +1997,7 @@ function versionMismatches(items, expectedVersion, versionFn) {
 
 function hasSharedPrimitiveHttpBackend(item) {
   const runtime = item.report?.primitive_runtime ?? {}
-  return (
+  const profileScoped =
     item.reachable === true &&
     item.status === 'healthy' &&
     runtime.transport === 'streamable-http' &&
@@ -2001,14 +2005,66 @@ function hasSharedPrimitiveHttpBackend(item) {
     runtime.session_model === 'per-session-transport-shared-backend' &&
     Number(runtime.mounted_primitive_count) === 7 &&
     Number(runtime.tool_count) === 15
-  )
+  return profileScoped || hasProfileRoutedPrimitiveSupervisor(item)
 }
 
-function hasExplicitContextIdPolicy(item) {
+function hasProfileRoutedPrimitiveSupervisor(item) {
+  const runtime = item.report?.primitive_runtime ?? {}
+  const routing = item.report?.profile_routing
   return (
     item.reachable === true &&
     item.status === 'healthy' &&
-    item.report?.profile?.requires_explicit_context_id === true
+    runtime.transport === 'streamable-http' &&
+    runtime.backend === 'profile-routed' &&
+    runtime.session_model === 'per-session-transport-profile-routed-backend' &&
+    routing?.mode === 'explicit' &&
+    routing?.isolated_backends === true &&
+    primitiveRuntimeProfileRoutes(item).length > 0 &&
+    Number(runtime.tool_count) === 15
+  )
+}
+
+function primitiveRuntimeProfileRoutes(item) {
+  const routes = []
+  const direct = item?.report?.profile
+  if (direct?.agent) {
+    routes.push({
+      source: 'primitive-runtime-profile',
+      agent: direct.agent,
+      mirror_file: direct.mirror_file,
+      local_substrate_endpoint: direct.local_substrate_endpoint,
+      context_id_policy: direct.context_id_policy,
+      requires_explicit_context_id: direct.requires_explicit_context_id,
+    })
+  }
+  const routing = item?.report?.profile_routing
+  if (routing?.mode === 'explicit' && Array.isArray(routing.profiles)) {
+    for (const profile of routing.profiles) {
+      if (!profile?.agent) continue
+      routes.push({
+        source: 'primitive-runtime-profile-routing',
+        agent: profile.agent,
+        mirror_file: profile.mirror_file,
+        local_substrate_endpoint: profile.local_substrate_endpoint,
+        context_id_policy: profile.context_id_policy,
+        requires_explicit_context_id: profile.requires_explicit_context_id,
+      })
+    }
+  }
+  const byAgent = new Map()
+  for (const route of routes) {
+    if (!byAgent.has(route.agent)) byAgent.set(route.agent, route)
+  }
+  return [...byAgent.values()]
+}
+
+function primitiveRuntimeProfileRouteFor(item, profile) {
+  return primitiveRuntimeProfileRoutes(item).find((route) => route.agent === profile)
+}
+
+function hasExplicitContextIdPolicy(route) {
+  return (
+    route?.requires_explicit_context_id === true || route?.context_id_policy === 'explicit-required'
   )
 }
 
@@ -2073,17 +2129,20 @@ function activeSessionCoverage(primitiveHealth, activeSessionState) {
   const healthyPrimitiveHttp = primitiveHealth.filter(
     (item) => item.reachable && item.status === 'healthy',
   )
-  const runtimeProfiles = unique(healthyPrimitiveHttp.map((item) => item.report?.profile?.agent))
+  const runtimeProfileRoutes = healthyPrimitiveHttp.flatMap((item) =>
+    primitiveRuntimeProfileRoutes(item).map((route) => ({ item, route })),
+  )
+  const runtimeProfiles = unique(runtimeProfileRoutes.map((entry) => entry.route.agent))
   const primitiveHttpByProfile = new Map(
-    healthyPrimitiveHttp.map((item) => [item.report?.profile?.agent, item]),
+    runtimeProfileRoutes.map((entry) => [entry.route.agent, entry.item]),
   )
   const activeSessionStateByProfile = new Map(
     activeSessionState.map((item) => [item.profile, item]),
   )
   const explicitContextProfiles = unique(
-    healthyPrimitiveHttp
-      .filter(hasExplicitContextIdPolicy)
-      .map((item) => item.report?.profile?.agent),
+    runtimeProfileRoutes
+      .filter((entry) => hasExplicitContextIdPolicy(entry.route))
+      .map((entry) => entry.route.agent),
   )
   const explicitContextProfileSet = new Set(explicitContextProfiles)
   const validStateProfiles = runtimeProfiles.filter(
@@ -2161,10 +2220,10 @@ function bridgeRuntimeHealthSummary(items) {
 function localSubstrateEndpointsForConfig(config, primitiveHealthByEndpoint) {
   return unique([
     ...(config.local_substrate_endpoints ?? []),
-    ...(config.primitive_http_endpoints ?? []).map(
-      (endpoint) =>
-        primitiveHealthByEndpoint.get(endpoint)?.report?.profile?.local_substrate_endpoint,
-    ),
+    ...(config.primitive_http_endpoints ?? []).map((endpoint) => {
+      const health = primitiveHealthByEndpoint.get(endpoint)
+      return primitiveRuntimeProfileRouteFor(health, config.name)?.local_substrate_endpoint
+    }),
   ])
 }
 
@@ -2178,13 +2237,14 @@ function localSubstrateEndpointEvidenceForConfig(config, primitiveHealthByEndpoi
   }
   for (const primitiveEndpoint of config.primitive_http_endpoints ?? []) {
     const health = primitiveHealthByEndpoint.get(primitiveEndpoint)
-    const endpoint = health?.report?.profile?.local_substrate_endpoint
+    const route = primitiveRuntimeProfileRouteFor(health, config.name)
+    const endpoint = route?.local_substrate_endpoint
     if (endpoint) {
       evidence.push({
-        source: 'primitive-runtime-profile',
+        source: route.source,
         endpoint,
         primitive_http_endpoint: primitiveEndpoint,
-        profile: health?.report?.profile?.agent,
+        profile: route.agent,
       })
     }
   }
@@ -2512,6 +2572,9 @@ function buildGates({
     (item) => item.reachable && item.status === 'healthy',
   )
   const sharedPrimitiveHttp = healthyPrimitiveHttp.filter(hasSharedPrimitiveHttpBackend)
+  const profileRoutedPrimitiveHttp = healthyPrimitiveHttp.filter(
+    hasProfileRoutedPrimitiveSupervisor,
+  )
   const expectedPrimitiveVersion = expectedRuntimeVersion(
     expectedRuntimeVersions,
     'primitive_runtime',
@@ -2563,11 +2626,16 @@ function buildGates({
   }
 
   const primitiveHttpConfigRoutes = configsWithPrimitiveHttp.flatMap((config) =>
-    (config.primitive_http_endpoints ?? []).map((endpoint) => ({
-      config: config.name,
-      endpoint,
-      profileAgent: healthyPrimitiveHttpByEndpoint.get(endpoint)?.report?.profile?.agent,
-    })),
+    (config.primitive_http_endpoints ?? []).map((endpoint) => {
+      const health = healthyPrimitiveHttpByEndpoint.get(endpoint)
+      const route = primitiveRuntimeProfileRouteFor(health, config.name)
+      return {
+        config: config.name,
+        endpoint,
+        profileAgent: route?.agent,
+        profileRouteSource: route?.source,
+      }
+    }),
   )
   const configuredPrimitiveHttpEndpoints = unique(
     configsWithPrimitiveHttp.flatMap((config) => config.primitive_http_endpoints ?? []),
@@ -2580,8 +2648,6 @@ function buildGates({
   const nonSharedConfiguredPrimitiveEndpoints = configuredPrimitiveHttpEndpoints.filter(
     (endpoint) => !sharedPrimitiveHttpEndpoints.has(endpoint),
   )
-  const agentScopedEndpointCountOk =
-    configuredPrimitiveHttpEndpoints.length >= configsWithPrimitiveHttp.length
   const profileMismatches = primitiveHttpConfigRoutes.filter(
     (route) => route.profileAgent !== route.config,
   )
@@ -2590,7 +2656,6 @@ function buildGates({
     configsWithPrimitiveHttp.length === existingConfigs.length &&
     unhealthyConfiguredPrimitiveEndpoints.length === 0 &&
     nonSharedConfiguredPrimitiveEndpoints.length === 0 &&
-    agentScopedEndpointCountOk &&
     profileMismatches.length === 0 &&
     processSummary.primitive_runtime_http_processes >= configuredPrimitiveHttpEndpoints.length
   ) {
@@ -2598,7 +2663,7 @@ function buildGates({
       gate(
         'host-owned-primitives-http',
         'pass',
-        `${configuredPrimitiveHttpEndpoints.length} healthy agent-scoped primitive HTTP endpoint(s), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP`,
+        `${configuredPrimitiveHttpEndpoints.length} healthy agent-scoped or explicitly routed primitive HTTP endpoint(s), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP`,
       ),
     )
   } else if (
@@ -2610,7 +2675,7 @@ function buildGates({
       gate(
         'host-owned-primitives-http',
         'warn',
-        `${processSummary.primitive_runtime_http_processes} primitive HTTP process(es), ${healthyPrimitiveHttp.length} healthy endpoint(s), ${sharedPrimitiveHttp.length} shared backend endpoint(s), ${configuredPrimitiveHttpEndpoints.length} configured endpoint(s), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP, ${profileMismatches.length} profile mismatch(es)`,
+        `${processSummary.primitive_runtime_http_processes} primitive HTTP process(es), ${healthyPrimitiveHttp.length} healthy endpoint(s), ${sharedPrimitiveHttp.length} acceptable shared endpoint(s), ${profileRoutedPrimitiveHttp.length} profile-routed supervisor endpoint(s), ${configuredPrimitiveHttpEndpoints.length} configured endpoint(s), ${configsWithPrimitiveHttp.length}/${existingConfigs.length} config(s) point at HTTP, ${profileMismatches.length} profile mismatch(es)`,
       ),
     )
   } else {
@@ -3104,6 +3169,7 @@ function buildReport(input, options = {}) {
   const longLivedRoutes = summarizeLongLivedRoutes(longLivedAgents, reachableEndpoints)
   const longLivedActivity = summarizeLongLivedActivity(longLivedAgents, longLivedActivityReport)
   const sharedPrimitiveHttp = primitiveHealth.filter(hasSharedPrimitiveHttpBackend)
+  const profileRoutedPrimitiveHttp = primitiveHealth.filter(hasProfileRoutedPrimitiveSupervisor)
   const receiptSummary = knowledgeBaseReceiptSummary(knowledgeBaseReceiptReport)
   const gates = buildGates({
     processSummary,
@@ -3161,6 +3227,7 @@ function buildReport(input, options = {}) {
       primitive_proxy_processes: processSummary.primitive_proxy_processes,
       primitive_proxy_stdio_processes: processSummary.primitive_proxy_stdio_processes,
       primitive_runtime_http_shared: sharedPrimitiveHttp.length,
+      primitive_runtime_http_profile_routed: profileRoutedPrimitiveHttp.length,
       primitive_runtime_tool_calls_active: primitiveHealth.reduce(
         (sum, item) => sum + primitiveRuntimeActiveToolCalls(item),
         0,
@@ -3387,7 +3454,7 @@ function formatTextReport(report) {
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
     `runtime versions: coordinator=${report.summary.coordinator_version_expected ?? 'unchecked'} mismatches=${report.summary.coordinator_version_mismatches ?? 0}, primitive=${report.summary.primitive_runtime_version_expected ?? 'unchecked'} mismatches=${report.summary.primitive_runtime_version_mismatches ?? 0}`,
     `route registry: ${report.summary.route_registry_status}`,
-    `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, direct-stdio=${report.summary.primitive_runtime_stdio_processes}, proxy=${report.summary.primitive_proxy_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
+    `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, profile-routed=${report.summary.primitive_runtime_http_profile_routed}, direct-stdio=${report.summary.primitive_runtime_stdio_processes}, proxy=${report.summary.primitive_proxy_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `primitive tool dispatch: active=${report.summary.primitive_runtime_tool_calls_active ?? 0}, active-timed-out=${report.summary.primitive_runtime_tool_calls_active_timed_out ?? 0}, timed-out-total=${report.summary.primitive_runtime_tool_calls_timed_out ?? 0}`,
     `bridge processes: runtimes=${report.summary.bridge_runtime_processes} (http=${report.summary.bridge_runtime_http_processes}, proxy=${report.summary.bridge_proxy_processes}, stdio-proxy=${report.summary.bridge_proxy_stdio_processes}), legacy-wrappers=${report.summary.bridge_wrapper_processes}, upstream=${report.summary.bridge_upstream_processes}, duplicate-groups=${report.summary.duplicate_bridge_wrapper_groups}`,
     `host-owned bridge HTTP: healthy=${report.summary.bridge_runtime_http_healthy}/${report.summary.bridge_runtime_http_endpoints}`,
