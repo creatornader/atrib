@@ -564,6 +564,116 @@ describe('MCP protocol surface', () => {
     }
   })
 
+  it('recall_by_content does not report truncation when a broad mirror-dir load is exhaustive', async () => {
+    const first = await makeSignedEvent(1700000000000, EVENT_TYPE_OBSERVATION_URI)
+    const second = await makeSignedEvent(1700000001000, EVENT_TYPE_OBSERVATION_URI)
+    writeFileSync(
+      join(tmp, 'observations.jsonl'),
+      [
+        envelope(first, { what: 'critical path substrate audit first result' }),
+        envelope(second, { what: 'critical path substrate audit second result' }),
+      ].join('\n'),
+    )
+
+    const client = new McpClient({ ATRIB_RECORD_FILE: '', ATRIB_MIRROR_DIR: tmp })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query: 'critical path substrate audit',
+            k: 5,
+            max_records: 50,
+          },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        total_records: number | null
+        searched_records: number
+        truncated_corpus: boolean
+      }
+
+      expect(payload.total_records).toBe(2)
+      expect(payload.searched_records).toBe(2)
+      expect(payload.truncated_corpus).toBe(false)
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_by_content reloads a larger mirror-dir window after a smaller cached search', async () => {
+    writeFileSync(
+      join(tmp, 'observations.jsonl'),
+      [
+        envelope(await makeSignedEvent(1700000000000, EVENT_TYPE_OBSERVATION_URI), {
+          what: 'substrate audit cache expansion oldest',
+        }),
+        envelope(await makeSignedEvent(1700000001000, EVENT_TYPE_OBSERVATION_URI), {
+          what: 'substrate audit cache expansion middle',
+        }),
+        envelope(await makeSignedEvent(1700000002000, EVENT_TYPE_OBSERVATION_URI), {
+          what: 'substrate audit cache expansion newest',
+        }),
+      ].join('\n'),
+    )
+
+    const client = new McpClient({ ATRIB_RECORD_FILE: '', ATRIB_MIRROR_DIR: tmp })
+    try {
+      await client.initialize()
+      const first = await client.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query: 'substrate audit cache expansion',
+            k: 5,
+            max_records: 1,
+          },
+        },
+        2,
+      )
+      expect(first.error).toBeUndefined()
+      const firstResult = first.result as { content: { type: string; text: string }[] }
+      const firstPayload = JSON.parse(firstResult.content[0]!.text) as {
+        searched_records: number
+        truncated_corpus: boolean
+      }
+      expect(firstPayload.searched_records).toBe(1)
+      expect(firstPayload.truncated_corpus).toBe(true)
+
+      const second = await client.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query: 'substrate audit cache expansion',
+            k: 5,
+            max_records: 50,
+          },
+        },
+        2,
+      )
+      expect(second.error).toBeUndefined()
+      const secondResult = second.result as { content: { type: string; text: string }[] }
+      const secondPayload = JSON.parse(secondResult.content[0]!.text) as {
+        total_records: number | null
+        searched_records: number
+        truncated_corpus: boolean
+      }
+
+      expect(secondPayload.total_records).toBe(3)
+      expect(secondPayload.searched_records).toBe(3)
+      expect(secondPayload.truncated_corpus).toBe(false)
+    } finally {
+      client.close()
+    }
+  })
+
   it('recall_by_content retrieves OpenInference sidecar fields across prompt, model, usage, cost, score, and output', async () => {
     const { computeRecordHash } = await import('../src/aggregations.js')
     const target = await makeSignedEvent(1700000001000, EVENT_TYPE_OBSERVATION_URI)
