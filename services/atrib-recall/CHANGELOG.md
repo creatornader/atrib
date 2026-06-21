@@ -1,5 +1,11 @@
 # @atrib/recall
 
+## 0.14.1
+
+### Patch Changes
+
+- f21f1ac: Remove the record-count hard cap from complete content recall and add coverage metadata to recall_by_content responses.
+
 ## 0.14.0
 
 ### Minor Changes
