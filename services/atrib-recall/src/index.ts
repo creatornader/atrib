@@ -139,7 +139,8 @@ export const ATRIB_RECALL_CONTENT_MAX_RECORDS = parseInt(
   process.env.ATRIB_RECALL_CONTENT_MAX_RECORDS ?? '5000',
   10,
 )
-const ATRIB_RECALL_CONTENT_HARD_MAX_RECORDS = 50000
+const ATRIB_RECALL_CONTENT_COVERAGE_VERSION = 'coverage-v1'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -435,20 +436,45 @@ function getBm25IndexForNewestLimit(snapshot: LoadedMirrorSnapshot, limit: numbe
   return index
 }
 
-function resolveBoundedContentSearchLimit(requested: unknown, totalRecords: number): number {
+function hasExplicitRecordLimit(requested: unknown): requested is number {
+  return typeof requested === 'number' && Number.isFinite(requested)
+}
+
+function resolvePositiveRecordLimit(requested: unknown, fallback: number): number {
   const raw =
-    typeof requested === 'number' && Number.isFinite(requested)
-      ? requested
-      : ATRIB_RECALL_CONTENT_MAX_RECORDS
-  const bounded = Math.max(1, Math.min(ATRIB_RECALL_CONTENT_HARD_MAX_RECORDS, Math.floor(raw)))
-  return Math.min(totalRecords, bounded)
+    typeof requested === 'number' && Number.isFinite(requested) ? requested : fallback
+  return Math.max(1, Math.floor(raw))
+}
+
+function resolveBoundedContentSearchLimit(requested: unknown, totalRecords: number): number {
+  return Math.min(
+    totalRecords,
+    resolvePositiveRecordLimit(requested, ATRIB_RECALL_CONTENT_MAX_RECORDS),
+  )
 }
 
 function resolveCompleteContentSearchLimit(requested: unknown, totalRecords: number): number {
   if (totalRecords <= 0) return 0
-  const raw = typeof requested === 'number' && Number.isFinite(requested) ? requested : totalRecords
-  const bounded = Math.max(1, Math.min(ATRIB_RECALL_CONTENT_HARD_MAX_RECORDS, Math.floor(raw)))
-  return Math.min(totalRecords, bounded)
+  return Math.min(totalRecords, resolvePositiveRecordLimit(requested, totalRecords))
+}
+
+function mirrorHighWatermark(snapshot: LoadedMirrorSnapshot): string {
+  return `sha256:${createHash('sha256').update(snapshot.signature).digest('hex')}`
+}
+
+function recallCoverage(
+  snapshot: LoadedMirrorSnapshot,
+  strategy: 'bounded_newest_first' | 'complete_full_scan' | 'incomplete_explicit_limit',
+  searchedRecords: number,
+): Record<string, unknown> {
+  return {
+    version: ATRIB_RECALL_CONTENT_COVERAGE_VERSION,
+    strategy,
+    corpus: 'local_mirror',
+    mirror_high_watermark: mirrorHighWatermark(snapshot),
+    mirror_file_count: snapshot.files.length,
+    searched_records: searchedRecords,
+  }
 }
 
 /**
@@ -1662,7 +1688,7 @@ export function registerAtribRecallTools(server: McpServer): void {
           .number()
           .optional()
           .describe(
-            'Maximum newest-first records to search before BM25 candidate scoring. Default ATRIB_RECALL_CONTENT_MAX_RECORDS or 5000, max 50000. Raise for explicit archival sweeps.',
+            'Maximum newest-first records to search before BM25 candidate scoring. Default ATRIB_RECALL_CONTENT_MAX_RECORDS or 5000. In require_complete mode, omit this for full loaded-mirror coverage; an explicit value below total_records is treated as partial evidence.',
           ),
         evidence_mode: z
           .enum(['bounded', 'require_complete'])
@@ -1670,8 +1696,8 @@ export function registerAtribRecallTools(server: McpServer): void {
           .describe(
             'Default bounded keeps recall_by_content fast by searching the newest max_records window. ' +
               'Use require_complete for critical-path audits: it loads the full mirror, searches every ' +
-              'loaded record when total_records <= 50000, and refuses partial results with ' +
-              'evidence_status=incomplete plus fallback_required=true when max_records is below total_records.',
+              'loaded record, and refuses partial results with evidence_status=incomplete plus ' +
+              'fallback_required=true when max_records is explicitly below total_records.',
           ),
       },
     },
@@ -1697,7 +1723,8 @@ export function registerAtribRecallTools(server: McpServer): void {
                   resolveBoundedContentSearchLimit(args.max_records, Number.MAX_SAFE_INTEGER),
                   loaded.length,
                 )
-          if (evidenceMode === 'require_complete' && searchLimit < loaded.length) {
+          const explicitLimit = hasExplicitRecordLimit(args.max_records)
+          if (evidenceMode === 'require_complete' && explicitLimit && searchLimit < loaded.length) {
             const k = Math.max(1, Math.min(50, args.k ?? 10))
             return {
               content: [
@@ -1714,11 +1741,12 @@ export function registerAtribRecallTools(server: McpServer): void {
                         `require_complete refused a partial corpus: search_cap=${searchLimit}, ` +
                         `total_records=${loaded.length}.`,
                       fallback:
-                        'Rerun without max_records, raise max_records to total_records when it is <= 50000, ' +
-                        'or partition by context_id, event_type, signer, or time window and rerun each partition with require_complete.',
+                        'Rerun without max_records for full loaded-mirror coverage, or pass an explicit ' +
+                        'partition filter through a caller-owned audit plan and treat each partition as its own coverage claim.',
                       total_records: loaded.length,
                       searched_records: 0,
                       search_cap: searchLimit,
+                      coverage: recallCoverage(snapshot, 'incomplete_explicit_limit', 0),
                       candidate_records: 0,
                       truncated_corpus: true,
                       count: 0,
@@ -1785,6 +1813,7 @@ export function registerAtribRecallTools(server: McpServer): void {
           })
           const k = Math.max(1, Math.min(50, args.k ?? 10))
           const top = scored.slice(0, k)
+          const completeCoverage = !snapshot.partial && searchLimit >= loaded.length
           return {
             content: [
               {
@@ -1794,13 +1823,17 @@ export function registerAtribRecallTools(server: McpServer): void {
                     query: args.query,
                     k,
                     evidence_mode: evidenceMode,
-                    evidence_status:
-                      snapshot.partial || searchLimit < loaded.length ? 'bounded' : 'complete',
+                    evidence_status: completeCoverage ? 'complete' : 'bounded',
                     fallback_required: false,
                     total_records: totalRecords,
                     searched_records: searchLimit,
+                    coverage: recallCoverage(
+                      snapshot,
+                      completeCoverage ? 'complete_full_scan' : 'bounded_newest_first',
+                      searchLimit,
+                    ),
                     candidate_records: filteredSearchPool.length,
-                    truncated_corpus: snapshot.partial || searchLimit < loaded.length,
+                    truncated_corpus: !completeCoverage,
                     count: top.length,
                     results: top.map(({ lr, score, recency, importance, relevance }) => {
                       const ann = annotationsByRecord.get(lr.record_hash)

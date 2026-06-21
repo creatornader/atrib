@@ -504,6 +504,7 @@ describe('MCP protocol surface', () => {
         fallback_required: boolean
         total_records: number | null
         searched_records: number
+        coverage: { strategy: string; corpus: string; searched_records: number }
         truncated_corpus: boolean
         count: number
       }
@@ -512,6 +513,9 @@ describe('MCP protocol surface', () => {
       expect(payload.fallback_required).toBe(false)
       expect(payload.total_records).toBeNull()
       expect(payload.searched_records).toBe(3)
+      expect(payload.coverage.strategy).toBe('bounded_newest_first')
+      expect(payload.coverage.corpus).toBe('local_mirror')
+      expect(payload.coverage.searched_records).toBe(3)
       expect(payload.truncated_corpus).toBe(true)
       expect(payload.count).toBe(3)
     } finally {
@@ -543,6 +547,7 @@ describe('MCP protocol surface', () => {
         fallback_required: boolean
         total_records: number | null
         searched_records: number
+        coverage: { strategy: string; corpus: string; searched_records: number }
         truncated_corpus: boolean
         count: number
       }
@@ -551,6 +556,9 @@ describe('MCP protocol surface', () => {
       expect(payload.fallback_required).toBe(false)
       expect(payload.total_records).toBe(6)
       expect(payload.searched_records).toBe(6)
+      expect(payload.coverage.strategy).toBe('complete_full_scan')
+      expect(payload.coverage.corpus).toBe('local_mirror')
+      expect(payload.coverage.searched_records).toBe(6)
       expect(payload.truncated_corpus).toBe(false)
       expect(payload.count).toBe(6)
     } finally {
@@ -558,7 +566,7 @@ describe('MCP protocol surface', () => {
     }
   })
 
-  it('recall_by_content require_complete searches the full corpus when it fits the hard cap', async () => {
+  it('recall_by_content require_complete searches the full loaded corpus', async () => {
     writeFileSync(recordFile, (await makeContentSearchCorpus(6)).join('\n'))
     const client = new McpClient({
       ATRIB_RECORD_FILE: recordFile,
@@ -586,6 +594,7 @@ describe('MCP protocol surface', () => {
         fallback_required: boolean
         total_records: number | null
         searched_records: number
+        coverage: { strategy: string; corpus: string; searched_records: number }
         truncated_corpus: boolean
         count: number
       }
@@ -594,6 +603,9 @@ describe('MCP protocol surface', () => {
       expect(payload.fallback_required).toBe(false)
       expect(payload.total_records).toBe(6)
       expect(payload.searched_records).toBe(6)
+      expect(payload.coverage.strategy).toBe('complete_full_scan')
+      expect(payload.coverage.corpus).toBe('local_mirror')
+      expect(payload.coverage.searched_records).toBe(6)
       expect(payload.truncated_corpus).toBe(false)
       expect(payload.count).toBe(6)
     } finally {
@@ -628,6 +640,7 @@ describe('MCP protocol surface', () => {
         total_records: number
         searched_records: number
         search_cap: number
+        coverage: { strategy: string; corpus: string; searched_records: number }
         truncated_corpus: boolean
         count: number
         results: unknown[]
@@ -638,6 +651,9 @@ describe('MCP protocol surface', () => {
       expect(payload.total_records).toBe(6)
       expect(payload.searched_records).toBe(0)
       expect(payload.search_cap).toBe(3)
+      expect(payload.coverage.strategy).toBe('incomplete_explicit_limit')
+      expect(payload.coverage.corpus).toBe('local_mirror')
+      expect(payload.coverage.searched_records).toBe(0)
       expect(payload.truncated_corpus).toBe(true)
       expect(payload.count).toBe(0)
       expect(payload.results).toEqual([])
