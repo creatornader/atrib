@@ -177,7 +177,7 @@ The decision tree at each moment of substantive work:
 - Starting any consequential decision: "have I done this before? what shaped it?"
 - Searching for records by `context_id`, `creator_key`, `event_type`, `content_id`, `tool_name`, `args_hash`, annotation importance, topic tags, signer count, or rank mode.
 - Resolving a `record_hash` reference into its local neighborhood or body through `recall_walk` and related sibling tools.
-- Running a critical-path audit where missing evidence would change the answer. Use `recall_by_content({ query, evidence_mode: "require_complete" })`; if it returns `evidence_status: "incomplete"` or `fallback_required: true`, do not use the partial result. Emit an observation naming the incomplete recall and rerun without `max_records`, raise `max_records` to `total_records` when it is <= 50000, or partition by `context_id`, `event_type`, signer, or time window and rerun each partition with `require_complete`.
+- Running a critical-path audit where missing evidence would change the answer. Use `recall_by_content({ query, evidence_mode: "require_complete" })`; if it returns `evidence_status: "incomplete"` or `fallback_required: true`, do not use the partial result. Emit an observation naming the incomplete recall and rerun without `max_records` for full loaded-mirror coverage, or run a caller-owned partition plan and treat each partition as its own explicit coverage claim.
 
 **`atrib-trace`** (LINEAGE): you have a record and want to walk its causal chain. Use it when:
 
@@ -324,7 +324,7 @@ All eight read your local signed-record mirror, verify each Ed25519 signature, a
 `recall_by_content` has two evidence modes:
 
 - `bounded` is the default. It searches the newest `max_records` window so casual recall stays fast. If the corpus is larger, the response carries `evidence_status: "bounded"`, `truncated_corpus: true`, and `total_records: null`.
-- `require_complete` is for critical-path audits. It loads the full mirror and searches every loaded record when the corpus fits under the 50000 hard cap. If a caller sets `max_records` below `total_records`, or the corpus is larger than the cap, the response carries `evidence_status: "incomplete"`, `fallback_required: true`, `truncated_corpus: true`, and no results. Treat that as an evidence failure, not as "nothing matched." The MCP result itself is signed in wrapped hosts; emit an observation before taking the deterministic fallback so future-you can find the gap and the retry path.
+- `require_complete` is for critical-path audits. It loads the full mirror and searches every loaded record. If a caller sets `max_records` below `total_records`, the response carries `evidence_status: "incomplete"`, `fallback_required: true`, `truncated_corpus: true`, and no results. Treat that as an evidence failure, not as "nothing matched." The MCP result itself is signed in wrapped hosts; emit an observation before taking the deterministic fallback so future-you can find the gap and the retry path. Use the response `coverage` object to confirm whether the result came from a complete loaded-mirror scan or a bounded newest-first window.
 
 Filters on `recall_my_attribution_history`:
 

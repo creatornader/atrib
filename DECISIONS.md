@@ -6543,6 +6543,8 @@ and skips a second `tool_call` record.
 
 **Extends:** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion), [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), [D085](#d085-recall-calibration-defaults-survey-grounded-rationale), and [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content).
 
+**Superseded in part by:** [D125](#d125-complete-content-recall-is-coverage-first-not-cap-first), which removes the 50000 hard cap from `require_complete`.
+
 **Context.** `recall_by_content` serves two different jobs. Casual recall should stay fast, bounded, and cheap enough for agents to use often. Critical-path audits have a different failure mode: a caller can pass `max_records` below the mirror size, get plausible top hits, and accidentally treat a partial corpus as complete evidence.
 
 The local mirror on 2026-06-20 had about 50000 records. A full `max_records=50000` content search returned `truncated_corpus=false`; a smaller `max_records=20000` call correctly returned `truncated_corpus=true`. That means the structural false-truncation bug was fixed, but the raw primitive was still too easy to misuse.
@@ -6617,6 +6619,59 @@ An explicit `context_id` always wins over `context_scope`.
 - [`services/atrib-recall/src/index.ts`](services/atrib-recall/src/index.ts), `context_scope` implementation.
 - [`services/atrib-recall/test/context-scope.test.ts`](services/atrib-recall/test/context-scope.test.ts), regression coverage.
 - [`services/atrib-recall/README.md`](services/atrib-recall/README.md), operator-facing recall contract.
+
+## D125: Complete content recall is coverage-first, not cap-first
+
+**Date:** 2026-06-21
+
+**Status:** Accepted
+
+**Supersedes:** The 50000 hard-cap clause in [D123](#d123-critical-path-content-recall-requires-complete-evidence-or-explicit-fallback).
+
+**Extends:** [D062](#d062-local-mirror-sidecar-two-tier-private-local--public-canonical-persistence), [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content), [D123](#d123-critical-path-content-recall-requires-complete-evidence-or-explicit-fallback), and [D124](#d124-base-recall-makes-context-scope-explicit).
+
+**Context.** [D123](#d123-critical-path-content-recall-requires-complete-evidence-or-explicit-fallback) fixed a real misuse class: agents could treat a partial content search as complete evidence. Its implementation tied complete recall to a `50000` record hard cap because the local mirror was about that size during the live check.
+
+That number was an operational guardrail, not a proof boundary. Once the mirror grew beyond it, `require_complete` could return `evidence_status: "incomplete"` even after loading the full mirror into memory. The cap had become semantic: record count, rather than coverage, decided whether the caller could claim complete evidence.
+
+**Decision.** Make `require_complete` coverage-first:
+
+- `bounded` remains the default. It searches the newest `ATRIB_RECALL_CONTENT_MAX_RECORDS` window, or an explicit `max_records`, and marks `evidence_status: "bounded"` when the loaded snapshot is partial.
+- `require_complete` loads the full local mirror and searches every loaded record when `max_records` is omitted.
+- If a caller explicitly sets `max_records` below `total_records` in `require_complete`, recall returns no hits with `evidence_status: "incomplete"`, `fallback_required: true`, and `coverage.strategy: "incomplete_explicit_limit"`.
+- The old 50000 hard cap is removed. No record-count ceiling can by itself make loaded-mirror evidence incomplete.
+
+Add `coverage` to `recall_by_content` responses. Version `coverage-v1` includes:
+
+- `strategy`: `bounded_newest_first`, `complete_full_scan`, or `incomplete_explicit_limit`
+- `corpus`: currently `local_mirror`
+- `mirror_high_watermark`: a hash over the mirror fingerprint used for the call
+- `mirror_file_count`
+- `searched_records`
+
+This is a coverage contract, not an indexing claim. The current complete path is still a full loaded-mirror BM25 scan. A future indexed sidecar can add a separate strategy such as `complete_indexed` only when it can prove its index is caught up to the mirror high-water mark.
+
+**Alternatives considered.**
+
+- _Raise the hard cap._ Rejected. That preserves the wrong abstraction and would fail again at the next corpus size.
+- _Paginate around the hard cap._ Rejected as the primary fix. Pagination helps browsing and export, but ranked recall needs a global candidate set or shard-merge semantics.
+- _Keep returning incomplete above 50000 until the indexed sidecar ships._ Rejected. The current path already loads the full mirror before refusing. Refusing after load gives up correctness without saving the expensive work.
+- _Ship SQLite FTS in the same patch._ Deferred. The coverage semantics need to be right first. The indexed sidecar should then become a performance strategy behind the same coverage contract.
+
+**Consequences.**
+
+- Critical-path callers can now request `require_complete` without knowing the current mirror size.
+- `max_records` remains a caller-owned partial-corpus request. In complete mode, setting it below `total_records` is still an evidence failure.
+- Response consumers should inspect `coverage.strategy`, not just `truncated_corpus`, when they need to defend a recall claim.
+- Large complete recalls may still be slow. That is now a performance gap, not a correctness guard disguised as a corpus limit.
+- The next structural step is a durable recall index with high-water-mark verification. It must preserve the [D125](#d125-complete-content-recall-is-coverage-first-not-cap-first) coverage contract.
+
+**Cross-references.**
+
+- [`services/atrib-recall/src/index.ts`](services/atrib-recall/src/index.ts), coverage-first `recall_by_content` implementation.
+- [`services/atrib-recall/test/mcp-protocol.test.ts`](services/atrib-recall/test/mcp-protocol.test.ts), complete and bounded coverage regression tests.
+- [`services/atrib-recall/README.md`](services/atrib-recall/README.md), operator-facing recall contract.
+- [`skills/atrib/SKILL.md`](skills/atrib/SKILL.md), agent-facing critical-path recall guidance.
 
 # Pending decisions
 
