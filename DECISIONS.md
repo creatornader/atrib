@@ -6759,6 +6759,57 @@ The local-substrate topology report adds a `primitive-runtime-recall-contract` g
 - [`services/atrib-primitives/src/index.ts`](services/atrib-primitives/src/index.ts), `recall_contract` health reporting.
 - [`scripts/report-local-substrate-topology.mjs`](scripts/report-local-substrate-topology.mjs), `primitive-runtime-recall-contract` gate.
 
+## D128: Host-owned primitive runtime updates are build, restart, direct-probe
+
+**Date:** 2026-06-22
+
+**Status:** Accepted
+
+**Extends:** [D120](#d120-local-substrate-coordinator-remains-optional-with-wrapper-owned-signing), [D126](#d126-content-recall-uses-a-durable-index-behind-complete-evidence-coverage), and [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness).
+
+**Context.** [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness) made stale recall support visible in primitive HTTP health and topology. That still left the operator recovery path as a remembered sequence: build `@atrib/recall`, build `@atrib/primitives-runtime`, restart the launchd services, curl health, then manually call recall. That sequence worked in the session, but it was easy to run against the wrong checkout or stop after health without proving the real MCP tool result shape.
+
+The failure class is concrete. The live Codex app can be current while its host-owned `com.nader.atrib-primitives.codex` LaunchAgent is stale. After a Version Packages merge, the same thing can happen again because the expected primitive runtime version changes even if the process was current a minute earlier.
+
+**Decision.** `scripts/update-primitives-runtime.mjs` is the local operator command for host-owned primitive runtime updates. By default it:
+
+1. Discovers `com.nader.atrib-primitives.*` LaunchAgents from `~/Library/LaunchAgents`.
+2. Acts only on services whose plist runs this checkout's `services/atrib-primitives/dist/index.js` in Streamable HTTP mode on a loopback endpoint.
+3. Builds `@atrib/recall` and `@atrib/primitives-runtime`.
+4. Restarts the selected LaunchAgents with `launchctl kickstart -k`.
+5. Waits for each health endpoint and checks the checked-out primitive runtime version plus the [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness) recall contract.
+6. Connects over MCP Streamable HTTP and calls `recall_by_content` against each live endpoint.
+7. Fails if the tool result omits `runtime.content_index_version`, `runtime.coverage_version`, or `coverage.index.version/status`.
+8. Runs the topology report and requires the three primitive gates to pass: `primitive-runtime-version-freshness`, `primitive-runtime-recall-contract`, and `host-owned-primitives-http`.
+
+The command has scoped flags for real operator use:
+
+- `--profile <name>` restricts the action to one or more profiles.
+- `--skip-build --skip-restart` turns the command into a direct live proof without changing launchd state.
+- `--dry-run` reports the discovered LaunchAgent plan without build, restart, or probe.
+- `--no-topology` leaves the broader topology report out when only direct endpoint proof is needed.
+
+The script intentionally refuses LaunchAgents whose working directory or dist path does not match the checkout running the command. It does not infer ports from hardcoded profile names. It derives endpoints from each plist's `ProgramArguments` and restricts managed endpoints to loopback.
+
+**Alternatives considered.**
+
+- _Keep the sequence as shell notes._ Rejected. The failure came from stale process state, so the recovery path has to be executable and repeatable.
+- _Make normal health call `recall_by_content`._ Rejected. [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness) health should stay cheap. [D128](#d128-host-owned-primitive-runtime-updates-are-build-restart-direct-probe)'s direct MCP probe is the right heavier check because it runs during an explicit update/proof command.
+- _Hardcode Codex, Claude Code, and Claude Desktop ports._ Rejected. The plist is the source of truth for the process the host actually owns.
+- _Update every matching process regardless of checkout._ Rejected. A repo command should not restart a service that points at another worktree.
+
+**Consequences.**
+
+- A future agent can run `pnpm update:primitives-runtime` after recall or primitives-runtime changes and get one report that covers build, restart, health, direct MCP tool shape, and primitive topology gates.
+- Stale process fixes are now bounded to launchd services that visibly belong to the current checkout.
+- The direct probe catches the exact caller-facing shape [D126](#d126-content-recall-uses-a-durable-index-behind-complete-evidence-coverage) introduced, not only the cheaper [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness) contract summary.
+
+**Cross-references.**
+
+- [`scripts/update-primitives-runtime.mjs`](scripts/update-primitives-runtime.mjs), update, restart, and direct MCP proof command.
+- [`scripts/check-primitives-runtime-update.mjs`](scripts/check-primitives-runtime-update.mjs), deterministic checker for LaunchAgent selection and recall payload validation.
+- [`services/atrib-primitives/README.md`](services/atrib-primitives/README.md), operator command notes.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
