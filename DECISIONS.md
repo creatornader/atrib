@@ -6952,19 +6952,24 @@ ADK action decide from verified prior evidence before the tool body executes?
 The Google stack proof also needed to show AP2 and A2A evidence feeding a
 concrete ADK decision, not only an after-the-fact callback record.
 
-The TypeScript ADK package exposes `BasePlugin.beforeToolCallback`, which can
+Google ADK Python exposes `BasePlugin.before_tool_callback`, which can
 short-circuit a tool call. That is the right local boundary for an allow or
-refuse decision. Current ADK `ToolConfirmation` objects do not expose a native
-binding tag over tool name, canonical args, authority, policy version, and
-expiry, so confirmation binding has to stay in atrib-side fixture material for
-now.
+refuse decision in the `google/adk-python` issue surface. Current ADK
+confirmation objects do not expose a native binding tag over tool name,
+canonical args, authority, policy version, and expiry, so confirmation binding
+has to stay in atrib-side fixture material for now.
 
-**Decision.** Add a Google ADK decision-ledger proof under
-[`packages/integration/examples/google-adk-decision-ledger/`](packages/integration/examples/google-adk-decision-ledger/).
-The proof uses real `@google/adk` `InMemoryRunner`, `BasePlugin`, and
+**Decision.** Add a Python-native Google ADK decision-ledger proof under
+[`packages/integration/examples/google-adk-python/`](packages/integration/examples/google-adk-python/).
+The proof uses real `google-adk==2.3.0` `InMemoryRunner`, `BasePlugin`, and
 `FunctionTool` surfaces. It signs a hash-only decision record from
-`beforeToolCallback`, then signs an allowed tool outcome from
-`afterToolCallback` with the decision record in `informed_by`.
+`before_tool_callback`, then signs an allowed tool outcome from
+`after_tool_callback` with the decision record in `informed_by`.
+
+The TypeScript decision-ledger proof under
+[`packages/integration/examples/google-adk-decision-ledger/`](packages/integration/examples/google-adk-decision-ledger/)
+remains useful cross-SDK evidence. It is not the lead proof for
+`google/adk-python`.
 
 The decision record uses the local extension event type
 `https://google-adk-decision-ledger.example/v1` and schema
@@ -6978,6 +6983,8 @@ The proof covers:
 
 - `allowed`: the tool runs and the outcome cites the decision.
 - `refused`: the plugin returns a response and the tool body does not execute.
+- `policy_error`: plugin policy failure signs a decision record and the tool
+  body does not execute.
 - `confirmation_required` and `confirmation_resolved`: fixture entries bind the
   pending action to tool, canonical args, authority, policy version, and expiry.
 - `stale_or_mismatched`: the binding check fails closed when any of those fields
@@ -6985,17 +6992,20 @@ The proof covers:
 
 Update the Google stack chain proof to v3:
 AP2 transaction record -> A2A remote evidence -> A2A receiver follow-up -> ADK
-JS allow decision -> ADK JS tool outcome.
+Python allow decision -> ADK Python tool outcome.
 
 **Alternatives considered.**
 
 - _Treat the ADK decision record as a core atrib event type now._ Rejected. One
   ADK proof is not enough evidence to freeze a protocol byte or public package
   contract.
+- _Use the TypeScript ADK decision-ledger proof as the lead evidence for
+  `google/adk-python`._ Rejected. The route is in the Python repo, so the proof
+  should exercise Python callbacks, Python invocation ids, and Python sidecars.
 - _Keep signing only after the ADK tool callback._ Rejected. That proves audit
   and traceability, but not the pre-action authority decision.
 - _Claim native ADK confirmation binding._ Rejected. ADK's current
-  `ToolConfirmation` object does not expose the binding tag this proof needs.
+  confirmation objects do not expose the binding tag this proof needs.
 - _Patch ADK internals for deterministic invocation ids._ Rejected. The proof
   keeps deterministic reference output at the fixture layer and leaves live run
   ids runtime-owned.
@@ -7025,7 +7035,6 @@ JS allow decision -> ADK JS tool outcome.
   focused contract tests.
 - [`packages/integration/test/google-stack-chain.test.ts`](packages/integration/test/google-stack-chain.test.ts),
   deterministic chain proof tests.
-
 
 # Pending decisions
 

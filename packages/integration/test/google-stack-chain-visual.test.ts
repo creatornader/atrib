@@ -64,7 +64,9 @@ describe('Google stack chain visual workbench', () => {
     await expect.poll(() => page.title()).toBe('Google stack proof chain')
     await expect.poll(() => page.getByTestId('google-stack-visual').isVisible()).toBe(true)
     await expect
-      .poll(() => page.locator('.skip-link').evaluate((element) => element.getBoundingClientRect().bottom))
+      .poll(() =>
+        page.locator('.skip-link').evaluate((element) => element.getBoundingClientRect().bottom),
+      )
       .toBeLessThanOrEqual(0)
     await expect.poll(() => page.locator('#stageTitle').textContent()).toBe('Live proof chain')
     await expect
@@ -89,17 +91,17 @@ describe('Google stack chain visual workbench', () => {
       .poll(() => page.locator('#verifyStatus').textContent())
       .toContain('Fixture checked')
 
-    await page.getByRole('button', { name: 'Inspect ADK JS callback' }).click()
+    await page.getByRole('button', { name: 'Inspect ADK Python callback' }).click()
     await expect
       .poll(() => page.locator('#selectedTitle').textContent())
-      .toBe('ADK JS callback')
+      .toBe('ADK Python callback')
     await expect.poll(() => page.locator('#protocolBadge').getAttribute('class')).toContain('ADK')
     await expect
       .poll(() => page.locator('#selectedHash').textContent())
-      .toContain('sha256:61e7c3f52266ac2a24c22336f5c5e53539b1e55d91b78725fe9d70fe9b966a56')
+      .toContain('sha256:cb14068f57a8086a6a25ab301cb025da5510db7ecef523113e5207de1328f96c')
     await expect
       .poll(() => page.locator('#analyticsRows tr.selected').textContent())
-      .toContain('ADK JS')
+      .toContain('ADK Python')
     expect(consoleErrors).toEqual([])
     await page.close()
   })
@@ -155,14 +157,14 @@ describe('Google stack chain visual workbench', () => {
       .toBe('verified replay packet')
     await expect
       .poll(() => page.locator('#selectedTitle').textContent())
-      .toBe('ADK JS tool callback')
+      .toBe('ADK Python tool callback')
     await expect
       .poll(() => page.locator('#stageMode').textContent())
       .toContain('Active runtime path')
     await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(5)
     await expect
       .poll(() => page.locator('#analyticsRows tr').last().textContent())
-      .toContain('ADK JS')
+      .toContain('ADK Python')
     await page.locator('#analyticsRows tr').nth(1).click()
     await expect
       .poll(() => page.locator('#selectedTitle').textContent())
@@ -172,13 +174,11 @@ describe('Google stack chain visual workbench', () => {
       .poll(() => page.locator('#selectedTitle').textContent())
       .toBe('A2A receiver follow-up')
     await page.locator('#analyticsRows tr').nth(3).click()
-    await expect
-      .poll(() => page.locator('#selectedTitle').textContent())
-      .toBe('ADK allow decision')
+    await expect.poll(() => page.locator('#selectedTitle').textContent()).toBe('ADK allow decision')
     await page.locator('#analyticsRows tr').last().click()
     await expect
       .poll(() => page.locator('#selectedTitle').textContent())
-      .toBe('ADK JS tool callback')
+      .toBe('ADK Python tool callback')
     await expect.poll(() => page.locator('#resetRuntimeView').isEnabled()).toBe(true)
     await expect.poll(() => page.locator('#copySelectedHash').isEnabled()).toBe(true)
     await expect.poll(() => page.locator('#copySelectedJson').isEnabled()).toBe(true)
@@ -305,8 +305,8 @@ describe('Google stack chain visual workbench', () => {
       'sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db',
       'sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9',
       'sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2',
-      'sha256:4d30b4e5d7557ac2450f65c397f5442f9c45a7bad85c219de65153fcdc93294f',
-      'sha256:61e7c3f52266ac2a24c22336f5c5e53539b1e55d91b78725fe9d70fe9b966a56',
+      'sha256:47317fb2d00122696da2a385217e88b36a9bd94d42202acebb97a761ade450f5',
+      'sha256:cb14068f57a8086a6a25ab301cb025da5510db7ecef523113e5207de1328f96c',
     ])
     expect(
       fixture.analytics.rows.map((row: { trace_id: string | null; span_id: string | null }) => [
@@ -315,10 +315,10 @@ describe('Google stack chain visual workbench', () => {
       ]),
     ).toEqual([
       [null, null],
-      ['742ef877246a075452d965328d32ff98', 'b115b227841db8e4'],
-      ['742ef877246a075452d965328d32ff98', '1d6154dbc8bded9a'],
-      ['742ef877246a075452d965328d32ff98', 'bc9b7b9136e25e6c'],
-      ['742ef877246a075452d965328d32ff98', 'a273389a6a9ffa14'],
+      ['4f22c9bdbeaaf460f4aca6fd8fa817ef', 'b115b227841db8e4'],
+      ['4f22c9bdbeaaf460f4aca6fd8fa817ef', '1d6154dbc8bded9a'],
+      ['4f22c9bdbeaaf460f4aca6fd8fa817ef', 'ce4454985c7dfce8'],
+      ['4f22c9bdbeaaf460f4aca6fd8fa817ef', '6d52daf6ab39e6a5'],
     ])
   })
 })
@@ -399,7 +399,7 @@ function writeRuntimeMock(pathname: string, res: ServerResponse): void {
           event: {
             type: 'step_started',
             key: 'adk_decision',
-            protocol: 'ADK JS',
+            protocol: 'ADK Python',
             label: 'ADK allow decision',
             timestamp: adkDecisionStep.timestamp,
           },
@@ -417,7 +417,7 @@ function writeRuntimeMock(pathname: string, res: ServerResponse): void {
           event: {
             type: 'step_started',
             key: 'adk_tool_callback',
-            protocol: 'ADK JS',
+            protocol: 'ADK Python',
             label: 'ADK tool callback',
             timestamp: adkStep.timestamp,
           },
@@ -508,15 +508,13 @@ function mockRun() {
       },
       {
         key: 'adk_decision',
-        protocol: 'ADK JS',
+        protocol: 'ADK Python',
         status: 'complete',
         label: 'ADK allow decision',
         detail: 'ADK decision signed.',
         timestamp: '2026-06-18T00:00:02.000Z',
         record_hash: 'sha256:d3c1510a00000000000000000000000000000000000000000000000000000000',
-        informed_by: [
-          'sha256:a2a0000000000000000000000000000000000000000000000000000000000000',
-        ],
+        informed_by: ['sha256:a2a0000000000000000000000000000000000000000000000000000000000000'],
         checks: [
           {
             key: 'adk_decision_parent_resolved',
@@ -533,15 +531,13 @@ function mockRun() {
       },
       {
         key: 'adk_tool_callback',
-        protocol: 'ADK JS',
+        protocol: 'ADK Python',
         status: 'complete',
         label: 'ADK tool callback',
         detail: 'ADK callback signed.',
         timestamp: '2026-06-18T00:00:03.000Z',
         record_hash: 'sha256:adk0000000000000000000000000000000000000000000000000000000000000',
-        informed_by: [
-          'sha256:d3c1510a00000000000000000000000000000000000000000000000000000000',
-        ],
+        informed_by: ['sha256:d3c1510a00000000000000000000000000000000000000000000000000000000'],
         checks: [
           {
             key: 'adk_callback_informed_by_decision',
@@ -561,7 +557,7 @@ function mockRun() {
       ap2_informs_a2a_remote: true,
       a2a_remote_informs_receiver: true,
       a2a_receiver_informs_adk_decision: true,
-      adk_decision_informs_adk_js: true,
+      adk_decision_informs_adk_python: true,
     },
     analytics_rows: [
       mockAnalyticsRow({
@@ -583,16 +579,16 @@ function mockRun() {
         protocol: 'A2A',
       }),
       mockAnalyticsRow({
-        event_type: 'atrib.adk_js.decision_allowed',
+        event_type: 'atrib.adk_python.decision_allowed',
         atrib_record_hash:
           'sha256:d3c1510a00000000000000000000000000000000000000000000000000000000',
-        protocol: 'ADK JS',
+        protocol: 'ADK Python',
       }),
       mockAnalyticsRow({
-        event_type: 'atrib.adk_js.tool_callback_signed',
+        event_type: 'atrib.adk_python.tool_callback_signed',
         atrib_record_hash:
           'sha256:adk0000000000000000000000000000000000000000000000000000000000000',
-        protocol: 'ADK JS',
+        protocol: 'ADK Python',
       }),
     ],
     value_add: {
@@ -616,7 +612,7 @@ function mockAnalyticsRow({
   return {
     timestamp: '2026-06-18T00:00:00.000Z',
     event_type,
-    agent: protocol === 'ADK JS' ? 'google_adk_atrib_smoke_agent' : 'mock-agent',
+    agent: protocol === 'ADK Python' ? 'google_adk_python_decision_allow_agent' : 'mock-agent',
     session_id: 'mock-session',
     invocation_id: 'mock-invocation',
     user_id: 'google-stack-demo-operator',

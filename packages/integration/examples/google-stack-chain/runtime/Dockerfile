@@ -1,5 +1,17 @@
 FROM node:22-slim
 
+ENV UV_LINK_MODE=copy
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    python-is-python3 \
+    python3 \
+    python3-pip \
+    python3-venv \
+  && rm -rf /var/lib/apt/lists/*
+RUN python3 -m pip install --break-system-packages uv
+
 RUN corepack enable
 
 WORKDIR /app
@@ -15,6 +27,7 @@ RUN pnpm --filter @atrib/directory build
 RUN pnpm --filter @atrib/log-node build
 RUN pnpm --filter @atrib/verify build
 RUN pnpm --filter @atrib/agent build
+RUN uv run --quiet --with google-adk==2.3.0 --with cryptography python -c "import google.adk, cryptography"
 
 EXPOSE 8080
 

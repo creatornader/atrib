@@ -81,9 +81,9 @@ atrib/
         llamaindex-python-memory/ # LlamaIndex Python Memory proof with hash-only atrib records.
         a2a-handoff/           # Official A2A SDK JSON-RPC proof with signed AgentCard, verifier-gated handoff packet, and informed_by follow-up.
         google-adk/            # Google ADK InMemoryRunner + BasePlugin + FunctionTool proof for hash-only atrib signing at the ADK tool callback boundary.
-        google-adk-python/     # Google ADK Python InMemoryRunner + BasePlugin + FunctionTool proof for hash-only atrib signing at the Python tool callback boundary.
-        google-adk-decision-ledger/ # Google ADK JS before-tool decision-ledger proof with allow, refuse, confirmation, and callback signing.
-        google-stack-chain/     # Local proof chain linking AP2 / VI live interop, A2A handoff evidence, Google ADK JS allow decisions, and ADK JS callbacks through informed_by, plus a visual workbench.
+        google-adk-python/     # Google ADK Python InMemoryRunner + BasePlugin + FunctionTool proof for before-tool decision signing and hash-only callback signing.
+        google-adk-decision-ledger/ # Google ADK TypeScript before-tool decision-ledger proof with allow, refuse, confirmation, and callback signing.
+        google-stack-chain/     # Local proof chain linking AP2 / VI live interop, A2A handoff evidence, Google ADK Python allow decisions, and ADK Python callbacks through informed_by, plus a visual workbench.
         letta-memory/          # Letta core and archival memory proof through real Letta executor dispatch, with fake managers and hash-only host signing.
         mastra-runtime/        # Mastra MCPClient/MCPServer stdio proof plus workflow suspend/resume receipt proof.
         microsoft-agent-framework/ # Microsoft Agent Framework Python WorkflowBuilder proof with hash-only workflow event receipts.

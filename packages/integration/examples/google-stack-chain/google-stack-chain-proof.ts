@@ -4,7 +4,6 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { version as adkVersion } from '@google/adk'
 import { canonicalRecord, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
 import { verifyRecord as verifyAtribRecord } from '@atrib/verify'
 import {
@@ -13,7 +12,7 @@ import {
 } from '../../src/ap2-local-participant.js'
 import { runAp2LiveInterop } from '../../src/ap2-live-interop.js'
 import { runA2aHandoffProof } from '../../src/a2a-handoff.js'
-import { runGoogleAdkDecisionLedgerAllowPath } from '../google-adk-decision-ledger/google-adk-decision-ledger-proof.js'
+import { runGoogleAdkPythonDecisionLedgerAllowPath } from '../google-adk-python/google-adk-python-decision-ledger-proof.js'
 
 const NOW_SECONDS = 1_779_840_000
 const A2A_REQUEST_MESSAGE_ID = 'google-stack-a2a-request-0001'
@@ -30,7 +29,7 @@ type GoogleStackChainProof = {
     ap2_informs_a2a_remote: true
     a2a_remote_informs_a2a_receiver: true
     a2a_receiver_informs_adk_decision: true
-    adk_decision_informs_adk_js: true
+    adk_decision_informs_adk_python: true
   }
   snapshot: {
     schema: 'atrib-google-stack-chain.snapshot.v1'
@@ -39,7 +38,7 @@ type GoogleStackChainProof = {
       a2a_remote_evidence: string
       a2a_receiver_followup: string
       adk_decision: string
-      adk_js_tool_callback: string
+      adk_python_tool_callback: string
     }
     resolved_edges: Array<{
       from: string
@@ -75,7 +74,7 @@ type GoogleStackChainProof = {
       is_truncated: boolean
       atrib_record_hash: string
       atrib_parent_record_hashes: string[]
-      protocol: 'AP2' | 'A2A' | 'ADK JS'
+      protocol: 'AP2' | 'A2A' | 'ADK Python'
     }>
     caveat: string
   }
@@ -97,9 +96,9 @@ type GoogleStackChainProof = {
       receiver_followup_hash: string
       informed_by_resolved: string[]
     }
-    adk_js: {
-      protocol: 'ADK JS'
-      package: '@google/adk'
+    adk_python: {
+      protocol: 'ADK Python'
+      package: 'google-adk'
       version: string
       runtime: 'InMemoryRunner'
       plugin: 'BasePlugin'
@@ -115,7 +114,7 @@ type GoogleStackChainProof = {
         adk_session_id: string
         adk_function_call_id: string | null
         adk_agent_name: string | null
-        source: 'local-adk-decision-sidecar'
+        source: 'local-adk-python-decision-sidecar'
         trace_projection: 'deterministic-local'
       }
     }
@@ -192,30 +191,29 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
     throw new Error('A2A layer did not expose the signed follow-up record for ADK chaining')
   }
 
-  const adkJs = await runGoogleAdkDecisionLedgerAllowPath({
-    contextId: digestHex('google-stack-adk-js-decision-ledger', 32),
+  const adkPython = await runGoogleAdkPythonDecisionLedgerAllowPath({
+    contextId: digestHex('google-stack-adk-python-decision-ledger', 32),
     parentRecordHash: a2a.followup.record_hash,
-    sessionId: 'google-stack-adk-js-session-0001',
-    deterministicRandomSeed: 0x676f6f67,
+    sessionId: 'google-stack-adk-python-session-0001',
     nowMs: NOW_SECONDS * 1000 + 2_000,
     prompt: 'Quote the next atlas-kit action only after AP2 and A2A evidence resolves.',
   })
-  const decisionVerification = await verifyAtribRecord(adkJs.decision.record, {
+  const decisionVerification = await verifyAtribRecord(adkPython.decision.record, {
     informedByCandidates: [a2a.records.followup],
   })
-  const outcomeVerification = await verifyAtribRecord(adkJs.outcome.record, {
-    informedByCandidates: [adkJs.decision.record],
+  const outcomeVerification = await verifyAtribRecord(adkPython.outcome.record, {
+    informedByCandidates: [adkPython.decision.record],
   })
   if (
     decisionVerification.informed_by_resolution?.resolved[0] !== a2a.followup.record_hash ||
     decisionVerification.informed_by_resolution?.dangling.length !== 0 ||
-    outcomeVerification.informed_by_resolution?.resolved[0] !== adkJs.decision.record_hash ||
+    outcomeVerification.informed_by_resolution?.resolved[0] !== adkPython.decision.record_hash ||
     outcomeVerification.informed_by_resolution?.dangling.length !== 0
   ) {
-    throw new Error('ADK JS decision layer failed')
+    throw new Error('ADK Python decision layer failed')
   }
-  const adkDecisionOperationalIds = adkJs.google_operational_ids[0]!
-  const adkOutcomeOperationalIds = adkJs.google_operational_ids[1]!
+  const adkDecisionOperationalIds = adkPython.google_operational_ids[0]!
+  const adkOutcomeOperationalIds = adkPython.google_operational_ids[1]!
 
   return {
     ok: true,
@@ -226,7 +224,7 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
       ap2_informs_a2a_remote: true,
       a2a_remote_informs_a2a_receiver: true,
       a2a_receiver_informs_adk_decision: true,
-      adk_decision_informs_adk_js: true,
+      adk_decision_informs_adk_python: true,
     },
     snapshot: {
       schema: 'atrib-google-stack-chain.snapshot.v1',
@@ -234,8 +232,8 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
         ap2_transaction: ap2RecordHash,
         a2a_remote_evidence: a2a.evidence.remote_record_hash,
         a2a_receiver_followup: a2a.followup.record_hash,
-        adk_decision: adkJs.decision.record_hash,
-        adk_js_tool_callback: adkJs.outcome.record_hash,
+        adk_decision: adkPython.decision.record_hash,
+        adk_python_tool_callback: adkPython.outcome.record_hash,
       },
       resolved_edges: [
         {
@@ -252,13 +250,13 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
         },
         {
           from: a2a.followup.record_hash,
-          to: adkJs.decision.record_hash,
+          to: adkPython.decision.record_hash,
           relation: 'informed_by',
           verifier: '@atrib/verify',
         },
         {
-          from: adkJs.decision.record_hash,
-          to: adkJs.outcome.record_hash,
+          from: adkPython.decision.record_hash,
+          to: adkPython.outcome.record_hash,
           relation: 'informed_by',
           verifier: '@atrib/verify',
         },
@@ -343,8 +341,8 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
         },
         {
           timestamp: new Date(NOW_SECONDS * 1000 + 2_000).toISOString(),
-          event_type: 'atrib.adk_js.decision_allowed',
-          agent: adkDecisionOperationalIds.adk_agent_name ?? 'google-adk-js-agent',
+          event_type: 'atrib.adk_python.decision_allowed',
+          agent: adkDecisionOperationalIds.adk_agent_name ?? 'google-adk-python-agent',
           session_id: adkDecisionOperationalIds.adk_session_id,
           invocation_id: adkDecisionOperationalIds.adk_invocation_id,
           user_id: null,
@@ -354,14 +352,14 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
           status: 'OK',
           error_message: null,
           is_truncated: false,
-          atrib_record_hash: adkJs.decision.record_hash,
+          atrib_record_hash: adkPython.decision.record_hash,
           atrib_parent_record_hashes: [a2a.followup.record_hash],
-          protocol: 'ADK JS',
+          protocol: 'ADK Python',
         },
         {
           timestamp: new Date(NOW_SECONDS * 1000 + 2_001).toISOString(),
-          event_type: 'atrib.adk_js.tool_callback_signed',
-          agent: adkOutcomeOperationalIds.adk_agent_name ?? 'google-adk-js-agent',
+          event_type: 'atrib.adk_python.tool_callback_signed',
+          agent: adkOutcomeOperationalIds.adk_agent_name ?? 'google-adk-python-agent',
           session_id: adkOutcomeOperationalIds.adk_session_id,
           invocation_id: adkOutcomeOperationalIds.adk_invocation_id,
           user_id: null,
@@ -371,9 +369,9 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
           status: 'OK',
           error_message: null,
           is_truncated: false,
-          atrib_record_hash: adkJs.outcome.record_hash,
-          atrib_parent_record_hashes: [adkJs.decision.record_hash],
-          protocol: 'ADK JS',
+          atrib_record_hash: adkPython.outcome.record_hash,
+          atrib_parent_record_hashes: [adkPython.decision.record_hash],
+          protocol: 'ADK Python',
         },
       ],
       caveat:
@@ -397,15 +395,15 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
         receiver_followup_hash: a2a.followup.record_hash,
         informed_by_resolved: a2a.followup.informed_by_resolved,
       },
-      adk_js: {
-        protocol: 'ADK JS',
-        package: '@google/adk',
-        version: adkVersion,
+      adk_python: {
+        protocol: 'ADK Python',
+        package: adkPython.adk.python_package,
+        version: adkPython.adk.version,
         runtime: 'InMemoryRunner',
         plugin: 'BasePlugin',
-        decision_record_hash: adkJs.decision.record_hash,
-        signed_record_hash: adkJs.outcome.record_hash,
-        operation: adkJs.outcome.sidecar.operation,
+        decision_record_hash: adkPython.decision.record_hash,
+        signed_record_hash: adkPython.outcome.record_hash,
+        operation: adkPython.outcome.sidecar.operation,
         parent_informed_by_resolved: decisionVerification.informed_by_resolution.resolved,
         decision_informed_by_resolved: outcomeVerification.informed_by_resolution.resolved,
         google_operational_ids: adkOutcomeOperationalIds,
@@ -428,7 +426,7 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
       'Boundary: atrib is the trust-transfer layer here. AP2 evidence is accepted first, A2A receives that signed parent, and ADK signs an allow decision before the tool callback cites that decision.',
       'AP2 source: committed AP2 / VI fixtures or merchant-supplied packet JSON. This proof does not use live payment credentials or move funds.',
       'A2A source: in-process JSON-RPC with signed receiving-agent follow-up. It proves verifier-gated handoff, not an A2A TCK result or public server deployment.',
-      'ADK source: @google/adk InMemoryRunner proof. The claim is decision and callback-boundary signing, not managed Agent Platform Runtime, Gemini Enterprise, BigQuery Storage Write API export, or Memory Bank coverage.',
+      'ADK source: google-adk Python InMemoryRunner proof. The claim is decision and callback-boundary signing, not managed Agent Platform Runtime, Gemini Enterprise, BigQuery Storage Write API export, or Memory Bank coverage.',
     ],
   }
 }

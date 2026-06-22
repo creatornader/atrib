@@ -752,7 +752,7 @@ tbody tr:focus-visible {
 .chain {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
   min-height: 210px;
   position: relative;
 }

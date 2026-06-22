@@ -5,7 +5,7 @@ turns an AP2 result plus AP2 / Verifiable Intent evidence into a verifier-gated
 decision:
 
 ```text
-verify AP2 packet -> accept atrib transaction record -> allow next action
+verify AP2 packet -> run A2A handoff -> sign ADK Python allow decision -> sign ADK Python tool outcome
 ```
 
 Run locally:
@@ -32,7 +32,7 @@ Endpoints:
 
 - `GET /health`: service liveness.
 - `GET /api/runs`: recent active runtime runs, held in memory.
-- `POST /api/runs`: creates one verifier-gated AP2 -> A2A -> ADK JS run.
+- `POST /api/runs`: creates one verifier-gated AP2 -> A2A -> ADK Python run.
 - `GET /api/runs/:runId`: returns one active run.
 - `GET /v1/runtime-state`: replay verifier state for the visual workbench.
 - `POST /v1/replay/google-ap2-sample`: explicit replay trigger.
@@ -60,6 +60,10 @@ curl -X POST http://127.0.0.1:8080/v1/analytics/write \
 Public deployments should leave `BIGQUERY_WRITE_ENABLED` unset. The runtime can
 show live verifier state and active run rows without exposing a public BigQuery
 write endpoint.
+
+The active run uses the Python ADK decision-ledger proof, so the container image
+installs Python, `uv`, `google-adk==2.3.0`, and `cryptography` in addition to
+the Node workspace.
 
 Deploy:
 

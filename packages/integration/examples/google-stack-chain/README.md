@@ -5,7 +5,7 @@ proof chain:
 
 - AP2 / Verifiable Intent receipt and evidence verification
 - A2A signed Agent Card plus verifier-gated handoff evidence
-- Google ADK JS decision-ledger signing before dispatch, followed by ADK JS
+- Google ADK Python decision-ledger signing before dispatch, followed by ADK Python
   tool-callback signing
 
 Run:
@@ -34,7 +34,7 @@ highlights matching BigQuery Agent Analytics-shaped rows, and keeps proof
 boundaries visible.
 
 The script prints a JSON summary with the AP2 transaction record hash, A2A
-remote and receiver follow-up hashes, ADK JS allow-decision hash, and ADK JS
+remote and receiver follow-up hashes, ADK Python allow-decision hash, and ADK Python
 tool-callback record hash. It also prints a deterministic `snapshot` block. The
 snapshot excludes the runtime `/tmp` artifact path and pins the stable A2A
 evidence identifiers used for the signed record body.
@@ -47,17 +47,17 @@ Current snapshot record hashes:
   `sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9`
 - A2A receiver follow-up:
   `sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2`
-- ADK JS allow decision:
-  `sha256:4d30b4e5d7557ac2450f65c397f5442f9c45a7bad85c219de65153fcdc93294f`
-- ADK JS tool callback:
-  `sha256:61e7c3f52266ac2a24c22336f5c5e53539b1e55d91b78725fe9d70fe9b966a56`
+- ADK Python allow decision:
+  `sha256:47317fb2d00122696da2a385217e88b36a9bd94d42202acebb97a761ade450f5`
+- ADK Python tool callback:
+  `sha256:cb14068f57a8086a6a25ab301cb025da5510db7ecef523113e5207de1328f96c`
 
 The script also writes a local AP2 artifact bundle under `/tmp`.
 
-The ADK JS decision-ledger layer includes Google-style operational IDs as local
+The ADK Python decision-ledger layer includes Google-style operational IDs as local
 sidecar facts. The trace and span IDs are deterministic local projections for
 this proof. The ADK invocation ID and function-call ID come from the local
-`@google/adk` run, so live runtime values can vary across runs.
+`google-adk` Python run, so live runtime values can vary across runs.
 
 The output also includes an `analytics_fixture` block shaped around the common
 ADK BigQuery Agent Analytics columns (`timestamp`, `event_type`, `agent`,
@@ -87,7 +87,7 @@ The Cloud Run runtime lives in [`runtime/`](runtime/) and serves:
 
 - `GET /v1/runtime-state`: live AP2 replay verifier state for the visual.
 - `GET /api/runs`: recent active runtime runs, held in memory.
-- `POST /api/runs`: verifier-gated AP2 -> A2A -> ADK JS run creation.
+- `POST /api/runs`: verifier-gated AP2 -> A2A -> ADK Python run creation.
 - `GET /api/runs/:runId`: one active run with timeline and analytics rows.
 - `POST /v1/verify-ap2`: inline AP2 packet verification for a merchant or
   payment participant.
@@ -131,7 +131,7 @@ all pass.
 
 The active `/api/runs` path uses that gate as the first decision, then runs the
 local A2A handoff proof with the accepted AP2 record as parent evidence. It then
-runs the JavaScript ADK decision-ledger proof through `@google/adk`, signs an
+runs the Python ADK decision-ledger proof through `google-adk` Python, signs an
 allow decision with the A2A follow-up as parent evidence, and signs the tool
 callback with that decision as parent evidence. The visual workbench calls this
 endpoint to show the current run state instead of only replaying the pinned
@@ -144,11 +144,11 @@ snapshot.
 - That AP2 transaction record can inform the remote A2A evidence record.
 - A2A handoff evidence can be accepted before a receiving agent signs a
   verifier-resolved `informed_by` follow-up.
-- Google ADK JS can sign a hash-only allow decision before tool dispatch, then
+- Google ADK Python can sign a hash-only allow decision before tool dispatch, then
   sign the tool outcome with the decision record in `informed_by` while local
   sidecars keep the raw ADK payload inspectable.
 - The Cloud Run runtime can make the next-action decision from verified AP2
-  evidence, run the A2A and ADK JS follow-up, and produce BigQuery-shaped rows
+  evidence, run the A2A and ADK Python follow-up, and produce BigQuery-shaped rows
   tied to atrib record hashes.
 - These surfaces can be presented as one verifier story for support, audit, or
   external review.
