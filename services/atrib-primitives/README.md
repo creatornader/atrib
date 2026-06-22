@@ -43,6 +43,8 @@ The HTTP listener binds before the backend finishes mounting. During that window
 
 Each primitive tool dispatch has a runtime deadline. The default is 45 seconds and can be changed with `--tool-timeout-ms` or `ATRIB_PRIMITIVES_TOOL_TIMEOUT_MS`. If a child primitive call crosses the deadline, the runtime returns an MCP timeout before the client-level deadline, logs a structured `tool_call_timed_out` event on stderr, and keeps the underlying call visible in health until it settles. During that window health stays HTTP 200 but reports `status: "degraded"` with `report.tool_calls.active_tool_calls`, `calls_timed_out`, and `in_flight_tool_calls`.
 
+Health also reports `report.primitive_runtime.recall_contract`. A healthy host must show `status: "pass"`, `coverage_version: "coverage-v1"`, and `content_index_version: "content-index-v1"` for `@atrib/recall`. Missing or stale recall contract metadata makes the host report `status: "degraded"` so stale long-lived MCP hosts do not look ready after source or npm has already moved forward.
+
 The health report includes the profile's context policy. Set `ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID=1` on hosts that should refuse write-primitive calls when neither the caller nor the harness can provide a `context_id`. The write primitives then return a warnings-only response instead of signing a synthesized orphan context.
 
 ## Run As A Stdio Proxy
@@ -63,4 +65,4 @@ Proxy mode uses the same tool timeout setting as the host runtime. The shared ho
 pnpm --filter @atrib/primitives-runtime test
 ```
 
-The protocol test lists all 15 tools over stdio, routes a recall call through the combined server, repeats the path through Streamable HTTP, checks the stdio proxy path, verifies that two HTTP sessions share one mounted primitive backend, checks the starting health state, asserts the health contract for explicit-context profiles, and proves a hung child primitive returns a bounded timeout while health reports the stuck in-flight call.
+The protocol test lists all 15 tools over stdio, routes a recall call through the combined server, repeats the path through Streamable HTTP, checks the stdio proxy path, verifies that two HTTP sessions share one mounted primitive backend, checks the starting health state, asserts the health contract for explicit-context profiles and recall content-index support, and proves a hung child primitive returns a bounded timeout while health reports the stuck in-flight call.

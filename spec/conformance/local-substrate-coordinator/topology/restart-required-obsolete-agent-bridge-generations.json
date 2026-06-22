@@ -199,7 +199,17 @@
             "tool_count": 15,
             "backend": "shared",
             "session_model": "per-session-transport-shared-backend",
-            "mounted_primitive_count": 7
+            "mounted_primitive_count": 7,
+            "recall_contract": {
+              "status": "pass",
+              "package": "@atrib/recall",
+              "runtime_metadata_available": true,
+              "expected_coverage_version": "coverage-v1",
+              "expected_content_index_version": "content-index-v1",
+              "version": "0.14.2",
+              "coverage_version": "coverage-v1",
+              "content_index_version": "content-index-v1"
+            }
           },
           "profile": {
             "agent": "codex",
@@ -225,7 +235,17 @@
             "tool_count": 15,
             "backend": "shared",
             "session_model": "per-session-transport-shared-backend",
-            "mounted_primitive_count": 7
+            "mounted_primitive_count": 7,
+            "recall_contract": {
+              "status": "pass",
+              "package": "@atrib/recall",
+              "runtime_metadata_available": true,
+              "expected_coverage_version": "coverage-v1",
+              "expected_content_index_version": "content-index-v1",
+              "version": "0.14.2",
+              "coverage_version": "coverage-v1",
+              "content_index_version": "content-index-v1"
+            }
           },
           "profile": {
             "agent": "claude-code",

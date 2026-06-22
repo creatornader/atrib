@@ -84,12 +84,29 @@ export interface AtribPrimitivesDiagnostics {
   in_flight_tool_calls: AtribPrimitivesToolCallDiagnostic[]
 }
 
+export interface AtribPrimitiveRuntimeContractDiagnostic {
+  status: 'pass' | 'fail'
+  package: string
+  runtime_metadata_available: boolean
+  expected_coverage_version: string
+  expected_content_index_version: string
+  version?: string
+  coverage_version?: string
+  content_index_version?: string
+  reason?: string
+}
+
+export interface AtribPrimitivesRuntimeContracts {
+  recall_content: AtribPrimitiveRuntimeContractDiagnostic
+}
+
 export interface AtribPrimitivesBackend {
   tools: Tool[]
   toolNames: string[]
   mountedPrimitiveCount: number
   callTool(request: CallToolRequest['params']): Promise<CallToolResult>
   diagnostics(): AtribPrimitivesDiagnostics
+  runtimeContracts(): AtribPrimitivesRuntimeContracts
   flush(): Promise<void>
   close(): Promise<void>
 }
@@ -171,6 +188,8 @@ const DEFAULT_SESSION_IDLE_MS = 12 * 60 * 60 * 1000
 const DEFAULT_TOOL_TIMEOUT_MS = 45_000
 const MAX_JSON_BODY_BYTES = 1024 * 1024
 const MCP_REQUEST_TIMEOUT_CODE = -32001
+const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
+const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
 
 export type AtribPrimitiveFactory = () => Promise<AtribPrimitiveHandle> | AtribPrimitiveHandle
 
@@ -285,6 +304,74 @@ function toolCallDiagnosticsDegraded(diagnostics: AtribPrimitivesDiagnostics): b
   )
 }
 
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function failedRecallContract(reason: string): AtribPrimitiveRuntimeContractDiagnostic {
+  return {
+    status: 'fail',
+    package: '@atrib/recall',
+    runtime_metadata_available: false,
+    expected_coverage_version: EXPECTED_RECALL_COVERAGE_VERSION,
+    expected_content_index_version: EXPECTED_RECALL_CONTENT_INDEX_VERSION,
+    reason,
+  }
+}
+
+function validateRecallRuntimeContract(raw: unknown): AtribPrimitiveRuntimeContractDiagnostic {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return failedRecallContract('getAtribRecallRuntimeContract did not return an object')
+  }
+  const contract = raw as Record<string, unknown>
+  const pkg = stringValue(contract.package) ?? '@atrib/recall'
+  const version = stringValue(contract.version)
+  const coverageVersion = stringValue(contract.coverage_version)
+  const contentIndexVersion = stringValue(contract.content_index_version)
+  const ok =
+    pkg === '@atrib/recall' &&
+    coverageVersion === EXPECTED_RECALL_COVERAGE_VERSION &&
+    contentIndexVersion === EXPECTED_RECALL_CONTENT_INDEX_VERSION
+
+  const diagnostic: AtribPrimitiveRuntimeContractDiagnostic = {
+    status: ok ? 'pass' : 'fail',
+    package: pkg,
+    runtime_metadata_available: true,
+    expected_coverage_version: EXPECTED_RECALL_COVERAGE_VERSION,
+    expected_content_index_version: EXPECTED_RECALL_CONTENT_INDEX_VERSION,
+  }
+  if (version) diagnostic.version = version
+  if (coverageVersion) diagnostic.coverage_version = coverageVersion
+  if (contentIndexVersion) diagnostic.content_index_version = contentIndexVersion
+  if (!ok) {
+    diagnostic.reason =
+      `expected @atrib/recall ${EXPECTED_RECALL_COVERAGE_VERSION} and ` +
+      `${EXPECTED_RECALL_CONTENT_INDEX_VERSION}`
+  }
+  return diagnostic
+}
+
+async function inspectRuntimeContracts(): Promise<AtribPrimitivesRuntimeContracts> {
+  try {
+    const recall = (await import('@atrib/recall')) as Record<string, unknown>
+    const contractFn = recall.getAtribRecallRuntimeContract
+    if (typeof contractFn !== 'function') {
+      return {
+        recall_content: failedRecallContract(
+          '@atrib/recall does not export getAtribRecallRuntimeContract',
+        ),
+      }
+    }
+    return { recall_content: validateRecallRuntimeContract(contractFn()) }
+  } catch (error) {
+    return { recall_content: failedRecallContract(errorMessage(error)) }
+  }
+}
+
+function runtimeContractsDegraded(contracts: AtribPrimitivesRuntimeContracts): boolean {
+  return contracts.recall_content.status !== 'pass'
+}
+
 async function mountPrimitive(
   name: string,
   factory: AtribPrimitiveFactory,
@@ -315,6 +402,7 @@ export async function createAtribPrimitivesBackend(
   const routeByTool = new Map<string, ToolRoute>()
   const tools: Tool[] = []
   const inFlightToolCalls = new Map<string, InFlightToolCall>()
+  const runtimeContracts = await inspectRuntimeContracts()
   let callsStarted = 0
   let callsSucceeded = 0
   let callsFailed = 0
@@ -461,6 +549,7 @@ export async function createAtribPrimitivesBackend(
         ),
       }
     },
+    runtimeContracts: () => runtimeContracts,
     flush: async () => {
       await Promise.all(mounted.map((primitive) => primitive.handle.flush?.() ?? Promise.resolve()))
     },
@@ -931,7 +1020,11 @@ export async function bindAtribPrimitivesHttpHost(
       }
       const backend = backendStatus.backend
       const toolCalls = backend.diagnostics()
-      const status = toolCallDiagnosticsDegraded(toolCalls) ? 'degraded' : 'healthy'
+      const runtimeContracts = backend.runtimeContracts()
+      const status =
+        toolCallDiagnosticsDegraded(toolCalls) || runtimeContractsDegraded(runtimeContracts)
+          ? 'degraded'
+          : 'healthy'
       let activeHttpConnections = 0
       for (const socket of sockets) {
         if (!socket.destroyed && socket !== req.socket) activeHttpConnections += 1
@@ -950,6 +1043,7 @@ export async function bindAtribPrimitivesHttpHost(
             health_endpoint: healthEndpoint,
             tool_count: backend.toolNames.length,
             mounted_primitive_count: backend.mountedPrimitiveCount,
+            recall_contract: runtimeContracts.recall_content,
           },
           profile: {
             agent: process.env.ATRIB_AGENT,

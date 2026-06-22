@@ -6723,6 +6723,42 @@ Extend `recall_by_content` responses:
 - [`services/atrib-recall/README.md`](services/atrib-recall/README.md), operator-facing content-index contract and env vars.
 - [`skills/atrib/SKILL.md`](skills/atrib/SKILL.md), agent-facing stale-runtime and coverage guidance.
 
+## D127: Primitive runtime health gates recall contract freshness
+
+**Date:** 2026-06-22
+
+**Status:** Accepted
+
+**Extends:** [D120](#d120-local-substrate-coordinator-remains-optional-with-wrapper-owned-signing), [D123](#d123-critical-path-content-recall-requires-complete-evidence-or-explicit-fallback), [D125](#d125-complete-content-recall-is-coverage-first-not-cap-first), and [D126](#d126-content-recall-uses-a-durable-index-behind-complete-evidence-coverage).
+
+**Context.** After [D126](#d126-content-recall-uses-a-durable-index-behind-complete-evidence-coverage) landed, the checked-out source, npm package, release, and main-branch workflows were current, but the live Codex MCP surface still returned the old `recall_by_content` response shape. The root cause was not the Codex app process. Codex was configured to connect to the host-owned `atrib-primitives` Streamable HTTP endpoint at `http://127.0.0.1:8796/mcp`, and that launchd process was still serving `@atrib/primitives-runtime` `0.1.14` while the checkout was `0.1.16`.
+
+Version freshness already catches part of this class, but [D126](#d126-content-recall-uses-a-durable-index-behind-complete-evidence-coverage) made the real caller contract more specific: content recall responses need `runtime.content_index_version` and `coverage.index`. A long-lived host can look operational while still mounting a recall package that does not expose that contract.
+
+**Decision.** `@atrib/recall` exports `getAtribRecallRuntimeContract()`, returning the runtime metadata that critical callers should expect from `recall_by_content`: package name, package version, `coverage-v1`, and `content-index-v1`.
+
+`@atrib/primitives-runtime` reads that contract while mounting its backend and exposes it at `report.primitive_runtime.recall_contract` in HTTP health. If the mounted recall package is missing the contract or reports the wrong versions, the host stays reachable but reports `status: "degraded"`.
+
+The local-substrate topology report adds a `primitive-runtime-recall-contract` gate. The gate fails when any reachable primitive HTTP endpoint omits or fails the recall contract, and the report recommends rebuilding and restarting stale `atrib-primitives` LaunchAgents. `host-owned-primitives-http` also treats endpoints without the recall contract as unacceptable shared backends.
+
+**Alternatives considered.**
+
+- _Rely only on package version freshness._ Rejected. It detects many stale hosts, but the actual failure the caller sees is response-shape drift. The health contract should name that shape.
+- _Make every health check call `recall_by_content`._ Rejected. Health must stay cheap and predictable. The recall package can publish the same contract metadata without forcing a mirror read.
+- _Depend on restarting Codex._ Rejected. Codex connects to the host-owned HTTP endpoint. Restarting the app does not by itself restart the launchd-owned primitives host.
+
+**Consequences.**
+
+- Stale recall support now fails a named health gate before a critical-path agent trusts recall coverage.
+- Operators get a concrete recovery action: rebuild `services/atrib-primitives/dist` and restart the stale `com.nader.atrib-primitives.<profile>` LaunchAgent.
+- Future recall contract versions must update both the `@atrib/recall` export and the primitive runtime health gate.
+
+**Cross-references.**
+
+- [`services/atrib-recall/src/index.ts`](services/atrib-recall/src/index.ts), `getAtribRecallRuntimeContract()`.
+- [`services/atrib-primitives/src/index.ts`](services/atrib-primitives/src/index.ts), `recall_contract` health reporting.
+- [`scripts/report-local-substrate-topology.mjs`](scripts/report-local-substrate-topology.mjs), `primitive-runtime-recall-contract` gate.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
