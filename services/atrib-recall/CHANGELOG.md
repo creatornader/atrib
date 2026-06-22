@@ -1,5 +1,11 @@
 # @atrib/recall
 
+## 0.14.3
+
+### Patch Changes
+
+- e46b509: Expose recall runtime contract metadata for host-owned primitive runtime health checks.
+
 ## 0.14.2
 
 ### Patch Changes
