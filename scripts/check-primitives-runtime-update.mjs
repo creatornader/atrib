@@ -4,6 +4,7 @@
 
 import assert from 'node:assert/strict'
 import {
+  endpointProbeSettled,
   normalizePrimitiveLaunchAgent,
   parseArgs,
   selectTargetLaunchAgents,
@@ -163,6 +164,38 @@ assert.deepEqual(parseArgs(['--', '--profile', 'codex,claude-code', '--skip-buil
   'codex',
   'claude-code',
 ])
+
+assert.equal(
+  endpointProbeSettled({
+    report: {
+      sessions: {
+        active: 1,
+        active_http_requests: 1,
+        active_http_connections: 1,
+      },
+      tool_calls: {
+        active_tool_calls: 0,
+      },
+    },
+  }),
+  true,
+)
+
+assert.equal(
+  endpointProbeSettled({
+    report: {
+      sessions: {
+        active: 1,
+        active_http_requests: 1,
+        active_http_connections: 1,
+      },
+      tool_calls: {
+        active_tool_calls: 1,
+      },
+    },
+  }),
+  false,
+)
 
 const health = validateHealthPayload(
   {
