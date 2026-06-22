@@ -6775,12 +6775,12 @@ The failure class is concrete. The live Codex app can be current while its host-
 
 1. Discovers `com.nader.atrib-primitives.*` LaunchAgents from `~/Library/LaunchAgents`.
 2. Acts only on services whose plist runs this checkout's `services/atrib-primitives/dist/index.js` in Streamable HTTP mode on a loopback endpoint.
-3. Builds `@atrib/recall` and `@atrib/primitives-runtime`.
+3. Builds the `@atrib/primitives-runtime` dependency closure, covering all mounted primitive packages and the runtime.
 4. Restarts the selected LaunchAgents with `launchctl kickstart -k`.
-5. Waits for each health endpoint and checks the checked-out primitive runtime version plus the [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness) recall contract.
-6. Connects over MCP Streamable HTTP and calls `recall_by_content` against each live endpoint.
-7. Fails if the tool result omits `runtime.content_index_version`, `runtime.coverage_version`, or `coverage.index.version/status`.
-8. Runs the topology report and requires the three primitive gates to pass: `primitive-runtime-version-freshness`, `primitive-runtime-recall-contract`, and `host-owned-primitives-http`.
+5. Waits for each health endpoint and checks the checked-out primitive runtime version, the [D129](#d129-primitive-runtime-health-gates-every-mounted-primitive-surface) primitive package/tool contracts, and the [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness) recall contract.
+6. Connects over MCP Streamable HTTP, lists the live tool surface, and calls `recall_by_content` against each live endpoint.
+7. Fails if the live tool list omits or adds primitive tools, or if the recall result omits `runtime.content_index_version`, `runtime.coverage_version`, or `coverage.index.version/status`.
+8. Runs the topology report and requires the primitive gates to pass: `primitive-runtime-version-freshness`, `primitive-runtime-surface-contracts`, `primitive-runtime-recall-contract`, and `host-owned-primitives-http`.
 
 The command has scoped flags for real operator use:
 
@@ -6800,7 +6800,7 @@ The script intentionally refuses LaunchAgents whose working directory or dist pa
 
 **Consequences.**
 
-- A future agent can run `pnpm update:primitives-runtime` after recall or primitives-runtime changes and get one report that covers build, restart, health, direct MCP tool shape, and primitive topology gates.
+- A future agent can run `pnpm update:primitives-runtime` after any primitive package or primitives-runtime change and get one report that covers build, restart, health, direct MCP tool shape, and primitive topology gates.
 - Stale process fixes are now bounded to launchd services that visibly belong to the current checkout.
 - The direct probe catches the exact caller-facing shape [D126](#d126-content-recall-uses-a-durable-index-behind-complete-evidence-coverage) introduced, not only the cheaper [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness) contract summary.
 
@@ -6809,6 +6809,51 @@ The script intentionally refuses LaunchAgents whose working directory or dist pa
 - [`scripts/update-primitives-runtime.mjs`](scripts/update-primitives-runtime.mjs), update, restart, and direct MCP proof command.
 - [`scripts/check-primitives-runtime-update.mjs`](scripts/check-primitives-runtime-update.mjs), deterministic checker for LaunchAgent selection and recall payload validation.
 - [`services/atrib-primitives/README.md`](services/atrib-primitives/README.md), operator command notes.
+
+## D129: Primitive runtime health gates every mounted primitive surface
+
+**Date:** 2026-06-22
+
+**Status:** Accepted
+
+**Extends:** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), [D120](#d120-local-substrate-coordinator-remains-optional-with-wrapper-owned-signing), [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness), and [D128](#d128-host-owned-primitive-runtime-updates-are-build-restart-direct-probe).
+
+**Context.** [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness) correctly made stale recall support visible because recall had the first concrete caller-facing shape failure: `recall_by_content` needed `runtime.content_index_version` and `coverage.index`. But `@atrib/primitives-runtime` mounts all seven cognitive primitive packages, not only recall. A stale long-lived host can also miss `emit`, `annotate`, `revise`, `trace`, `summarize`, or `verify` package updates while still reporting a fresh runtime shell.
+
+Blindly calling every primitive during health would be wrong. The write primitives sign records on normal calls, and health must not mutate the log. The runtime needs a broad freshness contract without turning liveness checks into signed side effects.
+
+**Decision.** `@atrib/primitives-runtime` health exposes `report.primitive_runtime.primitive_contracts`, keyed by primitive name. Each contract records:
+
+- Primitive name and package name.
+- Mounted package version.
+- Expected and mounted MCP tool names.
+- Missing and unexpected tool names.
+- Whether normal tool calls mutate the log.
+- The probe mode, currently package/tool-surface for most primitives and read-only behavioral probe for recall.
+
+The runtime reports `status: "degraded"` when any mounted primitive contract fails. `report.primitive_runtime.recall_contract` remains for [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness) compatibility and continues to cover recall's content-index contract.
+
+The topology report adds a `primitive-runtime-surface-contracts` gate. The gate fails when any reachable primitive HTTP endpoint lacks the contract, reports a stale primitive package version, omits an expected tool, or exposes an unexpected tool. A surface-contract failure makes the topology `not_ready`, same as a recall contract failure.
+
+`scripts/update-primitives-runtime.mjs` now builds the `@atrib/primitives-runtime` dependency closure, validates every primitive contract from health, lists the live MCP tool surface, and then runs the recall-only behavioral probe. Write primitives are not called by the updater until they have explicit dry-run validation semantics.
+
+**Alternatives considered.**
+
+- _Probe every primitive by calling it._ Rejected. `emit`, `annotate`, and `revise` are write primitives; normal calls sign records and would make health checks mutate the log.
+- _Keep recall as the only contract._ Rejected. Recall had the visible failure first, but all seven mounted packages can drift independently from the long-lived host.
+- _Only trust `listTools`._ Rejected. A tool list proves the server surface but not the mounted package version. The health contract needs both.
+
+**Consequences.**
+
+- Stale or partial primitive mounts fail before future agents trust a host-owned primitive runtime.
+- Read-only behavioral probes can be added later per primitive when they have deterministic fixture inputs.
+- Write primitive health remains non-mutating until each write package exposes a deliberate validate-only mode.
+
+**Cross-references.**
+
+- [`services/atrib-primitives/src/index.ts`](services/atrib-primitives/src/index.ts), `primitive_contracts` health reporting.
+- [`scripts/report-local-substrate-topology.mjs`](scripts/report-local-substrate-topology.mjs), `primitive-runtime-surface-contracts` gate.
+- [`scripts/update-primitives-runtime.mjs`](scripts/update-primitives-runtime.mjs), dependency-closure build plus live tool-surface validation.
 
 # Pending decisions
 

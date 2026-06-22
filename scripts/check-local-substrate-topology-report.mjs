@@ -52,9 +52,9 @@ function withFakeOpenClawConfig(dir, endpoint, fn) {
     [
       '#!/usr/bin/env node',
       "if (process.argv.slice(2).join(' ') === 'config get env --json') {",
-      `  process.stdout.write(${
-        JSON.stringify(JSON.stringify({ vars: { ATRIB_LOCAL_SUBSTRATE_ENDPOINT: endpoint } }))
-      })`,
+      `  process.stdout.write(${JSON.stringify(
+        JSON.stringify({ vars: { ATRIB_LOCAL_SUBSTRATE_ENDPOINT: endpoint } }),
+      )})`,
       '  process.exit(0)',
       '}',
       'process.exit(1)',
@@ -252,10 +252,9 @@ function checkRouteRegistryNormalization() {
     const registryPath = join(openClawDir, 'routes.json')
     writeFileSync(
       envPath,
-      [
-        "export OPENCLAW_LAUNCHD_LABEL='ai.openclaw.gateway'",
-        'SECRET_TOKEN=must-not-leak',
-      ].join('\n'),
+      ["export OPENCLAW_LAUNCHD_LABEL='ai.openclaw.gateway'", 'SECRET_TOKEN=must-not-leak'].join(
+        '\n',
+      ),
     )
     writeFileSync(
       registryPath,
@@ -459,6 +458,36 @@ function checkPrimitiveRecallContractGate() {
     )
   ) {
     fail('primitive recall contract gate: expected recall contract recommendation')
+  }
+}
+
+function checkPrimitiveSurfaceContractGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  const target = snapshot.primitive_runtime_health.find(
+    (item) => item.report?.profile?.agent === 'codex',
+  )
+  if (!target) {
+    fail('primitive surface contract gate: expected codex primitive health fixture')
+    return
+  }
+  target.report.primitive_runtime.primitive_contracts.trace.mounted_tools = ['trace']
+  target.report.primitive_runtime.primitive_contracts.trace.missing_tools = ['trace_forward']
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'not_ready') {
+    fail(`primitive surface contract gate: expected status not_ready, got ${report.summary.status}`)
+  }
+  if (report.summary.primitive_runtime_surface_contract_mismatches !== 1) {
+    fail('primitive surface contract gate: expected one surface contract mismatch')
+  }
+  const contractGate = report.gates.find(
+    (gate) => gate.name === 'primitive-runtime-surface-contracts',
+  )
+  if (contractGate?.status !== 'fail') {
+    fail('primitive surface contract gate: expected primitive-runtime-surface-contracts=fail')
   }
 }
 
@@ -1758,6 +1787,7 @@ function main() {
   checkRouteRegistryDiagnosticsGate()
   checkConfigSurfaceEndpointEvidence()
   checkPrimitiveBackendContractGate()
+  checkPrimitiveSurfaceContractGate()
   checkPrimitiveRecallContractGate()
   checkProfileRoutedPrimitiveSupervisorGate()
   checkExplicitContextPolicyGate()

@@ -34,6 +34,28 @@ const EXPECTED_TOOL_NAMES = [
   'trace',
   'trace_forward',
 ]
+const EXPECTED_PRIMITIVE_CONTRACTS = {
+  annotate: { package: '@atrib/annotate', tools: ['atrib-annotate'], mutates: true },
+  emit: { package: '@atrib/emit', tools: ['emit'], mutates: true },
+  recall: {
+    package: '@atrib/recall',
+    tools: [
+      'recall_annotations',
+      'recall_by_content',
+      'recall_by_signer',
+      'recall_my_attribution_history',
+      'recall_orphans',
+      'recall_revisions',
+      'recall_session_chain',
+      'recall_walk',
+    ],
+    mutates: false,
+  },
+  revise: { package: '@atrib/revise', tools: ['atrib-revise'], mutates: true },
+  summarize: { package: '@atrib/summarize', tools: ['summarize'], mutates: false },
+  trace: { package: '@atrib/trace', tools: ['trace', 'trace_forward'], mutates: false },
+  verify: { package: '@atrib/verify-mcp', tools: ['atrib-verify'], mutates: false },
+}
 
 interface HttpHost {
   child: ChildProcessWithoutNullStreams
@@ -67,6 +89,41 @@ function emptyDiagnostics(toolTimeoutMs = 45_000): AtribPrimitivesDiagnostics {
   }
 }
 
+function fakeRuntimeContracts() {
+  return {
+    primitives: Object.fromEntries(
+      Object.entries(EXPECTED_PRIMITIVE_CONTRACTS).map(([primitive, contract]) => [
+        primitive,
+        {
+          status: 'pass' as const,
+          primitive,
+          package: contract.package,
+          version: '0.0.0',
+          expected_tools: contract.tools,
+          mounted_tools: contract.tools,
+          missing_tools: [],
+          unexpected_tools: [],
+          mutates_log_on_call: contract.mutates,
+          probe_mode:
+            primitive === 'recall'
+              ? ('read-only-behavioral-probe' as const)
+              : ('package-and-tool-surface' as const),
+        },
+      ]),
+    ),
+    recall_content: {
+      status: 'pass' as const,
+      package: '@atrib/recall',
+      runtime_metadata_available: true,
+      expected_coverage_version: 'coverage-v1',
+      expected_content_index_version: 'content-index-v1',
+      version: '0.0.0',
+      coverage_version: 'coverage-v1',
+      content_index_version: 'content-index-v1',
+    },
+  }
+}
+
 function fakeBackend(): AtribPrimitivesBackend {
   return {
     tools: [],
@@ -76,18 +133,7 @@ function fakeBackend(): AtribPrimitivesBackend {
       throw new Error('fake backend has no tools')
     },
     diagnostics: () => emptyDiagnostics(),
-    runtimeContracts: () => ({
-      recall_content: {
-        status: 'pass',
-        package: '@atrib/recall',
-        runtime_metadata_available: true,
-        expected_coverage_version: 'coverage-v1',
-        expected_content_index_version: 'content-index-v1',
-        version: '0.0.0',
-        coverage_version: 'coverage-v1',
-        content_index_version: 'content-index-v1',
-      },
-    }),
+    runtimeContracts: () => fakeRuntimeContracts(),
     flush: async () => {},
     close: async () => {},
   }
@@ -358,6 +404,7 @@ describe('atrib-primitives MCP runtime', () => {
     const backend = {
       ...fakeBackend(),
       runtimeContracts: () => ({
+        ...fakeRuntimeContracts(),
         recall_content: {
           status: 'fail' as const,
           package: '@atrib/recall',
@@ -457,7 +504,7 @@ describe('atrib-primitives MCP runtime', () => {
           }
         }
         if (health.report?.tool_calls?.active_tool_calls === 0) {
-          expect(health.status).toBe('healthy')
+          expect(health.status).toBe('degraded')
           expect(health.report.tool_calls.calls_settled_after_timeout).toBe(1)
           return
         }
@@ -484,6 +531,15 @@ describe('atrib-primitives MCP runtime', () => {
           primitive_runtime?: {
             backend?: string
             recall_contract?: { status?: string; content_index_version?: string }
+            primitive_contracts?: Record<
+              string,
+              {
+                status?: string
+                package?: string
+                mounted_tools?: string[]
+                mutates_log_on_call?: boolean
+              }
+            >
             mounted_primitive_count?: number
             session_model?: string
             tool_count?: number
@@ -509,6 +565,16 @@ describe('atrib-primitives MCP runtime', () => {
       expect(health.report?.primitive_runtime?.recall_contract?.content_index_version).toBe(
         'content-index-v1',
       )
+      const primitiveContracts = health.report?.primitive_runtime?.primitive_contracts ?? {}
+      expect(Object.keys(primitiveContracts).sort()).toEqual(
+        Object.keys(EXPECTED_PRIMITIVE_CONTRACTS).sort(),
+      )
+      for (const [primitive, expected] of Object.entries(EXPECTED_PRIMITIVE_CONTRACTS)) {
+        expect(primitiveContracts[primitive]?.status).toBe('pass')
+        expect(primitiveContracts[primitive]?.package).toBe(expected.package)
+        expect(primitiveContracts[primitive]?.mounted_tools?.sort()).toEqual(expected.tools)
+        expect(primitiveContracts[primitive]?.mutates_log_on_call).toBe(expected.mutates)
+      }
       expect(health.report?.profile?.agent).toBe('test-agent')
       expect(health.report?.profile?.context_id_policy).toBe('explicit-required')
       expect(health.report?.profile?.requires_explicit_context_id).toBe(true)

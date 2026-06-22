@@ -16,6 +16,33 @@ const EXPECTED_RUNTIME_PACKAGE_PATHS = {
   coordinator: join(ROOT, 'services/atrib-emit/package.json'),
   primitive_runtime: join(ROOT, 'services/atrib-primitives/package.json'),
 }
+const EXPECTED_PRIMITIVE_PACKAGE_PATHS = {
+  emit: join(ROOT, 'services/atrib-emit/package.json'),
+  annotate: join(ROOT, 'services/atrib-annotate/package.json'),
+  revise: join(ROOT, 'services/atrib-revise/package.json'),
+  recall: join(ROOT, 'services/atrib-recall/package.json'),
+  trace: join(ROOT, 'services/atrib-trace/package.json'),
+  summarize: join(ROOT, 'services/atrib-summarize/package.json'),
+  verify: join(ROOT, 'services/atrib-verify/package.json'),
+}
+const EXPECTED_PRIMITIVE_TOOLS = {
+  emit: ['emit'],
+  annotate: ['atrib-annotate'],
+  revise: ['atrib-revise'],
+  recall: [
+    'recall_annotations',
+    'recall_by_content',
+    'recall_by_signer',
+    'recall_my_attribution_history',
+    'recall_orphans',
+    'recall_revisions',
+    'recall_session_chain',
+    'recall_walk',
+  ],
+  trace: ['trace', 'trace_forward'],
+  summarize: ['summarize'],
+  verify: ['atrib-verify'],
+}
 const DEFAULT_ROUTE_REGISTRY_PATH = join(HOME, '.atrib/local-substrate/routes.json')
 const LEGACY_KNOWLEDGE_BASE_RECEIPT_REPORT_ENV = ['ATRIB_HEALTH_SECOND', 'BRAIN_REPORT'].join('_')
 const DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_GENERIC_PATH = join(
@@ -185,6 +212,19 @@ function collectExpectedRuntimeVersions() {
     checked: true,
     coordinator: readPackageVersion(EXPECTED_RUNTIME_PACKAGE_PATHS.coordinator),
     primitive_runtime: readPackageVersion(EXPECTED_RUNTIME_PACKAGE_PATHS.primitive_runtime),
+    primitives: Object.fromEntries(
+      Object.entries(EXPECTED_PRIMITIVE_PACKAGE_PATHS).map(([primitive, path]) => {
+        const pkg = existsSync(path) ? readJson(path) : {}
+        return [
+          primitive,
+          {
+            package: typeof pkg.name === 'string' ? pkg.name : null,
+            version: typeof pkg.version === 'string' ? pkg.version : null,
+            tools: EXPECTED_PRIMITIVE_TOOLS[primitive],
+          },
+        ]
+      }),
+    ),
   }
 }
 
@@ -1939,10 +1979,10 @@ function primitiveRuntimeHealthSummary(items) {
       session_model: report.primitive_runtime?.session_model,
       tool_count: report.primitive_runtime?.tool_count,
       mounted_primitive_count: report.primitive_runtime?.mounted_primitive_count,
+      primitive_contract_failures: primitiveRuntimeSurfaceContractFailures(item).length,
       recall_contract_status: report.primitive_runtime?.recall_contract?.status,
       recall_contract_version: report.primitive_runtime?.recall_contract?.version,
-      recall_contract_coverage_version:
-        report.primitive_runtime?.recall_contract?.coverage_version,
+      recall_contract_coverage_version: report.primitive_runtime?.recall_contract?.coverage_version,
       recall_contract_content_index_version:
         report.primitive_runtime?.recall_contract?.content_index_version,
       recall_contract_reason: report.primitive_runtime?.recall_contract?.reason,
@@ -2019,6 +2059,89 @@ function primitiveRuntimeRecallContractMismatches(items) {
         reason: contract.reason ?? 'missing recall_contract health field',
       }
     })
+}
+
+function sortedStringArray(values) {
+  return Array.isArray(values) ? values.map(String).sort((a, b) => a.localeCompare(b)) : []
+}
+
+function arraysEqual(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function primitiveRuntimeSurfaceContracts(item) {
+  return item.report?.primitive_runtime?.primitive_contracts
+}
+
+function expectedPrimitiveContracts(expectedRuntimeVersions) {
+  return expectedRuntimeVersions?.primitives &&
+    typeof expectedRuntimeVersions.primitives === 'object'
+    ? expectedRuntimeVersions.primitives
+    : {}
+}
+
+function primitiveRuntimeSurfaceContractFailures(item, expectedRuntimeVersions) {
+  if (item.reachable !== true) return []
+  const contracts = primitiveRuntimeSurfaceContracts(item)
+  if (!contracts || typeof contracts !== 'object') {
+    return [
+      {
+        endpoint: item.endpoint,
+        pid: item.report?.primitive_runtime?.pid,
+        primitive: '*',
+        reason: 'missing primitive_contracts health field',
+      },
+    ]
+  }
+  const expectedContracts = expectedPrimitiveContracts(expectedRuntimeVersions)
+  return unique([
+    ...Object.keys(EXPECTED_PRIMITIVE_TOOLS),
+    ...Object.keys(expectedContracts),
+  ]).flatMap((primitive) => {
+    const contract = contracts[primitive]
+    const expected = expectedContracts[primitive] ?? {}
+    const expectedTools = sortedStringArray(expected.tools ?? EXPECTED_PRIMITIVE_TOOLS[primitive])
+    const mountedTools = sortedStringArray(contract?.mounted_tools)
+    const reasons = []
+    if (!contract || typeof contract !== 'object') {
+      reasons.push('missing primitive contract')
+    } else {
+      if (contract.status !== 'pass') reasons.push(`status=${contract.status ?? 'missing'}`)
+      if (expected.package && contract.package !== expected.package) {
+        reasons.push(`package=${contract.package ?? 'missing'} expected=${expected.package}`)
+      }
+      if (expected.version && contract.version !== expected.version) {
+        reasons.push(`version=${contract.version ?? 'missing'} expected=${expected.version}`)
+      }
+      if (!arraysEqual(mountedTools, expectedTools)) {
+        reasons.push(
+          `mounted_tools=${mountedTools.join(',') || 'none'} expected=${expectedTools.join(',') || 'none'}`,
+        )
+      }
+      if ((contract.missing_tools ?? []).length) {
+        reasons.push(`missing_tools=${contract.missing_tools.join(',')}`)
+      }
+      if ((contract.unexpected_tools ?? []).length) {
+        reasons.push(`unexpected_tools=${contract.unexpected_tools.join(',')}`)
+      }
+    }
+    return reasons.length
+      ? [
+          {
+            endpoint: item.endpoint,
+            pid: item.report?.primitive_runtime?.pid,
+            primitive,
+            reason: reasons.join('; '),
+          },
+        ]
+      : []
+  })
+}
+
+function primitiveRuntimeSurfaceContractMismatches(items, expectedRuntimeVersions) {
+  return items.flatMap((item) =>
+    primitiveRuntimeSurfaceContractFailures(item, expectedRuntimeVersions),
+  )
 }
 
 function healthyItems(items) {
@@ -2637,6 +2760,35 @@ function buildGates({
     gates.push(gate('primitive-runtime-version-freshness', ok ? 'pass' : 'fail', detail))
   }
   const reachablePrimitiveHttp = primitiveHealth.filter((item) => item.reachable === true)
+  const surfaceContractMismatches = primitiveRuntimeSurfaceContractMismatches(
+    primitiveHealth,
+    expectedRuntimeVersions,
+  )
+  if (reachablePrimitiveHttp.length === 0) {
+    gates.push(
+      gate(
+        'primitive-runtime-surface-contracts',
+        'warn',
+        'no reachable primitive HTTP endpoint can prove mounted primitive package and tool contracts',
+      ),
+    )
+  } else if (surfaceContractMismatches.length > 0) {
+    gates.push(
+      gate(
+        'primitive-runtime-surface-contracts',
+        'fail',
+        `${surfaceContractMismatches.length} primitive package/tool contract mismatch(es) across ${reachablePrimitiveHttp.length} reachable primitive HTTP endpoint(s)`,
+      ),
+    )
+  } else {
+    gates.push(
+      gate(
+        'primitive-runtime-surface-contracts',
+        'pass',
+        `all reachable primitive HTTP endpoint(s) report the expected package and tool contract for ${Object.keys(EXPECTED_PRIMITIVE_TOOLS).length} primitive(s)`,
+      ),
+    )
+  }
   const recallContractMismatches = primitiveRuntimeRecallContractMismatches(primitiveHealth)
   if (reachablePrimitiveHttp.length === 0) {
     gates.push(
@@ -3132,7 +3284,11 @@ function statusFromGates(gates, processSummary) {
   }
   if (
     gates.some(
-      (item) => item.status === 'fail' && item.name === 'primitive-runtime-recall-contract',
+      (item) =>
+        item.status === 'fail' &&
+        ['primitive-runtime-surface-contracts', 'primitive-runtime-recall-contract'].includes(
+          item.name,
+        ),
     )
   ) {
     return 'not_ready'
@@ -3295,6 +3451,10 @@ function buildReport(input, options = {}) {
         primitiveHealth,
         expectedRuntimeVersion(expectedRuntimeVersions, 'primitive_runtime'),
         primitiveRuntimeVersion,
+      ).length,
+      primitive_runtime_surface_contract_mismatches: primitiveRuntimeSurfaceContractMismatches(
+        primitiveHealth,
+        expectedRuntimeVersions,
       ).length,
       primitive_runtime_recall_contract_mismatches:
         primitiveRuntimeRecallContractMismatches(primitiveHealth).length,
@@ -3467,6 +3627,13 @@ function recommendationsFor({ status, gates, processSummary }) {
       'restart stale atrib-primitives LaunchAgents so they run the checked-out @atrib/primitives-runtime package version',
     )
   }
+  if (
+    gates.find((item) => item.name === 'primitive-runtime-surface-contracts')?.status === 'fail'
+  ) {
+    recommendations.push(
+      'rebuild and restart stale atrib-primitives LaunchAgents so every mounted primitive reports the expected package version and tool surface',
+    )
+  }
   if (gates.find((item) => item.name === 'primitive-runtime-recall-contract')?.status === 'fail') {
     recommendations.push(
       'rebuild and restart stale atrib-primitives LaunchAgents so recall health reports runtime.content_index_version and coverage.index support',
@@ -3537,6 +3704,7 @@ function formatTextReport(report) {
     `local-substrate topology: ${report.summary.status}`,
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
     `runtime versions: coordinator=${report.summary.coordinator_version_expected ?? 'unchecked'} mismatches=${report.summary.coordinator_version_mismatches ?? 0}, primitive=${report.summary.primitive_runtime_version_expected ?? 'unchecked'} mismatches=${report.summary.primitive_runtime_version_mismatches ?? 0}`,
+    `primitive surface contracts: mismatches=${report.summary.primitive_runtime_surface_contract_mismatches ?? 0}`,
     `primitive recall contract: mismatches=${report.summary.primitive_runtime_recall_contract_mismatches ?? 0}`,
     `route registry: ${report.summary.route_registry_status}`,
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, profile-routed=${report.summary.primitive_runtime_http_profile_routed}, direct-stdio=${report.summary.primitive_runtime_stdio_processes}, proxy=${report.summary.primitive_proxy_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
