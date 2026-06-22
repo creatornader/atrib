@@ -12,7 +12,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
@@ -657,6 +657,204 @@ describe('MCP protocol surface', () => {
       expect(payload.truncated_corpus).toBe(true)
       expect(payload.count).toBe(0)
       expect(payload.results).toEqual([])
+    } finally {
+      client.close()
+    }
+  })
+
+  it('recall_by_content require_complete rebuilds and reuses a durable content index', async () => {
+    writeFileSync(recordFile, (await makeContentSearchCorpus(4)).join('\n'))
+    const indexFile = join(tmp, 'content-index.json')
+
+    const first = new McpClient({
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_RECALL_CONTENT_INDEX_FILE: indexFile,
+    })
+    try {
+      await first.initialize()
+      const res = await first.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query: 'critical path recall truncation',
+            k: 10,
+            evidence_mode: 'require_complete',
+          },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        runtime: { content_index_version: string }
+        evidence_status: string
+        total_records: number
+        coverage: {
+          strategy: string
+          searched_records: number
+          index: { status: string; path: string; version: string }
+        }
+      }
+      expect(payload.runtime.content_index_version).toBe('content-index-v1')
+      expect(payload.evidence_status).toBe('complete')
+      expect(payload.total_records).toBe(4)
+      expect(payload.coverage.strategy).toBe('complete_full_scan')
+      expect(payload.coverage.searched_records).toBe(4)
+      expect(payload.coverage.index.status).toBe('rebuilt')
+      expect(payload.coverage.index.path).toBe(indexFile)
+      expect(payload.coverage.index.version).toBe('content-index-v1')
+      expect(existsSync(indexFile)).toBe(true)
+    } finally {
+      first.close()
+    }
+
+    const second = new McpClient({
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_RECALL_CONTENT_INDEX_FILE: indexFile,
+    })
+    try {
+      await second.initialize()
+      const res = await second.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query: 'critical path recall truncation',
+            k: 10,
+            evidence_mode: 'require_complete',
+          },
+        },
+        3,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        evidence_status: string
+        total_records: number
+        coverage: { index: { status: string; path: string } }
+      }
+      expect(payload.evidence_status).toBe('complete')
+      expect(payload.total_records).toBe(4)
+      expect(payload.coverage.index.status).toBe('hit')
+      expect(payload.coverage.index.path).toBe(indexFile)
+    } finally {
+      second.close()
+    }
+  })
+
+  it('recall_by_content rejects a stale durable index when the mirror changes', async () => {
+    const firstCorpus = await makeContentSearchCorpus(3)
+    writeFileSync(recordFile, firstCorpus.join('\n'))
+    const indexFile = join(tmp, 'content-index.json')
+
+    const first = new McpClient({
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_RECALL_CONTENT_INDEX_FILE: indexFile,
+    })
+    try {
+      await first.initialize()
+      const res = await first.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query: 'critical path recall truncation',
+            k: 10,
+            evidence_mode: 'require_complete',
+          },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const payload = JSON.parse(
+        (res.result as { content: { type: string; text: string }[] }).content[0]!.text,
+      ) as { coverage: { index: { status: string } }; total_records: number }
+      expect(payload.total_records).toBe(3)
+      expect(payload.coverage.index.status).toBe('rebuilt')
+    } finally {
+      first.close()
+    }
+
+    const next = await makeSignedEvent(1700000200000, EVENT_TYPE_OBSERVATION_URI)
+    writeFileSync(
+      recordFile,
+      firstCorpus
+        .concat(
+          envelope(next, {
+            what: 'critical path recall truncation complete corpus appended after index build',
+            topics: ['recall-truncation'],
+          }),
+        )
+        .join('\n'),
+    )
+
+    const second = new McpClient({
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_RECALL_CONTENT_INDEX_FILE: indexFile,
+    })
+    try {
+      await second.initialize()
+      const res = await second.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query: 'critical path recall truncation',
+            k: 10,
+            evidence_mode: 'require_complete',
+          },
+        },
+        3,
+      )
+      expect(res.error).toBeUndefined()
+      const payload = JSON.parse(
+        (res.result as { content: { type: string; text: string }[] }).content[0]!.text,
+      ) as {
+        evidence_status: string
+        total_records: number
+        coverage: { index: { status: string } }
+      }
+      expect(payload.evidence_status).toBe('complete')
+      expect(payload.total_records).toBe(4)
+      expect(payload.coverage.index.status).toBe('rebuilt')
+    } finally {
+      second.close()
+    }
+  })
+
+  it('recall_by_content reports disabled durable index mode explicitly', async () => {
+    writeFileSync(recordFile, (await makeContentSearchCorpus(2)).join('\n'))
+    const indexFile = join(tmp, 'content-index-disabled.json')
+    const client = new McpClient({
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_RECALL_CONTENT_INDEX: '0',
+      ATRIB_RECALL_CONTENT_INDEX_FILE: indexFile,
+    })
+    try {
+      await client.initialize()
+      const res = await client.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query: 'critical path recall truncation',
+            k: 10,
+            evidence_mode: 'require_complete',
+          },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const result = res.result as { content: { type: string; text: string }[] }
+      const payload = JSON.parse(result.content[0]!.text) as {
+        evidence_status: string
+        coverage: { index: { enabled: boolean; status: string } }
+      }
+      expect(payload.evidence_status).toBe('complete')
+      expect(payload.coverage.index.enabled).toBe(false)
+      expect(payload.coverage.index.status).toBe('disabled')
+      expect(existsSync(indexFile)).toBe(false)
     } finally {
       client.close()
     }

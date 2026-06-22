@@ -140,10 +140,23 @@ export const ATRIB_RECALL_CONTENT_MAX_RECORDS = parseInt(
   10,
 )
 const ATRIB_RECALL_CONTENT_COVERAGE_VERSION = 'coverage-v1'
+const ATRIB_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
+const ATRIB_RECALL_CONTENT_INDEX_ENABLED = process.env.ATRIB_RECALL_CONTENT_INDEX !== '0'
+const ATRIB_RECALL_CONTENT_INDEX_DIR =
+  process.env.ATRIB_RECALL_CONTENT_INDEX_DIR ?? join(homedir(), '.atrib', 'cache')
+const ATRIB_RECALL_CONTENT_INDEX_FILE = process.env.ATRIB_RECALL_CONTENT_INDEX_FILE
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { z } from 'zod'
 import {
@@ -167,6 +180,7 @@ import {
   tokenize,
   indexableTokensForRecord,
   shouldSuppressLifecycleAnchorForQuery,
+  queryMentionsLifecycle,
 } from './scoring.js'
 import type { BM25Index } from './scoring.js'
 import { buildLocalGraph, shortestDistances, walkFrom } from './graph.js'
@@ -181,6 +195,16 @@ const ATRIB_LOG_ORIGIN = process.env.ATRIB_LOG_ORIGIN ?? 'log.atrib.dev'
 // (D078 ATRIB_CONTEXT_ID + D083 harness-discovery precedence). Per-run
 // declaration; changing the env mid-process is not supported.
 const ATRIB_CONTEXT_ID_DEFAULT = resolveEnvContextId()
+const ATRIB_RECALL_PACKAGE_VERSION = readPackageVersion()
+
+function recallRuntimeMetadata(): Record<string, unknown> {
+  return {
+    package: '@atrib/recall',
+    version: ATRIB_RECALL_PACKAGE_VERSION,
+    coverage_version: ATRIB_RECALL_CONTENT_COVERAGE_VERSION,
+    content_index_version: ATRIB_RECALL_CONTENT_INDEX_VERSION,
+  }
+}
 
 type MirrorFileStat = {
   path: string
@@ -208,12 +232,64 @@ type LoadedMirrorSnapshot = {
   partial: boolean
 }
 
+type ContentIndexEntry = {
+  record_hash: string
+  event_type: string
+  context_id: string
+  timestamp: number
+  tool_name?: string
+  producer?: string
+  annotations?: AggAnnotationSummary
+  display_summary: string
+  display_producer?: string
+  tokens: string[]
+  lifecycle_anchor: boolean
+  tool_call_score_factor: number
+}
+
+type ContentIndexFile = {
+  schema_version: typeof ATRIB_RECALL_CONTENT_INDEX_VERSION
+  coverage_version: typeof ATRIB_RECALL_CONTENT_COVERAGE_VERSION
+  mirror_signature: string
+  mirror_high_watermark: string
+  mirror_file_count: number
+  mirror_files: string[]
+  mirror_stats: MirrorFileStat[]
+  total_records: number
+  created_at: string
+  entries: ContentIndexEntry[]
+}
+
+type ContentIndexStatus = {
+  version: typeof ATRIB_RECALL_CONTENT_INDEX_VERSION
+  enabled: boolean
+  status: 'disabled' | 'hit' | 'rebuilt' | 'memory_only' | 'invalid' | 'write_failed'
+  path?: string
+  reason?: string
+}
+
+type ContentSearchSnapshot = {
+  signature: string
+  stats: MirrorFileStat[]
+  files: string[]
+  totalRecords: number | null
+  entries: ContentIndexEntry[]
+  newestEntries: ContentIndexEntry[]
+  entryByHash: Map<string, ContentIndexEntry>
+  bm25IndexesByNewestLimit: Map<number, BM25Index>
+  maxLoadedRecords?: number
+  partial: boolean
+  index: ContentIndexStatus
+}
+
 let loadedMirrorSnapshot: LoadedMirrorSnapshot | undefined
 let contentSearchMirrorSnapshot: LoadedMirrorSnapshot | undefined
+let contentSearchIndexSnapshot: ContentSearchSnapshot | undefined
 
 export function clearRecallMirrorCache(): void {
   loadedMirrorSnapshot = undefined
   contentSearchMirrorSnapshot = undefined
+  contentSearchIndexSnapshot = undefined
 }
 
 function readMirrorFingerprint(recordFile?: string): MirrorFingerprint {
@@ -351,6 +427,265 @@ function discoverNewestLoaded(maxRecords: number): { loaded: LoadedRecord[]; fil
   return loadNewestLoadedFromDir(envDir, maxRecords)
 }
 
+function getContentSearchSnapshotForRecall(
+  evidenceMode: 'bounded' | 'require_complete',
+  boundedLimit: number,
+): ContentSearchSnapshot {
+  const requireComplete = evidenceMode === 'require_complete'
+  const fingerprint = readMirrorFingerprint()
+  const cached = contentSearchIndexSnapshot
+  if (
+    cached?.signature === fingerprint.signature &&
+    (!requireComplete || !cached.partial) &&
+    (requireComplete || !cached.maxLoadedRecords || cached.maxLoadedRecords >= boundedLimit)
+  ) {
+    return cached
+  }
+
+  const durable = tryLoadDurableContentIndex(fingerprint)
+  if (durable) {
+    contentSearchIndexSnapshot = durable
+    return durable
+  }
+
+  const loadedSnapshot = requireComplete
+    ? getLoadedMirrorSnapshot()
+    : getContentSearchMirrorSnapshot(boundedLimit)
+
+  if (!requireComplete) {
+    contentSearchIndexSnapshot = contentSearchSnapshotFromLoaded(
+      loadedSnapshot,
+      contentIndexStatus('memory_only', contentIndexPath(fingerprint)),
+    )
+    return contentSearchIndexSnapshot
+  }
+
+  const indexPath = contentIndexPath(fingerprint)
+  if (!ATRIB_RECALL_CONTENT_INDEX_ENABLED) {
+    contentSearchIndexSnapshot = contentSearchSnapshotFromLoaded(
+      loadedSnapshot,
+      contentIndexStatus('disabled', indexPath, 'ATRIB_RECALL_CONTENT_INDEX=0'),
+    )
+    return contentSearchIndexSnapshot
+  }
+
+  const indexFile = contentIndexFileFromLoaded(loadedSnapshot)
+  const writeStatus = writeContentIndex(indexPath, indexFile)
+  contentSearchIndexSnapshot = contentSearchSnapshotFromIndexFile(
+    indexFile,
+    fingerprint,
+    writeStatus,
+  )
+  return contentSearchIndexSnapshot
+}
+
+function tryLoadDurableContentIndex(
+  fingerprint: MirrorFingerprint,
+): ContentSearchSnapshot | undefined {
+  if (!ATRIB_RECALL_CONTENT_INDEX_ENABLED) return undefined
+  const path = contentIndexPath(fingerprint)
+  if (!path) return undefined
+  if (!existsSync(path)) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return undefined
+  }
+  const indexFile = validateContentIndexFile(parsed, fingerprint)
+  if (!indexFile) return undefined
+  return contentSearchSnapshotFromIndexFile(indexFile, fingerprint, contentIndexStatus('hit', path))
+}
+
+function contentIndexPath(fingerprint: MirrorFingerprint): string | undefined {
+  if (!ATRIB_RECALL_CONTENT_INDEX_ENABLED) return undefined
+  if (ATRIB_RECALL_CONTENT_INDEX_FILE) return ATRIB_RECALL_CONTENT_INDEX_FILE
+  const hash = createHash('sha256').update(fingerprint.signature).digest('hex')
+  return join(ATRIB_RECALL_CONTENT_INDEX_DIR, `recall-content-${hash}.json`)
+}
+
+function contentIndexStatus(
+  status: ContentIndexStatus['status'],
+  path?: string,
+  reason?: string,
+): ContentIndexStatus {
+  return {
+    version: ATRIB_RECALL_CONTENT_INDEX_VERSION,
+    enabled: ATRIB_RECALL_CONTENT_INDEX_ENABLED,
+    status,
+    ...(path ? { path } : {}),
+    ...(reason ? { reason } : {}),
+  }
+}
+
+function writeContentIndex(
+  path: string | undefined,
+  indexFile: ContentIndexFile,
+): ContentIndexStatus {
+  if (!path) return contentIndexStatus('memory_only', undefined, 'no content index path resolved')
+  try {
+    mkdirSync(dirname(path), { recursive: true })
+    const tmpPath = `${path}.${process.pid}.${Date.now()}.tmp`
+    writeFileSync(tmpPath, JSON.stringify(indexFile))
+    renameSync(tmpPath, path)
+    return contentIndexStatus('rebuilt', path)
+  } catch (error) {
+    return contentIndexStatus(
+      'write_failed',
+      path,
+      error instanceof Error ? error.message : String(error),
+    )
+  }
+}
+
+function contentIndexFileFromLoaded(snapshot: LoadedMirrorSnapshot): ContentIndexFile {
+  return {
+    schema_version: ATRIB_RECALL_CONTENT_INDEX_VERSION,
+    coverage_version: ATRIB_RECALL_CONTENT_COVERAGE_VERSION,
+    mirror_signature: snapshot.signature,
+    mirror_high_watermark: mirrorHighWatermark(snapshot),
+    mirror_file_count: snapshot.files.length,
+    mirror_files: snapshot.files,
+    mirror_stats: snapshot.stats,
+    total_records: snapshot.loaded.length,
+    created_at: new Date().toISOString(),
+    entries: snapshot.loaded.map((lr) => contentIndexEntryFromLoaded(lr, snapshot)),
+  }
+}
+
+function contentIndexEntryFromLoaded(
+  lr: LoadedRecord,
+  snapshot: LoadedMirrorSnapshot,
+): ContentIndexEntry {
+  const annotations = snapshot.annotationsByRecord.get(lr.record_hash)
+  const toolName = (lr.record as AtribRecord & { tool_name?: string }).tool_name
+  const displayProducer = resolveDisplayProducer(lr.record, lr.producer)
+  return {
+    record_hash: lr.record_hash,
+    event_type: lr.record.event_type,
+    context_id: lr.record.context_id,
+    timestamp: lr.record.timestamp,
+    ...(toolName ? { tool_name: toolName } : {}),
+    ...(lr.producer ? { producer: lr.producer } : {}),
+    ...(annotations ? { annotations } : {}),
+    display_summary: synthesizeDisplaySummary(lr.record, lr.content, annotations),
+    ...(displayProducer ? { display_producer: displayProducer } : {}),
+    tokens: indexableTokensForRecord(lr, annotations),
+    lifecycle_anchor: shouldSuppressLifecycleAnchorForQuery(lr, annotations, []),
+    tool_call_score_factor: operationalToolCallScoreFactor(lr, annotations),
+  }
+}
+
+function contentSearchSnapshotFromLoaded(
+  snapshot: LoadedMirrorSnapshot,
+  index: ContentIndexStatus,
+): ContentSearchSnapshot {
+  const entries = snapshot.loaded.map((lr) => contentIndexEntryFromLoaded(lr, snapshot))
+  return {
+    signature: snapshot.signature,
+    stats: snapshot.stats,
+    files: snapshot.files,
+    totalRecords: snapshot.partial ? null : snapshot.loaded.length,
+    entries,
+    newestEntries: entries.slice().sort((a, b) => b.timestamp - a.timestamp),
+    entryByHash: new Map(entries.map((entry) => [entry.record_hash, entry])),
+    bm25IndexesByNewestLimit: new Map(),
+    maxLoadedRecords: snapshot.maxLoadedRecords,
+    partial: snapshot.partial,
+    index,
+  }
+}
+
+function contentSearchSnapshotFromIndexFile(
+  indexFile: ContentIndexFile,
+  fingerprint: MirrorFingerprint,
+  index: ContentIndexStatus,
+): ContentSearchSnapshot {
+  return {
+    signature: fingerprint.signature,
+    stats: fingerprint.stats,
+    files: indexFile.mirror_files,
+    totalRecords: indexFile.total_records,
+    entries: indexFile.entries,
+    newestEntries: indexFile.entries.slice().sort((a, b) => b.timestamp - a.timestamp),
+    entryByHash: new Map(indexFile.entries.map((entry) => [entry.record_hash, entry])),
+    bm25IndexesByNewestLimit: new Map(),
+    partial: false,
+    index,
+  }
+}
+
+function validateContentIndexFile(
+  parsed: unknown,
+  fingerprint: MirrorFingerprint,
+): ContentIndexFile | undefined {
+  if (!parsed || typeof parsed !== 'object') return undefined
+  const obj = parsed as Record<string, unknown>
+  if (obj.schema_version !== ATRIB_RECALL_CONTENT_INDEX_VERSION) return undefined
+  if (obj.coverage_version !== ATRIB_RECALL_CONTENT_COVERAGE_VERSION) return undefined
+  if (obj.mirror_signature !== fingerprint.signature) return undefined
+  if (obj.mirror_high_watermark !== mirrorHighWatermarkFromSignature(fingerprint.signature)) {
+    return undefined
+  }
+  if (typeof obj.total_records !== 'number' || !Number.isFinite(obj.total_records)) {
+    return undefined
+  }
+  if (!Array.isArray(obj.entries) || obj.entries.length !== obj.total_records) return undefined
+  if (!Array.isArray(obj.mirror_files) || !obj.mirror_files.every((v) => typeof v === 'string')) {
+    return undefined
+  }
+  if (!Array.isArray(obj.mirror_stats)) return undefined
+  if (typeof obj.created_at !== 'string') return undefined
+  const entries = obj.entries.map(normalizeContentIndexEntry)
+  if (entries.some((entry) => entry === undefined)) return undefined
+  return {
+    schema_version: ATRIB_RECALL_CONTENT_INDEX_VERSION,
+    coverage_version: ATRIB_RECALL_CONTENT_COVERAGE_VERSION,
+    mirror_signature: fingerprint.signature,
+    mirror_high_watermark: obj.mirror_high_watermark as string,
+    mirror_file_count:
+      typeof obj.mirror_file_count === 'number' ? obj.mirror_file_count : fingerprint.files.length,
+    mirror_files: obj.mirror_files as string[],
+    mirror_stats: fingerprint.stats,
+    total_records: obj.total_records,
+    created_at: obj.created_at,
+    entries: entries as ContentIndexEntry[],
+  }
+}
+
+function normalizeContentIndexEntry(value: unknown): ContentIndexEntry | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const obj = value as Record<string, unknown>
+  if (typeof obj.record_hash !== 'string') return undefined
+  if (typeof obj.event_type !== 'string') return undefined
+  if (typeof obj.context_id !== 'string') return undefined
+  if (typeof obj.timestamp !== 'number' || !Number.isFinite(obj.timestamp)) return undefined
+  if (typeof obj.display_summary !== 'string') return undefined
+  if (!Array.isArray(obj.tokens) || !obj.tokens.every((token) => typeof token === 'string')) {
+    return undefined
+  }
+  const entry: ContentIndexEntry = {
+    record_hash: obj.record_hash,
+    event_type: obj.event_type,
+    context_id: obj.context_id,
+    timestamp: obj.timestamp,
+    display_summary: obj.display_summary,
+    tokens: obj.tokens,
+    lifecycle_anchor: obj.lifecycle_anchor === true,
+    tool_call_score_factor:
+      typeof obj.tool_call_score_factor === 'number' && Number.isFinite(obj.tool_call_score_factor)
+        ? obj.tool_call_score_factor
+        : 1,
+  }
+  if (typeof obj.tool_name === 'string') entry.tool_name = obj.tool_name
+  if (typeof obj.producer === 'string') entry.producer = obj.producer
+  if (typeof obj.display_producer === 'string') entry.display_producer = obj.display_producer
+  if (obj.annotations && typeof obj.annotations === 'object') {
+    entry.annotations = obj.annotations as AggAnnotationSummary
+  }
+  return entry
+}
+
 function tryAppendRefreshLoadedMirrorSnapshot(
   previous: LoadedMirrorSnapshot | undefined,
   fingerprint: MirrorFingerprint,
@@ -436,13 +771,28 @@ function getBm25IndexForNewestLimit(snapshot: LoadedMirrorSnapshot, limit: numbe
   return index
 }
 
+function getContentBm25IndexForNewestLimit(
+  snapshot: ContentSearchSnapshot,
+  limit: number,
+): BM25Index {
+  const boundedLimit = Math.max(1, Math.min(snapshot.newestEntries.length, limit))
+  const cached = snapshot.bm25IndexesByNewestLimit.get(boundedLimit)
+  if (cached) return cached
+  const corpus = snapshot.newestEntries.slice(0, boundedLimit).map((entry) => ({
+    id: entry.record_hash,
+    tokens: entry.tokens,
+  }))
+  const index = buildBM25Index(corpus)
+  snapshot.bm25IndexesByNewestLimit.set(boundedLimit, index)
+  return index
+}
+
 function hasExplicitRecordLimit(requested: unknown): requested is number {
   return typeof requested === 'number' && Number.isFinite(requested)
 }
 
 function resolvePositiveRecordLimit(requested: unknown, fallback: number): number {
-  const raw =
-    typeof requested === 'number' && Number.isFinite(requested) ? requested : fallback
+  const raw = typeof requested === 'number' && Number.isFinite(requested) ? requested : fallback
   return Math.max(1, Math.floor(raw))
 }
 
@@ -459,22 +809,29 @@ function resolveCompleteContentSearchLimit(requested: unknown, totalRecords: num
 }
 
 function mirrorHighWatermark(snapshot: LoadedMirrorSnapshot): string {
-  return `sha256:${createHash('sha256').update(snapshot.signature).digest('hex')}`
+  return mirrorHighWatermarkFromSignature(snapshot.signature)
+}
+
+function mirrorHighWatermarkFromSignature(signature: string): string {
+  return `sha256:${createHash('sha256').update(signature).digest('hex')}`
 }
 
 function recallCoverage(
-  snapshot: LoadedMirrorSnapshot,
+  snapshot: { signature: string; files: string[] },
   strategy: 'bounded_newest_first' | 'complete_full_scan' | 'incomplete_explicit_limit',
   searchedRecords: number,
+  index?: ContentIndexStatus,
 ): Record<string, unknown> {
-  return {
+  const coverage: Record<string, unknown> = {
     version: ATRIB_RECALL_CONTENT_COVERAGE_VERSION,
     strategy,
     corpus: 'local_mirror',
-    mirror_high_watermark: mirrorHighWatermark(snapshot),
+    mirror_high_watermark: mirrorHighWatermarkFromSignature(snapshot.signature),
     mirror_file_count: snapshot.files.length,
     searched_records: searchedRecords,
   }
+  if (index) coverage.index = index
+  return coverage
 }
 
 /**
@@ -1671,7 +2028,7 @@ export function registerAtribRecallTools(server: McpServer): void {
     'recall_by_content',
     {
       description:
-        "Free-form text search over the agent's signed past. Returns top-k records by hybrid retrieval: BM25 over each record's per-event_type indexable text (observation `what + why_noted + intent + rationale + topics`; tool_call `tool_name + args + result`; annotation `summary + topics`; revision `prior_position + new_position + reason + topics`; transaction counterparty + memo; directory_anchor tree_root; extension URIs via generic recursive string-walk per D086/D118) plus the annotation summary + topics when present as a curator-quality lift. Reranked by Park et al. weighted-sum scoring with annotation-derived importance and recency signals. Raw unannotated tool_call records are score-demoted so operation logs do not dominate substantive memory. BM25 contribution is clamped to [0, 1] before coverage scaling so the documented Park-component bound is honored. Layer 2 (sqlite-vec sidecar, separate ship) extends with embedding similarity. Useful when the agent has no specific filter and needs to ask 'what do I know about X?'.",
+        "Free-form text search over the agent's signed past. Returns top-k records by hybrid retrieval: BM25 over each record's per-event_type indexable text (observation `what + why_noted + intent + rationale + topics`; tool_call `tool_name + args + result`; annotation `summary + topics`; revision `prior_position + new_position + reason + topics`; transaction counterparty + memo; directory_anchor tree_root; extension URIs via generic recursive string-walk per D086/D118) plus the annotation summary + topics when present as a curator-quality lift. Reranked by Park et al. weighted-sum scoring with annotation-derived importance and recency signals. Raw unannotated tool_call records are score-demoted so operation logs do not dominate substantive memory. BM25 contribution is clamped to [0, 1] before coverage scaling so the documented Park-component bound is honored. Responses include runtime metadata plus coverage.index, so callers can detect stale MCP processes and whether the durable content-token sidecar was hit, rebuilt, disabled, or bypassed. Useful when the agent has no specific filter and needs to ask 'what do I know about X?'.",
       inputSchema: {
         query: z
           .string()
@@ -1708,23 +2065,20 @@ export function registerAtribRecallTools(server: McpServer): void {
         async () => {
           const evidenceMode =
             args.evidence_mode === 'require_complete' ? 'require_complete' : 'bounded'
-          const snapshot =
-            evidenceMode === 'require_complete'
-              ? getLoadedMirrorSnapshot()
-              : getContentSearchMirrorSnapshot(
-                  resolveBoundedContentSearchLimit(args.max_records, Number.MAX_SAFE_INTEGER),
-                )
-          const { loaded, loadedByHash, annotationsByRecord } = snapshot
-          const totalRecords = snapshot.partial ? null : loaded.length
+          const boundedLimit = resolveBoundedContentSearchLimit(
+            args.max_records,
+            Number.MAX_SAFE_INTEGER,
+          )
+          const snapshot = getContentSearchSnapshotForRecall(evidenceMode, boundedLimit)
+          const { entryByHash } = snapshot
+          const totalRecords = snapshot.totalRecords
+          const loadedLength = snapshot.entries.length
           const searchLimit =
             evidenceMode === 'require_complete'
-              ? resolveCompleteContentSearchLimit(args.max_records, loaded.length)
-              : Math.min(
-                  resolveBoundedContentSearchLimit(args.max_records, Number.MAX_SAFE_INTEGER),
-                  loaded.length,
-                )
+              ? resolveCompleteContentSearchLimit(args.max_records, loadedLength)
+              : Math.min(boundedLimit, loadedLength)
           const explicitLimit = hasExplicitRecordLimit(args.max_records)
-          if (evidenceMode === 'require_complete' && explicitLimit && searchLimit < loaded.length) {
+          if (evidenceMode === 'require_complete' && explicitLimit && searchLimit < loadedLength) {
             const k = Math.max(1, Math.min(50, args.k ?? 10))
             return {
               content: [
@@ -1734,19 +2088,25 @@ export function registerAtribRecallTools(server: McpServer): void {
                     {
                       query: args.query,
                       k,
+                      runtime: recallRuntimeMetadata(),
                       evidence_mode: evidenceMode,
                       evidence_status: 'incomplete',
                       fallback_required: true,
                       fallback_reason:
                         `require_complete refused a partial corpus: search_cap=${searchLimit}, ` +
-                        `total_records=${loaded.length}.`,
+                        `total_records=${loadedLength}.`,
                       fallback:
                         'Rerun without max_records for full loaded-mirror coverage, or pass an explicit ' +
                         'partition filter through a caller-owned audit plan and treat each partition as its own coverage claim.',
-                      total_records: loaded.length,
+                      total_records: loadedLength,
                       searched_records: 0,
                       search_cap: searchLimit,
-                      coverage: recallCoverage(snapshot, 'incomplete_explicit_limit', 0),
+                      coverage: recallCoverage(
+                        snapshot,
+                        'incomplete_explicit_limit',
+                        0,
+                        snapshot.index,
+                      ),
                       candidate_records: 0,
                       truncated_corpus: true,
                       count: 0,
@@ -1759,42 +2119,34 @@ export function registerAtribRecallTools(server: McpServer): void {
               ],
             }
           }
-          const bm25Index = getBm25IndexForNewestLimit(snapshot, searchLimit)
+          const bm25Index = getContentBm25IndexForNewestLimit(snapshot, searchLimit)
           const queryTokens = tokenize(args.query)
           const relevanceByHash = bm25ScoresForQuery(bm25Index, queryTokens)
           const now = Date.now()
           const searchPool =
             queryTokens.length > 0
               ? Array.from(relevanceByHash.keys())
-                  .map((hash) => loadedByHash.get(hash))
-                  .filter((lr): lr is LoadedRecord => lr !== undefined)
-              : snapshot.newestLoaded.slice(0, searchLimit)
+                  .map((hash) => entryByHash.get(hash))
+                  .filter((entry): entry is ContentIndexEntry => entry !== undefined)
+              : snapshot.newestEntries.slice(0, searchLimit)
           const filteredSearchPool = searchPool.filter(
-            (lr) =>
-              !shouldSuppressLifecycleAnchorForQuery(
-                lr,
-                annotationsByRecord.get(lr.record_hash),
-                queryTokens,
-              ),
+            (entry) => !(entry.lifecycle_anchor && !queryMentionsLifecycle(queryTokens)),
           )
-          const scored = filteredSearchPool.map((lr) => {
-            const ann = annotationsByRecord.get(lr.record_hash)
-            const suppressLifecycleAnchor = shouldSuppressLifecycleAnchorForQuery(
-              lr,
-              ann,
-              queryTokens,
-            )
-            const toolCallScoreFactor = operationalToolCallScoreFactor(lr, ann)
+          const scored = filteredSearchPool.map((entry) => {
+            const ann = entry.annotations
+            const suppressLifecycleAnchor =
+              entry.lifecycle_anchor && !queryMentionsLifecycle(queryTokens)
+            const toolCallScoreFactor = entry.tool_call_score_factor
             const r =
-              recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS) * toolCallScoreFactor
+              recencyScore(entry.timestamp, now, ATRIB_RECALL_TAU_DAYS) * toolCallScoreFactor
             const i = suppressLifecycleAnchor ? 0 : importanceScore(ann)
             const rawRel =
               !suppressLifecycleAnchor && queryTokens.length > 0
-                ? (relevanceByHash.get(lr.record_hash) ?? 0)
+                ? (relevanceByHash.get(entry.record_hash) ?? 0)
                 : 0
             const rel =
               !suppressLifecycleAnchor && queryTokens.length > 0
-                ? normalizedBm25Relevance(bm25Index, lr.record_hash, queryTokens, rawRel) *
+                ? normalizedBm25Relevance(bm25Index, entry.record_hash, queryTokens, rawRel) *
                   toolCallScoreFactor
                 : 0
             const score = parkScore(
@@ -1805,15 +2157,15 @@ export function registerAtribRecallTools(server: McpServer): void {
               ATRIB_RECALL_BETA,
               ATRIB_RECALL_GAMMA,
             )
-            return { lr, score, recency: r, importance: i, relevance: rel }
+            return { entry, score, recency: r, importance: i, relevance: rel }
           })
           scored.sort((a, b) => {
             if (b.score !== a.score) return b.score - a.score
-            return b.lr.record.timestamp - a.lr.record.timestamp
+            return b.entry.timestamp - a.entry.timestamp
           })
           const k = Math.max(1, Math.min(50, args.k ?? 10))
           const top = scored.slice(0, k)
-          const completeCoverage = !snapshot.partial && searchLimit >= loaded.length
+          const completeCoverage = !snapshot.partial && searchLimit >= loadedLength
           return {
             content: [
               {
@@ -1822,6 +2174,7 @@ export function registerAtribRecallTools(server: McpServer): void {
                   {
                     query: args.query,
                     k,
+                    runtime: recallRuntimeMetadata(),
                     evidence_mode: evidenceMode,
                     evidence_status: completeCoverage ? 'complete' : 'bounded',
                     fallback_required: false,
@@ -1831,23 +2184,23 @@ export function registerAtribRecallTools(server: McpServer): void {
                       snapshot,
                       completeCoverage ? 'complete_full_scan' : 'bounded_newest_first',
                       searchLimit,
+                      snapshot.index,
                     ),
                     candidate_records: filteredSearchPool.length,
                     truncated_corpus: !completeCoverage,
                     count: top.length,
-                    results: top.map(({ lr, score, recency, importance, relevance }) => {
-                      const ann = annotationsByRecord.get(lr.record_hash)
+                    results: top.map(({ entry, score, recency, importance, relevance }) => {
                       return {
-                        record_hash: lr.record_hash,
-                        event_type: lr.record.event_type,
-                        context_id: lr.record.context_id,
-                        timestamp: lr.record.timestamp,
-                        tool_name: (lr.record as AtribRecord & { tool_name?: string }).tool_name,
-                        annotations: ann,
+                        record_hash: entry.record_hash,
+                        event_type: entry.event_type,
+                        context_id: entry.context_id,
+                        timestamp: entry.timestamp,
+                        tool_name: entry.tool_name,
+                        annotations: entry.annotations,
                         // Layer 1 v2 legibility fields (parity with compactify).
-                        display_summary: synthesizeDisplaySummary(lr.record, lr.content, ann),
-                        display_producer: resolveDisplayProducer(lr.record, lr.producer),
-                        age: formatAge(lr.record.timestamp, now),
+                        display_summary: entry.display_summary,
+                        display_producer: entry.display_producer,
+                        age: formatAge(entry.timestamp, now),
                         score,
                         components: { recency, importance, relevance },
                       }

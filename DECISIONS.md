@@ -6664,7 +6664,7 @@ This is a coverage contract, not an indexing claim. The current complete path is
 - `max_records` remains a caller-owned partial-corpus request. In complete mode, setting it below `total_records` is still an evidence failure.
 - Response consumers should inspect `coverage.strategy`, not just `truncated_corpus`, when they need to defend a recall claim.
 - Large complete recalls may still be slow. That is now a performance gap, not a correctness guard disguised as a corpus limit.
-- The next structural step is a durable recall index with high-water-mark verification. It must preserve the [D125](#d125-complete-content-recall-is-coverage-first-not-cap-first) coverage contract.
+- Durable content-token indexing is now covered by [D126](#d126-content-recall-uses-a-durable-index-behind-complete-evidence-coverage). Future index strategies must preserve the [D125](#d125-complete-content-recall-is-coverage-first-not-cap-first) coverage contract.
 
 **Cross-references.**
 
@@ -6672,6 +6672,56 @@ This is a coverage contract, not an indexing claim. The current complete path is
 - [`services/atrib-recall/test/mcp-protocol.test.ts`](services/atrib-recall/test/mcp-protocol.test.ts), complete and bounded coverage regression tests.
 - [`services/atrib-recall/README.md`](services/atrib-recall/README.md), operator-facing recall contract.
 - [`skills/atrib/SKILL.md`](skills/atrib/SKILL.md), agent-facing critical-path recall guidance.
+
+## D126: Content recall uses a durable index behind complete-evidence coverage
+
+**Date:** 2026-06-21
+
+**Status:** Accepted
+
+**Extends:** [D062](#d062-local-mirror-sidecar-two-tier-private-local--public-canonical-persistence), [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content), [D123](#d123-critical-path-content-recall-requires-complete-evidence-or-explicit-fallback), and [D125](#d125-complete-content-recall-is-coverage-first-not-cap-first).
+
+**Context.** [D125](#d125-complete-content-recall-is-coverage-first-not-cap-first) fixed the correctness bug: `require_complete` no longer turns an arbitrary record-count guardrail into an evidence boundary. That still left two operational gaps:
+
+- Complete recall rebuilt the content-search corpus inside each fresh MCP process, so critical-path recall stayed slower than it needed to be.
+- Operators could verify source, npm, and tags while a running MCP process still served an older implementation. The response shape needed a runtime contract that made stale process binding obvious.
+
+**Decision.** Add a durable content-token index for `recall_by_content`, behind the [D125](#d125-complete-content-recall-is-coverage-first-not-cap-first) coverage contract:
+
+- The sidecar schema is `content-index-v1`.
+- The sidecar stores the BM25 token corpus plus display metadata needed by `recall_by_content`; it does not store log-inclusion proofs and does not change the local-signature trust boundary.
+- A sidecar is accepted only when its stored mirror signature and mirror high-water mark match the current local mirror fingerprint.
+- `require_complete` writes or rewrites the sidecar after a complete loaded-mirror build when the sidecar is missing or stale.
+- Bounded recall may use a valid durable sidecar when present, but it does not force a full mirror load just to create one.
+- If the sidecar is disabled, missing, stale, invalid, or unwritable, recall falls back to the loaded-mirror path and reports that state.
+
+Extend `recall_by_content` responses:
+
+- `runtime` names the loaded `@atrib/recall` package version, `coverage-v1`, and `content-index-v1`.
+- `coverage.index` reports the sidecar status: `hit`, `rebuilt`, `memory_only`, `disabled`, or `write_failed`.
+- `coverage.corpus` remains `local_mirror`; the index is an acceleration and process-restart cache, not a new source of truth.
+
+**Alternatives considered.**
+
+- _SQLite FTS in the first durable-index patch._ Deferred. A JSON token sidecar avoids native dependencies in the MCP startup path and lets the coverage contract settle first.
+- _Persist full inverted BM25 postings._ Deferred. Persisting tokens is enough to avoid reparsing and re-tokenizing every local mirror line across MCP restarts. The in-memory postings can still be rebuilt cheaply from the sidecar.
+- _Create the durable index on every bounded search._ Rejected. That would make a casual bounded query unexpectedly load the full mirror. Complete-mode recall is the right index-build trigger because it already claims full corpus coverage.
+- _Trust package version or git state to prove runtime freshness._ Rejected. A running MCP process can stay old after source and npm are correct. The result itself must expose the runtime contract.
+
+**Consequences.**
+
+- Complete content recall can reuse a mirror-keyed sidecar across MCP process restarts.
+- Stale or partial sidecars cannot produce a complete coverage claim because the mirror signature must match.
+- Agents can detect stale MCP processes by checking for `runtime.content_index_version` and `coverage.index` in `recall_by_content` responses.
+- The sidecar is local cache material. It inherits the privacy posture of the local mirror and should not be committed.
+- Embedding retrieval remains future work. It can add semantic relevance over the same mirror-keyed coverage boundary, but it cannot weaken the [D125](#d125-complete-content-recall-is-coverage-first-not-cap-first) complete-evidence semantics.
+
+**Cross-references.**
+
+- [`services/atrib-recall/src/index.ts`](services/atrib-recall/src/index.ts), content-index implementation and runtime metadata.
+- [`services/atrib-recall/test/mcp-protocol.test.ts`](services/atrib-recall/test/mcp-protocol.test.ts), JSON-RPC coverage for rebuild, hit, stale-index invalidation, and disabled mode.
+- [`services/atrib-recall/README.md`](services/atrib-recall/README.md), operator-facing content-index contract and env vars.
+- [`skills/atrib/SKILL.md`](skills/atrib/SKILL.md), agent-facing stale-runtime and coverage guidance.
 
 # Pending decisions
 
