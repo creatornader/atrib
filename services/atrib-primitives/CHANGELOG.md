@@ -1,5 +1,11 @@
 # @atrib/primitives-runtime
 
+## 0.1.18
+
+### Patch Changes
+
+- 34c8075: Report package and tool-surface contracts for every mounted primitive in HTTP health, and extend the host-owned runtime updater to build the runtime dependency closure, validate the full primitive surface, and keep recall as the only live behavioral probe.
+
 ## 0.1.17
 
 ### Patch Changes
