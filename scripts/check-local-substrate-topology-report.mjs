@@ -491,6 +491,47 @@ function checkPrimitiveSurfaceContractGate() {
   }
 }
 
+function checkPrimitiveBehavioralProbeGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  const target = snapshot.primitive_runtime_health.find(
+    (item) => item.report?.profile?.agent === 'codex',
+  )
+  if (!target) {
+    fail('primitive behavioral probe gate: expected codex primitive health fixture')
+    return
+  }
+  target.report.primitive_runtime.behavioral_probes.verify.status = 'fail'
+  target.report.primitive_runtime.behavioral_probes.verify.reason = 'fixture failure'
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'not_ready') {
+    fail(`primitive behavioral probe gate: expected status not_ready, got ${report.summary.status}`)
+  }
+  if (report.summary.primitive_runtime_behavioral_probe_failures !== 1) {
+    fail('primitive behavioral probe gate: expected one behavioral probe failure')
+  }
+  const contractGate = report.gates.find(
+    (gate) => gate.name === 'primitive-runtime-behavioral-probes',
+  )
+  if (contractGate?.status !== 'fail') {
+    fail('primitive behavioral probe gate: expected primitive-runtime-behavioral-probes=fail')
+  }
+  const hostGate = report.gates.find((gate) => gate.name === 'host-owned-primitives-http')
+  if (hostGate?.status !== 'warn') {
+    fail('primitive behavioral probe gate: expected host-owned-primitives-http=warn')
+  }
+  if (
+    !report.recommendations.includes(
+      'rebuild and restart stale atrib-primitives LaunchAgents so safe read-only primitive behavioral probes pass without signing records',
+    )
+  ) {
+    fail('primitive behavioral probe gate: expected behavioral probe recommendation')
+  }
+}
+
 function checkProfileRoutedPrimitiveSupervisorGate() {
   const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
@@ -1788,6 +1829,7 @@ function main() {
   checkConfigSurfaceEndpointEvidence()
   checkPrimitiveBackendContractGate()
   checkPrimitiveSurfaceContractGate()
+  checkPrimitiveBehavioralProbeGate()
   checkPrimitiveRecallContractGate()
   checkProfileRoutedPrimitiveSupervisorGate()
   checkExplicitContextPolicyGate()

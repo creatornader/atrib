@@ -111,9 +111,20 @@ export interface AtribPrimitiveSurfaceContractDiagnostic {
   reason?: string
 }
 
+export interface AtribPrimitiveBehavioralProbeDiagnostic {
+  status: 'pass' | 'fail' | 'skipped'
+  primitive: string
+  tool_names: string[]
+  probe_kind: 'read-only' | 'schema-only' | 'not-available'
+  mutates_log_on_call: boolean
+  reason?: string
+  observed?: Record<string, unknown>
+}
+
 export interface AtribPrimitivesRuntimeContracts {
   primitives: Record<string, AtribPrimitiveSurfaceContractDiagnostic>
   recall_content: AtribPrimitiveRuntimeContractDiagnostic
+  behavioral_probes: Record<string, AtribPrimitiveBehavioralProbeDiagnostic>
 }
 
 export interface AtribPrimitivesBackend {
@@ -206,6 +217,8 @@ const MAX_JSON_BODY_BYTES = 1024 * 1024
 const MCP_REQUEST_TIMEOUT_CODE = -32001
 const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
 const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
+const HEALTH_PROBE_ABSENT_HASH = `sha256:${'f'.repeat(64)}`
+const HEALTH_PROBE_ABSENT_CONTEXT_ID = 'f'.repeat(32)
 const runtimeRequire = createRequire(import.meta.url)
 
 interface PrimitiveSpec {
@@ -447,6 +460,274 @@ function validateRecallRuntimeContract(raw: unknown): AtribPrimitiveRuntimeContr
   return diagnostic
 }
 
+function behavioralProbeSkipped(
+  spec: PrimitiveSpec,
+  reason: string,
+): AtribPrimitiveBehavioralProbeDiagnostic {
+  return {
+    status: 'skipped',
+    primitive: spec.name,
+    tool_names: [...spec.expectedTools],
+    probe_kind: 'not-available',
+    mutates_log_on_call: spec.mutatesLogOnCall,
+    reason,
+  }
+}
+
+function behavioralProbePassed(
+  spec: PrimitiveSpec,
+  probeKind: AtribPrimitiveBehavioralProbeDiagnostic['probe_kind'],
+  observed: Record<string, unknown>,
+): AtribPrimitiveBehavioralProbeDiagnostic {
+  return {
+    status: 'pass',
+    primitive: spec.name,
+    tool_names: [...spec.expectedTools],
+    probe_kind: probeKind,
+    mutates_log_on_call: spec.mutatesLogOnCall,
+    observed,
+  }
+}
+
+function behavioralProbeFailed(
+  spec: PrimitiveSpec,
+  reason: string,
+): AtribPrimitiveBehavioralProbeDiagnostic {
+  return {
+    status: 'fail',
+    primitive: spec.name,
+    tool_names: [...spec.expectedTools],
+    probe_kind: spec.mutatesLogOnCall ? 'not-available' : 'read-only',
+    mutates_log_on_call: spec.mutatesLogOnCall,
+    reason,
+  }
+}
+
+function parseToolJsonResult(toolName: string, result: CallToolResult): unknown {
+  const text = result.content?.find(
+    (item): item is { type: 'text'; text: string } =>
+      item.type === 'text' && typeof item.text === 'string',
+  )?.text
+  if (!text) throw new Error(`${toolName} returned no text content`)
+  return JSON.parse(text)
+}
+
+function assertObject(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} did not return an object`)
+  }
+  return value as Record<string, unknown>
+}
+
+function assertArray(value: unknown, label: string): unknown[] {
+  if (!Array.isArray(value)) throw new Error(`${label} did not return an array`)
+  return value
+}
+
+async function callProbeTool(
+  primitive: MountedPrimitive,
+  toolName: string,
+  args: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<Record<string, unknown>> {
+  const result = await callWithToolTimeout(
+    `${primitive.name}.${toolName}`,
+    Math.min(timeoutMs, 5_000),
+    () =>
+      primitive.client.callTool({
+        name: toolName,
+        arguments: args,
+      }) as Promise<CallToolResult>,
+  )
+  return assertObject(parseToolJsonResult(toolName, result), toolName)
+}
+
+async function probeRecallBehavior(
+  primitive: MountedPrimitive,
+  spec: PrimitiveSpec,
+  timeoutMs: number,
+): Promise<AtribPrimitiveBehavioralProbeDiagnostic> {
+  const payload = await callProbeTool(
+    primitive,
+    'recall_by_content',
+    {
+      query: 'atrib primitive runtime behavioral health probe',
+      k: 1,
+      max_records: 10,
+      evidence_mode: 'bounded',
+    },
+    timeoutMs,
+  )
+  const runtime = assertObject(payload.runtime, 'recall_by_content.runtime')
+  const coverage = assertObject(payload.coverage, 'recall_by_content.coverage')
+  const index = assertObject(coverage.index, 'recall_by_content.coverage.index')
+  if (runtime.coverage_version !== EXPECTED_RECALL_COVERAGE_VERSION) {
+    throw new Error(`unexpected recall coverage_version ${String(runtime.coverage_version)}`)
+  }
+  if (runtime.content_index_version !== EXPECTED_RECALL_CONTENT_INDEX_VERSION) {
+    throw new Error(
+      `unexpected recall content_index_version ${String(runtime.content_index_version)}`,
+    )
+  }
+  if (index.version !== EXPECTED_RECALL_CONTENT_INDEX_VERSION) {
+    throw new Error(`unexpected recall coverage.index.version ${String(index.version)}`)
+  }
+  return behavioralProbePassed(spec, 'read-only', {
+    tool: 'recall_by_content',
+    content_index_version: runtime.content_index_version,
+    coverage_version: runtime.coverage_version,
+    coverage_index_status: index.status,
+    searched_records: payload.searched_records,
+  })
+}
+
+async function probeTraceBehavior(
+  primitive: MountedPrimitive,
+  spec: PrimitiveSpec,
+  timeoutMs: number,
+): Promise<AtribPrimitiveBehavioralProbeDiagnostic> {
+  const backward = await callProbeTool(
+    primitive,
+    'trace',
+    { record_hash: HEALTH_PROBE_ABSENT_HASH, depth: 0, compact: true },
+    timeoutMs,
+  )
+  const forward = await callProbeTool(
+    primitive,
+    'trace_forward',
+    { record_hash: HEALTH_PROBE_ABSENT_HASH, depth: 0, compact: true },
+    timeoutMs,
+  )
+  for (const [label, payload, direction] of [
+    ['trace', backward, 'backward'],
+    ['trace_forward', forward, 'forward'],
+  ] as const) {
+    if (payload.start_hash !== HEALTH_PROBE_ABSENT_HASH) {
+      throw new Error(`${label} returned unexpected start_hash ${String(payload.start_hash)}`)
+    }
+    if (payload.direction !== direction) {
+      throw new Error(`${label} returned unexpected direction ${String(payload.direction)}`)
+    }
+    const dangling = assertArray(payload.dangling, `${label}.dangling`)
+    if (!dangling.includes(HEALTH_PROBE_ABSENT_HASH)) {
+      throw new Error(`${label} did not surface the absent probe hash as dangling`)
+    }
+    const visited = assertArray(payload.visited, `${label}.visited`)
+    if (visited.length !== 0) {
+      throw new Error(`${label} visited records for an absent probe hash`)
+    }
+  }
+  return behavioralProbePassed(spec, 'read-only', {
+    tools: ['trace', 'trace_forward'],
+    absent_hash_dangling: true,
+  })
+}
+
+async function probeSummarizeBehavior(
+  primitive: MountedPrimitive,
+  spec: PrimitiveSpec,
+  timeoutMs: number,
+): Promise<AtribPrimitiveBehavioralProbeDiagnostic> {
+  const payload = await callProbeTool(
+    primitive,
+    'summarize',
+    { context_id: HEALTH_PROBE_ABSENT_CONTEXT_ID, max_records: 1 },
+    timeoutMs,
+  )
+  if (payload.narrative !== null) {
+    throw new Error('summarize produced a narrative for the absent health-probe context')
+  }
+  if (payload.records_summarized !== 0) {
+    throw new Error(`summarize matched ${String(payload.records_summarized)} probe record(s)`)
+  }
+  const warnings = assertArray(payload.warnings, 'summarize.warnings').map(String)
+  const expectedWarning = warnings.find(
+    (warning) =>
+      warning.includes('no records matched') || warning.includes('no LLM API key resolved'),
+  )
+  if (!expectedWarning) {
+    throw new Error('summarize did not report a deterministic zero-record health-probe path')
+  }
+  return behavioralProbePassed(spec, 'schema-only', {
+    tool: 'summarize',
+    records_summarized: payload.records_summarized,
+    warning: expectedWarning,
+  })
+}
+
+async function probeVerifyBehavior(
+  primitive: MountedPrimitive,
+  spec: PrimitiveSpec,
+  timeoutMs: number,
+): Promise<AtribPrimitiveBehavioralProbeDiagnostic> {
+  const payload = await callProbeTool(
+    primitive,
+    'atrib-verify',
+    { records: [], required_record_hashes: [HEALTH_PROBE_ABSENT_HASH] },
+    timeoutMs,
+  )
+  if (payload.all_accepted !== false) {
+    throw new Error('atrib-verify accepted an intentionally missing required record')
+  }
+  const rejected = assertArray(payload.rejected, 'atrib-verify.rejected')
+  const missing = rejected.find((entry) => {
+    const claim = assertObject(entry, 'atrib-verify.rejected[]')
+    return (
+      claim.record_hash === HEALTH_PROBE_ABSENT_HASH &&
+      Array.isArray(claim.rejection_reasons) &&
+      claim.rejection_reasons.includes('record_missing')
+    )
+  })
+  if (!missing) {
+    throw new Error('atrib-verify did not reject the absent probe hash as record_missing')
+  }
+  return behavioralProbePassed(spec, 'read-only', {
+    tool: 'atrib-verify',
+    missing_required_record_rejected: true,
+  })
+}
+
+async function inspectPrimitiveBehavioralProbes(
+  mounted: readonly MountedPrimitive[],
+  timeoutMs: number,
+): Promise<Record<string, AtribPrimitiveBehavioralProbeDiagnostic>> {
+  const byName = new Map(mounted.map((primitive) => [primitive.name, primitive]))
+  const entries: [string, AtribPrimitiveBehavioralProbeDiagnostic][] = []
+  for (const spec of PRIMITIVE_SPECS) {
+    const primitive = byName.get(spec.name)
+    if (!primitive) {
+      entries.push([spec.name, behavioralProbeFailed(spec, 'primitive did not mount')])
+      continue
+    }
+    if (spec.mutatesLogOnCall) {
+      entries.push([
+        spec.name,
+        behavioralProbeSkipped(
+          spec,
+          'write primitive has no validate-only contract; health checks must not sign records',
+        ),
+      ])
+      continue
+    }
+    try {
+      if (spec.name === 'recall') {
+        entries.push([spec.name, await probeRecallBehavior(primitive, spec, timeoutMs)])
+      } else if (spec.name === 'trace') {
+        entries.push([spec.name, await probeTraceBehavior(primitive, spec, timeoutMs)])
+      } else if (spec.name === 'summarize') {
+        entries.push([spec.name, await probeSummarizeBehavior(primitive, spec, timeoutMs)])
+      } else if (spec.name === 'verify') {
+        entries.push([spec.name, await probeVerifyBehavior(primitive, spec, timeoutMs)])
+      } else {
+        entries.push([spec.name, behavioralProbeSkipped(spec, 'no behavioral probe defined')])
+      }
+    } catch (error) {
+      entries.push([spec.name, behavioralProbeFailed(spec, errorMessage(error))])
+    }
+  }
+  return Object.fromEntries(entries)
+}
+
 function inspectPrimitiveSurfaceContracts(
   mounted: readonly MountedPrimitive[],
 ): Record<string, AtribPrimitiveSurfaceContractDiagnostic> {
@@ -486,29 +767,41 @@ function inspectPrimitiveSurfaceContracts(
 
 async function inspectRuntimeContracts(
   mounted: readonly MountedPrimitive[],
+  timeoutMs: number,
 ): Promise<AtribPrimitivesRuntimeContracts> {
   const primitives = inspectPrimitiveSurfaceContracts(mounted)
+  const behavioralProbes = await inspectPrimitiveBehavioralProbes(mounted, timeoutMs)
   try {
     const recall = (await import('@atrib/recall')) as Record<string, unknown>
     const contractFn = recall.getAtribRecallRuntimeContract
     if (typeof contractFn !== 'function') {
       return {
         primitives,
+        behavioral_probes: behavioralProbes,
         recall_content: failedRecallContract(
           '@atrib/recall does not export getAtribRecallRuntimeContract',
         ),
       }
     }
-    return { primitives, recall_content: validateRecallRuntimeContract(contractFn()) }
+    return {
+      primitives,
+      behavioral_probes: behavioralProbes,
+      recall_content: validateRecallRuntimeContract(contractFn()),
+    }
   } catch (error) {
-    return { primitives, recall_content: failedRecallContract(errorMessage(error)) }
+    return {
+      primitives,
+      behavioral_probes: behavioralProbes,
+      recall_content: failedRecallContract(errorMessage(error)),
+    }
   }
 }
 
 function runtimeContractsDegraded(contracts: AtribPrimitivesRuntimeContracts): boolean {
   return (
     contracts.recall_content.status !== 'pass' ||
-    Object.values(contracts.primitives).some((contract) => contract.status !== 'pass')
+    Object.values(contracts.primitives).some((contract) => contract.status !== 'pass') ||
+    Object.values(contracts.behavioral_probes).some((probe) => probe.status === 'fail')
   )
 }
 
@@ -542,7 +835,7 @@ export async function createAtribPrimitivesBackend(
   const routeByTool = new Map<string, ToolRoute>()
   const tools: Tool[] = []
   const inFlightToolCalls = new Map<string, InFlightToolCall>()
-  const runtimeContracts = await inspectRuntimeContracts(mounted)
+  const runtimeContracts = await inspectRuntimeContracts(mounted, toolTimeoutMs)
   let callsStarted = 0
   let callsSucceeded = 0
   let callsFailed = 0
@@ -1184,6 +1477,7 @@ export async function bindAtribPrimitivesHttpHost(
             tool_count: backend.toolNames.length,
             mounted_primitive_count: backend.mountedPrimitiveCount,
             primitive_contracts: runtimeContracts.primitives,
+            behavioral_probes: runtimeContracts.behavioral_probes,
             recall_contract: runtimeContracts.recall_content,
           },
           profile: {

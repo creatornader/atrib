@@ -43,6 +43,15 @@ const EXPECTED_PRIMITIVE_TOOLS = {
 const EXPECTED_TOOL_NAMES = Object.values(EXPECTED_PRIMITIVE_TOOLS)
   .flat()
   .sort((a, b) => a.localeCompare(b))
+const EXPECTED_BEHAVIORAL_PROBES = {
+  recall: 'pass',
+  trace: 'pass',
+  summarize: 'pass',
+  verify: 'pass',
+  emit: 'skipped',
+  annotate: 'skipped',
+  revise: 'skipped',
+}
 const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
 const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
 const DEFAULT_TIMEOUT_MS = 15_000
@@ -358,6 +367,7 @@ export function validateHealthPayload(
   const runtime = body?.report?.primitive_runtime
   const contract = runtime?.recall_contract
   const primitiveContracts = runtime?.primitive_contracts
+  const behavioralProbes = runtime?.behavioral_probes
   const issues = []
   if (!runtime) issues.push('missing report.primitive_runtime')
   if (runtime?.version !== expectedRuntimeVersion) {
@@ -422,6 +432,28 @@ export function validateHealthPayload(
       }
     }
   }
+  if (!behavioralProbes || typeof behavioralProbes !== 'object') {
+    issues.push('missing report.primitive_runtime.behavioral_probes')
+  } else {
+    for (const [primitive, expectedStatus] of Object.entries(EXPECTED_BEHAVIORAL_PROBES)) {
+      const probe = behavioralProbes[primitive]
+      if (!probe || typeof probe !== 'object') {
+        issues.push(`missing behavioral_probes.${primitive}`)
+        continue
+      }
+      if (probe.status !== expectedStatus) {
+        issues.push(
+          `expected behavioral_probes.${primitive}.status ${expectedStatus}, got ${probe.status}`,
+        )
+      }
+      if (
+        expectedStatus === 'skipped' &&
+        (probe.mutates_log_on_call !== true || typeof probe.reason !== 'string')
+      ) {
+        issues.push(`behavioral_probes.${primitive} must explain skipped write probe`)
+      }
+    }
+  }
   if (issues.length) {
     throw new Error(`primitive health contract failed: ${issues.join('; ')}`)
   }
@@ -442,6 +474,17 @@ export function validateHealthPayload(
           tool_count: Array.isArray(primitiveContract.mounted_tools)
             ? primitiveContract.mounted_tools.length
             : 0,
+        },
+      ]),
+    ),
+    behavioral_probes: Object.fromEntries(
+      Object.entries(behavioralProbes).map(([primitive, probe]) => [
+        primitive,
+        {
+          status: probe.status,
+          probe_kind: probe.probe_kind,
+          mutates_log_on_call: probe.mutates_log_on_call,
+          tool_count: Array.isArray(probe.tool_names) ? probe.tool_names.length : 0,
         },
       ]),
     ),
@@ -631,6 +674,7 @@ function checkTopology({ dryRun = false } = {}) {
   const requiredGates = [
     'primitive-runtime-version-freshness',
     'primitive-runtime-surface-contracts',
+    'primitive-runtime-behavioral-probes',
     'primitive-runtime-recall-contract',
     'host-owned-primitives-http',
   ]
@@ -647,6 +691,8 @@ function checkTopology({ dryRun = false } = {}) {
     primitive_runtime_version_mismatches: report.summary?.primitive_runtime_version_mismatches,
     primitive_runtime_surface_contract_mismatches:
       report.summary?.primitive_runtime_surface_contract_mismatches,
+    primitive_runtime_behavioral_probe_failures:
+      report.summary?.primitive_runtime_behavioral_probe_failures,
     primitive_runtime_recall_contract_mismatches:
       report.summary?.primitive_runtime_recall_contract_mismatches,
     non_pass_gates: (report.gates ?? []).filter((gate) => gate.status !== 'pass'),
@@ -761,12 +807,12 @@ function formatTextReport(report) {
   ]
   for (const probe of report.probes) {
     lines.push(
-      `${probe.profile}: ${probe.endpoint} pid=${probe.health.pid} runtime=${probe.health.version} tools=${probe.tools.tool_count} recall=${probe.health.recall_contract} coverage.index=${probe.recall.coverage_index_status}`,
+      `${probe.profile}: ${probe.endpoint} pid=${probe.health.pid} runtime=${probe.health.version} tools=${probe.tools.tool_count} behavioral=${Object.values(probe.health.behavioral_probes).filter((item) => item.status === 'pass').length} recall=${probe.health.recall_contract} coverage.index=${probe.recall.coverage_index_status}`,
     )
   }
   if (report.topology) {
     lines.push(
-      `topology: primitive-gates=${report.topology.status}, global=${report.topology.global_status}, primitive mismatches=${report.topology.primitive_runtime_version_mismatches}, surface mismatches=${report.topology.primitive_runtime_surface_contract_mismatches}, recall mismatches=${report.topology.primitive_runtime_recall_contract_mismatches}`,
+      `topology: primitive-gates=${report.topology.status}, global=${report.topology.global_status}, primitive mismatches=${report.topology.primitive_runtime_version_mismatches}, surface mismatches=${report.topology.primitive_runtime_surface_contract_mismatches}, behavioral failures=${report.topology.primitive_runtime_behavioral_probe_failures}, recall mismatches=${report.topology.primitive_runtime_recall_contract_mismatches}`,
     )
   }
   return `${lines.join('\n')}\n`
