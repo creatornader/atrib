@@ -6777,10 +6777,10 @@ The failure class is concrete. The live Codex app can be current while its host-
 2. Acts only on services whose plist runs this checkout's `services/atrib-primitives/dist/index.js` in Streamable HTTP mode on a loopback endpoint.
 3. Builds the `@atrib/primitives-runtime` dependency closure, covering all mounted primitive packages and the runtime.
 4. Restarts the selected LaunchAgents with `launchctl kickstart -k`.
-5. Waits for each health endpoint and checks the checked-out primitive runtime version, the [D129](#d129-primitive-runtime-health-gates-every-mounted-primitive-surface) primitive package/tool contracts, and the [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness) recall contract.
+5. Waits for each health endpoint and checks the checked-out primitive runtime version, the [D129](#d129-primitive-runtime-health-gates-every-mounted-primitive-surface) primitive package/tool contracts, the [D130](#d130-primitive-runtime-health-uses-non-mutating-behavioral-probes) behavioral probes, and the [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness) recall contract.
 6. Connects over MCP Streamable HTTP, lists the live tool surface, and calls `recall_by_content` against each live endpoint.
 7. Fails if the live tool list omits or adds primitive tools, or if the recall result omits `runtime.content_index_version`, `runtime.coverage_version`, or `coverage.index.version/status`.
-8. Runs the topology report and requires the primitive gates to pass: `primitive-runtime-version-freshness`, `primitive-runtime-surface-contracts`, `primitive-runtime-recall-contract`, and `host-owned-primitives-http`.
+8. Runs the topology report and requires the primitive gates to pass: `primitive-runtime-version-freshness`, `primitive-runtime-surface-contracts`, `primitive-runtime-behavioral-probes`, `primitive-runtime-recall-contract`, and `host-owned-primitives-http`.
 
 The command has scoped flags for real operator use:
 
@@ -6835,7 +6835,7 @@ The runtime reports `status: "degraded"` when any mounted primitive contract fai
 
 The topology report adds a `primitive-runtime-surface-contracts` gate. The gate fails when any reachable primitive HTTP endpoint lacks the contract, reports a stale primitive package version, omits an expected tool, or exposes an unexpected tool. A surface-contract failure makes the topology `not_ready`, same as a recall contract failure.
 
-`scripts/update-primitives-runtime.mjs` now builds the `@atrib/primitives-runtime` dependency closure, validates every primitive contract from health, lists the live MCP tool surface, and then runs the recall-only behavioral probe. Write primitives are not called by the updater until they have explicit dry-run validation semantics.
+`scripts/update-primitives-runtime.mjs` now builds the `@atrib/primitives-runtime` dependency closure, validates every primitive contract from health, validates the health-reported behavioral probes, lists the live MCP tool surface, and then runs the direct recall content-index probe. Write primitives are not called by the updater until they have explicit dry-run validation semantics.
 
 **Alternatives considered.**
 
@@ -6854,6 +6854,59 @@ The topology report adds a `primitive-runtime-surface-contracts` gate. The gate 
 - [`services/atrib-primitives/src/index.ts`](services/atrib-primitives/src/index.ts), `primitive_contracts` health reporting.
 - [`scripts/report-local-substrate-topology.mjs`](scripts/report-local-substrate-topology.mjs), `primitive-runtime-surface-contracts` gate.
 - [`scripts/update-primitives-runtime.mjs`](scripts/update-primitives-runtime.mjs), dependency-closure build plus live tool-surface validation.
+
+## D130: Primitive runtime health uses non-mutating behavioral probes
+
+**Date:** 2026-06-22
+
+**Status:** Accepted
+
+**Extends:** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness), [D128](#d128-host-owned-primitive-runtime-updates-are-build-restart-direct-probe), and [D129](#d129-primitive-runtime-health-gates-every-mounted-primitive-surface).
+
+**Context.** [D129](#d129-primitive-runtime-health-gates-every-mounted-primitive-surface) proved that the combined primitive runtime had mounted the expected packages and tools. That still left a narrower failure class: a tool can be mounted and versioned correctly but fail on a deterministic request shape. The first recall incident showed why surface evidence alone is not enough for critical-path primitives.
+
+The fix cannot be "call every tool during health." `emit`, `atrib-annotate`, and `atrib-revise` sign records on normal calls, and health checks must not write to the signed log. The runtime needs behavioral proof where it can get it without side effects, and explicit skipped diagnostics where it cannot.
+
+**Decision.** `@atrib/primitives-runtime` health now exposes `report.primitive_runtime.behavioral_probes`, keyed by primitive name.
+
+Read-only or schema-only probes run during backend mount:
+
+- `recall`: calls `recall_by_content` with bounded evidence and checks `runtime.content_index_version`, `runtime.coverage_version`, and `coverage.index.version`.
+- `trace`: calls `trace` and `trace_forward` on an intentionally absent valid record hash and expects dangling results with no visited records.
+- `summarize`: calls `summarize` with an intentionally absent valid context id, expects no narrative and zero records summarized, and accepts the documented no-key or no-records warning path.
+- `verify`: calls `atrib-verify` with an intentionally missing required record hash and expects a `record_missing` rejection.
+
+Write probes are not run:
+
+- `emit`
+- `atrib-annotate`
+- `atrib-revise`
+
+Those report `status: "skipped"` with `mutates_log_on_call: true` and a reason that names the missing validate-only contract. A skipped write probe is acceptable. A failed read-only or schema-only probe degrades the runtime health.
+
+The topology report adds `primitive-runtime-behavioral-probes`. The gate fails when any reachable primitive HTTP endpoint lacks the probe block, reports an unexpected status, or fails a deterministic read-only probe. A behavioral-probe failure makes topology `not_ready` and prevents `host-owned-primitives-http` from passing.
+
+`scripts/update-primitives-runtime.mjs` now requires the behavioral-probe gate in addition to version freshness, primitive surface contracts, recall freshness, and host-owned primitive HTTP readiness.
+
+**Alternatives considered.**
+
+- _Treat mounted tools as enough._ Rejected. A mounted tool can still fail a caller-facing deterministic request.
+- _Call write primitives with invalid inputs and treat rejection as proof._ Rejected. That proves validation failure, not write-path readiness, and risks training future health checks to depend on incidental errors.
+- _Add dry-run probes for write primitives in this change._ Rejected for sequencing. The write packages need explicit validate-only semantics first, then health can call them.
+- _Keep behavioral proof in the updater only._ Rejected. Long-lived hosts need to expose whether their own mounted backend has passed the probes; the updater should validate that health contract, not invent a second private standard.
+
+**Consequences.**
+
+- Stale or broken read-only primitive behavior fails before future agents trust a host-owned primitive runtime.
+- Write primitive readiness remains honest: package and tool-surface proof pass, behavioral proof is skipped until a real dry-run contract exists.
+- The health contract now separates three questions: package/tool surface, deterministic non-mutating behavior, and recall's content-index metadata.
+
+**Cross-references.**
+
+- [`services/atrib-primitives/src/index.ts`](services/atrib-primitives/src/index.ts), `behavioral_probes` health reporting.
+- [`scripts/report-local-substrate-topology.mjs`](scripts/report-local-substrate-topology.mjs), `primitive-runtime-behavioral-probes` gate.
+- [`scripts/check-local-substrate-topology-report.mjs`](scripts/check-local-substrate-topology-report.mjs), fixture proof that behavioral probe failures make topology `not_ready`.
+- [`scripts/update-primitives-runtime.mjs`](scripts/update-primitives-runtime.mjs), live update proof that requires the behavioral-probe gate.
 
 # Pending decisions
 

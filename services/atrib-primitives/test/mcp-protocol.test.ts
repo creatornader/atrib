@@ -90,6 +90,25 @@ function emptyDiagnostics(toolTimeoutMs = 45_000): AtribPrimitivesDiagnostics {
 }
 
 function fakeRuntimeContracts() {
+  const behavioralProbes = Object.fromEntries(
+    Object.entries(EXPECTED_PRIMITIVE_CONTRACTS).map(([primitive, contract]) => [
+      primitive,
+      {
+        status: contract.mutates ? ('skipped' as const) : ('pass' as const),
+        primitive,
+        tool_names: contract.tools,
+        probe_kind: contract.mutates
+          ? ('not-available' as const)
+          : primitive === 'summarize'
+            ? ('schema-only' as const)
+            : ('read-only' as const),
+        mutates_log_on_call: contract.mutates,
+        ...(contract.mutates
+          ? { reason: 'write primitive has no validate-only contract' }
+          : { observed: { test: true } }),
+      },
+    ]),
+  )
   return {
     primitives: Object.fromEntries(
       Object.entries(EXPECTED_PRIMITIVE_CONTRACTS).map(([primitive, contract]) => [
@@ -111,6 +130,7 @@ function fakeRuntimeContracts() {
         },
       ]),
     ),
+    behavioral_probes: behavioralProbes,
     recall_content: {
       status: 'pass' as const,
       package: '@atrib/recall',
@@ -540,6 +560,15 @@ describe('atrib-primitives MCP runtime', () => {
                 mutates_log_on_call?: boolean
               }
             >
+            behavioral_probes?: Record<
+              string,
+              {
+                status?: string
+                probe_kind?: string
+                mutates_log_on_call?: boolean
+                reason?: string
+              }
+            >
             mounted_primitive_count?: number
             session_model?: string
             tool_count?: number
@@ -574,6 +603,17 @@ describe('atrib-primitives MCP runtime', () => {
         expect(primitiveContracts[primitive]?.package).toBe(expected.package)
         expect(primitiveContracts[primitive]?.mounted_tools?.sort()).toEqual(expected.tools)
         expect(primitiveContracts[primitive]?.mutates_log_on_call).toBe(expected.mutates)
+      }
+      const behavioralProbes = health.report?.primitive_runtime?.behavioral_probes ?? {}
+      expect(Object.keys(behavioralProbes).sort()).toEqual(
+        Object.keys(EXPECTED_PRIMITIVE_CONTRACTS).sort(),
+      )
+      for (const primitive of ['recall', 'trace', 'summarize', 'verify']) {
+        expect(behavioralProbes[primitive]?.status).toBe('pass')
+      }
+      for (const primitive of ['emit', 'annotate', 'revise']) {
+        expect(behavioralProbes[primitive]?.status).toBe('skipped')
+        expect(behavioralProbes[primitive]?.reason).toContain('validate-only')
       }
       expect(health.report?.profile?.agent).toBe('test-agent')
       expect(health.report?.profile?.context_id_policy).toBe('explicit-required')

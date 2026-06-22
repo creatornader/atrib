@@ -269,6 +269,81 @@
                 "mutates_log_on_call": false,
                 "probe_mode": "package-and-tool-surface"
               }
+            },
+            "behavioral_probes": {
+              "emit": {
+                "status": "skipped",
+                "primitive": "emit",
+                "tool_names": ["emit"],
+                "probe_kind": "not-available",
+                "mutates_log_on_call": true,
+                "reason": "write primitive has no validate-only contract; health checks must not sign records"
+              },
+              "annotate": {
+                "status": "skipped",
+                "primitive": "annotate",
+                "tool_names": ["atrib-annotate"],
+                "probe_kind": "not-available",
+                "mutates_log_on_call": true,
+                "reason": "write primitive has no validate-only contract; health checks must not sign records"
+              },
+              "revise": {
+                "status": "skipped",
+                "primitive": "revise",
+                "tool_names": ["atrib-revise"],
+                "probe_kind": "not-available",
+                "mutates_log_on_call": true,
+                "reason": "write primitive has no validate-only contract; health checks must not sign records"
+              },
+              "recall": {
+                "status": "pass",
+                "primitive": "recall",
+                "tool_names": [
+                  "recall_annotations",
+                  "recall_by_content",
+                  "recall_by_signer",
+                  "recall_my_attribution_history",
+                  "recall_orphans",
+                  "recall_revisions",
+                  "recall_session_chain",
+                  "recall_walk"
+                ],
+                "probe_kind": "read-only",
+                "mutates_log_on_call": false,
+                "observed": {
+                  "fixture": true
+                }
+              },
+              "trace": {
+                "status": "pass",
+                "primitive": "trace",
+                "tool_names": ["trace", "trace_forward"],
+                "probe_kind": "read-only",
+                "mutates_log_on_call": false,
+                "observed": {
+                  "fixture": true
+                }
+              },
+              "summarize": {
+                "status": "pass",
+                "primitive": "summarize",
+                "tool_names": ["summarize"],
+                "probe_kind": "schema-only",
+                "mutates_log_on_call": false,
+                "observed": {
+                  "fixture": true
+                }
+              },
+              "verify": {
+                "status": "pass",
+                "primitive": "verify",
+                "tool_names": ["atrib-verify"],
+                "probe_kind": "read-only",
+                "mutates_log_on_call": false,
+                "observed": {
+                  "fixture": true
+                }
+              }
             }
           },
           "profile": {
@@ -408,6 +483,81 @@
                 "unexpected_tools": [],
                 "mutates_log_on_call": false,
                 "probe_mode": "package-and-tool-surface"
+              }
+            },
+            "behavioral_probes": {
+              "emit": {
+                "status": "skipped",
+                "primitive": "emit",
+                "tool_names": ["emit"],
+                "probe_kind": "not-available",
+                "mutates_log_on_call": true,
+                "reason": "write primitive has no validate-only contract; health checks must not sign records"
+              },
+              "annotate": {
+                "status": "skipped",
+                "primitive": "annotate",
+                "tool_names": ["atrib-annotate"],
+                "probe_kind": "not-available",
+                "mutates_log_on_call": true,
+                "reason": "write primitive has no validate-only contract; health checks must not sign records"
+              },
+              "revise": {
+                "status": "skipped",
+                "primitive": "revise",
+                "tool_names": ["atrib-revise"],
+                "probe_kind": "not-available",
+                "mutates_log_on_call": true,
+                "reason": "write primitive has no validate-only contract; health checks must not sign records"
+              },
+              "recall": {
+                "status": "pass",
+                "primitive": "recall",
+                "tool_names": [
+                  "recall_annotations",
+                  "recall_by_content",
+                  "recall_by_signer",
+                  "recall_my_attribution_history",
+                  "recall_orphans",
+                  "recall_revisions",
+                  "recall_session_chain",
+                  "recall_walk"
+                ],
+                "probe_kind": "read-only",
+                "mutates_log_on_call": false,
+                "observed": {
+                  "fixture": true
+                }
+              },
+              "trace": {
+                "status": "pass",
+                "primitive": "trace",
+                "tool_names": ["trace", "trace_forward"],
+                "probe_kind": "read-only",
+                "mutates_log_on_call": false,
+                "observed": {
+                  "fixture": true
+                }
+              },
+              "summarize": {
+                "status": "pass",
+                "primitive": "summarize",
+                "tool_names": ["summarize"],
+                "probe_kind": "schema-only",
+                "mutates_log_on_call": false,
+                "observed": {
+                  "fixture": true
+                }
+              },
+              "verify": {
+                "status": "pass",
+                "primitive": "verify",
+                "tool_names": ["atrib-verify"],
+                "probe_kind": "read-only",
+                "mutates_log_on_call": false,
+                "observed": {
+                  "fixture": true
+                }
               }
             }
           },

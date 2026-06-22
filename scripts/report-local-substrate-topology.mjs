@@ -43,6 +43,15 @@ const EXPECTED_PRIMITIVE_TOOLS = {
   summarize: ['summarize'],
   verify: ['atrib-verify'],
 }
+const EXPECTED_PRIMITIVE_BEHAVIORAL_PROBES = {
+  recall: 'pass',
+  trace: 'pass',
+  summarize: 'pass',
+  verify: 'pass',
+  emit: 'skipped',
+  annotate: 'skipped',
+  revise: 'skipped',
+}
 const DEFAULT_ROUTE_REGISTRY_PATH = join(HOME, '.atrib/local-substrate/routes.json')
 const LEGACY_KNOWLEDGE_BASE_RECEIPT_REPORT_ENV = ['ATRIB_HEALTH_SECOND', 'BRAIN_REPORT'].join('_')
 const DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_GENERIC_PATH = join(
@@ -1980,6 +1989,7 @@ function primitiveRuntimeHealthSummary(items) {
       tool_count: report.primitive_runtime?.tool_count,
       mounted_primitive_count: report.primitive_runtime?.mounted_primitive_count,
       primitive_contract_failures: primitiveRuntimeSurfaceContractFailures(item).length,
+      behavioral_probe_failures: primitiveRuntimeBehavioralProbeFailures(item).length,
       recall_contract_status: report.primitive_runtime?.recall_contract?.status,
       recall_contract_version: report.primitive_runtime?.recall_contract?.version,
       recall_contract_coverage_version: report.primitive_runtime?.recall_contract?.coverage_version,
@@ -2073,6 +2083,10 @@ function primitiveRuntimeSurfaceContracts(item) {
   return item.report?.primitive_runtime?.primitive_contracts
 }
 
+function primitiveRuntimeBehavioralProbes(item) {
+  return item.report?.primitive_runtime?.behavioral_probes
+}
+
 function expectedPrimitiveContracts(expectedRuntimeVersions) {
   return expectedRuntimeVersions?.primitives &&
     typeof expectedRuntimeVersions.primitives === 'object'
@@ -2144,6 +2158,58 @@ function primitiveRuntimeSurfaceContractMismatches(items, expectedRuntimeVersion
   )
 }
 
+function primitiveRuntimeBehavioralProbeFailures(item) {
+  if (item.reachable !== true) return []
+  const probes = primitiveRuntimeBehavioralProbes(item)
+  if (!probes || typeof probes !== 'object') {
+    return [
+      {
+        endpoint: item.endpoint,
+        pid: item.report?.primitive_runtime?.pid,
+        primitive: '*',
+        reason: 'missing behavioral_probes health field',
+      },
+    ]
+  }
+  return Object.entries(EXPECTED_PRIMITIVE_BEHAVIORAL_PROBES).flatMap(
+    ([primitive, expectedStatus]) => {
+      const probe = probes[primitive]
+      const reasons = []
+      if (!probe || typeof probe !== 'object') {
+        reasons.push('missing behavioral probe')
+      } else {
+        if (probe.status !== expectedStatus) {
+          reasons.push(`status=${probe.status ?? 'missing'} expected=${expectedStatus}`)
+        }
+        if (
+          expectedStatus === 'skipped' &&
+          (probe.mutates_log_on_call !== true || typeof probe.reason !== 'string')
+        ) {
+          reasons.push('skipped write probe lacks mutation flag or reason')
+        }
+      }
+      return reasons.length
+        ? [
+            {
+              endpoint: item.endpoint,
+              pid: item.report?.primitive_runtime?.pid,
+              primitive,
+              reason: reasons.join('; '),
+            },
+          ]
+        : []
+    },
+  )
+}
+
+function primitiveRuntimeBehavioralProbeMismatches(items) {
+  return items.flatMap((item) => primitiveRuntimeBehavioralProbeFailures(item))
+}
+
+function primitiveRuntimeBehavioralProbesOk(item) {
+  return item.reachable === true && primitiveRuntimeBehavioralProbeFailures(item).length === 0
+}
+
 function healthyItems(items) {
   return items.filter((item) => item.reachable && item.status === 'healthy')
 }
@@ -2169,7 +2235,8 @@ function hasSharedPrimitiveHttpBackend(item) {
     runtime.session_model === 'per-session-transport-shared-backend' &&
     Number(runtime.mounted_primitive_count) === 7 &&
     Number(runtime.tool_count) === 15 &&
-    primitiveRuntimeRecallContractOk(item)
+    primitiveRuntimeRecallContractOk(item) &&
+    primitiveRuntimeBehavioralProbesOk(item)
   return profileScoped || hasProfileRoutedPrimitiveSupervisor(item)
 }
 
@@ -2186,7 +2253,8 @@ function hasProfileRoutedPrimitiveSupervisor(item) {
     routing?.isolated_backends === true &&
     primitiveRuntimeProfileRoutes(item).length > 0 &&
     Number(runtime.tool_count) === 15 &&
-    primitiveRuntimeRecallContractOk(item)
+    primitiveRuntimeRecallContractOk(item) &&
+    primitiveRuntimeBehavioralProbesOk(item)
   )
 }
 
@@ -2789,6 +2857,32 @@ function buildGates({
       ),
     )
   }
+  const behavioralProbeMismatches = primitiveRuntimeBehavioralProbeMismatches(primitiveHealth)
+  if (reachablePrimitiveHttp.length === 0) {
+    gates.push(
+      gate(
+        'primitive-runtime-behavioral-probes',
+        'warn',
+        'no reachable primitive HTTP endpoint can prove deterministic non-mutating primitive behavior',
+      ),
+    )
+  } else if (behavioralProbeMismatches.length > 0) {
+    gates.push(
+      gate(
+        'primitive-runtime-behavioral-probes',
+        'fail',
+        `${behavioralProbeMismatches.length} primitive behavioral probe mismatch(es) across ${reachablePrimitiveHttp.length} reachable primitive HTTP endpoint(s)`,
+      ),
+    )
+  } else {
+    gates.push(
+      gate(
+        'primitive-runtime-behavioral-probes',
+        'pass',
+        'all reachable primitive HTTP endpoint(s) report deterministic non-mutating primitive behavioral probes',
+      ),
+    )
+  }
   const recallContractMismatches = primitiveRuntimeRecallContractMismatches(primitiveHealth)
   if (reachablePrimitiveHttp.length === 0) {
     gates.push(
@@ -3286,9 +3380,11 @@ function statusFromGates(gates, processSummary) {
     gates.some(
       (item) =>
         item.status === 'fail' &&
-        ['primitive-runtime-surface-contracts', 'primitive-runtime-recall-contract'].includes(
-          item.name,
-        ),
+        [
+          'primitive-runtime-surface-contracts',
+          'primitive-runtime-behavioral-probes',
+          'primitive-runtime-recall-contract',
+        ].includes(item.name),
     )
   ) {
     return 'not_ready'
@@ -3456,6 +3552,8 @@ function buildReport(input, options = {}) {
         primitiveHealth,
         expectedRuntimeVersions,
       ).length,
+      primitive_runtime_behavioral_probe_failures:
+        primitiveRuntimeBehavioralProbeMismatches(primitiveHealth).length,
       primitive_runtime_recall_contract_mismatches:
         primitiveRuntimeRecallContractMismatches(primitiveHealth).length,
       route_registry_status:
@@ -3634,6 +3732,13 @@ function recommendationsFor({ status, gates, processSummary }) {
       'rebuild and restart stale atrib-primitives LaunchAgents so every mounted primitive reports the expected package version and tool surface',
     )
   }
+  if (
+    gates.find((item) => item.name === 'primitive-runtime-behavioral-probes')?.status === 'fail'
+  ) {
+    recommendations.push(
+      'rebuild and restart stale atrib-primitives LaunchAgents so safe read-only primitive behavioral probes pass without signing records',
+    )
+  }
   if (gates.find((item) => item.name === 'primitive-runtime-recall-contract')?.status === 'fail') {
     recommendations.push(
       'rebuild and restart stale atrib-primitives LaunchAgents so recall health reports runtime.content_index_version and coverage.index support',
@@ -3705,6 +3810,7 @@ function formatTextReport(report) {
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
     `runtime versions: coordinator=${report.summary.coordinator_version_expected ?? 'unchecked'} mismatches=${report.summary.coordinator_version_mismatches ?? 0}, primitive=${report.summary.primitive_runtime_version_expected ?? 'unchecked'} mismatches=${report.summary.primitive_runtime_version_mismatches ?? 0}`,
     `primitive surface contracts: mismatches=${report.summary.primitive_runtime_surface_contract_mismatches ?? 0}`,
+    `primitive behavioral probes: failures=${report.summary.primitive_runtime_behavioral_probe_failures ?? 0}`,
     `primitive recall contract: mismatches=${report.summary.primitive_runtime_recall_contract_mismatches ?? 0}`,
     `route registry: ${report.summary.route_registry_status}`,
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, profile-routed=${report.summary.primitive_runtime_http_profile_routed}, direct-stdio=${report.summary.primitive_runtime_stdio_processes}, proxy=${report.summary.primitive_proxy_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,

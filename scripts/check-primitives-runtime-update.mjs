@@ -58,6 +58,56 @@ function primitiveContractsFixture() {
   )
 }
 
+function behavioralProbesFixture() {
+  return {
+    recall: {
+      status: 'pass',
+      probe_kind: 'read-only',
+      mutates_log_on_call: false,
+      tool_names: expectedPrimitiveTools.recall,
+    },
+    trace: {
+      status: 'pass',
+      probe_kind: 'read-only',
+      mutates_log_on_call: false,
+      tool_names: expectedPrimitiveTools.trace,
+    },
+    summarize: {
+      status: 'pass',
+      probe_kind: 'schema-only',
+      mutates_log_on_call: false,
+      tool_names: expectedPrimitiveTools.summarize,
+    },
+    verify: {
+      status: 'pass',
+      probe_kind: 'read-only',
+      mutates_log_on_call: false,
+      tool_names: expectedPrimitiveTools.verify,
+    },
+    emit: {
+      status: 'skipped',
+      probe_kind: 'not-available',
+      mutates_log_on_call: true,
+      tool_names: expectedPrimitiveTools.emit,
+      reason: 'write primitive has no validate-only contract',
+    },
+    annotate: {
+      status: 'skipped',
+      probe_kind: 'not-available',
+      mutates_log_on_call: true,
+      tool_names: expectedPrimitiveTools.annotate,
+      reason: 'write primitive has no validate-only contract',
+    },
+    revise: {
+      status: 'skipped',
+      probe_kind: 'not-available',
+      mutates_log_on_call: true,
+      tool_names: expectedPrimitiveTools.revise,
+      reason: 'write primitive has no validate-only contract',
+    },
+  }
+}
+
 const validPlist = {
   Label: 'com.nader.atrib-primitives.codex',
   WorkingDirectory: root,
@@ -127,6 +177,7 @@ const health = validateHealthPayload(
           content_index_version: 'content-index-v1',
         },
         primitive_contracts: primitiveContractsFixture(),
+        behavioral_probes: behavioralProbesFixture(),
       },
     },
   },
@@ -136,6 +187,8 @@ assert.equal(health.pid, 123)
 assert.equal(health.recall_contract, 'pass')
 assert.equal(health.primitive_contracts.emit.status, 'pass')
 assert.equal(health.primitive_contracts.recall.tool_count, 8)
+assert.equal(health.behavioral_probes.verify.status, 'pass')
+assert.equal(health.behavioral_probes.emit.status, 'skipped')
 
 assert.throws(
   () =>
@@ -147,6 +200,7 @@ assert.throws(
             version: '0.1.16',
             recall_contract: {},
             primitive_contracts: {},
+            behavioral_probes: {},
           },
         },
       },
