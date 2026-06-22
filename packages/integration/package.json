@@ -98,7 +98,7 @@
     "@opentelemetry/exporter-trace-otlp-proto": "^0.219.0",
     "@opentelemetry/sdk-trace-base": "^2.8.0",
     "@opentelemetry/semantic-conventions": "^1.41.1",
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.0.0",
     "ai": "^6.0.205",
     "browser-use": "0.7.3",
     "jose": "6.2.3",
