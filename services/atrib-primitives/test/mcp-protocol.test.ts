@@ -76,6 +76,18 @@ function fakeBackend(): AtribPrimitivesBackend {
       throw new Error('fake backend has no tools')
     },
     diagnostics: () => emptyDiagnostics(),
+    runtimeContracts: () => ({
+      recall_content: {
+        status: 'pass',
+        package: '@atrib/recall',
+        runtime_metadata_available: true,
+        expected_coverage_version: 'coverage-v1',
+        expected_content_index_version: 'content-index-v1',
+        version: '0.0.0',
+        coverage_version: 'coverage-v1',
+        content_index_version: 'content-index-v1',
+      },
+    }),
     flush: async () => {},
     close: async () => {},
   }
@@ -342,6 +354,46 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
+  it('degrades health when mounted recall lacks the content-index contract', async () => {
+    const backend = {
+      ...fakeBackend(),
+      runtimeContracts: () => ({
+        recall_content: {
+          status: 'fail' as const,
+          package: '@atrib/recall',
+          runtime_metadata_available: false,
+          expected_coverage_version: 'coverage-v1',
+          expected_content_index_version: 'content-index-v1',
+          reason: '@atrib/recall does not export getAtribRecallRuntimeContract',
+        },
+      }),
+    }
+    const host = await bindAtribPrimitivesHttpHost({
+      port: 0,
+      backendFactory: async () => backend,
+    })
+    try {
+      const health = (await (await fetch(host.healthEndpoint)).json()) as {
+        status?: string
+        report?: {
+          primitive_runtime?: {
+            recall_contract?: {
+              status?: string
+              reason?: string
+            }
+          }
+        }
+      }
+      expect(health.status).toBe('degraded')
+      expect(health.report?.primitive_runtime?.recall_contract?.status).toBe('fail')
+      expect(health.report?.primitive_runtime?.recall_contract?.reason).toContain(
+        'getAtribRecallRuntimeContract',
+      )
+    } finally {
+      await host.close()
+    }
+  })
+
   it('times out hung primitive calls and exposes in-flight diagnostics', async () => {
     let releaseTool!: () => void
     const toolGate = new Promise<void>((resolveTool) => {
@@ -431,6 +483,7 @@ describe('atrib-primitives MCP runtime', () => {
         report?: {
           primitive_runtime?: {
             backend?: string
+            recall_contract?: { status?: string; content_index_version?: string }
             mounted_primitive_count?: number
             session_model?: string
             tool_count?: number
@@ -452,6 +505,10 @@ describe('atrib-primitives MCP runtime', () => {
       )
       expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(7)
       expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
+      expect(health.report?.primitive_runtime?.recall_contract?.status).toBe('pass')
+      expect(health.report?.primitive_runtime?.recall_contract?.content_index_version).toBe(
+        'content-index-v1',
+      )
       expect(health.report?.profile?.agent).toBe('test-agent')
       expect(health.report?.profile?.context_id_policy).toBe('explicit-required')
       expect(health.report?.profile?.requires_explicit_context_id).toBe(true)

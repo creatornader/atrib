@@ -206,6 +206,10 @@ function recallRuntimeMetadata(): Record<string, unknown> {
   }
 }
 
+export function getAtribRecallRuntimeContract(): Record<string, unknown> {
+  return recallRuntimeMetadata()
+}
+
 type MirrorFileStat = {
   path: string
   size: number

@@ -422,6 +422,46 @@ function checkPrimitiveBackendContractGate() {
   }
 }
 
+function checkPrimitiveRecallContractGate() {
+  const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
+  const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
+  const target = snapshot.primitive_runtime_health.find(
+    (item) => item.report?.profile?.agent === 'codex',
+  )
+  if (!target) {
+    fail('primitive recall contract gate: expected codex primitive health fixture')
+    return
+  }
+  delete target.report.primitive_runtime.recall_contract
+
+  const report = buildReport(snapshot, {
+    generatedAt: '2026-06-11T00:00:00.000Z',
+  })
+  if (report.summary.status !== 'not_ready') {
+    fail(`primitive recall contract gate: expected status not_ready, got ${report.summary.status}`)
+  }
+  if (report.summary.primitive_runtime_recall_contract_mismatches !== 1) {
+    fail('primitive recall contract gate: expected one recall contract mismatch')
+  }
+  const contractGate = report.gates.find(
+    (gate) => gate.name === 'primitive-runtime-recall-contract',
+  )
+  if (contractGate?.status !== 'fail') {
+    fail('primitive recall contract gate: expected primitive-runtime-recall-contract=fail')
+  }
+  const hostGate = report.gates.find((gate) => gate.name === 'host-owned-primitives-http')
+  if (hostGate?.status !== 'warn') {
+    fail('primitive recall contract gate: expected host-owned-primitives-http=warn')
+  }
+  if (
+    !report.recommendations.includes(
+      'rebuild and restart stale atrib-primitives LaunchAgents so recall health reports runtime.content_index_version and coverage.index support',
+    )
+  ) {
+    fail('primitive recall contract gate: expected recall contract recommendation')
+  }
+}
+
 function checkProfileRoutedPrimitiveSupervisorGate() {
   const fixture = readJson(join(FIXTURE_DIR, 'healthy-collapsed-startup-spawn.json'))
   const snapshot = JSON.parse(JSON.stringify(fixture.snapshot))
@@ -1718,6 +1758,7 @@ function main() {
   checkRouteRegistryDiagnosticsGate()
   checkConfigSurfaceEndpointEvidence()
   checkPrimitiveBackendContractGate()
+  checkPrimitiveRecallContractGate()
   checkProfileRoutedPrimitiveSupervisorGate()
   checkExplicitContextPolicyGate()
   checkStaleActiveSessionStateGate()

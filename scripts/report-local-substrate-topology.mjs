@@ -49,6 +49,8 @@ const ACTIVE_SESSION_STATE_MAX_BYTES = 128
 const ACTIVE_SESSION_STATE_MAX_AGE_MS = 4 * 3_600_000
 const SAFE_ACTIVE_SESSION_PROFILE = /^[A-Za-z0-9._-]{1,64}$/
 const ACTIVE_SESSION_STATE_DIR = join(HOME, '.claude', 'state')
+const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
+const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
 const PRIMITIVE_SERVERS = [
   'atrib-emit',
   'atrib-annotate',
@@ -1937,6 +1939,13 @@ function primitiveRuntimeHealthSummary(items) {
       session_model: report.primitive_runtime?.session_model,
       tool_count: report.primitive_runtime?.tool_count,
       mounted_primitive_count: report.primitive_runtime?.mounted_primitive_count,
+      recall_contract_status: report.primitive_runtime?.recall_contract?.status,
+      recall_contract_version: report.primitive_runtime?.recall_contract?.version,
+      recall_contract_coverage_version:
+        report.primitive_runtime?.recall_contract?.coverage_version,
+      recall_contract_content_index_version:
+        report.primitive_runtime?.recall_contract?.content_index_version,
+      recall_contract_reason: report.primitive_runtime?.recall_contract?.reason,
       agent: report.profile?.agent,
       mirror_file: report.profile?.mirror_file,
       local_substrate_endpoint: report.profile?.local_substrate_endpoint,
@@ -1980,6 +1989,38 @@ function primitiveRuntimeVersion(item) {
   return stringValue(item.report?.primitive_runtime?.version)
 }
 
+function primitiveRuntimeRecallContract(item) {
+  return item.report?.primitive_runtime?.recall_contract
+}
+
+function primitiveRuntimeRecallContractOk(item) {
+  const contract = primitiveRuntimeRecallContract(item)
+  return (
+    item.reachable === true &&
+    contract?.status === 'pass' &&
+    contract?.package === '@atrib/recall' &&
+    contract?.coverage_version === EXPECTED_RECALL_COVERAGE_VERSION &&
+    contract?.content_index_version === EXPECTED_RECALL_CONTENT_INDEX_VERSION
+  )
+}
+
+function primitiveRuntimeRecallContractMismatches(items) {
+  return items
+    .filter((item) => item.reachable === true && !primitiveRuntimeRecallContractOk(item))
+    .map((item) => {
+      const contract = primitiveRuntimeRecallContract(item) ?? {}
+      return {
+        endpoint: item.endpoint,
+        pid: item.report?.primitive_runtime?.pid,
+        status: contract.status,
+        version: contract.version,
+        coverage_version: contract.coverage_version,
+        content_index_version: contract.content_index_version,
+        reason: contract.reason ?? 'missing recall_contract health field',
+      }
+    })
+}
+
 function healthyItems(items) {
   return items.filter((item) => item.reachable && item.status === 'healthy')
 }
@@ -2004,7 +2045,8 @@ function hasSharedPrimitiveHttpBackend(item) {
     runtime.backend === 'shared' &&
     runtime.session_model === 'per-session-transport-shared-backend' &&
     Number(runtime.mounted_primitive_count) === 7 &&
-    Number(runtime.tool_count) === 15
+    Number(runtime.tool_count) === 15 &&
+    primitiveRuntimeRecallContractOk(item)
   return profileScoped || hasProfileRoutedPrimitiveSupervisor(item)
 }
 
@@ -2020,7 +2062,8 @@ function hasProfileRoutedPrimitiveSupervisor(item) {
     routing?.mode === 'explicit' &&
     routing?.isolated_backends === true &&
     primitiveRuntimeProfileRoutes(item).length > 0 &&
-    Number(runtime.tool_count) === 15
+    Number(runtime.tool_count) === 15 &&
+    primitiveRuntimeRecallContractOk(item)
   )
 }
 
@@ -2593,6 +2636,33 @@ function buildGates({
         : 'checked-out @atrib/primitives-runtime package version could not be read'
     gates.push(gate('primitive-runtime-version-freshness', ok ? 'pass' : 'fail', detail))
   }
+  const reachablePrimitiveHttp = primitiveHealth.filter((item) => item.reachable === true)
+  const recallContractMismatches = primitiveRuntimeRecallContractMismatches(primitiveHealth)
+  if (reachablePrimitiveHttp.length === 0) {
+    gates.push(
+      gate(
+        'primitive-runtime-recall-contract',
+        'warn',
+        'no reachable primitive HTTP endpoint can prove the @atrib/recall content-index contract',
+      ),
+    )
+  } else if (recallContractMismatches.length > 0) {
+    gates.push(
+      gate(
+        'primitive-runtime-recall-contract',
+        'fail',
+        `${recallContractMismatches.length}/${reachablePrimitiveHttp.length} reachable primitive HTTP endpoint(s) do not report @atrib/recall ${EXPECTED_RECALL_COVERAGE_VERSION} plus ${EXPECTED_RECALL_CONTENT_INDEX_VERSION}`,
+      ),
+    )
+  } else {
+    gates.push(
+      gate(
+        'primitive-runtime-recall-contract',
+        'pass',
+        `all reachable primitive HTTP endpoint(s) report @atrib/recall ${EXPECTED_RECALL_COVERAGE_VERSION} plus ${EXPECTED_RECALL_CONTENT_INDEX_VERSION}`,
+      ),
+    )
+  }
   const healthyPrimitiveHttpByEndpoint = new Map(
     healthyPrimitiveHttp.map((item) => [item.endpoint, item]),
   )
@@ -3060,6 +3130,13 @@ function statusFromGates(gates, processSummary) {
   if (gates.some((item) => item.status === 'fail' && item.name === 'coordinator-health')) {
     return 'blocked'
   }
+  if (
+    gates.some(
+      (item) => item.status === 'fail' && item.name === 'primitive-runtime-recall-contract',
+    )
+  ) {
+    return 'not_ready'
+  }
   if (onlyRestartResidueRemains(gates, processSummary)) {
     return 'restart_required'
   }
@@ -3219,6 +3296,8 @@ function buildReport(input, options = {}) {
         expectedRuntimeVersion(expectedRuntimeVersions, 'primitive_runtime'),
         primitiveRuntimeVersion,
       ).length,
+      primitive_runtime_recall_contract_mismatches:
+        primitiveRuntimeRecallContractMismatches(primitiveHealth).length,
       route_registry_status:
         registryProblems.length > 0 ? 'problem' : registryValid.length > 0 ? 'valid' : 'absent',
       primitive_runtime_processes: processSummary.primitive_runtime_processes,
@@ -3388,6 +3467,11 @@ function recommendationsFor({ status, gates, processSummary }) {
       'restart stale atrib-primitives LaunchAgents so they run the checked-out @atrib/primitives-runtime package version',
     )
   }
+  if (gates.find((item) => item.name === 'primitive-runtime-recall-contract')?.status === 'fail') {
+    recommendations.push(
+      'rebuild and restart stale atrib-primitives LaunchAgents so recall health reports runtime.content_index_version and coverage.index support',
+    )
+  }
   if (gates.find((item) => item.name === 'host-owned-active-session-context')?.status !== 'pass') {
     recommendations.push(
       'make every active host-owned primitive profile either write fresh valid active-session state or require explicit context_id before relying on profile fallback',
@@ -3453,6 +3537,7 @@ function formatTextReport(report) {
     `local-substrate topology: ${report.summary.status}`,
     `coordinators: healthy=${report.summary.healthy_coordinators}, configured=${report.summary.configured_coordinators}`,
     `runtime versions: coordinator=${report.summary.coordinator_version_expected ?? 'unchecked'} mismatches=${report.summary.coordinator_version_mismatches ?? 0}, primitive=${report.summary.primitive_runtime_version_expected ?? 'unchecked'} mismatches=${report.summary.primitive_runtime_version_mismatches ?? 0}`,
+    `primitive recall contract: mismatches=${report.summary.primitive_runtime_recall_contract_mismatches ?? 0}`,
     `route registry: ${report.summary.route_registry_status}`,
     `startup-spawn processes: atrib-primitives=${report.summary.primitive_runtime_processes} (http=${report.summary.primitive_runtime_http_processes}, shared-http=${report.summary.primitive_runtime_http_shared}, profile-routed=${report.summary.primitive_runtime_http_profile_routed}, direct-stdio=${report.summary.primitive_runtime_stdio_processes}, proxy=${report.summary.primitive_proxy_processes}), standalone-primitives=${report.summary.standalone_primitive_processes}, generations=${report.summary.standalone_primitive_generations}, obsolete=${report.summary.obsolete_standalone_primitive_processes}, duplicate-groups=${report.summary.duplicate_primitive_groups}`,
     `primitive tool dispatch: active=${report.summary.primitive_runtime_tool_calls_active ?? 0}, active-timed-out=${report.summary.primitive_runtime_tool_calls_active_timed_out ?? 0}, timed-out-total=${report.summary.primitive_runtime_tool_calls_timed_out ?? 0}`,
