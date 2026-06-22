@@ -5679,8 +5679,8 @@ The signed record uses:
 
 **Cross-references.**
 
-- [`packages/integration/examples/google-adk/`](packages/integration/examples/google-adk/),
-  TypeScript ADK plugin proof.
+- [`packages/integration/examples/google-adk-typescript/`](packages/integration/examples/google-adk-typescript/),
+  TypeScript ADK callback and decision-ledger proofs.
 - [`packages/integration/examples/google-adk-python/`](packages/integration/examples/google-adk-python/),
   Python ADK plugin proof.
 - [`packages/integration/test/google-adk-python-attribution.test.ts`](packages/integration/test/google-adk-python-attribution.test.ts),
@@ -6967,7 +6967,7 @@ The proof uses real `google-adk==2.3.0` `InMemoryRunner`, `BasePlugin`, and
 `after_tool_callback` with the decision record in `informed_by`.
 
 The TypeScript decision-ledger proof under
-[`packages/integration/examples/google-adk-decision-ledger/`](packages/integration/examples/google-adk-decision-ledger/)
+[`packages/integration/examples/google-adk-typescript/`](packages/integration/examples/google-adk-typescript/)
 remains useful cross-SDK evidence. It is not the lead proof for
 `google/adk-python`.
 
@@ -7025,14 +7025,18 @@ Python allow decision -> ADK Python tool outcome.
 
 **Cross-references.**
 
-- [`packages/integration/src/google-adk-decision-ledger.ts`](packages/integration/src/google-adk-decision-ledger.ts),
-  plugin, decision builder, signer, verifier, and binding helpers.
-- [`packages/integration/examples/google-adk-decision-ledger/`](packages/integration/examples/google-adk-decision-ledger/),
-  runnable ADK decision-ledger proof.
+- [`packages/integration/examples/google-adk-python/`](packages/integration/examples/google-adk-python/),
+  Python ADK callback and decision-ledger proofs.
+- [`packages/integration/src/google-adk-typescript-decision-ledger.ts`](packages/integration/src/google-adk-typescript-decision-ledger.ts),
+  TypeScript decision plugin, builder, signer, verifier, and binding helpers.
+- [`packages/integration/examples/google-adk-typescript/`](packages/integration/examples/google-adk-typescript/),
+  TypeScript ADK callback and decision-ledger proofs.
 - [`packages/integration/examples/google-stack-chain/`](packages/integration/examples/google-stack-chain/),
   AP2 -> A2A -> ADK decision -> ADK tool chain.
-- [`packages/integration/test/google-adk-decision-ledger.test.ts`](packages/integration/test/google-adk-decision-ledger.test.ts),
-  focused contract tests.
+- [`packages/integration/test/google-adk-python-decision-ledger.test.ts`](packages/integration/test/google-adk-python-decision-ledger.test.ts),
+  opt-in Python decision-ledger coverage.
+- [`packages/integration/test/google-adk-typescript-decision-ledger.test.ts`](packages/integration/test/google-adk-typescript-decision-ledger.test.ts),
+  TypeScript decision-ledger contract tests.
 - [`packages/integration/test/google-stack-chain.test.ts`](packages/integration/test/google-stack-chain.test.ts),
   deterministic chain proof tests.
 

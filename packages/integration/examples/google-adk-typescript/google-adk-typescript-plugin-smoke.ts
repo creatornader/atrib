@@ -14,7 +14,7 @@ import type { BaseLlmConnection, LlmRequest, LlmResponse } from '@google/adk'
 import { canonicalRecord, hexEncode, resolveChainRoot, sha256, verifyRecord } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { verifyRecord as verifyAtribRecord } from '@atrib/verify'
-import { AtribAdkPlugin } from '../../src/google-adk-attribution.js'
+import { AtribAdkPlugin } from '../../src/google-adk-typescript-attribution.js'
 
 const contextId = '676f6f676c652d61646b2d70726f6f66'
 const privateKey = Buffer.from(

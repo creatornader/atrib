@@ -97,11 +97,14 @@
       "commands": ["a2a-handoff-proof"]
     },
     {
-      "id": "google-adk",
-      "path": "examples/google-adk",
+      "id": "google-adk-typescript",
+      "path": "examples/google-adk-typescript",
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
-      "commands": ["google-adk-plugin-smoke"]
+      "commands": [
+        "google-adk-typescript-plugin-smoke",
+        "google-adk-typescript-decision-ledger-proof"
+      ]
     },
     {
       "id": "google-adk-python",
@@ -109,13 +112,6 @@
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
       "commands": ["google-adk-python-plugin-smoke", "google-adk-python-decision-ledger-proof"]
-    },
-    {
-      "id": "google-adk-decision-ledger",
-      "path": "examples/google-adk-decision-ledger",
-      "record_class": "offline-local",
-      "endpoint_posture": "local-only",
-      "commands": ["google-adk-decision-ledger-proof"]
     },
     {
       "id": "google-stack-chain",

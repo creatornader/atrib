@@ -23,14 +23,14 @@ import {
   hashPrincipal,
   signDecisionEntry,
   verifySignedGoogleAdkDecision,
-} from '../../src/google-adk-decision-ledger.js'
+} from '../../src/google-adk-typescript-decision-ledger.js'
 import type {
   GoogleAdkDecisionAuthority,
   GoogleAdkDecisionLedgerEntry,
   GoogleAdkDecisionLocalSidecar,
   SignedGoogleAdkDecision,
   SignedGoogleAdkOutcome,
-} from '../../src/google-adk-decision-ledger.js'
+} from '../../src/google-adk-typescript-decision-ledger.js'
 
 const privateKey = Buffer.from(
   '5566778899aabbccddeeff00112233445566778899aabbccddeeff0011223344',
@@ -43,7 +43,7 @@ const parentRecordHash = `sha256:${'a'.repeat(64)}`
 
 type DecisionLedgerProofResult = {
   ok: true
-  strategy: 'atrib-google-adk-decision-ledger-proof-v1'
+  strategy: 'atrib-google-adk-typescript-decision-ledger-proof-v1'
   adk: {
     package: '@google/adk'
     version: string
@@ -187,7 +187,7 @@ class SingleToolCallModel extends BaseLlm {
   }
 }
 
-export async function runGoogleAdkDecisionLedgerProof(): Promise<DecisionLedgerProofResult> {
+export async function runGoogleAdkTypeScriptDecisionLedgerProof(): Promise<DecisionLedgerProofResult> {
   setLogger(null)
 
   const allowed = await runLiveDecisionPath({
@@ -233,7 +233,7 @@ export async function runGoogleAdkDecisionLedgerProof(): Promise<DecisionLedgerP
 
   return {
     ok: true,
-    strategy: 'atrib-google-adk-decision-ledger-proof-v1',
+    strategy: 'atrib-google-adk-typescript-decision-ledger-proof-v1',
     adk: {
       package: '@google/adk',
       version: adkVersion,
@@ -320,7 +320,7 @@ export async function runGoogleAdkDecisionLedgerProof(): Promise<DecisionLedgerP
   }
 }
 
-export async function runGoogleAdkDecisionLedgerAllowPath(
+export async function runGoogleAdkTypeScriptDecisionLedgerAllowPath(
   options: GoogleAdkDecisionLedgerPathOptions = {},
 ): Promise<GoogleAdkDecisionLedgerPathResult> {
   const path = await runLiveDecisionPath({
@@ -375,7 +375,7 @@ async function runLiveDecisionPath({
   const plugin = new AtribAdkDecisionLedgerPlugin({
     privateKey,
     contextId: runContextId,
-    serverUrl: 'google-adk-decision-ledger://proof',
+    serverUrl: 'google-adk-typescript-decision-ledger://proof',
     parentRecordHashes: [rootParentRecordHash],
     now: () => clock++,
     policy: ({ tool }) => ({
@@ -574,7 +574,7 @@ async function buildConfirmationProof({
     entry: requiredEntry,
     privateKey,
     contextId,
-    serverUrl: 'google-adk-decision-ledger://proof',
+    serverUrl: 'google-adk-typescript-decision-ledger://proof',
     chainTailHex,
     informedBy: [parentRecordHash],
     timestampMs: startTimestampMs,
@@ -610,7 +610,7 @@ async function buildConfirmationProof({
     entry: resolvedEntry,
     privateKey,
     contextId,
-    serverUrl: 'google-adk-decision-ledger://proof',
+    serverUrl: 'google-adk-typescript-decision-ledger://proof',
     chainTailHex: required.record_hash.slice('sha256:'.length),
     informedBy: [required.record_hash],
     timestampMs: startTimestampMs + 1_000,
@@ -659,7 +659,7 @@ async function buildConfirmationProof({
     entry: staleEntry,
     privateKey,
     contextId,
-    serverUrl: 'google-adk-decision-ledger://proof',
+    serverUrl: 'google-adk-typescript-decision-ledger://proof',
     chainTailHex: resolved.record_hash.slice('sha256:'.length),
     informedBy: [resolved.record_hash],
     timestampMs: startTimestampMs + 2_000,
@@ -722,7 +722,7 @@ async function withDeterministicMathRandom<T>(
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  runGoogleAdkDecisionLedgerProof()
+  runGoogleAdkTypeScriptDecisionLedgerProof()
     .then((result) => {
       console.log(JSON.stringify(result, null, 2))
     })
