@@ -38,12 +38,8 @@
         "has_primitives_runtime": true,
         "standalone_primitive_servers": [],
         "local_substrate_endpoints": [],
-        "primitive_http_endpoints": [
-          "http://127.0.0.1:8796/mcp"
-        ],
-        "bridge_http_endpoints": [
-          "http://127.0.0.1:8794/mcp"
-        ]
+        "primitive_http_endpoints": ["http://127.0.0.1:8796/mcp"],
+        "bridge_http_endpoints": ["http://127.0.0.1:8794/mcp"]
       },
       {
         "name": "claude-code",
@@ -53,12 +49,8 @@
         "has_primitives_runtime": true,
         "standalone_primitive_servers": [],
         "local_substrate_endpoints": [],
-        "primitive_http_endpoints": [
-          "http://127.0.0.1:8795/mcp"
-        ],
-        "bridge_http_endpoints": [
-          "http://127.0.0.1:8793/mcp"
-        ]
+        "primitive_http_endpoints": ["http://127.0.0.1:8795/mcp"],
+        "bridge_http_endpoints": ["http://127.0.0.1:8793/mcp"]
       }
     ],
     "launch_agents": [
@@ -168,6 +160,110 @@
               "version": "0.14.2",
               "coverage_version": "coverage-v1",
               "content_index_version": "content-index-v1"
+            },
+            "primitive_contracts": {
+              "emit": {
+                "status": "pass",
+                "primitive": "emit",
+                "package": "@atrib/emit",
+                "version": "0.16.2",
+                "expected_tools": ["emit"],
+                "mounted_tools": ["emit"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": true,
+                "probe_mode": "package-and-tool-surface"
+              },
+              "annotate": {
+                "status": "pass",
+                "primitive": "annotate",
+                "package": "@atrib/annotate",
+                "version": "0.2.37",
+                "expected_tools": ["atrib-annotate"],
+                "mounted_tools": ["atrib-annotate"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": true,
+                "probe_mode": "package-and-tool-surface"
+              },
+              "revise": {
+                "status": "pass",
+                "primitive": "revise",
+                "package": "@atrib/revise",
+                "version": "0.2.37",
+                "expected_tools": ["atrib-revise"],
+                "mounted_tools": ["atrib-revise"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": true,
+                "probe_mode": "package-and-tool-surface"
+              },
+              "recall": {
+                "status": "pass",
+                "primitive": "recall",
+                "package": "@atrib/recall",
+                "version": "0.14.3",
+                "expected_tools": [
+                  "recall_annotations",
+                  "recall_by_content",
+                  "recall_by_signer",
+                  "recall_my_attribution_history",
+                  "recall_orphans",
+                  "recall_revisions",
+                  "recall_session_chain",
+                  "recall_walk"
+                ],
+                "mounted_tools": [
+                  "recall_annotations",
+                  "recall_by_content",
+                  "recall_by_signer",
+                  "recall_my_attribution_history",
+                  "recall_orphans",
+                  "recall_revisions",
+                  "recall_session_chain",
+                  "recall_walk"
+                ],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": false,
+                "probe_mode": "read-only-behavioral-probe"
+              },
+              "trace": {
+                "status": "pass",
+                "primitive": "trace",
+                "package": "@atrib/trace",
+                "version": "0.5.17",
+                "expected_tools": ["trace", "trace_forward"],
+                "mounted_tools": ["trace", "trace_forward"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": false,
+                "probe_mode": "package-and-tool-surface"
+              },
+              "summarize": {
+                "status": "pass",
+                "primitive": "summarize",
+                "package": "@atrib/summarize",
+                "version": "0.4.19",
+                "expected_tools": ["summarize"],
+                "mounted_tools": ["summarize"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": false,
+                "probe_mode": "package-and-tool-surface"
+              },
+              "verify": {
+                "status": "pass",
+                "primitive": "verify",
+                "package": "@atrib/verify-mcp",
+                "version": "0.2.17",
+                "expected_tools": ["atrib-verify"],
+                "mounted_tools": ["atrib-verify"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": false,
+                "probe_mode": "package-and-tool-surface"
+              }
             }
           },
           "profile": {
@@ -204,6 +300,110 @@
               "version": "0.14.2",
               "coverage_version": "coverage-v1",
               "content_index_version": "content-index-v1"
+            },
+            "primitive_contracts": {
+              "emit": {
+                "status": "pass",
+                "primitive": "emit",
+                "package": "@atrib/emit",
+                "version": "0.16.2",
+                "expected_tools": ["emit"],
+                "mounted_tools": ["emit"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": true,
+                "probe_mode": "package-and-tool-surface"
+              },
+              "annotate": {
+                "status": "pass",
+                "primitive": "annotate",
+                "package": "@atrib/annotate",
+                "version": "0.2.37",
+                "expected_tools": ["atrib-annotate"],
+                "mounted_tools": ["atrib-annotate"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": true,
+                "probe_mode": "package-and-tool-surface"
+              },
+              "revise": {
+                "status": "pass",
+                "primitive": "revise",
+                "package": "@atrib/revise",
+                "version": "0.2.37",
+                "expected_tools": ["atrib-revise"],
+                "mounted_tools": ["atrib-revise"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": true,
+                "probe_mode": "package-and-tool-surface"
+              },
+              "recall": {
+                "status": "pass",
+                "primitive": "recall",
+                "package": "@atrib/recall",
+                "version": "0.14.3",
+                "expected_tools": [
+                  "recall_annotations",
+                  "recall_by_content",
+                  "recall_by_signer",
+                  "recall_my_attribution_history",
+                  "recall_orphans",
+                  "recall_revisions",
+                  "recall_session_chain",
+                  "recall_walk"
+                ],
+                "mounted_tools": [
+                  "recall_annotations",
+                  "recall_by_content",
+                  "recall_by_signer",
+                  "recall_my_attribution_history",
+                  "recall_orphans",
+                  "recall_revisions",
+                  "recall_session_chain",
+                  "recall_walk"
+                ],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": false,
+                "probe_mode": "read-only-behavioral-probe"
+              },
+              "trace": {
+                "status": "pass",
+                "primitive": "trace",
+                "package": "@atrib/trace",
+                "version": "0.5.17",
+                "expected_tools": ["trace", "trace_forward"],
+                "mounted_tools": ["trace", "trace_forward"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": false,
+                "probe_mode": "package-and-tool-surface"
+              },
+              "summarize": {
+                "status": "pass",
+                "primitive": "summarize",
+                "package": "@atrib/summarize",
+                "version": "0.4.19",
+                "expected_tools": ["summarize"],
+                "mounted_tools": ["summarize"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": false,
+                "probe_mode": "package-and-tool-surface"
+              },
+              "verify": {
+                "status": "pass",
+                "primitive": "verify",
+                "package": "@atrib/verify-mcp",
+                "version": "0.2.17",
+                "expected_tools": ["atrib-verify"],
+                "mounted_tools": ["atrib-verify"],
+                "missing_tools": [],
+                "unexpected_tools": [],
+                "mutates_log_on_call": false,
+                "probe_mode": "package-and-tool-surface"
+              }
             }
           },
           "profile": {
@@ -323,10 +523,7 @@
         "max_age_ms": 108000000,
         "event_type": "https://atrib.dev/v1/types/observation",
         "context_id": "35ae959b3e8d4d5f943a9cf90bf8e538",
-        "topics": [
-          "agent-bridge",
-          "codex"
-        ]
+        "topics": ["agent-bridge", "codex"]
       }
     },
     "long_lived_activity_report": {

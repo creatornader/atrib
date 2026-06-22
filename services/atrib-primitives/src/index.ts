@@ -18,6 +18,7 @@ import {
   type Server as HttpServer,
   type ServerResponse,
 } from 'node:http'
+import { createRequire } from 'node:module'
 import type { AddressInfo, Socket } from 'node:net'
 import { pathToFileURL } from 'node:url'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
@@ -96,7 +97,22 @@ export interface AtribPrimitiveRuntimeContractDiagnostic {
   reason?: string
 }
 
+export interface AtribPrimitiveSurfaceContractDiagnostic {
+  status: 'pass' | 'fail'
+  primitive: string
+  package: string
+  expected_tools: string[]
+  mounted_tools: string[]
+  missing_tools: string[]
+  unexpected_tools: string[]
+  mutates_log_on_call: boolean
+  probe_mode: 'package-and-tool-surface' | 'read-only-behavioral-probe'
+  version?: string
+  reason?: string
+}
+
 export interface AtribPrimitivesRuntimeContracts {
+  primitives: Record<string, AtribPrimitiveSurfaceContractDiagnostic>
   recall_content: AtribPrimitiveRuntimeContractDiagnostic
 }
 
@@ -190,6 +206,15 @@ const MAX_JSON_BODY_BYTES = 1024 * 1024
 const MCP_REQUEST_TIMEOUT_CODE = -32001
 const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
 const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
+const runtimeRequire = createRequire(import.meta.url)
+
+interface PrimitiveSpec {
+  name: string
+  packageName: string
+  expectedTools: readonly string[]
+  mutatesLogOnCall: boolean
+  probeMode: AtribPrimitiveSurfaceContractDiagnostic['probe_mode']
+}
 
 export type AtribPrimitiveFactory = () => Promise<AtribPrimitiveHandle> | AtribPrimitiveHandle
 
@@ -197,6 +222,67 @@ export interface AtribPrimitivesBackendOptions {
   toolTimeoutMs?: number
   primitives?: readonly [string, AtribPrimitiveFactory][]
 }
+
+const PRIMITIVE_SPECS: readonly PrimitiveSpec[] = [
+  {
+    name: 'emit',
+    packageName: '@atrib/emit',
+    expectedTools: ['emit'],
+    mutatesLogOnCall: true,
+    probeMode: 'package-and-tool-surface',
+  },
+  {
+    name: 'annotate',
+    packageName: '@atrib/annotate',
+    expectedTools: ['atrib-annotate'],
+    mutatesLogOnCall: true,
+    probeMode: 'package-and-tool-surface',
+  },
+  {
+    name: 'revise',
+    packageName: '@atrib/revise',
+    expectedTools: ['atrib-revise'],
+    mutatesLogOnCall: true,
+    probeMode: 'package-and-tool-surface',
+  },
+  {
+    name: 'recall',
+    packageName: '@atrib/recall',
+    expectedTools: [
+      'recall_annotations',
+      'recall_by_content',
+      'recall_by_signer',
+      'recall_my_attribution_history',
+      'recall_orphans',
+      'recall_revisions',
+      'recall_session_chain',
+      'recall_walk',
+    ],
+    mutatesLogOnCall: false,
+    probeMode: 'read-only-behavioral-probe',
+  },
+  {
+    name: 'trace',
+    packageName: '@atrib/trace',
+    expectedTools: ['trace', 'trace_forward'],
+    mutatesLogOnCall: false,
+    probeMode: 'package-and-tool-surface',
+  },
+  {
+    name: 'summarize',
+    packageName: '@atrib/summarize',
+    expectedTools: ['summarize'],
+    mutatesLogOnCall: false,
+    probeMode: 'package-and-tool-surface',
+  },
+  {
+    name: 'verify',
+    packageName: '@atrib/verify-mcp',
+    expectedTools: ['atrib-verify'],
+    mutatesLogOnCall: false,
+    probeMode: 'package-and-tool-surface',
+  },
+]
 
 const PRIMITIVES: readonly [string, AtribPrimitiveFactory][] = [
   ['emit', async () => (await import('@atrib/emit')).createAtribEmitServer()],
@@ -223,6 +309,16 @@ function readPackageVersion(): string {
     return typeof pkg.version === 'string' ? pkg.version : '0.0.0'
   } catch {
     return '0.0.0'
+  }
+}
+
+function readDependencyPackageVersion(packageName: string): string | undefined {
+  try {
+    const packagePath = runtimeRequire.resolve(`${packageName}/package.json`)
+    const pkg = JSON.parse(readFileSync(packagePath, 'utf8')) as { version?: unknown }
+    return stringValue(pkg.version)
+  } catch {
+    return undefined
   }
 }
 
@@ -351,25 +447,69 @@ function validateRecallRuntimeContract(raw: unknown): AtribPrimitiveRuntimeContr
   return diagnostic
 }
 
-async function inspectRuntimeContracts(): Promise<AtribPrimitivesRuntimeContracts> {
+function inspectPrimitiveSurfaceContracts(
+  mounted: readonly MountedPrimitive[],
+): Record<string, AtribPrimitiveSurfaceContractDiagnostic> {
+  return Object.fromEntries(
+    PRIMITIVE_SPECS.map((spec) => {
+      const primitive = mounted.find((candidate) => candidate.name === spec.name)
+      const mountedTools = primitive
+        ? primitive.tools.map((tool) => tool.name).sort((a, b) => a.localeCompare(b))
+        : []
+      const expectedTools = [...spec.expectedTools].sort((a, b) => a.localeCompare(b))
+      const missingTools = expectedTools.filter((tool) => !mountedTools.includes(tool))
+      const unexpectedTools = mountedTools.filter((tool) => !expectedTools.includes(tool))
+      const version = readDependencyPackageVersion(spec.packageName)
+      const issues = []
+      if (!primitive) issues.push('primitive did not mount')
+      if (!version) issues.push('package version could not be read')
+      if (missingTools.length) issues.push(`missing tool(s): ${missingTools.join(', ')}`)
+      if (unexpectedTools.length) issues.push(`unexpected tool(s): ${unexpectedTools.join(', ')}`)
+
+      const diagnostic: AtribPrimitiveSurfaceContractDiagnostic = {
+        status: issues.length ? 'fail' : 'pass',
+        primitive: spec.name,
+        package: spec.packageName,
+        expected_tools: expectedTools,
+        mounted_tools: mountedTools,
+        missing_tools: missingTools,
+        unexpected_tools: unexpectedTools,
+        mutates_log_on_call: spec.mutatesLogOnCall,
+        probe_mode: spec.probeMode,
+      }
+      if (version) diagnostic.version = version
+      if (issues.length) diagnostic.reason = issues.join('; ')
+      return [spec.name, diagnostic]
+    }),
+  )
+}
+
+async function inspectRuntimeContracts(
+  mounted: readonly MountedPrimitive[],
+): Promise<AtribPrimitivesRuntimeContracts> {
+  const primitives = inspectPrimitiveSurfaceContracts(mounted)
   try {
     const recall = (await import('@atrib/recall')) as Record<string, unknown>
     const contractFn = recall.getAtribRecallRuntimeContract
     if (typeof contractFn !== 'function') {
       return {
+        primitives,
         recall_content: failedRecallContract(
           '@atrib/recall does not export getAtribRecallRuntimeContract',
         ),
       }
     }
-    return { recall_content: validateRecallRuntimeContract(contractFn()) }
+    return { primitives, recall_content: validateRecallRuntimeContract(contractFn()) }
   } catch (error) {
-    return { recall_content: failedRecallContract(errorMessage(error)) }
+    return { primitives, recall_content: failedRecallContract(errorMessage(error)) }
   }
 }
 
 function runtimeContractsDegraded(contracts: AtribPrimitivesRuntimeContracts): boolean {
-  return contracts.recall_content.status !== 'pass'
+  return (
+    contracts.recall_content.status !== 'pass' ||
+    Object.values(contracts.primitives).some((contract) => contract.status !== 'pass')
+  )
 }
 
 async function mountPrimitive(
@@ -402,7 +542,7 @@ export async function createAtribPrimitivesBackend(
   const routeByTool = new Map<string, ToolRoute>()
   const tools: Tool[] = []
   const inFlightToolCalls = new Map<string, InFlightToolCall>()
-  const runtimeContracts = await inspectRuntimeContracts()
+  const runtimeContracts = await inspectRuntimeContracts(mounted)
   let callsStarted = 0
   let callsSucceeded = 0
   let callsFailed = 0
@@ -1043,6 +1183,7 @@ export async function bindAtribPrimitivesHttpHost(
             health_endpoint: healthEndpoint,
             tool_count: backend.toolNames.length,
             mounted_primitive_count: backend.mountedPrimitiveCount,
+            primitive_contracts: runtimeContracts.primitives,
             recall_contract: runtimeContracts.recall_content,
           },
           profile: {

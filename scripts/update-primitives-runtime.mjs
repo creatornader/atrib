@@ -13,6 +13,36 @@ const HOME = process.env.HOME ?? ''
 const LAUNCH_AGENT_PREFIX = 'com.nader.atrib-primitives.'
 const PRIMITIVES_PACKAGE = join(ROOT, 'services/atrib-primitives/package.json')
 const RECALL_PACKAGE = join(ROOT, 'services/atrib-recall/package.json')
+const PRIMITIVE_PACKAGE_PATHS = {
+  emit: join(ROOT, 'services/atrib-emit/package.json'),
+  annotate: join(ROOT, 'services/atrib-annotate/package.json'),
+  revise: join(ROOT, 'services/atrib-revise/package.json'),
+  recall: RECALL_PACKAGE,
+  trace: join(ROOT, 'services/atrib-trace/package.json'),
+  summarize: join(ROOT, 'services/atrib-summarize/package.json'),
+  verify: join(ROOT, 'services/atrib-verify/package.json'),
+}
+const EXPECTED_PRIMITIVE_TOOLS = {
+  emit: ['emit'],
+  annotate: ['atrib-annotate'],
+  revise: ['atrib-revise'],
+  recall: [
+    'recall_annotations',
+    'recall_by_content',
+    'recall_by_signer',
+    'recall_my_attribution_history',
+    'recall_orphans',
+    'recall_revisions',
+    'recall_session_chain',
+    'recall_walk',
+  ],
+  trace: ['trace', 'trace_forward'],
+  summarize: ['summarize'],
+  verify: ['atrib-verify'],
+}
+const EXPECTED_TOOL_NAMES = Object.values(EXPECTED_PRIMITIVE_TOOLS)
+  .flat()
+  .sort((a, b) => a.localeCompare(b))
 const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
 const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
 const DEFAULT_TIMEOUT_MS = 15_000
@@ -36,8 +66,9 @@ Options:
 
 Default behavior discovers host-owned com.nader.atrib-primitives.* LaunchAgents
 that run this checkout's services/atrib-primitives/dist/index.js, builds
-@atrib/recall and @atrib/primitives-runtime, restarts those LaunchAgents, then
-directly calls recall_by_content over each Streamable HTTP MCP endpoint.
+the @atrib/primitives-runtime dependency closure, restarts those LaunchAgents,
+then lists tools and directly calls recall_by_content over each Streamable HTTP
+MCP endpoint.
 `
 }
 
@@ -236,12 +267,8 @@ function runCommand(command, args, { label, dryRun = false } = {}) {
 
 function buildPackages(options) {
   return [
-    runCommand('pnpm', ['--filter', '@atrib/recall', 'build'], {
-      label: 'build @atrib/recall',
-      dryRun: options.dryRun,
-    }),
-    runCommand('pnpm', ['--filter', '@atrib/primitives-runtime', 'build'], {
-      label: 'build @atrib/primitives-runtime',
+    runCommand('pnpm', ['--filter', '@atrib/primitives-runtime...', 'build'], {
+      label: 'build @atrib/primitives-runtime dependency closure',
       dryRun: options.dryRun,
     }),
   ]
@@ -301,9 +328,36 @@ function delay(ms) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
 }
 
-export function validateHealthPayload(body, { expectedRuntimeVersion }) {
+function expectedPrimitivePackageVersions() {
+  return Object.fromEntries(
+    Object.entries(PRIMITIVE_PACKAGE_PATHS).map(([primitive, path]) => {
+      const pkg = readJson(path)
+      return [
+        primitive,
+        {
+          package: pkg.name,
+          version: pkg.version,
+        },
+      ]
+    }),
+  )
+}
+
+function sortedStrings(values) {
+  return values.map(String).sort((a, b) => a.localeCompare(b))
+}
+
+function arraysEqual(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+export function validateHealthPayload(
+  body,
+  { expectedRuntimeVersion, expectedPrimitiveVersions = expectedPrimitivePackageVersions() },
+) {
   const runtime = body?.report?.primitive_runtime
   const contract = runtime?.recall_contract
+  const primitiveContracts = runtime?.primitive_contracts
   const issues = []
   if (!runtime) issues.push('missing report.primitive_runtime')
   if (runtime?.version !== expectedRuntimeVersion) {
@@ -322,6 +376,52 @@ export function validateHealthPayload(body, { expectedRuntimeVersion }) {
       `expected recall_contract.content_index_version ${EXPECTED_RECALL_CONTENT_INDEX_VERSION}, got ${contract?.content_index_version}`,
     )
   }
+  if (!primitiveContracts || typeof primitiveContracts !== 'object') {
+    issues.push('missing report.primitive_runtime.primitive_contracts')
+  } else {
+    for (const [primitive, expectedTools] of Object.entries(EXPECTED_PRIMITIVE_TOOLS)) {
+      const primitiveContract = primitiveContracts[primitive]
+      const expected = expectedPrimitiveVersions[primitive]
+      const mountedTools = Array.isArray(primitiveContract?.mounted_tools)
+        ? sortedStrings(primitiveContract.mounted_tools)
+        : []
+      const expectedToolList = sortedStrings(expectedTools)
+      if (!primitiveContract || typeof primitiveContract !== 'object') {
+        issues.push(`missing primitive_contracts.${primitive}`)
+        continue
+      }
+      if (primitiveContract.status !== 'pass') {
+        issues.push(
+          `expected primitive_contracts.${primitive}.status pass, got ${primitiveContract.status}`,
+        )
+      }
+      if (expected?.package && primitiveContract.package !== expected.package) {
+        issues.push(
+          `expected primitive_contracts.${primitive}.package ${expected.package}, got ${primitiveContract.package}`,
+        )
+      }
+      if (expected?.version && primitiveContract.version !== expected.version) {
+        issues.push(
+          `expected primitive_contracts.${primitive}.version ${expected.version}, got ${primitiveContract.version}`,
+        )
+      }
+      if (!arraysEqual(mountedTools, expectedToolList)) {
+        issues.push(
+          `expected primitive_contracts.${primitive}.mounted_tools ${expectedToolList.join(', ')}, got ${mountedTools.join(', ')}`,
+        )
+      }
+      if ((primitiveContract.missing_tools ?? []).length) {
+        issues.push(
+          `primitive_contracts.${primitive}.missing_tools=${primitiveContract.missing_tools.join(', ')}`,
+        )
+      }
+      if ((primitiveContract.unexpected_tools ?? []).length) {
+        issues.push(
+          `primitive_contracts.${primitive}.unexpected_tools=${primitiveContract.unexpected_tools.join(', ')}`,
+        )
+      }
+    }
+  }
   if (issues.length) {
     throw new Error(`primitive health contract failed: ${issues.join('; ')}`)
   }
@@ -332,6 +432,19 @@ export function validateHealthPayload(body, { expectedRuntimeVersion }) {
     recall_contract: contract.status,
     coverage_version: contract.coverage_version,
     content_index_version: contract.content_index_version,
+    primitive_contracts: Object.fromEntries(
+      Object.entries(primitiveContracts).map(([primitive, primitiveContract]) => [
+        primitive,
+        {
+          status: primitiveContract.status,
+          package: primitiveContract.package,
+          version: primitiveContract.version,
+          tool_count: Array.isArray(primitiveContract.mounted_tools)
+            ? primitiveContract.mounted_tools.length
+            : 0,
+        },
+      ]),
+    ),
   }
 }
 
@@ -452,7 +565,22 @@ export function validateRecallProbePayload(payload) {
   }
 }
 
-async function probeRecallByContent(agent, { timeoutMs, probeQuery }) {
+export function validateToolSurfacePayload(tools) {
+  const names = sortedStrings((tools ?? []).map((tool) => tool?.name).filter(Boolean))
+  const missing = EXPECTED_TOOL_NAMES.filter((tool) => !names.includes(tool))
+  const unexpected = names.filter((tool) => !EXPECTED_TOOL_NAMES.includes(tool))
+  if (missing.length || unexpected.length) {
+    throw new Error(
+      `primitive tool surface probe failed: missing=${missing.join(', ') || 'none'}; unexpected=${unexpected.join(', ') || 'none'}`,
+    )
+  }
+  return {
+    tool_count: names.length,
+    tools: names,
+  }
+}
+
+async function probeMcpEndpoint(agent, { timeoutMs, probeQuery }) {
   const { Client, StreamableHTTPClientTransport } = await loadMcpClientModules()
   const transport = new StreamableHTTPClientTransport(new URL(agent.endpoint))
   const client = new Client({
@@ -461,6 +589,8 @@ async function probeRecallByContent(agent, { timeoutMs, probeQuery }) {
   })
   try {
     await withTimeout(client.connect(transport), timeoutMs, `connect ${agent.endpoint}`)
+    const listed = await withTimeout(client.listTools(), timeoutMs, `listTools ${agent.endpoint}`)
+    const tools = validateToolSurfacePayload(listed.tools)
     const result = await withTimeout(
       client.callTool({
         name: 'recall_by_content',
@@ -474,7 +604,10 @@ async function probeRecallByContent(agent, { timeoutMs, probeQuery }) {
       timeoutMs,
       `recall_by_content ${agent.endpoint}`,
     )
-    return validateRecallProbePayload(parseToolTextResult(result))
+    return {
+      tools,
+      recall: validateRecallProbePayload(parseToolTextResult(result)),
+    }
   } finally {
     await client.close().catch(() => {})
     await transport.close().catch(() => {})
@@ -497,6 +630,7 @@ function checkTopology({ dryRun = false } = {}) {
   const report = JSON.parse(result.stdout)
   const requiredGates = [
     'primitive-runtime-version-freshness',
+    'primitive-runtime-surface-contracts',
     'primitive-runtime-recall-contract',
     'host-owned-primitives-http',
   ]
@@ -511,6 +645,8 @@ function checkTopology({ dryRun = false } = {}) {
     global_status: report.summary?.status,
     primitive_runtime_version_expected: report.expected_runtime_versions?.primitive_runtime,
     primitive_runtime_version_mismatches: report.summary?.primitive_runtime_version_mismatches,
+    primitive_runtime_surface_contract_mismatches:
+      report.summary?.primitive_runtime_surface_contract_mismatches,
     primitive_runtime_recall_contract_mismatches:
       report.summary?.primitive_runtime_recall_contract_mismatches,
     non_pass_gates: (report.gates ?? []).filter((gate) => gate.status !== 'pass'),
@@ -523,6 +659,7 @@ function checkTopology({ dryRun = false } = {}) {
 function expectedVersions() {
   return {
     primitive_runtime: readJson(PRIMITIVES_PACKAGE).version,
+    primitives: expectedPrimitivePackageVersions(),
     recall: readJson(RECALL_PACKAGE).version,
   }
 }
@@ -586,14 +723,16 @@ async function run(options) {
   for (const agent of targets) {
     const health = validateHealthPayload(await waitForHealth(agent, options), {
       expectedRuntimeVersion: versions.primitive_runtime,
+      expectedPrimitiveVersions: versions.primitives,
     })
-    const recall = await probeRecallByContent(agent, options)
+    const probe = await probeMcpEndpoint(agent, options)
     report.probes.push({
       label: agent.label,
       profile: agent.profile,
       endpoint: agent.endpoint,
       health,
-      recall,
+      tools: probe.tools,
+      recall: probe.recall,
     })
   }
   for (const agent of targets) {
@@ -614,16 +753,20 @@ function formatTextReport(report) {
   const lines = [
     'atrib primitives runtime update proof passed',
     `root: ${report.root}`,
-    `expected: @atrib/primitives-runtime ${report.expected_versions.primitive_runtime}, @atrib/recall ${report.expected_versions.recall}`,
+    `expected: @atrib/primitives-runtime ${report.expected_versions.primitive_runtime}, ${Object.values(
+      report.expected_versions.primitives,
+    )
+      .map((item) => `${item.package} ${item.version}`)
+      .join(', ')}`,
   ]
   for (const probe of report.probes) {
     lines.push(
-      `${probe.profile}: ${probe.endpoint} pid=${probe.health.pid} runtime=${probe.health.version} recall=${probe.health.recall_contract} coverage.index=${probe.recall.coverage_index_status}`,
+      `${probe.profile}: ${probe.endpoint} pid=${probe.health.pid} runtime=${probe.health.version} tools=${probe.tools.tool_count} recall=${probe.health.recall_contract} coverage.index=${probe.recall.coverage_index_status}`,
     )
   }
   if (report.topology) {
     lines.push(
-      `topology: primitive-gates=${report.topology.status}, global=${report.topology.global_status}, primitive mismatches=${report.topology.primitive_runtime_version_mismatches}, recall mismatches=${report.topology.primitive_runtime_recall_contract_mismatches}`,
+      `topology: primitive-gates=${report.topology.status}, global=${report.topology.global_status}, primitive mismatches=${report.topology.primitive_runtime_version_mismatches}, surface mismatches=${report.topology.primitive_runtime_surface_contract_mismatches}, recall mismatches=${report.topology.primitive_runtime_recall_contract_mismatches}`,
     )
   }
   return `${lines.join('\n')}\n`
