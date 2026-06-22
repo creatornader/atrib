@@ -491,37 +491,36 @@ export function validateHealthPayload(
   }
 }
 
-function idleSummary(body) {
+function endpointActivity(body) {
   const sessions = body?.report?.sessions ?? {}
   const toolCalls = body?.report?.tool_calls ?? {}
   return {
+    active_sessions: sessions.active,
     active_http_requests: sessions.active_http_requests,
     active_http_connections: sessions.active_http_connections,
     active_tool_calls: toolCalls.active_tool_calls,
   }
 }
 
-function endpointIdle(body) {
-  const idle = idleSummary(body)
-  return (
-    idle.active_http_requests === 0 &&
-    idle.active_http_connections === 0 &&
-    idle.active_tool_calls === 0
-  )
+export function endpointProbeSettled(body) {
+  const activity = endpointActivity(body)
+  return activity.active_tool_calls === 0
 }
 
-async function waitForEndpointIdle(agent, { timeoutMs }) {
+async function waitForEndpointSettled(agent, { timeoutMs }) {
   const deadline = Date.now() + Math.min(timeoutMs, 5000)
   let body
   while (Date.now() <= deadline) {
     body = await fetchJson(agent.health_endpoint, Math.min(1500, timeoutMs))
-    if (endpointIdle(body)) {
-      return idleSummary(body)
+    if (endpointProbeSettled(body)) {
+      return endpointActivity(body)
     }
     await delay(100)
   }
   throw new Error(
-    `${agent.label} did not settle after direct MCP probe: ${JSON.stringify(idleSummary(body))}`,
+    `${agent.label} still has active primitive tool calls after direct MCP probe: ${JSON.stringify(
+      endpointActivity(body),
+    )}`,
   )
 }
 
@@ -786,7 +785,7 @@ async function run(options) {
       label: agent.label,
       profile: agent.profile,
       endpoint: agent.endpoint,
-      idle: await waitForEndpointIdle(agent, options),
+      activity: await waitForEndpointSettled(agent, options),
     })
   }
   if (!options.noTopology) {
