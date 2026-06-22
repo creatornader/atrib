@@ -47,6 +47,26 @@ Health also reports `report.primitive_runtime.recall_contract`. A healthy host m
 
 The health report includes the profile's context policy. Set `ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID=1` on hosts that should refuse write-primitive calls when neither the caller nor the harness can provide a `context_id`. The write primitives then return a warnings-only response instead of signing a synthesized orphan context.
 
+## Update Host-Owned LaunchAgents
+
+After changing `@atrib/recall` or `@atrib/primitives-runtime`, update the local host-owned Streamable HTTP runtimes with:
+
+```sh
+pnpm update:primitives-runtime
+```
+
+The command discovers `com.nader.atrib-primitives.*` LaunchAgents that run this checkout, builds `@atrib/recall` and `@atrib/primitives-runtime`, restarts the selected services, checks health, calls `recall_by_content` over MCP Streamable HTTP, and fails if the tool result lacks `runtime.content_index_version` or `coverage.index`.
+
+Useful bounded forms:
+
+```sh
+pnpm update:primitives-runtime -- --profile codex
+pnpm update:primitives-runtime -- --skip-build --skip-restart
+pnpm update:primitives-runtime -- --dry-run
+```
+
+The script refuses to manage a LaunchAgent whose plist points at another checkout, a non-loopback endpoint, or a non-Streamable HTTP transport.
+
 ## Run As A Stdio Proxy
 
 ```sh
@@ -65,4 +85,4 @@ Proxy mode uses the same tool timeout setting as the host runtime. The shared ho
 pnpm --filter @atrib/primitives-runtime test
 ```
 
-The protocol test lists all 15 tools over stdio, routes a recall call through the combined server, repeats the path through Streamable HTTP, checks the stdio proxy path, verifies that two HTTP sessions share one mounted primitive backend, checks the starting health state, asserts the health contract for explicit-context profiles and recall content-index support, and proves a hung child primitive returns a bounded timeout while health reports the stuck in-flight call.
+The protocol test lists all 15 tools over stdio, routes a recall call through the combined server, repeats the path through Streamable HTTP, checks the stdio proxy path, verifies that two HTTP sessions share one mounted primitive backend, checks the starting health state, asserts the health contract for explicit-context profiles and recall content-index support, and proves a hung child primitive returns a bounded timeout while health reports the stuck in-flight call. `pnpm doc-sync` also runs `scripts/check-primitives-runtime-update.mjs` so the LaunchAgent selection and direct recall payload contract stay covered.
