@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
-import { chromium, type Browser } from 'playwright'
+import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const root = join(process.cwd(), 'examples/google-stack-chain/visual')
@@ -140,6 +140,7 @@ describe('Google stack chain visual workbench', () => {
     await page.goto(`${baseUrl}?runtime=${encodeURIComponent(`${baseUrl}/runtime`)}`)
     await expect.poll(() => page.locator('#runtimeStatus').textContent()).toBe('Ready')
     await expect.poll(() => page.locator('#runtimeFlow .runtime-flow-step').count()).toBe(4)
+    await expect.poll(() => runtimeRailFits(page)).toBe(true)
     await expect.poll(() => page.locator('.segment').count()).toBe(2)
     await expect.poll(() => page.locator('[data-jump]').count()).toBe(0)
     await expect.poll(() => page.locator('.node').count()).toBe(0)
@@ -151,6 +152,7 @@ describe('Google stack chain visual workbench', () => {
     await expect
       .poll(() => page.locator('#runtimeFlow .runtime-flow-step.complete').count())
       .toBe(4)
+    await expect.poll(() => runtimeRailFits(page)).toBe(true)
     await expect.poll(() => page.locator('.runtime-node').count()).toBe(5)
     await expect
       .poll(() => page.locator('.source-badge').first().textContent())
@@ -336,6 +338,25 @@ function contentType(filePath: string): string {
     default:
       return 'application/octet-stream'
   }
+}
+
+async function runtimeRailFits(page: Page): Promise<boolean> {
+  return page.locator('#workflowRail').evaluate((rail) => {
+    const flow = rail.querySelector('#runtimeFlow')
+    if (flow === null) return false
+    const railRect = rail.getBoundingClientRect()
+    const flowRect = flow.getBoundingClientRect()
+    const steps = [...flow.querySelectorAll('.runtime-flow-step')]
+    return (
+      rail.scrollWidth <= rail.clientWidth + 1 &&
+      flow.scrollWidth <= flow.clientWidth + 1 &&
+      steps.every((step) => {
+        const rect = step.getBoundingClientRect()
+        return rect.left >= railRect.left - 1 && rect.right <= railRect.right + 1
+      }) &&
+      flowRect.right <= railRect.right + 1
+    )
+  })
 }
 
 function writeRuntimeMock(pathname: string, res: ServerResponse): void {

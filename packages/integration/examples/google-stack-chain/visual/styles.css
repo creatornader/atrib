@@ -502,43 +502,46 @@ tbody tr:focus-visible {
 }
 
 .runtime-flow {
-  align-items: center;
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  gap: 7px;
-  justify-content: start;
+  align-items: stretch;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(166px, 1fr));
   list-style: none;
   margin: 0;
   padding: 0;
+  width: 100%;
 }
 
 .runtime-flow-step {
-  align-items: center;
+  align-items: start;
   background: var(--panel-soft);
   border: 1px solid var(--line);
-  border-radius: 999px;
-  display: flex;
-  flex: 1 1 0;
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 7px;
-  min-height: 34px;
+  min-height: 54px;
   min-width: 0;
-  padding: 6px 8px;
+  padding: 8px 9px;
+}
+
+.runtime-flow-step > div {
+  min-width: 0;
 }
 
 .runtime-flow-step strong {
   display: block;
   font-size: 12px;
-  line-height: 1.1;
-  white-space: nowrap;
+  line-height: 1.16;
+  overflow-wrap: anywhere;
 }
 
 .runtime-flow-step p {
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.1;
+  line-height: 1.18;
   margin: 1px 0 0;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .flow-detail {
@@ -560,18 +563,21 @@ tbody tr:focus-visible {
 .flow-dot {
   background: #c4cedb;
   border-radius: 999px;
+  margin-top: 2px;
   height: 10px;
   width: 10px;
 }
 
 .flow-state {
+  align-self: start;
   color: var(--muted);
   font-size: 10px;
   font-weight: 780;
   line-height: 1;
-  margin-left: auto;
+  max-width: 58px;
+  overflow-wrap: anywhere;
+  text-align: right;
   text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .runtime-flow-step.running {
@@ -1485,16 +1491,11 @@ td:nth-child(5) {
   }
 
   .runtime-flow {
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scroll-snap-type: x mandatory;
-    width: 100%;
+    grid-template-columns: 1fr;
   }
 
   .runtime-flow-step {
-    flex: 0 0 auto;
     min-height: 0;
-    scroll-snap-align: start;
   }
 
   .chain::before,
