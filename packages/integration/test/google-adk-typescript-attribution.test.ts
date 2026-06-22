@@ -14,11 +14,11 @@ const tsxBin = join(
   process.platform === 'win32' ? 'tsx.cmd' : 'tsx',
 )
 
-describe('Google ADK plugin attribution example', () => {
+describe('Google ADK TypeScript plugin attribution example', () => {
   it('signs an ADK FunctionTool call through the BasePlugin lifecycle', async () => {
     const { stdout } = await execFileAsync(
       tsxBin,
-      ['examples/google-adk/google-adk-plugin-smoke.ts'],
+      ['examples/google-adk-typescript/google-adk-typescript-plugin-smoke.ts'],
       {
         cwd: process.cwd(),
         timeout: 30000,

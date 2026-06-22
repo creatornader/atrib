@@ -2,12 +2,12 @@
 
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
-import { runGoogleAdkDecisionLedgerProof } from '../examples/google-adk-decision-ledger/google-adk-decision-ledger-proof.js'
+import { runGoogleAdkTypeScriptDecisionLedgerProof } from '../examples/google-adk-typescript/google-adk-typescript-decision-ledger-proof.js'
 import {
   buildDecisionLedgerEntry,
   GOOGLE_ADK_DECISION_LEDGER_SCHEMA,
-} from '../src/google-adk-decision-ledger.js'
-import type { GoogleAdkDecisionLedgerEntry } from '../src/google-adk-decision-ledger.js'
+} from '../src/google-adk-typescript-decision-ledger.js'
+import type { GoogleAdkDecisionLedgerEntry } from '../src/google-adk-typescript-decision-ledger.js'
 
 type FixtureCorpus = {
   schema: 'atrib.google-adk.decision-ledger.fixtures.v1'
@@ -15,12 +15,12 @@ type FixtureCorpus = {
   entries: Record<string, GoogleAdkDecisionLedgerEntry>
 }
 
-describe('Google ADK decision ledger proof', () => {
+describe('Google ADK TypeScript decision ledger proof', () => {
   it('signs ADK authority decisions before tool execution', async () => {
-    const result = await runGoogleAdkDecisionLedgerProof()
+    const result = await runGoogleAdkTypeScriptDecisionLedgerProof()
 
     expect(result.ok).toBe(true)
-    expect(result.strategy).toBe('atrib-google-adk-decision-ledger-proof-v1')
+    expect(result.strategy).toBe('atrib-google-adk-typescript-decision-ledger-proof-v1')
     expect(result.adk).toMatchObject({
       package: '@google/adk',
       version: '1.2.0',
@@ -97,7 +97,7 @@ describe('Google ADK decision ledger proof', () => {
     const fixtures = JSON.parse(
       await readFile(
         new URL(
-          '../examples/google-adk-decision-ledger/fixtures/decision-ledger-fixtures.json',
+          '../examples/google-adk-typescript/fixtures/decision-ledger-fixtures.json',
           import.meta.url,
         ),
         'utf8',

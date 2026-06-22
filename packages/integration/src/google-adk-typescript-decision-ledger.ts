@@ -26,7 +26,7 @@ export const GOOGLE_ADK_DECISION_LEDGER_SCHEMA =
   'atrib.google-adk.decision-ledger.entry.v1'
 
 const DEFAULT_PLUGIN_NAME = 'atrib_google_adk_decision_ledger'
-const DEFAULT_SERVER_URL = 'google-adk-decision-ledger://runner'
+const DEFAULT_SERVER_URL = 'google-adk-typescript-decision-ledger://runner'
 const encoder = new TextEncoder()
 
 export type GoogleAdkDecisionState =
