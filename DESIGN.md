@@ -23,7 +23,7 @@ This direction synthesizes six input streams:
 - atrib product language: "Verifiable agent actions", "Every action becomes signed context for the next", and "Agents that reason from a past they can prove."
 - Design-reference synthesis from 2026-05-25, reduced to product principles rather than copied references.
 - Public writing about agent-readable design rules, including Google Labs' Stitch `DESIGN.md` notes.
-- Prior work in the sibling `atrib-web` repo, where the first website-oriented atrib design contract was drafted.
+- Prior work in the sibling website repo, where the first website-oriented atrib design contract was drafted.
 - Local design skills: interface-design for product specificity, Hallmark for anti-generic structure, baseline-ui for technical UI quality, web interface guidelines for accessibility, and make-interfaces-feel-better for interaction detail.
 
 The shared lesson from the best sources: a design system is not only tokens and components. It is a reasoning surface for future design work. It should explain why the system looks this way, what to preserve, what to avoid, and what still needs to become true.
@@ -177,7 +177,7 @@ Share images:
 - Job: make the project recognizable wherever public links render previews.
 - Current focus: shared social-card and touch-icon bytes across the public website and explorer.
 - Target state: amber seal, graph fragments, and receipt-chain framing should make atrib recognizable before the text is read.
-- Asset contract: `atrib-web/scripts/generate-brand-assets.mjs` generates the public website social card and touch icons; `apps/dashboard/static/opengraph-image.png` and `apps/dashboard/static/apple-touch-icon.png` must remain byte-identical copies of those generated assets until the two repos share a packaged asset pipeline. Browser favicons must also stay aligned: `apps/dashboard/static/favicon.ico` is copied from `atrib-web/app/favicon.ico`, the explorer links a versioned `/favicon.ico?v=<hash>` URL, and the bare `/favicon.ico` route stays short-cached so CDN caches cannot pin stale icon bytes. Top-nav brand marks render `nav-mark.svg` at 20px so they match the original public website navbar mark. Public chrome colors share the website tokens: background `#0a0a0a`, surface `#131210`, raised surface `#1c1a17`, border `#2d2a25`, foreground `#f5f4ee`, muted `#8a877e`, and accent `#e8a04f`.
+- Asset contract: the website repo currently generates the public website social card, touch icons, and favicon. The generated copies committed here under `apps/dashboard/static/` must remain byte-identical with the deployed website assets until the two repos share a packaged asset pipeline. Public contributors can verify the committed explorer assets without access to the website source repo. The explorer links a versioned `/favicon.ico?v=<hash>` URL, and the bare `/favicon.ico` route stays short-cached so CDN caches cannot pin stale icon bytes. Top-nav brand marks render `nav-mark.svg` at 20px so they match the original public website navbar mark. Public chrome colors share the website tokens: background `#0a0a0a`, surface `#131210`, raised surface `#1c1a17`, border `#2d2a25`, foreground `#f5f4ee`, muted `#8a877e`, and accent `#e8a04f`.
 
 Status and reliability surfaces:
 
@@ -204,7 +204,7 @@ This inventory is grounded in `apps/dashboard/index.html` as of 2026-05-25. Upda
 
 ### Public surface alignment
 
-- [x] Create a design contract that covers landing and explorer-adjacent patterns in `atrib-web`.
+- [x] Create a design contract that covers landing and explorer-adjacent patterns in the website repo.
 - [x] Promote the design contract into this repo as `DESIGN.md`.
 - [x] Add a public header with explorer, spec, and GitHub routes.
 - [x] Make explorer the primary public CTA.
