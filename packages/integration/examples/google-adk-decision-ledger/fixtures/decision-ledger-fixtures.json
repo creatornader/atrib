@@ -1,0 +1,211 @@
+{
+  "schema": "atrib.google-adk.decision-ledger.fixtures.v1",
+  "event_type": "https://google-adk-decision-ledger.example/v1",
+  "entries": {
+    "allowed": {
+      "schema": "atrib.google-adk.decision-ledger.entry.v1",
+      "decision_state": "allowed",
+      "invocation_id": "fixture-adk-invocation-1",
+      "session_id": "fixture-adk-session-1",
+      "step": 1,
+      "tool_call_id": "fixture-adk-call-1",
+      "tool_name": "quote_price",
+      "canonical_args_digest": "sha256:89c91bdf332ace1d0d35dd8ebe8231d504e9b222bc91cfcce830171ff5ed4046",
+      "authority": {
+        "mode": "user-auth",
+        "principal_hash": "sha256:2cd3a52cceb5675978d0b7f2e887f4f84b8c278032bf7fc633de2796111ae499"
+      },
+      "policy": {
+        "source": "plugin",
+        "rule": "quote_price:fixture-allow",
+        "version": "fixture-policy-v1",
+        "outcome": "allow"
+      },
+      "confirmation": {
+        "required": false
+      },
+      "model_rationale": {
+        "text": "fixture allowed path",
+        "trust": "untrusted_generated"
+      },
+      "timestamp": "2026-05-27T01:40:00.000Z",
+      "parent_record_hashes": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "decision_id": "sha256:b76b38af37d587757d0b30654d5419d2da24a4a0722c299a235b0889dc17935e"
+    },
+    "refused": {
+      "schema": "atrib.google-adk.decision-ledger.entry.v1",
+      "decision_state": "refused",
+      "invocation_id": "fixture-adk-invocation-1",
+      "session_id": "fixture-adk-session-1",
+      "step": 2,
+      "tool_call_id": "fixture-adk-call-1",
+      "tool_name": "quote_price",
+      "canonical_args_digest": "sha256:105cfc52db1a0f417de1d82ebb2e1f2d30158fe98d1eb3865d808151d93760f5",
+      "authority": {
+        "mode": "user-auth",
+        "principal_hash": "sha256:2cd3a52cceb5675978d0b7f2e887f4f84b8c278032bf7fc633de2796111ae499"
+      },
+      "policy": {
+        "source": "plugin",
+        "rule": "quote_price:fixture-deny",
+        "version": "fixture-policy-v1",
+        "outcome": "deny",
+        "reason": "fixture deny"
+      },
+      "confirmation": {
+        "required": false
+      },
+      "model_rationale": {
+        "text": "fixture refused path",
+        "trust": "untrusted_generated"
+      },
+      "timestamp": "2026-05-27T01:40:00.000Z",
+      "parent_record_hashes": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "decision_id": "sha256:9b581c6b125b9a620296392d91553382430ba3829a8c85d4da226aaf7f8b68b7"
+    },
+    "confirmation_required": {
+      "schema": "atrib.google-adk.decision-ledger.entry.v1",
+      "decision_state": "confirmation_required",
+      "invocation_id": "fixture-adk-invocation-1",
+      "session_id": "fixture-adk-session-1",
+      "step": 3,
+      "tool_call_id": "fixture-adk-call-1",
+      "tool_name": "quote_price",
+      "canonical_args_digest": "sha256:89c91bdf332ace1d0d35dd8ebe8231d504e9b222bc91cfcce830171ff5ed4046",
+      "authority": {
+        "mode": "user-auth",
+        "principal_hash": "sha256:2cd3a52cceb5675978d0b7f2e887f4f84b8c278032bf7fc633de2796111ae499"
+      },
+      "policy": {
+        "source": "confirmation",
+        "rule": "quote_price:requires-confirmation",
+        "version": "fixture-policy-v1",
+        "outcome": "escalate"
+      },
+      "confirmation": {
+        "required": true,
+        "confirmation_id": "fixture-confirmation-1",
+        "binding_hash": "sha256:fe334ccfd9a2ecae247f638689506d65f9fcea4b128aa18c7b38df0fb4e1e8ee",
+        "expires_at": "2026-05-27T01:41:00.000Z"
+      },
+      "model_rationale": {
+        "text": "fixture requires confirmation",
+        "trust": "untrusted_generated"
+      },
+      "timestamp": "2026-05-27T01:40:00.000Z",
+      "parent_record_hashes": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "decision_id": "sha256:40f1cc458e8f1b33975a60047dd16cbb38f6e1e55c67fef0616a758514c5355a"
+    },
+    "confirmation_resolved": {
+      "schema": "atrib.google-adk.decision-ledger.entry.v1",
+      "decision_state": "confirmation_resolved",
+      "invocation_id": "fixture-adk-invocation-1",
+      "session_id": "fixture-adk-session-1",
+      "step": 4,
+      "tool_call_id": "fixture-adk-call-1",
+      "tool_name": "quote_price",
+      "canonical_args_digest": "sha256:89c91bdf332ace1d0d35dd8ebe8231d504e9b222bc91cfcce830171ff5ed4046",
+      "authority": {
+        "mode": "user-auth",
+        "principal_hash": "sha256:2cd3a52cceb5675978d0b7f2e887f4f84b8c278032bf7fc633de2796111ae499"
+      },
+      "policy": {
+        "source": "confirmation",
+        "rule": "quote_price:requires-confirmation",
+        "version": "fixture-policy-v1",
+        "outcome": "allow"
+      },
+      "confirmation": {
+        "required": true,
+        "confirmation_id": "fixture-confirmation-1",
+        "response_payload_digest": "sha256:46b57f2eefd9511d93ce13fe4f03aa29153966158ad5b6b2a73c6772ae0eadc7",
+        "binding_hash": "sha256:fe334ccfd9a2ecae247f638689506d65f9fcea4b128aa18c7b38df0fb4e1e8ee",
+        "expires_at": "2026-05-27T01:41:00.000Z"
+      },
+      "model_rationale": {
+        "text": "fixture confirmation resolved",
+        "trust": "untrusted_generated"
+      },
+      "timestamp": "2026-05-27T01:40:00.000Z",
+      "parent_record_hashes": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "decision_id": "sha256:0f7947af40ffdd3928b6aabbe563f3ffc36ca8d47b10ecf4c7c6f1692a3f6716"
+    },
+    "stale_or_mismatched": {
+      "schema": "atrib.google-adk.decision-ledger.entry.v1",
+      "decision_state": "stale_or_mismatched",
+      "invocation_id": "fixture-adk-invocation-1",
+      "session_id": "fixture-adk-session-1",
+      "step": 5,
+      "tool_call_id": "fixture-adk-call-1",
+      "tool_name": "quote_price",
+      "canonical_args_digest": "sha256:484e50faea9298fb82d35a6694181271459f7d9ebe08d7e97d9398b82a70565c",
+      "authority": {
+        "mode": "user-auth",
+        "principal_hash": "sha256:2cd3a52cceb5675978d0b7f2e887f4f84b8c278032bf7fc633de2796111ae499"
+      },
+      "policy": {
+        "source": "confirmation",
+        "rule": "quote_price:binding-check",
+        "version": "fixture-policy-v1",
+        "outcome": "deny",
+        "reason": "args_mismatch,confirmation_binding_mismatch"
+      },
+      "confirmation": {
+        "required": true,
+        "confirmation_id": "fixture-confirmation-1",
+        "binding_hash": "sha256:89e3d9682aa4610667304033dd729dc1553e4fb82ba65974a64de94bd1dbefd5",
+        "expires_at": "2026-05-27T01:41:00.000Z"
+      },
+      "model_rationale": {
+        "text": "fixture stale binding rejected",
+        "trust": "untrusted_generated"
+      },
+      "timestamp": "2026-05-27T01:40:00.000Z",
+      "parent_record_hashes": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "decision_id": "sha256:bd904242cadde5ee42a5d33eadfd44e04cd0bc262c103127a6a4232bb3b55a55"
+    },
+    "policy_error": {
+      "schema": "atrib.google-adk.decision-ledger.entry.v1",
+      "decision_state": "policy_error",
+      "invocation_id": "fixture-adk-invocation-1",
+      "session_id": "fixture-adk-session-1",
+      "step": 6,
+      "tool_call_id": "fixture-adk-call-1",
+      "tool_name": "quote_price",
+      "canonical_args_digest": "sha256:991b8751a169c819c28e94f4ad05036758ab8b19a891c89bb213b4091d5b1015",
+      "authority": {
+        "mode": "user-auth",
+        "principal_hash": "sha256:2cd3a52cceb5675978d0b7f2e887f4f84b8c278032bf7fc633de2796111ae499"
+      },
+      "policy": {
+        "source": "plugin",
+        "rule": "quote_price:fixture-policy-error",
+        "version": "fixture-policy-v1",
+        "outcome": "error",
+        "reason": "fixture policy resolver failed closed"
+      },
+      "confirmation": {
+        "required": false
+      },
+      "model_rationale": {
+        "text": "fixture policy error path",
+        "trust": "untrusted_generated"
+      },
+      "timestamp": "2026-05-27T01:40:00.000Z",
+      "parent_record_hashes": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "decision_id": "sha256:a97f0b1b5f04392865cc55ce1f38fba7bb243c21778d875622f7038c23d74605"
+    }
+  }
+}

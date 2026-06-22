@@ -174,10 +174,10 @@ Package READMEs:
 
 Share images:
 
-- Job: make the product recognizable in feeds.
-- Current focus: shared social-card and touch-icon bytes across the marketing site and explorer.
+- Job: make the project recognizable wherever public links render previews.
+- Current focus: shared social-card and touch-icon bytes across the public website and explorer.
 - Target state: amber seal, graph fragments, and receipt-chain framing should make atrib recognizable before the text is read.
-- Asset contract: `atrib-web/scripts/generate-brand-assets.mjs` generates the marketing social card and touch icons; `apps/dashboard/static/opengraph-image.png` and `apps/dashboard/static/apple-touch-icon.png` must remain byte-identical copies of those generated assets until the two repos share a packaged asset pipeline. Browser favicons must also stay aligned: `apps/dashboard/static/favicon.ico` is copied from `atrib-web/app/favicon.ico`, the explorer links a versioned `/favicon.ico?v=<hash>` URL, and the bare `/favicon.ico` route stays short-cached so CDN caches cannot pin stale icon bytes. Top-nav brand marks render `nav-mark.svg` at 20px so they match the original marketing navbar mark. Public chrome colors share the marketing tokens: background `#0a0a0a`, surface `#131210`, raised surface `#1c1a17`, border `#2d2a25`, foreground `#f5f4ee`, muted `#8a877e`, and accent `#e8a04f`.
+- Asset contract: `atrib-web/scripts/generate-brand-assets.mjs` generates the public website social card and touch icons; `apps/dashboard/static/opengraph-image.png` and `apps/dashboard/static/apple-touch-icon.png` must remain byte-identical copies of those generated assets until the two repos share a packaged asset pipeline. Browser favicons must also stay aligned: `apps/dashboard/static/favicon.ico` is copied from `atrib-web/app/favicon.ico`, the explorer links a versioned `/favicon.ico?v=<hash>` URL, and the bare `/favicon.ico` route stays short-cached so CDN caches cannot pin stale icon bytes. Top-nav brand marks render `nav-mark.svg` at 20px so they match the original public website navbar mark. Public chrome colors share the website tokens: background `#0a0a0a`, surface `#131210`, raised surface `#1c1a17`, border `#2d2a25`, foreground `#f5f4ee`, muted `#8a877e`, and accent `#e8a04f`.
 
 Status and reliability surfaces:
 
@@ -273,7 +273,7 @@ The signature element is the receipt chain:
 - A small amber seal marks signed artifacts.
 - Hairline connectors show that records form a chain.
 - Monospace hash fragments and event labels sit inside restrained surfaces.
-- Live explorer data should look like evidence, not a marketing demo.
+- Live explorer data should look like evidence, not a staged demo.
 
 This signature must appear in at least five places across a public surface: brand mark, hero status pill, code block header, section divider, explorer event chips, graph legend, receipt/action detail, or CTA panel.
 

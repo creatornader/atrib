@@ -58,34 +58,42 @@ describe('Google evidence runtime', () => {
     expect(run.steps.map((step) => step.key)).toEqual([
       'ap2_gate',
       'a2a_handoff',
+      'adk_decision',
       'adk_tool_callback',
     ])
     expect(run.chain).toEqual({
       ap2_informs_a2a_remote: true,
       a2a_remote_informs_receiver: true,
-      a2a_receiver_informs_adk_js: true,
+      a2a_receiver_informs_adk_decision: true,
+      adk_decision_informs_adk_js: true,
     })
     expect(run.a2a?.evidence.remote_informed_by_resolved).toEqual([run.gate.record_hash])
-    expect(run.adk_js?.chain.parent_informed_by_resolved).toEqual([run.a2a?.followup.record_hash])
+    expect(run.adk_js?.decision.record.informed_by).toEqual([run.a2a?.followup.record_hash])
+    expect(run.adk_js?.outcome.record.informed_by).toEqual([run.adk_js?.decision.record_hash])
     expect(run.analytics_rows.map((row) => row.event_type)).toEqual([
       'atrib.ap2.next_action_allowed',
       'atrib.a2a.remote_evidence_accepted',
       'atrib.a2a.receiver_followup_signed',
+      'atrib.adk_js.decision_allowed',
       'atrib.adk_js.tool_callback_signed',
     ])
     expect(run.analytics_rows.map((row) => row.atrib_record_hash)).toEqual([
       run.gate.record_hash,
       run.a2a?.evidence.remote_record_hash,
       run.a2a?.followup.record_hash,
-      run.adk_js?.record_hashes[0],
+      run.adk_js?.decision.record_hash,
+      run.adk_js?.outcome.record_hash,
     ])
     expect(run.analytics_rows[3]?.protocol).toBe('ADK JS')
+    expect(run.analytics_rows[4]?.protocol).toBe('ADK JS')
     expect(run.caveats.join(' ')).toContain('committed replay fixture')
     expect(events).toEqual([
       'run_started',
       'step_started:ap2_gate',
       'step_completed',
       'step_started:a2a_handoff',
+      'step_completed',
+      'step_started:adk_decision',
       'step_completed',
       'step_started:adk_tool_callback',
       'step_completed',

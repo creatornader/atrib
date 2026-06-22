@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://google-adk-decision-ledger.example/decision-ledger-entry.schema.json",
+  "title": "Google ADK decision ledger entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "decision_id",
+    "decision_state",
+    "invocation_id",
+    "session_id",
+    "step",
+    "tool_call_id",
+    "tool_name",
+    "canonical_args_digest",
+    "authority",
+    "policy",
+    "confirmation",
+    "model_rationale",
+    "timestamp",
+    "parent_record_hashes"
+  ],
+  "properties": {
+    "schema": {
+      "const": "atrib.google-adk.decision-ledger.entry.v1"
+    },
+    "decision_id": {
+      "$ref": "#/$defs/hash"
+    },
+    "decision_state": {
+      "enum": [
+        "allowed",
+        "refused",
+        "confirmation_required",
+        "confirmation_resolved",
+        "stale_or_mismatched",
+        "policy_error"
+      ]
+    },
+    "invocation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tool_call_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tool_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "canonical_args_digest": {
+      "$ref": "#/$defs/hash"
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "principal_hash"],
+      "properties": {
+        "mode": {
+          "enum": ["agent-auth", "user-auth"]
+        },
+        "principal_hash": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "rule", "version", "outcome"],
+      "properties": {
+        "source": {
+          "enum": ["plugin", "tool_context", "confirmation"]
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outcome": {
+          "enum": ["allow", "deny", "escalate", "error"]
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required"],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "confirmation_id": {
+          "type": "string"
+        },
+        "response_payload_digest": {
+          "$ref": "#/$defs/hash"
+        },
+        "binding_hash": {
+          "$ref": "#/$defs/hash"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "model_rationale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "trust"],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "trust": {
+          "const": "untrusted_generated"
+        }
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "parent_record_hashes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/hash"
+      },
+      "uniqueItems": true
+    },
+    "result_digest": {
+      "$ref": "#/$defs/hash"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

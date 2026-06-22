@@ -14,7 +14,7 @@ pnpm --filter @atrib/integration google-adk-plugin-smoke
 The smoke is local and credential-free. It does not call Gemini, Google Cloud,
 BigQuery, or a database. The fake part is only the scripted model response; the
 runner, plugin manager, function-tool path, and callback lifecycle come from
-`@google/adk@1.1.0`.
+`@google/adk@1.2.0`.
 
 ## What It Proves
 

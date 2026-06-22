@@ -211,11 +211,13 @@ Each action gets one producer.
 
 If a deployment uses both direct hooks and spans, direct hooks own `tool_call`. Spans can carry trace IDs, timing, model metadata, cost, and local sidecar content.
 
-## Upstream strategy
+## Implementation sequence
 
-OpenClaw is the better first upstream target because the typed hook catalog already carries the surfaces atrib needs, and OpenClaw plugin distribution is npm and ClawHub native.
+OpenClaw is the better first implementation target because the typed hook
+catalog already carries the surfaces atrib needs, and OpenClaw plugin packaging
+is npm and ClawHub native.
 
-Candidate OpenClaw upstream path:
+Candidate OpenClaw implementation path:
 
 1. Build external local plugin proof.
 2. Verify with one host-native tool, one wrapped MCP server, one subagent or exec child, and one trajectory manifest.

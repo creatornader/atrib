@@ -28,7 +28,9 @@ In ~150 lines of TypeScript and one terminal window, this demo runs the **entire
 
 5. A **CLI visualizer** that subscribes to the dev log via `onSubmit()` and pretty-prints each record as it lands; showing the chain build up step by step.
 
-By the end of the demo, you've watched a full attribution chain form: tool call → tool call → transaction, with chain linkage visible at each step, and you've seen how a customer would verify the attribution after the fact.
+By the end of the demo, you have watched a full attribution chain form: tool
+call → tool call → transaction, with chain linkage visible at each step, and
+you have seen how an independent verifier checks the attribution after the fact.
 
 ## What you should see
 
@@ -69,14 +71,20 @@ The colored chain hash on each line is what makes the chain visible: every recor
 
 Despite all those simplifications, **the wire format and the cryptographic signatures and the chain linkage and the transaction detection are all real**. Everything you see in the CLI output is a real signed record, a real chain hash, and a real transaction event detected by the production transaction-detection logic in `@atrib/agent`'s `transaction.ts`. The fakery is in the surrounding environment, not in the protocol.
 
-## How this demo informs a customer conversation
+## How to use this demo as a walkthrough
 
-This is the answer to "where does this go in 15 minutes?" When a prospective customer (Exa, Firecrawl, Browserbase, etc.) asks how atrib actually works, you can:
+This is the answer to "where does this go in 15 minutes?" When a developer wants
+to see how atrib works, you can:
 
-1. Run `pnpm tsx packages/integration/examples/end-to-end/demo.ts` in front of them
+1. Run `pnpm tsx packages/integration/examples/end-to-end/demo.ts`
 2. Watch the records flow
 3. Point at each step in the CLI output and explain what's happening at the protocol level
-4. Show them which lines of code they would have to add on their merchant side (~3 lines: import, wrap, set log endpoint) and on their agent side (~2 lines: import, wrap)
-5. Switch to the production answer: "this is the dev log; the production log is `log.atrib.dev/v1` and is Tessera-backed per spec [§2](../../../../atrib-spec.md#2-merkle-log-protocol); same wire format, same record shape, no client changes."
+4. Show which lines of code belong on the merchant side, roughly three lines:
+   import, wrap, set log endpoint
+5. Show which lines belong on the agent side, roughly two lines: import, wrap
+6. Switch to the production answer: "this is the dev log; the production log is
+   `log.atrib.dev/v1` and is Tessera-backed per spec
+   [§2](../../../../atrib-spec.md#2-merkle-log-protocol); same wire format, same
+   record shape, no client changes."
 
 The demo makes the abstract protocol concrete in a way that the spec and the README cannot.

@@ -462,13 +462,20 @@ The atrib stack runs across two repositories with distinct deployment platforms.
 
 | Subdomain             | Source repo                                                                    | Platform                          | Purpose                                                                                                                    |
 | --------------------- | ------------------------------------------------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `atrib.dev`           | [`atrib-web`](https://github.com/creatornader/atrib-web)                       | Vercel (Next.js)                  | Marketing landing page                                                                                                     |
+| `atrib.dev`           | [`atrib-web`](https://github.com/creatornader/atrib-web)                       | Vercel (Next.js)                  | Public project website                                                                                                     |
 | `explore.atrib.dev`   | [`atrib`](https://github.com/creatornader/atrib) at `apps/dashboard/`          | Fly.io (host-routed via log-node) | Public block explorer (seven views: overview, identity, session, action, demo, trace, anchoring)                           |
 | `log.atrib.dev`       | [`atrib`](https://github.com/creatornader/atrib) at `services/log-node/`       | Fly.io                            | Tessera-backed Merkle log API with optional SSE / JSON Feed subscriptions (spec [§2](atrib-spec.md#2-merkle-log-protocol)) |
 | `graph.atrib.dev`     | [`atrib`](https://github.com/creatornader/atrib) at `services/graph-node/`     | Fly.io                            | Graph query API (spec [§3](atrib-spec.md#3-graph-query-interface))                                                         |
 | `directory.atrib.dev` | [`atrib`](https://github.com/creatornader/atrib) at `services/directory-node/` | Fly.io                            | AKD-backed identity-claim directory (spec [§6](atrib-spec.md#6-key-directory))                                             |
 
-The bifurcation between `atrib-web` (landing page) and the `atrib` monorepo (protocol services + dashboard) is intentional. The landing page has different deployment cadence (Vercel preview-on-PR for marketing copy iteration) and a different audience (visitors learning about the protocol) than the API services (Fly + spec-locked). API services deploy through the `Deploy services` GitHub Actions workflow after `CI` succeeds on `main`; the manual fallback is `flyctl deploy -c services/<name>/fly.toml --remote-only`. Keeping them separate avoids coupling marketing iteration to the protocol release cycle.
+The bifurcation between `atrib-web` (project website) and the `atrib` monorepo
+(protocol services + dashboard) is intentional. The website has a different
+deployment cadence (Vercel preview-on-PR for public copy and page iteration) and
+a different audience (visitors learning about the protocol) than the API
+services (Fly + spec-locked). API services deploy through the `Deploy services`
+GitHub Actions workflow after `CI` succeeds on `main`; the manual fallback is
+`flyctl deploy -c services/<name>/fly.toml --remote-only`. Keeping them separate
+avoids coupling website iteration to the protocol release cycle.
 
 `explore.atrib.dev` is a special case: it shares the `atrib` repo with the API services and ships baked into the log-node Docker image. The log-node server applies host-based routing, when `Host=explore.atrib.dev` the request handler returns the dashboard HTML at `/`; otherwise it returns the API service-info index. This avoids a separate deployment surface for what is structurally one set of static assets composed against the log, graph, directory, and archive evidence APIs.
 

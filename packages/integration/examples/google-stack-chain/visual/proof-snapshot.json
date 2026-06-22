@@ -2,7 +2,7 @@
   "schema": "atrib-google-stack-chain.visual.v1",
   "title": "Google stack proof chain",
   "status": "reference snapshot ready",
-  "strategy": "atrib-google-stack-chain-proof-v2",
+  "strategy": "atrib-google-stack-chain-proof-v3",
   "command": "pnpm --filter @atrib/integration google-stack-chain-proof",
   "snapshot": {
     "schema": "atrib-google-stack-chain.snapshot.v1",
@@ -40,7 +40,9 @@
       "actor": "a2a-specialist-agent",
       "event_type": "atrib.a2a.remote_evidence_accepted",
       "record_hash": "sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9",
-      "parents": ["sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db"],
+      "parents": [
+        "sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db"
+      ],
       "verifier": "@atrib/verify",
       "checks": [
         "signed Agent Card valid",
@@ -57,24 +59,55 @@
       "actor": "a2a-receiving-agent",
       "event_type": "atrib.a2a.receiver_followup_signed",
       "record_hash": "sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2",
-      "parents": ["sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9"],
+      "parents": [
+        "sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9"
+      ],
       "verifier": "@atrib/verify",
-      "checks": ["handoff accepted", "receiver follow-up signed", "remote record parent resolved"],
+      "checks": [
+        "handoff accepted",
+        "receiver follow-up signed",
+        "remote record parent resolved"
+      ],
       "evidence": "The receiving agent signs its follow-up after verifier-gated A2A evidence acceptance.",
       "value": "The receiver can continue from a verified handoff instead of a chat transcript."
     },
     {
-      "id": "adk-python",
-      "label": "ADK Python callback",
-      "protocol": "ADK Python",
-      "actor": "google_adk_python_atrib_smoke_agent",
-      "event_type": "atrib.adk_python.tool_callback_signed",
-      "record_hash": "sha256:15801af402108603b899b8773b59aa68af71d9e34ee50ec18103afea141f31ed",
-      "parents": ["sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2"],
+      "id": "adk-decision",
+      "label": "ADK allow decision",
+      "protocol": "ADK JS",
+      "actor": "google_adk_decision_allow_agent",
+      "event_type": "atrib.adk_js.decision_allowed",
+      "record_hash": "sha256:4d30b4e5d7557ac2450f65c397f5442f9c45a7bad85c219de65153fcdc93294f",
+      "parents": [
+        "sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2"
+      ],
       "verifier": "@atrib/verify",
-      "checks": ["BasePlugin callback reached", "hash-only public record", "A2A parent resolved"],
-      "evidence": "The Google ADK Python plugin signs the tool callback boundary and keeps payload material in local sidecars.",
-      "value": "A local ADK runtime action can cite the A2A receiver record through informed_by."
+      "checks": [
+        "BasePlugin beforeToolCallback reached",
+        "decision state allowed",
+        "A2A parent resolved"
+      ],
+      "evidence": "The Google ADK JS plugin signs an allow decision before the FunctionTool callback runs.",
+      "value": "The runtime action starts from a signed authority decision, not only a later audit record."
+    },
+    {
+      "id": "adk-js",
+      "label": "ADK JS callback",
+      "protocol": "ADK JS",
+      "actor": "google_adk_decision_allow_agent",
+      "event_type": "atrib.adk_js.tool_callback_signed",
+      "record_hash": "sha256:61e7c3f52266ac2a24c22336f5c5e53539b1e55d91b78725fe9d70fe9b966a56",
+      "parents": [
+        "sha256:4d30b4e5d7557ac2450f65c397f5442f9c45a7bad85c219de65153fcdc93294f"
+      ],
+      "verifier": "@atrib/verify",
+      "checks": [
+        "FunctionTool callback reached",
+        "hash-only public record",
+        "ADK decision parent resolved"
+      ],
+      "evidence": "The Google ADK JS callback signs its own hash-only record after the allow decision.",
+      "value": "The callback record cites the decision record that authorized it to run."
     }
   ],
   "edges": [
@@ -92,7 +125,13 @@
     },
     {
       "from": "a2a-receiver",
-      "to": "adk-python",
+      "to": "adk-decision",
+      "relation": "informed_by",
+      "verifier": "@atrib/verify"
+    },
+    {
+      "from": "adk-decision",
+      "to": "adk-js",
       "relation": "informed_by",
       "verifier": "@atrib/verify"
     }
@@ -123,7 +162,7 @@
         "agent": "a2a-specialist-agent",
         "session_id": "google-stack-a2a-context-0001",
         "invocation_id": "google-stack-a2a-request-0001",
-        "trace_id": "b31c447d70e4b50bacf6440165eeaa1e",
+        "trace_id": "742ef877246a075452d965328d32ff98",
         "span_id": "b115b227841db8e4",
         "parent_span_id": null,
         "status": "OK",
@@ -140,7 +179,7 @@
         "agent": "a2a-receiving-agent",
         "session_id": "google-stack-a2a-context-0001",
         "invocation_id": "google-stack-a2a-response-0001",
-        "trace_id": "b31c447d70e4b50bacf6440165eeaa1e",
+        "trace_id": "742ef877246a075452d965328d32ff98",
         "span_id": "1d6154dbc8bded9a",
         "parent_span_id": "b115b227841db8e4",
         "status": "OK",
@@ -151,34 +190,51 @@
         "protocol": "A2A"
       },
       {
-        "node_id": "adk-python",
-        "timestamp": "2026-05-27T00:33:20.000Z",
-        "event_type": "atrib.adk_python.tool_callback_signed",
-        "agent": "google_adk_python_atrib_smoke_agent",
-        "session_id": "atrib-python-smoke-session",
-        "invocation_id": "e-local-adk-invocation",
-        "trace_id": "b31c447d70e4b50bacf6440165eeaa1e",
-        "span_id": "f1973f9540673909",
+        "node_id": "adk-decision",
+        "timestamp": "2026-05-27T00:00:02.000Z",
+        "event_type": "atrib.adk_js.decision_allowed",
+        "agent": "google_adk_decision_allow_agent",
+        "session_id": "google-stack-adk-js-session-0001",
+        "invocation_id": "e-c381ebeb-a58a-4132-b423-ae11d7372099",
+        "trace_id": "742ef877246a075452d965328d32ff98",
+        "span_id": "bc9b7b9136e25e6c",
         "parent_span_id": "1d6154dbc8bded9a",
         "status": "OK",
-        "atrib_record_hash": "sha256:15801af402108603b899b8773b59aa68af71d9e34ee50ec18103afea141f31ed",
+        "atrib_record_hash": "sha256:4d30b4e5d7557ac2450f65c397f5442f9c45a7bad85c219de65153fcdc93294f",
         "atrib_parent_record_hashes": [
           "sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2"
         ],
-        "protocol": "ADK Python"
+        "protocol": "ADK JS"
+      },
+      {
+        "node_id": "adk-js",
+        "timestamp": "2026-05-27T00:00:02.001Z",
+        "event_type": "atrib.adk_js.tool_callback_signed",
+        "agent": "google_adk_decision_allow_agent",
+        "session_id": "google-stack-adk-js-session-0001",
+        "invocation_id": "e-c381ebeb-a58a-4132-b423-ae11d7372099",
+        "trace_id": "742ef877246a075452d965328d32ff98",
+        "span_id": "a273389a6a9ffa14",
+        "parent_span_id": "bc9b7b9136e25e6c",
+        "status": "OK",
+        "atrib_record_hash": "sha256:61e7c3f52266ac2a24c22336f5c5e53539b1e55d91b78725fe9d70fe9b966a56",
+        "atrib_parent_record_hashes": [
+          "sha256:4d30b4e5d7557ac2450f65c397f5442f9c45a7bad85c219de65153fcdc93294f"
+        ],
+        "protocol": "ADK JS"
       }
     ],
     "caveat": "Static rows are a local fixture. The runtime panel can write its AP2 gate row to BigQuery when Cloud Run or local credentials are configured."
   },
   "value_add": [
-    "AP2 authorization evidence, A2A handoff evidence, and ADK runtime evidence are linked through verifier-resolved informed_by records.",
+    "AP2 authorization evidence, A2A handoff evidence, ADK decision evidence, and ADK runtime evidence are linked through verifier-resolved informed_by records.",
     "Public records expose hashes and record metadata while local artifacts or sidecars keep payment, task, and tool payload material inspectable by the host.",
     "A support reviewer can see what was authorized, what was handed off, and what runtime action was signed before resolving a support or counterparty decision."
   ],
   "caveats": [
-    "Boundary: atrib is the trust-transfer layer here. AP2 evidence is accepted first, A2A receives that signed parent, and ADK signs from the A2A parent.",
+    "Boundary: atrib is the trust-transfer layer here. AP2 evidence is accepted first, A2A receives that signed parent, and ADK signs an allow decision before the callback cites that decision.",
     "AP2 source: committed AP2 / VI fixtures or merchant-supplied packet JSON. This demo does not use live payment credentials or move funds.",
     "A2A source: in-process JSON-RPC with signed receiving-agent follow-up. It proves verifier-gated handoff, not an A2A TCK result or public server deployment.",
-    "ADK source: InMemoryRunner callback proofs in Python snapshot and JS runtime. The claim is callback-boundary signing, not managed Agent Platform Runtime, Gemini Enterprise, or Memory Bank coverage."
+    "ADK source: @google/adk InMemoryRunner proof. The claim is decision and callback-boundary signing, not managed Agent Platform Runtime, Gemini Enterprise, or Memory Bank coverage."
   ]
 }

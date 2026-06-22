@@ -43,7 +43,7 @@ atrib should not become a delegation protocol by default.
 - Runtime tool access belongs to the host runtime.
 - `verifyRecord()` should not call introspection endpoints. The caller owns network policy, secrets, trust roots, and timeouts.
 - Authorization evidence should stay outside base record validity. A record can be cryptographically valid while its authorization evidence is missing, weak, stale, or failed.
-- A universal grant language should wait for concrete customer or ecosystem demand.
+- A universal grant language should wait for concrete implementation demand.
 
 The base record says, "this signer made this signed claim at this time." Evidence blocks say, "these external authorization facts were checked this way." Consumer policy decides whether to accept the combination.
 
@@ -66,8 +66,8 @@ Until then, the correct product move is adapters and evidence projection, not a 
 | ----------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | OAuth / MCP             | Tokens, scopes, protected-resource metadata, DPoP, introspection              | Verify as `mcp_oauth` evidence, capture selected host facts, keep raw tokens local                                               |
 | AP2 / Verifiable Intent | Mandates, receipts, intent credentials, payment authorization evidence        | Verify as AP2 / VI evidence off the transaction detector path                                                                    |
-| ZCAP-LD                 | Capability delegation and attenuation                                         | Candidate evidence adapter when a customer or integrator brings real artifacts                                                   |
-| Vouch                   | Agent identity, intent attestation, heartbeat, and delegation-chain claims    | Candidate evidence adapter if ecosystem traction or customer use appears                                                         |
+| ZCAP-LD                 | Capability delegation and attenuation                                         | Candidate evidence adapter when an integrator brings real artifacts                                                              |
+| Vouch                   | Agent identity, intent attestation, heartbeat, and delegation-chain claims    | Candidate evidence adapter if implementation usage appears                                                                       |
 | AINS                    | Agent discovery, endpoints, capability metadata, and registry trust opinions  | Candidate resolver input for directory claims, `resolvedFacts`, or optional evidence blocks; trust scores stay external opinions |
 | UPIP                    | Process-state fork tokens, capability requirements, and continuation evidence | Candidate evidence inside continuation packets or archive bodies; does not replace `informed_by` handoff                         |
 | Host policy engine      | Runtime enforcement before tools execute                                      | Produces local facts and evidence; atrib records and verifies after the fact                                                     |

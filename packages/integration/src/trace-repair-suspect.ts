@@ -199,8 +199,8 @@ async function createFixture(logServer: LogServer, nowMs: number): Promise<Trace
     label: 'diagnose-stale-proof-risk',
     action: 'decide whether the proof artifact is safe to use',
     status: 'failed',
-    observation: 'the action would cite stale evidence and skip same-day proof refresh',
-    repair_hint: 'block the send and inspect the failed tool action first',
+    observation: 'the action would cite stale evidence without rerunning the proof',
+    repair_hint: 'block follow-up work and inspect the failed tool action first',
   }
   const failure = await makeFixtureRecord(
     logServer,

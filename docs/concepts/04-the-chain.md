@@ -9,17 +9,17 @@
 
 ## What this teaches
 
-The three different "linking primitives" atrib uses, why each exists, and what each is good (and bad) at. This is the most-evolved part of atrib — `chain_root` was foundational (Apr 14), `informed_by` was added later ([D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), Apr 28), `provenance_token` even later ([D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), May 3). The chain *evolved*; it wasn't designed up front.
+The three different "linking primitives" atrib uses, why each exists, and what each is good (and bad) at. `chain_root` was foundational (Apr 14), `informed_by` was added later ([D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), Apr 28), and `provenance_token` came after that ([D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), May 3). The chain _evolved_; it wasn't designed up front.
 
 ## What to cover when this gets written
 
 - `chain_root`: deterministic per-context anchor; same context_id → same chain_root forever
 - The genesis chain_root formula: `"sha256:" + hex(SHA-256(UTF-8(context_id)))`
-- `informed_by`: multi-valued, per-record array of full hashes — "this record was informed by these specific prior records"
-- `provenance_token`: single-valued, genesis-only, truncated to 16 bytes — cross-session causal anchoring suitable for the W3C tracestate header
-- Why `informed_by` and `provenance_token` are different things (operator decision: [D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type) vs [D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring) — and why the split was needed)
+- `informed_by`: multi-valued, per-record array of full hashes. "This record was informed by these specific prior records."
+- `provenance_token`: single-valued, genesis-only, truncated to 16 bytes. Cross-session causal anchoring suitable for the W3C tracestate header.
+- Why `informed_by` and `provenance_token` are different things (design decision: [D041](../../DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type) vs [D044](../../DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), and why the split was needed)
 - Multi-producer chain composition: [§1.2.3.1](../../atrib-spec.md#1231-multi-producer-chain-composition) + [D067](../../DECISIONS.md) precedence contract (inbound token > within-process tail > env var > mirror file > synthetic genesis)
-- The corollary: never reimplement chain selection in a new producer — use `resolveChainRoot` from `@atrib/mcp` or replicate it bit-for-bit
+- The corollary: never reimplement chain selection in a new producer. Use `resolveChainRoot` from `@atrib/mcp` or replicate it bit-for-bit
 - Worked example: a session with three tool calls, show how the three linking primitives compose
 
 ## See also

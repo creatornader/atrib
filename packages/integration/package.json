@@ -39,6 +39,7 @@
     "a2a-handoff-proof": "tsx examples/a2a-handoff/a2a-handoff-proof.ts",
     "google-adk-plugin-smoke": "tsx examples/google-adk/google-adk-plugin-smoke.ts",
     "google-adk-python-plugin-smoke": "tsx examples/google-adk-python/google-adk-python-plugin-smoke.ts",
+    "google-adk-decision-ledger-proof": "tsx examples/google-adk-decision-ledger/google-adk-decision-ledger-proof.ts",
     "google-stack-chain-proof": "tsx examples/google-stack-chain/google-stack-chain-proof.ts",
     "google-evidence-runtime": "tsx examples/google-stack-chain/runtime/server.ts",
     "google-stack-chain-visual": "vite --host 127.0.0.1 examples/google-stack-chain/visual",
