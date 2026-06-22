@@ -1,5 +1,11 @@
 # @atrib/primitives-runtime
 
+## 0.1.19
+
+### Patch Changes
+
+- 99cf86c: Expose deterministic non-mutating behavioral probes in primitive runtime health and gate stale hosts on the new probe status.
+
 ## 0.1.18
 
 ### Patch Changes
