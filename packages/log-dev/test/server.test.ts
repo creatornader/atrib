@@ -7,7 +7,7 @@
  *      §2.6.1 says it should accept and rejects what it should reject.
  *      These tests double-check the dev log against the spec, which
  *      means a regression in the dev log's validation surfaces here
- *      rather than in a customer's first deploy.
+ *      rather than in an application's first deploy.
  *
  *   2. Real-consumer demonstration for `X-atrib-Priority`. verify the
  *      priority queue actually orders submissions by priority when

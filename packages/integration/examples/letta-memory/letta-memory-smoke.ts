@@ -171,7 +171,7 @@ export async function runLettaMemorySmoke(): Promise<SmokeResult> {
     caveats: [
       'This imports the published Letta Python package and uses real Letta executor dispatch, but storage side effects are fake managers.',
       'It does not start the Letta server, call hosted Letta APIs, connect Postgres, connect a vector database, call an LLM provider, or run a real external MCP server.',
-      'External review still needs a same-day Letta proof refresh.',
+      'Rerun this proof before citing it as current Letta evidence.',
     ],
   }
 }

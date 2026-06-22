@@ -35,6 +35,5 @@ The script starts an in-process dev log and prints a JSON proof summary.
 
 This is an in-process JSON-RPC proof, not a deployed A2A server, a samples repo
 PR, an A2A TCK run, a public JWKS deployment, or a trust-signal registry. It
-closes the first signed-AgentCard plus handoff proof gate for future public
-claims. A public writeup should still refresh the SDK route and choose a narrow
-technical scope before citing this example.
+closes the first signed-AgentCard plus handoff proof gate for public technical
+claims. Rerun the SDK proof before citing this example as current evidence.

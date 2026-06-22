@@ -2,7 +2,7 @@
 
 > atrib is not a payment rail. It is a verification substrate that records cryptographically signed evidence of payments on top of whatever rail (x402, ACP, UCP, AP2, MPP, a2a-x402) actually moved the money. The transaction record is the multi-party-signed receipt that any third party can verify.
 
-**Status**: DRAFT (v1, 2026-05-22; produced in conversation, needs operator hand-review before promotion to REVIEW)
+**Status**: DRAFT (v1, 2026-05-22; not promoted to REVIEW)
 **Spec anchors**: [§1.7 Transaction Event Hooks](../../atrib-spec.md#17-transaction-event-hooks) · [§1.7.6 Cross-attestation requirement](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) · [D052](../../DECISIONS.md)
 **Builds on**: [Records & signing](01-records-and-signing.md), [The chain](04-the-chain.md), [Identity & the directory](03-identity-and-directory.md), [The Merkle log](02-the-merkle-log.md)
 **Enables**: [The calculation algorithm](09-calculation-algorithm.md), settlement adjudication
@@ -13,12 +13,12 @@ atrib is **not** a payment rail. It does not move money, hold funds, or execute 
 
 Three layers:
 
-| Layer | What it does | Examples |
-|---|---|---|
-| Identity (above atrib) | Who is this agent | W3C DIDs, agent identity standards |
-| **atrib** | **Verifiable action + transaction substrate** | The signed Merkle-log records |
-| Payment rail (below atrib) | Move the money | x402, ACP, UCP, AP2, MPP |
-| Settlement (below the rail) | Land the funds | Banks, on-chain rails |
+| Layer                       | What it does                                  | Examples                           |
+| --------------------------- | --------------------------------------------- | ---------------------------------- |
+| Identity (above atrib)      | Who is this agent                             | W3C DIDs, agent identity standards |
+| **atrib**                   | **Verifiable action + transaction substrate** | The signed Merkle-log records      |
+| Payment rail (below atrib)  | Move the money                                | x402, ACP, UCP, AP2, MPP           |
+| Settlement (below the rail) | Land the funds                                | Banks, on-chain rails              |
 
 ## What atrib does NOT do
 
@@ -35,21 +35,22 @@ These are bordering layers atrib composes with but does not subsume. Previous at
 
 Per [§1.7](../../atrib-spec.md#17-transaction-event-hooks), the trigger is a commerce protocol firing its completion signal. Each rail has a specific on-wire event atrib watches for:
 
-| Rail | Trigger event |
-|---|---|
-| ACP | `POST /checkout_sessions/{id}/complete` returns `status: "completed"` with embedded `order` object |
-| UCP | Same shape as ACP, distinguished by the `ucp.version` envelope (since UCP `2026-01-11`) |
-| x402 | HTTP 200 response carrying a `PAYMENT-RESPONSE` header (v2) or legacy `X-PAYMENT-RESPONSE` (v1) |
-| AP2 | `PaymentMandate` finalization |
-| MPP / a2a-x402 | Each with its own completion signal |
+| Rail           | Trigger event                                                                                      |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| ACP            | `POST /checkout_sessions/{id}/complete` returns `status: "completed"` with embedded `order` object |
+| UCP            | Same shape as ACP, distinguished by the `ucp.version` envelope (since UCP `2026-01-11`)            |
+| x402           | HTTP 200 response carrying a `PAYMENT-RESPONSE` header (v2) or legacy `X-PAYMENT-RESPONSE` (v1)    |
+| AP2            | `PaymentMandate` finalization                                                                      |
+| MPP / a2a-x402 | Each with its own completion signal                                                                |
 
 Why this particular event: it's the moment the commerce loop closes. Before completion, the agent has taken tool_calls (look up product, compare prices, etc.). The transaction record ties those prior actions to the spend they justified, with a cryptographic chain back through `informed_by` / `provenance_token` edges.
 
 ## The Linker: `context_id`
 
-Per [§1.7](../../atrib-spec.md#17-transaction-event-hooks): *"the `context_id` of the agent session must be embedded in the transaction metadata when the checkout is initiated, so that the transaction event webhook can be matched back to the attribution chain."*
+Per [§1.7](../../atrib-spec.md#17-transaction-event-hooks): _"the `context_id` of the agent session must be embedded in the transaction metadata when the checkout is initiated, so that the transaction event webhook can be matched back to the attribution chain."_
 
 Before the agent calls the rail, the atrib SDK injects the session's `context_id` into the commerce protocol's metadata channel:
+
 - HTTP rails: `X-atrib-Context` header (per [§1.5.3.1](../../atrib-spec.md#1531-context-id-header-x-atrib-context))
 - MCP-transport integrations: `params._meta.atrib`
 - W3C trace context: the `tracestate` `atrib=` entry (per [§1.5.2](../../atrib-spec.md#152-http-transport-tracestate))
@@ -75,20 +76,20 @@ A compromised single key cannot fabricate arbitrary transactions on someone else
 
 ## The full end-to-end flow
 
-| Step | What happens | Who does it |
-|---|---|---|
-| 1 | Agent starts session, gets `context_id` | Agent / agent SDK |
-| 2 | Agent takes signed `tool_call` actions, each `informed_by` prior records | Agent / `@atrib/agent` or `@atrib/mcp` middleware |
-| 3 | Agent decides to purchase, calls commerce protocol with `context_id` in metadata | Agent + atrib SDK |
-| 4 | Rail executes the actual payment | Payment rail |
-| 5 | Rail returns per-protocol completion signal | Rail |
-| 6 | atrib SDK constructs transaction record, agent signs it | Agent / atrib SDK |
-| 7 | Counterparty signs the same canonical bytes | Merchant / counterparty |
-| 8 | Record submitted to public Merkle log; chain is closed | Producer → log |
-| 9 | Anyone can use `@atrib/verify` to verify signatures + cross-attestation + walk `informed_by` | Verifier (any party) |
-| 10 | `@atrib/verify`'s `calculate()` runs on (graph, policy) → distribution map | Anyone with the inputs |
-| 11 | Settlement Recommendation Document ([§4.7](../../atrib-spec.md#47-settlement-recommendation-document)) constructed; optionally signed | Computing party (typically merchant) |
-| 12 | Merchant pays out creators per the distribution, using their own rails/treasury | Off-atrib |
+| Step | What happens                                                                                                                          | Who does it                                       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| 1    | Agent starts session, gets `context_id`                                                                                               | Agent / agent SDK                                 |
+| 2    | Agent takes signed `tool_call` actions, each `informed_by` prior records                                                              | Agent / `@atrib/agent` or `@atrib/mcp` middleware |
+| 3    | Agent decides to purchase, calls commerce protocol with `context_id` in metadata                                                      | Agent + atrib SDK                                 |
+| 4    | Rail executes the actual payment                                                                                                      | Payment rail                                      |
+| 5    | Rail returns per-protocol completion signal                                                                                           | Rail                                              |
+| 6    | atrib SDK constructs transaction record, agent signs it                                                                               | Agent / atrib SDK                                 |
+| 7    | Counterparty signs the same canonical bytes                                                                                           | Merchant / counterparty                           |
+| 8    | Record submitted to public Merkle log; chain is closed                                                                                | Producer → log                                    |
+| 9    | Anyone can use `@atrib/verify` to verify signatures + cross-attestation + walk `informed_by`                                          | Verifier (any party)                              |
+| 10   | `@atrib/verify`'s `calculate()` runs on (graph, policy) → distribution map                                                            | Anyone with the inputs                            |
+| 11   | Settlement Recommendation Document ([§4.7](../../atrib-spec.md#47-settlement-recommendation-document)) constructed; optionally signed | Computing party (typically merchant)              |
+| 12   | Merchant pays out creators per the distribution, using their own rails/treasury                                                       | Off-atrib                                         |
 
 Steps 1, 2, 8, 9 apply to every event_type. Steps 3-7 + 10-12 are payment-specific.
 
@@ -96,10 +97,10 @@ Steps 1, 2, 8, 9 apply to every event_type. Steps 3-7 + 10-12 are payment-specif
 
 Steps 9 and 10 in the flow above answer different questions, even though they run on the same signed bytes. Keeping them distinct is what makes settlement auditable.
 
-| Question | Step | What it answers |
-|---|---|---|
-| "Is this real?" | 9 (verification) | Signatures valid? Cross-attestation present? Graph self-consistent? Records committed to the log? |
-| "Given that it's real, how should value be apportioned?" | 10 (calculation) | What fraction of the transaction belongs to which creator, per the agreed policy? |
+| Question                                                 | Step             | What it answers                                                                                   |
+| -------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
+| "Is this real?"                                          | 9 (verification) | Signatures valid? Cross-attestation present? Graph self-consistent? Records committed to the log? |
+| "Given that it's real, how should value be apportioned?" | 10 (calculation) | What fraction of the transaction belongs to which creator, per the agreed policy?                 |
 
 You can run #9 without #10 (just want to verify what happened). You can't run #10 without #9: calculating on unverified records means calculating on potentially-forged data. The [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) cross-attestation gate is the bouncer for #10; see the next section.
 

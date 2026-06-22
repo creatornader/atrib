@@ -18,7 +18,7 @@ The right near-term posture is:
 - Treat TIBET as direct prior art, not noise.
 - Borrow the clarity of TIBET's `erachter` intent field and parent-chain story.
 - Integrate only at optional evidence and identity-boundary points.
-- Do not schedule a native TIBET adapter until a customer, integrator, public test vector, or standards discussion gives us real artifacts to verify.
+- Do not schedule a native TIBET adapter until an integrator, public test vector, or standards discussion gives us real artifacts to verify.
 
 ## Field crosswalk
 
@@ -154,7 +154,7 @@ A future `protocol: "tibet"` evidence adapter is plausible, but it should not be
 
 The trigger should be one of:
 
-- a customer or partner gives us real TIBET token chains
+- an integrator gives us real TIBET token chains
 - a standards discussion asks for an interop proof
 - Humotica publishes conformance fixtures or stable token corpora
 - atrib needs to verify TIBET evidence inside a live cross-agent flow

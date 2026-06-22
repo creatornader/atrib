@@ -143,7 +143,7 @@ function listPublicBoundaryFiles() {
     '.yaml',
     '.yml',
   ])
-  const skipFiles = new Set(['pnpm-lock.yaml', 'scripts/check-doc-sync.mjs'])
+  const skipFiles = new Set(['pnpm-lock.yaml', 'scripts/check-doc-sync.mjs', 'textleaks.yaml'])
 
   function walk(rel) {
     const out = []
@@ -587,13 +587,31 @@ function checkConformanceCorpusConsistency() {
 }
 
 // ─── public-boundary wording ───────────────────────────────────────────────
-// Public repo text can describe external issues, release claims, and proof
-// artifacts. It should not publish operator route planning, packet status,
-// private review gates, or relationship strategy.
+// Public repo text can describe external issues, release claims, proof
+// artifacts, and developer-facing examples. It should not publish operator
+// route planning, packet status, private review gates, relationship strategy,
+// or startup-growth framing.
 function checkPublicBoundaryWording() {
   const check = 'public-boundary-wording'
   const rules = [
+    { label: 'go-to-market', pattern: /\bgo-to-market\b/i },
+    { label: 'gtm', pattern: /\bgtm\b/i },
+    { label: 'launch strategy', pattern: /\blaunch strategy\b/i },
+    { label: 'startup growth', pattern: /\bstartup growth\b/i },
+    { label: 'marketing landing page', pattern: /\bmarketing landing page\b/i },
+    { label: 'marketing copy', pattern: /\bmarketing copy\b/i },
+    { label: 'marketing site', pattern: /\bmarketing site\b/i },
+    { label: 'marketing demo', pattern: /\bmarketing demo\b/i },
+    { label: 'customer-facing', pattern: /\bcustomer-facing\b/i },
+    { label: 'prospective customer', pattern: /\bprospective customer\b/i },
+    { label: 'customer conversation', pattern: /\bcustomer conversations?\b/i },
+    { label: 'customer walkthrough', pattern: /\bcustomer walkthroughs?\b/i },
+    { label: 'hand a customer', pattern: /\bhand a customer\b/i },
+    { label: 'real customer copy', pattern: /\breal customer\b.*\bcopy\b/i },
+    { label: 'customers install', pattern: /\bcustomers?\b.*\bpnpm add\b/i },
+    { label: 'shipping to customers', pattern: /\bshipping\b.*\bto customers\b/i },
     { label: 'outreach', pattern: /\boutreach\b/i },
+    { label: 'outreach proof framing', pattern: /\boutreach proof framing\b/i },
     { label: 'route packet', pattern: /\broute packet\b/i },
     { label: 'route plan', pattern: /\broute plan\b/i },
     { label: 'route artifact', pattern: /\broute artifact\b/i },
@@ -603,8 +621,19 @@ function checkPublicBoundaryWording() {
     { label: 'operator-approved', pattern: /\boperator-approved\b/i },
     { label: 'operator approves', pattern: /\boperator approves?\b/i },
     { label: 'public packet body', pattern: /\bpublic packet body\b/i },
+    { label: 'public writeup', pattern: /\bpublic writeup\b/i },
     { label: 'operator memory', pattern: /\btracked in operator memory\b/i },
+    { label: 'operator hand-review', pattern: /\boperator hand-review\b/i },
     { label: 'partner pitch', pattern: /\b(?:partner|partnership) pitch\b/i },
+    { label: 'partner gives artifacts', pattern: /\bcustomer or partner\b.*\bgives?\b/i },
+    { label: 'conversation provenance', pattern: /\bproduced in conversation\b/i },
+    { label: 'session trace', pattern: /\bsession trace\b/i },
+    { label: 'drafted privately', pattern: /\bdrafted privately\b/i },
+    { label: 'promoted to public', pattern: /\bpromoted to public\b/i },
+    { label: 'same-day proof refresh', pattern: /\bsame-day proof refresh\b/i },
+    { label: 'external review needs', pattern: /\bexternal review still needs\b/i },
+    { label: 'non-operator adoption', pattern: /\bfirst non-operator adoption\b/i },
+    { label: 'private repo tooling', pattern: /\batrib-internal\/tools\b/i },
     { label: 'maintainer engagement', pattern: /\bengag(?:e|ing)\b.*\bmaintainers?\b/i },
     { label: 'maintainer engagement', pattern: /\bmaintainers?\b.*\bengag(?:e|ing)\b/i },
     { label: 'maintainer interest', pattern: /\bmaintainer interest\b/i },

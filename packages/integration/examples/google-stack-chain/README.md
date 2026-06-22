@@ -5,7 +5,8 @@ proof chain:
 
 - AP2 / Verifiable Intent receipt and evidence verification
 - A2A signed Agent Card plus verifier-gated handoff evidence
-- Google ADK Python plugin callback signing
+- Google ADK JS decision-ledger signing before dispatch, followed by ADK JS
+  tool-callback signing
 
 Run:
 
@@ -25,17 +26,18 @@ supports direct file opening through
 review, while the file path is useful for quick local inspection.
 
 The workbench opens on the live runtime path first. The main proof chain stays
-empty until the runtime returns records. The pinned four-record snapshot remains
+empty until the runtime returns records. The pinned five-record snapshot remains
 available from the Reference view. When `runtime-config.js` or `?runtime=` is
 set, the page asks the Google evidence runtime for live AP2 verifier state,
-shows the AP2 -> A2A -> ADK run as records arrive, highlights matching
-BigQuery Agent Analytics-shaped rows, and keeps proof boundaries visible.
+shows the AP2 -> A2A -> ADK decision -> ADK tool run as records arrive,
+highlights matching BigQuery Agent Analytics-shaped rows, and keeps proof
+boundaries visible.
 
 The script prints a JSON summary with the AP2 transaction record hash, A2A
-remote and receiver follow-up hashes, and ADK Python tool-callback record hash.
-It also prints a deterministic `snapshot` block. The snapshot excludes the
-runtime `/tmp` artifact path and pins the stable A2A evidence identifiers used
-for the signed record body.
+remote and receiver follow-up hashes, ADK JS allow-decision hash, and ADK JS
+tool-callback record hash. It also prints a deterministic `snapshot` block. The
+snapshot excludes the runtime `/tmp` artifact path and pins the stable A2A
+evidence identifiers used for the signed record body.
 
 Current snapshot record hashes:
 
@@ -45,23 +47,25 @@ Current snapshot record hashes:
   `sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9`
 - A2A receiver follow-up:
   `sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2`
-- ADK Python tool callback:
-  `sha256:15801af402108603b899b8773b59aa68af71d9e34ee50ec18103afea141f31ed`
+- ADK JS allow decision:
+  `sha256:4d30b4e5d7557ac2450f65c397f5442f9c45a7bad85c219de65153fcdc93294f`
+- ADK JS tool callback:
+  `sha256:61e7c3f52266ac2a24c22336f5c5e53539b1e55d91b78725fe9d70fe9b966a56`
 
 The script also writes a local AP2 artifact bundle under `/tmp`.
 
-The ADK Python layer includes Google-style operational IDs as local sidecar
-facts. The trace and span IDs are deterministic local projections for this
-proof. The ADK invocation ID and function-call ID come from the local
-`google-adk` run, so they can vary across runs.
+The ADK JS decision-ledger layer includes Google-style operational IDs as local
+sidecar facts. The trace and span IDs are deterministic local projections for
+this proof. The ADK invocation ID and function-call ID come from the local
+`@google/adk` run, so live runtime values can vary across runs.
 
 The output also includes an `analytics_fixture` block shaped around the common
 ADK BigQuery Agent Analytics columns (`timestamp`, `event_type`, `agent`,
 `session_id`, `invocation_id`, `user_id`, `trace_id`, `span_id`,
 `parent_span_id`, `status`, `error_message`, `is_truncated`). It adds
 atrib-specific columns for record hash, parent record hashes, and protocol. This
-static chain output is a local fixture for review. The runtime can write its AP2
-gate row to BigQuery as an operator action with `BIGQUERY_WRITE_ENABLED=1`.
+static chain output is a local fixture for review. The runtime can write its
+rows to BigQuery as an operator action with `BIGQUERY_WRITE_ENABLED=1`.
 
 The visual snapshot lives at [`visual/proof-snapshot.json`](visual/proof-snapshot.json).
 [`visual/proof-snapshot.js`](visual/proof-snapshot.js) is generated from the JSON
@@ -127,9 +131,10 @@ all pass.
 
 The active `/api/runs` path uses that gate as the first decision, then runs the
 local A2A handoff proof with the accepted AP2 record as parent evidence. It then
-runs the JavaScript ADK smoke through `@google/adk` and signs the ADK tool
-callback with the A2A follow-up as parent evidence. The visual workbench calls
-this endpoint to show the current run state instead of only replaying the pinned
+runs the JavaScript ADK decision-ledger proof through `@google/adk`, signs an
+allow decision with the A2A follow-up as parent evidence, and signs the tool
+callback with that decision as parent evidence. The visual workbench calls this
+endpoint to show the current run state instead of only replaying the pinned
 snapshot.
 
 ## What it proves
@@ -139,9 +144,9 @@ snapshot.
 - That AP2 transaction record can inform the remote A2A evidence record.
 - A2A handoff evidence can be accepted before a receiving agent signs a
   verifier-resolved `informed_by` follow-up.
-- Google ADK Python can sign a hash-only record from the plugin tool-callback
-  boundary that informs by the A2A receiver follow-up while local sidecars keep
-  the raw ADK payload inspectable.
+- Google ADK JS can sign a hash-only allow decision before tool dispatch, then
+  sign the tool outcome with the decision record in `informed_by` while local
+  sidecars keep the raw ADK payload inspectable.
 - The Cloud Run runtime can make the next-action decision from verified AP2
   evidence, run the A2A and ADK JS follow-up, and produce BigQuery-shaped rows
   tied to atrib record hashes.

@@ -4,8 +4,8 @@
 # ADDED to the starter's patterns. Exception: two classes are explicitly
 # REPLACED with empty patterns (see notes below).
 #
-# atrib also runs a broader leak-audit substrate locally
-# via a private mirror. This file is the public-side textleaks surface
+# atrib can also run a broader leak-audit pass locally.
+# This file is the public-side textleaks surface
 # and intentionally stays conservative: it catches the most obvious
 # cross-project patterns that the existing substrate also catches,
 # so CI-side gating fires on the same surface even on contributor PRs
@@ -18,6 +18,7 @@ ignore_paths:
   - .pre-commit-config.yaml
   - .oss-twin.yaml
   - textleaks.yaml
+  - scripts/check-doc-sync.mjs
   - .gitignore
   - .github/workflows/security-scan.yml
   - .github/dependabot.yml
@@ -42,16 +43,56 @@ classes:
     patterns:
       - '\bagent-bridge-atrib\b'
 
+  - id: public-growth-language
+    patterns:
+      - '\bgo-to-market\b'
+      - '\bgtm\b'
+      - '\blaunch strategy\b'
+      - '\bstartup growth\b'
+      - '\bmarketing (?:landing page|copy|site|demo)\b'
+      - '\bcustomer-facing\b'
+      - '\bprospective customer\b'
+      - '\bcustomer conversations?\b'
+      - '\bcustomer walkthroughs?\b'
+      - '\bhand a customer\b'
+      - '\breal customer\b.*\bcopy\b'
+      - '\bcustomers?\b.*\bpnpm add\b'
+      - '\bshipping\b.*\bto customers\b'
+
+  - id: public-route-planning
+    patterns:
+      - '\boutreach\b'
+      - '\boutreach proof framing\b'
+      - '\broute packet\b'
+      - '\broute plan\b'
+      - '\broute artifact\b'
+      - '\bsource-backed route\b'
+      - '\bno outreach sent\b'
+      - '\bdraft packet\b'
+      - '\bpublic writeup\b'
+      - '\bpartner pitch\b'
+
+  - id: internal-workflow-provenance
+    patterns:
+      - '\boperator hand-review\b'
+      - '\bproduced in conversation\b'
+      - '\bsession trace\b'
+      - '\bdrafted privately\b'
+      - '\bpromoted to public\b'
+      - '\bsame-day proof refresh\b'
+      - '\bexternal review still needs\b'
+      - '\bfirst non-operator adoption\b'
+      - '\batrib-internal/tools\b'
+
   # time-of-day-narration and session-state-framing are DISABLED for
   # atrib because the spec + ADRs use "today", "in this session", and
   # related phrases as legitimate protocol terminology (e.g.,
   # "this session's chain_root", "today the only embedded directory
-  # is X"). atrib-internal/tools/leak-audit/ runs context-aware
-  # versions of these patterns via Vale + Layer B (LLM semantic
-  # judgement) which can distinguish protocol terminology from
-  # operator narration. The naive regex layer ships with textleaks
-  # would produce ~30 false positives per scan with no path to
-  # cleanly suppress in-context.
+  # is X"). The broader local leak-audit pass runs context-aware
+  # versions of these patterns and can distinguish protocol terminology
+  # from operator narration. The naive regex layer shipped with textleaks
+  # would produce many false positives per scan with no path to cleanly
+  # suppress in-context.
   - id: time-of-day-narration
     replace: true
     patterns: []

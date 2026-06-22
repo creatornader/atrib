@@ -7,7 +7,10 @@ Architectural and design decisions made during the atrib protocol development. E
 ## D001: Agent-first sequencing, not browser-first
 
 **Date:** 2026-04-05
-**Context:** The protocol needed a go-to-market wedge. Browser/OS adoption requires convincing Google/Apple. Prior attempts (Brave, Coil, Flattr) failed by targeting human browsing.
+**Context:** The protocol needed an initial deployment sequence. Browser and OS
+integration require platform-level adoption. Prior attempts (Brave, Coil,
+Flattr) failed by targeting human browsing before the underlying provenance
+problem had a native protocol surface.
 **Decision:** Build for agent-to-agent transactions first. Agents don't have UX preferences, the volume is growing exponentially, and the protocol can be API-native from day one. Extend to human-facing content later.
 **Alternatives considered:** Browser extension, browser fork, OS-level integration.
 
@@ -747,14 +750,21 @@ A fork of an already-patched client: when the patched `fork()` is invoked, it ca
 
 **Why this matters strategically:**
 
-The end-to-end demo answers "what can a developer hand a customer in 15 minutes?" Before this work, the protocol was implemented but a customer couldn't watch it work without standing up Tessera first (which doesn't exist). With the demo, `pnpm demo` produces a complete attribution chain visible in real time, with real signatures and real transaction detection, against a real (but in-memory) spec-compliant log. The fakery is in the surrounding environment: the merchant returns hardcoded search results, the agent issues hardcoded tool calls, the x402 payment is a stubbed header, but the protocol layer is real.
+The end-to-end demo answers "what can a developer run in 15 minutes?" Before
+this work, the protocol was implemented but a new contributor could not watch it
+work without standing up Tessera first. With the demo, `pnpm demo` produces a
+complete attribution chain visible in real time, with real signatures and real
+transaction detection, against a real in-memory spec-compliant log. The fakery
+is in the surrounding environment: the merchant returns hardcoded search
+results, the agent issues hardcoded tool calls, the x402 payment is a stubbed
+header, but the protocol layer is real.
 
 The spec/code drift fix is the kind of thing that only gets caught when you build a real reference implementation. Mocking `globalThis.fetch` in unit tests doesn't catch wire-format bugs because the mocks don't validate the request shape against the spec. The dev log is a real server that validates per [§2.6.1](atrib-spec.md#261-submit-entry); it caught the wrong wire format on the first integration attempt. This is a strong argument for keeping `@atrib/log-dev` in the test infrastructure permanently rather than treating it as a one-off demo helper.
 
 **Alternatives considered:**
 
 - **Drop `priority` from the wire entirely (option (a) from the priority discussion).** Initially leaned toward this on the grounds that no consumer existed. Rejected after a closer review surfaced two real consumers that DO exist, they just hadn't been wired yet.
-- **Keep the broken wire format and note the spec drift in TODO.md.** Rejected per the radical-honesty rule. Shipping a known wire-format bug to customers because "we'll fix it later" is exactly the kind of avoidable failure the rule exists to prevent.
+- **Keep the broken wire format and note the spec drift in TODO.md.** Rejected per the radical-honesty rule. Shipping a known wire-format bug to downstream users because "we'll fix it later" is exactly the kind of avoidable failure the rule exists to prevent.
 - **Build the dev log as a separate `services/log/dev-server/` directory rather than a workspace package.** Rejected after weighing trade-offs: option A (workspace package) wins because the demo can `import { startDevLog } from '@atrib/log-dev'` directly without spawning a child process, the inspection API is type-safe and ergonomic, and the existing `@atrib/mcp` and `@atrib/agent` test suites can reuse the dev log as a real fixture in the future instead of mocking `fetch`.
 - **Build the dev log in Go (matching the future Tessera service).** Rejected for this chunk. The Go Tessera-backed log will live in `services/log/` when it ships; the dev log is a TypeScript fixture for in-process integration tests and demos. They have different operational profiles and can coexist; the dev log is not a stepping stone to the real one.
 - **Implement signature verification ([§2.6.1](atrib-spec.md#261-submit-entry) Step 1) in the dev log.** Rejected because it would create a circular workspace dep: `@atrib/log-dev` would have to import from `@atrib/verify`, which already imports from `@atrib/mcp`. The dev log skips signature verification and is honest about it in the file header. Anyone using the dev log for end-to-end correctness testing should run `@atrib/verify` against the captured records separately.
@@ -769,7 +779,12 @@ The spec/code drift fix is the kind of thing that only gets caught when you buil
 
 Plus the demo runs end-to-end and produces the expected output (verified manually before commit).
 
-**Followup:** With the spec/code drift fixed and the dev log in place, the next layer of customer-readiness work is (a) the `services/log/` Tessera-backed Go service for production deployments, and (b) publishing `@atrib/mcp`, `@atrib/agent`, and `@atrib/verify` to npm so customers can actually `pnpm add` them. The unified `packages/agent/README.md` is ready to be the customer-facing entry point once packages are published.
+**Followup:** With the spec/code drift fixed and the dev log in place, the next
+release-readiness work is (a) the `services/log/` Tessera-backed Go service for
+production deployments, and (b) publishing `@atrib/mcp`, `@atrib/agent`, and
+`@atrib/verify` to npm so downstream applications can install them. The unified
+`packages/agent/README.md` is ready to be the developer-facing entry point once
+packages are published.
 
 ---
 
@@ -1483,7 +1498,7 @@ The `keystore: 'callback'` mode (designed and merged but not yet wired end-to-en
 
 - _Spec._ New [§7.6](atrib-spec.md#76-hsm-operator-profile) subsection (informative profiles + normative callback contract).
 - _Wrapper._ `keystore: 'callback'` is the change that matters, already designed; validation against a mock HSM signer closes the implementation gap.
-- _Documentation._ Each profile gets a 1-2 page operator runbook in `docs/operator/hsm-<profile>.md`; runbooks are drafted privately and promoted to public at first non-operator adoption.
+- _Documentation._ Each profile gets a 1-2 page operator runbook in `docs/operator/hsm-<profile>.md`; runbooks should publish when a non-local deployment needs them.
 - _No breaking changes._ The `keystore: 'env' | 'file' | 'keychain'` modes remain available for solo operators / dev. Callback mode is additive.
 
 **What this DOES NOT solve.**
@@ -2085,13 +2100,20 @@ A layered defense replaces the ad-hoc catch-up cycle with structural prevention.
 - _atrib (public repo)._ New `.git-hooks/pre-commit` and `.git-hooks/pre-push` scripts (committed for transparency; users opt in via `git config core.hooksPath .git-hooks`). New `scripts/check-leaks.mjs` (regex check) and `scripts/check-leaks-semantic.mjs` (LLM check).
 - _Cloud routine._ The weekly audit gains the new regex patterns and LLM-check step.
 
+**Current enforcement, 2026-06-22.** The public repo now uses pre-commit's
+`textleaks` and `oss-twin-check` hooks, plus `scripts/check-doc-sync.mjs`
+`public-boundary-wording`, as the active local checks. The older
+`scripts/check-leaks*.mjs` filenames were part of the initial plan and are no
+longer the active local surface.
+
 **What this DOESN'T solve.**
 
 - _Operator override misuse._ `--no-verify` bypasses the hooks. The override is logged but not enforced. Discipline is required.
 - _Hosted LLM availability._ If the API is unavailable, Layer B fails open (push proceeds). The cloud audit (Layer C) catches what Layer B missed.
 - _Style guide drift._ The style guide itself can grow stale. Quarterly review (manual) checks alignment.
 
-**Implementation sequencing.** Style guide drafted → regex check script + pre-commit hook → LLM check script + pre-push hook → cloud audit update → documentation cross-reference.
+**Implementation sequencing.** Style guide drafted → catalog-driven pre-commit
+checks → semantic/cloud audit backstop → documentation cross-reference.
 
 ## D050: Cross-log replication for equivocation defense
 
@@ -2344,12 +2366,12 @@ The right shape is a unified explorer that composes from the public read APIs. T
 - _Spec._ No spec changes for [D054](#d054-unified-public-explorer-vs-per-service-admin-uis) itself; the explorer reads from the existing [§2.5](atrib-spec.md#25-tile-api-read-interface) / [§3.4](atrib-spec.md#34-query-api) / [§6.2](atrib-spec.md#62-directory-operations) read APIs. CORS clarification can land in those sections as a normative note (`Access-Control-Allow-Origin: *` is the canonical setting for the read endpoints).
 - _log-node, graph-node, directory-node, archive-node._ Composed read services set `Access-Control-Allow-Origin: *` headers on read endpoints (and OPTIONS preflight handling where needed). Tests confirm headers present.
 - _Repo._ New `apps/dashboard/` directory ships the explorer source. Option 1 is a single HTML file with embedded CSS + vanilla JS (no build step). Options 2 and 3 will introduce a framework + build step when they're built.
-- _Hosting._ Option 1 is served inline by log-node at `https://explore.atrib.dev/` (also at `https://log.atrib.dev/dashboard` for legacy direct access). The Dockerfile copies `apps/dashboard/index.html` into the image; the server reads it once at startup, caches in memory, and returns with `Cache-Control: public, max-age=60`. The "no per-service inspection UIs" rule (point 1 above) bans per-service ADMIN HTML, page-shaped, service-private surfaces. Serving the unified explorer from a service is materially different: log-node is acting as a static-file host for the cross-service surface, not exposing a service-specific admin. The host-based routing is explicit: when the request `Host` header is `explore.atrib.dev` the dashboard is returned at `/`; otherwise log-node returns API responses at `/v1/*` and a 404 hint at `/`. When option 2 (SPA) ships it will get its own hosting (likely Cloudflare Pages); the inline route stays as a fallback. **Naming rationale:** `explore` was chosen over `dashboard` so that `dashboard.atrib.dev` is reserved for the actual auth-gated personal dashboard product (separate memory entry); `explore` reads as block-explorer and avoids the "dashboard implies my-account" connotation.
+- _Hosting._ Option 1 is served inline by log-node at `https://explore.atrib.dev/` (also at `https://log.atrib.dev/dashboard` for legacy direct access). The Dockerfile copies `apps/dashboard/index.html` into the image; the server reads it once at startup, caches in memory, and returns with `Cache-Control: public, max-age=60`. The "no per-service inspection UIs" rule (point 1 above) bans per-service ADMIN HTML, page-shaped, service-private surfaces. Serving the unified explorer from a service is materially different: log-node is acting as a static-file host for the cross-service surface, not exposing a service-specific admin. The host-based routing is explicit: when the request `Host` header is `explore.atrib.dev` the dashboard is returned at `/`; otherwise log-node returns API responses at `/v1/*` and a 404 hint at `/`. When option 2 (SPA) ships it will get its own hosting (likely Cloudflare Pages); the inline route stays as a fallback. **Naming rationale:** `explore` was chosen over `dashboard` so that `dashboard.atrib.dev` remains available for a future authenticated workspace surface; `explore` reads as block-explorer and avoids the "dashboard implies my-account" connotation.
 - _CLAUDE.md._ New sync trigger: "Explorer view changes" → update apps/dashboard/ + verify CORS unchanged on the underlying services.
 
 **What this DOESN'T solve.**
 
-- _Personal dashboard._ Out of scope. Tracked separately as a future product item; needed before a public user-facing launch.
+- _Authenticated workspace._ Out of scope for this ADR. It needs its own design decision before any public route depends on it.
 - _Real-time updates._ Option 1 + 2 are pull-on-load; option 3 may add WebSocket or SSE for live updates.
 - _Search indexing at scale._ Option 1 + 2 do client-side filtering against API responses. Option 3 may need a server-side search index when the log volume makes client-side impractical.
 - _Internationalization._ Out of scope for option 1. Option 2/3 may add when the user base warrants.
@@ -3274,7 +3296,10 @@ The ten conventions:
 
 **Consequences:**
 
-- New spec sections written after this ADR MUST follow all ten conventions. `scripts/check-doc-sync.mjs` enforces conventions 3 and 8 mechanically. `scripts/check-leaks.mjs` and `scripts/check-leaks-semantic.mjs` enforce convention 7. The other conventions are enforced by review.
+- New spec sections written after this ADR MUST follow all ten conventions.
+  `scripts/check-doc-sync.mjs` enforces conventions 3 and 8 mechanically, and
+  the pre-commit `textleaks` hook plus `public-boundary-wording` enforce
+  convention 7. The other conventions are enforced by review.
 
 - Existing spec sections predating this ADR are grandfathered. Substantive edits to those sections (more than a typo or small clarification) bring the section in scope; the editor migrates the section to convention compliance as part of the edit.
 
@@ -4133,8 +4158,8 @@ This ADR codifies the rationale for each calibration choice against a 2026-05-23
 
 - [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface): the cognitive primitive surface the recall API belongs to.
 - [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement): the Surface 6 instrumentation that will feed the queued gold-standard sweep with real-workload data.
-- `services/atrib-recall/README.md`: customer-facing reference for the calibration defaults and the novel-in-field noise-floor behavior.
-- Survey citations: see the inline GitHub permalink in the `ALPHA=0.3` row above. The full two surveys (research papers + OSS source) were one-shot research artifacts; their cited URLs live in the session trace, not as separate checked-in research files.
+- `services/atrib-recall/README.md`: developer-facing reference for the calibration defaults and the novel-in-field noise-floor behavior.
+- Survey citations: see the inline GitHub permalink in the `ALPHA=0.3` row above. The full two surveys (research papers + OSS source) were one-shot research artifacts and are not checked in as separate research files.
 
 ## D086: BM25 corpus extended from annotations to per-event_type record content
 
@@ -5601,15 +5626,14 @@ and [D100](#d100-log-submission-can-be-disabled-while-still-signing-and-running-
 **Context.** The existing Google ADK example proved the TypeScript package:
 `@google/adk` `InMemoryRunner`, `BasePlugin`, and `FunctionTool` can emit a
 hash-only atrib record at the tool callback boundary. Source reading showed that
-the Python package is a stronger compatibility target for agent-runtime
-provenance, because `google/adk-python` already exposes discussion and example
-surfaces around provenance exporters, Ed25519 receipts, compliance plugins,
-memory, and authority receipts. The TypeScript proof was useful, but a Python
-proof better matches the runtime surface being evaluated.
+the Python package is also a first-class ADK runtime target with plugin,
+runner, model, tool, session, auth, and callback surfaces that need their own
+compatibility proof. The TypeScript proof was useful, but it did not prove the
+Python package lifecycle.
 
 **Decision.** Add a sibling Python ADK proof at
 [`packages/integration/examples/google-adk-python/`](packages/integration/examples/google-adk-python/).
-The proof runs a real `google-adk==2.1.0` `InMemoryRunner`, registers a Python
+The proof runs a real `google-adk==2.3.0` `InMemoryRunner`, registers a Python
 `BasePlugin`, uses a scripted `BaseLlm`, calls a real `FunctionTool`, and captures
 the `after_tool_callback` event. The TypeScript smoke then signs one hash-only
 atrib `tool_call` record for that captured Python tool outcome, following the
@@ -5628,17 +5652,19 @@ The signed record uses:
 
 **Alternatives rejected.**
 
-- _Post the TypeScript proof into `google/adk-python`._ Rejected. The channel
-  mismatch would make the artifact harder for Python maintainers to judge.
+- _Treat the TypeScript proof as sufficient for Python ADK._ Rejected. The
+  packages have separate runtimes and callback implementations, so the
+  TypeScript proof does not prove the Python lifecycle.
 - _Open a Python proof that bypasses ADK and calls the tool function directly._
   Rejected. It would not prove the ADK plugin lifecycle.
 - _Sign inside the Python script._ Rejected for this example. The existing
   Python examples keep Python runtime capture separate from atrib signing in the
   TypeScript smoke, so protocol signing still uses the shared `@atrib/mcp`
   helpers.
-- _Lead with BigQuery Agent Analytics or Agent Platform Runtime._ Rejected for
-  this proof. Those are stronger later routes, but they require managed Google
-  identifiers that this local `InMemoryRunner` proof does not produce.
+- _Add managed Google identifiers to this local proof._ Rejected for this proof.
+  Agent Platform Runtime, BigQuery Agent Analytics, Memory Bank, and Cloud Trace
+  identifiers require managed services that this local `InMemoryRunner` proof
+  does not produce.
 
 **Consequences.**
 
@@ -6908,6 +6934,99 @@ The topology report adds `primitive-runtime-behavioral-probes`. The gate fails w
 - [`scripts/check-local-substrate-topology-report.mjs`](scripts/check-local-substrate-topology-report.mjs), fixture proof that behavioral probe failures make topology `not_ready`.
 - [`scripts/update-primitives-runtime.mjs`](scripts/update-primitives-runtime.mjs), live update proof that requires the behavioral-probe gate.
 
+## D131: Google ADK decision ledger stays an extension proof
+
+**Date:** 2026-06-22
+
+**Status:** Accepted
+
+**Extends:** [D114](#d114-google-adk-python-proof-uses-the-plugin-callback-boundary),
+[D116](#d116-producer-side-informed_by-validation-is-source-aware),
+[D117](#d117-demo-records-are-classified-by-execution-surface), and
+[D122](#d122-host-runtime-adapters-stay-distinct-from-agent-framework-adapters).
+
+**Context.** [D114](#d114-google-adk-python-proof-uses-the-plugin-callback-boundary)
+proved the ADK plugin callback boundary after a tool ran. That is useful
+evidence, but it does not answer the authority-boundary question: can a later
+ADK action decide from verified prior evidence before the tool body executes?
+The Google stack proof also needed to show AP2 and A2A evidence feeding a
+concrete ADK decision, not only an after-the-fact callback record.
+
+The TypeScript ADK package exposes `BasePlugin.beforeToolCallback`, which can
+short-circuit a tool call. That is the right local boundary for an allow or
+refuse decision. Current ADK `ToolConfirmation` objects do not expose a native
+binding tag over tool name, canonical args, authority, policy version, and
+expiry, so confirmation binding has to stay in atrib-side fixture material for
+now.
+
+**Decision.** Add a Google ADK decision-ledger proof under
+[`packages/integration/examples/google-adk-decision-ledger/`](packages/integration/examples/google-adk-decision-ledger/).
+The proof uses real `@google/adk` `InMemoryRunner`, `BasePlugin`, and
+`FunctionTool` surfaces. It signs a hash-only decision record from
+`beforeToolCallback`, then signs an allowed tool outcome from
+`afterToolCallback` with the decision record in `informed_by`.
+
+The decision record uses the local extension event type
+`https://google-adk-decision-ledger.example/v1` and schema
+`atrib.google-adk.decision-ledger.entry.v1`. It is not promoted to a normative
+atrib event type. The local sidecar entry carries the decision state, tool call
+id, tool name, canonical args digest, authority mode, principal hash, policy,
+confirmation fields, timestamp, parent record hashes, and optional result
+digest. Public records stay hash-only.
+
+The proof covers:
+
+- `allowed`: the tool runs and the outcome cites the decision.
+- `refused`: the plugin returns a response and the tool body does not execute.
+- `confirmation_required` and `confirmation_resolved`: fixture entries bind the
+  pending action to tool, canonical args, authority, policy version, and expiry.
+- `stale_or_mismatched`: the binding check fails closed when any of those fields
+  drift.
+
+Update the Google stack chain proof to v3:
+AP2 transaction record -> A2A remote evidence -> A2A receiver follow-up -> ADK
+JS allow decision -> ADK JS tool outcome.
+
+**Alternatives considered.**
+
+- _Treat the ADK decision record as a core atrib event type now._ Rejected. One
+  ADK proof is not enough evidence to freeze a protocol byte or public package
+  contract.
+- _Keep signing only after the ADK tool callback._ Rejected. That proves audit
+  and traceability, but not the pre-action authority decision.
+- _Claim native ADK confirmation binding._ Rejected. ADK's current
+  `ToolConfirmation` object does not expose the binding tag this proof needs.
+- _Patch ADK internals for deterministic invocation ids._ Rejected. The proof
+  keeps deterministic reference output at the fixture layer and leaves live run
+  ids runtime-owned.
+
+**Consequences.**
+
+- atrib can now show pre-action trust transfer in the Google stack: AP2 evidence
+  is accepted, A2A receives signed parent evidence, ADK signs an allow decision
+  from that chain, then the tool outcome cites the decision.
+- The proof stays local and credential-free. It does not claim upstream Google
+  adoption, Agent Platform Runtime, Gemini Enterprise, Memory Bank, BigQuery
+  export, A2A TCK, or a live merchant/payment participant.
+- The older ADK Python callback proof remains valid for callback-boundary
+  coverage. The decision-ledger proof does not replace it.
+- Promotion into a public `@atrib/agent` ADK adapter or normative event type
+  requires repeated runtime evidence outside this one proof.
+
+**Cross-references.**
+
+- [`packages/integration/src/google-adk-decision-ledger.ts`](packages/integration/src/google-adk-decision-ledger.ts),
+  plugin, decision builder, signer, verifier, and binding helpers.
+- [`packages/integration/examples/google-adk-decision-ledger/`](packages/integration/examples/google-adk-decision-ledger/),
+  runnable ADK decision-ledger proof.
+- [`packages/integration/examples/google-stack-chain/`](packages/integration/examples/google-stack-chain/),
+  AP2 -> A2A -> ADK decision -> ADK tool chain.
+- [`packages/integration/test/google-adk-decision-ledger.test.ts`](packages/integration/test/google-adk-decision-ledger.test.ts),
+  focused contract tests.
+- [`packages/integration/test/google-stack-chain.test.ts`](packages/integration/test/google-stack-chain.test.ts),
+  deterministic chain proof tests.
+
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -7055,7 +7174,7 @@ The `extractor_classification` field is redundant for records where event_type i
 **Considerations.**
 
 - This is a new integration pattern not covered by the shipped [§9](atrib-spec.md#9-runtime-integration-patterns) patterns. Pattern #4 OpenInference is the closest, but operates on real-time spans, not post-hoc API events.
-- A reference adapter for Anthropic Managed Agents is planned for public release; it demonstrates how hosted-runtime customers can adopt atrib with one npm install.
+- A reference adapter for Anthropic Managed Agents would demonstrate how hosted-runtime applications can adopt atrib with one npm install.
 - Pattern composes with [P012](#p012-new-runtime-integration-pattern---multi-agent-orchestrator-orchestrator-queries-atrib-for-worker-capability--cross-attestation-status-before-delegating) (a hosted-runtime adapter is a substrate producer; orchestrators built on top can query the substrate the adapter produces).
 - Composes with [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox) when the hosted runtime extracts events from a sandboxed worker. The signing key must live outside the sandbox per [§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution).
 - Each runtime adapter is independent; ADR codifies the pattern, not any specific adapter.

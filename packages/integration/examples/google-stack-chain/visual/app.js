@@ -35,15 +35,26 @@ const runtimeStages = [
     complete: 'A2A receiver signed a follow-up that cites the verified handoff evidence.',
   },
   {
+    key: 'adk_decision',
+    id: 'runtime-adk-decision',
+    protocol: 'ADK JS',
+    label: 'ADK allow decision',
+    actor: 'google_adk_decision_allow_agent',
+    source: 'fresh signed decision',
+    waiting: 'Waiting for the A2A receiver record.',
+    running: 'Signing the ADK allow decision from the A2A parent record.',
+    complete: 'ADK signed an allow decision before the tool callback ran.',
+  },
+  {
     key: 'adk_tool_callback',
     id: 'runtime-adk-js',
     protocol: 'ADK JS',
     label: 'ADK JS tool callback',
-    actor: 'google_adk_atrib_smoke_agent',
+    actor: 'google_adk_decision_allow_agent',
     source: 'fresh signed callback',
-    waiting: 'Waiting for the A2A receiver record.',
-    running: 'Running the ADK FunctionTool callback with the A2A parent record.',
-    complete: 'ADK callback signed a record that cites the A2A receiver follow-up.',
+    waiting: 'Waiting for the ADK allow decision.',
+    running: 'Running the ADK FunctionTool callback with the signed decision parent.',
+    complete: 'ADK callback signed a record that cites the allow decision.',
   },
 ]
 
@@ -85,16 +96,28 @@ const runtimeChainStages = [
     complete: 'The receiving A2A agent signed a follow-up record that cites the accepted evidence.',
   },
   {
+    key: 'adk_decision',
+    stepKey: 'adk_decision',
+    id: 'runtime-adk-decision',
+    protocol: 'ADK JS',
+    label: 'ADK allow decision',
+    actor: 'google_adk_decision_allow_agent',
+    source: 'fresh signed decision',
+    waiting: 'Waiting for the A2A receiver record.',
+    running: 'Signing the ADK allow decision from the A2A parent record.',
+    complete: 'ADK JS signed an allow decision before the FunctionTool callback ran.',
+  },
+  {
     key: 'adk_tool_callback',
     stepKey: 'adk_tool_callback',
     id: 'runtime-adk-js',
     protocol: 'ADK JS',
     label: 'ADK JS tool callback',
-    actor: 'google_adk_atrib_smoke_agent',
+    actor: 'google_adk_decision_allow_agent',
     source: 'fresh signed callback',
-    waiting: 'Waiting for the A2A receiver record.',
-    running: 'Running the ADK FunctionTool callback with the A2A parent record.',
-    complete: 'ADK JS signed its callback record from the accepted A2A/AP2 chain.',
+    waiting: 'Waiting for the ADK allow decision.',
+    running: 'Running the ADK FunctionTool callback with the signed decision parent.',
+    complete: 'ADK JS signed its callback record from the signed allow decision.',
   },
 ]
 
@@ -303,7 +326,7 @@ function renderLiveWaiting() {
   )
   renderInspectorEmpty(
     'No live record selected',
-    'Start run to inspect the AP2 gate, A2A handoff, and ADK callback records.',
+    'Start run to inspect the AP2 gate, A2A handoff, ADK decision, and ADK callback records.',
   )
   renderAnalyticsEmpty('Runtime analytics rows appear after Start run.')
 }
@@ -313,7 +336,7 @@ function renderReferenceSnapshot() {
   state.runtimeChainNodes = null
   nodes.stageTitle.textContent = 'Example run'
   nodes.stageMode.textContent =
-    'Pinned local AP2, A2A, and ADK Python proof snapshot. It is inspectable evidence, not the active Cloud Run run.'
+    'Pinned local AP2, A2A, and ADK JS decision-ledger proof snapshot. It is inspectable evidence, not the active Cloud Run run.'
   renderChainCollection(state.data.nodes)
   nodes.analyticsTitle.textContent = 'Example analytics rows'
   nodes.analyticsCaveat.textContent = state.data.analytics.caveat
@@ -706,8 +729,8 @@ function renderRuntimeStarted(writeAnalytics) {
   nodes.runtimeStatus.className = 'runtime-chip pending'
   setRuntimeRail('Runtime running', 'pending')
   nodes.runtimeReason.textContent = writeAnalytics
-    ? 'Streaming the AP2 to A2A to ADK path, then attempting the analytics write.'
-    : 'Streaming the AP2 to A2A to ADK path from the runtime API.'
+    ? 'Streaming the AP2 to A2A to ADK decision path, then attempting the analytics write.'
+    : 'Streaming the AP2 to A2A to ADK decision path from the runtime API.'
   nodes.startRuntimeRun.disabled = true
   nodes.startRuntimeRun.textContent = 'Running AP2 gate'
   nodes.resetRuntimeView.disabled = true
@@ -736,8 +759,10 @@ function renderRuntimeStepStarted(event) {
   nodes.startRuntimeRun.textContent =
     event.key === 'a2a_handoff'
       ? 'Running A2A'
+      : event.key === 'adk_decision'
+        ? 'Running ADK decision'
       : event.key === 'adk_tool_callback'
-        ? 'Running ADK'
+        ? 'Running ADK callback'
         : 'Running AP2 gate'
   renderRuntimeFlow()
   renderRuntimeChainFromProgress()
@@ -863,9 +888,12 @@ function buildRuntimeChainNodes(run) {
   const adkStep =
     runtimeStepByKey('adk_tool_callback') ??
     run?.steps?.find((step) => step.key === 'adk_tool_callback')
+  const adkDecisionStep =
+    runtimeStepByKey('adk_decision') ?? run?.steps?.find((step) => step.key === 'adk_decision')
   const byKey = {
     ap2_gate: ap2Step,
     a2a_handoff: a2aStep,
+    adk_decision: adkDecisionStep,
     adk_tool_callback: adkStep,
   }
 
@@ -899,7 +927,12 @@ function sourceForRuntimeStage(stage, run) {
 }
 
 function checksForRuntimeNode(stage, step, run) {
-  if ((stage.key === 'ap2_gate' || stage.key === 'adk_tool_callback') && step?.checks?.length) {
+  if (
+    (stage.key === 'ap2_gate' ||
+      stage.key === 'adk_decision' ||
+      stage.key === 'adk_tool_callback') &&
+    step?.checks?.length
+  ) {
     return step.checks.map((check) => `${formatEvent(check.key)}: ${check.detail}`)
   }
   if (stage.key === 'a2a_remote') {
@@ -926,8 +959,15 @@ function checksForRuntimeNode(stage, step, run) {
     }
     return [stage.waiting]
   }
+  if (stage.key === 'adk_decision' && run?.chain) {
+    return [
+      `A2A receiver informs ADK decision: ${String(
+        run.chain.a2a_receiver_informs_adk_decision,
+      )}`,
+    ]
+  }
   if (stage.key === 'adk_tool_callback' && run?.chain) {
-    return [`A2A receiver informs ADK JS: ${String(run.chain.a2a_receiver_informs_adk_js)}`]
+    return [`ADK decision informs callback: ${String(run.chain.adk_decision_informs_adk_js)}`]
   }
   return [stage?.waiting ?? 'Waiting for runtime evidence.']
 }
@@ -940,18 +980,30 @@ function parentsForRuntimeNode(stage, step, run) {
   if (stage.key === 'a2a_receiver') {
     return compactHashes([runtimeRecordHashByKey('a2a_remote', run)])
   }
-  if (stage.key === 'adk_tool_callback') {
+  if (stage.key === 'adk_decision') {
     return step?.informed_by?.length
       ? step.informed_by
       : compactHashes([runtimeRecordHashByKey('a2a_receiver', run)])
+  }
+  if (stage.key === 'adk_tool_callback') {
+    return step?.informed_by?.length
+      ? step.informed_by
+      : compactHashes([runtimeRecordHashByKey('adk_decision', run)])
   }
   return []
 }
 
 function runtimeActorForStage(stage, run) {
+  if (stage.key === 'adk_decision') {
+    return (
+      run?.analytics_rows?.find((row) => row.event_type.includes('adk_js.decision'))?.agent ??
+      stage.actor
+    )
+  }
   if (stage.key === 'adk_tool_callback') {
     return (
-      run?.analytics_rows?.find((row) => row.event_type.includes('adk_js'))?.agent ?? stage.actor
+      run?.analytics_rows?.find((row) => row.event_type.includes('adk_js.tool'))?.agent ??
+      stage.actor
     )
   }
   if (stage.key === 'a2a_remote') {
@@ -979,7 +1031,10 @@ function valueForRuntimeStage(key) {
   if (key === 'a2a_receiver') {
     return 'The A2A receiver signs its own follow-up from the accepted remote evidence.'
   }
-  return 'The ADK callback runs from the signed A2A/AP2 chain and signs its own follow-up.'
+  if (key === 'adk_decision') {
+    return 'The ADK runtime signs an allow decision from the verified A2A/AP2 chain before the tool runs.'
+  }
+  return 'The ADK callback runs from the signed allow decision and signs its own follow-up.'
 }
 
 function runtimeEvidenceForChainStage(stage, status, step) {
@@ -1013,7 +1068,10 @@ function runtimeRecordHashForChainStage(stage, step, run) {
       'pending'
     )
   }
-  return step?.record_hash ?? runtimeAnalyticsHash(run, 'adk_js') ?? 'pending'
+  if (stage.key === 'adk_decision') {
+    return step?.record_hash ?? runtimeAnalyticsHash(run, 'adk_js.decision') ?? 'pending'
+  }
+  return step?.record_hash ?? runtimeAnalyticsHash(run, 'adk_js.tool') ?? 'pending'
 }
 
 function runtimeRecordHashByKey(key, run) {
@@ -1135,12 +1193,14 @@ function nodeIdForRuntimeRow(row) {
     if (row.event_type.includes('a2a.remote')) return 'runtime-a2a-remote'
     if (row.event_type.includes('a2a.receiver')) return 'runtime-a2a-receiver'
     if (row.event_type.includes('a2a')) return 'runtime-a2a-receiver'
+    if (row.event_type.includes('adk_js.decision')) return 'runtime-adk-decision'
     if (row.event_type.includes('adk')) return 'runtime-adk-js'
     return 'runtime-ap2'
   }
   if (row.event_type.includes('a2a.remote')) return 'a2a-remote'
   if (row.event_type.includes('a2a.receiver')) return 'a2a-receiver'
-  if (row.event_type.includes('adk')) return 'adk-python'
+  if (row.event_type.includes('adk_js.decision')) return 'adk-decision'
+  if (row.event_type.includes('adk')) return 'adk-js'
   return 'ap2'
 }
 
@@ -1524,9 +1584,13 @@ function liveChainCheckForSelected(selected, run) {
       key: 'a2a_remote_informs_receiver',
       label: 'A2A remote informs receiver',
     },
+    'runtime-adk-decision': {
+      key: 'a2a_receiver_informs_adk_decision',
+      label: 'A2A receiver informs ADK decision',
+    },
     'runtime-adk-js': {
-      key: 'a2a_receiver_informs_adk_js',
-      label: 'A2A receiver informs ADK JS',
+      key: 'adk_decision_informs_adk_js',
+      label: 'ADK decision informs callback',
     },
   }
   const chain = byNodeId[selected.id]

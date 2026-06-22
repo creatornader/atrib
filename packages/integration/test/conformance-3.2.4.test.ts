@@ -7,11 +7,11 @@
  * `buildGraphFromRecords` exists because the runnable end-to-end demo,
  * the calc-demo script, and the in-process integration tests all need
  * to compute a graph in-process without calling out to the graph-node
- * HTTP service. It is the GRAPH BUILDER CUSTOMERS SEE WHEN THEY RUN
- * `pnpm demo` IN FRONT OF THEM. If it silently drifts from
+ * HTTP service. It is the graph builder developers exercise when they run
+ * `pnpm demo`. If it silently drifts from
  * graph-node's production derivation, the demo's chain-hash output
  * misrepresents what production atrib infrastructure actually emits,
- * a customer-trust bug, not just a test-coverage gap.
+ * a verifier-trust bug, not just a test-coverage gap.
  *
  * This test enforces that drift never happens: every record fixture
  * is run through BOTH `graph-node`'s buildGraph and the integration
@@ -34,11 +34,10 @@
  * The 9-edge regression case at the bottom of this file is the
  * assertion that protects the four producer-claim edges: if any
  * (INFORMED_BY, PROVENANCE_OF, ANNOTATES, REVISES) silently drifts
- * between the two implementations, the demo will start lying to
- * customers about what production behavior looks like for cognitive
- * primitives (atrib-emit / atrib-recall / atrib-trace / atrib-summarize
- * are the surface customers care most about). That is the bug class
- * this test is designed to catch.
+ * between the two implementations, the demo will misstate production
+ * behavior for cognitive primitives (atrib-emit / atrib-recall /
+ * atrib-trace / atrib-summarize). That is the bug class this test is
+ * designed to catch.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -133,12 +132,8 @@ function assertGraphsAgree(a: GraphResponse, b: GraphResponse): void {
 
   // verification_state per node must match, both impls must mark a tampered
   // record the same way, otherwise downstream policy filters disagree.
-  const aStates = a.nodes
-    .map((n) => `${n.id}:${n.verification_state}`)
-    .sort()
-  const bStates = b.nodes
-    .map((n) => `${n.id}:${n.verification_state}`)
-    .sort()
+  const aStates = a.nodes.map((n) => `${n.id}:${n.verification_state}`).sort()
+  const bStates = b.nodes.map((n) => `${n.id}:${n.verification_state}`).sort()
   expect(aStates).toEqual(bStates)
 }
 
@@ -396,8 +391,14 @@ describe('§3.2.4 cross-implementation conformance', () => {
       'REVISES',
     ]
     for (const t of expectedTypes) {
-      expect(gnGraph.edges.some((e: GraphEdge) => e.type === t), `gn missing ${t}`).toBe(true)
-      expect(intGraph.edges.some((e: GraphEdge) => e.type === t), `int missing ${t}`).toBe(true)
+      expect(
+        gnGraph.edges.some((e: GraphEdge) => e.type === t),
+        `gn missing ${t}`,
+      ).toBe(true)
+      expect(
+        intGraph.edges.some((e: GraphEdge) => e.type === t),
+        `int missing ${t}`,
+      ).toBe(true)
     }
   })
 
@@ -428,19 +429,28 @@ describe('§3.2.4 cross-implementation conformance', () => {
     const cases = readdirSync(casesDir)
       .filter((f) => f.endsWith('.json'))
       .sort()
-      .map((f) => JSON.parse(readFileSync(join(casesDir, f), 'utf8')) as {
-        name: string
-        input: { records: AtribRecord[]; compact: boolean }
-      })
+      .map(
+        (f) =>
+          JSON.parse(readFileSync(join(casesDir, f), 'utf8')) as {
+            name: string
+            input: { records: AtribRecord[]; compact: boolean }
+          },
+      )
 
     expect(cases.length).toBeGreaterThan(0)
     for (const c of cases) {
-      const gn = await buildGraph(c.input.records, [], { compactIntraSessionEdges: c.input.compact })
-      const intg = await buildGraphFromAllRecords(c.input.records, { compactIntraSessionEdges: c.input.compact })
+      const gn = await buildGraph(c.input.records, [], {
+        compactIntraSessionEdges: c.input.compact,
+      })
+      const intg = await buildGraphFromAllRecords(c.input.records, {
+        compactIntraSessionEdges: c.input.compact,
+      })
       try {
         assertGraphsAgree(gn, intg)
       } catch (e) {
-        throw new Error(`§3.4.1.1 case "${c.name}", impls disagree: ${e instanceof Error ? e.message : String(e)}`)
+        throw new Error(
+          `§3.4.1.1 case "${c.name}", impls disagree: ${e instanceof Error ? e.message : String(e)}`,
+        )
       }
     }
   })

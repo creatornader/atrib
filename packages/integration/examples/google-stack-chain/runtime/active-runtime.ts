@@ -10,9 +10,13 @@ import {
   type GoogleEvidencePacket,
   type RuntimeCheck,
 } from '../../../src/google-evidence-runtime.js'
-import { runGoogleAdkPluginSmoke } from '../../google-adk/google-adk-plugin-smoke.js'
+import { runGoogleAdkDecisionLedgerAllowPath } from '../../google-adk-decision-ledger/google-adk-decision-ledger-proof.js'
 
-export type GoogleActiveRuntimeStepKey = 'ap2_gate' | 'a2a_handoff' | 'adk_tool_callback'
+export type GoogleActiveRuntimeStepKey =
+  | 'ap2_gate'
+  | 'a2a_handoff'
+  | 'adk_decision'
+  | 'adk_tool_callback'
 export type GoogleActiveRuntimeStatus = 'complete' | 'blocked'
 
 export interface GoogleActiveRuntimeStep {
@@ -73,10 +77,11 @@ export interface GoogleActiveRuntimeRun {
   chain: {
     ap2_informs_a2a_remote: boolean
     a2a_remote_informs_receiver: boolean
-    a2a_receiver_informs_adk_js: boolean
+    a2a_receiver_informs_adk_decision: boolean
+    adk_decision_informs_adk_js: boolean
   }
   a2a?: A2aHandoffProofResult
-  adk_js?: Awaited<ReturnType<typeof runGoogleAdkPluginSmoke>>
+  adk_js?: Awaited<ReturnType<typeof runGoogleAdkDecisionLedgerAllowPath>>
   analytics_rows: GoogleAgentAnalyticsRow[]
   value_add: {
     pre_action_trust_transfer: string
@@ -159,7 +164,8 @@ export async function createGoogleActiveRuntimeRun(
       chain: {
         ap2_informs_a2a_remote: false,
         a2a_remote_informs_receiver: false,
-        a2a_receiver_informs_adk_js: false,
+        a2a_receiver_informs_adk_decision: false,
+        adk_decision_informs_adk_js: false,
       },
       analytics_rows: [gate.analytics_row],
       value_add: runtimeValueAdd(),
@@ -226,39 +232,37 @@ export async function createGoogleActiveRuntimeRun(
 
   await emit({
     type: 'step_started',
-    key: 'adk_tool_callback',
+    key: 'adk_decision',
     protocol: 'ADK JS',
-    label: 'ADK tool callback',
+    label: 'ADK allow decision',
     timestamp: new Date(createdMs + 2_000).toISOString(),
   })
-  const adkJs = await runGoogleAdkPluginSmoke({
-    contextId: digestHex(`adk-js:${options.runId}`, 32),
+  const adkJs = await runGoogleAdkDecisionLedgerAllowPath({
+    contextId: digestHex(`adk-js-decision:${options.runId}`, 32),
     parentRecordHash: a2a.followup.record_hash,
-    parentRecord: a2a.records.followup,
+    sessionId: `google-active-adk-session-${digestHex(options.runId, 12)}`,
     prompt,
     nowMs: createdMs + 2_000,
   })
-  const adkRecordHash = adkJs.record_hashes[0]
-  if (!adkRecordHash) throw new Error('ADK JS proof did not sign a tool callback record')
   steps.push({
-    key: 'adk_tool_callback',
+    key: 'adk_decision',
     protocol: 'ADK JS',
     status: 'complete',
-    label: 'ADK tool callback',
-    detail: 'ADK JS InMemoryRunner executed a FunctionTool after the verified A2A handoff.',
+    label: 'ADK allow decision',
+    detail: 'ADK JS BasePlugin signed an allow decision before the FunctionTool executed.',
     timestamp: new Date(createdMs + 2_000).toISOString(),
-    record_hash: adkRecordHash,
+    record_hash: adkJs.decision.record_hash,
     informed_by: [a2a.followup.record_hash],
     checks: [
       {
-        key: 'adk_parent_informed_by_resolved',
-        ok: adkJs.chain.parent_informed_by_resolved.includes(a2a.followup.record_hash),
-        detail: `ADK record cites ${a2a.followup.record_hash}`,
+        key: 'adk_decision_parent_resolved',
+        ok: adkJs.decision.record.informed_by?.includes(a2a.followup.record_hash) ?? false,
+        detail: `ADK decision cites ${a2a.followup.record_hash}`,
       },
       {
-        key: 'adk_public_record_hash_only',
-        ok: adkJs.privacy.public_records_hash_only,
-        detail: 'Public ADK record keeps tool payload material out of the log.',
+        key: 'adk_decision_state_allowed',
+        ok: adkJs.decision.entry.decision_state === 'allowed',
+        detail: `Decision state ${adkJs.decision.entry.decision_state}`,
       },
     ],
   })
@@ -268,6 +272,41 @@ export async function createGoogleActiveRuntimeRun(
     timestamp: new Date(createdMs + 2_000).toISOString(),
   })
 
+  await emit({
+    type: 'step_started',
+    key: 'adk_tool_callback',
+    protocol: 'ADK JS',
+    label: 'ADK tool callback',
+    timestamp: new Date(createdMs + 3_000).toISOString(),
+  })
+  steps.push({
+    key: 'adk_tool_callback',
+    protocol: 'ADK JS',
+    status: 'complete',
+    label: 'ADK tool callback',
+    detail: 'ADK JS InMemoryRunner executed a FunctionTool after the signed allow decision.',
+    timestamp: new Date(createdMs + 3_000).toISOString(),
+    record_hash: adkJs.outcome.record_hash,
+    informed_by: [adkJs.decision.record_hash],
+    checks: [
+      {
+        key: 'adk_callback_informed_by_decision',
+        ok: adkJs.outcome.record.informed_by?.includes(adkJs.decision.record_hash) ?? false,
+        detail: `ADK callback cites ${adkJs.decision.record_hash}`,
+      },
+      {
+        key: 'adk_public_record_hash_only',
+        ok: !JSON.stringify(adkJs.publicRecords).includes('decision ledger private tool note'),
+        detail: 'Public ADK record keeps tool payload material out of the log.',
+      },
+    ],
+  })
+  await emit({
+    type: 'step_completed',
+    step: steps[3]!,
+    timestamp: new Date(createdMs + 3_000).toISOString(),
+  })
+
   const analyticsRows = buildRuntimeAnalyticsRows({
     runId: options.runId,
     createdMs,
@@ -275,7 +314,7 @@ export async function createGoogleActiveRuntimeRun(
     a2a,
     adkJs,
   })
-  const updatedAt = new Date(createdMs + 2_000).toISOString()
+  const updatedAt = new Date(createdMs + 3_000).toISOString()
 
   const run: GoogleActiveRuntimeRun = {
     ok: true,
@@ -285,7 +324,7 @@ export async function createGoogleActiveRuntimeRun(
     prompt,
     created_at: createdAt,
     updated_at: updatedAt,
-    duration_ms: 2_000,
+    duration_ms: 3_000,
     gate,
     steps,
     chain: {
@@ -293,9 +332,11 @@ export async function createGoogleActiveRuntimeRun(
       a2a_remote_informs_receiver: a2a.followup.informed_by_resolved.includes(
         a2a.evidence.remote_record_hash,
       ),
-      a2a_receiver_informs_adk_js: adkJs.chain.parent_informed_by_resolved.includes(
+      a2a_receiver_informs_adk_decision: adkJs.decision.record.informed_by?.includes(
         a2a.followup.record_hash,
-      ),
+      ) ?? false,
+      adk_decision_informs_adk_js:
+        adkJs.outcome.record.informed_by?.includes(adkJs.decision.record_hash) ?? false,
     },
     a2a,
     adk_js: adkJs,
@@ -322,14 +363,17 @@ function buildRuntimeAnalyticsRows({
   createdMs: number
   gate: GoogleEvidenceGate
   a2a: A2aHandoffProofResult
-  adkJs: Awaited<ReturnType<typeof runGoogleAdkPluginSmoke>>
+  adkJs: Awaited<ReturnType<typeof runGoogleAdkDecisionLedgerAllowPath>>
 }): GoogleAgentAnalyticsRow[] {
   const traceId = digestHex(`google-active-runtime:${runId}:${gate.record_hash}`, 32)
   const ap2Span = digestHex(`${runId}:ap2`, 16)
   const a2aRemoteSpan = digestHex(`${runId}:a2a-remote`, 16)
   const a2aReceiverSpan = digestHex(`${runId}:a2a-receiver`, 16)
-  const adkIds = adkJs.google_operational_ids[0]
-  if (!adkIds) throw new Error('ADK JS proof did not expose operational ids')
+  const adkDecisionIds = adkJs.google_operational_ids[0]
+  const adkOutcomeIds = adkJs.google_operational_ids[1]
+  if (!adkDecisionIds || !adkOutcomeIds) {
+    throw new Error('ADK JS proof did not expose decision and outcome operational ids')
+  }
 
   return [
     {
@@ -376,19 +420,36 @@ function buildRuntimeAnalyticsRows({
     },
     {
       timestamp: new Date(createdMs + 2_000).toISOString(),
-      event_type: 'atrib.adk_js.tool_callback_signed',
-      agent: adkIds.adk_agent_name,
-      session_id: adkIds.adk_session_id,
-      invocation_id: adkIds.adk_invocation_id,
+      event_type: 'atrib.adk_js.decision_allowed',
+      agent: adkDecisionIds.adk_agent_name,
+      session_id: adkDecisionIds.adk_session_id,
+      invocation_id: adkDecisionIds.adk_invocation_id,
       user_id: 'google-stack-demo-operator',
       trace_id: traceId,
-      span_id: adkIds.span_id,
+      span_id: adkDecisionIds.span_id,
       parent_span_id: a2aReceiverSpan,
       status: 'OK',
       error_message: '',
       is_truncated: false,
-      atrib_record_hash: adkJs.record_hashes[0]!,
+      atrib_record_hash: adkJs.decision.record_hash,
       atrib_parent_record_hashes: JSON.stringify([a2a.followup.record_hash]),
+      protocol: 'ADK JS',
+    },
+    {
+      timestamp: new Date(createdMs + 3_000).toISOString(),
+      event_type: 'atrib.adk_js.tool_callback_signed',
+      agent: adkOutcomeIds.adk_agent_name,
+      session_id: adkOutcomeIds.adk_session_id,
+      invocation_id: adkOutcomeIds.adk_invocation_id,
+      user_id: 'google-stack-demo-operator',
+      trace_id: traceId,
+      span_id: adkOutcomeIds.span_id,
+      parent_span_id: adkDecisionIds.span_id,
+      status: 'OK',
+      error_message: '',
+      is_truncated: false,
+      atrib_record_hash: adkJs.outcome.record_hash,
+      atrib_parent_record_hashes: JSON.stringify([adkJs.decision.record_hash]),
       protocol: 'ADK JS',
     },
   ]
@@ -412,7 +473,7 @@ function idsForRun(runId: string): {
 function runtimeValueAdd(): GoogleActiveRuntimeRun['value_add'] {
   return {
     pre_action_trust_transfer:
-      'The ADK tool action receives verifier-resolved AP2 and A2A parent evidence before it runs.',
+      'The ADK allow decision receives verifier-resolved AP2 and A2A parent evidence before the tool runs.',
     runtime_gate:
       'The next action is blocked unless AP2 detection, AP2 / VI evidence, the atrib record, and counterparty attestation pass.',
     analytics_join:
@@ -424,7 +485,7 @@ function runtimeCaveats(): string[] {
   return [
     'The AP2 packet is still a committed replay fixture unless a merchant supplies live AP2 result and evidence JSON.',
     'The A2A exchange is in-process JSON-RPC, not a public A2A server or upstream TCK result.',
-    'The ADK proof uses @google/adk InMemoryRunner, not Agent Platform Runtime, Gemini Enterprise, or Memory Bank.',
+    'The ADK proof uses @google/adk InMemoryRunner decision and callback hooks, not Agent Platform Runtime, Gemini Enterprise, or Memory Bank.',
   ]
 }
 

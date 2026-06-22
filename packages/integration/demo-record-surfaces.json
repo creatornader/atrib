@@ -111,6 +111,13 @@
       "commands": ["google-adk-python-plugin-smoke"]
     },
     {
+      "id": "google-adk-decision-ledger",
+      "path": "examples/google-adk-decision-ledger",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["google-adk-decision-ledger-proof"]
+    },
+    {
       "id": "google-stack-chain",
       "path": "examples/google-stack-chain",
       "record_class": "offline-local",

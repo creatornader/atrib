@@ -207,7 +207,7 @@ export async function runLlamaIndexPythonMemorySmoke(): Promise<SmokeResult> {
     caveats: [
       'This proves Python llama_index.core.memory.Memory with StaticMemoryBlock, not VectorMemoryBlock retrieval or an external vector database.',
       'It does not call an LLM, run a full LlamaIndex agent workflow, persist SQL history outside the default local store, or prove external adoption.',
-      'External review still needs a same-day LlamaIndex proof refresh.',
+      'Rerun this proof before citing it as current LlamaIndex evidence.',
     ],
   }
 }

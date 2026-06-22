@@ -74,8 +74,8 @@ describe('Google stack chain visual workbench', () => {
     await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(1)
     await page.locator('#viewReferenceSnapshot').click()
     await expect.poll(() => page.locator('#stageTitle').textContent()).toBe('Example run')
-    await expect.poll(() => page.locator('.node').count()).toBe(4)
-    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(4)
+    await expect.poll(() => page.locator('.node').count()).toBe(5)
+    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(5)
     await expect
       .poll(() => page.locator('#proofStatus').textContent())
       .toBe('reference snapshot ready')
@@ -89,17 +89,17 @@ describe('Google stack chain visual workbench', () => {
       .poll(() => page.locator('#verifyStatus').textContent())
       .toContain('Fixture checked')
 
-    await page.getByRole('button', { name: 'Inspect ADK Python callback' }).click()
+    await page.getByRole('button', { name: 'Inspect ADK JS callback' }).click()
     await expect
       .poll(() => page.locator('#selectedTitle').textContent())
-      .toBe('ADK Python callback')
+      .toBe('ADK JS callback')
     await expect.poll(() => page.locator('#protocolBadge').getAttribute('class')).toContain('ADK')
     await expect
       .poll(() => page.locator('#selectedHash').textContent())
-      .toContain('sha256:15801af402108603b899b8773b59aa68af71d9e34ee50ec18103afea141f31ed')
+      .toContain('sha256:61e7c3f52266ac2a24c22336f5c5e53539b1e55d91b78725fe9d70fe9b966a56')
     await expect
       .poll(() => page.locator('#analyticsRows tr.selected').textContent())
-      .toContain('ADK Python')
+      .toContain('ADK JS')
     expect(consoleErrors).toEqual([])
     await page.close()
   })
@@ -121,8 +121,8 @@ describe('Google stack chain visual workbench', () => {
       .toContain('Runtime records will appear here')
     await expect.poll(() => page.locator('.node').count()).toBe(0)
     await page.locator('#viewReferenceSnapshot').click()
-    await expect.poll(() => page.locator('.node').count()).toBe(4)
-    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(4)
+    await expect.poll(() => page.locator('.node').count()).toBe(5)
+    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(5)
     expect(consoleErrors).toEqual([])
     await page.close()
   })
@@ -137,7 +137,7 @@ describe('Google stack chain visual workbench', () => {
 
     await page.goto(`${baseUrl}?runtime=${encodeURIComponent(`${baseUrl}/runtime`)}`)
     await expect.poll(() => page.locator('#runtimeStatus').textContent()).toBe('Ready')
-    await expect.poll(() => page.locator('#runtimeFlow .runtime-flow-step').count()).toBe(3)
+    await expect.poll(() => page.locator('#runtimeFlow .runtime-flow-step').count()).toBe(4)
     await expect.poll(() => page.locator('.segment').count()).toBe(2)
     await expect.poll(() => page.locator('[data-jump]').count()).toBe(0)
     await expect.poll(() => page.locator('.node').count()).toBe(0)
@@ -148,8 +148,8 @@ describe('Google stack chain visual workbench', () => {
     await expect.poll(() => page.locator('#runtimeAdkHash').textContent()).toContain('sha256:adk')
     await expect
       .poll(() => page.locator('#runtimeFlow .runtime-flow-step.complete').count())
-      .toBe(3)
-    await expect.poll(() => page.locator('.runtime-node').count()).toBe(4)
+      .toBe(4)
+    await expect.poll(() => page.locator('.runtime-node').count()).toBe(5)
     await expect
       .poll(() => page.locator('.source-badge').first().textContent())
       .toBe('verified replay packet')
@@ -159,7 +159,7 @@ describe('Google stack chain visual workbench', () => {
     await expect
       .poll(() => page.locator('#stageMode').textContent())
       .toContain('Active runtime path')
-    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(4)
+    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(5)
     await expect
       .poll(() => page.locator('#analyticsRows tr').last().textContent())
       .toContain('ADK JS')
@@ -171,6 +171,10 @@ describe('Google stack chain visual workbench', () => {
     await expect
       .poll(() => page.locator('#selectedTitle').textContent())
       .toBe('A2A receiver follow-up')
+    await page.locator('#analyticsRows tr').nth(3).click()
+    await expect
+      .poll(() => page.locator('#selectedTitle').textContent())
+      .toBe('ADK allow decision')
     await page.locator('#analyticsRows tr').last().click()
     await expect
       .poll(() => page.locator('#selectedTitle').textContent())
@@ -186,7 +190,7 @@ describe('Google stack chain visual workbench', () => {
       .toBe('Accepted')
     await expect
       .poll(() => page.locator('#checkList strong').first().textContent())
-      .toBe('A2A receiver informs ADK callback')
+      .toBe('ADK Callback Informed By Decision')
     await page.getByRole('button', { name: 'Live verify' }).click()
     await expect.poll(() => page.locator('#verifyStatus').textContent()).toContain('Live verified')
     await expect
@@ -204,7 +208,7 @@ describe('Google stack chain visual workbench', () => {
       .toEqual(['Accepted', 'Accepted', 'Accepted', 'Accepted', 'Accepted', 'Accepted'])
     await expect
       .poll(() => page.locator('#checkList').textContent())
-      .toContain('A2A receiver informs ADK JS is true')
+      .toContain('ADK decision informs callback is true')
     await expect
       .poll(() => page.locator('#runtimeChecks').evaluate((element) => element.scrollHeight))
       .toBeLessThanOrEqual(
@@ -301,7 +305,8 @@ describe('Google stack chain visual workbench', () => {
       'sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db',
       'sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9',
       'sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2',
-      'sha256:15801af402108603b899b8773b59aa68af71d9e34ee50ec18103afea141f31ed',
+      'sha256:4d30b4e5d7557ac2450f65c397f5442f9c45a7bad85c219de65153fcdc93294f',
+      'sha256:61e7c3f52266ac2a24c22336f5c5e53539b1e55d91b78725fe9d70fe9b966a56',
     ])
     expect(
       fixture.analytics.rows.map((row: { trace_id: string | null; span_id: string | null }) => [
@@ -310,9 +315,10 @@ describe('Google stack chain visual workbench', () => {
       ]),
     ).toEqual([
       [null, null],
-      ['b31c447d70e4b50bacf6440165eeaa1e', 'b115b227841db8e4'],
-      ['b31c447d70e4b50bacf6440165eeaa1e', '1d6154dbc8bded9a'],
-      ['b31c447d70e4b50bacf6440165eeaa1e', 'f1973f9540673909'],
+      ['742ef877246a075452d965328d32ff98', 'b115b227841db8e4'],
+      ['742ef877246a075452d965328d32ff98', '1d6154dbc8bded9a'],
+      ['742ef877246a075452d965328d32ff98', 'bc9b7b9136e25e6c'],
+      ['742ef877246a075452d965328d32ff98', 'a273389a6a9ffa14'],
     ])
   })
 })
@@ -346,8 +352,10 @@ function writeRuntimeMock(pathname: string, res: ServerResponse): void {
   }
   if (pathname === '/runtime/api/runs/stream') {
     const run = mockRun()
-    const [ap2Step, a2aStep, adkStep] = run.steps
-    if (!ap2Step || !a2aStep || !adkStep) throw new Error('mock run is missing runtime steps')
+    const [ap2Step, a2aStep, adkDecisionStep, adkStep] = run.steps
+    if (!ap2Step || !a2aStep || !adkDecisionStep || !adkStep) {
+      throw new Error('mock run is missing runtime steps')
+    }
     res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
     res.end(
       [
@@ -385,6 +393,24 @@ function writeRuntimeMock(pathname: string, res: ServerResponse): void {
         {
           ok: true,
           event: { type: 'step_completed', step: a2aStep, timestamp: a2aStep.timestamp },
+        },
+        {
+          ok: true,
+          event: {
+            type: 'step_started',
+            key: 'adk_decision',
+            protocol: 'ADK JS',
+            label: 'ADK allow decision',
+            timestamp: adkDecisionStep.timestamp,
+          },
+        },
+        {
+          ok: true,
+          event: {
+            type: 'step_completed',
+            step: adkDecisionStep,
+            timestamp: adkDecisionStep.timestamp,
+          },
         },
         {
           ok: true,
@@ -458,8 +484,8 @@ function mockRun() {
     mode: 'replay',
     prompt: 'Continue only if the AP2 evidence verifies.',
     created_at: '2026-06-18T00:00:00.000Z',
-    updated_at: '2026-06-18T00:00:02.000Z',
-    duration_ms: 2000,
+    updated_at: '2026-06-18T00:00:03.000Z',
+    duration_ms: 3000,
     gate: mockGate(),
     steps: [
       {
@@ -481,19 +507,61 @@ function mockRun() {
         record_hash: 'sha256:a2a0000000000000000000000000000000000000000000000000000000000000',
       },
       {
+        key: 'adk_decision',
+        protocol: 'ADK JS',
+        status: 'complete',
+        label: 'ADK allow decision',
+        detail: 'ADK decision signed.',
+        timestamp: '2026-06-18T00:00:02.000Z',
+        record_hash: 'sha256:d3c1510a00000000000000000000000000000000000000000000000000000000',
+        informed_by: [
+          'sha256:a2a0000000000000000000000000000000000000000000000000000000000000',
+        ],
+        checks: [
+          {
+            key: 'adk_decision_parent_resolved',
+            ok: true,
+            detail:
+              'ADK decision cites sha256:a2a0000000000000000000000000000000000000000000000000000000000000',
+          },
+          {
+            key: 'adk_decision_state_allowed',
+            ok: true,
+            detail: 'Decision state allowed',
+          },
+        ],
+      },
+      {
         key: 'adk_tool_callback',
         protocol: 'ADK JS',
         status: 'complete',
         label: 'ADK tool callback',
         detail: 'ADK callback signed.',
-        timestamp: '2026-06-18T00:00:02.000Z',
+        timestamp: '2026-06-18T00:00:03.000Z',
         record_hash: 'sha256:adk0000000000000000000000000000000000000000000000000000000000000',
+        informed_by: [
+          'sha256:d3c1510a00000000000000000000000000000000000000000000000000000000',
+        ],
+        checks: [
+          {
+            key: 'adk_callback_informed_by_decision',
+            ok: true,
+            detail:
+              'ADK callback cites sha256:d3c1510a00000000000000000000000000000000000000000000000000000000',
+          },
+          {
+            key: 'adk_public_record_hash_only',
+            ok: true,
+            detail: 'Public ADK record keeps tool payload material out of the log.',
+          },
+        ],
       },
     ],
     chain: {
       ap2_informs_a2a_remote: true,
       a2a_remote_informs_receiver: true,
-      a2a_receiver_informs_adk_js: true,
+      a2a_receiver_informs_adk_decision: true,
+      adk_decision_informs_adk_js: true,
     },
     analytics_rows: [
       mockAnalyticsRow({
@@ -513,6 +581,12 @@ function mockRun() {
         atrib_record_hash:
           'sha256:a2a0000000000000000000000000000000000000000000000000000000000000',
         protocol: 'A2A',
+      }),
+      mockAnalyticsRow({
+        event_type: 'atrib.adk_js.decision_allowed',
+        atrib_record_hash:
+          'sha256:d3c1510a00000000000000000000000000000000000000000000000000000000',
+        protocol: 'ADK JS',
       }),
       mockAnalyticsRow({
         event_type: 'atrib.adk_js.tool_callback_signed',
