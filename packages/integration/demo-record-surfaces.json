@@ -108,7 +108,7 @@
       "path": "examples/google-adk-python",
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
-      "commands": ["google-adk-python-plugin-smoke"]
+      "commands": ["google-adk-python-plugin-smoke", "google-adk-python-decision-ledger-proof"]
     },
     {
       "id": "google-adk-decision-ledger",
@@ -122,7 +122,11 @@
       "path": "examples/google-stack-chain",
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
-      "commands": ["google-stack-chain-proof", "google-evidence-runtime", "google-stack-chain-visual"]
+      "commands": [
+        "google-stack-chain-proof",
+        "google-evidence-runtime",
+        "google-stack-chain-visual"
+      ]
     },
     {
       "id": "openai-agents-runtime",
