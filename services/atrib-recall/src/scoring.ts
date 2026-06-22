@@ -95,7 +95,7 @@ export function shouldSuppressLifecycleAnchorForQuery(
   return hasLifecycleSignal(loaded, annotation)
 }
 
-function queryMentionsLifecycle(queryTokens: string[]): boolean {
+export function queryMentionsLifecycle(queryTokens: string[]): boolean {
   return queryTokens.some((token) => LIFECYCLE_QUERY_TOKENS.has(token))
 }
 
@@ -127,8 +127,7 @@ function summaryLooksLikeLifecycleAnchor(summary: string | undefined): boolean {
   if (typeof summary !== 'string') return false
   const normalized = summary.toLowerCase()
   return (
-    normalized.startsWith('session compaction at ') ||
-    normalized.startsWith('session ended at ')
+    normalized.startsWith('session compaction at ') || normalized.startsWith('session ended at ')
   )
 }
 
@@ -162,8 +161,8 @@ function hasSemanticAnnotation(annotation: AnnotationSummary | undefined): boole
   if (!annotation) return false
   return Boolean(
     annotation.summary ||
-      (annotation.topics && annotation.topics.length > 0) ||
-      annotation.max_importance,
+    (annotation.topics && annotation.topics.length > 0) ||
+    annotation.max_importance,
   )
 }
 
@@ -272,11 +271,7 @@ export function normalizedBm25Relevance(
   return Math.min(rawScore, 1) * coverage
 }
 
-export function queryTokenCoverage(
-  index: BM25Index,
-  docId: string,
-  queryTokens: string[],
-): number {
+export function queryTokenCoverage(index: BM25Index, docId: string, queryTokens: string[]): number {
   const doc = index.docs.get(docId)
   if (!doc) return 0
   const uniqueQueryTokens = Array.from(new Set(queryTokens))
