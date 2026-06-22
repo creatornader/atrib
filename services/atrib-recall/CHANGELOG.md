@@ -1,5 +1,11 @@
 # @atrib/recall
 
+## 0.14.2
+
+### Patch Changes
+
+- 29aee57: Add a durable content-token index for complete content recall and expose runtime/index coverage metadata.
+
 ## 0.14.1
 
 ### Patch Changes
