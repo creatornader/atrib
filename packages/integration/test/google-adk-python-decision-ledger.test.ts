@@ -34,15 +34,32 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_ADK_PYTHON_DECISION_LEDGER !== '1')
 
       expect(result.live_adk.allowed).toMatchObject({
         decision_state: 'allowed',
+        authority_mode: 'user-auth',
+        selection_source: 'after_model_callback',
+        model_rationale_trust: 'untrusted_generated',
         tool_body_executed: true,
         function_call_events: 1,
         function_response_events: 1,
       })
       expect(result.live_adk.allowed.decision_record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
       expect(result.live_adk.allowed.outcome_record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(result.live_adk.allowed.selection_rationale_digest).toMatch(/^sha256:[0-9a-f]{64}$/)
+
+      expect(result.live_adk.agent_authority).toMatchObject({
+        decision_state: 'allowed',
+        authority_mode: 'agent-auth',
+        selection_source: 'after_model_callback',
+        tool_body_executed: true,
+        function_call_events: 1,
+        function_response_events: 1,
+      })
+      expect(result.live_adk.agent_authority.decision_record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(result.live_adk.agent_authority.outcome_record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
 
       expect(result.live_adk.refused).toMatchObject({
         decision_state: 'refused',
+        policy_rule: 'quote_price:atlas-policy',
+        policy_reason: 'sku denied by local policy',
         outcome_record_hash: null,
         tool_body_executed: false,
         function_call_events: 1,
@@ -50,16 +67,36 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_ADK_PYTHON_DECISION_LEDGER !== '1')
       })
       expect(result.live_adk.policy_error).toMatchObject({
         decision_state: 'policy_error',
+        policy_rule: 'quote_price:atlas-policy',
+        policy_reason: 'policy evaluator failed closed before dispatch',
         outcome_record_hash: null,
         tool_body_executed: false,
         function_call_events: 1,
         function_response_events: 1,
       })
+      expect(result.live_adk.native_confirmation_required).toMatchObject({
+        decision_state: 'confirmation_required',
+        policy_source: 'confirmation',
+        policy_rule: 'quote_price:native-require-confirmation',
+        outcome_record_hash: null,
+        requested_tool_confirmations: 1,
+        adk_request_confirmation_events: 1,
+        tool_body_executed: false,
+        function_call_events: 2,
+        function_response_events: 1,
+      })
 
       expect(result.proof).toMatchObject({
         allowed_execution_informed_by_decision: true,
+        agent_authority_execution_informed_by_decision: true,
         refused_tool_body_executed: false,
         policy_error_tool_body_executed: false,
+        native_confirmation_tool_body_executed: false,
+        native_confirmation_requested: true,
+        model_selection_captured: true,
+        agent_auth_mode_captured: true,
+        refusal_rule_recorded: true,
+        policy_error_rule_recorded: true,
         stale_mismatch_detected: true,
       })
       expect(result.confirmation).toMatchObject({
@@ -77,16 +114,19 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_ADK_PYTHON_DECISION_LEDGER !== '1')
       )
 
       expect(Object.keys(result.record_hashes).sort()).toEqual([
+        'agent_authority_decision',
+        'agent_authority_tool_outcome',
         'allowed_decision',
         'allowed_tool_outcome',
         'confirmation_required',
         'confirmation_resolved',
+        'native_confirmation_required',
         'policy_error_decision',
         'refused_decision',
         'stale_or_mismatched',
       ])
-      expect(result.publicRecords).toHaveLength(7)
-      expect(result.sidecars).toHaveLength(7)
+      expect(result.publicRecords).toHaveLength(10)
+      expect(result.sidecars).toHaveLength(10)
       expect(result.privacy).toEqual({
         public_records_hash_only: true,
         local_sidecars_keep_payloads: true,
@@ -97,6 +137,7 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_ADK_PYTHON_DECISION_LEDGER !== '1')
         'python decision ledger private tool note',
       )
       expect(JSON.stringify(result.publicRecords)).not.toContain('user:atlas-buyer@example.test')
+      expect(JSON.stringify(result.publicRecords)).not.toContain('agent:catalog-service@example.test')
       expect(result.caveats.join(' ')).toContain('ToolConfirmation')
     }, 120000)
   },

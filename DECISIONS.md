@@ -6953,18 +6953,25 @@ The Google stack proof also needed to show AP2 and A2A evidence feeding a
 concrete ADK decision, not only an after-the-fact callback record.
 
 Google ADK Python exposes `BasePlugin.before_tool_callback`, which can
-short-circuit a tool call. That is the right local boundary for an allow or
-refuse decision in the `google/adk-python` issue surface. Current ADK
-confirmation objects do not expose a native binding tag over tool name,
-canonical args, authority, policy version, and expiry, so confirmation binding
-has to stay in atrib-side fixture material for now.
+short-circuit a tool call. That is the right local boundary for an allow,
+refuse, or policy-error decision in the `google/adk-python` issue surface.
+It also exposes `BasePlugin.after_model_callback`, which can observe the model
+response that selected a tool, and `FunctionTool(require_confirmation=True)`,
+which can request native ADK tool confirmation before the tool body runs.
+Current ADK confirmation objects do not expose a native binding tag over tool
+name, canonical args, authority, policy version, and expiry, so confirmation
+resolution binding has to stay in atrib-side fixture material for now.
 
 **Decision.** Add a Python-native Google ADK decision-ledger proof under
 [`packages/integration/examples/google-adk-python/`](packages/integration/examples/google-adk-python/).
 The proof uses real `google-adk==2.3.0` `InMemoryRunner`, `BasePlugin`, and
 `FunctionTool` surfaces. It signs a hash-only decision record from
 `before_tool_callback`, then signs an allowed tool outcome from
-`after_tool_callback` with the decision record in `informed_by`.
+`after_tool_callback` with the decision record in `informed_by`. It also uses
+`after_model_callback` to capture the tool-selection source as untrusted model
+context, exercises both `user-auth` and `agent-auth` shaped authority records,
+and runs a native `FunctionTool(require_confirmation=True)` path that signs
+`confirmation_required` while proving the tool body did not run.
 
 The TypeScript decision-ledger proof under
 [`packages/integration/examples/google-adk-typescript/`](packages/integration/examples/google-adk-typescript/)
@@ -6975,18 +6982,22 @@ The decision record uses the local extension event type
 `https://google-adk-decision-ledger.example/v1` and schema
 `atrib.google-adk.decision-ledger.entry.v1`. It is not promoted to a normative
 atrib event type. The local sidecar entry carries the decision state, tool call
-id, tool name, canonical args digest, authority mode, principal hash, policy,
-confirmation fields, timestamp, parent record hashes, and optional result
-digest. Public records stay hash-only.
+id, tool name, canonical args digest, selection source and rationale digest,
+authority mode, principal hash, policy, confirmation fields, timestamp, parent
+record hashes, and optional result digest. Public records stay hash-only.
 
 The proof covers:
 
 - `allowed`: the tool runs and the outcome cites the decision.
+- `agent-auth allowed`: the tool runs under an agent-auth shaped authority
+  record and the outcome cites the decision.
 - `refused`: the plugin returns a response and the tool body does not execute.
 - `policy_error`: plugin policy failure signs a decision record and the tool
   body does not execute.
-- `confirmation_required` and `confirmation_resolved`: fixture entries bind the
-  pending action to tool, canonical args, authority, policy version, and expiry.
+- `confirmation_required`: native ADK `FunctionTool(require_confirmation=True)`
+  requests confirmation before the tool body runs.
+- `confirmation_resolved`: a fixture entry binds the pending action to tool,
+  canonical args, authority, policy version, and expiry.
 - `stale_or_mismatched`: the binding check fails closed when any of those fields
   drift.
 
@@ -7005,7 +7016,9 @@ Python allow decision -> ADK Python tool outcome.
 - _Keep signing only after the ADK tool callback._ Rejected. That proves audit
   and traceability, but not the pre-action authority decision.
 - _Claim native ADK confirmation binding._ Rejected. ADK's current
-  confirmation objects do not expose the binding tag this proof needs.
+  confirmation objects do not expose the binding tag this proof needs. The proof
+  now exercises native confirmation request emission, but keeps resolved and
+  stale binding checks in fixture material.
 - _Patch ADK internals for deterministic invocation ids._ Rejected. The proof
   keeps deterministic reference output at the fixture layer and leaves live run
   ids runtime-owned.
@@ -7015,6 +7028,10 @@ Python allow decision -> ADK Python tool outcome.
 - atrib can now show pre-action trust transfer in the Google stack: AP2 evidence
   is accepted, A2A receives signed parent evidence, ADK signs an allow decision
   from that chain, then the tool outcome cites the decision.
+- The ADK proof is stronger than a generic signed receipt. It shows the
+  external-signer side of the decision-semantics layer: selection source,
+  authority mode, refusal rule, native confirmation request, and tool outcome
+  can converge into one verifier-readable record shape.
 - The proof stays local and credential-free. It does not claim upstream Google
   adoption, Agent Platform Runtime, Gemini Enterprise, Memory Bank, BigQuery
   export, A2A TCK, or a live merchant/payment participant.

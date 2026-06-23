@@ -138,6 +138,16 @@ def build_decision_ledger_entry(params):
   canonical_args_digest = params.get("canonical_args_digest") or digest_canonical(
       params.get("args") or {}
   )
+  selection = params.get("selection") or {
+      "source": "unavailable",
+      "tool_name": params["tool_name"],
+      "canonical_args_digest": canonical_args_digest,
+      "function_call_id": None,
+      "rationale_digest": digest_canonical({
+          "text": params.get("model_rationale", ""),
+          "trust": "untrusted_generated",
+      }),
+  }
   entry_without_id = {
       "schema": GOOGLE_ADK_DECISION_LEDGER_SCHEMA,
       "decision_state": params["decision_state"],
@@ -147,6 +157,7 @@ def build_decision_ledger_entry(params):
       "tool_call_id": params["tool_call_id"],
       "tool_name": params["tool_name"],
       "canonical_args_digest": canonical_args_digest,
+      "selection": selection,
       "authority": params["authority"],
       "policy": params["policy"],
       "confirmation": params["confirmation"],
@@ -344,6 +355,73 @@ def ctx_attr(tool_context, *names, default=None):
   return default
 
 
+def normalize_function_args(value):
+  if value is None:
+    return {}
+  if isinstance(value, dict):
+    return dict(value)
+  if hasattr(value, "items"):
+    return dict(value.items())
+  return json.loads(canonical_json(value))
+
+
+def selection_key(tool_name, args):
+  return f"{tool_name}:{digest_canonical(normalize_function_args(args))}"
+
+
+def extract_model_response_parts(llm_response):
+  content = getattr(llm_response, "content", None)
+  return getattr(content, "parts", None) or []
+
+
+def extract_model_selection(llm_response):
+  parts = extract_model_response_parts(llm_response)
+  text_parts = [getattr(part, "text", None) for part in parts]
+  rationale = " ".join(text for text in text_parts if text)
+  selections = []
+  for part in parts:
+    function_call = getattr(part, "function_call", None)
+    if not function_call:
+      continue
+    args = normalize_function_args(getattr(function_call, "args", None))
+    tool_name = getattr(function_call, "name", "")
+    selections.append({
+        "source": "after_model_callback",
+        "tool_name": tool_name,
+        "canonical_args_digest": digest_canonical(args),
+        "function_call_id": getattr(function_call, "id", None),
+        "rationale_digest": digest_canonical({
+            "text": rationale,
+            "trust": "untrusted_generated",
+        }),
+        "rationale_text": rationale,
+    })
+  return selections
+
+
+def native_confirmation_counts(events):
+  requested = 0
+  request_events = 0
+  for event in events:
+    actions = getattr(event, "actions", None)
+    requested_tool_confirmations = (
+        getattr(actions, "requested_tool_confirmations", None) if actions else None
+    )
+    if isinstance(requested_tool_confirmations, dict):
+      requested += len(requested_tool_confirmations)
+    elif requested_tool_confirmations:
+      requested += 1
+    parts = getattr(getattr(event, "content", None), "parts", None) or []
+    for part in parts:
+      function_call = getattr(part, "function_call", None)
+      if function_call and getattr(function_call, "name", None) == "adk_request_confirmation":
+        request_events += 1
+  return {
+      "requested_tool_confirmations": requested,
+      "adk_request_confirmation_events": request_events,
+  }
+
+
 class AtribAdkPythonDecisionLedgerPlugin(BasePlugin):
   def __init__(self, *, options, private_key, creator_key, execution_counter):
     super().__init__("atrib_google_adk_python_decision_ledger")
@@ -356,33 +434,78 @@ class AtribAdkPythonDecisionLedgerPlugin(BasePlugin):
     self.decisions = []
     self.outcomes = []
     self.pending = {}
+    self.selections = {}
+    self.native_confirmation_requests = []
     self.last_record = None
     self.step = 0
+
+  async def after_model_callback(self, *, callback_context, llm_response):
+    for selection in extract_model_selection(llm_response):
+      key = f"{selection['tool_name']}:{selection['canonical_args_digest']}"
+      self.selections[key] = selection
+    return None
+
+  async def on_event_callback(self, *, invocation_context, event):
+    parts = getattr(getattr(event, "content", None), "parts", None) or []
+    for part in parts:
+      function_call = getattr(part, "function_call", None)
+      if function_call and getattr(function_call, "name", None) == "adk_request_confirmation":
+        self.native_confirmation_requests.append({
+            "source": "on_event_callback",
+            "invocation_id": ctx_attr(invocation_context, "invocation_id", "invocationId", default=None),
+            "function_call_id": getattr(function_call, "id", None),
+            "args_digest": digest_canonical(normalize_function_args(getattr(function_call, "args", None))),
+        })
+    return None
 
   async def before_tool_callback(self, *, tool, tool_args, tool_context):
     self.step += 1
     timestamp_ms = self.options["now_ms"] + self.step - 1
     policy_outcome = self.options["policy_outcome"]
-    decision_state = {
-        "allow": "allowed",
-        "deny": "refused",
-        "error": "policy_error",
-    }[policy_outcome]
+    native_confirmation_required = self.options.get("native_confirmation_required", False)
+    decision_state = (
+        "confirmation_required"
+        if native_confirmation_required
+        else {
+            "allow": "allowed",
+            "deny": "refused",
+            "error": "policy_error",
+        }[policy_outcome]
+    )
     principal = self.options["principal"]
     authority = {
-        "mode": "user-auth",
+        "mode": self.options["authority_mode"],
         "principal_hash": hash_principal(principal),
     }
     policy = {
-        "source": "plugin",
-        "rule": f"{tool.name}:atlas-policy",
+        "source": "confirmation" if native_confirmation_required else "plugin",
+        "rule": (
+            f"{tool.name}:native-require-confirmation"
+            if native_confirmation_required
+            else f"{tool.name}:atlas-policy"
+        ),
         "version": "atlas-policy-v1",
-        "outcome": policy_outcome,
+        "outcome": "escalate" if native_confirmation_required else policy_outcome,
     }
+    if native_confirmation_required:
+      policy["reason"] = "ADK FunctionTool require_confirmation requested approval before execution"
     if policy_outcome == "deny":
       policy["reason"] = "sku denied by local policy"
     if policy_outcome == "error":
       policy["reason"] = "policy evaluator failed closed before dispatch"
+    selection = self.selections.get(
+        selection_key(tool.name, tool_args),
+        {
+            "source": "unavailable",
+            "tool_name": tool.name,
+            "canonical_args_digest": digest_canonical(tool_args),
+            "function_call_id": None,
+            "rationale_digest": digest_canonical({
+                "text": f"scripted request for {self.options['sku']}",
+                "trust": "untrusted_generated",
+            }),
+        },
+    )
     entry = build_decision_ledger_entry({
         "decision_state": decision_state,
         "invocation_id": ctx_attr(tool_context, "invocation_id", "invocationId", default="unknown"),
@@ -393,8 +516,22 @@ class AtribAdkPythonDecisionLedgerPlugin(BasePlugin):
         "args": tool_args,
         "authority": authority,
         "policy": policy,
-        "confirmation": {"required": False},
-        "model_rationale": f"scripted request for {self.options['sku']}",
+        "confirmation": {
+            "required": native_confirmation_required,
+            **({
+                "source": "adk.FunctionTool.require_confirmation",
+                "status": "requested",
+            } if native_confirmation_required else {}),
+        },
+        "selection": {
+            key: value
+            for key, value in selection.items()
+            if key != "rationale_text"
+        },
+        "model_rationale": selection.get(
+            "rationale_text",
+            f"scripted request for {self.options['sku']}",
+        ),
         "timestamp": iso_ms(timestamp_ms),
         "parent_record_hashes": self.options["parent_record_hashes"],
     })
@@ -418,7 +555,7 @@ class AtribAdkPythonDecisionLedgerPlugin(BasePlugin):
     self.decisions.append(decision)
     marker = f"{tool.name}:{entry['tool_call_id']}"
     self.pending[marker] = {"decision": decision, "principal": principal}
-    if decision_state == "allowed":
+    if decision_state in ["allowed", "confirmation_required"]:
       return None
     return {
         "atrib_decision": decision_state,
@@ -498,7 +635,15 @@ class SingleToolCallModel(BaseLlm):
       yield LlmResponse(
           content=types.Content(
               role="model",
-              parts=[types.Part.from_function_call(name="quote_price", args=self.args)],
+              parts=[
+                  types.Part.from_text(
+                      text=(
+                          f"I selected quote_price because {self.args['sku']} needs "
+                          "a catalog quote before any follow-up action."
+                      )
+                  ),
+                  types.Part.from_function_call(name="quote_price", args=self.args),
+              ],
           )
       )
       return
@@ -575,7 +720,7 @@ async def run_live_decision_path_once(options):
           "internal_note": PRIVATE_PHRASE,
       }),
       instruction="Quote catalog items with the quote_price tool.",
-      tools=[FunctionTool(quote_price)],
+      tools=[FunctionTool(quote_price, require_confirmation=options.get("require_confirmation", False))],
   )
   runner = InMemoryRunner(
       agent=agent,
@@ -603,12 +748,21 @@ async def run_live_decision_path_once(options):
   decision = plugin.decisions[0]
   outcome = plugin.outcomes[0] if plugin.outcomes else None
   counts = event_counts(yielded_events)
+  native_confirmation = native_confirmation_counts(yielded_events)
   return {
       "summary": {
           "decision_state": decision["entry"]["decision_state"],
           "decision_record_hash": decision["record_hash"],
           "outcome_record_hash": outcome["record_hash"] if outcome else None,
+          "authority_mode": decision["entry"]["authority"]["mode"],
+          "policy_source": decision["entry"]["policy"]["source"],
+          "policy_rule": decision["entry"]["policy"]["rule"],
+          "policy_reason": decision["entry"]["policy"].get("reason"),
+          "selection_source": decision["entry"]["selection"]["source"],
+          "selection_rationale_digest": decision["entry"]["selection"]["rationale_digest"],
+          "model_rationale_trust": decision["entry"]["model_rationale"]["trust"],
           "tool_body_executed": execution_counter["count"] > 0,
+          **native_confirmation,
           **counts,
       },
       "decision": decision,
@@ -858,6 +1012,9 @@ def options_for(policy_outcome, sku, now_ms, extra=None):
       "sku": sku,
       "now_ms": now_ms,
       "principal": extra.get("principal", "user:atlas-buyer@example.test"),
+      "authority_mode": extra.get("authority_mode", "user-auth"),
+      "require_confirmation": extra.get("require_confirmation", False),
+      "native_confirmation_required": extra.get("native_confirmation_required", False),
       **({"deterministic_uuid_seed": extra["deterministic_uuid_seed"]} if "deterministic_uuid_seed" in extra else {}),
   }
 
@@ -866,6 +1023,19 @@ async def run_proof():
   base_timestamp = 1_779_846_000_000
   allowed = await run_live_decision_path(
       options_for("allow", "atlas-kit", base_timestamp, {"deterministic_uuid_seed": 0xA110})
+  )
+  agent_authority = await run_live_decision_path(
+      options_for(
+          "allow",
+          "agent-kit",
+          base_timestamp + 5_000,
+          {
+              "authority_mode": "agent-auth",
+              "principal": "agent:catalog-service@example.test",
+              "agent_name": "google_adk_python_decision_agent_auth_agent",
+              "deterministic_uuid_seed": 0xA63A,
+          },
+      )
   )
   refused = await run_live_decision_path(
       options_for("deny", "denied-kit", base_timestamp + 10_000, {"deterministic_uuid_seed": 0xD3A1})
@@ -878,20 +1048,36 @@ async def run_proof():
           {"deterministic_uuid_seed": 0xE440},
       )
   )
+  native_confirmation = await run_live_decision_path(
+      options_for(
+          "allow",
+          "confirm-kit",
+          base_timestamp + 18_000,
+          {
+              "native_confirmation_required": True,
+              "require_confirmation": True,
+              "deterministic_uuid_seed": 0xC0F1,
+          },
+      )
+  )
   confirmation = build_confirmation_proof(
       chain_tail_record=policy_error["decision"]["record"],
       start_timestamp_ms=base_timestamp + 20_000,
   )
   public_records_json = canonical_json(
       allowed["publicRecords"]
+      + agent_authority["publicRecords"]
       + refused["publicRecords"]
       + policy_error["publicRecords"]
+      + native_confirmation["publicRecords"]
       + confirmation["publicRecords"]
   )
   sidecars_json = canonical_json(
       allowed["sidecars"]
+      + agent_authority["sidecars"]
       + refused["sidecars"]
       + policy_error["sidecars"]
+      + native_confirmation["sidecars"]
       + confirmation["sidecars"]
   )
   if PRIVATE_PHRASE in public_records_json:
@@ -900,6 +1086,8 @@ async def run_proof():
     raise RuntimeError("decision ledger sidecars should keep inspectable tool material")
   if "user:atlas-buyer@example.test" in public_records_json:
     raise RuntimeError("public decision ledger records leaked the raw principal")
+  if "agent:catalog-service@example.test" in public_records_json:
+    raise RuntimeError("public decision ledger records leaked the raw agent principal")
   return {
       "ok": True,
       "strategy": "atrib-google-adk-python-decision-ledger-proof-v1",
@@ -928,18 +1116,32 @@ async def run_proof():
               "tool_call_id",
               "tool_name",
               "decision_state",
+              "authority.mode",
+              "policy.source",
+              "policy.rule",
+              "selection.source",
           ],
           "derived_commitments": [
               "canonical_args_digest",
               "confirmation.binding_hash",
               "result_digest",
+              "selection.rationale_digest",
           ],
           "untrusted_fields": ["model_rationale.text"],
+          "adk_surfaces": {
+              "tool_selection": "BasePlugin.after_model_callback",
+              "authority_decision": "BasePlugin.before_tool_callback",
+              "execution_receipt": "BasePlugin.after_tool_callback",
+              "native_confirmation_request": "FunctionTool(require_confirmation=True)",
+              "confirmation_resolution_binding": "local fixture",
+          },
       },
       "live_adk": {
           "allowed": allowed["summary"],
+          "agent_authority": agent_authority["summary"],
           "refused": refused["summary"],
           "policy_error": policy_error["summary"],
+          "native_confirmation_required": native_confirmation["summary"],
       },
       "confirmation": {
           "required": summarize_decision(confirmation["required"]),
@@ -951,16 +1153,26 @@ async def run_proof():
       "record_hashes": {
           "allowed_decision": allowed["decision"]["record_hash"],
           "allowed_tool_outcome": allowed["outcome"]["record_hash"],
+          "agent_authority_decision": agent_authority["decision"]["record_hash"],
+          "agent_authority_tool_outcome": agent_authority["outcome"]["record_hash"],
           "refused_decision": refused["decision"]["record_hash"],
           "policy_error_decision": policy_error["decision"]["record_hash"],
+          "native_confirmation_required": native_confirmation["decision"]["record_hash"],
           "confirmation_required": confirmation["required"]["record_hash"],
           "confirmation_resolved": confirmation["resolved"]["record_hash"],
           "stale_or_mismatched": confirmation["stale"]["record_hash"],
       },
       "proof": {
           "allowed_execution_informed_by_decision": allowed["outcome"]["record"]["informed_by"] == [allowed["decision"]["record_hash"]],
+          "agent_authority_execution_informed_by_decision": agent_authority["outcome"]["record"]["informed_by"] == [agent_authority["decision"]["record_hash"]],
           "refused_tool_body_executed": refused["summary"]["tool_body_executed"],
           "policy_error_tool_body_executed": policy_error["summary"]["tool_body_executed"],
+          "native_confirmation_tool_body_executed": native_confirmation["summary"]["tool_body_executed"],
+          "native_confirmation_requested": native_confirmation["summary"]["requested_tool_confirmations"] > 0,
+          "model_selection_captured": allowed["summary"]["selection_source"] == "after_model_callback",
+          "agent_auth_mode_captured": agent_authority["summary"]["authority_mode"] == "agent-auth",
+          "refusal_rule_recorded": refused["summary"]["policy_rule"] == "quote_price:atlas-policy",
+          "policy_error_rule_recorded": policy_error["summary"]["policy_rule"] == "quote_price:atlas-policy",
           "confirmation_binding_covers": [
               "tool_name",
               "canonical_args_digest",
@@ -978,17 +1190,21 @@ async def run_proof():
       },
       "publicRecords": (
           allowed["publicRecords"]
+          + agent_authority["publicRecords"]
           + refused["publicRecords"]
           + policy_error["publicRecords"]
+          + native_confirmation["publicRecords"]
           + confirmation["publicRecords"]
       ),
       "sidecars": allowed["sidecars"]
+      + agent_authority["sidecars"]
       + refused["sidecars"]
       + policy_error["sidecars"]
+      + native_confirmation["sidecars"]
       + confirmation["sidecars"],
       "caveats": [
-          "The allowed, refused, and policy_error states run through real google-adk Python InMemoryRunner BasePlugin callbacks.",
-          "Confirmation states are local fixtures because ADK ToolConfirmation does not expose a native binding tag over tool, args, authority, policy, and expiry.",
+          "The allowed, agent-auth, refused, policy_error, and native confirmation_required states run through real google-adk Python InMemoryRunner BasePlugin callbacks.",
+          "Native ADK FunctionTool require_confirmation is exercised for confirmation_required, but confirmation_resolved and stale_or_mismatched binding checks stay local fixtures because ADK ToolConfirmation does not expose a native binding tag over tool, args, authority, policy, and expiry.",
           "This does not claim Agent Platform Runtime, Gemini Enterprise, BigQuery export, Memory Bank, or Google adoption.",
       ],
   }

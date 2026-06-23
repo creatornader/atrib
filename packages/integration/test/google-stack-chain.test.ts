@@ -28,9 +28,9 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
           a2a_receiver_followup:
             'sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2',
           adk_decision:
-            'sha256:47317fb2d00122696da2a385217e88b36a9bd94d42202acebb97a761ade450f5',
+            'sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f',
           adk_python_tool_callback:
-            'sha256:cb14068f57a8086a6a25ab301cb025da5510db7ecef523113e5207de1328f96c',
+            'sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af',
         },
       })
       expect(result.snapshot.resolved_edges).toHaveLength(4)
@@ -101,7 +101,7 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
       ])
       expect(result.layers.adk_python.google_operational_ids).toMatchObject({
         trace_id: '4f22c9bdbeaaf460f4aca6fd8fa817ef',
-        span_id: '6d52daf6ab39e6a5',
+        span_id: '2a7b24b6f52f9a1f',
         adk_session_id: 'google-stack-adk-python-session-0001',
         adk_agent_name: 'google_adk_python_decision_allow_agent',
         source: 'local-adk-python-decision-sidecar',
