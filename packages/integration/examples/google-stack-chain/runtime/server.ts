@@ -4,6 +4,10 @@ import { fileURLToPath } from 'node:url'
 import type { AtribRecord } from '@atrib/mcp'
 import type { Ap2ViEvidenceBundle } from '@atrib/verify'
 import {
+  primeGoogleAdkPythonDecisionLedgerWorker,
+  warmGoogleAdkPythonDecisionLedgerWorker,
+} from '../../google-adk-python/google-adk-python-decision-ledger-proof.js'
+import {
   DEFAULT_RUNTIME_NOW_SECONDS,
   buildGoogleEvidenceGate,
   buildReplayPacket,
@@ -33,6 +37,7 @@ const server = createServer((request, response) => {
 })
 
 server.listen(port, '0.0.0.0', () => {
+  warmGoogleAdkPythonDecisionLedgerWorker()
   console.log(JSON.stringify({ ok: true, service: serviceName, port }))
 })
 
@@ -52,6 +57,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     }
 
     if (request.method === 'GET' && url.pathname === '/v1/runtime-state') {
+      await primeGoogleAdkPythonDecisionLedgerWorker()
       const gate = await buildDefaultGate()
       writeJson(response, 200, runtimeState(gate))
       return

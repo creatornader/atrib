@@ -72,6 +72,11 @@ describe('Google evidence runtime', () => {
         adk_decision_informs_adk_python: true,
       })
       expect(run.a2a?.evidence.remote_informed_by_resolved).toEqual([run.gate.record_hash])
+      expect(run.operation_timings?.some((timing) => timing.key === 'remote_log_submit')).toBe(true)
+      expect(
+        run.operation_timings?.some((timing) => timing.key === 'adk_python_decision_ledger'),
+      ).toBe(true)
+      expect(run.steps[1]?.timings).toEqual(run.a2a?.timings)
       expect(run.adk_python?.decision.record.informed_by).toEqual([run.a2a?.followup.record_hash])
       expect(run.adk_python?.outcome.record.informed_by).toEqual([
         run.adk_python?.decision.record_hash,

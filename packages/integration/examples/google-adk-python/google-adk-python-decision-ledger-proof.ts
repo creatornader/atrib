@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { canonicalRecord, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
@@ -175,6 +175,28 @@ type PythonAllowPathResult = {
   google_operational_ids: GoogleAdkPythonDecisionOperationalIds[]
 }
 
+type PythonCommand = {
+  command: string
+  args: string[]
+}
+
+type PythonCommandResult = {
+  status: number | null
+  stdout: string
+  stderr: string
+}
+
+type PythonWorkerEnvelope =
+  | {
+      ok: true
+      result: unknown
+    }
+  | {
+      ok: false
+      error: string
+      error_type?: string
+    }
+
 export interface GoogleAdkPythonDecisionLedgerPathOptions {
   contextId?: string
   parentRecordHash?: string
@@ -187,8 +209,11 @@ export interface GoogleAdkPythonDecisionLedgerPathOptions {
 export type GoogleAdkPythonDecisionLedgerProofResult = PythonProofResult
 export type GoogleAdkPythonDecisionLedgerAllowPathResult = PythonAllowPathResult
 
+let sharedPythonWorker: PythonDecisionWorker | undefined
+let sharedPythonWorkerPrime: Promise<void> | undefined
+
 export async function runGoogleAdkPythonDecisionLedgerProof(): Promise<PythonProofResult> {
-  const result = runPythonDecisionProof<PythonProofResult>({ mode: 'proof' })
+  const result = await runPythonDecisionProof<PythonProofResult>({ mode: 'proof' })
   await validatePythonResult(result.publicRecords)
   if (result.live_adk.allowed.outcome_record_hash === null) {
     throw new Error('Python ADK allowed decision did not sign a tool outcome')
@@ -205,7 +230,7 @@ export async function runGoogleAdkPythonDecisionLedgerProof(): Promise<PythonPro
 export async function runGoogleAdkPythonDecisionLedgerAllowPath(
   options: GoogleAdkPythonDecisionLedgerPathOptions = {},
 ): Promise<PythonAllowPathResult> {
-  const result = runPythonDecisionProof<PythonAllowPathResult>({
+  const result = await runPythonDecisionProof<PythonAllowPathResult>({
     mode: 'allow_path',
     ...(options.contextId ? { context_id: options.contextId } : {}),
     ...(options.parentRecordHash ? { parent_record_hash: options.parentRecordHash } : {}),
@@ -221,32 +246,15 @@ export async function runGoogleAdkPythonDecisionLedgerAllowPath(
   return result
 }
 
-function runPythonDecisionProof<T>(options: Record<string, unknown>): T {
+async function runPythonDecisionProof<T>(options: Record<string, unknown>): Promise<T> {
   const exampleDir = dirname(fileURLToPath(import.meta.url))
   const pythonScript = join(exampleDir, 'google-adk-python-decision-ledger-proof.py')
-  const result = spawnSync(
-    'uv',
-    [
-      'run',
-      '--quiet',
-      '--with',
-      'google-adk==2.3.0',
-      '--with',
-      'cryptography',
-      'python',
-      pythonScript,
-    ],
-    {
-      cwd: exampleDir,
-      env: {
-        ...process.env,
-        PYTHONWARNINGS: 'ignore',
-        ATRIB_GOOGLE_ADK_PYTHON_DECISION_OPTIONS: JSON.stringify(options),
-      },
-      encoding: 'utf8',
-      maxBuffer: 1024 * 1024 * 20,
-    },
-  )
+  const command = pythonDecisionCommand(pythonScript)
+  if (process.env.ATRIB_GOOGLE_ADK_PYTHON_WORKER === '1') {
+    const result = await pythonWorker(command, exampleDir).request(options)
+    return result as T
+  }
+  const result = await runPythonCommand(command, exampleDir, options)
 
   if (result.status !== 0) {
     throw new Error(
@@ -268,6 +276,236 @@ function runPythonDecisionProof<T>(options: Record<string, unknown>): T {
     throw new Error(`Google ADK Python decision-ledger proof did not print JSON: ${raw}`)
   }
   return JSON.parse(raw.slice(start, end + 1)) as T
+}
+
+export function warmGoogleAdkPythonDecisionLedgerWorker(): void {
+  if (process.env.ATRIB_GOOGLE_ADK_PYTHON_WORKER !== '1') return
+  const exampleDir = dirname(fileURLToPath(import.meta.url))
+  const pythonScript = join(exampleDir, 'google-adk-python-decision-ledger-proof.py')
+  pythonWorker(pythonDecisionCommand(pythonScript), exampleDir).start()
+}
+
+export function primeGoogleAdkPythonDecisionLedgerWorker(): Promise<void> {
+  if (process.env.ATRIB_GOOGLE_ADK_PYTHON_WORKER !== '1') return Promise.resolve()
+  sharedPythonWorkerPrime ??= runGoogleAdkPythonDecisionLedgerAllowPath({
+    contextId: '676f6f676c652d61646b2d70792d3130',
+    parentRecordHash: 'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    sessionId: 'google-adk-python-worker-warmup',
+    prompt: 'Prime the Google ADK Python decision worker.',
+    nowMs: 1779846060000,
+  }).then(() => undefined)
+  return sharedPythonWorkerPrime
+}
+
+export function stopGoogleAdkPythonDecisionLedgerWorker(): void {
+  sharedPythonWorker?.stop()
+  sharedPythonWorker = undefined
+  sharedPythonWorkerPrime = undefined
+}
+
+function pythonDecisionCommand(pythonScript: string): PythonCommand {
+  if (process.env.ATRIB_GOOGLE_ADK_PYTHON_DIRECT === '1') {
+    return {
+      command: process.env.PYTHON ?? 'python3',
+      args: [pythonScript],
+    }
+  }
+  return {
+    command: 'uv',
+    args: [
+      'run',
+      '--quiet',
+      '--with',
+      'google-adk==2.3.0',
+      '--with',
+      'cryptography',
+      'python',
+      pythonScript,
+    ],
+  }
+}
+
+function runPythonCommand(
+  command: PythonCommand,
+  cwd: string,
+  options: Record<string, unknown>,
+): Promise<PythonCommandResult> {
+  const maxBuffer = 1024 * 1024 * 20
+  return new Promise((resolve, reject) => {
+    const child = spawn(command.command, command.args, {
+      cwd,
+      env: {
+        ...process.env,
+        ATRIB_GOOGLE_ADK_PYTHON_WORKER: '0',
+        PYTHONWARNINGS: 'ignore',
+        ATRIB_GOOGLE_ADK_PYTHON_DECISION_OPTIONS: JSON.stringify(options),
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+
+    const append = (streamName: 'stdout' | 'stderr', chunk: Buffer): void => {
+      if (streamName === 'stdout') {
+        stdout += chunk.toString('utf8')
+      } else {
+        stderr += chunk.toString('utf8')
+      }
+      if (stdout.length + stderr.length > maxBuffer && !settled) {
+        settled = true
+        child.kill('SIGTERM')
+        reject(new Error('Google ADK Python decision-ledger proof exceeded output buffer'))
+      }
+    }
+
+    child.stdout.on('data', (chunk: Buffer) => append('stdout', chunk))
+    child.stderr.on('data', (chunk: Buffer) => append('stderr', chunk))
+    child.on('error', (error) => {
+      if (settled) return
+      settled = true
+      reject(error)
+    })
+    child.on('close', (status) => {
+      if (settled) return
+      settled = true
+      resolve({ status, stdout, stderr })
+    })
+  })
+}
+
+function pythonWorker(command: PythonCommand, cwd: string): PythonDecisionWorker {
+  sharedPythonWorker ??= new PythonDecisionWorker(command, cwd)
+  return sharedPythonWorker
+}
+
+class PythonDecisionWorker {
+  private child: ReturnType<typeof spawn> | undefined
+  private pending:
+    | {
+        resolve: (value: unknown) => void
+        reject: (reason: unknown) => void
+      }
+    | undefined
+  private queue: Promise<unknown> = Promise.resolve()
+  private stdoutBuffer = ''
+  private stderrTail = ''
+
+  constructor(
+    private readonly command: PythonCommand,
+    private readonly cwd: string,
+  ) {}
+
+  start(): void {
+    this.ensureChild()
+  }
+
+  stop(): void {
+    const child = this.child
+    this.child = undefined
+    if (child === undefined) return
+    const stdin = child.stdin
+    if (stdin !== null) stdin.end()
+    child.kill('SIGTERM')
+  }
+
+  request(options: Record<string, unknown>): Promise<unknown> {
+    const run = (): Promise<unknown> => this.requestOnce(options)
+    const next = this.queue.then(run, run)
+    this.queue = next.then(
+      () => undefined,
+      () => undefined,
+    )
+    return next
+  }
+
+  private requestOnce(options: Record<string, unknown>): Promise<unknown> {
+    const child = this.ensureChild()
+    return new Promise((resolve, reject) => {
+      const stdin = child.stdin
+      if (stdin === null) {
+        reject(new Error('Google ADK Python worker stdin is unavailable'))
+        return
+      }
+      this.pending = { resolve, reject }
+      stdin.write(`${JSON.stringify(options)}\n`, (error) => {
+        if (error === null || error === undefined) return
+        if (this.pending?.reject === reject) this.pending = undefined
+        reject(error)
+      })
+    })
+  }
+
+  private ensureChild(): ReturnType<typeof spawn> {
+    if (this.child !== undefined && !this.child.killed) return this.child
+    const child = spawn(this.command.command, this.command.args, {
+      cwd: this.cwd,
+      env: {
+        ...process.env,
+        ATRIB_GOOGLE_ADK_PYTHON_WORKER: '1',
+        PYTHONWARNINGS: 'ignore',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    this.child = child
+    this.stdoutBuffer = ''
+    this.stderrTail = ''
+
+    child.stdout.on('data', (chunk: Buffer) => this.handleStdout(chunk))
+    child.stderr.on('data', (chunk: Buffer) => this.rememberStderr(chunk))
+    child.on('error', (error) => this.failPending(error))
+    child.on('close', (status) => {
+      const error = new Error(
+        `Google ADK Python worker exited with status ${String(status)}${this.stderrTail ? `: ${this.stderrTail}` : ''}`,
+      )
+      this.child = undefined
+      this.failPending(error)
+    })
+    return child
+  }
+
+  private handleStdout(chunk: Buffer): void {
+    this.stdoutBuffer += chunk.toString('utf8')
+    let newlineIndex = this.stdoutBuffer.indexOf('\n')
+    while (newlineIndex !== -1) {
+      const line = this.stdoutBuffer.slice(0, newlineIndex).trim()
+      this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1)
+      if (line.length > 0) this.handleLine(line)
+      newlineIndex = this.stdoutBuffer.indexOf('\n')
+    }
+  }
+
+  private handleLine(line: string): void {
+    const pending = this.pending
+    this.pending = undefined
+    if (pending === undefined) return
+    let envelope: PythonWorkerEnvelope
+    try {
+      envelope = JSON.parse(line) as PythonWorkerEnvelope
+    } catch (error) {
+      pending.reject(error)
+      return
+    }
+    if (envelope.ok) {
+      pending.resolve(envelope.result)
+      return
+    }
+    pending.reject(
+      new Error(
+        `Google ADK Python worker failed${envelope.error_type ? ` (${envelope.error_type})` : ''}: ${envelope.error}`,
+      ),
+    )
+  }
+
+  private rememberStderr(chunk: Buffer): void {
+    this.stderrTail = `${this.stderrTail}${chunk.toString('utf8')}`.slice(-4000)
+  }
+
+  private failPending(error: unknown): void {
+    const pending = this.pending
+    this.pending = undefined
+    pending?.reject(error)
+  }
 }
 
 async function validatePythonResult(records: AtribRecord[]): Promise<void> {
@@ -298,5 +536,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     .catch((err) => {
       console.error('google-adk Python decision ledger proof failed:', err)
       process.exitCode = 1
+    })
+    .finally(() => {
+      stopGoogleAdkPythonDecisionLedgerWorker()
     })
 }

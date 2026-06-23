@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import random
+import sys
 import uuid
 from urllib.parse import urlparse
 
@@ -1026,13 +1027,43 @@ async def run_allow_path(options):
   }
 
 
+async def run_for_options(options):
+  if options.get("mode") == "allow_path":
+    return await run_allow_path(options)
+  return await run_proof()
+
+
+async def worker_main():
+  while True:
+    line = await asyncio.to_thread(sys.stdin.readline)
+    if line == "":
+      return
+    if not line.strip():
+      continue
+    try:
+      result = await run_for_options(json.loads(line))
+      print(json.dumps({"ok": True, "result": result}, sort_keys=True), flush=True)
+    except Exception as error:
+      print(
+          json.dumps(
+              {
+                  "ok": False,
+                  "error": str(error),
+                  "error_type": error.__class__.__name__,
+              },
+              sort_keys=True,
+          ),
+          flush=True,
+      )
+
+
 async def main():
+  if os.environ.get("ATRIB_GOOGLE_ADK_PYTHON_WORKER") == "1":
+    await worker_main()
+    return
   raw_options = os.environ.get("ATRIB_GOOGLE_ADK_PYTHON_DECISION_OPTIONS")
   options = json.loads(raw_options) if raw_options else {"mode": "proof"}
-  if options.get("mode") == "allow_path":
-    result = await run_allow_path(options)
-  else:
-    result = await run_proof()
+  result = await run_for_options(options)
   print(json.dumps(result, indent=2, sort_keys=True))
 
 

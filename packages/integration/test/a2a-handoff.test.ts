@@ -26,4 +26,35 @@ describe('A2A handoff proof', () => {
     expect(result.followup.informed_by_dangling).toEqual([])
     expect(result.privacy.public_record_contains_private_phrase).toBe(false)
   })
+
+  it('can break down the handoff proof into operation timings', async () => {
+    const result = await runA2aHandoffProof({
+      nowMs: 1_779_840_000_000,
+      captureTimings: true,
+    })
+
+    expect(result.timings?.map((timing) => timing.key)).toEqual([
+      'log_server_start',
+      'agent_card_sign',
+      'agent_card_verify',
+      'a2a_stack_setup',
+      'a2a_client_create',
+      'remote_record_sign',
+      'remote_log_submit',
+      'handoff_packet_build',
+      'a2a_remote_evidence_build',
+      'a2a_send_message',
+      'handoff_packet_extract',
+      'handoff_claims_verify',
+      'remote_record_verify',
+      'receiver_followup_sign',
+      'receiver_followup_verify',
+      'log_server_close',
+      'a2a_handoff_total',
+    ])
+    expect(result.timings?.every((timing) => timing.duration_ms >= 0)).toBe(true)
+    expect(result.timings?.find((timing) => timing.key === 'remote_log_submit')?.parent_key).toBe(
+      'a2a_remote_evidence_build',
+    )
+  })
 })
