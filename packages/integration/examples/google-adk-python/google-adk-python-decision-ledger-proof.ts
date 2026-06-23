@@ -24,6 +24,13 @@ type GoogleAdkPythonDecisionEntry = {
   tool_call_id: string
   tool_name: string
   canonical_args_digest: string
+  selection: {
+    source: 'after_model_callback' | 'local_fixture' | 'unavailable'
+    tool_name: string
+    canonical_args_digest: string
+    function_call_id?: string | null
+    rationale_digest: string
+  }
   authority: {
     mode: 'agent-auth' | 'user-auth'
     principal_hash: string
@@ -41,6 +48,8 @@ type GoogleAdkPythonDecisionEntry = {
     response_payload_digest?: string
     binding_hash?: string
     expires_at?: string
+    source?: 'adk.FunctionTool.require_confirmation'
+    status?: 'requested'
   }
   model_rationale: {
     text: string
@@ -86,10 +95,19 @@ type SignedPythonOutcome = {
 }
 
 type PythonLiveRunSummary = {
-  decision_state: 'allowed' | 'refused' | 'policy_error'
+  decision_state: 'allowed' | 'refused' | 'confirmation_required' | 'policy_error'
   decision_record_hash: string
   outcome_record_hash: string | null
+  authority_mode: 'agent-auth' | 'user-auth'
+  policy_source: 'plugin' | 'tool_context' | 'confirmation'
+  policy_rule: string
+  policy_reason?: string | null
+  selection_source: 'after_model_callback' | 'local_fixture' | 'unavailable'
+  selection_rationale_digest: string
+  model_rationale_trust: 'untrusted_generated'
   tool_body_executed: boolean
+  requested_tool_confirmations: number
+  adk_request_confirmation_events: number
   yielded_events: number
   function_call_events: number
   function_response_events: number
@@ -124,11 +142,14 @@ type PythonProofResult = {
     framework_attested_fields: string[]
     derived_commitments: string[]
     untrusted_fields: string[]
+    adk_surfaces: Record<string, string>
   }
   live_adk: {
     allowed: PythonLiveRunSummary
+    agent_authority: PythonLiveRunSummary
     refused: PythonLiveRunSummary
     policy_error: PythonLiveRunSummary
+    native_confirmation_required: PythonLiveRunSummary
   }
   confirmation: {
     required: DecisionSummary
@@ -140,8 +161,15 @@ type PythonProofResult = {
   record_hashes: Record<string, string>
   proof: {
     allowed_execution_informed_by_decision: boolean
+    agent_authority_execution_informed_by_decision: boolean
     refused_tool_body_executed: boolean
     policy_error_tool_body_executed: boolean
+    native_confirmation_tool_body_executed: boolean
+    native_confirmation_requested: boolean
+    model_selection_captured: boolean
+    agent_auth_mode_captured: boolean
+    refusal_rule_recorded: boolean
+    policy_error_rule_recorded: boolean
     confirmation_binding_covers: string[]
     stale_mismatch_detected: boolean
   }
@@ -218,11 +246,23 @@ export async function runGoogleAdkPythonDecisionLedgerProof(): Promise<PythonPro
   if (result.live_adk.allowed.outcome_record_hash === null) {
     throw new Error('Python ADK allowed decision did not sign a tool outcome')
   }
+  if (result.live_adk.agent_authority.outcome_record_hash === null) {
+    throw new Error('Python ADK agent-auth decision did not sign a tool outcome')
+  }
   if (result.live_adk.refused.outcome_record_hash !== null) {
     throw new Error('Python ADK refused path signed a tool outcome')
   }
   if (result.live_adk.policy_error.outcome_record_hash !== null) {
     throw new Error('Python ADK policy_error path signed a tool outcome')
+  }
+  if (result.live_adk.native_confirmation_required.outcome_record_hash !== null) {
+    throw new Error('Python ADK native confirmation path signed a tool outcome')
+  }
+  if (result.live_adk.native_confirmation_required.requested_tool_confirmations < 1) {
+    throw new Error('Python ADK native confirmation path did not request confirmation')
+  }
+  if (!result.proof.model_selection_captured || !result.proof.agent_auth_mode_captured) {
+    throw new Error('Python ADK decision proof missed selection or authority fields')
   }
   return result
 }
@@ -525,6 +565,9 @@ async function validatePythonResult(records: AtribRecord[]): Promise<void> {
   }
   if (serialized.includes('user:atlas-buyer@example.test')) {
     throw new Error('Python ADK public records leaked raw principal material')
+  }
+  if (serialized.includes('agent:catalog-service@example.test')) {
+    throw new Error('Python ADK public records leaked raw agent principal material')
   }
 }
 

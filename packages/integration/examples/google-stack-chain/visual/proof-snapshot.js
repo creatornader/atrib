@@ -69,7 +69,7 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
       protocol: 'ADK Python',
       actor: 'google_adk_python_decision_allow_agent',
       event_type: 'atrib.adk_python.decision_allowed',
-      record_hash: 'sha256:47317fb2d00122696da2a385217e88b36a9bd94d42202acebb97a761ade450f5',
+      record_hash: 'sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f',
       parents: ['sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2'],
       verifier: '@atrib/verify',
       checks: [
@@ -88,8 +88,8 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
       protocol: 'ADK Python',
       actor: 'google_adk_python_decision_allow_agent',
       event_type: 'atrib.adk_python.tool_callback_signed',
-      record_hash: 'sha256:cb14068f57a8086a6a25ab301cb025da5510db7ecef523113e5207de1328f96c',
-      parents: ['sha256:47317fb2d00122696da2a385217e88b36a9bd94d42202acebb97a761ade450f5'],
+      record_hash: 'sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af',
+      parents: ['sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f'],
       verifier: '@atrib/verify',
       checks: [
         'FunctionTool callback reached',
@@ -191,11 +191,11 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
         session_id: 'google-stack-adk-python-session-0001',
         invocation_id: 'e-b7ca2de9-6454-413a-93f7-14d9e12d6dc6',
         trace_id: '4f22c9bdbeaaf460f4aca6fd8fa817ef',
-        span_id: 'ce4454985c7dfce8',
+        span_id: 'e434f38575bf4688',
         parent_span_id: '1d6154dbc8bded9a',
         status: 'OK',
         atrib_record_hash:
-          'sha256:47317fb2d00122696da2a385217e88b36a9bd94d42202acebb97a761ade450f5',
+          'sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f',
         atrib_parent_record_hashes: [
           'sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2',
         ],
@@ -209,13 +209,13 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
         session_id: 'google-stack-adk-python-session-0001',
         invocation_id: 'e-b7ca2de9-6454-413a-93f7-14d9e12d6dc6',
         trace_id: '4f22c9bdbeaaf460f4aca6fd8fa817ef',
-        span_id: '6d52daf6ab39e6a5',
-        parent_span_id: 'ce4454985c7dfce8',
+        span_id: '2a7b24b6f52f9a1f',
+        parent_span_id: 'e434f38575bf4688',
         status: 'OK',
         atrib_record_hash:
-          'sha256:cb14068f57a8086a6a25ab301cb025da5510db7ecef523113e5207de1328f96c',
+          'sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af',
         atrib_parent_record_hashes: [
-          'sha256:47317fb2d00122696da2a385217e88b36a9bd94d42202acebb97a761ade450f5',
+          'sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f',
         ],
         protocol: 'ADK Python',
       },
