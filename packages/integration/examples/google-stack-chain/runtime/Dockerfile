@@ -10,7 +10,7 @@ RUN apt-get update \
     python3-pip \
     python3-venv \
   && rm -rf /var/lib/apt/lists/*
-RUN python3 -m pip install --break-system-packages uv
+RUN python3 -m pip install --break-system-packages uv google-adk==2.3.0 cryptography
 
 RUN corepack enable
 
@@ -27,10 +27,12 @@ RUN pnpm --filter @atrib/directory build
 RUN pnpm --filter @atrib/log-node build
 RUN pnpm --filter @atrib/verify build
 RUN pnpm --filter @atrib/agent build
-RUN uv run --quiet --with google-adk==2.3.0 --with cryptography python -c "import google.adk, cryptography"
+RUN python3 -c "import google.adk, cryptography"
 
 EXPOSE 8080
 
 ENV PORT=8080
+ENV ATRIB_GOOGLE_ADK_PYTHON_DIRECT=1
+ENV ATRIB_GOOGLE_ADK_PYTHON_WORKER=1
 
 CMD ["pnpm", "--filter", "@atrib/integration", "google-evidence-runtime"]

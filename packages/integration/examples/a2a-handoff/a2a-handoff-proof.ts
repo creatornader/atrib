@@ -2,7 +2,9 @@
 
 import { runA2aHandoffProof } from '../../src/a2a-handoff.js'
 
-const result = await runA2aHandoffProof()
+const result = await runA2aHandoffProof({
+  captureTimings: process.env.ATRIB_A2A_TIMINGS === '1',
+})
 console.log(JSON.stringify(result, null, 2))
 
 if (

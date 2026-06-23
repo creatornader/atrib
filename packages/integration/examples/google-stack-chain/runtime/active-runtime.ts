@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import { performance } from 'node:perf_hooks'
 import { hexEncode, sha256 } from '@atrib/mcp'
 import { runA2aHandoffProof } from '../../../src/a2a-handoff.js'
-import type { A2aHandoffProofResult } from '../../../src/a2a-handoff.js'
+import type { A2aHandoffProofResult, A2aHandoffTiming } from '../../../src/a2a-handoff.js'
 import {
   buildGoogleEvidenceGate,
   type GoogleAgentAnalyticsRow,
@@ -18,6 +19,7 @@ export type GoogleActiveRuntimeStepKey =
   | 'adk_decision'
   | 'adk_tool_callback'
 export type GoogleActiveRuntimeStatus = 'complete' | 'blocked'
+export type GoogleActiveRuntimeTiming = A2aHandoffTiming
 
 export interface GoogleActiveRuntimeStep {
   key: GoogleActiveRuntimeStepKey
@@ -30,6 +32,7 @@ export interface GoogleActiveRuntimeStep {
   content_id?: string | null
   informed_by?: string[]
   checks?: RuntimeCheck[]
+  timings?: A2aHandoffTiming[]
 }
 
 export type GoogleActiveRuntimeEvent =
@@ -83,6 +86,7 @@ export interface GoogleActiveRuntimeRun {
   a2a?: A2aHandoffProofResult
   adk_python?: Awaited<ReturnType<typeof runGoogleAdkPythonDecisionLedgerAllowPath>>
   analytics_rows: GoogleAgentAnalyticsRow[]
+  operation_timings?: GoogleActiveRuntimeTiming[]
   value_add: {
     pre_action_trust_transfer: string
     runtime_gate: string
@@ -100,6 +104,13 @@ export interface GoogleActiveRuntimeRunOptions {
   onEvent?: (event: GoogleActiveRuntimeEvent) => void | Promise<void>
 }
 
+interface RuntimeTimingRecorder {
+  span<T>(key: string, label: string, operation: () => T | Promise<T>): Promise<T>
+  markTotal(key: string, label: string): Promise<void>
+  offsetNow(): number
+  entries(): GoogleActiveRuntimeTiming[]
+}
+
 const DEFAULT_ACTIVE_PROMPT =
   'Continue only if the AP2 evidence verifies, then quote the next atlas-kit action.'
 
@@ -110,6 +121,7 @@ export async function createGoogleActiveRuntimeRun(
   const createdMs = options.nowMs ?? Date.now()
   const createdAt = new Date(createdMs).toISOString()
   const mode = options.mode ?? 'replay'
+  const runtimeTimings = createRuntimeTimingRecorder()
   const emit = async (event: GoogleActiveRuntimeEvent): Promise<void> => {
     await options.onEvent?.(event)
   }
@@ -129,7 +141,9 @@ export async function createGoogleActiveRuntimeRun(
     timestamp: createdAt,
   })
 
-  const gate = await buildGoogleEvidenceGate(options.packet)
+  const gate = await runtimeTimings.span('ap2_gate_build', 'Build AP2 evidence gate', () =>
+    buildGoogleEvidenceGate(options.packet),
+  )
   const steps: GoogleActiveRuntimeStep[] = [
     {
       key: 'ap2_gate',
@@ -150,6 +164,8 @@ export async function createGoogleActiveRuntimeRun(
   })
 
   if (!gate.allowed) {
+    await runtimeTimings.markTotal('google_active_runtime_total', 'Google active runtime total')
+    const operationTimings = runtimeTimings.entries()
     const blockedRun: GoogleActiveRuntimeRun = {
       ok: false,
       run_id: options.runId,
@@ -168,6 +184,7 @@ export async function createGoogleActiveRuntimeRun(
         adk_decision_informs_adk_python: false,
       },
       analytics_rows: [gate.analytics_row],
+      operation_timings: operationTimings,
       value_add: runtimeValueAdd(),
       caveats: runtimeCaveats(),
     }
@@ -187,13 +204,17 @@ export async function createGoogleActiveRuntimeRun(
     label: 'A2A verifier handoff',
     timestamp: new Date(createdMs + 1_000).toISOString(),
   })
-  const a2a = await runA2aHandoffProof({
-    nowMs: createdMs + 1_000,
-    remoteInformedBy: [gate.record_hash],
-    remoteInformedByCandidates: [options.packet.transactionRecord],
-    includeSignedRecords: true,
-    ids: a2aIds,
-  })
+  const a2aStartedOffsetMs = runtimeTimings.offsetNow()
+  const a2a = await runtimeTimings.span('a2a_handoff_proof', 'Run A2A handoff proof', () =>
+    runA2aHandoffProof({
+      nowMs: createdMs + 1_000,
+      remoteInformedBy: [gate.record_hash],
+      remoteInformedByCandidates: [options.packet.transactionRecord],
+      includeSignedRecords: true,
+      captureTimings: true,
+      ids: a2aIds,
+    }),
+  )
   if (!a2a.records?.followup) {
     throw new Error('A2A proof did not expose the signed receiving-agent follow-up record')
   }
@@ -206,6 +227,7 @@ export async function createGoogleActiveRuntimeRun(
     timestamp: new Date(createdMs + 1_000).toISOString(),
     record_hash: a2a.followup.record_hash,
     informed_by: [a2a.evidence.remote_record_hash],
+    ...(a2a.timings !== undefined ? { timings: a2a.timings } : {}),
     checks: [
       {
         key: 'a2a_agent_card_signature_valid',
@@ -237,13 +259,18 @@ export async function createGoogleActiveRuntimeRun(
     label: 'ADK allow decision',
     timestamp: new Date(createdMs + 2_000).toISOString(),
   })
-  const adkPython = await runGoogleAdkPythonDecisionLedgerAllowPath({
-    contextId: digestHex(`adk-python-decision:${options.runId}`, 32),
-    parentRecordHash: a2a.followup.record_hash,
-    sessionId: `google-active-adk-session-${digestHex(options.runId, 12)}`,
-    prompt,
-    nowMs: createdMs + 2_000,
-  })
+  const adkPython = await runtimeTimings.span(
+    'adk_python_decision_ledger',
+    'Run ADK Python decision-ledger proof',
+    () =>
+      runGoogleAdkPythonDecisionLedgerAllowPath({
+        contextId: digestHex(`adk-python-decision:${options.runId}`, 32),
+        parentRecordHash: a2a.followup.record_hash,
+        sessionId: `google-active-adk-session-${digestHex(options.runId, 12)}`,
+        prompt,
+        nowMs: createdMs + 2_000,
+      }),
+  )
   steps.push({
     key: 'adk_decision',
     protocol: 'ADK Python',
@@ -309,13 +336,23 @@ export async function createGoogleActiveRuntimeRun(
     timestamp: new Date(createdMs + 3_000).toISOString(),
   })
 
-  const analyticsRows = buildRuntimeAnalyticsRows({
-    runId: options.runId,
-    createdMs,
-    gate,
-    a2a,
-    adkPython,
-  })
+  const analyticsRows = await runtimeTimings.span(
+    'analytics_rows_build',
+    'Build BigQuery-shaped analytics rows',
+    () =>
+      buildRuntimeAnalyticsRows({
+        runId: options.runId,
+        createdMs,
+        gate,
+        a2a,
+        adkPython,
+      }),
+  )
+  await runtimeTimings.markTotal('google_active_runtime_total', 'Google active runtime total')
+  const operationTimings = [
+    ...runtimeTimings.entries(),
+    ...shiftA2aTimings(a2a.timings ?? [], a2aStartedOffsetMs),
+  ].sort((left, right) => left.started_offset_ms - right.started_offset_ms)
   const updatedAt = new Date(createdMs + 3_000).toISOString()
 
   const run: GoogleActiveRuntimeRun = {
@@ -334,15 +371,15 @@ export async function createGoogleActiveRuntimeRun(
       a2a_remote_informs_receiver: a2a.followup.informed_by_resolved.includes(
         a2a.evidence.remote_record_hash,
       ),
-      a2a_receiver_informs_adk_decision: adkPython.decision.record.informed_by?.includes(
-        a2a.followup.record_hash,
-      ) ?? false,
+      a2a_receiver_informs_adk_decision:
+        adkPython.decision.record.informed_by?.includes(a2a.followup.record_hash) ?? false,
       adk_decision_informs_adk_python:
         adkPython.outcome.record.informed_by?.includes(adkPython.decision.record_hash) ?? false,
     },
     a2a,
     adk_python: adkPython,
     analytics_rows: analyticsRows,
+    operation_timings: operationTimings,
     value_add: runtimeValueAdd(),
     caveats: runtimeCaveats(),
   }
@@ -489,6 +526,55 @@ function runtimeCaveats(): string[] {
     'The A2A exchange is in-process JSON-RPC, not a public A2A server or upstream TCK result.',
     'The ADK proof uses google-adk Python InMemoryRunner decision and callback hooks, not Agent Platform Runtime, Gemini Enterprise, or Memory Bank.',
   ]
+}
+
+function createRuntimeTimingRecorder(): RuntimeTimingRecorder {
+  const baseMs = performance.now()
+  const entries: GoogleActiveRuntimeTiming[] = []
+
+  const record = (key: string, label: string, startedAtMs: number, endedAtMs: number): void => {
+    entries.push({
+      key,
+      label,
+      started_offset_ms: roundRuntimeMs(startedAtMs - baseMs),
+      duration_ms: roundRuntimeMs(endedAtMs - startedAtMs),
+    })
+  }
+
+  return {
+    async span<T>(key: string, label: string, operation: () => T | Promise<T>): Promise<T> {
+      const startedAtMs = performance.now()
+      try {
+        return await operation()
+      } finally {
+        record(key, label, startedAtMs, performance.now())
+      }
+    },
+    async markTotal(key: string, label: string): Promise<void> {
+      record(key, label, baseMs, performance.now())
+    },
+    offsetNow(): number {
+      return roundRuntimeMs(performance.now() - baseMs)
+    },
+    entries(): GoogleActiveRuntimeTiming[] {
+      return [...entries]
+    },
+  }
+}
+
+function shiftA2aTimings(
+  timings: A2aHandoffTiming[],
+  startedOffsetMs: number,
+): GoogleActiveRuntimeTiming[] {
+  return timings.map((timing) => ({
+    ...timing,
+    started_offset_ms: roundRuntimeMs(startedOffsetMs + timing.started_offset_ms),
+    parent_key: timing.parent_key ?? 'a2a_handoff_proof',
+  }))
+}
+
+function roundRuntimeMs(value: number): number {
+  return Math.round(value * 1000) / 1000
 }
 
 function digestHex(value: string, length: number): string {

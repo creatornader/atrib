@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { randomUUID } from 'node:crypto'
+import { performance } from 'node:perf_hooks'
 import canonicalize from 'canonicalize'
 import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
@@ -94,10 +95,19 @@ export interface A2aHandoffProofResult {
     public_record_contains_private_phrase: boolean
   }
   log_url: string
+  timings?: A2aHandoffTiming[]
   records?: {
     remote: AtribRecord
     followup: AtribRecord
   }
+}
+
+export interface A2aHandoffTiming {
+  key: string
+  label: string
+  started_offset_ms: number
+  duration_ms: number
+  parent_key?: string
 }
 
 export interface A2aHandoffProofOptions {
@@ -105,12 +115,25 @@ export interface A2aHandoffProofOptions {
   remoteInformedBy?: string[]
   remoteInformedByCandidates?: AtribRecord[]
   includeSignedRecords?: boolean
+  captureTimings?: boolean
+  onTiming?: (timing: A2aHandoffTiming) => void | Promise<void>
   ids?: {
     requestMessageId?: string
     responseMessageId?: string
     taskId?: string
     contextId?: string
   }
+}
+
+interface TimingRecorder {
+  span<T>(
+    key: string,
+    label: string,
+    operation: () => T | Promise<T>,
+    parentKey?: string,
+  ): Promise<T>
+  markTotal(key: string, label: string): Promise<void>
+  entries(): A2aHandoffTiming[] | undefined
 }
 
 interface RemoteA2aEvidenceBody {
@@ -152,15 +175,23 @@ class EvidencePacketAgent implements AgentExecutor {
     private readonly logUrl: string,
     private readonly nowMs: number,
     private readonly options: A2aHandoffProofOptions,
+    private readonly timings: TimingRecorder,
   ) {}
 
   async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
-    const evidence = await makeRemoteEvidence(
-      this.logUrl,
-      requestContext,
-      this.nowMs,
-      this.options.remoteInformedBy ?? [],
-      this.options.ids,
+    const evidence = await this.timings.span(
+      'a2a_remote_evidence_build',
+      'Build remote A2A evidence packet',
+      () =>
+        makeRemoteEvidence(
+          this.logUrl,
+          requestContext,
+          this.nowMs,
+          this.options.remoteInformedBy ?? [],
+          this.timings,
+          this.options.ids,
+        ),
+      'a2a_send_message',
     )
     const packetPart: DataPart = {
       kind: 'data',
@@ -198,46 +229,80 @@ export async function runA2aHandoffProof(
 ): Promise<A2aHandoffProofResult> {
   const options = typeof input === 'number' ? { nowMs: input } : input
   const nowMs = options.nowMs ?? Date.now()
+  const timings = createTimingRecorder(options)
   let logServer: LogServer | undefined
+  let result: A2aHandoffProofResult | undefined
   try {
-    logServer = await startLogServer({
-      port: 0,
-      logPrivateKey: ed.utils.randomSecretKey(),
-    })
-    const agentCard = await makeSignedAgentCard()
-    const agentCardSignature = await verifyAgentCardSignature(agentCard)
-    const requestHandler = new DefaultRequestHandler(
-      agentCard,
-      new InMemoryTaskStore(),
-      new EvidencePacketAgent(logServer.url, nowMs, options),
+    logServer = await timings.span('log_server_start', 'Start ephemeral log server', () =>
+      startLogServer({
+        port: 0,
+        logPrivateKey: ed.utils.randomSecretKey(),
+      }),
     )
-    const transportHandler = new JsonRpcTransportHandler(requestHandler)
-    const clientFactory = new ClientFactory({
-      transports: [
-        new JsonRpcTransportFactory({
-          fetchImpl: makeInProcessA2aFetch(transportHandler),
-        }),
-      ],
-      preferredTransports: ['JSONRPC'],
-    })
-    const client = await clientFactory.createFromAgentCard(agentCard)
-    const response = await client.sendMessage(makeSendParams(options.ids))
+    const agentCard = await timings.span('agent_card_sign', 'Sign A2A Agent Card', () =>
+      makeSignedAgentCard(),
+    )
+    const agentCardSignature = await timings.span(
+      'agent_card_verify',
+      'Verify A2A Agent Card signature',
+      () => verifyAgentCardSignature(agentCard),
+    )
+    const clientFactory = await timings.span(
+      'a2a_stack_setup',
+      'Build in-process A2A JSON-RPC stack',
+      () => {
+        const requestHandler = new DefaultRequestHandler(
+          agentCard,
+          new InMemoryTaskStore(),
+          new EvidencePacketAgent(logServer!.url, nowMs, options, timings),
+        )
+        const transportHandler = new JsonRpcTransportHandler(requestHandler)
+        const clientFactory = new ClientFactory({
+          transports: [
+            new JsonRpcTransportFactory({
+              fetchImpl: makeInProcessA2aFetch(transportHandler),
+            }),
+          ],
+          preferredTransports: ['JSONRPC'],
+        })
+        return clientFactory
+      },
+    )
+    const client = await timings.span(
+      'a2a_client_create',
+      'Create A2A client from Agent Card',
+      () => clientFactory.createFromAgentCard(agentCard),
+    )
+    const response = await timings.span(
+      'a2a_send_message',
+      'Send blocking A2A JSON-RPC message',
+      () => client.sendMessage(makeSendParams(options.ids)),
+    )
     if (!isMessage(response)) {
       throw new Error(`expected A2A message response, got ${response.kind}`)
     }
-    const packetData = extractPacketData(response)
+    const packetData = await timings.span(
+      'handoff_packet_extract',
+      'Extract atrib handoff packet',
+      () => extractPacketData(response),
+    )
     const packet = packetData.packet
     const trustedCreatorKeys = [await publicKey(A2A_REMOTE_AGENT_SEED)]
-    const handoff = await verifyHandoffClaims(handoffClaimsFromEvidencePacket(packet), {
-      trusted_creator_keys: trustedCreatorKeys,
-      allowed_context_ids: [REMOTE_ATRIB_CONTEXT_ID],
-      require_body: true,
-      require_body_commitment: true,
-      require_log_inclusion: true,
-      log_public_key: logServer.logPublicKey,
-      now_ms: nowMs,
-      max_age_ms: MAX_AGE_MS,
-    })
+    const handoff = await timings.span(
+      'handoff_claims_verify',
+      'Verify handoff claims and log inclusion',
+      () =>
+        verifyHandoffClaims(handoffClaimsFromEvidencePacket(packet), {
+          trusted_creator_keys: trustedCreatorKeys,
+          allowed_context_ids: [REMOTE_ATRIB_CONTEXT_ID],
+          require_body: true,
+          require_body_commitment: true,
+          require_log_inclusion: true,
+          log_public_key: logServer!.logPublicKey,
+          now_ms: nowMs,
+          max_age_ms: MAX_AGE_MS,
+        }),
+    )
     if (handoff.accepted_record_hashes.length !== 1) {
       throw new Error(`expected one accepted record, got ${handoff.accepted_record_hashes.length}`)
     }
@@ -245,18 +310,34 @@ export async function runA2aHandoffProof(
       (entry) => entry.record_hash === handoff.accepted_record_hashes[0],
     )
     if (!remoteEntry?.record) throw new Error('accepted A2A record missing from packet')
-    const remoteVerification = await verifyAtribRecord(remoteEntry.record, {
-      informedByCandidates: options.remoteInformedByCandidates ?? [],
-    })
-    const followupRecord = await makeReceivingAgentFollowup(
-      handoff.accepted_record_hashes,
-      response.contextId ?? A2A_CONTEXT_ID,
-      nowMs,
+    const remoteRecord = remoteEntry.record
+    const remoteVerification = await timings.span(
+      'remote_record_verify',
+      'Verify remote record informed_by resolution',
+      () =>
+        verifyAtribRecord(remoteRecord, {
+          informedByCandidates: options.remoteInformedByCandidates ?? [],
+        }),
     )
-    const followupVerification = await verifyAtribRecord(followupRecord, {
-      informedByCandidates: [remoteEntry.record],
-    })
-    const result: A2aHandoffProofResult = {
+    const followupRecord = await timings.span(
+      'receiver_followup_sign',
+      'Sign receiving-agent follow-up',
+      () =>
+        makeReceivingAgentFollowup(
+          handoff.accepted_record_hashes,
+          response.contextId ?? A2A_CONTEXT_ID,
+          nowMs,
+        ),
+    )
+    const followupVerification = await timings.span(
+      'receiver_followup_verify',
+      'Verify receiving-agent follow-up',
+      () =>
+        verifyAtribRecord(followupRecord, {
+          informedByCandidates: [remoteRecord],
+        }),
+    )
+    result = {
       strategy: 'atrib-a2a-handoff-proof-v1',
       sdk: {
         package: '@a2a-js/sdk',
@@ -303,14 +384,72 @@ export async function runA2aHandoffProof(
     }
     if (options.includeSignedRecords) {
       result.records = {
-        remote: remoteEntry.record,
+        remote: remoteRecord,
         followup: followupRecord,
       }
     }
-    return result
   } finally {
-    await logServer?.close()
+    if (logServer !== undefined) {
+      await timings.span('log_server_close', 'Close ephemeral log server', () => logServer!.close())
+    }
   }
+  await timings.markTotal('a2a_handoff_total', 'A2A handoff proof total')
+  const entries = timings.entries()
+  if (entries !== undefined && result !== undefined) result.timings = entries
+  return result
+}
+
+function createTimingRecorder(options: A2aHandoffProofOptions): TimingRecorder {
+  const baseMs = performance.now()
+  const entries: A2aHandoffTiming[] = []
+  const shouldTime = options.captureTimings === true || options.onTiming !== undefined
+
+  const record = async (
+    key: string,
+    label: string,
+    startedAtMs: number,
+    endedAtMs: number,
+    parentKey?: string,
+  ): Promise<void> => {
+    if (!shouldTime) return
+    const timing: A2aHandoffTiming = {
+      key,
+      label,
+      started_offset_ms: roundMs(startedAtMs - baseMs),
+      duration_ms: roundMs(endedAtMs - startedAtMs),
+      ...(parentKey !== undefined ? { parent_key: parentKey } : {}),
+    }
+    if (options.captureTimings === true) entries.push(timing)
+    await options.onTiming?.(timing)
+  }
+
+  return {
+    async span<T>(
+      key: string,
+      label: string,
+      operation: () => T | Promise<T>,
+      parentKey?: string,
+    ): Promise<T> {
+      if (!shouldTime) return operation()
+      const startedAtMs = performance.now()
+      try {
+        return await operation()
+      } finally {
+        await record(key, label, startedAtMs, performance.now(), parentKey)
+      }
+    },
+    async markTotal(key: string, label: string): Promise<void> {
+      await record(key, label, baseMs, performance.now())
+    },
+    entries(): A2aHandoffTiming[] | undefined {
+      if (options.captureTimings !== true) return undefined
+      return [...entries]
+    },
+  }
+}
+
+function roundMs(value: number): number {
+  return Math.round(value * 1000) / 1000
 }
 
 async function makeSignedAgentCard(): Promise<AgentCard> {
@@ -472,6 +611,7 @@ async function makeRemoteEvidence(
   requestContext: RequestContext,
   nowMs: number,
   informedBy: string[],
+  timings: TimingRecorder,
   ids: A2aHandoffProofOptions['ids'] = {},
 ): Promise<RemoteEvidence> {
   const requestText = requestTextFromMessage(requestContext.userMessage)
@@ -492,24 +632,40 @@ async function makeRemoteEvidence(
       summary: 'delegated A2A agent completed evidence capture',
     },
   }
-  const record = await makeRemoteClaimRecord(body, nowMs, informedBy)
+  const record = await timings.span(
+    'remote_record_sign',
+    'Sign remote A2A evidence record',
+    () => makeRemoteClaimRecord(body, nowMs, informedBy),
+    'a2a_remote_evidence_build',
+  )
   const recordHashValue = recordHash(record)
-  const proof = await submitRecord(logUrl, record)
-  const packet: HandoffEvidencePacket = {
-    kind: 'a2a_handoff_packet',
-    required_record_hashes: [recordHashValue],
-    records: [
-      {
-        record_hash: recordHashValue,
-        record,
-        proof,
-        _local: {
-          producer: 'a2a-specialist-agent',
-          content: body,
-        },
-      },
-    ],
-  }
+  const proof = await timings.span(
+    'remote_log_submit',
+    'Submit remote A2A record to local log',
+    () => submitRecord(logUrl, record),
+    'a2a_remote_evidence_build',
+  )
+  const packet = await timings.span(
+    'handoff_packet_build',
+    'Build handoff packet from signed remote evidence',
+    () =>
+      ({
+        kind: 'a2a_handoff_packet',
+        required_record_hashes: [recordHashValue],
+        records: [
+          {
+            record_hash: recordHashValue,
+            record,
+            proof,
+            _local: {
+              producer: 'a2a-specialist-agent',
+              content: body,
+            },
+          },
+        ],
+      }) satisfies HandoffEvidencePacket,
+    'a2a_remote_evidence_build',
+  )
   return { packet, record, recordHash: recordHashValue, proof, body }
 }
 
