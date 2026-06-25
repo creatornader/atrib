@@ -672,6 +672,20 @@ def event_counts(events):
   }
 
 
+def runtime_error_summary(error):
+  if error is None:
+    return {"runner_error_name": None, "runner_error_message": None}
+  return {"runner_error_name": error.__class__.__name__, "runner_error_message": str(error)}
+
+
+def outcome_status(outcome):
+  if outcome is None:
+    return None
+  if outcome["sidecar"].get("error"):
+    return "error"
+  return "ok"
+
+
 async def run_live_decision_path(options):
   async def run_inner():
     return await run_live_decision_path_once(options)
@@ -705,6 +719,8 @@ async def run_live_decision_path_once(options):
 
   def quote_price(sku: str, quantity: int, internal_note: str = ""):
     execution_counter["count"] += 1
+    if options.get("tool_behavior") == "raise":
+      raise RuntimeError("quote_price handler failed after ADK allowed the call")
     return {
         "sku": sku,
         "quantity": quantity,
@@ -733,15 +749,21 @@ async def run_live_decision_path_once(options):
       session_id=options["session_id"],
   )
   yielded_events = []
-  async for event in runner.run_async(
-      user_id=options["user_id"],
-      session_id=options["session_id"],
-      new_message=types.Content(
-          role="user",
-          parts=[types.Part.from_text(text=options["prompt"])],
-      ),
-  ):
-    yielded_events.append(event)
+  runner_error = None
+  try:
+    async for event in runner.run_async(
+        user_id=options["user_id"],
+        session_id=options["session_id"],
+        new_message=types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=options["prompt"])],
+        ),
+    ):
+      yielded_events.append(event)
+  except Exception as error:
+    runner_error = error
+    if options.get("tool_behavior") != "raise" or not plugin.outcomes:
+      raise
 
   if not plugin.decisions:
     raise RuntimeError("Python ADK decision plugin did not sign a decision")
@@ -762,6 +784,8 @@ async def run_live_decision_path_once(options):
           "selection_rationale_digest": decision["entry"]["selection"]["rationale_digest"],
           "model_rationale_trust": decision["entry"]["model_rationale"]["trust"],
           "tool_body_executed": execution_counter["count"] > 0,
+          "outcome_status": outcome_status(outcome),
+          **runtime_error_summary(runner_error),
           **native_confirmation,
           **counts,
       },
@@ -1015,6 +1039,7 @@ def options_for(policy_outcome, sku, now_ms, extra=None):
       "authority_mode": extra.get("authority_mode", "user-auth"),
       "require_confirmation": extra.get("require_confirmation", False),
       "native_confirmation_required": extra.get("native_confirmation_required", False),
+      "tool_behavior": extra.get("tool_behavior", "return"),
       **({"deterministic_uuid_seed": extra["deterministic_uuid_seed"]} if "deterministic_uuid_seed" in extra else {}),
   }
 
@@ -1034,6 +1059,18 @@ async def run_proof():
               "principal": "agent:catalog-service@example.test",
               "agent_name": "google_adk_python_decision_agent_auth_agent",
               "deterministic_uuid_seed": 0xA63A,
+          },
+      )
+  )
+  handler_error = await run_live_decision_path(
+      options_for(
+          "allow",
+          "handler-error-kit",
+          base_timestamp + 8_000,
+          {
+              "tool_behavior": "raise",
+              "agent_name": "google_adk_python_decision_handler_error_agent",
+              "deterministic_uuid_seed": 0xE770,
           },
       )
   )
@@ -1067,6 +1104,7 @@ async def run_proof():
   public_records_json = canonical_json(
       allowed["publicRecords"]
       + agent_authority["publicRecords"]
+      + handler_error["publicRecords"]
       + refused["publicRecords"]
       + policy_error["publicRecords"]
       + native_confirmation["publicRecords"]
@@ -1075,6 +1113,7 @@ async def run_proof():
   sidecars_json = canonical_json(
       allowed["sidecars"]
       + agent_authority["sidecars"]
+      + handler_error["sidecars"]
       + refused["sidecars"]
       + policy_error["sidecars"]
       + native_confirmation["sidecars"]
@@ -1139,6 +1178,7 @@ async def run_proof():
       "live_adk": {
           "allowed": allowed["summary"],
           "agent_authority": agent_authority["summary"],
+          "handler_error": handler_error["summary"],
           "refused": refused["summary"],
           "policy_error": policy_error["summary"],
           "native_confirmation_required": native_confirmation["summary"],
@@ -1155,6 +1195,8 @@ async def run_proof():
           "allowed_tool_outcome": allowed["outcome"]["record_hash"],
           "agent_authority_decision": agent_authority["decision"]["record_hash"],
           "agent_authority_tool_outcome": agent_authority["outcome"]["record_hash"],
+          "handler_error_decision": handler_error["decision"]["record_hash"],
+          "handler_error_tool_outcome": handler_error["outcome"]["record_hash"],
           "refused_decision": refused["decision"]["record_hash"],
           "policy_error_decision": policy_error["decision"]["record_hash"],
           "native_confirmation_required": native_confirmation["decision"]["record_hash"],
@@ -1165,6 +1207,8 @@ async def run_proof():
       "proof": {
           "allowed_execution_informed_by_decision": allowed["outcome"]["record"]["informed_by"] == [allowed["decision"]["record_hash"]],
           "agent_authority_execution_informed_by_decision": agent_authority["outcome"]["record"]["informed_by"] == [agent_authority["decision"]["record_hash"]],
+          "handler_error_execution_informed_by_decision": handler_error["outcome"]["record"]["informed_by"] == [handler_error["decision"]["record_hash"]],
+          "handler_error_terminal_outcome_signed": handler_error["summary"]["outcome_status"] == "error",
           "refused_tool_body_executed": refused["summary"]["tool_body_executed"],
           "policy_error_tool_body_executed": policy_error["summary"]["tool_body_executed"],
           "native_confirmation_tool_body_executed": native_confirmation["summary"]["tool_body_executed"],
@@ -1191,6 +1235,7 @@ async def run_proof():
       "publicRecords": (
           allowed["publicRecords"]
           + agent_authority["publicRecords"]
+          + handler_error["publicRecords"]
           + refused["publicRecords"]
           + policy_error["publicRecords"]
           + native_confirmation["publicRecords"]
@@ -1198,12 +1243,14 @@ async def run_proof():
       ),
       "sidecars": allowed["sidecars"]
       + agent_authority["sidecars"]
+      + handler_error["sidecars"]
       + refused["sidecars"]
       + policy_error["sidecars"]
       + native_confirmation["sidecars"]
       + confirmation["sidecars"],
       "caveats": [
-          "The allowed, agent-auth, refused, policy_error, and native confirmation_required states run through real google-adk Python InMemoryRunner BasePlugin callbacks.",
+          "The allowed, agent-auth, handler-error, refused, policy_error, and native confirmation_required states run through real google-adk Python InMemoryRunner BasePlugin callbacks.",
+          "The handler-error path covers a real FunctionTool body raising after an allowed decision; timeout, cancellation, and process-crash completeness still need ADK-owned terminal emission semantics.",
           "Native ADK FunctionTool require_confirmation is exercised for confirmation_required, but confirmation_resolved and stale_or_mismatched binding checks stay local fixtures because ADK ToolConfirmation does not expose a native binding tag over tool, args, authority, policy, and expiry.",
           "This does not claim Agent Platform Runtime, Gemini Enterprise, BigQuery export, Memory Bank, or Google adoption.",
       ],
@@ -1243,9 +1290,47 @@ async def run_allow_path(options):
   }
 
 
+async def run_handler_error_path(options):
+  path = await run_live_decision_path(
+      options_for(
+          "allow",
+          options.get("sku", "handler-error-kit"),
+          options.get("now_ms", 1_779_846_000_000),
+          {
+              "context_id": options.get("context_id", DEFAULT_CONTEXT_ID),
+              "parent_record_hashes": [options.get("parent_record_hash", DEFAULT_PARENT_RECORD_HASH)],
+              "session_id": options.get("session_id", "adk-python-decision-session-handler-error"),
+              "prompt": options.get("prompt", "Quote handler-error-kit."),
+              "agent_name": "google_adk_python_decision_handler_error_agent",
+              "tool_behavior": "raise",
+              "deterministic_uuid_seed": options.get("deterministic_uuid_seed", 0x6572726F),
+          },
+      )
+  )
+  if not path.get("outcome"):
+    raise RuntimeError("handler-error Python ADK decision did not sign a terminal outcome")
+  if path["summary"].get("outcome_status") != "error":
+    raise RuntimeError("handler-error Python ADK path did not sign an error outcome")
+  return {
+      "ok": True,
+      "strategy": "atrib-google-adk-python-decision-ledger-handler-error-path-v1",
+      "adk": {
+          "python_package": "google-adk",
+          "version": adk_version.__version__,
+          "runner": "InMemoryRunner",
+          "plugin": "BasePlugin",
+          "tool": "FunctionTool",
+          "model": "BaseLlm",
+      },
+      **path,
+  }
+
+
 async def run_for_options(options):
   if options.get("mode") == "allow_path":
     return await run_allow_path(options)
+  if options.get("mode") == "handler_error_path":
+    return await run_handler_error_path(options)
   return await run_proof()
 
 

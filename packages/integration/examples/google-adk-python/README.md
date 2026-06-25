@@ -34,6 +34,9 @@ What the decision-ledger proof shows:
   principal hash.
 - The allowed path executes the tool and signs a tool outcome that cites the
   decision record.
+- The handler-error path lets the tool body raise after an allowed decision,
+  then signs the terminal error outcome from `on_tool_error_callback` with the
+  decision record in `informed_by`.
 - The refused and policy-error paths return plugin responses without executing
   the tool body, while keeping the refusal or policy-error rule in the decision
   record.
@@ -54,6 +57,10 @@ Enterprise, BigQuery Agent Analytics, Memory Bank, trajectory evaluation, or a
 production Google Cloud run. The TypeScript ADK decision-ledger proof remains
 useful cross-SDK evidence, but this directory is the Python-native proof for
 `google/adk-python` route work.
+
+The handler-error path covers a real `FunctionTool` exception. Timeout,
+cancellation, and process-crash completeness still need ADK-owned terminal
+emission semantics so a host can prove a terminal outcome was not dropped.
 
 The decision-ledger schema in this example is a local extension proof, not a
 normative atrib event type and not a proposal that ADK should adopt atrib. It

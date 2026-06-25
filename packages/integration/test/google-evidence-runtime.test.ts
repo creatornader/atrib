@@ -64,12 +64,15 @@ describe('Google evidence runtime', () => {
         'a2a_handoff',
         'adk_decision',
         'adk_tool_callback',
+        'adk_handler_error',
       ])
       expect(run.chain).toEqual({
         ap2_informs_a2a_remote: true,
         a2a_remote_informs_receiver: true,
         a2a_receiver_informs_adk_decision: true,
         adk_decision_informs_adk_python: true,
+        a2a_receiver_informs_adk_handler_error_decision: true,
+        adk_handler_error_decision_informs_terminal_outcome: true,
       })
       expect(run.a2a?.evidence.remote_informed_by_resolved).toEqual([run.gate.record_hash])
       expect(run.operation_timings?.some((timing) => timing.key === 'remote_log_submit')).toBe(true)
@@ -81,12 +84,23 @@ describe('Google evidence runtime', () => {
       expect(run.adk_python?.outcome.record.informed_by).toEqual([
         run.adk_python?.decision.record_hash,
       ])
+      expect(run.adk_handler_error?.decision.record.informed_by).toEqual([
+        run.a2a?.followup.record_hash,
+      ])
+      expect(run.adk_handler_error?.outcome.record.informed_by).toEqual([
+        run.adk_handler_error?.decision.record_hash,
+      ])
+      expect(run.adk_handler_error?.outcome.sidecar.error?.message).toBe(
+        'quote_price handler failed after ADK allowed the call',
+      )
       expect(run.analytics_rows.map((row) => row.event_type)).toEqual([
         'atrib.ap2.next_action_allowed',
         'atrib.a2a.remote_evidence_accepted',
         'atrib.a2a.receiver_followup_signed',
         'atrib.adk_python.decision_allowed',
         'atrib.adk_python.tool_callback_signed',
+        'atrib.adk_python.handler_error_decision_allowed',
+        'atrib.adk_python.handler_error_terminal_outcome_signed',
       ])
       expect(run.analytics_rows.map((row) => row.atrib_record_hash)).toEqual([
         run.gate.record_hash,
@@ -94,9 +108,16 @@ describe('Google evidence runtime', () => {
         run.a2a?.followup.record_hash,
         run.adk_python?.decision.record_hash,
         run.adk_python?.outcome.record_hash,
+        run.adk_handler_error?.decision.record_hash,
+        run.adk_handler_error?.outcome.record_hash,
       ])
       expect(run.analytics_rows[3]?.protocol).toBe('ADK Python')
       expect(run.analytics_rows[4]?.protocol).toBe('ADK Python')
+      expect(run.analytics_rows[6]).toMatchObject({
+        protocol: 'ADK Python',
+        status: 'ERROR',
+        error_message: 'quote_price handler failed after ADK allowed the call',
+      })
       expect(run.caveats.join(' ')).toContain('committed replay fixture')
       expect(events).toEqual([
         'run_started',
@@ -107,6 +128,8 @@ describe('Google evidence runtime', () => {
         'step_started:adk_decision',
         'step_completed',
         'step_started:adk_tool_callback',
+        'step_completed',
+        'step_started:adk_handler_error',
         'step_completed',
         'run_completed',
       ])

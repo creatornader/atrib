@@ -5,8 +5,8 @@ proof chain:
 
 - AP2 / Verifiable Intent receipt and evidence verification
 - A2A signed Agent Card plus verifier-gated handoff evidence
-- Google ADK Python decision-ledger signing before dispatch, followed by ADK Python
-  tool-callback signing
+- Google ADK Python decision-ledger signing before dispatch, followed by ADK
+  Python tool-callback signing and a handler-error terminal outcome proof
 
 Run:
 
@@ -26,16 +26,18 @@ supports direct file opening through
 review, while the file path is useful for quick local inspection.
 
 The workbench opens on the live runtime path first. The main proof chain stays
-empty until the runtime returns records. The pinned five-record snapshot remains
+empty until the runtime returns records. The pinned seven-record snapshot remains
 available from the Reference view. When `runtime-config.js` or `?runtime=` is
 set, the page asks the Google evidence runtime for live AP2 verifier state,
-shows the AP2 -> A2A -> ADK decision -> ADK tool run as records arrive,
-highlights matching BigQuery Agent Analytics-shaped rows, and keeps proof
+shows the AP2 -> A2A -> ADK decision -> ADK tool run and handler-error outcome
+as records arrive,
+marks matching BigQuery Agent Analytics-shaped rows, and keeps proof
 boundaries visible.
 
 The script prints a JSON summary with the AP2 transaction record hash, A2A
 remote and receiver follow-up hashes, ADK Python allow-decision hash, and ADK Python
-tool-callback record hash. It also prints a deterministic `snapshot` block. The
+tool-callback record hash, plus the ADK Python handler-error decision and
+terminal-outcome hashes. It also prints a deterministic `snapshot` block. The
 snapshot excludes the runtime `/tmp` artifact path and pins the stable A2A
 evidence identifiers used for the signed record body.
 
@@ -51,6 +53,10 @@ Current snapshot record hashes:
   `sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f`
 - ADK Python tool callback:
   `sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af`
+- ADK Python handler-error decision:
+  `sha256:49e8f7c207bcea047601dab8a5bdce53777bc559b20c99ab1ec357fb9b425d24`
+- ADK Python terminal error outcome:
+  `sha256:192d8c403e65a34ae37d184c4f9dacc4c1b6a84c1eb4b0270426737f5570e9c0`
 
 The script also writes a local AP2 artifact bundle under `/tmp`.
 
@@ -133,9 +139,11 @@ The active `/api/runs` path uses that gate as the first decision, then runs the
 local A2A handoff proof with the accepted AP2 record as parent evidence. It then
 runs the Python ADK decision-ledger proof through `google-adk` Python, signs an
 allow decision with the A2A follow-up as parent evidence, and signs the tool
-callback with that decision as parent evidence. The visual workbench calls this
-endpoint to show the current run state instead of only replaying the pinned
-snapshot.
+callback with that decision as parent evidence. It also runs a separate ADK
+handler-error path that signs an allow decision, lets the `FunctionTool` raise,
+and signs the terminal error outcome from the decision record. The visual
+workbench calls this endpoint to show the current run state instead of only
+replaying the pinned snapshot.
 
 ## What it proves
 
@@ -147,6 +155,8 @@ snapshot.
 - Google ADK Python can sign a hash-only allow decision before tool dispatch, then
   sign the tool outcome with the decision record in `informed_by` while local
   sidecars keep the raw ADK payload inspectable.
+- Google ADK Python can sign a terminal error outcome from `on_tool_error_callback`
+  when a `FunctionTool` raises after an allow decision.
 - The Cloud Run runtime can make the next-action decision from verified AP2
   evidence, run the A2A and ADK Python follow-up, and produce BigQuery-shaped rows
   tied to atrib record hashes.
@@ -163,3 +173,6 @@ It is also not an Agent Platform Runtime proof, an A2A TCK result, a live AP2
 payment run, a Gemini Enterprise registration, or a Cloud Marketplace listing.
 The AP2 runtime is deployed on Cloud Run and uses official-sample replay or
 provided packet JSON; it is not a real external AP2 merchant or payment service.
+The ADK handler-error branch proves a real exception path, but timeout,
+cancellation, and process-crash completeness still need ADK-owned terminal
+emission semantics.

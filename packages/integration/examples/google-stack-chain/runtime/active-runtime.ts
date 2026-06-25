@@ -11,13 +11,17 @@ import {
   type GoogleEvidencePacket,
   type RuntimeCheck,
 } from '../../../src/google-evidence-runtime.js'
-import { runGoogleAdkPythonDecisionLedgerAllowPath } from '../../google-adk-python/google-adk-python-decision-ledger-proof.js'
+import {
+  runGoogleAdkPythonDecisionLedgerAllowPath,
+  runGoogleAdkPythonDecisionLedgerHandlerErrorPath,
+} from '../../google-adk-python/google-adk-python-decision-ledger-proof.js'
 
 export type GoogleActiveRuntimeStepKey =
   | 'ap2_gate'
   | 'a2a_handoff'
   | 'adk_decision'
   | 'adk_tool_callback'
+  | 'adk_handler_error'
 export type GoogleActiveRuntimeStatus = 'complete' | 'blocked'
 export type GoogleActiveRuntimeTiming = A2aHandoffTiming
 
@@ -82,9 +86,12 @@ export interface GoogleActiveRuntimeRun {
     a2a_remote_informs_receiver: boolean
     a2a_receiver_informs_adk_decision: boolean
     adk_decision_informs_adk_python: boolean
+    a2a_receiver_informs_adk_handler_error_decision: boolean
+    adk_handler_error_decision_informs_terminal_outcome: boolean
   }
   a2a?: A2aHandoffProofResult
   adk_python?: Awaited<ReturnType<typeof runGoogleAdkPythonDecisionLedgerAllowPath>>
+  adk_handler_error?: Awaited<ReturnType<typeof runGoogleAdkPythonDecisionLedgerHandlerErrorPath>>
   analytics_rows: GoogleAgentAnalyticsRow[]
   operation_timings?: GoogleActiveRuntimeTiming[]
   value_add: {
@@ -182,6 +189,8 @@ export async function createGoogleActiveRuntimeRun(
         a2a_remote_informs_receiver: false,
         a2a_receiver_informs_adk_decision: false,
         adk_decision_informs_adk_python: false,
+        a2a_receiver_informs_adk_handler_error_decision: false,
+        adk_handler_error_decision_informs_terminal_outcome: false,
       },
       analytics_rows: [gate.analytics_row],
       operation_timings: operationTimings,
@@ -336,6 +345,55 @@ export async function createGoogleActiveRuntimeRun(
     timestamp: new Date(createdMs + 3_000).toISOString(),
   })
 
+  await emit({
+    type: 'step_started',
+    key: 'adk_handler_error',
+    protocol: 'ADK Python',
+    label: 'ADK terminal error outcome',
+    timestamp: new Date(createdMs + 4_000).toISOString(),
+  })
+  const adkHandlerError = await runtimeTimings.span(
+    'adk_python_handler_error',
+    'Run ADK Python handler-error terminal outcome proof',
+    () =>
+      runGoogleAdkPythonDecisionLedgerHandlerErrorPath({
+        contextId: digestHex(`adk-python-handler-error:${options.runId}`, 32),
+        parentRecordHash: a2a.followup.record_hash,
+        sessionId: `google-active-adk-error-session-${digestHex(options.runId, 12)}`,
+        prompt: 'Quote handler-error-kit to prove a terminal error outcome is signed.',
+        nowMs: createdMs + 4_000,
+      }),
+  )
+  steps.push({
+    key: 'adk_handler_error',
+    protocol: 'ADK Python',
+    status: 'complete',
+    label: 'ADK terminal error outcome',
+    detail: 'ADK Python on_tool_error_callback signed a terminal error outcome after the FunctionTool raised.',
+    timestamp: new Date(createdMs + 4_000).toISOString(),
+    record_hash: adkHandlerError.outcome.record_hash,
+    informed_by: [adkHandlerError.decision.record_hash],
+    checks: [
+      {
+        key: 'adk_handler_error_decision_parent_resolved',
+        ok: adkHandlerError.decision.record.informed_by?.includes(a2a.followup.record_hash) ?? false,
+        detail: `ADK handler-error decision cites ${a2a.followup.record_hash}`,
+      },
+      {
+        key: 'adk_handler_error_terminal_outcome',
+        ok:
+          adkHandlerError.summary.outcome_status === 'error' &&
+          (adkHandlerError.outcome.record.informed_by?.includes(adkHandlerError.decision.record_hash) ?? false),
+        detail: `Terminal outcome ${adkHandlerError.summary.outcome_status ?? 'missing'} cites ${adkHandlerError.decision.record_hash}`,
+      },
+    ],
+  })
+  await emit({
+    type: 'step_completed',
+    step: steps[4]!,
+    timestamp: new Date(createdMs + 4_000).toISOString(),
+  })
+
   const analyticsRows = await runtimeTimings.span(
     'analytics_rows_build',
     'Build BigQuery-shaped analytics rows',
@@ -346,6 +404,7 @@ export async function createGoogleActiveRuntimeRun(
         gate,
         a2a,
         adkPython,
+        adkHandlerError,
       }),
   )
   await runtimeTimings.markTotal('google_active_runtime_total', 'Google active runtime total')
@@ -353,7 +412,7 @@ export async function createGoogleActiveRuntimeRun(
     ...runtimeTimings.entries(),
     ...shiftA2aTimings(a2a.timings ?? [], a2aStartedOffsetMs),
   ].sort((left, right) => left.started_offset_ms - right.started_offset_ms)
-  const updatedAt = new Date(createdMs + 3_000).toISOString()
+  const updatedAt = new Date(createdMs + 4_000).toISOString()
 
   const run: GoogleActiveRuntimeRun = {
     ok: true,
@@ -363,7 +422,7 @@ export async function createGoogleActiveRuntimeRun(
     prompt,
     created_at: createdAt,
     updated_at: updatedAt,
-    duration_ms: 3_000,
+    duration_ms: 4_000,
     gate,
     steps,
     chain: {
@@ -375,9 +434,15 @@ export async function createGoogleActiveRuntimeRun(
         adkPython.decision.record.informed_by?.includes(a2a.followup.record_hash) ?? false,
       adk_decision_informs_adk_python:
         adkPython.outcome.record.informed_by?.includes(adkPython.decision.record_hash) ?? false,
+      a2a_receiver_informs_adk_handler_error_decision:
+        adkHandlerError.decision.record.informed_by?.includes(a2a.followup.record_hash) ?? false,
+      adk_handler_error_decision_informs_terminal_outcome:
+        adkHandlerError.outcome.record.informed_by?.includes(adkHandlerError.decision.record_hash) ??
+        false,
     },
     a2a,
     adk_python: adkPython,
+    adk_handler_error: adkHandlerError,
     analytics_rows: analyticsRows,
     operation_timings: operationTimings,
     value_add: runtimeValueAdd(),
@@ -397,12 +462,14 @@ function buildRuntimeAnalyticsRows({
   gate,
   a2a,
   adkPython,
+  adkHandlerError,
 }: {
   runId: string
   createdMs: number
   gate: GoogleEvidenceGate
   a2a: A2aHandoffProofResult
   adkPython: Awaited<ReturnType<typeof runGoogleAdkPythonDecisionLedgerAllowPath>>
+  adkHandlerError: Awaited<ReturnType<typeof runGoogleAdkPythonDecisionLedgerHandlerErrorPath>>
 }): GoogleAgentAnalyticsRow[] {
   const traceId = digestHex(`google-active-runtime:${runId}:${gate.record_hash}`, 32)
   const ap2Span = digestHex(`${runId}:ap2`, 16)
@@ -410,7 +477,9 @@ function buildRuntimeAnalyticsRows({
   const a2aReceiverSpan = digestHex(`${runId}:a2a-receiver`, 16)
   const adkDecisionIds = adkPython.google_operational_ids[0]
   const adkOutcomeIds = adkPython.google_operational_ids[1]
-  if (!adkDecisionIds || !adkOutcomeIds) {
+  const adkHandlerDecisionIds = adkHandlerError.google_operational_ids[0]
+  const adkHandlerOutcomeIds = adkHandlerError.google_operational_ids[1]
+  if (!adkDecisionIds || !adkOutcomeIds || !adkHandlerDecisionIds || !adkHandlerOutcomeIds) {
     throw new Error('ADK Python proof did not expose decision and outcome operational ids')
   }
 
@@ -491,6 +560,40 @@ function buildRuntimeAnalyticsRows({
       atrib_parent_record_hashes: JSON.stringify([adkPython.decision.record_hash]),
       protocol: 'ADK Python',
     },
+    {
+      timestamp: new Date(createdMs + 4_000).toISOString(),
+      event_type: 'atrib.adk_python.handler_error_decision_allowed',
+      agent: adkHandlerDecisionIds.adk_agent_name ?? '',
+      session_id: adkHandlerDecisionIds.adk_session_id,
+      invocation_id: adkHandlerDecisionIds.adk_invocation_id ?? '',
+      user_id: 'google-stack-demo-operator',
+      trace_id: traceId,
+      span_id: adkHandlerDecisionIds.span_id,
+      parent_span_id: a2aReceiverSpan,
+      status: 'OK',
+      error_message: '',
+      is_truncated: false,
+      atrib_record_hash: adkHandlerError.decision.record_hash,
+      atrib_parent_record_hashes: JSON.stringify([a2a.followup.record_hash]),
+      protocol: 'ADK Python',
+    },
+    {
+      timestamp: new Date(createdMs + 4_001).toISOString(),
+      event_type: 'atrib.adk_python.handler_error_terminal_outcome_signed',
+      agent: adkHandlerOutcomeIds.adk_agent_name ?? '',
+      session_id: adkHandlerOutcomeIds.adk_session_id,
+      invocation_id: adkHandlerOutcomeIds.adk_invocation_id ?? '',
+      user_id: 'google-stack-demo-operator',
+      trace_id: traceId,
+      span_id: adkHandlerOutcomeIds.span_id,
+      parent_span_id: adkHandlerDecisionIds.span_id,
+      status: 'ERROR',
+      error_message: adkHandlerError.outcome.sidecar.error?.message ?? '',
+      is_truncated: false,
+      atrib_record_hash: adkHandlerError.outcome.record_hash,
+      atrib_parent_record_hashes: JSON.stringify([adkHandlerError.decision.record_hash]),
+      protocol: 'ADK Python',
+    },
   ]
 }
 
@@ -524,7 +627,8 @@ function runtimeCaveats(): string[] {
   return [
     'The AP2 packet is still a committed replay fixture unless a merchant supplies live AP2 result and evidence JSON.',
     'The A2A exchange is in-process JSON-RPC, not a public A2A server or upstream TCK result.',
-    'The ADK proof uses google-adk Python InMemoryRunner decision and callback hooks, not Agent Platform Runtime, Gemini Enterprise, or Memory Bank.',
+    'The ADK proof uses google-adk Python InMemoryRunner decision, callback, and handler-error hooks, not Agent Platform Runtime, Gemini Enterprise, or Memory Bank.',
+    'The handler-error branch covers a real FunctionTool exception. Timeout, cancellation, and process-crash completeness still need ADK-owned terminal emission semantics.',
   ]
 }
 

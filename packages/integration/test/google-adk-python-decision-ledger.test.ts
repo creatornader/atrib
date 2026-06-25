@@ -56,6 +56,19 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_ADK_PYTHON_DECISION_LEDGER !== '1')
       expect(result.live_adk.agent_authority.decision_record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
       expect(result.live_adk.agent_authority.outcome_record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
 
+      expect(result.live_adk.handler_error).toMatchObject({
+        decision_state: 'allowed',
+        authority_mode: 'user-auth',
+        outcome_status: 'error',
+        tool_body_executed: true,
+        runner_error_name: 'RuntimeError',
+      })
+      expect(result.live_adk.handler_error.decision_record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(result.live_adk.handler_error.outcome_record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(result.live_adk.handler_error.runner_error_message).toContain(
+        'quote_price handler failed after ADK allowed the call',
+      )
+
       expect(result.live_adk.refused).toMatchObject({
         decision_state: 'refused',
         policy_rule: 'quote_price:atlas-policy',
@@ -89,6 +102,8 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_ADK_PYTHON_DECISION_LEDGER !== '1')
       expect(result.proof).toMatchObject({
         allowed_execution_informed_by_decision: true,
         agent_authority_execution_informed_by_decision: true,
+        handler_error_execution_informed_by_decision: true,
+        handler_error_terminal_outcome_signed: true,
         refused_tool_body_executed: false,
         policy_error_tool_body_executed: false,
         native_confirmation_tool_body_executed: false,
@@ -120,13 +135,15 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_ADK_PYTHON_DECISION_LEDGER !== '1')
         'allowed_tool_outcome',
         'confirmation_required',
         'confirmation_resolved',
+        'handler_error_decision',
+        'handler_error_tool_outcome',
         'native_confirmation_required',
         'policy_error_decision',
         'refused_decision',
         'stale_or_mismatched',
       ])
-      expect(result.publicRecords).toHaveLength(10)
-      expect(result.sidecars).toHaveLength(10)
+      expect(result.publicRecords).toHaveLength(12)
+      expect(result.sidecars).toHaveLength(12)
       expect(result.privacy).toEqual({
         public_records_hash_only: true,
         local_sidecars_keep_payloads: true,
