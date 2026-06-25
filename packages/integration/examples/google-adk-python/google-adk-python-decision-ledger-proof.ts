@@ -98,6 +98,7 @@ type PythonLiveRunSummary = {
   decision_state: 'allowed' | 'refused' | 'confirmation_required' | 'policy_error'
   decision_record_hash: string
   outcome_record_hash: string | null
+  outcome_status: 'ok' | 'error' | null
   authority_mode: 'agent-auth' | 'user-auth'
   policy_source: 'plugin' | 'tool_context' | 'confirmation'
   policy_rule: string
@@ -106,6 +107,8 @@ type PythonLiveRunSummary = {
   selection_rationale_digest: string
   model_rationale_trust: 'untrusted_generated'
   tool_body_executed: boolean
+  runner_error_name: string | null
+  runner_error_message: string | null
   requested_tool_confirmations: number
   adk_request_confirmation_events: number
   yielded_events: number
@@ -147,6 +150,7 @@ type PythonProofResult = {
   live_adk: {
     allowed: PythonLiveRunSummary
     agent_authority: PythonLiveRunSummary
+    handler_error: PythonLiveRunSummary
     refused: PythonLiveRunSummary
     policy_error: PythonLiveRunSummary
     native_confirmation_required: PythonLiveRunSummary
@@ -162,6 +166,8 @@ type PythonProofResult = {
   proof: {
     allowed_execution_informed_by_decision: boolean
     agent_authority_execution_informed_by_decision: boolean
+    handler_error_execution_informed_by_decision: boolean
+    handler_error_terminal_outcome_signed: boolean
     refused_tool_body_executed: boolean
     policy_error_tool_body_executed: boolean
     native_confirmation_tool_body_executed: boolean
@@ -203,6 +209,10 @@ type PythonAllowPathResult = {
   google_operational_ids: GoogleAdkPythonDecisionOperationalIds[]
 }
 
+type PythonHandlerErrorPathResult = Omit<PythonAllowPathResult, 'strategy'> & {
+  strategy: 'atrib-google-adk-python-decision-ledger-handler-error-path-v1'
+}
+
 type PythonCommand = {
   command: string
   args: string[]
@@ -236,6 +246,7 @@ export interface GoogleAdkPythonDecisionLedgerPathOptions {
 
 export type GoogleAdkPythonDecisionLedgerProofResult = PythonProofResult
 export type GoogleAdkPythonDecisionLedgerAllowPathResult = PythonAllowPathResult
+export type GoogleAdkPythonDecisionLedgerHandlerErrorPathResult = PythonHandlerErrorPathResult
 
 let sharedPythonWorker: PythonDecisionWorker | undefined
 let sharedPythonWorkerPrime: Promise<void> | undefined
@@ -248,6 +259,12 @@ export async function runGoogleAdkPythonDecisionLedgerProof(): Promise<PythonPro
   }
   if (result.live_adk.agent_authority.outcome_record_hash === null) {
     throw new Error('Python ADK agent-auth decision did not sign a tool outcome')
+  }
+  if (result.live_adk.handler_error.outcome_record_hash === null) {
+    throw new Error('Python ADK handler-error decision did not sign a terminal outcome')
+  }
+  if (result.live_adk.handler_error.outcome_status !== 'error') {
+    throw new Error('Python ADK handler-error path did not sign an error outcome')
   }
   if (result.live_adk.refused.outcome_record_hash !== null) {
     throw new Error('Python ADK refused path signed a tool outcome')
@@ -282,6 +299,28 @@ export async function runGoogleAdkPythonDecisionLedgerAllowPath(
   await validatePythonResult(result.publicRecords)
   if (result.outcome.record.informed_by?.[0] !== result.decision.record_hash) {
     throw new Error('Python ADK tool outcome does not cite the decision record')
+  }
+  return result
+}
+
+export async function runGoogleAdkPythonDecisionLedgerHandlerErrorPath(
+  options: GoogleAdkPythonDecisionLedgerPathOptions = {},
+): Promise<PythonHandlerErrorPathResult> {
+  const result = await runPythonDecisionProof<PythonHandlerErrorPathResult>({
+    mode: 'handler_error_path',
+    ...(options.contextId ? { context_id: options.contextId } : {}),
+    ...(options.parentRecordHash ? { parent_record_hash: options.parentRecordHash } : {}),
+    ...(options.sessionId ? { session_id: options.sessionId } : {}),
+    ...(options.nowMs !== undefined ? { now_ms: options.nowMs } : {}),
+    ...(options.prompt ? { prompt: options.prompt } : {}),
+    ...(options.sku ? { sku: options.sku } : {}),
+  })
+  await validatePythonResult(result.publicRecords)
+  if (result.outcome.record.informed_by?.[0] !== result.decision.record_hash) {
+    throw new Error('Python ADK handler-error outcome does not cite the decision record')
+  }
+  if (result.summary.outcome_status !== 'error' || !result.outcome.sidecar.error) {
+    throw new Error('Python ADK handler-error path did not return a signed error outcome')
   }
   return result
 }

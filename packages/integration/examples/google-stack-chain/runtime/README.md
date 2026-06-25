@@ -5,7 +5,7 @@ turns an AP2 result plus AP2 / Verifiable Intent evidence into a verifier-gated
 decision:
 
 ```text
-verify AP2 packet -> run A2A handoff -> sign ADK Python allow decision -> sign ADK Python tool outcome
+verify AP2 packet -> run A2A handoff -> sign ADK Python allow decision -> sign ADK Python tool outcome -> sign ADK Python terminal error outcome
 ```
 
 Run locally:
@@ -61,9 +61,11 @@ Public deployments should leave `BIGQUERY_WRITE_ENABLED` unset. The runtime can
 show live verifier state and active run rows without exposing a public BigQuery
 write endpoint.
 
-The active run uses the Python ADK decision-ledger proof, so the container image
-installs Python, `uv`, `google-adk==2.3.0`, and `cryptography` in addition to
-the Node workspace.
+The active run uses the Python ADK decision-ledger proof. It signs the success
+path and a handler-error path where a real `FunctionTool` raises after an allow
+decision and `on_tool_error_callback` signs the terminal outcome. The container
+image installs Python, `uv`, `google-adk==2.3.0`, and `cryptography` in addition
+to the Node workspace.
 
 Deploy:
 

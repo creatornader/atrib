@@ -56,6 +56,17 @@ const runtimeStages = [
     running: 'Running the ADK FunctionTool callback with the signed decision parent.',
     complete: 'ADK callback signed a record that cites the allow decision.',
   },
+  {
+    key: 'adk_handler_error',
+    id: 'runtime-adk-error-outcome',
+    protocol: 'ADK Python',
+    label: 'ADK error outcome',
+    actor: 'google_adk_python_decision_handler_error_agent',
+    source: 'fresh signed terminal outcome',
+    waiting: 'Waiting for the ADK handler-error proof.',
+    running: 'Running a separate ADK FunctionTool failure path.',
+    complete: 'ADK signed a terminal error outcome after the FunctionTool raised.',
+  },
 ]
 
 const runtimeChainStages = [
@@ -118,6 +129,30 @@ const runtimeChainStages = [
     waiting: 'Waiting for the ADK allow decision.',
     running: 'Running the ADK FunctionTool callback with the signed decision parent.',
     complete: 'ADK Python signed its callback record from the signed allow decision.',
+  },
+  {
+    key: 'adk_handler_error_decision',
+    stepKey: 'adk_handler_error',
+    id: 'runtime-adk-error-decision',
+    protocol: 'ADK Python',
+    label: 'ADK error-path decision',
+    actor: 'google_adk_python_decision_handler_error_agent',
+    source: 'fresh signed decision',
+    waiting: 'Waiting for the A2A receiver record.',
+    running: 'Signing the ADK allow decision for the failure-path check.',
+    complete: 'ADK Python signed an allow decision before the failing FunctionTool ran.',
+  },
+  {
+    key: 'adk_handler_error_outcome',
+    stepKey: 'adk_handler_error',
+    id: 'runtime-adk-error-outcome',
+    protocol: 'ADK Python',
+    label: 'ADK terminal error outcome',
+    actor: 'google_adk_python_decision_handler_error_agent',
+    source: 'fresh signed terminal outcome',
+    waiting: 'Waiting for the handler-error decision.',
+    running: 'Waiting for on_tool_error_callback to sign the terminal error outcome.',
+    complete: 'ADK Python signed a terminal error outcome that cites the allow decision.',
   },
 ]
 
@@ -685,6 +720,7 @@ function renderRuntimeState(payload) {
 
 function renderActiveRuntimeRun(run, analyticsWrite) {
   const adkStep = run.steps.find((step) => step.key === 'adk_tool_callback')
+  const handlerErrorStep = run.steps.find((step) => step.key === 'adk_handler_error')
   nodes.runtimeStatus.textContent = run.status === 'complete' ? 'Complete' : 'Blocked'
   nodes.runtimeStatus.className = `runtime-chip ${run.ok ? 'good' : 'bad'}`
   setRuntimeRail(
@@ -700,8 +736,10 @@ function renderActiveRuntimeRun(run, analyticsWrite) {
   nodes.runtimeDecision.textContent = formatEvent(run.gate.decision)
   nodes.runtimeRecordHash.textContent = shortHash(run.gate.record_hash)
   nodes.runtimeRecordHash.title = run.gate.record_hash
-  nodes.runtimeAdkHash.textContent = shortHash(adkStep?.record_hash ?? 'pending')
-  nodes.runtimeAdkHash.title = adkStep?.record_hash ?? ''
+  nodes.runtimeAdkHash.textContent = shortHash(
+    handlerErrorStep?.record_hash ?? adkStep?.record_hash ?? 'pending',
+  )
+  nodes.runtimeAdkHash.title = handlerErrorStep?.record_hash ?? adkStep?.record_hash ?? ''
   nodes.runtimeSource.textContent = run.mode === 'replay' ? 'Cloud Run replay' : 'provided packet'
   nodes.writeRuntimeAnalytics.disabled = !state.runtimeCanWrite
   nodes.writeRuntimeAnalytics.textContent = state.runtimeCanWrite ? 'Write rows' : 'Write locked'
@@ -714,8 +752,8 @@ function renderActiveRuntimeRun(run, analyticsWrite) {
   nodes.runtimeChecks.replaceChildren(...run.steps.map(renderRuntimeStep))
   renderRuntimeAnalyticsRows()
   nodes.stageMode.textContent =
-    'Active runtime path. AP2 is a verified replay packet; A2A and ADK are freshly signed for this run.'
-  selectNode(run.ok ? 'runtime-adk-python' : 'runtime-ap2')
+    'Active runtime path. AP2 is a verified replay packet; A2A and ADK are freshly signed, including the handler-error terminal outcome check.'
+  selectNode(run.ok ? 'runtime-adk-error-outcome' : 'runtime-ap2')
   if (analyticsWrite?.error) showToast(formatEvent(analyticsWrite.error))
 }
 
@@ -763,7 +801,9 @@ function renderRuntimeStepStarted(event) {
         ? 'Running ADK decision'
         : event.key === 'adk_tool_callback'
           ? 'Running ADK callback'
-          : 'Running AP2 gate'
+          : event.key === 'adk_handler_error'
+            ? 'Running ADK terminal outcome'
+            : 'Running AP2 gate'
   renderRuntimeFlow()
   renderRuntimeChainFromProgress()
   selectNode(runtimeNodeIdForStep(event.key, 'started'))
@@ -784,6 +824,10 @@ function renderRuntimeStepCompleted(step) {
     nodes.runtimeAdkHash.textContent = shortHash(step.record_hash ?? 'pending')
     nodes.runtimeAdkHash.title = step.record_hash ?? ''
   }
+  if (step.key === 'adk_handler_error') {
+    nodes.runtimeAdkHash.textContent = shortHash(step.record_hash ?? 'pending')
+    nodes.runtimeAdkHash.title = step.record_hash ?? ''
+  }
   renderRuntimeFlow()
   renderRuntimeChainFromProgress()
   selectNode(runtimeNodeIdForStep(step.key, 'completed'))
@@ -792,6 +836,9 @@ function renderRuntimeStepCompleted(step) {
 function runtimeNodeIdForStep(key, phase) {
   if (key === 'a2a_handoff') {
     return phase === 'started' ? 'runtime-a2a-remote' : 'runtime-a2a-receiver'
+  }
+  if (key === 'adk_handler_error') {
+    return phase === 'started' ? 'runtime-adk-error-decision' : 'runtime-adk-error-outcome'
   }
   return runtimeStageByKey(key)?.id ?? 'runtime-ap2'
 }
@@ -890,11 +937,15 @@ function buildRuntimeChainNodes(run) {
     run?.steps?.find((step) => step.key === 'adk_tool_callback')
   const adkDecisionStep =
     runtimeStepByKey('adk_decision') ?? run?.steps?.find((step) => step.key === 'adk_decision')
+  const adkHandlerErrorStep =
+    runtimeStepByKey('adk_handler_error') ??
+    run?.steps?.find((step) => step.key === 'adk_handler_error')
   const byKey = {
     ap2_gate: ap2Step,
     a2a_handoff: a2aStep,
     adk_decision: adkDecisionStep,
     adk_tool_callback: adkStep,
+    adk_handler_error: adkHandlerErrorStep,
   }
 
   return runtimeChainStages.map((stage) => {
@@ -930,7 +981,9 @@ function checksForRuntimeNode(stage, step, run) {
   if (
     (stage.key === 'ap2_gate' ||
       stage.key === 'adk_decision' ||
-      stage.key === 'adk_tool_callback') &&
+      stage.key === 'adk_tool_callback' ||
+      stage.key === 'adk_handler_error_decision' ||
+      stage.key === 'adk_handler_error_outcome') &&
     step?.checks?.length
   ) {
     return step.checks.map((check) => `${formatEvent(check.key)}: ${check.detail}`)
@@ -967,6 +1020,16 @@ function checksForRuntimeNode(stage, step, run) {
   if (stage.key === 'adk_tool_callback' && run?.chain) {
     return [`ADK decision informs callback: ${String(run.chain.adk_decision_informs_adk_python)}`]
   }
+  if (stage.key === 'adk_handler_error_decision' && run?.chain) {
+    return [
+      `A2A receiver informs ADK handler-error decision: ${String(run.chain.a2a_receiver_informs_adk_handler_error_decision)}`,
+    ]
+  }
+  if (stage.key === 'adk_handler_error_outcome' && run?.chain) {
+    return [
+      `ADK handler-error decision informs terminal outcome: ${String(run.chain.adk_handler_error_decision_informs_terminal_outcome)}`,
+    ]
+  }
   return [stage?.waiting ?? 'Waiting for runtime evidence.']
 }
 
@@ -988,6 +1051,14 @@ function parentsForRuntimeNode(stage, step, run) {
       ? step.informed_by
       : compactHashes([runtimeRecordHashByKey('adk_decision', run)])
   }
+  if (stage.key === 'adk_handler_error_decision') {
+    return compactHashes([runtimeRecordHashByKey('a2a_receiver', run)])
+  }
+  if (stage.key === 'adk_handler_error_outcome') {
+    return step?.informed_by?.length
+      ? step.informed_by
+      : compactHashes([runtimeRecordHashByKey('adk_handler_error_decision', run)])
+  }
   return []
 }
 
@@ -1002,6 +1073,18 @@ function runtimeActorForStage(stage, run) {
     return (
       run?.analytics_rows?.find((row) => row.event_type.includes('adk_python.tool'))?.agent ??
       stage.actor
+    )
+  }
+  if (stage.key === 'adk_handler_error_decision') {
+    return (
+      run?.analytics_rows?.find((row) => row.event_type.includes('handler_error_decision'))
+        ?.agent ?? stage.actor
+    )
+  }
+  if (stage.key === 'adk_handler_error_outcome') {
+    return (
+      run?.analytics_rows?.find((row) => row.event_type.includes('handler_error_terminal'))
+        ?.agent ?? stage.actor
     )
   }
   if (stage.key === 'a2a_remote') {
@@ -1031,6 +1114,12 @@ function valueForRuntimeStage(key) {
   }
   if (key === 'adk_decision') {
     return 'The ADK runtime signs an allow decision from the verified A2A/AP2 chain before the tool runs.'
+  }
+  if (key === 'adk_handler_error_decision') {
+    return 'The failure-path check starts from the same verified A2A/AP2 parent evidence.'
+  }
+  if (key === 'adk_handler_error_outcome') {
+    return 'The terminal error outcome is signed and tied back to the decision that allowed the failed call.'
   }
   return 'The ADK callback runs from the signed allow decision and signs its own follow-up.'
 }
@@ -1063,6 +1152,24 @@ function runtimeRecordHashForChainStage(stage, step, run) {
   }
   if (stage.key === 'adk_decision') {
     return step?.record_hash ?? runtimeAnalyticsHash(run, 'adk_python.decision') ?? 'pending'
+  }
+  if (stage.key === 'adk_tool_callback') {
+    return step?.record_hash ?? runtimeAnalyticsHash(run, 'adk_python.tool_callback') ?? 'pending'
+  }
+  if (stage.key === 'adk_handler_error_decision') {
+    return (
+      run?.adk_handler_error?.decision?.record_hash ??
+      runtimeAnalyticsHash(run, 'handler_error_decision') ??
+      'pending'
+    )
+  }
+  if (stage.key === 'adk_handler_error_outcome') {
+    return (
+      step?.record_hash ??
+      run?.adk_handler_error?.outcome?.record_hash ??
+      runtimeAnalyticsHash(run, 'handler_error_terminal') ??
+      'pending'
+    )
   }
   return step?.record_hash ?? runtimeAnalyticsHash(run, 'adk_python.tool') ?? 'pending'
 }
@@ -1186,12 +1293,16 @@ function nodeIdForRuntimeRow(row) {
     if (row.event_type.includes('a2a.remote')) return 'runtime-a2a-remote'
     if (row.event_type.includes('a2a.receiver')) return 'runtime-a2a-receiver'
     if (row.event_type.includes('a2a')) return 'runtime-a2a-receiver'
+    if (row.event_type.includes('handler_error_decision')) return 'runtime-adk-error-decision'
+    if (row.event_type.includes('handler_error_terminal')) return 'runtime-adk-error-outcome'
     if (row.event_type.includes('adk_python.decision')) return 'runtime-adk-decision'
     if (row.event_type.includes('adk')) return 'runtime-adk-python'
     return 'runtime-ap2'
   }
   if (row.event_type.includes('a2a.remote')) return 'a2a-remote'
   if (row.event_type.includes('a2a.receiver')) return 'a2a-receiver'
+  if (row.event_type.includes('handler_error_decision')) return 'adk-handler-error-decision'
+  if (row.event_type.includes('handler_error_terminal')) return 'adk-handler-error-outcome'
   if (row.event_type.includes('adk_python.decision')) return 'adk-decision'
   if (row.event_type.includes('adk')) return 'adk-python'
   return 'ap2'
@@ -1585,6 +1696,14 @@ function liveChainCheckForSelected(selected, run) {
     'runtime-adk-python': {
       key: 'adk_decision_informs_adk_python',
       label: 'ADK decision informs callback',
+    },
+    'runtime-adk-error-decision': {
+      key: 'a2a_receiver_informs_adk_handler_error_decision',
+      label: 'A2A receiver informs ADK handler-error decision',
+    },
+    'runtime-adk-error-outcome': {
+      key: 'adk_handler_error_decision_informs_terminal_outcome',
+      label: 'ADK handler-error decision informs terminal outcome',
     },
   }
   const chain = byNodeId[selected.id]

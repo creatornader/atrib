@@ -17,6 +17,8 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
         a2a_remote_informs_a2a_receiver: true,
         a2a_receiver_informs_adk_decision: true,
         adk_decision_informs_adk_python: true,
+        a2a_receiver_informs_adk_handler_error_decision: true,
+        adk_handler_error_decision_informs_terminal_outcome: true,
       })
       expect(result.snapshot).toMatchObject({
         schema: 'atrib-google-stack-chain.snapshot.v1',
@@ -31,9 +33,13 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
             'sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f',
           adk_python_tool_callback:
             'sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af',
+          adk_handler_error_decision:
+            'sha256:49e8f7c207bcea047601dab8a5bdce53777bc559b20c99ab1ec357fb9b425d24',
+          adk_handler_error_terminal_outcome:
+            'sha256:192d8c403e65a34ae37d184c4f9dacc4c1b6a84c1eb4b0270426737f5570e9c0',
         },
       })
-      expect(result.snapshot.resolved_edges).toHaveLength(4)
+      expect(result.snapshot.resolved_edges).toHaveLength(6)
       expect(result.analytics_fixture).toMatchObject({
         schema: 'atrib-google-stack-chain.bigquery-agent-analytics.fixture.v1',
         source: 'local-fixture',
@@ -54,13 +60,15 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
         'error_message',
         'is_truncated',
       ])
-      expect(result.analytics_fixture.rows).toHaveLength(5)
+      expect(result.analytics_fixture.rows).toHaveLength(7)
       expect(result.analytics_fixture.rows.map((row) => row.atrib_record_hash)).toEqual([
         result.snapshot.record_hashes.ap2_transaction,
         result.snapshot.record_hashes.a2a_remote_evidence,
         result.snapshot.record_hashes.a2a_receiver_followup,
         result.snapshot.record_hashes.adk_decision,
         result.snapshot.record_hashes.adk_python_tool_callback,
+        result.snapshot.record_hashes.adk_handler_error_decision,
+        result.snapshot.record_hashes.adk_handler_error_terminal_outcome,
       ])
       expect(result.analytics_fixture.rows.map((row) => row.atrib_parent_record_hashes)).toEqual([
         [],
@@ -68,7 +76,14 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
         [result.snapshot.record_hashes.a2a_remote_evidence],
         [result.snapshot.record_hashes.a2a_receiver_followup],
         [result.snapshot.record_hashes.adk_decision],
+        [result.snapshot.record_hashes.a2a_receiver_followup],
+        [result.snapshot.record_hashes.adk_handler_error_decision],
       ])
+      expect(result.analytics_fixture.rows.at(-1)).toMatchObject({
+        event_type: 'atrib.adk_python.handler_error_terminal_outcome_signed',
+        status: 'ERROR',
+        error_message: 'quote_price handler failed after ADK allowed the call',
+      })
       expect(result.layers.ap2).toMatchObject({
         protocol: 'AP2',
         detected: true,
@@ -99,6 +114,15 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
       expect(result.layers.adk_python.decision_informed_by_resolved).toEqual([
         result.layers.adk_python.decision_record_hash,
       ])
+      expect(result.layers.adk_python.handler_error_parent_informed_by_resolved).toEqual([
+        result.layers.a2a.receiver_followup_hash,
+      ])
+      expect(result.layers.adk_python.handler_error_outcome_informed_by_resolved).toEqual([
+        result.layers.adk_python.handler_error_decision_record_hash,
+      ])
+      expect(result.layers.adk_python.handler_error_outcome_record_hash).toBe(
+        result.snapshot.record_hashes.adk_handler_error_terminal_outcome,
+      )
       expect(result.layers.adk_python.google_operational_ids).toMatchObject({
         trace_id: '4f22c9bdbeaaf460f4aca6fd8fa817ef',
         span_id: '2a7b24b6f52f9a1f',

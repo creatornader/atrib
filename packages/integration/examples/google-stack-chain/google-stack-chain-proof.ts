@@ -12,7 +12,10 @@ import {
 } from '../../src/ap2-local-participant.js'
 import { runAp2LiveInterop } from '../../src/ap2-live-interop.js'
 import { runA2aHandoffProof } from '../../src/a2a-handoff.js'
-import { runGoogleAdkPythonDecisionLedgerAllowPath } from '../google-adk-python/google-adk-python-decision-ledger-proof.js'
+import {
+  runGoogleAdkPythonDecisionLedgerAllowPath,
+  runGoogleAdkPythonDecisionLedgerHandlerErrorPath,
+} from '../google-adk-python/google-adk-python-decision-ledger-proof.js'
 
 const NOW_SECONDS = 1_779_840_000
 const A2A_REQUEST_MESSAGE_ID = 'google-stack-a2a-request-0001'
@@ -30,6 +33,8 @@ type GoogleStackChainProof = {
     a2a_remote_informs_a2a_receiver: true
     a2a_receiver_informs_adk_decision: true
     adk_decision_informs_adk_python: true
+    a2a_receiver_informs_adk_handler_error_decision: true
+    adk_handler_error_decision_informs_terminal_outcome: true
   }
   snapshot: {
     schema: 'atrib-google-stack-chain.snapshot.v1'
@@ -39,6 +44,8 @@ type GoogleStackChainProof = {
       a2a_receiver_followup: string
       adk_decision: string
       adk_python_tool_callback: string
+      adk_handler_error_decision: string
+      adk_handler_error_terminal_outcome: string
     }
     resolved_edges: Array<{
       from: string
@@ -69,7 +76,7 @@ type GoogleStackChainProof = {
       trace_id: string | null
       span_id: string | null
       parent_span_id: string | null
-      status: 'OK'
+      status: 'OK' | 'ERROR'
       error_message: string | null
       is_truncated: boolean
       atrib_record_hash: string
@@ -107,6 +114,10 @@ type GoogleStackChainProof = {
       operation: string
       parent_informed_by_resolved: string[]
       decision_informed_by_resolved: string[]
+      handler_error_decision_record_hash: string
+      handler_error_outcome_record_hash: string
+      handler_error_parent_informed_by_resolved: string[]
+      handler_error_outcome_informed_by_resolved: string[]
       google_operational_ids: {
         trace_id: string
         span_id: string
@@ -198,22 +209,43 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
     nowMs: NOW_SECONDS * 1000 + 2_000,
     prompt: 'Quote the next atlas-kit action only after AP2 and A2A evidence resolves.',
   })
+  const adkHandlerError = await runGoogleAdkPythonDecisionLedgerHandlerErrorPath({
+    contextId: digestHex('google-stack-adk-python-handler-error', 32),
+    parentRecordHash: a2a.followup.record_hash,
+    sessionId: 'google-stack-adk-python-handler-error-session-0001',
+    nowMs: NOW_SECONDS * 1000 + 4_000,
+    prompt: 'Quote handler-error-kit to prove a terminal error outcome is signed.',
+  })
   const decisionVerification = await verifyAtribRecord(adkPython.decision.record, {
     informedByCandidates: [a2a.records.followup],
   })
   const outcomeVerification = await verifyAtribRecord(adkPython.outcome.record, {
     informedByCandidates: [adkPython.decision.record],
   })
+  const handlerErrorDecisionVerification = await verifyAtribRecord(adkHandlerError.decision.record, {
+    informedByCandidates: [a2a.records.followup],
+  })
+  const handlerErrorOutcomeVerification = await verifyAtribRecord(adkHandlerError.outcome.record, {
+    informedByCandidates: [adkHandlerError.decision.record],
+  })
   if (
     decisionVerification.informed_by_resolution?.resolved[0] !== a2a.followup.record_hash ||
     decisionVerification.informed_by_resolution?.dangling.length !== 0 ||
     outcomeVerification.informed_by_resolution?.resolved[0] !== adkPython.decision.record_hash ||
-    outcomeVerification.informed_by_resolution?.dangling.length !== 0
+    outcomeVerification.informed_by_resolution?.dangling.length !== 0 ||
+    handlerErrorDecisionVerification.informed_by_resolution?.resolved[0] !==
+      a2a.followup.record_hash ||
+    handlerErrorDecisionVerification.informed_by_resolution?.dangling.length !== 0 ||
+    handlerErrorOutcomeVerification.informed_by_resolution?.resolved[0] !==
+      adkHandlerError.decision.record_hash ||
+    handlerErrorOutcomeVerification.informed_by_resolution?.dangling.length !== 0
   ) {
     throw new Error('ADK Python decision layer failed')
   }
   const adkDecisionOperationalIds = adkPython.google_operational_ids[0]!
   const adkOutcomeOperationalIds = adkPython.google_operational_ids[1]!
+  const adkHandlerDecisionOperationalIds = adkHandlerError.google_operational_ids[0]!
+  const adkHandlerOutcomeOperationalIds = adkHandlerError.google_operational_ids[1]!
 
   return {
     ok: true,
@@ -225,6 +257,8 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
       a2a_remote_informs_a2a_receiver: true,
       a2a_receiver_informs_adk_decision: true,
       adk_decision_informs_adk_python: true,
+      a2a_receiver_informs_adk_handler_error_decision: true,
+      adk_handler_error_decision_informs_terminal_outcome: true,
     },
     snapshot: {
       schema: 'atrib-google-stack-chain.snapshot.v1',
@@ -234,6 +268,8 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
         a2a_receiver_followup: a2a.followup.record_hash,
         adk_decision: adkPython.decision.record_hash,
         adk_python_tool_callback: adkPython.outcome.record_hash,
+        adk_handler_error_decision: adkHandlerError.decision.record_hash,
+        adk_handler_error_terminal_outcome: adkHandlerError.outcome.record_hash,
       },
       resolved_edges: [
         {
@@ -257,6 +293,18 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
         {
           from: adkPython.decision.record_hash,
           to: adkPython.outcome.record_hash,
+          relation: 'informed_by',
+          verifier: '@atrib/verify',
+        },
+        {
+          from: a2a.followup.record_hash,
+          to: adkHandlerError.decision.record_hash,
+          relation: 'informed_by',
+          verifier: '@atrib/verify',
+        },
+        {
+          from: adkHandlerError.decision.record_hash,
+          to: adkHandlerError.outcome.record_hash,
           relation: 'informed_by',
           verifier: '@atrib/verify',
         },
@@ -373,6 +421,40 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
           atrib_parent_record_hashes: [adkPython.decision.record_hash],
           protocol: 'ADK Python',
         },
+        {
+          timestamp: new Date(NOW_SECONDS * 1000 + 4_000).toISOString(),
+          event_type: 'atrib.adk_python.handler_error_decision_allowed',
+          agent: adkHandlerDecisionOperationalIds.adk_agent_name ?? 'google-adk-python-agent',
+          session_id: adkHandlerDecisionOperationalIds.adk_session_id,
+          invocation_id: adkHandlerDecisionOperationalIds.adk_invocation_id,
+          user_id: null,
+          trace_id: adkHandlerDecisionOperationalIds.trace_id,
+          span_id: adkHandlerDecisionOperationalIds.span_id,
+          parent_span_id: digestHex(`${A2A_CONTEXT_ID}:a2a-receiver`, 16),
+          status: 'OK',
+          error_message: null,
+          is_truncated: false,
+          atrib_record_hash: adkHandlerError.decision.record_hash,
+          atrib_parent_record_hashes: [a2a.followup.record_hash],
+          protocol: 'ADK Python',
+        },
+        {
+          timestamp: new Date(NOW_SECONDS * 1000 + 4_001).toISOString(),
+          event_type: 'atrib.adk_python.handler_error_terminal_outcome_signed',
+          agent: adkHandlerOutcomeOperationalIds.adk_agent_name ?? 'google-adk-python-agent',
+          session_id: adkHandlerOutcomeOperationalIds.adk_session_id,
+          invocation_id: adkHandlerOutcomeOperationalIds.adk_invocation_id,
+          user_id: null,
+          trace_id: adkHandlerOutcomeOperationalIds.trace_id,
+          span_id: adkHandlerOutcomeOperationalIds.span_id,
+          parent_span_id: adkHandlerDecisionOperationalIds.span_id,
+          status: 'ERROR',
+          error_message: adkHandlerError.outcome.sidecar.error?.message ?? null,
+          is_truncated: false,
+          atrib_record_hash: adkHandlerError.outcome.record_hash,
+          atrib_parent_record_hashes: [adkHandlerError.decision.record_hash],
+          protocol: 'ADK Python',
+        },
       ],
       caveat:
         'This is a local BigQuery Agent Analytics-shaped fixture, not a BigQuery Storage Write API export or a managed Google Cloud run.',
@@ -406,14 +488,20 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
         operation: adkPython.outcome.sidecar.operation,
         parent_informed_by_resolved: decisionVerification.informed_by_resolution.resolved,
         decision_informed_by_resolved: outcomeVerification.informed_by_resolution.resolved,
+        handler_error_decision_record_hash: adkHandlerError.decision.record_hash,
+        handler_error_outcome_record_hash: adkHandlerError.outcome.record_hash,
+        handler_error_parent_informed_by_resolved:
+          handlerErrorDecisionVerification.informed_by_resolution.resolved,
+        handler_error_outcome_informed_by_resolved:
+          handlerErrorOutcomeVerification.informed_by_resolution.resolved,
         google_operational_ids: adkOutcomeOperationalIds,
       },
     },
     value_add: {
       cross_layer_continuity:
-        'AP2 authorization evidence, A2A handoff evidence, ADK decision evidence, and ADK runtime evidence are linked through verifier-resolved informed_by records.',
+        'AP2 authorization evidence, A2A handoff evidence, ADK decision evidence, ADK runtime evidence, and ADK terminal-error evidence are linked through verifier-resolved informed_by records.',
       verifier_use:
-        'Each layer produces verifier-readable facts: AP2 receipt and VI checks, A2A accepted handoff records, ADK decision records, and ADK hash-only tool callback records.',
+        'Each layer produces verifier-readable facts: AP2 receipt and VI checks, A2A accepted handoff records, ADK decision records, ADK hash-only tool callback records, and an ADK handler-error terminal outcome.',
       privacy_boundary:
         'Public records expose hashes and record metadata while local artifacts or sidecars keep payment, task, and tool payload material inspectable by the host.',
       support_and_dispute_use:
@@ -426,7 +514,8 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
       'Boundary: atrib is the trust-transfer layer here. AP2 evidence is accepted first, A2A receives that signed parent, and ADK signs an allow decision before the tool callback cites that decision.',
       'AP2 source: committed AP2 / VI fixtures or merchant-supplied packet JSON. This proof does not use live payment credentials or move funds.',
       'A2A source: in-process JSON-RPC with signed receiving-agent follow-up. It proves verifier-gated handoff, not an A2A TCK result or public server deployment.',
-      'ADK source: google-adk Python InMemoryRunner proof. The claim is decision and callback-boundary signing, not managed Agent Platform Runtime, Gemini Enterprise, BigQuery Storage Write API export, or Memory Bank coverage.',
+      'ADK source: google-adk Python InMemoryRunner proof. The claim is decision, callback, and handler-error terminal-outcome signing, not managed Agent Platform Runtime, Gemini Enterprise, BigQuery Storage Write API export, or Memory Bank coverage.',
+      'ADK handler-error coverage proves a real FunctionTool exception path. Timeout, cancellation, and process-crash completeness still need ADK-owned terminal emission semantics.',
     ],
   }
 }

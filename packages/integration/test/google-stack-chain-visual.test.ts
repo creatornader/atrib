@@ -76,8 +76,8 @@ describe('Google stack chain visual workbench', () => {
     await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(1)
     await page.locator('#viewReferenceSnapshot').click()
     await expect.poll(() => page.locator('#stageTitle').textContent()).toBe('Example run')
-    await expect.poll(() => page.locator('.node').count()).toBe(5)
-    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(5)
+    await expect.poll(() => page.locator('.node').count()).toBe(7)
+    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(7)
     await expect
       .poll(() => page.locator('#proofStatus').textContent())
       .toBe('reference snapshot ready')
@@ -123,8 +123,8 @@ describe('Google stack chain visual workbench', () => {
       .toContain('Runtime records will appear here')
     await expect.poll(() => page.locator('.node').count()).toBe(0)
     await page.locator('#viewReferenceSnapshot').click()
-    await expect.poll(() => page.locator('.node').count()).toBe(5)
-    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(5)
+    await expect.poll(() => page.locator('.node').count()).toBe(7)
+    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(7)
     expect(consoleErrors).toEqual([])
     await page.close()
   })
@@ -139,7 +139,7 @@ describe('Google stack chain visual workbench', () => {
 
     await page.goto(`${baseUrl}?runtime=${encodeURIComponent(`${baseUrl}/runtime`)}`)
     await expect.poll(() => page.locator('#runtimeStatus').textContent()).toBe('Ready')
-    await expect.poll(() => page.locator('#runtimeFlow .runtime-flow-step').count()).toBe(4)
+    await expect.poll(() => page.locator('#runtimeFlow .runtime-flow-step').count()).toBe(5)
     await expect.poll(() => runtimeRailFits(page)).toBe(true)
     await expect.poll(() => page.locator('.segment').count()).toBe(2)
     await expect.poll(() => page.locator('[data-jump]').count()).toBe(0)
@@ -148,22 +148,22 @@ describe('Google stack chain visual workbench', () => {
     await page.getByRole('button', { name: 'Start run' }).click()
     await expect.poll(() => page.locator('#runtimeStatus').textContent()).toBe('Complete')
     await expect.poll(() => page.locator('#runtimeRunId').textContent()).toBe('mock-active-run')
-    await expect.poll(() => page.locator('#runtimeAdkHash').textContent()).toContain('sha256:adk')
+    await expect.poll(() => page.locator('#runtimeAdkHash').textContent()).toContain('sha256:err')
     await expect
       .poll(() => page.locator('#runtimeFlow .runtime-flow-step.complete').count())
-      .toBe(4)
+      .toBe(5)
     await expect.poll(() => runtimeRailFits(page)).toBe(true)
-    await expect.poll(() => page.locator('.runtime-node').count()).toBe(5)
+    await expect.poll(() => page.locator('.runtime-node').count()).toBe(7)
     await expect
       .poll(() => page.locator('.source-badge').first().textContent())
       .toBe('verified replay packet')
     await expect
       .poll(() => page.locator('#selectedTitle').textContent())
-      .toBe('ADK Python tool callback')
+      .toBe('ADK terminal error outcome')
     await expect
       .poll(() => page.locator('#stageMode').textContent())
       .toContain('Active runtime path')
-    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(5)
+    await expect.poll(() => page.locator('#analyticsRows tr').count()).toBe(7)
     await expect
       .poll(() => page.locator('#analyticsRows tr').last().textContent())
       .toContain('ADK Python')
@@ -180,7 +180,7 @@ describe('Google stack chain visual workbench', () => {
     await page.locator('#analyticsRows tr').last().click()
     await expect
       .poll(() => page.locator('#selectedTitle').textContent())
-      .toBe('ADK Python tool callback')
+      .toBe('ADK terminal error outcome')
     await expect.poll(() => page.locator('#resetRuntimeView').isEnabled()).toBe(true)
     await expect.poll(() => page.locator('#copySelectedHash').isEnabled()).toBe(true)
     await expect.poll(() => page.locator('#copySelectedJson').isEnabled()).toBe(true)
@@ -192,7 +192,7 @@ describe('Google stack chain visual workbench', () => {
       .toBe('Accepted')
     await expect
       .poll(() => page.locator('#checkList strong').first().textContent())
-      .toBe('ADK Callback Informed By Decision')
+      .toBe('ADK Handler Error Decision Parent Resolved')
     await page.getByRole('button', { name: 'Live verify' }).click()
     await expect.poll(() => page.locator('#verifyStatus').textContent()).toContain('Live verified')
     await expect
@@ -210,7 +210,7 @@ describe('Google stack chain visual workbench', () => {
       .toEqual(['Accepted', 'Accepted', 'Accepted', 'Accepted', 'Accepted', 'Accepted'])
     await expect
       .poll(() => page.locator('#checkList').textContent())
-      .toContain('ADK decision informs callback is true')
+      .toContain('ADK handler-error decision informs terminal outcome is true')
     await expect
       .poll(() => page.locator('#runtimeChecks').evaluate((element) => element.scrollHeight))
       .toBeLessThanOrEqual(
@@ -225,7 +225,7 @@ describe('Google stack chain visual workbench', () => {
     await expect
       .poll(() => page.locator('#recordDialogJson').textContent())
       .toContain(
-        '"record_hash": "sha256:adk0000000000000000000000000000000000000000000000000000000000000"',
+        '"record_hash": "sha256:err0000000000000000000000000000000000000000000000000000000000000"',
       )
     await page.getByRole('button', { name: 'Close' }).click()
     await expect
@@ -309,6 +309,8 @@ describe('Google stack chain visual workbench', () => {
       'sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2',
       'sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f',
       'sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af',
+      'sha256:49e8f7c207bcea047601dab8a5bdce53777bc559b20c99ab1ec357fb9b425d24',
+      'sha256:192d8c403e65a34ae37d184c4f9dacc4c1b6a84c1eb4b0270426737f5570e9c0',
     ])
     expect(
       fixture.analytics.rows.map((row: { trace_id: string | null; span_id: string | null }) => [
@@ -321,6 +323,8 @@ describe('Google stack chain visual workbench', () => {
       ['4f22c9bdbeaaf460f4aca6fd8fa817ef', '1d6154dbc8bded9a'],
       ['4f22c9bdbeaaf460f4aca6fd8fa817ef', 'e434f38575bf4688'],
       ['4f22c9bdbeaaf460f4aca6fd8fa817ef', '2a7b24b6f52f9a1f'],
+      ['849166752a8d0fcda4ae6b3e4640c1c6', '788caf2ee5867281'],
+      ['849166752a8d0fcda4ae6b3e4640c1c6', 'b2c05cce8c854872'],
     ])
   })
 })
@@ -373,8 +377,8 @@ function writeRuntimeMock(pathname: string, res: ServerResponse): void {
   }
   if (pathname === '/runtime/api/runs/stream') {
     const run = mockRun()
-    const [ap2Step, a2aStep, adkDecisionStep, adkStep] = run.steps
-    if (!ap2Step || !a2aStep || !adkDecisionStep || !adkStep) {
+    const [ap2Step, a2aStep, adkDecisionStep, adkStep, adkHandlerErrorStep] = run.steps
+    if (!ap2Step || !a2aStep || !adkDecisionStep || !adkStep || !adkHandlerErrorStep) {
       throw new Error('mock run is missing runtime steps')
     }
     res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
@@ -447,6 +451,24 @@ function writeRuntimeMock(pathname: string, res: ServerResponse): void {
           ok: true,
           event: { type: 'step_completed', step: adkStep, timestamp: adkStep.timestamp },
         },
+        {
+          ok: true,
+          event: {
+            type: 'step_started',
+            key: 'adk_handler_error',
+            protocol: 'ADK Python',
+            label: 'ADK terminal error outcome',
+            timestamp: adkHandlerErrorStep.timestamp,
+          },
+        },
+        {
+          ok: true,
+          event: {
+            type: 'step_completed',
+            step: adkHandlerErrorStep,
+            timestamp: adkHandlerErrorStep.timestamp,
+          },
+        },
         { ok: true, event: { type: 'run_completed', run, timestamp: run.updated_at } },
         {
           ok: true,
@@ -505,8 +527,8 @@ function mockRun() {
     mode: 'replay',
     prompt: 'Continue only if the AP2 evidence verifies.',
     created_at: '2026-06-18T00:00:00.000Z',
-    updated_at: '2026-06-18T00:00:03.000Z',
-    duration_ms: 3000,
+    updated_at: '2026-06-18T00:00:04.000Z',
+    duration_ms: 4000,
     gate: mockGate(),
     steps: [
       {
@@ -573,12 +595,40 @@ function mockRun() {
           },
         ],
       },
+      {
+        key: 'adk_handler_error',
+        protocol: 'ADK Python',
+        status: 'complete',
+        label: 'ADK terminal error outcome',
+        detail: 'ADK handler error outcome signed.',
+        timestamp: '2026-06-18T00:00:04.000Z',
+        record_hash: 'sha256:err0000000000000000000000000000000000000000000000000000000000000',
+        informed_by: [
+          'sha256:errd3c1510a000000000000000000000000000000000000000000000000000',
+        ],
+        checks: [
+          {
+            key: 'adk_handler_error_decision_parent_resolved',
+            ok: true,
+            detail:
+              'ADK handler-error decision cites sha256:a2a0000000000000000000000000000000000000000000000000000000000000',
+          },
+          {
+            key: 'adk_handler_error_terminal_outcome',
+            ok: true,
+            detail:
+              'Terminal outcome error cites sha256:errd3c1510a000000000000000000000000000000000000000000000000000',
+          },
+        ],
+      },
     ],
     chain: {
       ap2_informs_a2a_remote: true,
       a2a_remote_informs_receiver: true,
       a2a_receiver_informs_adk_decision: true,
       adk_decision_informs_adk_python: true,
+      a2a_receiver_informs_adk_handler_error_decision: true,
+      adk_handler_error_decision_informs_terminal_outcome: true,
     },
     analytics_rows: [
       mockAnalyticsRow({
@@ -609,6 +659,18 @@ function mockRun() {
         event_type: 'atrib.adk_python.tool_callback_signed',
         atrib_record_hash:
           'sha256:adk0000000000000000000000000000000000000000000000000000000000000',
+        protocol: 'ADK Python',
+      }),
+      mockAnalyticsRow({
+        event_type: 'atrib.adk_python.handler_error_decision_allowed',
+        atrib_record_hash:
+          'sha256:errd3c1510a000000000000000000000000000000000000000000000000000',
+        protocol: 'ADK Python',
+      }),
+      mockAnalyticsRow({
+        event_type: 'atrib.adk_python.handler_error_terminal_outcome_signed',
+        atrib_record_hash:
+          'sha256:err0000000000000000000000000000000000000000000000000000000000000',
         protocol: 'ADK Python',
       }),
     ],
