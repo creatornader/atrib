@@ -79,6 +79,36 @@ interface TraceResponse {
   records: TraceRecord[]
 }
 
+interface ReceiptRecoveryGate {
+  ok: boolean
+  kind: 'codemode_receipt_recovery_gate'
+  run_id: string
+  context_id: string
+  status: WorkflowStatus
+  gate:
+    | 'human_review'
+    | 'codemode_resume'
+    | 'revised_human_review'
+    | 'terminal_rejection'
+    | 'handoff_ready'
+  next_step: string
+  allows_write: boolean
+  source: 'durable_object_sqlite_trace_records'
+  required_record_hashes: string[]
+  recovered_head: Record<string, unknown>
+  policy: Record<string, unknown> | null
+  policy_ok: boolean
+  continuation: Record<string, unknown> | null
+  continuation_ok: boolean
+  verification: Record<string, unknown>
+  durable_object_boundary: {
+    deterministic_fixture: boolean
+    forced_eviction: boolean
+    recovery_model: 'persisted_receipt_head'
+    note: string
+  }
+}
+
 interface TestEnv {
   ApprovalTraceAgent: DurableObjectNamespace
   ApprovalActionMcp: DurableObjectNamespace
@@ -90,6 +120,8 @@ interface FetchHandler {
 
 interface RunReader {
   getRun(runId: string): Promise<TraceResponse>
+  getRecoveryGate(runId: string): Promise<ReceiptRecoveryGate>
+  approveRun(input: { runId: string; reason: string }): Promise<unknown>
   getRepositoryRows(filePath: string): Promise<Array<Record<string, unknown>>>
   getAppliedDecisionRows(runId: string): Promise<Array<Record<string, unknown>>>
 }
@@ -199,6 +231,23 @@ async function requestChanges(runId: string): Promise<TraceResponse> {
 async function getAgentRun(runId: string): Promise<TraceResponse> {
   const stub = testEnv.ApprovalTraceAgent.get(testEnv.ApprovalTraceAgent.idFromName(runId))
   return runInDurableObject(stub, (instance) => (instance as unknown as RunReader).getRun(runId))
+}
+
+async function approveWithoutExecuting(runId: string): Promise<void> {
+  const stub = testEnv.ApprovalTraceAgent.get(testEnv.ApprovalTraceAgent.idFromName(runId))
+  await runInDurableObject(stub, (instance) =>
+    (instance as unknown as RunReader).approveRun({
+      runId,
+      reason: 'Approved to test recovery before Code Mode execution resumes.',
+    }),
+  )
+}
+
+async function getRecoveryGate(runId: string): Promise<ReceiptRecoveryGate> {
+  const stub = testEnv.ApprovalTraceAgent.get(testEnv.ApprovalTraceAgent.idFromName(runId))
+  return runInDurableObject(stub, (instance) =>
+    (instance as unknown as RunReader).getRecoveryGate(runId),
+  )
 }
 
 async function getTargetRows(
@@ -478,6 +527,93 @@ describe('Cloudflare approval trace Worker', () => {
     const httpRun = await getJson<TraceResponse>(`/api/runs/${runId}`)
     expect(httpRun.status).toBe('succeeded')
     expect(labels(httpRun)).toEqual(labels(trace))
+
+    const recoveryGate = await getJson<ReceiptRecoveryGate>(
+      `/api/runs/${runId}/recovery-gate`,
+    )
+    expect(recoveryGate).toMatchObject({
+      ok: true,
+      kind: 'codemode_receipt_recovery_gate',
+      gate: 'handoff_ready',
+      allows_write: false,
+      source: 'durable_object_sqlite_trace_records',
+      policy_ok: true,
+      continuation_ok: true,
+      durable_object_boundary: {
+        deterministic_fixture: true,
+        forced_eviction: false,
+        recovery_model: 'persisted_receipt_head',
+      },
+      verification: expect.objectContaining({
+        ok: true,
+        head_record_hash: handoff.record_hash,
+      }),
+      recovered_head: expect.objectContaining({
+        proposal_record_hash: proposal.record_hash,
+        decision_record_hash: approval.record_hash,
+        runtime_record_hash: execution.record_hash,
+        outcome_record_hash: outcome.record_hash,
+        handoff_record_hash: handoff.record_hash,
+      }),
+    })
+    expect(recoveryGate.required_record_hashes).toEqual(
+      expect.arrayContaining([
+        proposal.record_hash,
+        approval.record_hash,
+        execution.record_hash,
+        outcome.record_hash,
+        handoff.record_hash,
+      ]),
+    )
+  })
+
+  it('reconstructs the Code Mode resume gate before the approved write runs', async () => {
+    const runId = uniqueRunId('pre-resume-recovery-local-e2e')
+    const pending = await createRun(runId)
+    const proposal = byLabel(pending).get('proposal')!
+
+    await approveWithoutExecuting(runId)
+
+    const approved = await getAgentRun(runId)
+    const approval = byLabel(approved).get('approval')!
+    const gate = await getRecoveryGate(runId)
+
+    expect(labels(approved)).toEqual(['trigger', 'triage', 'proposal', 'approval'])
+    expect(approved.status).toBe('approved')
+    expect(gate).toMatchObject({
+      ok: true,
+      kind: 'codemode_receipt_recovery_gate',
+      gate: 'codemode_resume',
+      status: 'approved',
+      allows_write: true,
+      source: 'durable_object_sqlite_trace_records',
+      policy_ok: true,
+      continuation_ok: true,
+      verification: expect.objectContaining({
+        ok: true,
+        head_record_hash: approval.record_hash,
+        checked_record_hashes: expect.arrayContaining([
+          proposal.record_hash,
+          approval.record_hash,
+        ]),
+      }),
+      recovered_head: expect.objectContaining({
+        head_record_hash: approval.record_hash,
+        head_label: 'approval',
+        proposal_record_hash: proposal.record_hash,
+        decision_record_hash: approval.record_hash,
+        runtime_record_hash: null,
+        outcome_record_hash: null,
+        handoff_record_hash: null,
+      }),
+      durable_object_boundary: {
+        deterministic_fixture: true,
+        forced_eviction: false,
+        recovery_model: 'persisted_receipt_head',
+      },
+    })
+    expect(gate.required_record_hashes).toEqual([proposal.record_hash, approval.record_hash])
+    expect(await getTargetRows(runId, 'workers/checkout/session.ts')).toEqual([])
   })
 
   it('signs a rejection and closes the pending Code Mode action', async () => {
@@ -525,6 +661,23 @@ describe('Cloudflare approval trace Worker', () => {
       executed: false,
       outcome: 'not_run',
       changed: [],
+    })
+    const gate = await getRecoveryGate(runId)
+    expect(gate).toMatchObject({
+      ok: true,
+      gate: 'terminal_rejection',
+      allows_write: false,
+      policy_ok: true,
+      continuation_ok: true,
+      verification: expect.objectContaining({
+        ok: true,
+        head_record_hash: runtimeRejection.record_hash,
+      }),
+      recovered_head: expect.objectContaining({
+        proposal_record_hash: proposal.record_hash,
+        decision_record_hash: rejection.record_hash,
+        runtime_record_hash: runtimeRejection.record_hash,
+      }),
     })
     expect(await getTargetRows(runId, 'workers/checkout/session.ts')).toEqual([])
   })
@@ -616,6 +769,37 @@ describe('Cloudflare approval trace Worker', () => {
       outcome: 'pending',
       changed: [],
     })
+    const revisionGate = await getRecoveryGate(runId)
+    expect(revisionGate).toMatchObject({
+      ok: true,
+      gate: 'revised_human_review',
+      allows_write: false,
+      policy_ok: true,
+      continuation_ok: true,
+      verification: expect.objectContaining({
+        ok: true,
+        head_record_hash: revision.record_hash,
+        checked_record_hashes: expect.arrayContaining([
+          proposal.record_hash,
+          feedback.record_hash,
+          runtimeRejection.record_hash,
+          revision.record_hash,
+        ]),
+      }),
+      recovered_head: expect.objectContaining({
+        proposal_record_hash: revision.record_hash,
+        change_request_record_hash: feedback.record_hash,
+        runtime_record_hash: runtimeRejection.record_hash,
+      }),
+    })
+    expect(revisionGate.required_record_hashes).toEqual(
+      expect.arrayContaining([
+        proposal.record_hash,
+        feedback.record_hash,
+        runtimeRejection.record_hash,
+        revision.record_hash,
+      ]),
+    )
     expect(await getTargetRows(runId, 'workers/checkout/session.ts')).toEqual([])
 
     const duplicateResponse = await dispatch(`/api/runs/${runId}/request-changes`, {
