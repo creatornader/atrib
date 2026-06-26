@@ -191,9 +191,24 @@ interface ListedActionRecord {
   created_at: number
 }
 
+interface ReceiptVerification {
+  ok: boolean
+  checked_at: string
+  checked_record_hashes: string[]
+  head_record_hash: string | null
+  head_label: string | null
+  signature_failures: string[]
+  hash_failures: string[]
+  missing_record_hashes: string[]
+}
+
 const TEXT_ENCODER = new TextEncoder()
 const STABLE_CONNECTOR_ID = 'cloudflare-demo-repository-write-mcp'
 const CODEMODE_RUNTIME_ID = 'cloudflare-demo-codemode-runtime'
+const CODEMODE_RUNTIME_VERSION = '@cloudflare/codemode@0.4.1'
+const AGENTS_SDK_VERSION = 'agents@0.16.2'
+const APPROVAL_POLICY_ID = 'cloudflare-workers-payment-route-write'
+const APPROVAL_POLICY_VERSION = '2026-06-26.1'
 const LOG_BASE_URL = 'https://log.atrib.dev/v1'
 const DEFAULT_TRIGGER_PROMPT =
   'Workers Observability detected checkout 500s after deploy; Browser Run reproduced the failure and Code Mode proposed a guarded Workers patch.'
@@ -266,6 +281,46 @@ function stableStringify(value: unknown): string {
 
 function hashUnknown(value: unknown): string {
   return `sha256:${hexEncode(sha256(TEXT_ENCODER.encode(stableStringify(value))))}`
+}
+
+function approvalPolicy() {
+  return {
+    policy_id: APPROVAL_POLICY_ID,
+    policy_version: APPROVAL_POLICY_VERSION,
+    approval_boundary: 'codemode_pending_action',
+    rule: 'Payment-impacting Workers writes require a signed human decision before Code Mode executes the write.',
+    requires_human_review: true,
+  }
+}
+
+function codeModeRuntimeContext(runId: string, executor: CodeModeExecutorMode) {
+  return {
+    runtime: 'CodemodeRuntime',
+    runtime_version: CODEMODE_RUNTIME_VERSION,
+    runtime_name: codeModeRuntimeName(runId),
+    agents_sdk_version: AGENTS_SDK_VERSION,
+    executor,
+  }
+}
+
+function codeModeContinuation(input: {
+  runId: string
+  pendingAction: PendingAction
+  payloadHash: string
+  executor: CodeModeExecutorMode
+}) {
+  return {
+    ...codeModeRuntimeContext(input.runId, input.executor),
+    continuation_id: `${input.pendingAction.executionId}:${input.pendingAction.seq}`,
+    execution_id: input.pendingAction.executionId,
+    seq: input.pendingAction.seq,
+    connector: input.pendingAction.connector,
+    method: input.pendingAction.method,
+    requires_approval: true,
+    stable_connector_id: CODEMODE_RUNTIME_ID,
+    input_digest: hashUnknown(input.pendingAction.args),
+    payload_hash: input.payloadHash,
+  }
 }
 
 function recordHash(record: AtribRecord): string {
@@ -669,12 +724,31 @@ function tracePacket(
   const latestProposal =
     [...parsed].reverse().find((entry) => entry.label === 'revision') ?? get('proposal')
   const execution = get('execution')
+  const latestRuntimeRejection = [...parsed]
+    .reverse()
+    .find((entry) => entry.label === 'runtime_rejection')
   const outcome = get('outcome')
   const handoff = get('handoff')
   const outcomeBody = outcome?.body as {
     status?: string
     changed_rows?: string[]
     diagnostic?: string
+  } | null
+  const handoffBody = handoff?.body as {
+    receipt_head?: Record<string, unknown>
+    summary?: string
+  } | null
+  const activeDecision = get('approval') ?? get('rejection') ?? get('change_request')
+  const activeRuntime = execution ?? latestRuntimeRejection
+  const activeRuntimeBody = activeRuntime?.body as {
+    continuation?: unknown
+    policy?: unknown
+    pre_resume_receipt_check?: unknown
+  } | null
+  const activeProposalBody = latestProposal?.body as {
+    decision_scope?: { continuation?: unknown }
+    policy?: unknown
+    pre_revision_receipt_check?: unknown
   } | null
   const publicContextUrl = workflow?.context_id
     ? `${LOG_BASE_URL}/by-context/${workflow.context_id}`
@@ -737,9 +811,35 @@ function tracePacket(
       },
     ],
     handoff: {
-      summary: (handoff?.body as { summary?: string } | null)?.summary ?? null,
+      summary: handoffBody?.summary ?? null,
       public_context_url: publicContextUrl,
       record_hash: handoff?.record_hash ?? null,
+      receipt_head: handoffBody?.receipt_head ?? null,
+    },
+    receipt_state: {
+      head_record_hash:
+        (handoffBody?.receipt_head as { head_record_hash?: string } | undefined)
+          ?.head_record_hash ??
+        handoff?.record_hash ??
+        outcome?.record_hash ??
+        latestRuntimeRejection?.record_hash ??
+        activeDecision?.record_hash ??
+        latestProposal?.record_hash ??
+        null,
+      proposal_record_hash: latestProposal?.record_hash ?? null,
+      decision_record_hash: activeDecision?.record_hash ?? null,
+      runtime_record_hash: activeRuntime?.record_hash ?? null,
+      outcome_record_hash: outcome?.record_hash ?? null,
+      handoff_record_hash: handoff?.record_hash ?? null,
+      policy: activeProposalBody?.policy ?? activeRuntimeBody?.policy ?? null,
+      continuation:
+        activeProposalBody?.decision_scope?.continuation ?? activeRuntimeBody?.continuation ?? null,
+      latest_receipt_check:
+        (handoffBody?.receipt_head as { receipt_state_check?: unknown } | undefined)
+          ?.receipt_state_check ??
+        activeRuntimeBody?.pre_resume_receipt_check ??
+        activeProposalBody?.pre_revision_receipt_check ??
+        null,
     },
     observability: {
       native_events: nativeEvents,
@@ -1055,6 +1155,25 @@ class RepositoryCodeModeConnector extends CodemodeConnector<Env> {
     }
     const p = validation.payload
     this.ensureRepoSchema()
+    const existingApply = this.appliedDecision(workflow.decision_record_hash)
+    if (existingApply) {
+      return {
+        status: 'success',
+        diagnostic:
+          'Exact-once fence found this signed decision was already applied; no duplicate write ran.',
+        changed_rows: [],
+        approval_record_hash: workflow.decision_record_hash,
+        execution_id: executionId,
+        exact_once: {
+          applied: false,
+          previously_applied: true,
+          decision_record_hash: workflow.decision_record_hash,
+          first_execution_id: existingApply.execution_id,
+          first_seq: existingApply.seq,
+          applied_at: existingApply.applied_at,
+        },
+      }
+    }
     this.storage.exec(
       `
         INSERT OR REPLACE INTO repo_files
@@ -1067,12 +1186,39 @@ class RepositoryCodeModeConnector extends CodemodeConnector<Env> {
       JSON.stringify(p.after),
       Date.now(),
     )
+    this.storage.exec(
+      `
+        INSERT INTO applied_decisions
+          (
+            decision_record_hash,
+            run_id,
+            execution_id,
+            seq,
+            payload_hash,
+            file_path,
+            applied_at
+          )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      workflow.decision_record_hash,
+      workflow.run_id,
+      executionId,
+      this.pendingSeqForPayload(validation.run_id, validation.payload_digest),
+      workflow.payload_hash,
+      p.target_file,
+      Date.now(),
+    )
     return {
       status: 'success',
       diagnostic: 'Durable Object SQLite demo checkout file row updated.',
       changed_rows: [`repo_files.${p.target_file}`],
       approval_record_hash: workflow.decision_record_hash,
       execution_id: executionId,
+      exact_once: {
+        applied: true,
+        previously_applied: false,
+        decision_record_hash: workflow.decision_record_hash,
+      },
       after: p.after,
     }
   }
@@ -1131,6 +1277,69 @@ class RepositoryCodeModeConnector extends CodemodeConnector<Env> {
         updated_at INTEGER NOT NULL
       )
     `)
+    this.storage.exec(`
+      CREATE TABLE IF NOT EXISTS applied_decisions (
+        decision_record_hash TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        execution_id TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        payload_hash TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        applied_at INTEGER NOT NULL
+      )
+    `)
+    this.storage.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_applied_decisions_execution_seq
+      ON applied_decisions (execution_id, seq)
+    `)
+  }
+
+  private appliedDecision(decisionRecordHash: string): {
+    execution_id: string
+    seq: number
+    applied_at: number
+  } | null {
+    const rows = this.storage
+      .exec<Record<string, SqlStorageValue>>(
+        `
+          SELECT execution_id, seq, applied_at
+          FROM applied_decisions
+          WHERE decision_record_hash = ?
+          LIMIT 1
+        `,
+        decisionRecordHash,
+      )
+      .toArray()
+    return (
+      (rows[0] as unknown as
+        | { execution_id: string; seq: number; applied_at: number }
+        | undefined) ?? null
+    )
+  }
+
+  private pendingSeqForPayload(runId: string, payloadDigest: string): number {
+    const workflow = this.workflow(runId)
+    if (!workflow) return -1
+    const proposalRows = this.storage
+      .exec<Record<string, SqlStorageValue>>(
+        `
+          SELECT body_json
+          FROM trace_records
+          WHERE run_id = ?
+            AND record_hash = ?
+          LIMIT 1
+        `,
+        runId,
+        workflow.proposal_record_hash,
+      )
+      .toArray()
+    const body = proposalRows[0]?.body_json
+      ? (JSON.parse(String(proposalRows[0].body_json)) as Record<string, unknown>)
+      : null
+    const pending = codeModePendingActionFromBody(body)
+    if (!pending) return -1
+    const args = pending.args as Partial<CodeModeToolArgs>
+    return args.payload_digest === payloadDigest ? pending.seq : -1
   }
 
   private get storage(): SqlStorage {
@@ -1333,6 +1542,12 @@ export class ApprovalTraceAgent extends Agent<Env> {
       forceError: input.forceError,
       executorMode: input.codeModeExecutor,
     })
+    const continuation = codeModeContinuation({
+      runId,
+      pendingAction: codeMode.pendingAction,
+      payloadHash,
+      executor: codeMode.executorMode,
+    })
     const body = {
       kind: 'agent_proposal',
       prompt: input.prompt,
@@ -1344,13 +1559,21 @@ export class ApprovalTraceAgent extends Agent<Env> {
       stable_connector_id: CODEMODE_RUNTIME_ID,
       proposed_payload_hash: payloadHash,
       proposed_payload: plan.payload,
+      policy: approvalPolicy(),
+      decision_scope: {
+        kind: 'codemode_pending_action',
+        continuation,
+      },
       codemode: {
         runtime: 'CodemodeRuntime',
+        runtime_version: CODEMODE_RUNTIME_VERSION,
         runtime_name: codeModeRuntimeName(runId),
+        agents_sdk_version: AGENTS_SDK_VERSION,
         execution_id: codeMode.output.executionId,
         execution_status: codeMode.output.status,
         executor: codeMode.executorMode,
         pending_action: codeMode.pendingAction,
+        continuation,
         code_hash: codeMode.codeHash,
         log: codeModeLogSummary(codeMode.executionState),
       },
@@ -1495,6 +1718,44 @@ export class ApprovalTraceAgent extends Agent<Env> {
     return executions.find((execution) => execution.id === executionId) ?? null
   }
 
+  private async verifyReceiptState(input: {
+    runId: string
+    requiredRecordHashes?: string[]
+    headRecordHash?: string | null
+  }): Promise<ReceiptVerification> {
+    const rows = this.getRecordRows(input.runId)
+    const byHash = new Map(rows.map((row) => [row.record_hash, row]))
+    const headIndex = input.headRecordHash
+      ? rows.findIndex((row) => row.record_hash === input.headRecordHash)
+      : -1
+    const checkedRows = input.headRecordHash && headIndex >= 0 ? rows.slice(0, headIndex + 1) : rows
+    const signatureFailures: string[] = []
+    const hashFailures: string[] = []
+    for (const row of checkedRows) {
+      const record = JSON.parse(row.record_json) as AtribRecord
+      if (recordHash(record) !== row.record_hash) hashFailures.push(row.record_hash)
+      if (!(await verifyAtribRecord(record))) signatureFailures.push(row.record_hash)
+    }
+    const missingRecordHashes = (input.requiredRecordHashes ?? []).filter(
+      (hash) => !byHash.has(hash),
+    )
+    const headRow = input.headRecordHash ? byHash.get(input.headRecordHash) : rows.at(-1)
+    return {
+      ok:
+        signatureFailures.length === 0 &&
+        hashFailures.length === 0 &&
+        missingRecordHashes.length === 0 &&
+        (!input.headRecordHash || Boolean(headRow)),
+      checked_at: new Date().toISOString(),
+      checked_record_hashes: checkedRows.map((row) => row.record_hash),
+      head_record_hash: headRow?.record_hash ?? null,
+      head_label: headRow?.label ?? null,
+      signature_failures: signatureFailures,
+      hash_failures: hashFailures,
+      missing_record_hashes: missingRecordHashes,
+    }
+  }
+
   private currentProposalBody(workflow: WorkflowRow): Record<string, unknown> | null {
     const row = this.getRecordRows(workflow.run_id).find(
       (record) => record.record_hash === workflow.proposal_record_hash,
@@ -1528,13 +1789,24 @@ export class ApprovalTraceAgent extends Agent<Env> {
       runTimestamp(workflow.created_at, TRACE_RECORD_OFFSETS_MS.approval),
       proposalTimestamp + TRACE_RECORD_OFFSETS_MS.reviewDecisionDelay,
     )
+    const pending = this.currentCodeModePendingAction(workflow)
+    if (!pending) throw new Error('run has no Code Mode pending action to approve')
+    const continuation = codeModeContinuation({
+      runId: input.runId,
+      pendingAction: pending,
+      payloadHash: workflow.payload_hash,
+      executor: this.currentCodeModeExecutor(workflow),
+    })
     const body = {
       kind: 'human_approval',
       reviewer_id: 'browser-demo-human',
       decision: 'approved',
       reason: input.reason,
+      proposal_record_hash: workflow.proposal_record_hash,
       approved_payload_hash: workflow.payload_hash,
       stable_connector_id: CODEMODE_RUNTIME_ID,
+      policy: approvalPolicy(),
+      continuation,
       expires_at: new Date(approvalTimestamp + 1000 * 60 * 30).toISOString(),
     }
     const record = await signObservation({
@@ -1603,6 +1875,22 @@ export class ApprovalTraceAgent extends Agent<Env> {
     }
     const pending = this.currentCodeModePendingAction(workflow)
     if (!pending) throw new Error('run has no Code Mode pending action to approve')
+    const continuation = codeModeContinuation({
+      runId: input.runId,
+      pendingAction: pending,
+      payloadHash: workflow.payload_hash,
+      executor: this.currentCodeModeExecutor(workflow),
+    })
+    const preResumeReceiptCheck = await this.verifyReceiptState({
+      runId: input.runId,
+      requiredRecordHashes: [workflow.proposal_record_hash, workflow.decision_record_hash],
+      headRecordHash: workflow.decision_record_hash,
+    })
+    if (!preResumeReceiptCheck.ok) {
+      throw new Error(
+        `receipt state failed before Code Mode resume: ${jsonText(preResumeReceiptCheck)}`,
+      )
+    }
     const runtime = this.codeModeRuntime(input.runId, this.currentCodeModeExecutor(workflow))
     const output = await runtime.approve({ executionId: pending.executionId })
     const state = await this.getCodeModeExecution(runtime, pending.executionId)
@@ -1610,11 +1898,17 @@ export class ApprovalTraceAgent extends Agent<Env> {
     const executionBody = {
       kind: 'codemode_execution_resumed',
       runtime: 'CodemodeRuntime',
+      runtime_version: CODEMODE_RUNTIME_VERSION,
       runtime_name: codeModeRuntimeName(input.runId),
+      agents_sdk_version: AGENTS_SDK_VERSION,
       execution_id: pending.executionId,
       pending_action: pending,
+      policy: approvalPolicy(),
+      continuation,
+      proposal_record_hash: workflow.proposal_record_hash,
       approval_record_hash: workflow.decision_record_hash,
       approved_payload_hash: workflow.payload_hash,
+      pre_resume_receipt_check: preResumeReceiptCheck,
       output,
       execution_state: state
         ? {
@@ -1656,8 +1950,16 @@ export class ApprovalTraceAgent extends Agent<Env> {
       kind: 'execution_outcome',
       ...resultBody,
       runtime: 'CodemodeRuntime',
+      runtime_version: CODEMODE_RUNTIME_VERSION,
       execution_id: pending.executionId,
       execution_record_hash: executionHash,
+      policy: approvalPolicy(),
+      continuation,
+      receipt_links: {
+        proposal_record_hash: workflow.proposal_record_hash,
+        decision_record_hash: workflow.decision_record_hash,
+        execution_record_hash: executionHash,
+      },
     }
     const outcomeRecord = await signObservation({
       env: this.env,
@@ -1701,13 +2003,13 @@ export class ApprovalTraceAgent extends Agent<Env> {
   async rejectCurrentCodeModeRun(input: {
     runId: string
     reason: 'rejected' | 'changes_requested'
-  }): Promise<void> {
+  }): Promise<string | null> {
     this.ensureSchema()
     const workflow = this.getWorkflowRow(input.runId)
     if (!workflow) throw new Error(`run not found: ${input.runId}`)
-    if (!workflow.decision_record_hash) return
+    if (!workflow.decision_record_hash) return null
     const pending = this.currentCodeModePendingAction(workflow)
-    if (!pending) return
+    if (!pending) return null
     const runtime = this.codeModeRuntime(input.runId, this.currentCodeModeExecutor(workflow))
     const terminated = await runtime.reject({
       executionId: pending.executionId,
@@ -1715,15 +2017,27 @@ export class ApprovalTraceAgent extends Agent<Env> {
     })
     const state = await this.getCodeModeExecution(runtime, pending.executionId)
     const timestamp = runTimestamp(workflow.updated_at, 125)
+    const continuation = codeModeContinuation({
+      runId: input.runId,
+      pendingAction: pending,
+      payloadHash: workflow.payload_hash,
+      executor: this.currentCodeModeExecutor(workflow),
+    })
     const body = {
       kind: 'codemode_runtime_rejection',
       runtime: 'CodemodeRuntime',
+      runtime_version: CODEMODE_RUNTIME_VERSION,
       runtime_name: codeModeRuntimeName(input.runId),
+      agents_sdk_version: AGENTS_SDK_VERSION,
       reason: input.reason,
       terminated,
       execution_id: pending.executionId,
       pending_action: pending,
+      policy: approvalPolicy(),
+      continuation,
+      proposal_record_hash: workflow.proposal_record_hash,
       decision_record_hash: workflow.decision_record_hash,
+      payload_hash: workflow.payload_hash,
       execution_status: state?.status ?? (terminated ? 'rejected' : 'unknown'),
       log: codeModeLogSummary(state),
     }
@@ -1746,6 +2060,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
       body,
       proof: await submitRecord(this.env, record),
     })
+    const rejectionHash = recordHash(record)
     this.saveNativeEvent(
       input.runId,
       emitNativeEvent({
@@ -1761,6 +2076,7 @@ export class ApprovalTraceAgent extends Agent<Env> {
         timestamp,
       }),
     )
+    return rejectionHash
   }
 
   async rejectRun(input: { runId: string; reason: string }): Promise<unknown> {
@@ -1775,13 +2091,24 @@ export class ApprovalTraceAgent extends Agent<Env> {
       runTimestamp(workflow.created_at, TRACE_RECORD_OFFSETS_MS.rejection),
       proposalTimestamp + TRACE_RECORD_OFFSETS_MS.reviewDecisionDelay,
     )
+    const pending = this.currentCodeModePendingAction(workflow)
+    if (!pending) throw new Error('run has no Code Mode pending action to reject')
+    const continuation = codeModeContinuation({
+      runId: input.runId,
+      pendingAction: pending,
+      payloadHash: workflow.payload_hash,
+      executor: this.currentCodeModeExecutor(workflow),
+    })
     const body = {
       kind: 'human_approval',
       reviewer_id: 'browser-demo-human',
       decision: 'rejected',
       reason: input.reason,
+      proposal_record_hash: workflow.proposal_record_hash,
       approved_payload_hash: workflow.payload_hash,
       stable_connector_id: CODEMODE_RUNTIME_ID,
+      policy: approvalPolicy(),
+      continuation,
     }
     const record = await signObservation({
       env: this.env,
@@ -1856,6 +2183,14 @@ export class ApprovalTraceAgent extends Agent<Env> {
       proposalTimestamp + TRACE_RECORD_OFFSETS_MS.reviewDecisionDelay,
     )
     const feedback = input.feedback.trim() || 'Request a narrower Workers checkout patch.'
+    const pending = this.currentCodeModePendingAction(workflow)
+    if (!pending) throw new Error('run has no Code Mode pending action for feedback')
+    const continuation = codeModeContinuation({
+      runId: input.runId,
+      pendingAction: pending,
+      payloadHash: workflow.payload_hash,
+      executor: this.currentCodeModeExecutor(workflow),
+    })
     const body = {
       kind: 'human_review_feedback',
       reviewer_id: 'browser-demo-human',
@@ -1865,8 +2200,11 @@ export class ApprovalTraceAgent extends Agent<Env> {
         'Keep the checkout guard scoped to missing cart ids only.',
         'Return a revised proposal before Code Mode writes the Workers checkout file.',
       ],
+      proposal_record_hash: workflow.proposal_record_hash,
       approved_payload_hash: workflow.payload_hash,
       stable_connector_id: CODEMODE_RUNTIME_ID,
+      policy: approvalPolicy(),
+      continuation,
       next_step: 'agent_revision',
     }
     const record = await signObservation({
@@ -1914,7 +2252,19 @@ export class ApprovalTraceAgent extends Agent<Env> {
           updated_at = ${reviewFeedbackTimestamp}
       WHERE run_id = ${input.runId}
     `
-    await this.rejectCurrentCodeModeRun({ runId: input.runId, reason: 'changes_requested' })
+    const runtimeRejectionHash = await this.rejectCurrentCodeModeRun({
+      runId: input.runId,
+      reason: 'changes_requested',
+    })
+    const preRevisionReceiptCheck = await this.verifyReceiptState({
+      runId: input.runId,
+      requiredRecordHashes: [
+        workflow.proposal_record_hash,
+        feedbackHash,
+        ...(runtimeRejectionHash ? [runtimeRejectionHash] : []),
+      ],
+      headRecordHash: runtimeRejectionHash ?? feedbackHash,
+    })
     const priorPayload = JSON.parse(workflow.payload_json) as PlannedAction['payload']
     const revision = revisedPlanFromFeedback(priorPayload, feedback)
     const revisionPayloadHash = hashUnknown(revision.payload)
@@ -1923,6 +2273,12 @@ export class ApprovalTraceAgent extends Agent<Env> {
       payload: revision.payload,
       payloadHash: revisionPayloadHash,
       executorMode: this.currentCodeModeExecutor(workflow),
+    })
+    const revisionContinuation = codeModeContinuation({
+      runId: input.runId,
+      pendingAction: codeMode.pendingAction,
+      payloadHash: revisionPayloadHash,
+      executor: codeMode.executorMode,
     })
     const revisionTimestamp = Math.max(
       Date.now(),
@@ -1943,13 +2299,24 @@ export class ApprovalTraceAgent extends Agent<Env> {
       stable_connector_id: CODEMODE_RUNTIME_ID,
       proposed_payload_hash: revisionPayloadHash,
       proposed_payload: revision.payload,
+      policy: approvalPolicy(),
+      pre_revision_receipt_check: preRevisionReceiptCheck,
+      decision_scope: {
+        kind: 'codemode_pending_action',
+        supersedes_proposal_record_hash: workflow.proposal_record_hash,
+        prior_terminal_receipt_hash: runtimeRejectionHash,
+        continuation: revisionContinuation,
+      },
       codemode: {
         runtime: 'CodemodeRuntime',
+        runtime_version: CODEMODE_RUNTIME_VERSION,
         runtime_name: codeModeRuntimeName(input.runId),
+        agents_sdk_version: AGENTS_SDK_VERSION,
         execution_id: codeMode.output.executionId,
         execution_status: codeMode.output.status,
         executor: codeMode.executorMode,
         pending_action: codeMode.pendingAction,
+        continuation: revisionContinuation,
         code_hash: codeMode.codeHash,
         log: codeModeLogSummary(codeMode.executionState),
       },
@@ -2060,9 +2427,28 @@ export class ApprovalTraceAgent extends Agent<Env> {
     if (!workflow) throw new Error(`run not found: ${input.runId}`)
     const rows = this.getRecordRows(input.runId)
     const approval = rows.find((row) => row.label === 'approval')
+    const execution = rows.find((row) => row.label === 'execution')
     const outcome = rows.find((row) => row.label === 'outcome')
-    if (!approval || !outcome) throw new Error('approval and outcome records are required')
+    if (!approval || !execution || !outcome) {
+      throw new Error('approval, execution, and outcome records are required')
+    }
     const outcomeRecord = JSON.parse(outcome.record_json) as AtribRecord
+    const executionBody = execution.body_json
+      ? (JSON.parse(execution.body_json) as Record<string, unknown>)
+      : {}
+    const finalReceiptCheck = await this.verifyReceiptState({
+      runId: input.runId,
+      requiredRecordHashes: [
+        workflow.proposal_record_hash,
+        approval.record_hash,
+        execution.record_hash,
+        outcome.record_hash,
+      ],
+      headRecordHash: outcome.record_hash,
+    })
+    if (!finalReceiptCheck.ok) {
+      throw new Error(`receipt state failed before handoff: ${jsonText(finalReceiptCheck)}`)
+    }
     const handoffTimestamp = Math.max(
       Date.now(),
       workflow.created_at + TRACE_RECORD_OFFSETS_MS.handoff,
@@ -2073,7 +2459,26 @@ export class ApprovalTraceAgent extends Agent<Env> {
       summary: input.failed
         ? 'The approved Cloudflare-shaped file action failed with signed diagnostic evidence.'
         : 'The approved Cloudflare-shaped file action completed and produced a signed outcome.',
+      receipt_head: {
+        kind: 'codemode_decision_receipt_head',
+        head_record_hash: outcome.record_hash,
+        head_label: 'outcome',
+        run_id: input.runId,
+        context_id: workflow.context_id,
+        proposal_record_hash: workflow.proposal_record_hash,
+        decision_record_hash: approval.record_hash,
+        execution_record_hash: execution.record_hash,
+        outcome_record_hash: outcome.record_hash,
+        payload_hash: workflow.payload_hash,
+        policy: approvalPolicy(),
+        runtime: executionBody.runtime ?? 'CodemodeRuntime',
+        runtime_version: executionBody.runtime_version ?? CODEMODE_RUNTIME_VERSION,
+        agents_sdk_version: executionBody.agents_sdk_version ?? AGENTS_SDK_VERSION,
+        continuation: executionBody.continuation ?? null,
+        receipt_state_check: finalReceiptCheck,
+      },
       approval_record_hash: approval.record_hash,
+      execution_record_hash: execution.record_hash,
       outcome_record_hash: outcome.record_hash,
       public_context_url: `${LOG_BASE_URL}/by-context/${workflow.context_id}`,
       next_owner: 'cloudflare-agents-reviewer',
@@ -2171,6 +2576,26 @@ export class ApprovalTraceAgent extends Agent<Env> {
     }))
   }
 
+  getAppliedDecisionRows(runId: string): Array<Record<string, unknown>> {
+    this.ensureSchema()
+    this.ensureRepoSchema()
+    return [
+      ...this.sql<{
+        decision_record_hash: string
+        execution_id: string
+        seq: number
+        payload_hash: string
+        file_path: string
+        applied_at: number
+      }>`
+      SELECT decision_record_hash, execution_id, seq, payload_hash, file_path, applied_at
+      FROM applied_decisions
+      WHERE run_id = ${runId}
+      ORDER BY applied_at ASC
+    `,
+    ]
+  }
+
   async getRun(runId: string): Promise<unknown> {
     this.ensureSchema()
     const workflow = this.getWorkflowRow(runId)
@@ -2243,6 +2668,21 @@ export class ApprovalTraceAgent extends Agent<Env> {
         state_json TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       )
+    `
+    this.sql`
+      CREATE TABLE IF NOT EXISTS applied_decisions (
+        decision_record_hash TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        execution_id TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        payload_hash TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        applied_at INTEGER NOT NULL
+      )
+    `
+    this.sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_applied_decisions_execution_seq
+      ON applied_decisions (execution_id, seq)
     `
   }
 
