@@ -3,12 +3,15 @@
 Interactive Cloudflare Agents example for atrib-signed Code Mode approval and
 execution receipts.
 The example is a native `@cloudflare/codemode` approval bridge wrapped in an
-atrib-signed receipt envelope.
+atrib-signed receipt envelope. It keeps Cloudflare's runtime in charge of the
+pause and resume path, then signs the state a later reviewer needs to check:
+the pending action, exact payload, human decision, resumed execution, result,
+and handoff.
 
 The app is a safe Cloudflare-shaped workflow:
 
 ```text
-prior trigger -> autonomous triage -> Code Mode approval halt -> human decision -> approved execution or rejection -> signed audit trace
+prior trigger -> autonomous triage -> Code Mode approval halt -> human decision -> approved execution or rejection -> signed receipt head
 ```
 
 The simulated target is a Durable Object SQLite table that looks like a
@@ -38,6 +41,15 @@ portable signed receipt envelope around the same boundary: pending action,
 exact payload, human decision, runtime approval or rejection, result, and audit
 handoff.
 
+The receipt state is deliberately machine-readable. Proposal, approval,
+execution, runtime rejection, outcome, and handoff records carry the same
+approval policy id and Code Mode continuation id. Before the Worker resumes a
+paused run, it verifies the proposal and human decision records. Before it
+hands the run off, it verifies proposal, approval, execution, and outcome
+records again and signs a `codemode_decision_receipt_head`. The repository
+write also has an exact-once fence keyed by the signed decision record, so a
+replayed approval cannot apply the same write twice.
+
 ## What this shows
 
 - A prior trigger starts the agent before the browser approval gate appears.
@@ -46,11 +58,15 @@ handoff.
 - A real browser approval or rejection resumes or closes the Code Mode workflow.
 - The approval is bound to the proposed payload, not to a vague "continue"
   action.
+- The approval is also bound to the Code Mode pending action through a signed
+  continuation id (`executionId:seq`).
 - Agent, human reviewer, and Code Mode runtime records use distinct signing keys.
 - The Code Mode execution record has explicit `informed_by` edges to the
   proposal and human approval records.
 - The outcome and handoff records make the async work auditable after the run
   finishes.
+- The handoff record carries a receipt head that names the proposal, decision,
+  execution, outcome, policy, continuation, and verification result.
 - The UI keeps atrib details visible enough to explain the value without making
   the user read raw records first.
 
@@ -63,6 +79,8 @@ The important atrib differentiators are:
 - **Signed decision chain:** proposal, approval or rejection, Code Mode
   execution or rejection, outcome, and handoff link to each other as signed
   records.
+- **Receipt state for the next step:** a later runtime or debug view can verify
+  which proposal, human decision, pending action, and result belong together.
 - **Trustless audit:** a later audit can verify the trace outside the Worker,
   Durable Object database, or transcript.
 - **Signer separation:** autonomous agent action, human decision, and execution
@@ -72,12 +90,12 @@ The important atrib differentiators are:
 
 The current hosted Worker is `https://atrib-cloudflare.nagala.workers.dev/`.
 
-Latest verified proof: `pnpm --filter @atrib/cloudflare-approval-trace
-proof:worker` passed `391/391` checks at `2026-06-19T19:54:36.878Z` from
-the public commit used for that proof:
-[`8fb3820628d4a3b156816d65a3e507ac8b76481e`](https://github.com/creatornader/atrib/commit/8fb3820628d4a3b156816d65a3e507ac8b76481e).
-The deployed Worker version for that run was
-`d25746f8-7f4e-4f69-9970-8774b983bb9b`.
+Latest verified proof: run `pnpm --filter @atrib/cloudflare-approval-trace
+proof:worker` from the repo root. The proof deploys the Worker, drives approved,
+rejected, request-changes, revised-approve, revised-reject, and diagnostic-error
+paths, then checks signatures, public inclusion proofs, causal graph edges,
+receipt-state continuity, and exact-once decision fencing. The private route
+packet keeps the pinned run ids from the latest route refresh.
 
 Open the hosted Worker, start a run, then approve, reject, or request changes.
 When a run finishes, the UI exposes receipt details, trace JSON, and public log
@@ -107,10 +125,12 @@ not submit records to the public log.
 The proof script uses stable demo-only signing keys from
 `~/.atrib/secrets/cloudflare-approval-trace.json`, syncs them into
 `.tmp/secrets.json` for Wrangler, deploys the Worker, drives approved, rejected,
-and diagnostic-error runs through the same HTTP endpoints the UI uses, and
-verifies record hashes, signatures, public inclusion proofs, causal edges, and
-graph-node derivation for the generated records. Set
-`ATRIB_APPROVAL_TRACE_SECRETS_PATH` to point at another local secrets file.
+request-changes, revised-approve, revised-reject, and diagnostic-error runs
+through the same HTTP endpoints the UI uses, and verifies record hashes,
+signatures, public inclusion proofs, causal edges, graph-node derivation,
+receipt-state continuity, and exact-once decision fencing for the generated
+records. Set `ATRIB_APPROVAL_TRACE_SECRETS_PATH` to point at another local
+secrets file.
 
 The demo does not publish to the graph or directory services. It keeps the
 runtime proof small: records are signed, submitted to the public log, persisted

@@ -52,7 +52,22 @@ interface TraceResponse {
       diagnostic: string | null
     }
     differentiators: Array<{ name: string; evidence_labels: string[] }>
-    handoff: { public_context_url: string | null; record_hash: string | null }
+    handoff: {
+      public_context_url: string | null
+      record_hash: string | null
+      receipt_head: Record<string, unknown> | null
+    }
+    receipt_state: {
+      head_record_hash: string | null
+      proposal_record_hash: string | null
+      decision_record_hash: string | null
+      runtime_record_hash: string | null
+      outcome_record_hash: string | null
+      handoff_record_hash: string | null
+      policy: Record<string, unknown> | null
+      continuation: Record<string, unknown> | null
+      latest_receipt_check: Record<string, unknown> | null
+    }
     timeline: Array<{
       label: string
       signer: SignerRole
@@ -76,6 +91,7 @@ interface FetchHandler {
 interface RunReader {
   getRun(runId: string): Promise<TraceResponse>
   getRepositoryRows(filePath: string): Promise<Array<Record<string, unknown>>>
+  getAppliedDecisionRows(runId: string): Promise<Array<Record<string, unknown>>>
 }
 
 const worker = (workerExports as unknown as { default: FetchHandler }).default
@@ -195,6 +211,13 @@ async function getTargetRows(
   )
 }
 
+async function getAppliedDecisionRows(runId: string): Promise<Array<Record<string, unknown>>> {
+  const stub = testEnv.ApprovalTraceAgent.get(testEnv.ApprovalTraceAgent.idFromName(runId))
+  return runInDurableObject(stub, (instance) =>
+    (instance as unknown as RunReader).getAppliedDecisionRows(runId),
+  )
+}
+
 function expectTracePacketBasics(trace: TraceResponse): void {
   expect(trace.trace_packet.timeline.map((entry) => entry.label)).toEqual(labels(trace))
   expect(trace.trace_packet.handoff.public_context_url).toBe(
@@ -293,9 +316,25 @@ describe('Cloudflare approval trace Worker', () => {
       computeContentId('codemode://atrib-cloudflare-test/runtime', 'record_outcome'),
     )
     expect(proposal.body).toMatchObject({
+      policy: {
+        policy_id: 'cloudflare-workers-payment-route-write',
+        policy_version: '2026-06-26.1',
+        requires_human_review: true,
+      },
       stable_connector_id: 'cloudflare-demo-codemode-runtime',
+      decision_scope: {
+        kind: 'codemode_pending_action',
+        continuation: expect.objectContaining({
+          continuation_id: expect.stringMatching(/^exec_.*:\d+$/),
+          connector: 'repository',
+          method: 'write_file',
+          stable_connector_id: 'cloudflare-demo-codemode-runtime',
+          input_digest: expect.stringMatching(/^sha256:/),
+        }),
+      },
       codemode: {
         runtime: 'CodemodeRuntime',
+        runtime_version: '@cloudflare/codemode@0.4.1',
         executor: 'local-test',
         execution_status: 'paused',
         pending_action: expect.objectContaining({
@@ -313,6 +352,81 @@ describe('Cloudflare approval trace Worker', () => {
           }),
         ]),
       },
+    })
+    expect(approval.body).toMatchObject({
+      proposal_record_hash: proposal.record_hash,
+      approved_payload_hash: (proposal.body as { proposed_payload_hash: string })
+        .proposed_payload_hash,
+      policy: {
+        policy_version: '2026-06-26.1',
+      },
+      continuation: expect.objectContaining({
+        continuation_id: expect.stringMatching(/^exec_.*:\d+$/),
+      }),
+    })
+    expect(execution.body).toMatchObject({
+      policy: {
+        policy_version: '2026-06-26.1',
+      },
+      continuation: expect.objectContaining({
+        continuation_id: expect.stringMatching(/^exec_.*:\d+$/),
+      }),
+      pre_resume_receipt_check: expect.objectContaining({
+        ok: true,
+        head_record_hash: approval.record_hash,
+        checked_record_hashes: expect.arrayContaining([proposal.record_hash, approval.record_hash]),
+      }),
+      output: {
+        status: 'completed',
+        result: {
+          execution: {
+            exact_once: expect.objectContaining({
+              applied: true,
+              decision_record_hash: approval.record_hash,
+            }),
+          },
+        },
+      },
+    })
+    expect(outcome.body).toMatchObject({
+      receipt_links: {
+        proposal_record_hash: proposal.record_hash,
+        decision_record_hash: approval.record_hash,
+        execution_record_hash: execution.record_hash,
+      },
+      continuation: expect.objectContaining({
+        continuation_id: expect.stringMatching(/^exec_.*:\d+$/),
+      }),
+    })
+    expect(handoff.body).toMatchObject({
+      receipt_head: {
+        kind: 'codemode_decision_receipt_head',
+        head_record_hash: outcome.record_hash,
+        proposal_record_hash: proposal.record_hash,
+        decision_record_hash: approval.record_hash,
+        execution_record_hash: execution.record_hash,
+        outcome_record_hash: outcome.record_hash,
+        policy: {
+          policy_version: '2026-06-26.1',
+        },
+        receipt_state_check: expect.objectContaining({
+          ok: true,
+          head_record_hash: outcome.record_hash,
+        }),
+      },
+    })
+    expect(trace.trace_packet.receipt_state).toMatchObject({
+      proposal_record_hash: proposal.record_hash,
+      decision_record_hash: approval.record_hash,
+      runtime_record_hash: execution.record_hash,
+      outcome_record_hash: outcome.record_hash,
+      handoff_record_hash: handoff.record_hash,
+      policy: {
+        policy_version: '2026-06-26.1',
+      },
+      continuation: expect.objectContaining({
+        continuation_id: expect.stringMatching(/^exec_.*:\d+$/),
+      }),
     })
     expect(trace.trace_packet.answer).toMatchObject({
       decision: 'approved',
@@ -352,6 +466,15 @@ describe('Cloudflare approval trace Worker', () => {
     const directRun = await getAgentRun(runId)
     expect(labels(directRun)).toEqual(labels(trace))
 
+    const appliedDecisions = await getAppliedDecisionRows(runId)
+    expect(appliedDecisions).toEqual([
+      expect.objectContaining({
+        decision_record_hash: approval.record_hash,
+        payload_hash: (proposal.body as { proposed_payload_hash: string }).proposed_payload_hash,
+        file_path: 'workers/checkout/session.ts',
+      }),
+    ])
+
     const httpRun = await getJson<TraceResponse>(`/api/runs/${runId}`)
     expect(httpRun.status).toBe('succeeded')
     expect(labels(httpRun)).toEqual(labels(trace))
@@ -387,6 +510,14 @@ describe('Cloudflare approval trace Worker', () => {
       reason: 'rejected',
       terminated: true,
       execution_status: 'rejected',
+      policy: {
+        policy_version: '2026-06-26.1',
+      },
+      continuation: expect.objectContaining({
+        continuation_id: expect.stringMatching(/^exec_.*:\d+$/),
+        connector: 'repository',
+        method: 'write_file',
+      }),
     })
     expect(trace.records.some((record) => record.signer === 'action_mcp')).toBe(false)
     expect(trace.trace_packet.answer).toMatchObject({
@@ -435,13 +566,42 @@ describe('Cloudflare approval trace Worker', () => {
       reason: 'changes_requested',
       terminated: true,
       execution_status: 'rejected',
+      policy: {
+        policy_version: '2026-06-26.1',
+      },
+      continuation: expect.objectContaining({
+        continuation_id: expect.stringMatching(/^exec_.*:\d+$/),
+      }),
     })
     expect(revision.body).toMatchObject({
       kind: 'agent_revised_proposal',
       revision_number: 2,
       feedback_record_hash: feedback.record_hash,
+      policy: {
+        policy_version: '2026-06-26.1',
+      },
+      pre_revision_receipt_check: expect.objectContaining({
+        ok: true,
+        head_record_hash: runtimeRejection.record_hash,
+        checked_record_hashes: expect.arrayContaining([
+          proposal.record_hash,
+          feedback.record_hash,
+          runtimeRejection.record_hash,
+        ]),
+      }),
+      decision_scope: {
+        kind: 'codemode_pending_action',
+        supersedes_proposal_record_hash: proposal.record_hash,
+        prior_terminal_receipt_hash: runtimeRejection.record_hash,
+        continuation: expect.objectContaining({
+          continuation_id: expect.stringMatching(/^exec_.*:\d+$/),
+          connector: 'repository',
+          method: 'write_file',
+        }),
+      },
       codemode: expect.objectContaining({
         runtime: 'CodemodeRuntime',
+        runtime_version: '@cloudflare/codemode@0.4.1',
         executor: 'local-test',
         execution_status: 'paused',
         pending_action: expect.objectContaining({
@@ -539,6 +699,12 @@ describe('Cloudflare approval trace Worker', () => {
       reason: 'rejected',
       terminated: true,
       execution_status: 'rejected',
+      policy: {
+        policy_version: '2026-06-26.1',
+      },
+      continuation: expect.objectContaining({
+        continuation_id: expect.stringMatching(/^exec_.*:\d+$/),
+      }),
     })
     expect(trace.records.some((record) => record.signer === 'action_mcp')).toBe(false)
     expect(trace.trace_packet.answer).toMatchObject({

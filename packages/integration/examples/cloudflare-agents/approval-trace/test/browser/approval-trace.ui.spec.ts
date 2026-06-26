@@ -41,6 +41,13 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.locator('#proposal')).toContainText('Diff (unified)')
   await expect(page.locator('#receipts pre')).toContainText('"trace_id"')
   await expect(page.locator('#receiptSummary')).toContainText('Total records')
+  await expect(page.locator('.trace-integrity')).toContainText('Receipt head')
+  await expect(page.locator('.trace-integrity')).toContainText('Policy')
+  await expect(page.locator('.trace-integrity')).toContainText(
+    'cloudflare-workers-payment-route-write',
+  )
+  await expect(page.locator('.trace-integrity')).toContainText('Continuation')
+  await expect(page.locator('.trace-integrity')).toContainText('exec_')
   await expect(page.getByRole('button', { name: 'Approve and resume' })).toBeEnabled()
   await expect(page.locator('#reject')).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Request changes' })).toBeEnabled()
@@ -1695,7 +1702,7 @@ test.describe('Cloudflare approval trace browser UI', () => {
       await expectCopies(
         page.locator('.trace-integrity').getByRole('button', { name: 'Copy Merkle root' }),
       )
-      await expectCopies(page.getByRole('button', { name: 'Copy receipt' }))
+      await expectCopies(page.getByRole('button', { name: 'Copy receipt', exact: true }))
       await expect(
         page.locator('#verification').getByRole('link', { name: 'View proof' }),
       ).toHaveAttribute('href', /log\.atrib\.dev|\/api\/runs\//)

@@ -33,6 +33,10 @@ type WorkflowStatus =
   | 'failed'
 type SignerRole = 'agent' | 'human' | 'action_mcp' | 'codemode_runtime'
 
+const APPROVAL_POLICY_ID = 'cloudflare-workers-payment-route-write'
+const APPROVAL_POLICY_VERSION = '2026-06-26.1'
+const CODEMODE_RUNTIME_VERSION = '@cloudflare/codemode@0.4.1'
+
 interface TraceRecord {
   label: string
   signer: SignerRole
@@ -56,6 +60,22 @@ interface TraceResponse {
       changed: string[]
     }
     differentiators: Array<{ name: string; evidence_labels: string[] }>
+    handoff?: {
+      receipt_head?: Record<string, unknown> | null
+      record_hash?: string | null
+      public_context_url?: string | null
+    }
+    receipt_state: {
+      head_record_hash: string | null
+      proposal_record_hash: string | null
+      decision_record_hash: string | null
+      runtime_record_hash: string | null
+      outcome_record_hash: string | null
+      handoff_record_hash: string | null
+      policy: Record<string, unknown> | null
+      continuation: Record<string, unknown> | null
+      latest_receipt_check: Record<string, unknown> | null
+    }
     timeline: Array<{
       label: string
       signer: SignerRole
@@ -280,6 +300,80 @@ function hasGraphEdge(
   )
 }
 
+function asObject(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
+}
+
+function objectField(value: unknown, key: string): Record<string, unknown> | null {
+  return asObject(asObject(value)?.[key])
+}
+
+function stringField(value: unknown, key: string): string | null {
+  const field = asObject(value)?.[key]
+  return typeof field === 'string' ? field : null
+}
+
+function numberField(value: unknown, key: string): number | null {
+  const field = asObject(value)?.[key]
+  return typeof field === 'number' ? field : null
+}
+
+function policyFromBody(body: unknown): Record<string, unknown> | null {
+  return objectField(body, 'policy')
+}
+
+function continuationFromBody(body: unknown): Record<string, unknown> | null {
+  return (
+    objectField(objectField(body, 'codemode'), 'continuation') ??
+    objectField(objectField(body, 'decision_scope'), 'continuation') ??
+    objectField(body, 'continuation') ??
+    objectField(objectField(body, 'receipt_head'), 'continuation')
+  )
+}
+
+function policyMatches(policy: unknown): boolean {
+  const body = asObject(policy)
+  return (
+    body?.policy_id === APPROVAL_POLICY_ID &&
+    body?.policy_version === APPROVAL_POLICY_VERSION &&
+    body?.approval_boundary === 'codemode_pending_action'
+  )
+}
+
+function continuationMatches(continuation: unknown, expectedPayloadHash: string | null): boolean {
+  const body = asObject(continuation)
+  const continuationId = stringField(body, 'continuation_id')
+  const seq = numberField(body, 'seq')
+  const inputDigest = stringField(body, 'input_digest')
+  const payloadHash = stringField(body, 'payload_hash')
+  return (
+    typeof continuationId === 'string' &&
+    continuationId.startsWith('exec_') &&
+    typeof seq === 'number' &&
+    seq >= 0 &&
+    body?.runtime === 'CodemodeRuntime' &&
+    body?.method === 'write_file' &&
+    body?.connector === 'repository' &&
+    typeof inputDigest === 'string' &&
+    (expectedPayloadHash === null || payloadHash === expectedPayloadHash)
+  )
+}
+
+function sameContinuationId(left: unknown, right: unknown): boolean {
+  const leftId = stringField(left, 'continuation_id')
+  const rightId = stringField(right, 'continuation_id')
+  return typeof leftId === 'string' && leftId === rightId
+}
+
+function receiptCheckOk(value: unknown): boolean {
+  const check = asObject(value)
+  return (
+    check?.ok === true &&
+    Array.isArray(check.checked_record_hashes) &&
+    check.checked_record_hashes.length > 0
+  )
+}
+
 async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
   const checks: Check[] = []
   const push = (name: string, ok: boolean, detail?: string) => checks.push({ name, ok, detail })
@@ -296,6 +390,12 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
   const runtimeRejections = trace.records.filter((record) => record.label === 'runtime_rejection')
   const latestRuntimeRejection = runtimeRejections[runtimeRejections.length - 1]
   const decisionBase = revision ?? proposal
+  const activeRuntime = execution ?? latestRuntimeRejection
+  const activeProposalBody = asObject(decisionBase?.body)
+  const activePayloadHash = stringField(activeProposalBody, 'proposed_payload_hash')
+  const activeContinuation = continuationFromBody(activeProposalBody)
+  const receiptState = trace.trace_packet.receipt_state
+  const receiptContinuation = receiptState.continuation
   const graph = (await buildGraph(
     trace.records.map((record) => record.record),
     [],
@@ -435,6 +535,53 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
       ),
     )
   }
+
+  push(
+    `${trace.run_id}: proposal carries approval policy`,
+    Boolean(proposal && policyMatches(policyFromBody(proposal.body))),
+  )
+  push(
+    `${trace.run_id}: active proposal carries Code Mode runtime version`,
+    stringField(objectField(activeProposalBody, 'codemode'), 'runtime_version') ===
+      CODEMODE_RUNTIME_VERSION,
+  )
+  push(
+    `${trace.run_id}: active proposal carries pending continuation`,
+    continuationMatches(activeContinuation, activePayloadHash),
+  )
+  push(
+    `${trace.run_id}: packet receipt policy matches active proposal`,
+    Boolean(
+      policyMatches(receiptState.policy) && policyMatches(policyFromBody(activeProposalBody)),
+    ),
+  )
+  push(
+    `${trace.run_id}: packet receipt continuation matches active proposal`,
+    Boolean(
+      continuationMatches(receiptContinuation, activePayloadHash) &&
+      sameContinuationId(receiptContinuation, activeContinuation),
+    ),
+  )
+  push(
+    `${trace.run_id}: packet receipt proposal hash matches active proposal`,
+    receiptState.proposal_record_hash === (decisionBase?.record_hash ?? null),
+  )
+  push(
+    `${trace.run_id}: packet receipt decision hash matches active decision`,
+    receiptState.decision_record_hash === ((decision ?? changeRequest)?.record_hash ?? null),
+  )
+  push(
+    `${trace.run_id}: packet receipt runtime hash matches terminal runtime`,
+    receiptState.runtime_record_hash === (activeRuntime?.record_hash ?? null),
+  )
+  push(
+    `${trace.run_id}: packet receipt outcome hash matches outcome`,
+    receiptState.outcome_record_hash === (outcome?.record_hash ?? null),
+  )
+  push(
+    `${trace.run_id}: packet receipt handoff hash matches handoff`,
+    receiptState.handoff_record_hash === (handoff?.record_hash ?? null),
+  )
   push(
     `${trace.run_id}: decision points at active proposal`,
     trace.status === 'pending_approval'
@@ -482,6 +629,24 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
     push(`${trace.run_id}: rejected did not execute`, !execution && !outcome && !handoff)
     push(`${trace.run_id}: rejected closed Code Mode action`, Boolean(latestRuntimeRejection))
     push(
+      `${trace.run_id}: rejected decision carries approval policy`,
+      Boolean(decision && policyMatches(policyFromBody(decision.body))),
+    )
+    push(
+      `${trace.run_id}: rejected decision continuation matches proposal`,
+      Boolean(
+        decision && sameContinuationId(continuationFromBody(decision.body), activeContinuation),
+      ),
+    )
+    push(
+      `${trace.run_id}: rejected runtime closure carries receipt state`,
+      Boolean(
+        latestRuntimeRejection &&
+        policyMatches(policyFromBody(latestRuntimeRejection.body)) &&
+        sameContinuationId(continuationFromBody(latestRuntimeRejection.body), activeContinuation),
+      ),
+    )
+    push(
       `${trace.run_id}: rejected runtime closure points at decision`,
       Boolean(
         decision &&
@@ -502,10 +667,50 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
     push(`${trace.run_id}: pending packet decision`, trace.trace_packet.answer.decision === null)
     push(`${trace.run_id}: pending packet outcome`, trace.trace_packet.answer.outcome === 'pending')
     push(`${trace.run_id}: pending packet executed`, trace.trace_packet.answer.executed === false)
+    push(
+      `${trace.run_id}: pending revision receipt check passed`,
+      revision
+        ? receiptCheckOk(revision.body && asObject(revision.body)?.pre_revision_receipt_check)
+        : true,
+    )
   } else {
     push(`${trace.run_id}: execution exists`, Boolean(execution))
     push(`${trace.run_id}: outcome exists`, Boolean(outcome))
     push(`${trace.run_id}: handoff exists`, Boolean(handoff))
+    push(
+      `${trace.run_id}: approval carries approval policy`,
+      Boolean(decision && policyMatches(policyFromBody(decision.body))),
+    )
+    push(
+      `${trace.run_id}: approval continuation matches proposal`,
+      Boolean(
+        decision && sameContinuationId(continuationFromBody(decision.body), activeContinuation),
+      ),
+    )
+    push(
+      `${trace.run_id}: execution carries pre-resume receipt check`,
+      Boolean(execution && receiptCheckOk(asObject(execution.body)?.pre_resume_receipt_check)),
+    )
+    push(
+      `${trace.run_id}: execution continuation matches approval`,
+      Boolean(
+        decision &&
+        execution &&
+        sameContinuationId(
+          continuationFromBody(execution.body),
+          continuationFromBody(decision.body),
+        ),
+      ),
+    )
+    push(
+      `${trace.run_id}: execution used exact-once decision fence`,
+      trace.status === 'failed'
+        ? true
+        : Boolean(
+            asObject(asObject(asObject(asObject(execution?.body)?.output)?.result)?.execution)
+              ?.exact_once,
+          ),
+    )
     push(
       `${trace.run_id}: approved packet decision`,
       trace.trace_packet.answer.decision === 'approved',
@@ -560,6 +765,40 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
       ),
     )
     push(
+      `${trace.run_id}: handoff receipt head matches final records`,
+      Boolean(
+        handoff &&
+        outcome &&
+        execution &&
+        decision &&
+        asObject(handoff.body)?.receipt_head &&
+        stringField(asObject(handoff.body)?.receipt_head, 'head_record_hash') ===
+          outcome.record_hash &&
+        stringField(asObject(handoff.body)?.receipt_head, 'proposal_record_hash') ===
+          decisionBase?.record_hash &&
+        stringField(asObject(handoff.body)?.receipt_head, 'decision_record_hash') ===
+          decision.record_hash &&
+        stringField(asObject(handoff.body)?.receipt_head, 'execution_record_hash') ===
+          execution.record_hash &&
+        stringField(asObject(handoff.body)?.receipt_head, 'outcome_record_hash') ===
+          outcome.record_hash &&
+        policyMatches(objectField(asObject(handoff.body)?.receipt_head, 'policy')) &&
+        sameContinuationId(
+          objectField(asObject(handoff.body)?.receipt_head, 'continuation'),
+          activeContinuation,
+        ) &&
+        receiptCheckOk(objectField(asObject(handoff.body)?.receipt_head, 'receipt_state_check')),
+      ),
+    )
+    push(
+      `${trace.run_id}: packet receipt head follows handoff head`,
+      Boolean(
+        handoff &&
+        stringField(asObject(handoff.body)?.receipt_head, 'head_record_hash') ===
+          receiptState.head_record_hash,
+      ),
+    )
+    push(
       `${trace.run_id}: final outcome matches status`,
       trace.status === 'failed'
         ? trace.trace_packet.answer.outcome === 'error'
@@ -585,6 +824,8 @@ async function main() {
         page.includes('Trigger &amp; progress') &&
         page.includes('write_file') &&
         page.includes('Record timeline') &&
+        page.includes('Receipt head') &&
+        page.includes('Continuation') &&
         page.includes('Receipt inspector') &&
         page.includes('Approve and resume') &&
         page.includes('Request changes'),

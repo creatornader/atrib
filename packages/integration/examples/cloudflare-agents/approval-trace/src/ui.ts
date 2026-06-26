@@ -4262,6 +4262,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           <div class="trace-integrity">
             <span class="trace-section-label">Trace integrity</span>
             <div class="integrity-list">
+              \${receiptIntegrityRows(run)}
               <div class="integrity-row"><strong>Merkle root</strong><span class="hash">\${merkleRoot || 'pending'}</span>\${copyIcon(merkleRoot, 'Merkle root')}</div>
               <div class="integrity-row"><strong>Log hash</strong><span class="hash">\${logHash || 'pending'}</span>\${copyIcon(logHash, 'log hash')}</div>
               <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value">\${merkleRoot ? 'Signed records available' : 'Waiting for first signed record'}</span><span></span></div>
@@ -4527,23 +4528,46 @@ export function renderApp(options: { colo?: string } = {}): string {
         return 'CodemodeRuntime@0.4.1';
       }
 
+      function currentReceiptState(run = currentRun) {
+        return run?.trace_packet?.receipt_state ?? {};
+      }
+
+      function receiptIntegrityRows(run = currentRun) {
+        const receiptState = currentReceiptState(run);
+        const receiptHead = receiptState.head_record_hash ?? '';
+        const receiptPolicyId = receiptState.policy?.policy_id ?? '';
+        const receiptPolicyVersion = receiptState.policy?.policy_version ?? '';
+        const receiptPolicy = receiptPolicyId && receiptPolicyVersion
+          ? receiptPolicyId + '@' + receiptPolicyVersion
+          : receiptPolicyVersion || 'pending';
+        const receiptContinuation = receiptState.continuation?.continuation_id ?? 'pending';
+        return \`
+          <div class="integrity-row"><strong>Receipt head</strong><span class="hash">\${receiptHead ? shortHash(receiptHead) : 'pending'}</span>\${copyIcon(receiptHead, 'receipt head')}</div>
+          <div class="integrity-row"><strong>Policy</strong><span class="value">\${escapeHtml(receiptPolicy)}</span><span></span></div>
+          <div class="integrity-row"><strong>Continuation</strong><span class="hash">\${escapeHtml(receiptContinuation)}</span>\${copyIcon(receiptContinuation === 'pending' ? '' : receiptContinuation, 'Code Mode continuation')}</div>
+        \`;
+      }
+
       function codeModeSummaryFromProposal(proposal) {
         const codemode = proposal?.body?.codemode ?? {};
+        const continuation = codemode.continuation ?? proposal?.body?.decision_scope?.continuation ?? {};
         const pending = codemode.pending_action ?? {};
         const log = Array.isArray(codemode.log) ? codemode.log : [];
         const pendingEntry = log.find((entry) => entry.connector === pending.connector && entry.method === pending.method)
           ?? log.find((entry) => entry.requires_approval)
           ?? {};
         return {
-          version: codeModeRuntimeVersionLabel(),
+          version: codemode.runtime_version ? 'CodemodeRuntime@' + String(codemode.runtime_version).replace(/^@cloudflare\\/codemode@/u, '') : codeModeRuntimeVersionLabel(),
           executor: codemode.executor ?? 'dynamic-worker',
-          executionId: codemode.execution_id ?? pending.executionId ?? 'pending',
+          executionId: codemode.execution_id ?? continuation.execution_id ?? pending.executionId ?? 'pending',
+          continuationId: continuation.continuation_id ?? ((codemode.execution_id ?? pending.executionId) && (pending.seq ?? pendingEntry.seq) !== undefined ? (codemode.execution_id ?? pending.executionId) + ':' + (pending.seq ?? pendingEntry.seq) : 'pending'),
           executionStatus: codemode.execution_status ?? 'pending',
           seq: pending.seq ?? pendingEntry.seq ?? '-',
           connector: pending.connector ?? pendingEntry.connector ?? 'repository',
           method: pending.method ?? pendingEntry.method ?? 'write_file',
           requiresApproval: pendingEntry.requires_approval ?? true,
-          argsHash: pendingEntry.args_hash ?? '-',
+          argsHash: continuation.input_digest ?? pendingEntry.args_hash ?? '-',
+          policyVersion: proposal?.body?.policy?.policy_version ?? currentReceiptState().policy?.policy_version ?? 'pending',
         };
       }
 
@@ -4552,7 +4576,7 @@ export function renderApp(options: { colo?: string } = {}): string {
         return \`
           <span class="native-runtime-inline" title="\${escapeHtml(runtime.executionId)}">
             <span class="native-runtime-badge">Code Mode \${escapeHtml(runtime.version.replace('CodemodeRuntime@', ''))}</span>
-            <span class="visually-hidden">Native Code Mode runtime \${escapeHtml(runtime.version)}. Status \${escapeHtml(runtime.executionStatus)}. Pending method \${escapeHtml(runtime.connector)}.\${escapeHtml(runtime.method)}. Approval gate seq \${escapeHtml(runtime.seq)} requiresApproval. Cloudflare owns durable pause, approve, reject, rollback, and execution history. atrib signs the proposal, human decision, runtime resolution, and audit handoff around that lifecycle. Args hash \${escapeHtml(runtime.argsHash)}. Executor \${escapeHtml(runtime.executor)}.</span>
+            <span class="visually-hidden">Native Code Mode runtime \${escapeHtml(runtime.version)}. Status \${escapeHtml(runtime.executionStatus)}. Pending method \${escapeHtml(runtime.connector)}.\${escapeHtml(runtime.method)}. Approval gate seq \${escapeHtml(runtime.seq)} requiresApproval. Continuation \${escapeHtml(runtime.continuationId)}. Policy \${escapeHtml(runtime.policyVersion)}. Cloudflare owns durable pause, approve, reject, rollback, and execution history. atrib signs the proposal, human decision, runtime resolution, and audit handoff around that lifecycle. Args hash \${escapeHtml(runtime.argsHash)}. Executor \${escapeHtml(runtime.executor)}.</span>
           </span>
         \`;
       }
@@ -5357,6 +5381,7 @@ export function renderApp(options: { colo?: string } = {}): string {
           <div class="trace-integrity">
             <span class="trace-section-label">Trace integrity</span>
             <div class="integrity-list">
+              \${receiptIntegrityRows(run)}
               <div class="integrity-row"><strong>Merkle root</strong><span class="hash">\${run.records[0]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[0]?.record_hash ?? '', 'Merkle root')}</div>
               <div class="integrity-row"><strong>Log hash</strong><span class="hash">\${run.records[1]?.record_hash ?? 'pending'}</span>\${copyIcon(run.records[1]?.record_hash ?? '', 'log hash')}</div>
               <div class="integrity-row proof-row"><strong>Proof status</strong><span class="value proof-status-value"><span class="integrity-proof-dot" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="m5.4 8.1 1.8 1.8 3.5-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="proof-status-text">Included in Cloudflare Integrity Log</span></span><a class="event-action" href="\${run.trace_packet.handoff?.public_context_url ?? '/api/runs/' + run.run_id}" target="_blank" rel="noreferrer">View proof \${actionGlyph('external')}</a></div>

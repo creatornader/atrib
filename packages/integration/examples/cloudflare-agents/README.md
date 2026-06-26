@@ -249,23 +249,28 @@ not a claim that approval-gated `createCodeTool` usage is the documented happy
 path.
 
 The signed boundary is the point: exact proposal payload, generated code digest,
-human decision over that payload, approved execution, outcome, and handoff trace.
+Code Mode pending action, human decision over that payload, approved execution
+or runtime rejection, outcome, and handoff trace. Proposal, decision, execution,
+rejection, outcome, and handoff records carry a shared policy id and Code Mode
+continuation id, so a later reader can verify which pending action the human
+approved and what the runtime executed from that approval. The repository write
+also has an exact-once decision fence keyed by the signed approval record.
+
 The UI focuses on the parts a human reviewer needs first: trigger context, live
-progress, review state, signed decision chain, receipt inspection, and signer
-separation.
+progress, review state, signed decision chain, receipt state, receipt
+inspection, and signer separation.
 
 The current hosted proof is at
 `https://atrib-cloudflare.nagala.workers.dev/`.
-The latest verified refresh passed `proof:worker` with `391/391` checks at
-`2026-06-19T19:54:36.878Z` from the public commit used for that proof:
-[`8fb3820628d4a3b156816d65a3e507ac8b76481e`](https://github.com/creatornader/atrib/commit/8fb3820628d4a3b156816d65a3e507ac8b76481e).
-The deployed Worker version for that run was
-`d25746f8-7f4e-4f69-9970-8774b983bb9b`.
+The live proof runner drives approved, rejected, request-changes,
+revised-approve, revised-reject, and diagnostic-error paths. It checks record
+hashes, Ed25519 signatures, public inclusion proofs, causal graph edges,
+receipt-state continuity, exact-once decision fencing, and the Cloudflare-shaped
+debug packet exposed by the Worker.
 
 Third-party production redeploys may require Cloudflare Dynamic Workers access
 because Worker Loader is used by `DynamicWorkerExecutor`. On accounts without
-that access, `proof:worker` can fail before publishing with Cloudflare error
-10195. Local Worker tests and deploy dry-runs still exercise the Code Mode
+that access, `proof:worker` can fail before publishing with Cloudflare error 10195. Local Worker tests and deploy dry-runs still exercise the Code Mode
 approval bridge without mutating a real Cloudflare production resource.
 
 Run it with:
