@@ -50,6 +50,15 @@ records again and signs a `codemode_decision_receipt_head`. The repository
 write also has an exact-once fence keyed by the signed decision record, so a
 replayed approval cannot apply the same write twice.
 
+The Worker also exposes `GET /api/runs/:runId/recovery-gate`. That endpoint
+rebuilds a compact receipt head from persisted Durable Object SQLite rows,
+verifies the signed records up to the current head, and reports the next allowed
+step. This is a deterministic restart-shaped fixture. It proves the gate can be
+reconstructed from persisted state, but it does not force Cloudflare to evict or
+restart the Durable Object. The boundary follows Cloudflare's Durable Object
+guidance: persist state incrementally, then recover from storage when the object
+starts again.
+
 ## What this shows
 
 - A prior trigger starts the agent before the browser approval gate appears.
@@ -67,6 +76,8 @@ replayed approval cannot apply the same write twice.
   finishes.
 - The handoff record carries a receipt head that names the proposal, decision,
   execution, outcome, policy, continuation, and verification result.
+- The recovery-gate endpoint reconstructs the current approval or handoff gate
+  from persisted signed records instead of in-memory state.
 - The UI keeps atrib details visible enough to explain the value without making
   the user read raw records first.
 
@@ -94,8 +105,8 @@ Latest verified proof: run `pnpm --filter @atrib/cloudflare-approval-trace
 proof:worker` from the repo root. The proof deploys the Worker, drives approved,
 rejected, request-changes, revised-approve, revised-reject, and diagnostic-error
 paths, then checks signatures, public inclusion proofs, causal graph edges,
-receipt-state continuity, and exact-once decision fencing. The private route
-packet keeps the pinned run ids from the latest route refresh.
+receipt-state continuity, recovery-gate reconstruction, and exact-once decision
+fencing. Each run writes an ignored JSON artifact under `runs/` for local review.
 
 Open the hosted Worker, start a run, then approve, reject, or request changes.
 When a run finishes, the UI exposes receipt details, trace JSON, and public log
@@ -128,9 +139,9 @@ The proof script uses stable demo-only signing keys from
 request-changes, revised-approve, revised-reject, and diagnostic-error runs
 through the same HTTP endpoints the UI uses, and verifies record hashes,
 signatures, public inclusion proofs, causal edges, graph-node derivation,
-receipt-state continuity, and exact-once decision fencing for the generated
-records. Set `ATRIB_APPROVAL_TRACE_SECRETS_PATH` to point at another local
-secrets file.
+receipt-state continuity, recovery-gate reconstruction, and exact-once decision
+fencing for the generated records. Set `ATRIB_APPROVAL_TRACE_SECRETS_PATH` to
+point at another local secrets file.
 
 The demo does not publish to the graph or directory services. It keeps the
 runtime proof small: records are signed, submitted to the public log, persisted

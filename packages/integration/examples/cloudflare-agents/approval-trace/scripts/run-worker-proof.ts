@@ -86,6 +86,36 @@ interface TraceResponse {
   records: TraceRecord[]
 }
 
+interface ReceiptRecoveryGate {
+  ok: boolean
+  kind: 'codemode_receipt_recovery_gate'
+  run_id: string
+  context_id: string
+  status: WorkflowStatus
+  gate:
+    | 'human_review'
+    | 'codemode_resume'
+    | 'revised_human_review'
+    | 'terminal_rejection'
+    | 'handoff_ready'
+  next_step: string
+  allows_write: boolean
+  source: 'durable_object_sqlite_trace_records'
+  required_record_hashes: string[]
+  recovered_head: Record<string, unknown>
+  policy: Record<string, unknown> | null
+  policy_ok: boolean
+  continuation: Record<string, unknown> | null
+  continuation_ok: boolean
+  verification: Record<string, unknown>
+  durable_object_boundary: {
+    deterministic_fixture: boolean
+    forced_eviction: boolean
+    recovery_model: 'persisted_receipt_head'
+    note: string
+  }
+}
+
 interface ParsedCheckpoint {
   treeSize: number
   rootHash: string
@@ -177,6 +207,12 @@ async function postJson<T>(
     await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
   }
   throw new Error(`${url} failed: ${lastError}`)
+}
+
+async function getJson<T>(url: string): Promise<T> {
+  const response = await fetch(url)
+  if (response.ok) return (await response.json()) as T
+  throw new Error(`${url} failed: ${response.status} ${await response.text()}`)
 }
 
 async function postExpectStatus(
@@ -809,6 +845,101 @@ async function verifyTrace(trace: TraceResponse): Promise<Check[]> {
   return checks
 }
 
+function verifyRecoveryGate(trace: TraceResponse, gate: ReceiptRecoveryGate): Check[] {
+  const checks: Check[] = []
+  const push = (name: string, ok: boolean, detail?: string) => checks.push({ name, ok, detail })
+  const byLabel = new Map(trace.records.map((record) => [record.label, record]))
+  const proposal = byLabel.get('revision') ?? byLabel.get('proposal')
+  const changeRequest = byLabel.get('change_request')
+  const decision = byLabel.get('approval') ?? byLabel.get('rejection')
+  const execution = byLabel.get('execution')
+  const outcome = byLabel.get('outcome')
+  const handoff = byLabel.get('handoff')
+  const runtimeRejections = trace.records.filter((record) => record.label === 'runtime_rejection')
+  const latestRuntimeRejection = runtimeRejections[runtimeRejections.length - 1]
+  const activePayloadHash = stringField(asObject(proposal?.body), 'proposed_payload_hash')
+
+  push(`${trace.run_id}: recovery gate run`, gate.run_id === trace.run_id)
+  push(`${trace.run_id}: recovery gate context`, gate.context_id === trace.context_id)
+  push(`${trace.run_id}: recovery gate ok`, gate.ok === true)
+  push(`${trace.run_id}: recovery gate source`, gate.source === 'durable_object_sqlite_trace_records')
+  push(`${trace.run_id}: recovery gate policy`, gate.policy_ok && policyMatches(gate.policy))
+  push(
+    `${trace.run_id}: recovery gate continuation`,
+    gate.continuation_ok && continuationMatches(gate.continuation, activePayloadHash),
+  )
+  push(
+    `${trace.run_id}: recovery gate verification`,
+    receiptCheckOk(gate.verification) &&
+      stringField(gate.recovered_head, 'head_record_hash') ===
+        stringField(gate.verification, 'head_record_hash'),
+  )
+  push(
+    `${trace.run_id}: recovery gate does not claim forced eviction`,
+    gate.durable_object_boundary.deterministic_fixture === true &&
+      gate.durable_object_boundary.forced_eviction === false &&
+      gate.durable_object_boundary.recovery_model === 'persisted_receipt_head',
+  )
+
+  if (trace.status === 'pending_approval') {
+    push(`${trace.run_id}: recovery gate waits for revised review`, gate.gate === 'revised_human_review')
+    push(`${trace.run_id}: recovery gate does not allow pending write`, gate.allows_write === false)
+    push(
+      `${trace.run_id}: recovery gate revision hashes`,
+      Boolean(
+        proposal &&
+          changeRequest &&
+          latestRuntimeRejection &&
+          gate.required_record_hashes.includes(proposal.record_hash) &&
+          gate.required_record_hashes.includes(changeRequest.record_hash) &&
+          gate.required_record_hashes.includes(latestRuntimeRejection.record_hash),
+      ),
+    )
+  } else if (trace.status === 'rejected') {
+    push(`${trace.run_id}: recovery gate records terminal rejection`, gate.gate === 'terminal_rejection')
+    push(`${trace.run_id}: recovery gate blocks rejected write`, gate.allows_write === false)
+    push(
+      `${trace.run_id}: recovery gate rejection hashes`,
+      Boolean(
+        proposal &&
+          decision &&
+          latestRuntimeRejection &&
+          gate.required_record_hashes.includes(proposal.record_hash) &&
+          gate.required_record_hashes.includes(decision.record_hash) &&
+          gate.required_record_hashes.includes(latestRuntimeRejection.record_hash),
+      ),
+    )
+  } else {
+    push(`${trace.run_id}: recovery gate handoff ready`, gate.gate === 'handoff_ready')
+    push(`${trace.run_id}: recovery gate terminal write closed`, gate.allows_write === false)
+    push(
+      `${trace.run_id}: recovery gate terminal hashes`,
+      Boolean(
+        proposal &&
+          decision &&
+          execution &&
+          outcome &&
+          handoff &&
+          gate.required_record_hashes.includes(proposal.record_hash) &&
+          gate.required_record_hashes.includes(decision.record_hash) &&
+          gate.required_record_hashes.includes(execution.record_hash) &&
+          gate.required_record_hashes.includes(outcome.record_hash) &&
+          gate.required_record_hashes.includes(handoff.record_hash),
+      ),
+    )
+    push(
+      `${trace.run_id}: recovery gate handoff head`,
+      Boolean(
+        handoff &&
+          stringField(gate.recovered_head, 'handoff_record_hash') === handoff.record_hash &&
+          objectField(gate.recovered_head, 'source_receipt_head') !== null,
+      ),
+    )
+  }
+
+  return checks
+}
+
 async function main() {
   await ensureSecretFile()
   const workerUrl = await runWranglerDeploy()
@@ -842,7 +973,14 @@ async function main() {
     await runChangesApproved(workerUrl),
     await runChangesRejected(workerUrl),
   ]
-  for (const trace of traces) checks.push(...(await verifyTrace(trace)))
+  const recoveryGates: ReceiptRecoveryGate[] = []
+  for (const trace of traces) {
+    const recoveryGate = await getJson<ReceiptRecoveryGate>(
+      `${workerUrl}/api/runs/${trace.run_id}/recovery-gate`,
+    )
+    recoveryGates.push(recoveryGate)
+    checks.push(...(await verifyTrace(trace)), ...verifyRecoveryGate(trace, recoveryGate))
+  }
 
   const ok = checks.every((check) => check.ok)
   const run = {
@@ -851,6 +989,7 @@ async function main() {
     worker_url: workerUrl,
     checks,
     traces,
+    recovery_gates: recoveryGates,
   }
 
   await mkdir(RUNS_DIR, { recursive: true })

@@ -202,6 +202,38 @@ interface ReceiptVerification {
   missing_record_hashes: string[]
 }
 
+type RecoveryGateKind =
+  | 'human_review'
+  | 'codemode_resume'
+  | 'revised_human_review'
+  | 'terminal_rejection'
+  | 'handoff_ready'
+
+interface ReceiptRecoveryGate {
+  ok: boolean
+  kind: 'codemode_receipt_recovery_gate'
+  run_id: string
+  context_id: string
+  status: WorkflowStatus
+  gate: RecoveryGateKind
+  next_step: string
+  allows_write: boolean
+  source: 'durable_object_sqlite_trace_records'
+  required_record_hashes: string[]
+  recovered_head: Record<string, unknown>
+  policy: Record<string, unknown> | null
+  policy_ok: boolean
+  continuation: Record<string, unknown> | null
+  continuation_ok: boolean
+  verification: ReceiptVerification
+  durable_object_boundary: {
+    deterministic_fixture: true
+    forced_eviction: false
+    recovery_model: 'persisted_receipt_head'
+    note: string
+  }
+}
+
 const TEXT_ENCODER = new TextEncoder()
 const STABLE_CONNECTOR_ID = 'cloudflare-demo-repository-write-mcp'
 const CODEMODE_RUNTIME_ID = 'cloudflare-demo-codemode-runtime'
@@ -321,6 +353,62 @@ function codeModeContinuation(input: {
     input_digest: hashUnknown(input.pendingAction.args),
     payload_hash: input.payloadHash,
   }
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
+}
+
+function objectField(value: unknown, key: string): Record<string, unknown> | null {
+  return asObject(asObject(value)?.[key])
+}
+
+function stringField(value: unknown, key: string): string | null {
+  const field = asObject(value)?.[key]
+  return typeof field === 'string' ? field : null
+}
+
+function policyFromBody(body: unknown): Record<string, unknown> | null {
+  return objectField(body, 'policy') ?? objectField(objectField(body, 'receipt_head'), 'policy')
+}
+
+function continuationFromBody(body: unknown): Record<string, unknown> | null {
+  return (
+    objectField(objectField(body, 'codemode'), 'continuation') ??
+    objectField(objectField(body, 'decision_scope'), 'continuation') ??
+    objectField(body, 'continuation') ??
+    objectField(objectField(body, 'receipt_head'), 'continuation')
+  )
+}
+
+function policyMatches(policy: unknown): boolean {
+  const body = asObject(policy)
+  return (
+    body?.policy_id === APPROVAL_POLICY_ID &&
+    body?.policy_version === APPROVAL_POLICY_VERSION &&
+    body?.approval_boundary === 'codemode_pending_action' &&
+    body?.requires_human_review === true
+  )
+}
+
+function continuationMatches(continuation: unknown, expectedPayloadHash: string | null): boolean {
+  const body = asObject(continuation)
+  const continuationId = stringField(body, 'continuation_id')
+  const executionId = stringField(body, 'execution_id')
+  const payloadHash = stringField(body, 'payload_hash')
+  const seq = body?.seq
+  return (
+    typeof continuationId === 'string' &&
+    typeof executionId === 'string' &&
+    typeof seq === 'number' &&
+    continuationId === `${executionId}:${seq}` &&
+    body?.runtime === 'CodemodeRuntime' &&
+    body?.connector === 'repository' &&
+    body?.method === 'write_file' &&
+    body?.requires_approval === true &&
+    body?.stable_connector_id === CODEMODE_RUNTIME_ID &&
+    (expectedPayloadHash === null || payloadHash === expectedPayloadHash)
+  )
 }
 
 function recordHash(record: AtribRecord): string {
@@ -2551,6 +2639,163 @@ export class ApprovalTraceAgent extends Agent<Env> {
     }
   }
 
+  async getRecoveryGate(runId: string): Promise<ReceiptRecoveryGate> {
+    this.ensureSchema()
+    const workflow = this.getWorkflowRow(runId)
+    if (!workflow) throw new Error(`run not found: ${runId}`)
+    const rows = this.getRecordRows(runId)
+    if (rows.length === 0) throw new Error(`run has no trace records: ${runId}`)
+
+    const byHash = new Map(rows.map((row) => [row.record_hash, row]))
+    const latest = (label: string) => [...rows].reverse().find((row) => row.label === label)
+    const rowBody = (row: TraceRecordRow | undefined | null): Record<string, unknown> | null =>
+      row?.body_json ? (JSON.parse(row.body_json) as Record<string, unknown>) : null
+
+    const proposal =
+      byHash.get(workflow.proposal_record_hash) ?? latest('revision') ?? latest('proposal')
+    if (!proposal) throw new Error(`run has no active proposal record: ${runId}`)
+
+    const approval = latest('approval')
+    const rejection = latest('rejection')
+    const changeRequest = latest('change_request')
+    const execution = latest('execution')
+    const outcome = latest('outcome')
+    const handoff = latest('handoff')
+    const latestRuntimeRejection = latest('runtime_rejection')
+    const decision = workflow.decision_record_hash
+      ? byHash.get(workflow.decision_record_hash)
+      : (approval ?? rejection ?? changeRequest)
+    const activeRuntime = execution ?? latestRuntimeRejection
+    const proposalBody = rowBody(proposal)
+    const decisionBody = rowBody(decision)
+    const runtimeBody = rowBody(activeRuntime)
+    const handoffBody = rowBody(handoff)
+    const receiptHead = objectField(handoffBody, 'receipt_head')
+
+    let gate: RecoveryGateKind
+    let head = proposal
+    let requiredRecordHashes: string[] = [proposal.record_hash]
+    let nextStep = 'Wait for human review before any Code Mode write can resume.'
+
+    if (handoff && outcome && execution && approval) {
+      gate = 'handoff_ready'
+      head = handoff
+      requiredRecordHashes = [
+        proposal.record_hash,
+        approval.record_hash,
+        execution.record_hash,
+        outcome.record_hash,
+        handoff.record_hash,
+      ]
+      nextStep =
+        'Handoff to a runtime or debug surface using the verified receipt head.'
+    } else if (workflow.status === 'rejected' && decision && latestRuntimeRejection) {
+      gate = 'terminal_rejection'
+      head = latestRuntimeRejection
+      requiredRecordHashes = [
+        proposal.record_hash,
+        decision.record_hash,
+        latestRuntimeRejection.record_hash,
+      ]
+      nextStep = 'Stop. The pending Code Mode action is closed and no write is allowed.'
+    } else if (proposal.label === 'revision' && workflow.status === 'pending_approval') {
+      gate = 'revised_human_review'
+      head = proposal
+      const decisionScope = objectField(proposalBody, 'decision_scope')
+      requiredRecordHashes = [
+        stringField(proposalBody, 'prior_proposal_record_hash'),
+        stringField(proposalBody, 'feedback_record_hash'),
+        stringField(decisionScope, 'prior_terminal_receipt_hash'),
+        proposal.record_hash,
+      ].filter((hash): hash is string => typeof hash === 'string')
+      nextStep =
+        'Wait for human review of the revised proposal. The earlier pending action is closed.'
+    } else if (
+      (workflow.status === 'approved' || workflow.status === 'executing') &&
+      decision &&
+      workflow.decision === 'approved'
+    ) {
+      gate = 'codemode_resume'
+      head = decision
+      requiredRecordHashes = [proposal.record_hash, decision.record_hash]
+      nextStep =
+        'Resume the paused Code Mode write only after the proposal and human decision verify.'
+    } else {
+      gate = 'human_review'
+    }
+
+    const verification = await this.verifyReceiptState({
+      runId,
+      requiredRecordHashes,
+      headRecordHash: head.record_hash,
+    })
+    const policy =
+      policyFromBody(proposalBody) ??
+      policyFromBody(decisionBody) ??
+      policyFromBody(runtimeBody) ??
+      objectField(receiptHead, 'policy')
+    const continuation =
+      continuationFromBody(proposalBody) ??
+      continuationFromBody(decisionBody) ??
+      continuationFromBody(runtimeBody) ??
+      objectField(receiptHead, 'continuation')
+    const policyOk = policyMatches(policy)
+    const continuationOk = continuationMatches(continuation, workflow.payload_hash)
+    const allowsWrite =
+      gate === 'codemode_resume' &&
+      workflow.decision === 'approved' &&
+      verification.ok &&
+      policyOk &&
+      continuationOk
+    const recoveredHead = {
+      kind: 'codemode_recovery_receipt_head',
+      run_id: runId,
+      context_id: workflow.context_id,
+      status: workflow.status,
+      gate,
+      head_record_hash: head.record_hash,
+      head_label: head.label,
+      proposal_record_hash: proposal.record_hash,
+      decision_record_hash: workflow.decision_record_hash ?? null,
+      change_request_record_hash: changeRequest?.record_hash ?? null,
+      runtime_record_hash: activeRuntime?.record_hash ?? null,
+      outcome_record_hash: outcome?.record_hash ?? null,
+      handoff_record_hash: handoff?.record_hash ?? null,
+      source_receipt_head: receiptHead ?? null,
+      payload_hash: workflow.payload_hash,
+      policy,
+      continuation,
+      receipt_state_check: verification,
+      trace_record_count: rows.length,
+    }
+
+    return {
+      ok: verification.ok && policyOk && continuationOk,
+      kind: 'codemode_receipt_recovery_gate',
+      run_id: runId,
+      context_id: workflow.context_id,
+      status: workflow.status,
+      gate,
+      next_step: nextStep,
+      allows_write: allowsWrite,
+      source: 'durable_object_sqlite_trace_records',
+      required_record_hashes: requiredRecordHashes,
+      recovered_head: recoveredHead,
+      policy,
+      policy_ok: policyOk,
+      continuation,
+      continuation_ok: continuationOk,
+      verification,
+      durable_object_boundary: {
+        deterministic_fixture: true,
+        forced_eviction: false,
+        recovery_model: 'persisted_receipt_head',
+        note:
+          'This fixture reconstructs the gate from persisted Durable Object rows. It does not force Cloudflare to evict or restart the object.',
+      },
+    }
+  }
+
   getRepositoryRows(filePath: string): Array<Record<string, unknown>> {
     this.ensureSchema()
     this.ensureRepoSchema()
@@ -3270,6 +3515,13 @@ export default {
         return json(await agent.getRun(runId))
       }
 
+      const recoveryGateMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/recovery-gate$/u)
+      if (recoveryGateMatch && request.method === 'GET') {
+        const runId = decodeURIComponent(recoveryGateMatch[1]!)
+        const agent = await getTraceAgent(env, runId)
+        return json(await agent.getRecoveryGate(runId))
+      }
+
       const approveMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/approve$/u)
       if (approveMatch && request.method === 'POST') {
         const runId = decodeURIComponent(approveMatch[1]!)
@@ -3342,6 +3594,7 @@ export default {
           '/api/runs',
           '/api/verify-record',
           '/api/runs/:runId',
+          '/api/runs/:runId/recovery-gate',
           '/api/runs/:runId/approve',
           '/api/runs/:runId/reject',
           '/api/runs/:runId/request-changes',
