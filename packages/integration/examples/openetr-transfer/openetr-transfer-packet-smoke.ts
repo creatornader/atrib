@@ -8,6 +8,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   hashText,
   runWrappedMcpPacket,
+  type PacketActionPolicySummary,
+  type PacketPolicyGateDecision,
+  type PacketPolicyGateInput,
   type WrappedMcpPacketResult,
   writeJson,
 } from '../wrapped-mcp-proof-runner.js'
@@ -21,9 +24,13 @@ const PRIVATE_RELAY = 'wss://relay.openetr.example/private-transfer'
 const PRIVATE_ORIGIN_EVENT_ID = '1111111111111111111111111111111111111111111111111111111111111111'
 const PRIVATE_INITIATE_EVENT_ID = '2222222222222222222222222222222222222222222222222222222222222222'
 const PRIVATE_ACCEPT_EVENT_ID = '3333333333333333333333333333333333333333333333333333333333333333'
+const RECOGNIZE_TOOL_NAME = 'openetr_recognize_title_transfer'
+const OPENETR_POLICY_VERSION = 'openetr-transfer-policy-v1'
+const TITLE_AUTHORITY_POLICY_ID = 'openetr-demo-title-authority-policy'
 
 type PacketOptions = Parameters<typeof runWrappedMcpPacket>[0]
 type OpenEtrSourceEvidence = ReturnType<typeof runOpenEtrSourceE2e>
+type OpenEtrPublicRelayAvailability = Awaited<ReturnType<typeof runPublicRelayAvailability>>
 type PolicyDecisionArtifact = ReturnType<typeof buildPolicyDecision>
 
 type OpenEtrSourceEvent = {
@@ -66,6 +73,7 @@ export type OpenEtrTransferPacketRun = {
   verifierOutput: unknown
   redactionManifest: unknown
   policyDecision: PolicyDecisionArtifact
+  publicRelayAvailability: OpenEtrPublicRelayAvailability
   artifact_dir: string | null
 }
 
@@ -207,6 +215,181 @@ function sanitizeSourceRun(sourceRun: OpenEtrSourceRun) {
   }
 }
 
+function publicControlRecord(
+  actionPolicy: PacketActionPolicySummary | undefined,
+  kind: 'policy_decision' | 'policy_outcome',
+) {
+  const record = actionPolicy?.[kind === 'policy_decision' ? 'decisions' : 'outcomes'].find(
+    (entry) => entry.tool_name === RECOGNIZE_TOOL_NAME,
+  )
+  if (!record) return null
+  return {
+    kind: record.kind,
+    tool_name: record.tool_name,
+    event_type: record.event_type,
+    record_hash: record.record_hash,
+    chain_root: record.chain_root,
+    informed_by: record.informed_by,
+    args_hash: record.args_hash,
+    record_valid: record.record_valid,
+    content: record.content,
+    proof: record.proof,
+  }
+}
+
+function openEtrTitleRecognitionPolicyGate(
+  input: PacketPolicyGateInput,
+): PacketPolicyGateDecision | undefined {
+  if (input.call.name !== RECOGNIZE_TOOL_NAME) return undefined
+  return {
+    decision: 'escalate',
+    policy_version: OPENETR_POLICY_VERSION,
+    reason_codes: [
+      'public_relay_availability_missing',
+      'title_transfer_authority_missing',
+      'mletr_legal_conclusion_missing',
+      'controller_semantics_review_required',
+    ],
+    content: {
+      schema: 'atrib.openetr.title_recognition_policy_decision.v1',
+      proposed_action: 'recognize_transfer',
+      action_tool: RECOGNIZE_TOOL_NAME,
+      packet: input.packet,
+      completed_calls: input.completed_calls,
+      previous_record_hashes: input.previous_records.map((entry) => entry.record_hash),
+      evidence_requirements: {
+        public_nostr_relay_availability:
+          'OpenETR issue, initiate, accept, and query events must be available from selected public relays.',
+        title_transfer_authority:
+          'A configured title-transfer authority or recognized attestor must sign the control decision or atrib bytes.',
+        legal_title_transfer:
+          'A jurisdiction-specific legal reviewer or relying-party policy must attest the legal effect.',
+        mletr_compliance:
+          'A legal or policy attestation must map the evidence to MLETR functional-equivalence requirements.',
+        controller_semantics:
+          'The verifier must resolve the OpenETR p-tag controller ambiguity instead of reading latest p tag as title control.',
+      },
+    },
+  }
+}
+
+function publicRelayUrls(env: NodeJS.ProcessEnv): string[] {
+  return (env.OPENETR_PUBLIC_RELAY_URLS ?? '')
+    .split(',')
+    .map((url) => url.trim())
+    .filter((url) => url.length > 0)
+}
+
+async function probePublicRelay(url: string, timeoutMs: number) {
+  const startedAt = Date.now()
+  const relay = {
+    url_hash: hashText(url),
+    connected: false,
+    nostr_response_observed: false,
+    response_type: null as string | null,
+    error: null as string | null,
+    elapsed_ms: 0,
+  }
+
+  if (typeof WebSocket !== 'function') {
+    return {
+      ...relay,
+      error: 'websocket_unavailable_in_node_runtime',
+      elapsed_ms: Date.now() - startedAt,
+    }
+  }
+
+  return await new Promise<typeof relay>((resolve) => {
+    let settled = false
+    let socket: WebSocket | null = null
+    const finish = (patch: Partial<typeof relay>) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try {
+        socket?.close()
+      } catch {
+        // Ignore close races after network failures.
+      }
+      resolve({ ...relay, ...patch, elapsed_ms: Date.now() - startedAt })
+    }
+    const timer = setTimeout(() => finish({ error: 'timeout_waiting_for_relay' }), timeoutMs)
+    try {
+      socket = new WebSocket(url)
+    } catch (err) {
+      finish({ error: err instanceof Error ? err.message : 'websocket_constructor_failed' })
+      return
+    }
+    socket.addEventListener('open', () => {
+      relay.connected = true
+      const subscriptionId = `atrib-openetr-availability-${Date.now()}`
+      socket?.send(JSON.stringify(['REQ', subscriptionId, { kinds: [31415, 31416], limit: 1 }]))
+    })
+    socket.addEventListener('message', (event) => {
+      const text = typeof event.data === 'string' ? event.data : ''
+      try {
+        const parsed = JSON.parse(text) as unknown
+        const responseType =
+          Array.isArray(parsed) && typeof parsed[0] === 'string' ? parsed[0] : null
+        finish({
+          connected: true,
+          nostr_response_observed: responseType !== null,
+          response_type: responseType,
+        })
+      } catch {
+        finish({
+          connected: true,
+          nostr_response_observed: false,
+          error: 'non_json_relay_response',
+        })
+      }
+    })
+    socket.addEventListener('error', () => {
+      finish({ connected: relay.connected, error: 'websocket_error' })
+    })
+    socket.addEventListener('close', () => {
+      finish({
+        connected: relay.connected,
+        error: relay.connected ? 'closed_before_nostr_response' : 'closed_before_open',
+      })
+    })
+  })
+}
+
+async function runPublicRelayAvailability(env: NodeJS.ProcessEnv) {
+  const urls = publicRelayUrls(env)
+  const timeoutMs = Number(env.OPENETR_PUBLIC_RELAY_TIMEOUT_MS ?? 5000)
+  if (urls.length === 0) {
+    return {
+      schema: 'atrib.openetr.public_relay_availability.v1',
+      requested: false,
+      status: 'not_requested',
+      checked_at_ms: null,
+      relay_count: 0,
+      reachable_count: 0,
+      relays: [],
+      caveat:
+        'Set OPENETR_PUBLIC_RELAY_URLS to probe public Nostr relay availability for OpenETR event kinds.',
+    }
+  }
+
+  const relays = await Promise.all(urls.map((url) => probePublicRelay(url, timeoutMs)))
+  const reachableCount = relays.filter(
+    (relay) => relay.connected && relay.nostr_response_observed,
+  ).length
+  return {
+    schema: 'atrib.openetr.public_relay_availability.v1',
+    requested: true,
+    status: reachableCount > 0 ? 'available' : 'unavailable',
+    checked_at_ms: Date.now(),
+    relay_count: relays.length,
+    reachable_count: reachableCount,
+    relays,
+    caveat:
+      'This proves relay WebSocket and Nostr REQ response availability, not that the OpenETR transfer events were published to a public relay.',
+  }
+}
+
 function runOpenEtrSourceE2e(
   env: NodeJS.ProcessEnv,
   exampleDir: string,
@@ -253,7 +436,10 @@ function runOpenEtrSourceE2e(
 function buildPolicyDecision(
   result: WrappedMcpPacketResult,
   sourceEvidence: OpenEtrSourceEvidence,
+  publicRelayAvailability: OpenEtrPublicRelayAvailability,
 ) {
+  const signedPolicyDecision = publicControlRecord(result.action_policy, 'policy_decision')
+  const signedPolicyOutcome = publicControlRecord(result.action_policy, 'policy_outcome')
   const sourceRule = sourceEvidence
     ? [
         {
@@ -268,7 +454,7 @@ function buildPolicyDecision(
     schema: 'atrib.proof_packet.policy_decision.v1',
     packet: result.packet,
     mode: result.mode,
-    evaluator: 'openetr-transfer-policy-v0',
+    evaluator: OPENETR_POLICY_VERSION,
     decision: 'escalate_before_title_recognition',
     decision_status: 'review_required',
     proposed_next_action: {
@@ -286,6 +472,16 @@ function buildPolicyDecision(
       privacy: result.privacy,
       openetr_event_kinds: [31415, 31416],
       openetr_source_e2e: sourceEvidence?.sanitized ?? null,
+      public_nostr_relay_availability: publicRelayAvailability,
+      action_policy: {
+        schema: result.action_policy?.schema ?? null,
+        stopped_before: result.action_policy?.stopped_before ?? null,
+        blocked_tool_executed: result.action_policy?.blocked_tool_executed ?? null,
+      },
+    },
+    signed_control_records: {
+      policy_decision: signedPolicyDecision,
+      policy_outcome: signedPolicyOutcome,
     },
     rule_results: [
       ...sourceRule,
@@ -293,6 +489,13 @@ function buildPolicyDecision(
         id: 'signed_openetr_records_present',
         outcome: result.verifier.record_valid ? 'pass' : 'fail',
         evidence: `${result.signed_records} verified OpenETR-shaped tool-call records`,
+      },
+      {
+        id: 'signed_atrib_control_record_policy_decision',
+        outcome: signedPolicyDecision?.record_valid ? 'pass' : 'fail',
+        evidence: signedPolicyDecision
+          ? `policy decision signed as ${signedPolicyDecision.record_hash}`
+          : 'no signed policy decision record was present',
       },
       {
         id: 'openetr_chain_observed',
@@ -309,6 +512,14 @@ function buildPolicyDecision(
         evidence: 'transfer accept action was signed before state query',
       },
       {
+        id: 'public_nostr_relay_availability',
+        outcome: publicRelayAvailability.status === 'available' ? 'pass' : 'escalate',
+        evidence:
+          publicRelayAvailability.status === 'available'
+            ? `${publicRelayAvailability.reachable_count} public relay probe responded`
+            : publicRelayAvailability.caveat,
+      },
+      {
         id: 'p_tag_semantics_review_required',
         outcome: 'escalate',
         evidence:
@@ -319,6 +530,12 @@ function buildPolicyDecision(
         outcome: 'escalate',
         evidence:
           'fixture contains no title-transfer authority or recognized attestor signature over atrib bytes',
+      },
+      {
+        id: 'legal_title_transfer_or_mletr_attestation_missing',
+        outcome: 'escalate',
+        evidence:
+          'packet contains no jurisdiction-specific legal-title-transfer or MLETR compliance attestation',
       },
       {
         id: 'raw_openetr_payload_private',
@@ -355,7 +572,7 @@ function buildPolicyDecision(
       'This packet proves the atrib wrapper and policy boundary for an OpenETR-shaped flow.',
       'It does not prove live OpenETR relay behavior.',
       'It does not prove legal title transfer or MLETR compliance.',
-      'The policy decision artifact is not a signed atrib record yet.',
+      'The deterministic policy artifact summarizes the signed atrib control-record decision.',
     ],
   }
   return {
@@ -369,6 +586,8 @@ function renderReadme(
   policyDecision: PolicyDecisionArtifact,
   sourceEvidence: OpenEtrSourceEvidence,
 ): string {
+  const signedPolicyDecision = publicControlRecord(result.action_policy, 'policy_decision')
+  const signedPolicyOutcome = publicControlRecord(result.action_policy, 'policy_outcome')
   const rows = result.operations
     .map(
       (operation, index) =>
@@ -417,6 +636,28 @@ recognition, or live Nostr event availability.`
   const regenerateCommand = sourceEvidence
     ? `OPENETR_SOURCE_DIR=/path/to/trbouma/openetr ATRIB_PACKET_WRITE_ARTIFACTS=1 pnpm --filter @atrib/integration openetr-transfer-source-packet`
     : `ATRIB_PACKET_WRITE_ARTIFACTS=1 pnpm --filter @atrib/integration openetr-transfer-packet`
+  const signedPolicySection =
+    signedPolicyDecision && signedPolicyOutcome
+      ? `
+## Signed control records
+
+The packet signs the title-recognition policy decision as atrib control evidence
+before the risky recognition action can run.
+
+| Kind | Tool | Record hash | Local log index |
+| --- | --- | --- | --- |
+| ${signedPolicyDecision.kind} | ${signedPolicyDecision.tool_name} | ${signedPolicyDecision.record_hash} | ${signedPolicyDecision.proof.log_index} |
+| ${signedPolicyOutcome.kind} | ${signedPolicyOutcome.tool_name} | ${signedPolicyOutcome.record_hash} | ${signedPolicyOutcome.proof.log_index} |
+
+Stopped before: \`${result.action_policy?.stopped_before ?? 'none'}\`.
+
+Blocked tool executed: \`${String(result.action_policy?.blocked_tool_executed ?? false)}\`.
+`
+      : `
+## Signed control records
+
+No signed title-recognition policy control record was produced.
+`
 
   return `# OpenETR transfer proof artifact
 
@@ -470,8 +711,18 @@ Escalated before execution: \`${policyDecision.escalated_actions.join('`, `')}\`
 Policy decision hash: \`${policyDecision.decision_hash}\`.
 
 The policy decision file is deterministic and hash-bound to the signed records.
-It is not a signed atrib record yet. The signed evidence in this packet is the
-wrapped OpenETR-shaped tool-call chain.
+The stop-before-recognition decision is also signed as an atrib control record.
+${signedPolicySection}
+
+## Public relay availability
+
+\`public-relay-availability.json\` records the relay availability check status:
+\`${policyDecision.inputs.public_nostr_relay_availability.status}\`.
+
+Set \`OPENETR_PUBLIC_RELAY_URLS=wss://relay.example,...\` to probe public Nostr
+relay availability for OpenETR event kinds. That probe checks relay connectivity
+and Nostr responses. It does not prove the transfer events were published to the
+public relay.
 ${sourceSection}
 
 ## Weakness
@@ -500,6 +751,7 @@ export async function runOpenEtrTransferPacket(
   const exampleDir = dirname(fileURLToPath(import.meta.url))
   const integrationDir = dirname(dirname(exampleDir))
   const sourceEvidence = runOpenEtrSourceE2e(env, exampleDir)
+  const publicRelayAvailability = await runPublicRelayAvailability(env)
   const fixtureServer = join(exampleDir, 'openetr-fixture-mcp.ts')
   const upstream = sourceEvidence
     ? {
@@ -523,6 +775,7 @@ export async function runOpenEtrTransferPacket(
       'openetr_transfer_initiate',
       'openetr_transfer_accept',
       'openetr_query_state',
+      RECOGNIZE_TOOL_NAME,
     ],
     calls: [
       {
@@ -558,7 +811,16 @@ export async function runOpenEtrTransferPacket(
         arguments: { object_digest: PRIVATE_OBJECT_DIGEST, relays: [PRIVATE_RELAY] },
         expectText: 'ambiguous_controller_warning',
       },
+      {
+        name: RECOGNIZE_TOOL_NAME,
+        arguments: {
+          object_digest: PRIVATE_OBJECT_DIGEST,
+          accept_event_id: PRIVATE_ACCEPT_EVENT_ID,
+          authority_policy_id: TITLE_AUTHORITY_POLICY_ID,
+        },
+      },
     ],
+    policyGate: openEtrTitleRecognitionPolicyGate,
     privateNeedles: [
       PRIVATE_OBJECT_DIGEST,
       PRIVATE_DOCUMENT_TITLE,
@@ -574,7 +836,9 @@ export async function runOpenEtrTransferPacket(
   }
   const result = await runWrappedMcpPacket(packetOptions)
   const publicResult = artifactResult(result)
-  const policyDecision = buildPolicyDecision(publicResult, sourceEvidence)
+  const policyDecision = buildPolicyDecision(publicResult, sourceEvidence, publicRelayAvailability)
+  const signedPolicyDecision = publicControlRecord(publicResult.action_policy, 'policy_decision')
+  const signedPolicyOutcome = publicControlRecord(publicResult.action_policy, 'policy_outcome')
   const verifierOutput = {
     schema: 'atrib.proof_packet.verifier_output.v1',
     packet: publicResult.packet,
@@ -597,20 +861,27 @@ export async function runOpenEtrTransferPacket(
       attestor_evidence_supplied: false,
       controller_semantics_pinned: false,
       source_e2e: sourceEvidence?.sanitized ?? null,
+      public_relay_availability: publicRelayAvailability,
+      title_recognition_control_record_signed: Boolean(signedPolicyDecision),
+      title_recognition_tool_executed:
+        publicResult.action_policy?.blocked_tool_executed ??
+        publicResult.operations.includes(RECOGNIZE_TOOL_NAME),
     },
     policy_decision: {
       artifact: 'policy-decision.json',
       decision: policyDecision.decision,
       decision_status: policyDecision.decision_status,
       decision_hash: policyDecision.decision_hash,
-      signed_policy_record: false,
-      caveat:
-        'Policy decision is a deterministic artifact bound to signed records, not a signed atrib record.',
+      signed_policy_record: Boolean(signedPolicyDecision),
+      signed_control_record: signedPolicyDecision,
+      signed_outcome_record: signedPolicyOutcome,
+      caveat: 'Policy decision artifact summarizes the signed atrib control-record decision.',
     },
     caveats: [
       'Fixture run only. It does not prove live OpenETR relay output.',
       'Private OpenETR object, party, relay, and event-id material are represented by hashes only.',
       'Title recognition remains a consumer policy decision until attestor evidence is supplied.',
+      'The risky title-recognition tool is present but not executed in the valid packet.',
     ],
   }
   const redactionManifest = {
@@ -654,6 +925,7 @@ export async function runOpenEtrTransferPacket(
     writeJson(join(outDir, 'verifier-output.json'), verifierOutput)
     writeJson(join(outDir, 'redaction-manifest.json'), redactionManifest)
     writeJson(join(outDir, 'policy-decision.json'), policyDecision)
+    writeJson(join(outDir, 'public-relay-availability.json'), publicRelayAvailability)
     if (sourceEvidence) writeJson(join(outDir, 'source-run-output.json'), sourceEvidence.sanitized)
   }
 
@@ -662,6 +934,7 @@ export async function runOpenEtrTransferPacket(
     verifierOutput,
     redactionManifest,
     policyDecision,
+    publicRelayAvailability,
     artifact_dir: outDir ?? null,
   }
 }
@@ -669,6 +942,7 @@ export async function runOpenEtrTransferPacket(
 async function main(): Promise<void> {
   const packet = await runOpenEtrTransferPacket()
   const { result, policyDecision, artifact_dir } = packet
+  const signedPolicyDecision = publicControlRecord(result.action_policy, 'policy_decision')
   console.log(
     JSON.stringify(
       {
@@ -680,6 +954,8 @@ async function main(): Promise<void> {
           artifact: 'policy-decision.json',
           decision: policyDecision.decision,
           decision_hash: policyDecision.decision_hash,
+          signed_policy_record: Boolean(signedPolicyDecision),
+          signed_control_record_hash: signedPolicyDecision?.record_hash ?? null,
         },
         artifact_dir,
       },

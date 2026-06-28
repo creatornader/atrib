@@ -29,7 +29,7 @@
     {
       "role": "origin",
       "kind": 31415,
-      "event_id_hash": "sha256:121626b6f6a9a8d65c6f80d8bec9902e505ebec149614b82fce6cc2398c11e49",
+      "event_id_hash": "sha256:a2978b9726900aab5c70f689b9d6718a30236753b54150562e38651ac87b8455",
       "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
       "content_hash": "sha256:cedd26997c3b1f1fc6bf2df071538d2aba6db8b6e87fa5001588d6fc3800acac",
       "tag_names": ["d", "o"],
@@ -41,25 +41,25 @@
     {
       "role": "transfer_initiate",
       "kind": 31416,
-      "event_id_hash": "sha256:3d3a6346e4e29fb404d059a7361720d2f221d1f225658ae58e98d11df49fa8a5",
+      "event_id_hash": "sha256:9e26675315250225ad86caf51539ed2c8d5ccfbbb9b68dba012b7c745557c954",
       "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
-      "content_hash": "sha256:dd1aeeb74e2a47f4952a3e9de1c6d490b7ad4d3dc66adf7a6beb8beed39b086f",
+      "content_hash": "sha256:1056274b1c6794abef33d683c4674dae6695c1dd95278cb4817d8531d0cb39f7",
       "tag_names": ["d", "o", "e", "origin", "p", "action"],
       "action": "initiate",
       "object_digest_hash": "sha256:41e44a069f2763ebee1f91c1e2c630701ad4a1166ceaecec94b125cb0ee75924",
-      "prior_event_id_hash": "sha256:121626b6f6a9a8d65c6f80d8bec9902e505ebec149614b82fce6cc2398c11e49",
+      "prior_event_id_hash": "sha256:a2978b9726900aab5c70f689b9d6718a30236753b54150562e38651ac87b8455",
       "party_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16"
     },
     {
       "role": "transfer_accept",
       "kind": 31416,
-      "event_id_hash": "sha256:d54ad236fafd6c7193180b1d9d9400cff56dd4c5c65dea3b1c684d1d5ff270de",
+      "event_id_hash": "sha256:c2d54164f66291f26dfe77b886f0f57a10bbe0c576b1843b9d82bb528ccafa4e",
       "signer_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
-      "content_hash": "sha256:70b882831ff5d4ed7a1af472010c3a6485a484af6769435d3a80df5a99db31ee",
+      "content_hash": "sha256:36184c62cae6d38d1fb1499ac319da7a7dc1047ed29bf30cb095f5886b23bee0",
       "tag_names": ["d", "o", "e", "p", "action"],
       "action": "accept",
       "object_digest_hash": "sha256:41e44a069f2763ebee1f91c1e2c630701ad4a1166ceaecec94b125cb0ee75924",
-      "prior_event_id_hash": "sha256:3d3a6346e4e29fb404d059a7361720d2f221d1f225658ae58e98d11df49fa8a5",
+      "prior_event_id_hash": "sha256:9e26675315250225ad86caf51539ed2c8d5ccfbbb9b68dba012b7c745557c954",
       "party_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81"
     }
   ],

@@ -47,11 +47,12 @@ This is a fixture proof. It proves:
 - The proof packet keeps raw OpenETR payload material private.
 - The source-backed mode can bind the packet to real OpenETR Python issue,
   transfer, accept, and query code at commit `c97eb84f5790ff041ad14a1c30df0f71ceb8d3d9`.
-- The policy artifact refuses to treat the accept event as recognized title
-  transfer without attestor or title-transfer authority evidence.
+- The signed control-record policy decision refuses to treat the accept event
+  as recognized title transfer without public relay, title-transfer authority,
+  legal-title-transfer, or MLETR evidence.
 
-It does not prove public Nostr relay behavior, legal title transfer, MLETR
-compliance, or title-transfer authority recognition.
+It does not prove public OpenETR event availability, legal title transfer,
+MLETR compliance, or title-transfer authority recognition.
 
 ## Live upstream path
 

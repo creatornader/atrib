@@ -42,9 +42,11 @@ records to a candidate review gate for sensitive downstream actions.
 OpenETR is local-only. Its default packet signs an OpenETR-shaped issue,
 transfer-initiate, transfer-accept, and state-query flow. Its source-backed
 packet runs the pinned upstream Python implementation against a local WebSocket
-Nostr relay, writes a sanitized `source-run-output.json`, and still escalates
-before recognized title transfer because no attestor or title-transfer authority
-evidence is supplied.
+Nostr relay, writes a sanitized `source-run-output.json`, writes
+`public-relay-availability.json`, and signs a control-record policy decision
+that stops before recognized title transfer. The packet still escalates because
+no public event-availability proof, title-transfer authority evidence, or
+legal/MLETR attestation is supplied.
 
 ## Contact drafts
 

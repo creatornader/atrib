@@ -13,10 +13,10 @@
   "records": [
     {
       "tool_name": "openetr_issue",
-      "record_hash": "sha256:b1c6ab6216564c8e95d7701a8c9657f6d491673a57e788a4fce5b31d5717618c",
+      "record_hash": "sha256:7c97724da8180d06df44ec21d638a13a9feab33b1d24ee4a3c5c61b084da4139",
       "log_index": 0,
       "proof": {
-        "record_hash": "sha256:b1c6ab6216564c8e95d7701a8c9657f6d491673a57e788a4fce5b31d5717618c",
+        "record_hash": "sha256:7c97724da8180d06df44ec21d638a13a9feab33b1d24ee4a3c5c61b084da4139",
         "log_index": 0,
         "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "checkpoint": "openetr-transfer-local",
@@ -25,10 +25,10 @@
     },
     {
       "tool_name": "openetr_transfer_initiate",
-      "record_hash": "sha256:4a38b1dc3b01c1a793527177ffbf33f94c1fa731bd12abc11b0e139dbb4dd236",
+      "record_hash": "sha256:634a24c5fc95f947d061ae54ceca963b8e6090d9792a8bcf867501ca66ed8245",
       "log_index": 1,
       "proof": {
-        "record_hash": "sha256:4a38b1dc3b01c1a793527177ffbf33f94c1fa731bd12abc11b0e139dbb4dd236",
+        "record_hash": "sha256:634a24c5fc95f947d061ae54ceca963b8e6090d9792a8bcf867501ca66ed8245",
         "log_index": 1,
         "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "checkpoint": "openetr-transfer-local",
@@ -37,10 +37,10 @@
     },
     {
       "tool_name": "openetr_transfer_accept",
-      "record_hash": "sha256:541dedbfe619a49e04bd1b8fb3bcb311caca14d3c19680ff2d59a76ea85568ba",
+      "record_hash": "sha256:a6dd00d4ec0e748b5531a6cbbe510c2a28dbd1f02f02481deb60c7ba366a0882",
       "log_index": 2,
       "proof": {
-        "record_hash": "sha256:541dedbfe619a49e04bd1b8fb3bcb311caca14d3c19680ff2d59a76ea85568ba",
+        "record_hash": "sha256:a6dd00d4ec0e748b5531a6cbbe510c2a28dbd1f02f02481deb60c7ba366a0882",
         "log_index": 2,
         "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "checkpoint": "openetr-transfer-local",
@@ -49,10 +49,10 @@
     },
     {
       "tool_name": "openetr_query_state",
-      "record_hash": "sha256:b30afb7f54fd43b5c7863d985cae6198c24489f7be3910735acc5629555a2975",
+      "record_hash": "sha256:f95bfb80f00bbbd8f47aec95ab91e22faf5c90ebc0b36fe133def30f2c8675c5",
       "log_index": 3,
       "proof": {
-        "record_hash": "sha256:b30afb7f54fd43b5c7863d985cae6198c24489f7be3910735acc5629555a2975",
+        "record_hash": "sha256:f95bfb80f00bbbd8f47aec95ab91e22faf5c90ebc0b36fe133def30f2c8675c5",
         "log_index": 3,
         "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "checkpoint": "openetr-transfer-local",
@@ -67,28 +67,28 @@
     "inclusion_verified": false,
     "proofs": [
       {
-        "record_hash": "sha256:b1c6ab6216564c8e95d7701a8c9657f6d491673a57e788a4fce5b31d5717618c",
+        "record_hash": "sha256:7c97724da8180d06df44ec21d638a13a9feab33b1d24ee4a3c5c61b084da4139",
         "log_index": 0,
         "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "checkpoint": "openetr-transfer-local",
         "inclusion_proof": []
       },
       {
-        "record_hash": "sha256:4a38b1dc3b01c1a793527177ffbf33f94c1fa731bd12abc11b0e139dbb4dd236",
+        "record_hash": "sha256:634a24c5fc95f947d061ae54ceca963b8e6090d9792a8bcf867501ca66ed8245",
         "log_index": 1,
         "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "checkpoint": "openetr-transfer-local",
         "inclusion_proof": []
       },
       {
-        "record_hash": "sha256:541dedbfe619a49e04bd1b8fb3bcb311caca14d3c19680ff2d59a76ea85568ba",
+        "record_hash": "sha256:a6dd00d4ec0e748b5531a6cbbe510c2a28dbd1f02f02481deb60c7ba366a0882",
         "log_index": 2,
         "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "checkpoint": "openetr-transfer-local",
         "inclusion_proof": []
       },
       {
-        "record_hash": "sha256:b30afb7f54fd43b5c7863d985cae6198c24489f7be3910735acc5629555a2975",
+        "record_hash": "sha256:f95bfb80f00bbbd8f47aec95ab91e22faf5c90ebc0b36fe133def30f2c8675c5",
         "log_index": 3,
         "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "checkpoint": "openetr-transfer-local",
@@ -143,7 +143,7 @@
         {
           "role": "origin",
           "kind": 31415,
-          "event_id_hash": "sha256:121626b6f6a9a8d65c6f80d8bec9902e505ebec149614b82fce6cc2398c11e49",
+          "event_id_hash": "sha256:a2978b9726900aab5c70f689b9d6718a30236753b54150562e38651ac87b8455",
           "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
           "content_hash": "sha256:cedd26997c3b1f1fc6bf2df071538d2aba6db8b6e87fa5001588d6fc3800acac",
           "tag_names": ["d", "o"],
@@ -155,25 +155,25 @@
         {
           "role": "transfer_initiate",
           "kind": 31416,
-          "event_id_hash": "sha256:3d3a6346e4e29fb404d059a7361720d2f221d1f225658ae58e98d11df49fa8a5",
+          "event_id_hash": "sha256:9e26675315250225ad86caf51539ed2c8d5ccfbbb9b68dba012b7c745557c954",
           "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
-          "content_hash": "sha256:dd1aeeb74e2a47f4952a3e9de1c6d490b7ad4d3dc66adf7a6beb8beed39b086f",
+          "content_hash": "sha256:1056274b1c6794abef33d683c4674dae6695c1dd95278cb4817d8531d0cb39f7",
           "tag_names": ["d", "o", "e", "origin", "p", "action"],
           "action": "initiate",
           "object_digest_hash": "sha256:41e44a069f2763ebee1f91c1e2c630701ad4a1166ceaecec94b125cb0ee75924",
-          "prior_event_id_hash": "sha256:121626b6f6a9a8d65c6f80d8bec9902e505ebec149614b82fce6cc2398c11e49",
+          "prior_event_id_hash": "sha256:a2978b9726900aab5c70f689b9d6718a30236753b54150562e38651ac87b8455",
           "party_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16"
         },
         {
           "role": "transfer_accept",
           "kind": 31416,
-          "event_id_hash": "sha256:d54ad236fafd6c7193180b1d9d9400cff56dd4c5c65dea3b1c684d1d5ff270de",
+          "event_id_hash": "sha256:c2d54164f66291f26dfe77b886f0f57a10bbe0c576b1843b9d82bb528ccafa4e",
           "signer_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
-          "content_hash": "sha256:70b882831ff5d4ed7a1af472010c3a6485a484af6769435d3a80df5a99db31ee",
+          "content_hash": "sha256:36184c62cae6d38d1fb1499ac319da7a7dc1047ed29bf30cb095f5886b23bee0",
           "tag_names": ["d", "o", "e", "p", "action"],
           "action": "accept",
           "object_digest_hash": "sha256:41e44a069f2763ebee1f91c1e2c630701ad4a1166ceaecec94b125cb0ee75924",
-          "prior_event_id_hash": "sha256:3d3a6346e4e29fb404d059a7361720d2f221d1f225658ae58e98d11df49fa8a5",
+          "prior_event_id_hash": "sha256:9e26675315250225ad86caf51539ed2c8d5ccfbbb9b68dba012b7c745557c954",
           "party_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81"
         }
       ],
@@ -203,19 +203,110 @@
           "present": true
         }
       ]
-    }
+    },
+    "public_relay_availability": {
+      "schema": "atrib.openetr.public_relay_availability.v1",
+      "requested": false,
+      "status": "not_requested",
+      "checked_at_ms": null,
+      "relay_count": 0,
+      "reachable_count": 0,
+      "relays": [],
+      "caveat": "Set OPENETR_PUBLIC_RELAY_URLS to probe public Nostr relay availability for OpenETR event kinds."
+    },
+    "title_recognition_control_record_signed": true,
+    "title_recognition_tool_executed": false
   },
   "policy_decision": {
     "artifact": "policy-decision.json",
     "decision": "escalate_before_title_recognition",
     "decision_status": "review_required",
-    "decision_hash": "sha256:85dccc888a31df4263ce9ce30585f2add26501b55f14957cf48aeabafcdf8078",
-    "signed_policy_record": false,
-    "caveat": "Policy decision is a deterministic artifact bound to signed records, not a signed atrib record."
+    "decision_hash": "sha256:d2f24676360b712d848cecfe821ab47d8e122695e35b52392ad1d9016842125a",
+    "signed_policy_record": true,
+    "signed_control_record": {
+      "kind": "policy_decision",
+      "tool_name": "openetr_recognize_title_transfer",
+      "event_type": "https://openetr-transfer.atrib.dev/v1/control",
+      "record_hash": "sha256:a0489deac4104b10ed566bd735fae487e7893e2ca215c856a42c48acf86a74c8",
+      "chain_root": "sha256:f95bfb80f00bbbd8f47aec95ab91e22faf5c90ebc0b36fe133def30f2c8675c5",
+      "informed_by": ["sha256:f95bfb80f00bbbd8f47aec95ab91e22faf5c90ebc0b36fe133def30f2c8675c5"],
+      "args_hash": "sha256:f50f4d119429a724991d66c8230491b7a0d8dd8ab7f1e18a11415d0345872b3d",
+      "record_valid": true,
+      "content": {
+        "schema": "atrib.openetr.title_recognition_policy_decision.v1",
+        "proposed_action": "recognize_transfer",
+        "action_tool": "openetr_recognize_title_transfer",
+        "packet": "openetr-transfer",
+        "completed_calls": [
+          "openetr_issue",
+          "openetr_transfer_initiate",
+          "openetr_transfer_accept",
+          "openetr_query_state"
+        ],
+        "previous_record_hashes": [
+          "sha256:7c97724da8180d06df44ec21d638a13a9feab33b1d24ee4a3c5c61b084da4139",
+          "sha256:634a24c5fc95f947d061ae54ceca963b8e6090d9792a8bcf867501ca66ed8245",
+          "sha256:a6dd00d4ec0e748b5531a6cbbe510c2a28dbd1f02f02481deb60c7ba366a0882",
+          "sha256:f95bfb80f00bbbd8f47aec95ab91e22faf5c90ebc0b36fe133def30f2c8675c5"
+        ],
+        "evidence_requirements": {
+          "public_nostr_relay_availability": "OpenETR issue, initiate, accept, and query events must be available from selected public relays.",
+          "title_transfer_authority": "A configured title-transfer authority or recognized attestor must sign the control decision or atrib bytes.",
+          "legal_title_transfer": "A jurisdiction-specific legal reviewer or relying-party policy must attest the legal effect.",
+          "mletr_compliance": "A legal or policy attestation must map the evidence to MLETR functional-equivalence requirements.",
+          "controller_semantics": "The verifier must resolve the OpenETR p-tag controller ambiguity instead of reading latest p tag as title control."
+        },
+        "decision": "escalate",
+        "policy_version": "openetr-transfer-policy-v1",
+        "reason_codes": [
+          "public_relay_availability_missing",
+          "title_transfer_authority_missing",
+          "mletr_legal_conclusion_missing",
+          "controller_semantics_review_required"
+        ]
+      },
+      "proof": {
+        "log_index": 4,
+        "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "checkpoint": "openetr-transfer-local",
+        "inclusion_proof": [],
+        "public_endpoint": "http://127.0.0.1:52571/v1/entries",
+        "inclusion_verified": false
+      }
+    },
+    "signed_outcome_record": {
+      "kind": "policy_outcome",
+      "tool_name": "openetr_recognize_title_transfer",
+      "event_type": "https://openetr-transfer.atrib.dev/v1/control",
+      "record_hash": "sha256:557f7a22c1babba6df9c9b63aafa6f7f118af076ed1dcdde96fbe118b5f18ef4",
+      "chain_root": "sha256:a0489deac4104b10ed566bd735fae487e7893e2ca215c856a42c48acf86a74c8",
+      "informed_by": ["sha256:a0489deac4104b10ed566bd735fae487e7893e2ca215c856a42c48acf86a74c8"],
+      "args_hash": "sha256:16d8fea3341b63c47e049045ee56ce4074ca9ad556cc1b2344186d6bf0e2fe99",
+      "record_valid": true,
+      "content": {
+        "schema": "atrib.packet.action_policy_outcome.v1",
+        "decision": "escalate",
+        "executed": false,
+        "stopped_before": "openetr_recognize_title_transfer",
+        "decision_record_hash": "sha256:a0489deac4104b10ed566bd735fae487e7893e2ca215c856a42c48acf86a74c8",
+        "cleanup_record_hashes": [],
+        "cleanup_tools": []
+      },
+      "proof": {
+        "log_index": 5,
+        "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "checkpoint": "openetr-transfer-local",
+        "inclusion_proof": [],
+        "public_endpoint": "http://127.0.0.1:52571/v1/entries",
+        "inclusion_verified": false
+      }
+    },
+    "caveat": "Policy decision artifact summarizes the signed atrib control-record decision."
   },
   "caveats": [
     "Fixture run only. It does not prove live OpenETR relay output.",
     "Private OpenETR object, party, relay, and event-id material are represented by hashes only.",
-    "Title recognition remains a consumer policy decision until attestor evidence is supplied."
+    "Title recognition remains a consumer policy decision until attestor evidence is supplied.",
+    "The risky title-recognition tool is present but not executed in the valid packet."
   ]
 }

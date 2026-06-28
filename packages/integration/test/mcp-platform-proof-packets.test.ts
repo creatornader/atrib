@@ -48,6 +48,8 @@ async function runPacket(
           artifact: string
           decision: string
           decision_hash: string
+          signed_policy_record?: boolean
+          signed_control_record_hash?: string | null
         }
         source_e2e?: boolean
       },
@@ -211,13 +213,42 @@ describe('MCP platform proof packets', () => {
       ])
       expect(run.result.record_hashes).toHaveLength(4)
       expect(run.result.log_indexes).toEqual([0, 1, 2, 3])
+      expect(run.result.action_policy).toMatchObject({
+        stopped_before: 'openetr_recognize_title_transfer',
+        blocked_tool_executed: false,
+      })
+      expect(run.result.action_policy?.decisions[0]?.content).toMatchObject({
+        decision: 'escalate',
+        action_tool: 'openetr_recognize_title_transfer',
+        reason_codes: [
+          'public_relay_availability_missing',
+          'title_transfer_authority_missing',
+          'mletr_legal_conclusion_missing',
+          'controller_semantics_review_required',
+        ],
+      })
+      expect(run.result.action_policy?.outcomes[0]?.content).toMatchObject({
+        decision: 'escalate',
+        executed: false,
+        stopped_before: 'openetr_recognize_title_transfer',
+      })
+      expect(run.result.action_policy?.decisions[0]?.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(run.result.action_policy?.outcomes[0]?.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(run.result.action_policy?.decisions[0]?.record_valid).toBe(true)
+      expect(run.result.action_policy?.outcomes[0]?.record_valid).toBe(true)
+      expect(run.result.action_policy?.decisions[0]?.proof.log_index).toBe(4)
+      expect(run.result.action_policy?.outcomes[0]?.proof.log_index).toBe(5)
       expect(run.result.verifier.record_valid).toBe(true)
       expect(run.result.privacy.public_records_hash_only).toBe(true)
       expect(run.result.policy_decision).toMatchObject({
         artifact: 'policy-decision.json',
         decision: 'escalate_before_title_recognition',
+        signed_policy_record: true,
       })
       expect(run.result.policy_decision?.decision_hash).toMatch(/^sha256:[0-9a-f]{64}$/u)
+      expect(run.result.policy_decision?.signed_control_record_hash).toMatch(
+        /^sha256:[0-9a-f]{64}$/u,
+      )
       expect(run.result.source_e2e).toBe(false)
 
       const text = `${run.stdout}\n${artifactText(run.outDir, [
@@ -225,12 +256,16 @@ describe('MCP platform proof packets', () => {
         'verifier-output.json',
         'redaction-manifest.json',
         'policy-decision.json',
+        'public-relay-availability.json',
       ])}`
       expect(text).toContain('signed_openetr_records_present')
+      expect(text).toContain('signed_atrib_control_record_policy_decision')
       expect(text).toContain('openetr_chain_observed')
       expect(text).toContain('acceptance_observed')
+      expect(text).toContain('public_nostr_relay_availability')
       expect(text).toContain('p_tag_semantics_review_required')
       expect(text).toContain('title_recognition_requires_attestor')
+      expect(text).toContain('legal_title_transfer_or_mletr_attestation_missing')
       expect(text).toContain('escalate_before_title_recognition')
       for (const needle of [
         'sha256:7f4b8b8e2f394fddad1ed04e94c456ff0c8fb7ee6f0c5d5017deac9a0f61d425',
@@ -271,9 +306,11 @@ describe('MCP platform proof packets', () => {
           'verifier-output.json',
           'redaction-manifest.json',
           'policy-decision.json',
+          'public-relay-availability.json',
           'source-run-output.json',
         ])}`
         expect(text).toContain('actual_openetr_source_run_present')
+        expect(text).toContain('signed_atrib_control_record_policy_decision')
         expect(text).toContain('c97eb84f5790ff041ad14a1c30df0f71ceb8d3d9')
         expect(text).toContain('query_reports_initiator_after_accept')
         expect(text).toContain('local-websocket-nostr-relay')

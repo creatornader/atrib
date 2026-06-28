@@ -99,6 +99,11 @@ Fourth, a verifier reviews the packet. It checks atrib signatures and log inclus
 
 The result is not "atrib says title transferred." The result is narrower and stronger: "this agent made these signed calls, under this signed policy decision, against this OpenETR control chain, and these external parties supplied this evidence."
 
+The current proof packet follows that rule. It signs the OpenETR-shaped action
+chain, then signs a control-record policy decision that stops before title
+recognition until public relay evidence, title-transfer authority evidence, and
+legal/MLETR evidence are supplied.
+
 ## Implementation caution
 
 The OpenETR implementation snapshot reviewed for this note was `trbouma/openetr` at commit `c97eb84f5790ff041ad14a1c30df0f71ceb8d3d9` from 2026-06-01.

@@ -127,6 +127,15 @@ async function main(): Promise<void> {
       },
       ['object_digest'],
     ),
+    toolSchema(
+      'openetr_recognize_title_transfer',
+      {
+        object_digest: { type: 'string' },
+        accept_event_id: { type: 'string' },
+        authority_policy_id: { type: 'string' },
+      },
+      ['object_digest', 'accept_event_id', 'authority_policy_id'],
+    ),
   ]
 
   underlying.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }))
@@ -271,6 +280,24 @@ async function main(): Promise<void> {
                 'Latest accept event p tag points at the initiator while the expected controller is the acceptor.',
             },
           ],
+        })
+      }
+
+      if (req.params.name === 'openetr_recognize_title_transfer') {
+        return textJson({
+          status: 'not_executed_in_valid_packet',
+          action: 'recognize_title_transfer',
+          object_digest: objectDigest,
+          accept_event_id:
+            typeof args.accept_event_id === 'string'
+              ? args.accept_event_id
+              : PRIVATE_ACCEPT_EVENT_ID,
+          authority_policy_id:
+            typeof args.authority_policy_id === 'string'
+              ? args.authority_policy_id
+              : 'openetr-demo-title-authority-policy',
+          warning:
+            'Valid packets must stop before this tool unless public relay, title authority, and legal evidence are supplied.',
         })
       }
 

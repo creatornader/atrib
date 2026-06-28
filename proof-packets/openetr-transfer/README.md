@@ -19,10 +19,10 @@ This proof signs an OpenETR-shaped transfer-control flow through `@atrib/mcp-wra
 
 | Tool                      | Record hash                                                             | Local log index |
 | ------------------------- | ----------------------------------------------------------------------- | --------------- |
-| openetr_issue             | sha256:b1c6ab6216564c8e95d7701a8c9657f6d491673a57e788a4fce5b31d5717618c | 0               |
-| openetr_transfer_initiate | sha256:4a38b1dc3b01c1a793527177ffbf33f94c1fa731bd12abc11b0e139dbb4dd236 | 1               |
-| openetr_transfer_accept   | sha256:541dedbfe619a49e04bd1b8fb3bcb311caca14d3c19680ff2d59a76ea85568ba | 2               |
-| openetr_query_state       | sha256:b30afb7f54fd43b5c7863d985cae6198c24489f7be3910735acc5629555a2975 | 3               |
+| openetr_issue             | sha256:7c97724da8180d06df44ec21d638a13a9feab33b1d24ee4a3c5c61b084da4139 | 0               |
+| openetr_transfer_initiate | sha256:634a24c5fc95f947d061ae54ceca963b8e6090d9792a8bcf867501ca66ed8245 | 1               |
+| openetr_transfer_accept   | sha256:a6dd00d4ec0e748b5531a6cbbe510c2a28dbd1f02f02481deb60c7ba366a0882 | 2               |
+| openetr_query_state       | sha256:f95bfb80f00bbbd8f47aec95ab91e22faf5c90ebc0b36fe133def30f2c8675c5 | 3               |
 
 ## Redaction line
 
@@ -50,11 +50,34 @@ Allowed without review: `internal_state_query`, `proof_packet_review`.
 
 Escalated before execution: `recognize_transfer`, `release_goods`, `settle_against_warehouse_receipt`, `update_official_title_register`.
 
-Policy decision hash: `sha256:85dccc888a31df4263ce9ce30585f2add26501b55f14957cf48aeabafcdf8078`.
+Policy decision hash: `sha256:d2f24676360b712d848cecfe821ab47d8e122695e35b52392ad1d9016842125a`.
 
 The policy decision file is deterministic and hash-bound to the signed records.
-It is not a signed atrib record yet. The signed evidence in this packet is the
-wrapped OpenETR-shaped tool-call chain.
+The stop-before-recognition decision is also signed as an atrib control record.
+
+## Signed control records
+
+The packet signs the title-recognition policy decision as atrib control evidence
+before the risky recognition action can run.
+
+| Kind            | Tool                             | Record hash                                                             | Local log index |
+| --------------- | -------------------------------- | ----------------------------------------------------------------------- | --------------- |
+| policy_decision | openetr_recognize_title_transfer | sha256:a0489deac4104b10ed566bd735fae487e7893e2ca215c856a42c48acf86a74c8 | 4               |
+| policy_outcome  | openetr_recognize_title_transfer | sha256:557f7a22c1babba6df9c9b63aafa6f7f118af076ed1dcdde96fbe118b5f18ef4 | 5               |
+
+Stopped before: `openetr_recognize_title_transfer`.
+
+Blocked tool executed: `false`.
+
+## Public relay availability
+
+`public-relay-availability.json` records the relay availability check status:
+`not_requested`.
+
+Set `OPENETR_PUBLIC_RELAY_URLS=wss://relay.example,...` to probe public Nostr
+relay availability for OpenETR event kinds. That probe checks relay connectivity
+and Nostr responses. It does not prove the transfer events were published to the
+public relay.
 
 ## Source-backed OpenETR run
 

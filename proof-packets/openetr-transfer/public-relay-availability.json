@@ -1,0 +1,10 @@
+{
+  "schema": "atrib.openetr.public_relay_availability.v1",
+  "requested": false,
+  "status": "not_requested",
+  "checked_at_ms": null,
+  "relay_count": 0,
+  "reachable_count": 0,
+  "relays": [],
+  "caveat": "Set OPENETR_PUBLIC_RELAY_URLS to probe public Nostr relay availability for OpenETR event kinds."
+}
