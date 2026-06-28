@@ -122,6 +122,22 @@ describe('parseConfig', () => {
     expect(config.upstream.env).toEqual({ FOO: 'bar' })
   })
 
+  it('parses an HTTP upstream', () => {
+    const config = parseConfig({
+      ...MINIMAL,
+      upstream: {
+        type: 'http',
+        url: 'https://mcp.browserbase.com/mcp?browserbaseApiKey=test',
+        headers: { 'x-test': 'yes' },
+      },
+    })
+    expect(config.upstream).toEqual({
+      type: 'http',
+      url: 'https://mcp.browserbase.com/mcp?browserbaseApiKey=test',
+      headers: { 'x-test': 'yes' },
+    })
+  })
+
   it('parses per-tool overrides', () => {
     const config = parseConfig({
       ...MINIMAL,
@@ -165,6 +181,10 @@ describe('parseConfig', () => {
 
   it('rejects missing upstream.command', () => {
     expect(() => parseConfig({ ...MINIMAL, upstream: {} })).toThrow()
+  })
+
+  it('rejects an HTTP upstream without a URL', () => {
+    expect(() => parseConfig({ ...MINIMAL, upstream: { type: 'http' } })).toThrow()
   })
 
   it('rejects missing serverUrl', () => {

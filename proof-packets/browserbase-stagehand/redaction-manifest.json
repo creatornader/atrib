@@ -1,0 +1,38 @@
+{
+  "schema": "atrib.proof_packet.redaction_manifest.v1",
+  "packet": "browserbase-stagehand",
+  "private_fields": [
+    {
+      "field": "target_url",
+      "disclosure": "hash-only",
+      "hash": "sha256:100680ad546ce6a577f42f52df33b4cfdca756859e664b8d7de329b150d09ce9"
+    },
+    {
+      "field": "observe_instruction",
+      "disclosure": "hash-only",
+      "hash": "sha256:5e8f823187ba1e71ad6eb66fd488c1140134e58cfdf5ed695537310ad0774264"
+    },
+    {
+      "field": "act_action",
+      "disclosure": "hash-only",
+      "hash": "sha256:e92427736ac5cb1394c3ca3e9b436facfbcd493cca64eb188e5c4011f97eecab"
+    },
+    {
+      "field": "extract_instruction",
+      "disclosure": "hash-only",
+      "hash": "sha256:10e12442c832ffc07d391f13e2842fe6c06e49765e9f27fa12e6d3e49901221e"
+    },
+    {
+      "field": "browserbase_session_or_replay_url",
+      "disclosure": "redacted-ref"
+    },
+    {
+      "field": "page_snapshot",
+      "disclosure": "result-hash-only"
+    },
+    {
+      "field": "selectors",
+      "disclosure": "result-hash-only"
+    }
+  ]
+}

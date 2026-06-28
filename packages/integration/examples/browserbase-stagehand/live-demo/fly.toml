@@ -1,0 +1,42 @@
+app = 'atrib-browserbase-stagehand-demo'
+primary_region = 'iad'
+
+[build]
+  dockerfile = './Dockerfile'
+
+[env]
+  PORT = '8080'
+  HOST = '0.0.0.0'
+  ATRIB_BROWSERBASE_DEMO_MODE = 'live'
+  ATRIB_BROWSERBASE_UPSTREAM = 'hosted'
+  ATRIB_BROWSERBASE_DEMO_PUBLIC_LOG = '1'
+  ATRIB_BROWSERBASE_DEMO_DEPLOYED = '1'
+  ATRIB_BROWSERBASE_DEMO_CREDENTIAL_SCOPE = 'demo-only'
+  ATRIB_BROWSERBASE_DEMO_URL = 'https://example.com'
+  ATRIB_BROWSERBASE_LIVE_MAX_ATTEMPTS = '3'
+  ATRIB_BROWSERBASE_DEMO_RUN_TIMEOUT_MS = '120000'
+  ATRIB_BROWSERBASE_DEMO_RATE_LIMIT = '1'
+  ATRIB_BROWSERBASE_DEMO_RATE_LIMIT_WINDOW_MS = '3600000'
+  ATRIB_BROWSERBASE_DEMO_MAX_RUNS_PER_WINDOW = '2'
+  ATRIB_BROWSERBASE_DEMO_MAX_RUNS_PER_DAY = '8'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+
+[checks]
+  [checks.health]
+    port = 8080
+    type = 'http'
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '20s'
+    method = 'GET'
+    path = '/health'

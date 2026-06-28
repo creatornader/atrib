@@ -54,4 +54,5 @@ extend-exclude = [
     "patches/",
     "pnpm-lock.yaml",
     "metrics/",
+    "proof-packets/*/verifier-output.json",
 ]

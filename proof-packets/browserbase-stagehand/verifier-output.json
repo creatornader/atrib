@@ -1,0 +1,204 @@
+{
+  "schema": "atrib.proof_packet.verifier_output.v1",
+  "packet": "browserbase-stagehand",
+  "mode": "live",
+  "live_upstream": true,
+  "upstream_shape": "Browserbase hosted Streamable HTTP MCP endpoint at https://mcp.browserbase.com/mcp",
+  "operations": [
+    "start",
+    "navigate",
+    "observe",
+    "act",
+    "extract",
+    "end"
+  ],
+  "records": [
+    {
+      "tool_name": "start",
+      "record_hash": "sha256:535201b60e3660f1b2f5babcfdd85f09f3a1503f4ad73cfc419528285c696aae",
+      "log_index": 65792,
+      "proof": {
+        "record_hash": "sha256:535201b60e3660f1b2f5babcfdd85f09f3a1503f4ad73cfc419528285c696aae",
+        "log_index": 65792,
+        "leaf_hash": "hF3FOLKuakfSnYrHClWtWvCBUMwu3YvuBCsHnCcsdtM=",
+        "checkpoint": "log.atrib.dev/v1\n65793\n/L9AkxO1l4gYZ+0jvV4IykBp3hQlnwt9lAO7Mm5Iuqo=\n\n— log.atrib.dev/v1 5awdbXYgbT9OcEuWNlxQZip71l2WtZBOUyTez73Caa08XddhkxH9IyRmn1NPBOUuTE0kDNkemTweq8B86o5AzExfEQo=\n",
+        "inclusion_proof": [
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      }
+    },
+    {
+      "tool_name": "navigate",
+      "record_hash": "sha256:1f92f466f3bcbab058f9dc2fec99c5536a6d2f9f71fd21aa6b1b48417f1ad19d",
+      "log_index": 65793,
+      "proof": {
+        "record_hash": "sha256:1f92f466f3bcbab058f9dc2fec99c5536a6d2f9f71fd21aa6b1b48417f1ad19d",
+        "log_index": 65793,
+        "leaf_hash": "bziullJnLXeQLO+vFgwhjMOCY4jY1lC/nWEB6e34A7M=",
+        "checkpoint": "log.atrib.dev/v1\n65794\n0FYhrPzgy3Pygd+KUHkRL0H9D1c7UYe3nLUiaX8thWw=\n\n— log.atrib.dev/v1 5awdbTJh6qaRIxJdUjljws4A7UflTv7hKHQmJD/UL5fp2AU9Z0ZyV+dbWoDwknDhfg6SBHWrDAcdnmVmWDj+CHmW9wU=\n",
+        "inclusion_proof": [
+          "hF3FOLKuakfSnYrHClWtWvCBUMwu3YvuBCsHnCcsdtM=",
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      }
+    },
+    {
+      "tool_name": "observe",
+      "record_hash": "sha256:4fd3e736c98b2652fda30963ff5d379db210b4dff71db401c39805936a1361d4",
+      "log_index": 65794,
+      "proof": {
+        "record_hash": "sha256:4fd3e736c98b2652fda30963ff5d379db210b4dff71db401c39805936a1361d4",
+        "log_index": 65794,
+        "leaf_hash": "gydof70inI1slLiLr+zyHYBVViEoU03aBK5bGBMnYVc=",
+        "checkpoint": "log.atrib.dev/v1\n65795\nLj0VufAzQ25MlTNx37hOkojOkQliW2o8c7+XQkT+x9U=\n\n— log.atrib.dev/v1 5awdbVnX7STCml4NSF7u+8wqpvLrKhNb1sssYRNuaLvj5xn1G2KLip++dMFxbH8thunwe1zt61s8FHRZOA6oiBTkAQc=\n",
+        "inclusion_proof": [
+          "qWqZ9LIL9qYZi+aZcvvZXPShuVTxKF8i+dhI0S1OLyw=",
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      }
+    },
+    {
+      "tool_name": "act",
+      "record_hash": "sha256:9295f755361578f90242fe7e5d3d59c99a76e36942dfd2f7b34277dcf70cb65c",
+      "log_index": 65795,
+      "proof": {
+        "record_hash": "sha256:9295f755361578f90242fe7e5d3d59c99a76e36942dfd2f7b34277dcf70cb65c",
+        "log_index": 65795,
+        "leaf_hash": "YuYFkoymF9iXsCUzDt1lele5IcNe/NS1ca8qnJQqFtM=",
+        "checkpoint": "log.atrib.dev/v1\n65796\n/rZX0FBs7m4p/WIPdzeHm54l8fu+seZG/GLO/TQMxA4=\n\n— log.atrib.dev/v1 5awdbbF6t63wdQOJx4hGBYLxrYiJY2hYzwgbwN1Tw2m51Qgozc+sFNcBzIvB4ppfn2n7KOPxeXx8azmzm4V2M3jHXA8=\n",
+        "inclusion_proof": [
+          "gydof70inI1slLiLr+zyHYBVViEoU03aBK5bGBMnYVc=",
+          "qWqZ9LIL9qYZi+aZcvvZXPShuVTxKF8i+dhI0S1OLyw=",
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      }
+    },
+    {
+      "tool_name": "extract",
+      "record_hash": "sha256:8910a05fcfc243096e9238c311218304af569c1cc7e71774ccd834531d2ec028",
+      "log_index": 65796,
+      "proof": {
+        "record_hash": "sha256:8910a05fcfc243096e9238c311218304af569c1cc7e71774ccd834531d2ec028",
+        "log_index": 65796,
+        "leaf_hash": "yCMWmcTEvwbuWRhnlx6VkxXQJ2g9wVpkSopGT+igl3g=",
+        "checkpoint": "log.atrib.dev/v1\n65797\nZICdcHtVN0JfSQ5rPXubTKEwK4MAJpUy2h2mzfaEd6Y=\n\n— log.atrib.dev/v1 5awdbV1Vysf4LB2jqgS0Tce5h1YdmXKTsISrv7DWtIKuNfoFJ/e+5OAD8OOgcyi7lgsjdERVBloQqebJOYSXToSImA0=\n",
+        "inclusion_proof": [
+          "tyrU4x5LYJghmLVZBjD6waaevtUXw/mDgdntjz15t6g=",
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      }
+    },
+    {
+      "tool_name": "end",
+      "record_hash": "sha256:a78400352f4daab9d03ae606854c36565bbd911dba736ece22535f8a8ffec4a6",
+      "log_index": 65797,
+      "proof": {
+        "record_hash": "sha256:a78400352f4daab9d03ae606854c36565bbd911dba736ece22535f8a8ffec4a6",
+        "log_index": 65797,
+        "leaf_hash": "wn4MdRClO0wnWnqs4Kcmaoflm3QfSMcihE0s6fbOObk=",
+        "checkpoint": "log.atrib.dev/v1\n65798\nc01DryO3TGSCTsKqh5Jv/KknvSwqcC4MUeMsdEAc5MA=\n\n— log.atrib.dev/v1 5awdbUmghAV6aMBqQGNz/QnLjqy6lyxQPnn7lYqvMZhBWSbRHIpTk1r+XvAVLFEPTVDvHvfiJzg2rbAZEzKkCTxFdAM=\n",
+        "inclusion_proof": [
+          "yCMWmcTEvwbuWRhnlx6VkxXQJ2g9wVpkSopGT+igl3g=",
+          "tyrU4x5LYJghmLVZBjD6waaevtUXw/mDgdntjz15t6g=",
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      }
+    }
+  ],
+  "log": {
+    "mode": "public",
+    "endpoint": "https://log.atrib.dev/v1/entries",
+    "publish_policy": "accepted-run-after-verification",
+    "inclusion_verified": true,
+    "proofs": [
+      {
+        "record_hash": "sha256:535201b60e3660f1b2f5babcfdd85f09f3a1503f4ad73cfc419528285c696aae",
+        "log_index": 65792,
+        "leaf_hash": "hF3FOLKuakfSnYrHClWtWvCBUMwu3YvuBCsHnCcsdtM=",
+        "checkpoint": "log.atrib.dev/v1\n65793\n/L9AkxO1l4gYZ+0jvV4IykBp3hQlnwt9lAO7Mm5Iuqo=\n\n— log.atrib.dev/v1 5awdbXYgbT9OcEuWNlxQZip71l2WtZBOUyTez73Caa08XddhkxH9IyRmn1NPBOUuTE0kDNkemTweq8B86o5AzExfEQo=\n",
+        "inclusion_proof": [
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      },
+      {
+        "record_hash": "sha256:1f92f466f3bcbab058f9dc2fec99c5536a6d2f9f71fd21aa6b1b48417f1ad19d",
+        "log_index": 65793,
+        "leaf_hash": "bziullJnLXeQLO+vFgwhjMOCY4jY1lC/nWEB6e34A7M=",
+        "checkpoint": "log.atrib.dev/v1\n65794\n0FYhrPzgy3Pygd+KUHkRL0H9D1c7UYe3nLUiaX8thWw=\n\n— log.atrib.dev/v1 5awdbTJh6qaRIxJdUjljws4A7UflTv7hKHQmJD/UL5fp2AU9Z0ZyV+dbWoDwknDhfg6SBHWrDAcdnmVmWDj+CHmW9wU=\n",
+        "inclusion_proof": [
+          "hF3FOLKuakfSnYrHClWtWvCBUMwu3YvuBCsHnCcsdtM=",
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      },
+      {
+        "record_hash": "sha256:4fd3e736c98b2652fda30963ff5d379db210b4dff71db401c39805936a1361d4",
+        "log_index": 65794,
+        "leaf_hash": "gydof70inI1slLiLr+zyHYBVViEoU03aBK5bGBMnYVc=",
+        "checkpoint": "log.atrib.dev/v1\n65795\nLj0VufAzQ25MlTNx37hOkojOkQliW2o8c7+XQkT+x9U=\n\n— log.atrib.dev/v1 5awdbVnX7STCml4NSF7u+8wqpvLrKhNb1sssYRNuaLvj5xn1G2KLip++dMFxbH8thunwe1zt61s8FHRZOA6oiBTkAQc=\n",
+        "inclusion_proof": [
+          "qWqZ9LIL9qYZi+aZcvvZXPShuVTxKF8i+dhI0S1OLyw=",
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      },
+      {
+        "record_hash": "sha256:9295f755361578f90242fe7e5d3d59c99a76e36942dfd2f7b34277dcf70cb65c",
+        "log_index": 65795,
+        "leaf_hash": "YuYFkoymF9iXsCUzDt1lele5IcNe/NS1ca8qnJQqFtM=",
+        "checkpoint": "log.atrib.dev/v1\n65796\n/rZX0FBs7m4p/WIPdzeHm54l8fu+seZG/GLO/TQMxA4=\n\n— log.atrib.dev/v1 5awdbbF6t63wdQOJx4hGBYLxrYiJY2hYzwgbwN1Tw2m51Qgozc+sFNcBzIvB4ppfn2n7KOPxeXx8azmzm4V2M3jHXA8=\n",
+        "inclusion_proof": [
+          "gydof70inI1slLiLr+zyHYBVViEoU03aBK5bGBMnYVc=",
+          "qWqZ9LIL9qYZi+aZcvvZXPShuVTxKF8i+dhI0S1OLyw=",
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      },
+      {
+        "record_hash": "sha256:8910a05fcfc243096e9238c311218304af569c1cc7e71774ccd834531d2ec028",
+        "log_index": 65796,
+        "leaf_hash": "yCMWmcTEvwbuWRhnlx6VkxXQJ2g9wVpkSopGT+igl3g=",
+        "checkpoint": "log.atrib.dev/v1\n65797\nZICdcHtVN0JfSQ5rPXubTKEwK4MAJpUy2h2mzfaEd6Y=\n\n— log.atrib.dev/v1 5awdbV1Vysf4LB2jqgS0Tce5h1YdmXKTsISrv7DWtIKuNfoFJ/e+5OAD8OOgcyi7lgsjdERVBloQqebJOYSXToSImA0=\n",
+        "inclusion_proof": [
+          "tyrU4x5LYJghmLVZBjD6waaevtUXw/mDgdntjz15t6g=",
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      },
+      {
+        "record_hash": "sha256:a78400352f4daab9d03ae606854c36565bbd911dba736ece22535f8a8ffec4a6",
+        "log_index": 65797,
+        "leaf_hash": "wn4MdRClO0wnWnqs4Kcmaoflm3QfSMcihE0s6fbOObk=",
+        "checkpoint": "log.atrib.dev/v1\n65798\nc01DryO3TGSCTsKqh5Jv/KknvSwqcC4MUeMsdEAc5MA=\n\n— log.atrib.dev/v1 5awdbUmghAV6aMBqQGNz/QnLjqy6lyxQPnn7lYqvMZhBWSbRHIpTk1r+XvAVLFEPTVDvHvfiJzg2rbAZEzKkCTxFdAM=\n",
+        "inclusion_proof": [
+          "yCMWmcTEvwbuWRhnlx6VkxXQJ2g9wVpkSopGT+igl3g=",
+          "tyrU4x5LYJghmLVZBjD6waaevtUXw/mDgdntjz15t6g=",
+          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+        ]
+      }
+    ]
+  },
+  "verifier": {
+    "record_valid": true,
+    "checked_records": 6,
+    "event_type": "https://atrib.dev/v1/types/tool_call",
+    "args_hash_present": true,
+    "result_hash_present": true
+  },
+  "privacy": {
+    "public_records_hash_only": true,
+    "private_needles_absent_from_public_records": true
+  },
+  "caveats": [
+    "Live Browserbase MCP command path. Browserbase replay material remains private.",
+    "Private Browserbase session and page material are represented by hashes only."
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "atrib.proof_packet.redaction_manifest.v1",
+  "packet": "firecrawl-web-ingestion",
+  "private_fields": [
+    {
+      "field": "query",
+      "disclosure": "hash-only",
+      "hash": "sha256:13bbd975e774aa2fdc2d9438f1e7a436e3f39e04639e3d4a2ba57d33c399d3a9"
+    },
+    {
+      "field": "source_url",
+      "disclosure": "hash-only",
+      "hash": "sha256:100680ad546ce6a577f42f52df33b4cfdca756859e664b8d7de329b150d09ce9"
+    },
+    {
+      "field": "extract_prompt",
+      "disclosure": "hash-only",
+      "hash": "sha256:0c8502445031f72e67a4794f264b366bc45c8aeae610f950b6a3f730c9c1c0e0"
+    },
+    {
+      "field": "raw_scraped_content",
+      "disclosure": "result-hash-only"
+    },
+    {
+      "field": "extracted_page_text",
+      "disclosure": "result-hash-only"
+    },
+    {
+      "field": "crawl_job_id",
+      "disclosure": "result-hash-only"
+    }
+  ]
+}
