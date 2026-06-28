@@ -2,7 +2,7 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   hashText,
   runWrappedMcpPacket,
@@ -16,22 +16,43 @@ const PRIVATE_MARKDOWN = '# Private vendor page\n\nConfidential pricing: private
 const PRIVATE_HTML = '<main><h1>Private vendor page</h1><p>Confidential pricing</p></main>'
 const PRIVATE_EXTRACT = 'private firecrawl extracted account note'
 const PRIVATE_CRAWL_JOB_ID = 'crawl_private_job_20260623'
-const LIVE_DEFAULT_QUERY = 'site:example.com Example Domain'
-const LIVE_DEFAULT_URL = 'https://example.com'
-const LIVE_DEFAULT_EXTRACT_PROMPT =
+export const LIVE_DEFAULT_QUERY = 'site:example.com Example Domain'
+export const LIVE_DEFAULT_URL = 'https://example.com'
+export const LIVE_DEFAULT_EXTRACT_PROMPT =
   'Extract the organization name and a short account note from this public page.'
 
-const CRAWL_CAP = {
+export const CRAWL_CAP = {
   maxDepth: 1,
   limit: 2,
 } as const
 
 type PolicyDecisionArtifact = ReturnType<typeof buildPolicyDecision>
+type PacketOptions = Parameters<typeof runWrappedMcpPacket>[0]
 
-function requiredFirecrawlEnv(): Record<string, string> {
+export type FirecrawlWebIngestionPacketOptions = {
+  env?: NodeJS.ProcessEnv
+  liveMode?: boolean
+  publicLog?: boolean
+  query?: string
+  sourceUrl?: string
+  extractPrompt?: string
+  timeoutMs?: number
+  outDir?: string
+  writeArtifacts?: boolean
+}
+
+export type FirecrawlWebIngestionPacketRun = {
+  result: WrappedMcpPacketResult
+  verifierOutput: unknown
+  redactionManifest: unknown
+  policyDecision: PolicyDecisionArtifact
+  artifact_dir: string | null
+}
+
+function requiredFirecrawlEnv(envSource: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}
-  if (process.env.FIRECRAWL_API_KEY) env.FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY
-  if (process.env.FIRECRAWL_API_URL) env.FIRECRAWL_API_URL = process.env.FIRECRAWL_API_URL
+  if (envSource.FIRECRAWL_API_KEY) env.FIRECRAWL_API_KEY = envSource.FIRECRAWL_API_KEY
+  if (envSource.FIRECRAWL_API_URL) env.FIRECRAWL_API_URL = envSource.FIRECRAWL_API_URL
   if (!env.FIRECRAWL_API_KEY && !env.FIRECRAWL_API_URL) {
     throw new Error(
       'FIRECRAWL_API_KEY or FIRECRAWL_API_URL is required for ATRIB_FIRECRAWL_WEB_INGESTION_LIVE=1',
@@ -40,9 +61,14 @@ function requiredFirecrawlEnv(): Record<string, string> {
   return env
 }
 
-function artifactDir(integrationDir: string): string | undefined {
-  if (process.env.ATRIB_PACKET_OUT_DIR) return process.env.ATRIB_PACKET_OUT_DIR
-  if (process.env.ATRIB_PACKET_WRITE_ARTIFACTS === '1') {
+function artifactDir(
+  integrationDir: string,
+  env: NodeJS.ProcessEnv,
+  options: FirecrawlWebIngestionPacketOptions,
+): string | undefined {
+  if (options.outDir) return options.outDir
+  if (env.ATRIB_PACKET_OUT_DIR) return env.ATRIB_PACKET_OUT_DIR
+  if (options.writeArtifacts || env.ATRIB_PACKET_WRITE_ARTIFACTS === '1') {
     return join(integrationDir, '..', '..', 'proof-packets', 'firecrawl-web-ingestion')
   }
   return undefined
@@ -268,45 +294,55 @@ The runner does not call \`op read\`.
 `
 }
 
-async function main(): Promise<void> {
+export async function runFirecrawlWebIngestionPacket(
+  options: FirecrawlWebIngestionPacketOptions = {},
+): Promise<FirecrawlWebIngestionPacketRun> {
+  const env = options.env ?? process.env
   const exampleDir = dirname(fileURLToPath(import.meta.url))
   const integrationDir = dirname(dirname(exampleDir))
-  const liveMode = process.env.ATRIB_FIRECRAWL_WEB_INGESTION_LIVE === '1'
-  const publicLog = liveMode && process.env.ATRIB_PACKET_PUBLIC_LOG !== '0'
-  const query = process.env.ATRIB_FIRECRAWL_QUERY ?? (liveMode ? LIVE_DEFAULT_QUERY : PRIVATE_QUERY)
-  const sourceUrl = process.env.ATRIB_FIRECRAWL_URL ?? (liveMode ? LIVE_DEFAULT_URL : PRIVATE_URL)
+  const liveMode = options.liveMode ?? env.ATRIB_FIRECRAWL_WEB_INGESTION_LIVE === '1'
+  const publicLog = options.publicLog ?? (liveMode && env.ATRIB_PACKET_PUBLIC_LOG !== '0')
+  const query =
+    options.query ?? env.ATRIB_FIRECRAWL_QUERY ?? (liveMode ? LIVE_DEFAULT_QUERY : PRIVATE_QUERY)
+  const sourceUrl =
+    options.sourceUrl ?? env.ATRIB_FIRECRAWL_URL ?? (liveMode ? LIVE_DEFAULT_URL : PRIVATE_URL)
   const extractPrompt =
-    process.env.ATRIB_FIRECRAWL_EXTRACT_PROMPT ??
+    options.extractPrompt ??
+    env.ATRIB_FIRECRAWL_EXTRACT_PROMPT ??
     (liveMode ? LIVE_DEFAULT_EXTRACT_PROMPT : 'Extract vendor and account note')
-  const result = await runWrappedMcpPacket({
+  const expectText = (value: string) => (liveMode ? {} : { expectText: value })
+  const packetOptions: PacketOptions = {
     packet: 'firecrawl-web-ingestion',
     mode: liveMode ? 'live' : 'fixture',
     logMode: publicLog ? 'public' : 'local',
-    publicLogEndpoint: process.env.ATRIB_PACKET_PUBLIC_LOG_ENDPOINT,
     upstreamShape: liveMode
       ? 'Firecrawl MCP stdio server launched with npx -y firecrawl-mcp'
       : 'Firecrawl MCP stdio server tools firecrawl_search, firecrawl_scrape, firecrawl_extract, firecrawl_crawl',
     exampleDir,
     integrationDir,
-    fixtureServer: liveMode ? undefined : join(exampleDir, 'firecrawl-fixture-mcp.ts'),
-    upstream: liveMode
+    ...(env.ATRIB_PACKET_PUBLIC_LOG_ENDPOINT
+      ? { publicLogEndpoint: env.ATRIB_PACKET_PUBLIC_LOG_ENDPOINT }
+      : {}),
+    ...(liveMode
       ? {
-          command: 'npx',
-          args: ['-y', 'firecrawl-mcp'],
-          env: requiredFirecrawlEnv(),
+          upstream: {
+            command: 'npx',
+            args: ['-y', 'firecrawl-mcp'],
+            env: requiredFirecrawlEnv(env),
+          },
         }
-      : undefined,
+      : { fixtureServer: join(exampleDir, 'firecrawl-fixture-mcp.ts') }),
     expectedTools: ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_extract', 'firecrawl_crawl'],
     calls: [
       {
         name: 'firecrawl_search',
         arguments: { query, limit: 1 },
-        expectText: liveMode ? undefined : 'Private vendor page',
+        ...expectText('Private vendor page'),
       },
       {
         name: 'firecrawl_scrape',
         arguments: { url: sourceUrl, formats: ['markdown', 'html'] },
-        expectText: liveMode ? undefined : 'success',
+        ...expectText('success'),
       },
       {
         name: 'firecrawl_extract',
@@ -321,12 +357,12 @@ async function main(): Promise<void> {
             },
           },
         },
-        expectText: liveMode ? undefined : 'Fixture Vendor',
+        ...expectText('Fixture Vendor'),
       },
       {
         name: 'firecrawl_crawl',
         arguments: { url: sourceUrl, ...CRAWL_CAP },
-        expectText: liveMode ? undefined : 'queued',
+        ...expectText('queued'),
       },
     ],
     privateNeedles: liveMode
@@ -339,7 +375,9 @@ async function main(): Promise<void> {
           PRIVATE_EXTRACT,
           PRIVATE_CRAWL_JOB_ID,
         ],
-  })
+    ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
+  }
+  const result = await runWrappedMcpPacket(packetOptions)
 
   const policyDecision = buildPolicyDecision(result)
 
@@ -403,7 +441,7 @@ async function main(): Promise<void> {
         ],
   }
 
-  const outDir = artifactDir(integrationDir)
+  const outDir = artifactDir(integrationDir, env, options)
   if (outDir) {
     mkdirSync(outDir, { recursive: true })
     writeFileSync(join(outDir, 'README.md'), renderReadme(result, policyDecision))
@@ -412,6 +450,18 @@ async function main(): Promise<void> {
     writeJson(join(outDir, 'policy-decision.json'), policyDecision)
   }
 
+  return {
+    result,
+    verifierOutput,
+    redactionManifest,
+    policyDecision,
+    artifact_dir: outDir ?? null,
+  }
+}
+
+async function main(): Promise<void> {
+  const packet = await runFirecrawlWebIngestionPacket()
+  const { result, policyDecision, artifact_dir } = packet
   console.log(
     JSON.stringify(
       {
@@ -421,7 +471,7 @@ async function main(): Promise<void> {
           decision: policyDecision.decision,
           decision_hash: policyDecision.decision_hash,
         },
-        artifact_dir: outDir ?? null,
+        artifact_dir,
       },
       null,
       2,
@@ -429,7 +479,9 @@ async function main(): Promise<void> {
   )
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err)
-  process.exit(1)
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err)
+    process.exit(1)
+  })
+}

@@ -19,6 +19,7 @@ Firecrawl web ingestion:
 
 - Artifact: [`firecrawl-web-ingestion/verifier-output.json`](firecrawl-web-ingestion/verifier-output.json)
 - Policy decision: [`firecrawl-web-ingestion/policy-decision.json`](firecrawl-web-ingestion/policy-decision.json)
+- Live demo code: [`../packages/integration/examples/firecrawl-web-ingestion/live-demo/README.md`](../packages/integration/examples/firecrawl-web-ingestion/live-demo/README.md)
 - Explorer: <https://explore.atrib.dev/action/sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434>
 - Public log proof: <https://log.atrib.dev/v1/proof/bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434>
 - Public log indexes: `66265`, `66266`, `66267`, `66268`
@@ -162,8 +163,9 @@ Hosted Browserbase fresh runs can still return temporary model-capacity errors.
 The demo shows failed runs plainly and rate-limits retries.
 
 Firecrawl is ready as a fixed proof artifact plus rerunnable command. A hosted
-Firecrawl demo remains deferred because arbitrary crawl input needs stricter
-abuse and cost controls.
+Firecrawl demo should use the fixed-input ingestion-gate code in
+`packages/integration/examples/firecrawl-web-ingestion/live-demo/`. It must not
+accept arbitrary crawl targets or crawl depths.
 
 Public-write guard: hosted demos should use demo-only keys and explicit run
 limits so reviewers can create fresh records without creating unbounded public

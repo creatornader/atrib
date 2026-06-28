@@ -4,6 +4,14 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { hashText, runWrappedMcpPacket, writeJson } from '../wrapped-mcp-proof-runner.js'
+import {
+  BROWSERBASE_ACTION_POLICY_EVENT_TYPE,
+  BROWSERBASE_ACTION_POLICY_VERSION,
+  browserbaseAllowedOrigins,
+  createBrowserbaseActionPolicyGate,
+  normalizeBrowserbaseActionPolicyMode,
+  type BrowserbaseActionPolicyMode,
+} from './action-policy.js'
 
 const PRIVATE_SESSION_ID = 'bb_session_private_20260623'
 const PRIVATE_REPLAY_URL = 'https://browserbase.example.invalid/sessions/private-replay-20260623'
@@ -13,6 +21,7 @@ const PRIVATE_PAGE_SNAPSHOT =
   '<html><body><button id="private-checkout-control">Ship</button></body></html>'
 const PRIVATE_EXTRACTED_TEXT =
   'Internal quote: private browserbase note. Account tier: confidential.'
+const FIXTURE_PROOF_URL = 'https://example.invalid/vendor-quote'
 
 type PacketOptions = Parameters<typeof runWrappedMcpPacket>[0]
 
@@ -24,6 +33,8 @@ export type BrowserbaseStagehandPacketOptions = {
   observeInstruction?: string
   actAction?: string
   extractInstruction?: string
+  actionPolicyMode?: BrowserbaseActionPolicyMode
+  allowedOrigins?: string[]
   timeoutMs?: number
 }
 
@@ -142,6 +153,34 @@ Representative public links:
         `| ${operation} | ${result.record_hashes[index] ?? 'missing'} | ${result.log_indexes[index] ?? 'missing'} |`,
     )
     .join('\n')
+  const policyRows = result.action_policy
+    ? result.action_policy.decisions
+        .map((decision) => {
+          const outcome = result.action_policy?.outcomes.find(
+            (candidate) => candidate.tool_name === decision.tool_name,
+          )
+          return `| ${decision.tool_name} | ${String(decision.content.decision)} | ${decision.record_hash} | ${decision.proof.log_index} | ${outcome?.record_hash ?? 'missing'} | ${outcome?.proof.log_index ?? 'missing'} |`
+        })
+        .join('\n')
+    : ''
+  const policySection = result.action_policy
+    ? `
+## Action policy gate
+
+The runner evaluates \`${BROWSERBASE_ACTION_POLICY_VERSION}\` before \`act\`. The decision
+record is signed before the Browserbase tool call. If the decision is \`block\`
+or \`escalate\`, the runner stops before \`act\` and closes the session with
+\`end\` when possible.
+
+| Tool | Decision | Decision record | Decision index | Outcome record | Outcome index |
+| --- | --- | --- | --- | --- | --- |
+${policyRows}
+
+- Policy event type: \`${BROWSERBASE_ACTION_POLICY_EVENT_TYPE}\`
+- Stopped before: ${result.action_policy.stopped_before ?? 'none'}
+- Blocked tool executed: ${String(result.action_policy.blocked_tool_executed)}
+`
+    : ''
 
   const upstreamLine =
     result.mode === 'live' && result.upstream_shape.includes('hosted')
@@ -182,9 +221,10 @@ This proof signs a Browserbase MCP shaped browser session through \`@atrib/mcp-w
 ${rows}
 
 ${publicLinks}
+${policySection}
 ## Redaction line
 
-The wrapper saw private Browserbase-shaped payloads: session id, replay URL, page snapshot, selector, form value, and extracted page text. The public artifact stores only hashes for those fields. See \`redaction-manifest.json\`.
+The wrapper saw private Browserbase-shaped payloads: session id, replay URL, page snapshot, selector, form value, and extracted page text. The action policy also saw target/action/observed-state inputs. The public artifact stores only hashes for those fields. See \`redaction-manifest.json\`.
 
 ## Weakness
 
@@ -243,6 +283,11 @@ export async function runBrowserbaseStagehandPacket(
     options.extractInstruction ??
     env.ATRIB_BROWSERBASE_EXTRACT_INSTRUCTION ??
     'Extract the page title and current URL'
+  const policyTargetUrl = liveMode ? proofUrl : FIXTURE_PROOF_URL
+  const actionPolicyMode = normalizeBrowserbaseActionPolicyMode(
+    options.actionPolicyMode ?? env.ATRIB_BROWSERBASE_ACTION_POLICY,
+  )
+  const allowedOrigins = options.allowedOrigins ?? browserbaseAllowedOrigins(env, policyTargetUrl)
   const packetOptions: PacketOptions = {
     packet: 'browserbase-stagehand',
     mode: liveMode ? 'live' : 'fixture',
@@ -256,6 +301,13 @@ export async function runBrowserbaseStagehandPacket(
     exampleDir,
     integrationDir,
     expectedTools: ['start', 'navigate', 'observe', 'act', 'extract', 'end'],
+    controlEventType: BROWSERBASE_ACTION_POLICY_EVENT_TYPE,
+    policyGate: createBrowserbaseActionPolicyGate({
+      mode: actionPolicyMode,
+      targetUrl: policyTargetUrl,
+      action: actAction,
+      allowedOrigins,
+    }),
     calls: liveMode
       ? [
           { name: 'start' },
@@ -269,7 +321,7 @@ export async function runBrowserbaseStagehandPacket(
           { name: 'start', expectText: 'started' },
           {
             name: 'navigate',
-            arguments: { url: 'https://example.invalid/vendor-quote' },
+            arguments: { url: FIXTURE_PROOF_URL },
             expectText: 'navigated',
           },
           {
@@ -314,9 +366,9 @@ export async function runBrowserbaseStagehandPacket(
   if (options.timeoutMs) {
     packetOptions.timeoutMs = options.timeoutMs
   }
+  packetOptions.cleanupOnFailure = { name: 'end', afterTool: 'start' }
   if (liveMode) {
     packetOptions.upstream = browserbaseUpstream(liveHosted, env)
-    packetOptions.cleanupOnFailure = { name: 'end', afterTool: 'start' }
   } else {
     packetOptions.fixtureServer = join(exampleDir, 'browserbase-fixture-mcp.ts')
   }
@@ -352,6 +404,7 @@ function writeBrowserbaseStagehandArtifacts(input: {
       log_index: result.log_indexes[index],
       proof: result.log.proofs[index],
     })),
+    action_policy: result.action_policy ?? null,
     log: result.log,
     verifier: result.verifier,
     privacy: result.privacy,
@@ -360,12 +413,31 @@ function writeBrowserbaseStagehandArtifacts(input: {
         ? 'Live Browserbase MCP command path. Browserbase replay material remains private.'
         : 'Fixture run only. It does not prove Browserbase cloud session replay.',
       'Private Browserbase session and page material are represented by hashes only.',
+      `Action policy decisions use ${BROWSERBASE_ACTION_POLICY_VERSION} and are exported as signed policy records.`,
     ],
   }
 
   const redactionManifest = {
     schema: 'atrib.proof_packet.redaction_manifest.v1',
     packet: result.packet,
+    action_policy: result.action_policy
+      ? {
+          event_type: BROWSERBASE_ACTION_POLICY_EVENT_TYPE,
+          decisions: result.action_policy.decisions.map((decision) => ({
+            decision: decision.content.decision,
+            record_hash: decision.record_hash,
+            reason_codes: decision.content.reason_codes,
+            observed_record_hash: decision.content.observed_record_hash,
+          })),
+          outcomes: result.action_policy.outcomes.map((outcome) => ({
+            decision: outcome.content.decision,
+            executed: outcome.content.executed,
+            record_hash: outcome.record_hash,
+          })),
+          stopped_before: result.action_policy.stopped_before,
+          blocked_tool_executed: result.action_policy.blocked_tool_executed,
+        }
+      : null,
     private_fields: liveMode
       ? [
           { field: 'target_url', disclosure: 'hash-only', hash: hashText(proofUrl) },

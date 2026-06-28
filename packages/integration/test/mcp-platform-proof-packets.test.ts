@@ -10,6 +10,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import {
   redactUpstreamDiagnostic,
   runWrappedMcpPacket,
+  type WrappedMcpPacketResult,
 } from '../examples/wrapped-mcp-proof-runner.js'
 
 const execFileAsync = promisify(execFile)
@@ -21,7 +22,11 @@ const tsxBin = join(
   process.platform === 'win32' ? 'tsx.cmd' : 'tsx',
 )
 
-async function runPacket(script: string, outPrefix: string) {
+async function runPacket(
+  script: string,
+  outPrefix: string,
+  envOverrides: Record<string, string> = {},
+) {
   const outDir = mkdtempSync(join(tmpdir(), outPrefix))
   try {
     const { stdout } = await execFileAsync(tsxBin, [script], {
@@ -31,26 +36,19 @@ async function runPacket(script: string, outPrefix: string) {
       env: {
         ...process.env,
         ATRIB_PACKET_OUT_DIR: outDir,
+        ...envOverrides,
       },
     })
     return {
       outDir,
       stdout,
-      result: JSON.parse(stdout.trim()) as {
-        ok: boolean
-        packet: string
-        signed_records: number
-        operations: string[]
-        record_hashes: string[]
-        log_indexes: number[]
-        verifier: { record_valid: boolean }
-        privacy: { public_records_hash_only: boolean }
+      result: JSON.parse(stdout.trim()) as WrappedMcpPacketResult & {
+        artifact_dir: string
         policy_decision?: {
           artifact: string
           decision: string
           decision_hash: string
         }
-        artifact_dir: string
       },
       cleanup: () => rmSync(outDir, { recursive: true, force: true }),
     }
@@ -105,7 +103,25 @@ describe('MCP platform proof packets', () => {
         'end',
       ])
       expect(run.result.record_hashes).toHaveLength(6)
-      expect(run.result.log_indexes).toEqual([0, 1, 2, 3, 4, 5])
+      expect(run.result.log_indexes).toEqual([0, 1, 2, 4, 6, 7])
+      expect(run.result.action_policy).toMatchObject({
+        stopped_before: null,
+        blocked_tool_executed: false,
+      })
+      expect(run.result.action_policy?.decisions[0]?.content).toMatchObject({
+        decision: 'allow',
+        reason_codes: ['policy_allow'],
+      })
+      expect(run.result.action_policy?.outcomes[0]?.content).toMatchObject({
+        decision: 'allow',
+        executed: true,
+      })
+      expect(run.result.action_policy?.decisions[0]?.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(run.result.action_policy?.outcomes[0]?.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(run.result.action_policy?.decisions[0]?.record_valid).toBe(true)
+      expect(run.result.action_policy?.outcomes[0]?.record_valid).toBe(true)
+      expect(run.result.action_policy?.decisions[0]?.proof.log_index).toBe(3)
+      expect(run.result.action_policy?.outcomes[0]?.proof.log_index).toBe(5)
       expect(run.result.verifier.record_valid).toBe(true)
       expect(run.result.privacy.public_records_hash_only).toBe(true)
 
