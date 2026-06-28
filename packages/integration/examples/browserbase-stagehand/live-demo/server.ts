@@ -36,6 +36,7 @@ export type BrowserbaseDemoRun = {
   verifier?: WrappedMcpPacketResult['verifier']
   privacy?: WrappedMcpPacketResult['privacy']
   log?: WrappedMcpPacketResult['log']
+  action_gate?: WrappedMcpPacketResult['action_gate']
   operations?: Array<{
     step: string
     record_hash: string
@@ -66,6 +67,10 @@ export function demoModeFromEnv(env: NodeJS.ProcessEnv = process.env): DemoMode 
 export function publicLogFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.ATRIB_BROWSERBASE_DEMO_PUBLIC_LOG === '0') return false
   return demoModeFromEnv(env) === 'live'
+}
+
+export function actionGateFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ATRIB_BROWSERBASE_ACTION_GATE !== '0'
 }
 
 export function browserbaseUpstreamFromEnv(
@@ -107,6 +112,9 @@ export function deploymentGuardIssues(env: NodeJS.ProcessEnv = process.env): str
   }
   if (!publicLogFromEnv(env)) {
     issues.push('ATRIB_BROWSERBASE_DEMO_PUBLIC_LOG must enable public log publication')
+  }
+  if (!actionGateFromEnv(env)) {
+    issues.push('ATRIB_BROWSERBASE_ACTION_GATE must not be 0')
   }
   for (const name of missingLiveEnv(env)) {
     issues.push(`${name} is required`)
@@ -209,6 +217,7 @@ export function summarizePacketResult(input: {
     verifier: input.result.verifier,
     privacy: input.result.privacy,
     log: input.result.log,
+    action_gate: input.result.action_gate,
     operations: input.result.operations.map((step, index) => {
       const recordHash = input.result.record_hashes[index] ?? ''
       const recordHex = recordHash.startsWith('sha256:') ? recordHash.slice('sha256:'.length) : ''
@@ -241,6 +250,7 @@ export async function runBrowserbaseProof(options: {
     extractInstruction:
       process.env.ATRIB_BROWSERBASE_DEMO_EXTRACT ?? 'Extract the page title and current URL',
     timeoutMs: proofRunTimeoutMs(process.env),
+    actionGate: actionGateFromEnv(process.env),
   }).catch((error: unknown) => {
     throw new Error(redactError(error instanceof Error ? error.message : String(error)))
   })
@@ -291,13 +301,22 @@ export function createBrowserbaseDemoServer(
           mode,
           upstream: browserbaseUpstreamFromEnv(env),
           public_log: publicLogFromEnv(env),
+          action_gate: actionGateFromEnv(env),
           live_ready: missingLiveEnv(env).length === 0,
           missing_live_env: mode === 'live' ? missingLiveEnv(env) : [],
           rate_limit: rateLimitConfigFromEnv(env),
           max_attempts: env.ATRIB_BROWSERBASE_LIVE_MAX_ATTEMPTS ?? '3',
           run_timeout_ms: proofRunTimeoutMs(env),
           fixed_flow: ['start', 'navigate', 'observe', 'act', 'extract', 'end'],
-          public_fields: ['tool name', 'args_hash', 'result_hash', 'record hash', 'log index'],
+          public_fields: [
+            'tool name',
+            'args_hash',
+            'result_hash',
+            'record hash',
+            'log index',
+            'Action Gate decision hash',
+            'Action Gate outcome hash',
+          ],
           private_fields: [
             'Browserbase API key',
             'Browserbase project id',
@@ -689,7 +708,7 @@ function renderApp(): string {
       <header>
         <div>
           <h1>Browserbase Atrib Proof</h1>
-          <p>Run a fixed Browserbase MCP flow and inspect signed receipts for start, navigate, observe, act, extract, and end.</p>
+          <p>Run a fixed Browserbase MCP flow, gate the act step, and inspect signed receipts for the browser action path.</p>
         </div>
         <button id="runButton" type="button">Run proof</button>
       </header>
@@ -698,7 +717,8 @@ function renderApp(): string {
           <h2>Boundary</h2>
           <div class="kv">
             <div><strong>Mode</strong><span id="mode">loading</span></div>
-            <div><strong>Public fields</strong><span>tool name, args hash, result hash, record hash, log index</span></div>
+            <div><strong>Control</strong><span id="control">loading</span></div>
+            <div><strong>Public fields</strong><span>tool name, args hash, result hash, record hash, log index, gate hashes</span></div>
             <div><strong>Private fields</strong><span>session URL, replay URL, page snapshot, selectors, form values, raw extraction</span></div>
             <div><strong>Status</strong><span id="statusChip" class="chip warn">waiting</span></div>
           </div>
@@ -713,12 +733,14 @@ function renderApp(): string {
       const runButton = document.getElementById('runButton');
       const runPanel = document.getElementById('runPanel');
       const modeLabel = document.getElementById('mode');
+      const controlLabel = document.getElementById('control');
       const statusChip = document.getElementById('statusChip');
 
       async function loadConfig() {
         const response = await fetch('/api/config');
         const config = await response.json();
         modeLabel.textContent = config.mode + (config.public_log ? ' with public log' : ' with local log');
+        controlLabel.textContent = config.action_gate ? 'Action Gate on act step' : 'Action Gate off';
         if (config.deployment_guard_issues && config.deployment_guard_issues.length > 0) {
           setStatus('Guard failed', 'err');
           runButton.disabled = true;
@@ -783,11 +805,21 @@ function renderApp(): string {
         const table = rows
           ? '<table><thead><tr><th>Step</th><th>Record hash</th><th>Index</th><th>Links</th></tr></thead><tbody>' + rows + '</tbody></table>'
           : '<div class="empty">Proof is running.</div>';
+        const gatedActions = (run.action_gate && run.action_gate.gated_actions) || [];
+        const gateRows = gatedActions.map((action) =>
+          '<tr><td>' + escapeHtml(action.tool_name) + '</td><td>' + escapeHtml(action.state) + '</td><td><code>' +
+          escapeHtml(action.decision_record_hash) + '</code></td><td><code>' +
+          escapeHtml(action.outcome_record_hash) + '</code></td></tr>'
+        ).join('');
+        const gateTable = gateRows
+          ? '<h2>Action Gate</h2><table><thead><tr><th>Tool</th><th>Decision</th><th>Decision hash</th><th>Outcome hash</th></tr></thead><tbody>' + gateRows + '</tbody></table>'
+          : '';
         const chipClass = run.status === 'accepted' ? 'ok' : run.status === 'running' ? 'warn' : 'err';
         runPanel.innerHTML =
           '<p><span class="chip ' + chipClass + '">' + escapeHtml(run.status) + '</span> ' +
           escapeHtml(run.run_id) + '</p>' +
-          table;
+          table +
+          gateTable;
       }
 
       function setStatus(label, kind) {

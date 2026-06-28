@@ -30,6 +30,23 @@ while the flow is running. After the full flow verifies, it submits the accepted
 record set to `https://log.atrib.dev/v1/entries`, verifies inclusion, and writes
 those public log indexes into the artifact.
 
+Enable the Action Gate wrapper when the packet should prove pre-action control:
+
+```bash
+ATRIB_BROWSERBASE_ACTION_GATE=1 pnpm --filter @atrib/integration browserbase-stagehand-packet
+```
+
+With the gate on, `@atrib/action-gate` evaluates the `act` step before the
+Browserbase MCP call runs. Browserbase and Stagehand still own browser
+automation. Atrib signs separate decision and outcome extension records and
+adds their hashes to the packet.
+
+That is the product boundary the demo is meant to show. Browserbase makes the
+browser action happen. Atrib makes the action trail portable across sessions,
+agents, and teams: the next session can recall it, another agent can verify it
+before continuing, and a reviewer can inspect the same decision and outcome
+hashes without needing raw selectors or replay URLs in public records.
+
 ## Proof and demo boundary
 
 This example has three runnable modes:
@@ -41,6 +58,8 @@ This example has three runnable modes:
   MCP through `@atrib/mcp-wrap`'s HTTP upstream support.
 - Live demo: local or hosted proof console that starts fresh runs through the
   same packet runner and returns receipt rows with explorer and log-proof links.
+  The demo enables Action Gate by default; set `ATRIB_BROWSERBASE_ACTION_GATE=0`
+  only for a browser-receipts-only run.
 
 The live demo is implemented in [`live-demo/`](live-demo/). Deployment is a
 human gate. Do not publish a hosted URL until demo-only credentials and rate
@@ -80,6 +99,7 @@ Run the proof console against Browserbase:
 ATRIB_BROWSERBASE_DEMO_MODE=live \
 ATRIB_BROWSERBASE_UPSTREAM=hosted \
 ATRIB_BROWSERBASE_DEMO_PUBLIC_LOG=1 \
+ATRIB_BROWSERBASE_ACTION_GATE=1 \
 BROWSERBASE_API_KEY=... \
   pnpm --filter @atrib/integration browserbase-stagehand-live-demo
 ```

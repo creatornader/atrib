@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  actionGateFromEnv,
   checkRateLimit,
   createBrowserbaseDemoServer,
   deploymentGuardIssues,
@@ -57,6 +58,24 @@ const fixtureResult: WrappedMcpPacketResult = {
     public_records_hash_only: true,
     private_needles_absent_from_public_records: true,
   },
+  action_gate: {
+    enabled: true,
+    package: '@atrib/action-gate',
+    gated_actions: [
+      {
+        action_id: 'browserbase-stagehand:3:act',
+        tool_name: 'act',
+        state: 'allowed',
+        outcome_status: 'executed',
+        action_executed: true,
+        policy_id: 'browserbase-stagehand-action-policy',
+        decision_record_hash: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        outcome_record_hash: 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+        outcome_informed_by_decision: true,
+        verification_valid: true,
+      },
+    ],
+  },
 }
 
 describe('Browserbase Stagehand live demo', () => {
@@ -68,6 +87,14 @@ describe('Browserbase Stagehand live demo', () => {
       result: fixtureResult,
     })
     expect(run.status).toBe('accepted')
+    expect(run.action_gate?.gated_actions[0]).toMatchObject({
+      tool_name: 'act',
+      state: 'allowed',
+      decision_record_hash:
+        'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+      outcome_record_hash:
+        'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+    })
     expect(run.operations?.[0]).toMatchObject({
       step: 'start',
       log_index: 0,
@@ -94,6 +121,13 @@ describe('Browserbase Stagehand live demo', () => {
       'BROWSERBASE_PROJECT_ID',
       'GEMINI_API_KEY',
     ])
+  })
+
+  it('enables Action Gate by default unless explicitly disabled', () => {
+    expect(actionGateFromEnv({} as NodeJS.ProcessEnv)).toBe(true)
+    expect(actionGateFromEnv({ ATRIB_BROWSERBASE_ACTION_GATE: '0' } as NodeJS.ProcessEnv)).toBe(
+      false,
+    )
   })
 
   it('blocks deployed mode until demo-only hosted public-log config is present', () => {
@@ -147,7 +181,7 @@ describe('Browserbase Stagehand live demo', () => {
     const baseUrl = await listen(server)
     try {
       const config = (await fetchJson(`${baseUrl}/api/config`)) as { ok: boolean; mode: string }
-      expect(config).toMatchObject({ ok: true, mode: 'fixture' })
+      expect(config).toMatchObject({ ok: true, mode: 'fixture', action_gate: true })
 
       const response = (await fetchJson(`${baseUrl}/api/runs`, { method: 'POST' })) as {
         ok: boolean
@@ -161,6 +195,7 @@ describe('Browserbase Stagehand live demo', () => {
       const run = await waitForRun(baseUrl, response.run.run_id)
       expect(run.status).toBe('accepted')
       expect(run.operations?.map((operation) => operation.step)).toEqual(['start', 'end'])
+      expect(run.action_gate?.gated_actions[0]?.tool_name).toBe('act')
     } finally {
       await close(server)
     }

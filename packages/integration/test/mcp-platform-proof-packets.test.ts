@@ -21,7 +21,7 @@ const tsxBin = join(
   process.platform === 'win32' ? 'tsx.cmd' : 'tsx',
 )
 
-async function runPacket(script: string, outPrefix: string) {
+async function runPacket(script: string, outPrefix: string, env: NodeJS.ProcessEnv = {}) {
   const outDir = mkdtempSync(join(tmpdir(), outPrefix))
   try {
     const { stdout } = await execFileAsync(tsxBin, [script], {
@@ -31,6 +31,7 @@ async function runPacket(script: string, outPrefix: string) {
       env: {
         ...process.env,
         ATRIB_PACKET_OUT_DIR: outDir,
+        ...env,
       },
     })
     return {
@@ -49,6 +50,22 @@ async function runPacket(script: string, outPrefix: string) {
           artifact: string
           decision: string
           decision_hash: string
+        }
+        action_gate?: {
+          enabled: boolean
+          package: '@atrib/action-gate'
+          gated_actions: Array<{
+            action_id: string
+            tool_name: string
+            state: string
+            outcome_status: string
+            action_executed: boolean
+            policy_id: string
+            decision_record_hash: string
+            outcome_record_hash: string
+            outcome_informed_by_decision: boolean
+            verification_valid: boolean
+          }>
         }
         artifact_dir: string
       },
@@ -117,6 +134,54 @@ describe('MCP platform proof packets', () => {
         'private browserbase note',
         '<html><body><button id="private-checkout-control">Ship</button></body></html>',
         'Internal quote: private browserbase note',
+      ]) {
+        expect(text).not.toContain(needle)
+      }
+    } finally {
+      run.cleanup()
+    }
+  }, 60000)
+
+  it('embeds Action Gate records in the Browserbase Stagehand packet when enabled', async () => {
+    const run = await runPacket(
+      'examples/browserbase-stagehand/browserbase-stagehand-packet-smoke.ts',
+      'atrib-browserbase-gated-packet-',
+      { ATRIB_BROWSERBASE_ACTION_GATE: '1' },
+    )
+    try {
+      expect(run.result.ok).toBe(true)
+      expect(run.result.packet).toBe('browserbase-stagehand')
+      expect(run.result.signed_records).toBe(6)
+      expect(run.result.action_gate).toMatchObject({
+        enabled: true,
+        package: '@atrib/action-gate',
+      })
+      expect(run.result.action_gate?.gated_actions).toHaveLength(1)
+      expect(run.result.action_gate?.gated_actions[0]).toMatchObject({
+        tool_name: 'act',
+        state: 'allowed',
+        outcome_status: 'executed',
+        action_executed: true,
+        policy_id: 'browserbase-stagehand-action-policy',
+        outcome_informed_by_decision: true,
+        verification_valid: true,
+      })
+      expect(run.result.action_gate?.gated_actions[0]?.decision_record_hash).toMatch(
+        /^sha256:[0-9a-f]{64}$/u,
+      )
+      expect(run.result.action_gate?.gated_actions[0]?.outcome_record_hash).toMatch(
+        /^sha256:[0-9a-f]{64}$/u,
+      )
+
+      const text = `${run.stdout}\n${artifactText(run.outDir)}`
+      expect(text).toContain('@atrib/action-gate')
+      expect(text).toContain('Action Gate')
+      expect(text).toContain('browserbase-stagehand-action-policy')
+      for (const needle of [
+        'bb_session_private_20260623',
+        'https://browserbase.example.invalid/sessions/private-replay-20260623',
+        '#private-checkout-control',
+        'private browserbase note',
       ]) {
         expect(text).not.toContain(needle)
       }

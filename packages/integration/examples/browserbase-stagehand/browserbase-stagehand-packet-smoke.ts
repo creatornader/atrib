@@ -3,7 +3,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { hashText, runWrappedMcpPacket, writeJson } from '../wrapped-mcp-proof-runner.js'
+import {
+  hashText,
+  runWrappedMcpPacket,
+  writeJson,
+  type PacketActionGateOptions,
+} from '../wrapped-mcp-proof-runner.js'
 
 const PRIVATE_SESSION_ID = 'bb_session_private_20260623'
 const PRIVATE_REPLAY_URL = 'https://browserbase.example.invalid/sessions/private-replay-20260623'
@@ -25,6 +30,7 @@ export type BrowserbaseStagehandPacketOptions = {
   actAction?: string
   extractInstruction?: string
   timeoutMs?: number
+  actionGate?: boolean
 }
 
 function requiredEnv(name: string, env: NodeJS.ProcessEnv): string {
@@ -123,6 +129,40 @@ function browserbaseUpstream(liveHosted: boolean, env: NodeJS.ProcessEnv) {
   }
 }
 
+function actionGateContextId(): string {
+  return hashText('browserbase-stagehand-action-gate').slice('sha256:'.length, 'sha256:'.length + 32)
+}
+
+function browserbaseActionGate(mode: 'fixture' | 'live'): PacketActionGateOptions {
+  return {
+    privateKey: new Uint8Array(32).fill(31),
+    contextId: actionGateContextId(),
+    runId: `browserbase-stagehand-${mode}`,
+    agentId: 'browserbase-stagehand-proof',
+    surface: 'browser',
+    toolNames: ['act'],
+    risk: () => ['browser_action', 'external_write', 'stagehand_act'],
+    refs: () => ({
+      packet: 'browserbase-stagehand',
+      automation_layer: 'browserbase-stagehand',
+      control_layer: '@atrib/action-gate',
+      mode,
+    }),
+    policy: () => ({
+      outcome: 'allow',
+      policy_id: 'browserbase-stagehand-action-policy',
+      policy_version: '2026-06-28.1',
+      reason: 'Stagehand act is allowed for this proof after a signed pre-action decision.',
+      authority: { mode: 'host-policy' },
+      approval: { required: false },
+      evidence: {
+        automation_layer: 'browserbase-stagehand',
+        control_layer: '@atrib/action-gate',
+      },
+    }),
+  }
+}
+
 function renderReadme(result: Awaited<ReturnType<typeof runWrappedMcpPacket>>): string {
   const logLabel = result.log.mode === 'public' ? 'Public log index' : 'Local log index'
   const representativeHash = result.record_hashes[0]
@@ -142,6 +182,31 @@ Representative public links:
         `| ${operation} | ${result.record_hashes[index] ?? 'missing'} | ${result.log_indexes[index] ?? 'missing'} |`,
     )
     .join('\n')
+  const actionGateRows = result.action_gate?.gated_actions
+    .map(
+      (action) =>
+        `| ${action.tool_name} | ${action.state} | ${action.decision_record_hash} | ${action.outcome_record_hash} | ${action.verification_valid ? 'yes' : 'no'} |`,
+    )
+    .join('\n')
+  const actionGateSection = actionGateRows
+    ? `
+## Action Gate
+
+\`@atrib/action-gate\` evaluated the high-impact \`act\` step before the Browserbase
+automation call ran. Browserbase still owns browser execution. Atrib signs the
+control decision and the outcome as separate extension records.
+
+| Tool | Decision | Decision record | Outcome record | Verified |
+| --- | --- | --- | --- | --- |
+${actionGateRows}
+`
+    : `
+## Action Gate
+
+This packet was generated without the optional \`@atrib/action-gate\` wrapper.
+Set \`ATRIB_BROWSERBASE_ACTION_GATE=1\` to sign a pre-action decision and outcome
+around the \`act\` step.
+`
 
   const upstreamLine =
     result.mode === 'live' && result.upstream_shape.includes('hosted')
@@ -170,6 +235,7 @@ This proof signs a Browserbase MCP shaped browser session through \`@atrib/mcp-w
 
 - Upstream surface: ${upstreamLine}
 - Atrib path: ${atribPath}
+- Control path: ${result.action_gate?.enabled ? '`@atrib/action-gate` signs the `act` decision and outcome before the Browserbase action runs.' : 'not enabled for this artifact.'}
 - Record policy: public records keep tool names plus \`args_hash\` and \`result_hash\`.
 - Verification: \`@atrib/mcp\` verifies each Ed25519 record signature after the wrapper writes its mirror.
 - Log proof: ${result.log.mode === 'public' ? `accepted records were submitted to \`${result.log.endpoint}\` after full-flow verification; inclusion was verified.` : 'local fixture log only.'}
@@ -182,6 +248,7 @@ This proof signs a Browserbase MCP shaped browser session through \`@atrib/mcp-w
 ${rows}
 
 ${publicLinks}
+${actionGateSection}
 ## Redaction line
 
 The wrapper saw private Browserbase-shaped payloads: session id, replay URL, page snapshot, selector, form value, and extracted page text. The public artifact stores only hashes for those fields. See \`redaction-manifest.json\`.
@@ -232,6 +299,7 @@ export async function runBrowserbaseStagehandPacket(
   const liveMode = options.liveMode ?? env.ATRIB_BROWSERBASE_STAGEHAND_LIVE === '1'
   const liveHosted = liveMode && useHostedBrowserbaseMcp(env)
   const publicLog = options.publicLog ?? (liveMode && env.ATRIB_PACKET_PUBLIC_LOG !== '0')
+  const actionGateEnabled = options.actionGate ?? env.ATRIB_BROWSERBASE_ACTION_GATE === '1'
   const proofUrl = options.proofUrl ?? env.ATRIB_BROWSERBASE_PROOF_URL ?? 'https://example.com'
   const observeInstruction =
     options.observeInstruction ??
@@ -314,6 +382,9 @@ export async function runBrowserbaseStagehandPacket(
   if (options.timeoutMs) {
     packetOptions.timeoutMs = options.timeoutMs
   }
+  if (actionGateEnabled) {
+    packetOptions.actionGate = browserbaseActionGate(liveMode ? 'live' : 'fixture')
+  }
   if (liveMode) {
     packetOptions.upstream = browserbaseUpstream(liveHosted, env)
     packetOptions.cleanupOnFailure = { name: 'end', afterTool: 'start' }
@@ -355,6 +426,7 @@ function writeBrowserbaseStagehandArtifacts(input: {
     log: result.log,
     verifier: result.verifier,
     privacy: result.privacy,
+    action_gate: result.action_gate ?? null,
     caveats: [
       result.mode === 'live'
         ? 'Live Browserbase MCP command path. Browserbase replay material remains private.'

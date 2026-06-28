@@ -1,10 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import {
+  runGatedAction,
+  type ActionGateActionEnvelope,
+  type ActionGateDecisionState,
+  type ActionGateOutcomeStatus,
+  type ActionGatePolicyDecision,
+} from '@atrib/action-gate'
 import {
   canonicalRecord,
   hexEncode,
@@ -16,6 +30,7 @@ import {
 } from '@atrib/mcp'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { snapshotWrapperMain } from './mcp-wrap-runtime.js'
 
 const EVENT_TYPE_TOOL_CALL = 'https://atrib.dev/v1/types/tool_call'
 
@@ -44,6 +59,38 @@ export type CleanupOnFailure = {
   name: string
   arguments?: Record<string, unknown>
   afterTool?: string
+}
+
+export type PacketActionGateContext = {
+  call: PacketCall
+  index: number
+  action: ActionGateActionEnvelope
+  timestamp: string
+}
+
+export type PacketActionGateOptions = {
+  privateKey?: Uint8Array | string
+  contextId?: string
+  runId: string
+  agentId: string
+  surface: string
+  toolNames: string[]
+  policy: (input: PacketActionGateContext) => ActionGatePolicyDecision
+  risk?: (input: { call: PacketCall; index: number }) => readonly string[]
+  refs?: (input: { call: PacketCall; index: number }) => Record<string, string> | undefined
+}
+
+export type PacketActionGateSummary = {
+  action_id: string
+  tool_name: string
+  state: ActionGateDecisionState
+  outcome_status: ActionGateOutcomeStatus
+  action_executed: boolean
+  policy_id: string
+  decision_record_hash: string
+  outcome_record_hash: string
+  outcome_informed_by_decision: boolean
+  verification_valid: boolean
 }
 
 type PacketUpstream =
@@ -91,6 +138,11 @@ export type WrappedMcpPacketResult = {
   privacy: {
     public_records_hash_only: boolean
     private_needles_absent_from_public_records: boolean
+  }
+  action_gate?: {
+    enabled: boolean
+    package: '@atrib/action-gate'
+    gated_actions: PacketActionGateSummary[]
   }
 }
 
@@ -337,14 +389,8 @@ export async function runWrappedMcpPacket(options: {
   cleanupOnFailure?: CleanupOnFailure
   timeoutMs?: number
   privateNeedles: string[]
+  actionGate?: PacketActionGateOptions
 }): Promise<WrappedMcpPacketResult> {
-  const wrapperMain = join(options.integrationDir, '..', 'mcp-wrap', 'dist', 'main.js')
-  if (!existsSync(wrapperMain)) {
-    throw new Error(
-      'missing @atrib/mcp-wrap dist/main.js. Run `pnpm --filter @atrib/mcp-wrap build` first.',
-    )
-  }
-
   const tempDir = mkdtempSync(join(tmpdir(), `atrib-${options.packet}-`))
   const configPath = join(tempDir, 'wrap-config.json')
   const recordFile = join(tempDir, 'records.jsonl')
@@ -352,55 +398,13 @@ export async function runWrappedMcpPacket(options: {
   const logMode = options.logMode ?? 'local'
   const privateNeedles = options.privateNeedles.filter((needle) => needle.length > 0)
   const publicLogEndpoint = options.publicLogEndpoint ?? 'https://log.atrib.dev/v1/entries'
-  const captureLog = await startCaptureLog({
-    checkpoint: `${options.packet}-local`,
-  })
   const client = new Client({ name: `${options.packet}-packet-host`, version: '0.1.0' })
-  const upstream =
-    options.upstream ??
-    (options.fixtureServer
-      ? {
-          command: 'pnpm',
-          args: ['exec', 'tsx', options.fixtureServer],
-        }
-      : undefined)
-  if (!upstream) throw new Error('runWrappedMcpPacket requires fixtureServer or upstream')
-
-  const config = {
-    name: options.packet,
-    agent: `${options.packet}-proof`,
-    upstream,
-    serverUrl: `${options.packet}://mcp.local`,
-    logEndpoint: captureLog.endpoint,
-    recordFile,
-    logFile,
-    autoChain: true,
-    autoChainFallback: 'fresh',
-    disclosure: {
-      tool_name: 'verbatim',
-      args: 'plain-sha256',
-      result: 'plain-sha256',
-    },
-  }
-  writeFileSync(configPath, JSON.stringify(config, null, 2))
-
-  const transport = new StdioClientTransport({
-    command: 'node',
-    args: [wrapperMain, configPath],
-    env: cleanEnv({ ATRIB_PRIVATE_KEY: randomBytes(32).toString('base64url') }),
-    stderr: 'pipe',
-  })
-  transport.stderr?.on('data', () => {})
+  let captureLog: LocalLogServer | undefined
+  let transport: StdioClientTransport | undefined
   const completedCalls: string[] = []
+  const actionGateResults: PacketActionGateSummary[] = []
   let timedOut = false
-  const timeout =
-    options.timeoutMs && options.timeoutMs > 0
-      ? setTimeout(() => {
-          timedOut = true
-          void transport.close().catch(() => {})
-          void client.close().catch(() => {})
-        }, options.timeoutMs)
-      : undefined
+  let timeout: NodeJS.Timeout | undefined
 
   async function cleanupAfterFailedRun(): Promise<void> {
     const cleanup = options.cleanupOnFailure
@@ -416,6 +420,58 @@ export async function runWrappedMcpPacket(options: {
   }
 
   try {
+    const wrapperMain = await snapshotWrapperMain({
+      integrationDir: options.integrationDir,
+      tempDir,
+    })
+    const activeCaptureLog = await startCaptureLog({
+      checkpoint: `${options.packet}-local`,
+    })
+    captureLog = activeCaptureLog
+    const upstream =
+      options.upstream ??
+      (options.fixtureServer
+        ? {
+            command: 'pnpm',
+            args: ['exec', 'tsx', options.fixtureServer],
+          }
+        : undefined)
+    if (!upstream) throw new Error('runWrappedMcpPacket requires fixtureServer or upstream')
+
+    const config = {
+      name: options.packet,
+      agent: `${options.packet}-proof`,
+      upstream,
+      serverUrl: `${options.packet}://mcp.local`,
+      logEndpoint: activeCaptureLog.endpoint,
+      recordFile,
+      logFile,
+      autoChain: true,
+      autoChainFallback: 'fresh',
+      disclosure: {
+        tool_name: 'verbatim',
+        args: 'plain-sha256',
+        result: 'plain-sha256',
+      },
+    }
+    writeFileSync(configPath, JSON.stringify(config, null, 2))
+
+    transport = new StdioClientTransport({
+      command: 'node',
+      args: [wrapperMain, configPath],
+      env: cleanEnv({ ATRIB_PRIVATE_KEY: randomBytes(32).toString('base64url') }),
+      stderr: 'pipe',
+    })
+    transport.stderr?.on('data', () => {})
+    timeout =
+      options.timeoutMs && options.timeoutMs > 0
+        ? setTimeout(() => {
+            timedOut = true
+            void transport?.close().catch(() => {})
+            void client.close().catch(() => {})
+          }, options.timeoutMs)
+        : undefined
+
     await client.connect(transport)
     const tools = await client.listTools()
     const toolNames = new Set(tools.tools.map((tool) => tool.name))
@@ -425,10 +481,16 @@ export async function runWrappedMcpPacket(options: {
       }
     }
 
-    for (const call of options.calls) {
-      const result = await client.callTool({
-        name: call.name,
-        arguments: call.arguments ?? {},
+    for (let index = 0; index < options.calls.length; index += 1) {
+      const call = options.calls[index]
+      if (!call) throw new Error(`missing packet call at index ${index}`)
+      const result = await runPacketCall({
+        call,
+        index,
+        client,
+        packet: options.packet,
+        actionGateResults,
+        ...(options.actionGate ? { actionGate: options.actionGate } : {}),
       })
       if (
         typeof result === 'object' &&
@@ -445,7 +507,7 @@ export async function runWrappedMcpPacket(options: {
 
     await waitFor(() => existsSync(recordFile), 'record mirror')
     await waitFor(
-      () => captureLog.submissions.length >= options.calls.length,
+      () => activeCaptureLog.submissions.length >= options.calls.length,
       `${logMode} log submissions`,
       logMode === 'public' ? 15000 : 5000,
     )
@@ -486,7 +548,7 @@ export async function runWrappedMcpPacket(options: {
     const recordHashes = records.map(
       (record) => `sha256:${hexEncode(sha256(canonicalRecord(record)))}`,
     )
-    const capturedHashes = captureLog.submissions.map((submission) => submission.record_hash)
+    const capturedHashes = activeCaptureLog.submissions.map((submission) => submission.record_hash)
     if (capturedHashes.join(',') !== recordHashes.join(',')) {
       throw new Error('captured log submissions did not match verified record mirror')
     }
@@ -494,7 +556,7 @@ export async function runWrappedMcpPacket(options: {
     const acceptedSubmissions =
       logMode === 'public'
         ? await publishAcceptedRecords(records, publicLogEndpoint)
-        : captureLog.submissions
+        : activeCaptureLog.submissions
     const proofs = acceptedSubmissions.map((submission) => ({
       record_hash: submission.record_hash,
       log_index: submission.proof.log_index,
@@ -538,6 +600,15 @@ export async function runWrappedMcpPacket(options: {
         public_records_hash_only: true,
         private_needles_absent_from_public_records: true,
       },
+      ...(options.actionGate
+        ? {
+            action_gate: {
+              enabled: true,
+              package: '@atrib/action-gate' as const,
+              gated_actions: actionGateResults,
+            },
+          }
+        : {}),
     }
   } catch (error) {
     if (timedOut) {
@@ -548,7 +619,88 @@ export async function runWrappedMcpPacket(options: {
   } finally {
     if (timeout) clearTimeout(timeout)
     await client.close().catch(() => {})
-    await captureLog.close().catch(() => {})
+    await captureLog?.close().catch(() => {})
     rmSync(tempDir, { recursive: true, force: true })
   }
+}
+
+async function runPacketCall({
+  call,
+  index,
+  client,
+  packet,
+  actionGate,
+  actionGateResults,
+}: {
+  call: PacketCall
+  index: number
+  client: Client
+  packet: string
+  actionGate?: PacketActionGateOptions
+  actionGateResults: PacketActionGateSummary[]
+}): Promise<unknown> {
+  if (!actionGate?.toolNames.includes(call.name)) {
+    return client.callTool({
+      name: call.name,
+      arguments: call.arguments ?? {},
+    })
+  }
+
+  const refs = actionGate.refs?.({ call, index })
+  const action: ActionGateActionEnvelope = {
+    run_id: actionGate.runId,
+    action_id: `${packet}:${index}:${call.name}`,
+    agent_id: actionGate.agentId,
+    surface: actionGate.surface,
+    tool_name: call.name,
+    args: call.arguments ?? {},
+    risk: actionGate.risk?.({ call, index }) ?? ['browser_action'],
+    ...(refs ? { refs } : {}),
+  }
+  const privateKey = actionGate.privateKey ?? new Uint8Array(randomBytes(32))
+  const gated = await runGatedAction({
+    privateKey,
+    action,
+    evaluate: ({ timestamp }) =>
+      actionGate.policy({
+        call,
+        index,
+        action,
+        timestamp,
+      }),
+    execute: () =>
+      client.callTool({
+        name: call.name,
+        arguments: call.arguments ?? {},
+      }),
+    ...(actionGate.contextId ? { contextId: actionGate.contextId } : {}),
+  })
+
+  actionGateResults.push({
+    action_id: action.action_id,
+    tool_name: call.name,
+    state: gated.state,
+    outcome_status: gated.outcome.entry.status,
+    action_executed: gated.action_executed,
+    policy_id: gated.decision.entry.policy.policy_id,
+    decision_record_hash: gated.decision.record_hash,
+    outcome_record_hash: gated.outcome.record_hash,
+    outcome_informed_by_decision:
+      gated.outcome.record.informed_by?.includes(gated.decision.record_hash) ?? false,
+    verification_valid: gated.verification.valid,
+  })
+  if (!gated.verification.valid) {
+    throw new Error(
+      `action gate verification failed for ${call.name}: ${gated.verification.issues
+        .map((issue) => issue.code)
+        .join(', ')}`,
+    )
+  }
+  if (!gated.action_executed) {
+    throw new Error(`action gate closed before ${call.name}: ${gated.state}`)
+  }
+  if (gated.error) {
+    throw new Error(`action gate execution failed for ${call.name}: ${gated.error.message}`)
+  }
+  return gated.result
 }
