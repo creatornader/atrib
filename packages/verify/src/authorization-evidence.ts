@@ -16,6 +16,11 @@ import type {
   AAuthAuthorizationEvidenceVerification,
 } from './aauth-evidence.js'
 import type { DpopReplayCache, DpopReplayCacheKey } from './dpop-replay-cache.js'
+import { verifyX401AuthorizationEvidence } from './x401-evidence.js'
+import type {
+  X401AuthorizationEvidenceInput,
+  X401AuthorizationEvidenceVerification,
+} from './x401-evidence.js'
 
 export type EvidenceCheckStatus = 'passed' | 'failed' | 'unresolved' | 'not_checked'
 export type OAuthSignaturePolicy = 'require' | 'best-effort' | 'off'
@@ -789,10 +794,15 @@ export type AuthorizationEvidenceInput =
       aauth: AAuthAuthorizationEvidenceInput
     }
   | {
+      protocol?: 'x401'
+      x401: X401AuthorizationEvidenceInput
+    }
+  | {
       protocol?: OAuthEvidenceProtocol
       oauth: OAuthAuthorizationEvidenceInput
     }
   | AAuthAuthorizationEvidenceInput
+  | X401AuthorizationEvidenceInput
   | OAuthAuthorizationEvidenceInput
 
 function isAAuthAuthorizationEvidenceInput(
@@ -811,14 +821,40 @@ function isAAuthAuthorizationEvidenceInput(
   )
 }
 
+function isX401AuthorizationEvidenceInput(
+  evidence: AuthorizationEvidenceInput,
+): evidence is X401AuthorizationEvidenceInput {
+  if (evidence.protocol === 'x401') return true
+  return (
+    'headers' in evidence ||
+    'headerSet' in evidence ||
+    'proofRequest' in evidence ||
+    'proofResponse' in evidence ||
+    'proofResult' in evidence ||
+    'resultVerified' in evidence ||
+    'tokenVerified' in evidence
+  )
+}
+
 export async function verifyAuthorizationEvidence(
   evidence: AuthorizationEvidenceInput,
-): Promise<EvidenceVerificationBlock | AAuthAuthorizationEvidenceVerification> {
+): Promise<
+  EvidenceVerificationBlock | AAuthAuthorizationEvidenceVerification | X401AuthorizationEvidenceVerification
+> {
   if ('aauth' in evidence) {
     return verifyAAuthAuthorizationEvidence({
       ...evidence.aauth,
       protocol: 'aauth',
     })
+  }
+  if ('x401' in evidence) {
+    return verifyX401AuthorizationEvidence({
+      ...evidence.x401,
+      protocol: 'x401',
+    })
+  }
+  if (isX401AuthorizationEvidenceInput(evidence)) {
+    return verifyX401AuthorizationEvidence(evidence)
   }
   if (isAAuthAuthorizationEvidenceInput(evidence)) {
     return verifyAAuthAuthorizationEvidence(evidence)

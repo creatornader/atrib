@@ -1,6 +1,6 @@
 # @atrib/archive-node
 
-Reference Record Body Archive Layer for atrib [§2.12](../../atrib-spec.md#212-record-body-archive-layer).
+Reference Record Body Archive Layer for Atrib's verifiable action layer, per [§2.12](../../atrib-spec.md#212-record-body-archive-layer).
 
 The archive is separate from `log-node`. The log stores fixed commitment entries. The archive stores full signed record bodies and optional verifier evidence for producers that opt into public body retrieval.
 
@@ -26,7 +26,9 @@ Production deploy target: `https://archive.atrib.dev/v1`, backed by the Fly app 
 }
 ```
 
-`authorizationEvidence` uses the `@atrib/verify` OAuth / MCP evidence input shape. The archive verifies those inputs on retrieval and returns generic `evidence[]` blocks. It does not return raw bearer tokens. Producers should not submit records whose privacy posture requires producer-local-only bodies.
+`authorizationEvidence` uses the `@atrib/verify` generic authorization evidence input shapes for MCP/OAuth, AAuth, and x401. The archive verifies those inputs on submission or retrieval and returns generic `evidence[]` blocks. It does not return raw bearer tokens, raw AAuth JWTs, raw x401 proof-response headers, or private credential payloads. Producers should not submit records whose privacy posture requires producer-local-only bodies.
+
+x401 evidence is projected before storage. The archive keeps verifier result blocks, proof hashes, proof-gate status, payment-separation facts, and hashed origin, issuer-trust, or proof-payment binding references, then removes the raw x401 authorization input from the stored body.
 
 `@atrib/mcp` and `@atrib/mcp-wrap` can submit to this API through the opt-in `archiveSubmission` config. The producer path sends the signed record body, the log proof returned by `POST /v1/entries`, optional `authorizationEvidence`, and optional `resolvedFacts`. It does not send local-only sidecar `args` or `result` fields.
 

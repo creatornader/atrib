@@ -10,6 +10,17 @@ fixture proof, and public proof use the same `@atrib/mcp-wrap` runner. The
 hosted server calls that function in process. It does not spawn `pnpm` or `tsx`
 for each reviewer-triggered run.
 
+The demo enables `@atrib/action-gate` by default. Browserbase and Stagehand own
+browser automation. Action Gate evaluates the `act` step before execution and
+adds decision and outcome hashes to the run result. Set
+`ATRIB_BROWSERBASE_ACTION_GATE=0` only when testing browser receipts without the
+control layer.
+
+Read the demo as a cross-session and cross-team proof, not only as a browser
+replay. Browserbase shows the browser run. Atrib shows the decision and outcome
+hashes that a later session, another agent, or a reviewer team can verify before
+continuing from that action.
+
 ## Run locally
 
 Fixture mode is the default. It creates local receipts only and needs no
@@ -42,6 +53,7 @@ do not call `op read` inside this demo server.
 ATRIB_BROWSERBASE_DEMO_MODE=live \
 ATRIB_BROWSERBASE_UPSTREAM=hosted \
 ATRIB_BROWSERBASE_DEMO_PUBLIC_LOG=1 \
+ATRIB_BROWSERBASE_ACTION_GATE=1 \
 BROWSERBASE_API_KEY=... \
   pnpm --filter @atrib/integration browserbase-stagehand-live-demo
 ```
@@ -65,6 +77,7 @@ Public output:
 - verifier status
 - explorer link
 - log proof link
+- Action Gate decision and outcome hashes
 
 Private or redacted:
 
@@ -112,6 +125,7 @@ true:
 - `ATRIB_BROWSERBASE_DEMO_MODE=live`
 - `ATRIB_BROWSERBASE_UPSTREAM=hosted`
 - `ATRIB_BROWSERBASE_DEMO_PUBLIC_LOG=1`
+- `ATRIB_BROWSERBASE_ACTION_GATE` is not `0`
 - `ATRIB_BROWSERBASE_DEMO_DEPLOYED=1`
 - `ATRIB_BROWSERBASE_DEMO_CREDENTIAL_SCOPE=demo-only`
 - `ATRIB_BROWSERBASE_DEMO_URL` is set to the fixed target URL.

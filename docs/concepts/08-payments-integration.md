@@ -1,6 +1,6 @@
 # Payments integration
 
-> atrib is not a payment rail. It is a verification substrate that records cryptographically signed evidence of payments on top of whatever rail (x402, ACP, UCP, AP2, MPP, a2a-x402) actually moved the money. The transaction record is the multi-party-signed receipt that any third party can verify.
+> atrib is not a payment rail. It is a verifiable action layer and protocol substrate that records cryptographically signed evidence of payments on top of whatever rail (x402, ACP, UCP, AP2, MPP, a2a-x402) actually moved the money. The transaction record is the multi-party-signed receipt that any third party can verify.
 
 **Status**: DRAFT (v1, 2026-05-22; not promoted to REVIEW)
 **Spec anchors**: [§1.7 Transaction Event Hooks](../../atrib-spec.md#17-transaction-event-hooks) · [§1.7.6 Cross-attestation requirement](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) · [D052](../../DECISIONS.md)
@@ -9,7 +9,7 @@
 
 ## The Protocol Distinction
 
-atrib is **not** a payment rail. It does not move money, hold funds, or execute transfers. atrib is a verification substrate that records cryptographically signed evidence of what happened on top of whatever rail did the actual settlement.
+atrib is **not** a payment rail. It does not move money, hold funds, or execute transfers. atrib is a verifiable action substrate that records cryptographically signed evidence of what happened on top of whatever rail did the actual settlement.
 
 Three layers:
 
@@ -29,7 +29,7 @@ atrib intentionally stays out of four adjacent concerns that the layers above an
 - **Custody** of funds. Banks, custodial wallets, on-chain accounts; atrib never touches money.
 - **Settlement** itself. The rail's job, then off-rail (banks, on-chain transfers, treasury payouts).
 
-These are bordering layers atrib composes with but does not subsume. Previous attempts at "agent commerce" that tried to be receipts plus payments plus identity plus authorization all at once ended up doing none of them well. atrib's scope is deliberately the receipts surface only.
+These are bordering layers atrib composes with but does not subsume. Previous attempts at "agent commerce" that tried to be receipts plus payments plus identity plus authorization all at once ended up doing none of them well. atrib's scope is the signed action and transaction evidence surface: records, proofs, graph structure, verifier results, and host-owned policy decisions attached to the action trail.
 
 ## When the transaction record gets triggered
 

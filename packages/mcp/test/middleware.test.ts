@@ -87,6 +87,10 @@ function createToolCallRequest(toolName: string, meta?: Record<string, unknown>)
   }
 }
 
+function encodeProofHeader(value: unknown): string {
+  return base64urlEncode(new TextEncoder().encode(JSON.stringify(value)))
+}
+
 async function waitForProbe(done: Promise<void>): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
@@ -674,6 +678,93 @@ describe('atrib() middleware', () => {
       expect(JSON.stringify(dpop)).not.toContain('secret-bearer-token')
     })
 
+    it('captures x401 proof headers into sidecar evidence when enabled', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const originalHandler = vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] })
+      const sidecars: OnRecordSidecar[] = []
+      const proofRequest = encodeProofHeader({
+        scheme: 'x401',
+        version: '0.2.0',
+        credential_requirements: {
+          digital: {
+            requests: [
+              {
+                protocol: 'openid4vp-v1-signed',
+                data: {
+                  client_id: 'https://verifier.example/client.json',
+                  nonce: 'nonce-1',
+                },
+              },
+            ],
+          },
+        },
+        oauth: { token_endpoint: 'https://verifier.example/oauth/token' },
+        request_id: 'proof-template-basic-v1',
+      })
+      const proofResponse = encodeProofHeader({
+        request_id: 'proof-template-basic-v1',
+        agent_id: 'did:web:agent.example',
+        credential_result: {
+          protocol: 'openid4vp-v1-signed',
+          data: { vp_token: 'private-vp-token' },
+        },
+      })
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://mcp.example.com/mcp',
+        logSubmission: 'disabled',
+        x401AuthorizationEvidence: {
+          resultVerified: true,
+          expectedRequestId: 'proof-template-basic-v1',
+          expectedAgentId: 'did:web:agent.example',
+          expectedAgentOrigin: 'https://agent.example/origin',
+          agentOrigin: 'https://agent.example/origin',
+          agentOriginVerified: true,
+          issuerTrustVerified: true,
+          issuerTrustRootType: 'proof-trust-list',
+          issuerTrustRootRef: 'https://trust.example/x401.json',
+          proofPaymentBindingVerified: true,
+          proofPaymentBindingRef: 'ap2-receipt:checkout-123',
+        },
+        onRecord: (_record, sidecar) => {
+          if (sidecar) sidecars.push(sidecar)
+        },
+      })
+      registerToolHandler(originalHandler)
+
+      const handler = getToolHandler()!
+      await handler(createToolCallRequest('read_protected'), {
+        requestInfo: {
+          headers: new Headers({
+            'PROOF-REQUEST': proofRequest,
+            'PROOF-RESPONSE': proofResponse,
+          }),
+        },
+      })
+
+      expect(sidecars).toHaveLength(1)
+      const evidence = sidecars[0]!.authorizationEvidence?.[0]
+      expect(evidence).toMatchObject({
+        protocol: 'x401',
+        resultVerified: true,
+        expectedRequestId: 'proof-template-basic-v1',
+        expectedAgentId: 'did:web:agent.example',
+        expectedAgentOrigin: 'https://agent.example/origin',
+        agentOrigin: 'https://agent.example/origin',
+        agentOriginVerified: true,
+        issuerTrustVerified: true,
+        issuerTrustRootType: 'proof-trust-list',
+        issuerTrustRootRef: 'https://trust.example/x401.json',
+        proofPaymentBindingVerified: true,
+        proofPaymentBindingRef: 'ap2-receipt:checkout-123',
+      })
+      expect(evidence?.headers).toEqual({
+        'PROOF-REQUEST': proofRequest,
+        'PROOF-RESPONSE': proofResponse,
+      })
+    })
+
     it('submits sanitized OAuth evidence to the archive when enabled', async () => {
       const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
       const originalHandler = vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] })
@@ -736,6 +827,103 @@ describe('atrib() middleware', () => {
             },
           ],
           resolvedFacts: { tool_name: 'read_file' },
+        })
+      } finally {
+        fetchSpy.mockRestore()
+      }
+    })
+
+    it('submits captured x401 evidence to the archive when enabled', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const originalHandler = vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] })
+      const proof = {
+        log_index: 43,
+        checkpoint: 'log.test/v1\n44\nrootHashBase64\n',
+        inclusion_proof: [],
+        leaf_hash: 'leafHashBase64',
+      }
+      const proofRequest = encodeProofHeader({
+        scheme: 'x401',
+        version: '0.2.0',
+        credential_requirements: {
+          digital: {
+            requests: [
+              {
+                protocol: 'openid4vp-v1-signed',
+                data: {
+                  client_id: 'https://verifier.example/client.json',
+                  nonce: 'nonce-1',
+                },
+              },
+            ],
+          },
+        },
+        oauth: { token_endpoint: 'https://verifier.example/oauth/token' },
+        request_id: 'proof-template-basic-v1',
+      })
+      const proofResponse = encodeProofHeader({
+        request_id: 'proof-template-basic-v1',
+        agent_id: 'did:web:agent.example',
+        credential_result: {
+          protocol: 'openid4vp-v1-signed',
+          data: { vp_token: 'private-vp-token' },
+        },
+      })
+      const archivePayloads: unknown[] = []
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+        const href = String(url)
+        if (href === 'https://log.test/v1/entries') {
+          return new Response(JSON.stringify(proof), { status: 200 })
+        }
+        if (href === 'https://archive.test/v1/records') {
+          archivePayloads.push(JSON.parse(init?.body as string))
+          return new Response(JSON.stringify({ stored: true }), { status: 201 })
+        }
+        throw new Error(`unexpected fetch ${href}`)
+      })
+
+      try {
+        const wrapped = atrib(mockServer, {
+          creatorKey: TEST_PRIVATE_KEY_B64,
+          serverUrl: 'https://mcp.example.com/mcp',
+          logEndpoint: 'https://log.test/v1/entries',
+          archiveSubmission: { endpoint: 'https://archive.test/v1' },
+          x401AuthorizationEvidence: {
+            resultVerified: true,
+            expectedRequestId: 'proof-template-basic-v1',
+            expectedAgentId: 'did:web:agent.example',
+            agentOriginVerified: true,
+            issuerTrustVerified: true,
+            proofPaymentBindingVerified: true,
+          },
+        })
+        registerToolHandler(originalHandler)
+
+        const handler = getToolHandler()!
+        await handler(createToolCallRequest('read_protected'), {
+          requestInfo: {
+            headers: new Headers({
+              'PROOF-REQUEST': proofRequest,
+              'PROOF-RESPONSE': proofResponse,
+            }),
+          },
+        })
+        await wrapped.flush()
+
+        expect(archivePayloads).toHaveLength(1)
+        expect(archivePayloads[0]).toMatchObject({
+          proof,
+          authorizationEvidence: [
+            {
+              protocol: 'x401',
+              resultVerified: true,
+              expectedRequestId: 'proof-template-basic-v1',
+              agentOriginVerified: true,
+              issuerTrustVerified: true,
+              proofPaymentBindingVerified: true,
+            },
+          ],
+          resolvedFacts: { tool_name: 'read_protected' },
         })
       } finally {
         fetchSpy.mockRestore()

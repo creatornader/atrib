@@ -1,6 +1,6 @@
 # atrib-directory-bridge
 
-Rust→WASM bridge wrapping Meta's [`akd`](https://github.com/facebook/akd) crate. Built via `./build-wasm.sh`; the resulting `pkg/` artifacts are copied into `packages/directory/wasm/` (which IS checked into git) so the SDK package ships the WASM module inline.
+Rust→WASM bridge wrapping Meta's [`akd`](https://github.com/facebook/akd) crate for the identity lane of Atrib's verifiable action layer. Built via `./build-wasm.sh`; the resulting `pkg/` artifacts are copied into `packages/directory/wasm/` (which IS checked into git) so the SDK package ships the WASM module inline.
 
 The bridge exposes the four directory operations spec [§6](../../atrib-spec.md#6-key-directory) normatively requires (publish, lookup, history, prove_absence) plus the operations supporting per-operation anchoring (current_epoch, current_root, audit_proof) and the [§6.3](../../atrib-spec.md#63-verifier-consultation-algorithm) 9-step verifier consultation algorithm.
 

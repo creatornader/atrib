@@ -82,6 +82,25 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))
 
+  packages/action-gate:
+    dependencies:
+      '@atrib/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      canonicalize:
+        specifier: ^3.0.0
+        version: 3.0.0
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.3
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))
+
   packages/agent:
     dependencies:
       '@atrib/mcp':
@@ -156,6 +175,9 @@ importers:
       '@a2a-js/sdk':
         specifier: 0.3.13
         version: 0.3.13(@grpc/grpc-js@1.14.4)(express@5.2.1)
+      '@atrib/action-gate':
+        specifier: workspace:*
+        version: link:../action-gate
       '@atrib/agent':
         specifier: workspace:*
         version: link:../agent
@@ -247,6 +269,9 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.41.1
         version: 1.41.1
+      '@proof.com/x401-node':
+        specifier: github:creatornader/x401-node#338b785ac60b6021873d384a916fd405f561915a
+        version: https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a
       '@types/node':
         specifier: ^25.9.3
         version: 25.9.3
@@ -2693,6 +2718,9 @@ packages:
     resolution: {integrity: sha512-/UhIkaZgPutTFmQ7RnIJGgDXZmtEJ7Dvi86xNTFWcnRxVRNk/aotsqDJYeEvDP+FSMB2SdW+pQzNMcWP0rwuNA==}
     engines: {node: '>=14'}
 
+  '@owf/identity-common@0.3.0':
+    resolution: {integrity: sha512-Ot+T8zHqb9cPqPdHL2edRXjWtRLng95N+auhb9TZq+Jy4HxjRzBUMVnB0wzeV5GCgoIkINcHAeLXFMsHs77hVQ==}
+
   '@oxc-project/types@0.133.0':
     resolution: {integrity: sha512-KzkdCd6Uxqnf6l3HOw1xfatAlUURA0g14cvBYFyJ5SaNOQbOUvBr9PKArcPcrNIeRsBdgcUzOGrhKveVpvOIGA==}
 
@@ -2722,6 +2750,11 @@ packages:
 
   '@posthog/types@1.382.0':
     resolution: {integrity: sha512-iK4OcSgvtmS9FZ9EUpvwlRZmHCLXaZ3+6dbRjkE7q9LL0zHLewxJH84H6uGvCw8aGzxs5rIliZqPHgimTcQEaw==}
+
+  '@proof.com/x401-node@https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a':
+    resolution: {tarball: https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a}
+    version: 0.2.0
+    engines: {node: '>=22.0.0'}
 
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
@@ -9441,6 +9474,8 @@ snapshots:
 
   '@opentelemetry/semantic-conventions@1.41.1': {}
 
+  '@owf/identity-common@0.3.0': {}
+
   '@oxc-project/types@0.133.0': {}
 
   '@pinojs/redact@0.4.0': {}
@@ -9469,6 +9504,10 @@ snapshots:
       '@posthog/types': 1.382.0
 
   '@posthog/types@1.382.0': {}
+
+  '@proof.com/x401-node@https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a':
+    dependencies:
+      '@owf/identity-common': 0.3.0
 
   '@protobufjs/aspromise@1.1.2': {}
 

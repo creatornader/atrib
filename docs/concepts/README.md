@@ -4,6 +4,8 @@ Plain-English deep-dives on the core ideas behind atrib. The spec ([`atrib-spec.
 
 Each concept links back to the spec sections that carry the normative detail, and forward to the other concepts it depends on or enables.
 
+Current product frame: atrib is a verifiable action layer for agents. Teams can control what runs, coordinate what carries forward, and prove what happened. The concepts below still preserve the protocol boundary: identity, authorization, payment, runtime execution, and memory stay specialized.
+
 ## How these docs are written
 
 - Plain English first; jargon defined when introduced

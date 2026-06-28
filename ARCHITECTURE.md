@@ -2,13 +2,22 @@
 
 How the protocol works, what the trust model actually guarantees, and why the design is the way it is. If you want the pitch, read the [README](README.md). If you want every normative detail, read the [spec](atrib-spec.md). This is the middle layer: enough to evaluate whether atrib is worth building on.
 
+Productized atrib uses the same substrate as a verifiable action layer: a runtime can check policy before execution, sign the decision, sign or reject the action, and pass the resulting evidence forward across sessions, agents, and teams. The protocol does not become the authorization issuer. It supplies the records, graph, log, and verifier rules that make the product layer possible.
+
+The browser and computer-use wedge should be read through that lens. A click,
+form fill, desktop action, support reply, admin change, or payment-impacting
+step is useful only if later actors can trust the trail. atrib makes the
+control result portable: a later session can recall it, another agent can verify
+it before continuing, and a reviewer team can inspect the same hashes and
+selected evidence.
+
 Architectural decisions and rejected alternatives are logged in [DECISIONS.md](DECISIONS.md).
 
 ---
 
 ## System overview
 
-Three protocol layers, one SDK layer that automates them. Data flows in one direction: tool call happens, record gets signed, record gets committed to the log, graph gets built, policy gets applied, settlement recommendation comes out.
+Three protocol layers, one SDK layer that automates them. The append-only flow is: action or host decision happens, record gets signed, record gets committed to the log, graph gets built, policy gets applied, settlement recommendation comes out. Product integrations can also place this flow before execution through pre-call hooks, approval gates, signer proxies, and verifier checks.
 
 ```
                           ┌──────────────────────────────────────────┐
@@ -202,6 +211,8 @@ The design principle: detect, don't implement. atrib pattern-matches on tool cal
 
 AP2 has a second verifier-side surface. `@atrib/agent` treats successful CheckoutReceipt or PaymentReceipt as the transaction close signal. `@atrib/verify` can then inspect AP2 / Verifiable Intent evidence after detection: signed receipt JWTs, receipt references, VI SD-JWT signatures, `sd_hash` links, disclosure digests, delegated agent keys, and checkout/payment hash binding. That keeps authorization checks out of the detector while still giving merchants dispute-grade evidence.
 
+x401 is deliberately outside transaction detection. It is a `401` proof-requirement protocol for credential-gated HTTP routes. `PROOF-REQUEST`, `PROOF-RESPONSE`, and `PROOF-RESULT` can attach to signed action records as authorization evidence, including optional caller-owned origin, issuer-trust, and proof-payment binding facts, when the same workflow later closes payment through AP2, x402, MPP, ACP, or UCP.
+
 Why this matters:
 
 Protocol agnosticism. atrib works regardless of which payment rail the merchant uses. If a seventh protocol shows up tomorrow, adding detection is a pattern-matching rule, not a protocol change.
@@ -245,6 +256,7 @@ The integration target decides which atrib package belongs in the path.
 | Object                                   | Owner                                                     | atrib surface                                   | Boundary                                                                                              |
 | ---------------------------------------- | --------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Tool call or SDK callback                | Tool host or agent SDK                                    | `@atrib/mcp`, `@atrib/mcp-wrap`, `@atrib/agent` | Sign the action when it happens.                                                                      |
+| Pre-action policy gate                   | Host harness, approval layer, or policy engine            | `@atrib/action-gate`                            | Decide allow, block, or escalate before execution, then sign the decision and outcome.                 |
 | OpenTelemetry or OpenInference span tree | Observability pipeline                                    | `@atrib/openinference`                          | Read spans as intake, then emit signed records plus local cognitive sidecars.                         |
 | Runtime log window                       | Runtime, workflow engine, checkpoint store, or job packet | `@atrib/runtime-log`                            | Verify roots, projections, receipts, forks, compactions, and redaction policy for one bounded window. |
 | Vendor-hosted session export             | Hosted runtime vendor                                     | Pattern 5 adapter, planned                      | Sign what the consumer observed from the vendor export. Do not claim vendor-internal truth.           |
@@ -262,7 +274,7 @@ atrib has two adapter families that should not be merged.
 | Family                   | Owner                        | Typical surfaces                                                                             | Primary packages                                                                                                                                     |
 | ------------------------ | ---------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Agent framework adapters | Application code or SDK user | MCP client/server calls, SDK tool callbacks, payment-response flow                           | `@atrib/agent`, `@atrib/mcp`, `@atrib/mcp-wrap`                                                                                                      |
-| Host runtime adapters    | Harness or runtime operator  | Lifecycle hooks, native tool hooks, approvals, subagents, exec env, run logs, hosted exports | Host-specific proof code plus `@atrib/mcp-wrap`, `@atrib/openinference`, `@atrib/runtime-log`, `@atrib/verify`, `atrib-emit-cli`, or local substrate |
+| Host runtime adapters    | Harness or runtime operator  | Lifecycle hooks, native tool hooks, approvals, subagents, exec env, run logs, hosted exports | Host-specific proof code plus `@atrib/mcp-wrap`, `@atrib/action-gate`, `@atrib/openinference`, `@atrib/runtime-log`, `@atrib/verify`, `atrib-emit-cli`, or local substrate |
 
 The distinction is architectural, not naming preference. `@atrib/agent` covers
 the agent application's tool-call path and commerce fallback path. It should not
@@ -278,6 +290,7 @@ to an existing proof role:
 | MCP tool call                    | `@atrib/mcp-wrap` owns the `tool_call` record.                            |
 | Host-native tool hook            | Host runtime adapter owns the `tool_call` record.                         |
 | SDK tool callback                | `@atrib/agent` owns the client-side middleware path.                      |
+| Pre-action policy gate           | `@atrib/action-gate` owns decision and outcome extension records.         |
 | Lifecycle hook                   | `atrib-emit-cli` or local substrate owns the observation.                 |
 | OpenInference-shaped span intake | `@atrib/openinference` owns span-derived records or correlation sidecars. |
 | Plain OTel span intake           | Host-specific ingest adapter, only after the span contract is explicit.   |
@@ -444,7 +457,7 @@ The choices that define the protocol. Each is in [DECISIONS.md](DECISIONS.md) wi
 
 **Robustness layers ([D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense)-[D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records), Sections 1.7.6, 2.11, 6.7).** Transaction records require ≥2 distinct verified signer keys (agent + counterparty per [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). Records may be cross-replicated to multiple independent logs and verifiers detect equivocation across them ([§2.11](atrib-spec.md#211-cross-log-replication)). Identity claims may declare capability envelopes that verifiers check records against; out-of-envelope records are flagged as a signal ([§6.7](atrib-spec.md#67-capability-declarations)). These are additive defenses; single-signer transactions, single-log submissions, and capability-less identity claims remain conforming.
 
-Authorization evidence follows the same boundary. atrib verifies supplied OAuth, AP2 / VI, or future capability-chain evidence as tiered verifier signals, but it does not issue grants or enforce runtime access. The strategic boundary is spelled out in [Delegation and capabilities](docs/concepts/12-delegation-and-capabilities.md).
+Authorization evidence follows the same boundary. atrib verifies supplied OAuth, AAuth, x401, AP2 / VI, or future capability-chain evidence as tiered verifier signals, but it does not issue grants or enforce runtime access. The strategic boundary is spelled out in [Delegation and capabilities](docs/concepts/12-delegation-and-capabilities.md).
 
 **Adversarial threat model (Section 8.7).** atrib certifies what was signed, not whether the signed claim is true. A 10-layer trust assessment stack (signature, identity attestation, capability declaration, key revocation, transaction cross-attestation, tool-side response signing, external evidence, witnessing, cross-log replication, structural anomaly detection) lets verifiers build confidence in any individual record. No single layer is dispositive. The substrate provides structure for assessment, not guaranteed truth.
 
@@ -510,6 +523,11 @@ Versioned URL paths (`/v1/checkpoint`, `/v6/lookup/<key>`) are immutable: once a
 @atrib/agent          Agent middleware (consumer side)
   ├── Core interceptor: reads/forwards context, detects transactions
   └── Framework adapters: one per supported MCP framework
+
+@atrib/action-gate    Host-owned action control helper
+  └── Signs policy decisions and outcomes around high-impact actions before
+      the action body runs. It does not own host policy, identity, auth, or
+      approval UI.
 
 @atrib/verify         Merchant verification library
   └── Runs §4.6 calculation locally, verifies settlement recommendations and AP2 / VI evidence
@@ -584,7 +602,7 @@ services/archive-node  Record Body Archive Layer (§2.12), deployed at https://a
       contract.
 ```
 
-The sixteen designed-public packages are live on npm: nine SDK and integration packages (`mcp`, `agent`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`, `runtime-log`) and seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`). `runtime-log` version 0.2.0 was first-published manually, with Trusted Publisher configured for later releases. The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The private `@atrib/primitives-runtime` binary composes them into one local stdio server for harness configs that need fewer child processes; no separate deployment is needed.
+The seventeen designed-public packages are in source: ten SDK and integration packages (`mcp`, `agent`, `action-gate`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`, `runtime-log`) and seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`). `@atrib/action-gate` is publishable but not yet released. `runtime-log` version 0.2.0 was first-published manually, with Trusted Publisher configured for later releases. The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The private `@atrib/primitives-runtime` binary composes them into one local stdio server for harness configs that need fewer child processes; no separate deployment is needed.
 
 Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hashes` for SHA-256, `canonicalize` for JCS. Framework dependencies are structural-typed, never hard-imported.
 
@@ -593,7 +611,7 @@ Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hash
 ## Further reading
 
 - [atrib-spec.md](atrib-spec.md), the complete protocol specification ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns))
-- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D121](DECISIONS.md#d121-runtime-log-proof-manifests-verify-host-owned-run-windows))
+- [DECISIONS.md](DECISIONS.md), architectural decision log ([D001](DECISIONS.md#d001-agent-first-sequencing-not-browser-first)-[D133](DECISIONS.md#d133-action-gate-is-a-host-owned-controlproof-package))
 - [packages/agent/README.md](packages/agent/README.md) -- adapter table with quick-start snippets for every framework
 - [packages/integration/examples/signer-proxy/](packages/integration/examples/signer-proxy/) -- sandbox signer proxy example ([§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution) / [D102](DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox))
 - [spec/conformance/1.4/](spec/conformance/1.4/) -- signing and adversarial record conformance corpus ([§1.4](atrib-spec.md#14-signing-and-verification) / [D101](DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus))

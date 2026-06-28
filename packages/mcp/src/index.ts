@@ -221,6 +221,14 @@ export type {
   McpRequestExtraLike,
 } from './oauth-evidence.js'
 
+// x401 sidecar evidence capture. Producer-side helper for HTTP proof-gate
+// headers carried through host request metadata.
+export { buildX401EvidenceFromExtra } from './x401-evidence.js'
+export type {
+  CapturedX401Evidence,
+  X401EvidenceCaptureOptions,
+} from './x401-evidence.js'
+
 // AAuth sidecar evidence capture. Producer-side helper for AAuth
 // callback-shaped events from clients, middleware, or audit sinks.
 export { buildAAuthEvidenceFromEvent } from './aauth-evidence.js'

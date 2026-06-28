@@ -153,6 +153,13 @@
       "commands": ["microsoft-agent-framework-workflow-smoke"]
     },
     {
+      "id": "action-control-gate",
+      "path": "examples/action-control-gate",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["action-control-gate-smoke"]
+    },
+    {
       "id": "browser-workflow",
       "path": "examples/browser-workflow",
       "record_class": "offline-local",
@@ -301,6 +308,27 @@
       "record_class": "offline-local",
       "endpoint_posture": "public-read",
       "commands": ["calc-demo"]
+    },
+    {
+      "id": "proof-x401-sdk-compat",
+      "path": "scripts/check-proof-x401-sdk-compat.ts",
+      "record_class": "offline-local",
+      "endpoint_posture": "public-read",
+      "commands": ["x401-proof-sdk-compat"]
+    },
+    {
+      "id": "proof-x401-node-runtime-interop",
+      "path": "scripts/proof-x401-node-runtime-interop.ts",
+      "record_class": "offline-local",
+      "endpoint_posture": "public-read",
+      "commands": ["proof-x401-node-runtime-interop"]
+    },
+    {
+      "id": "proof-repo-interop",
+      "path": "scripts/check-proof-repo-interop.ts",
+      "record_class": "offline-local",
+      "endpoint_posture": "public-read",
+      "commands": ["proof-repo-interop"]
     },
     {
       "id": "ap2-live-interop",

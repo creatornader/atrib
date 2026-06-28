@@ -17,7 +17,7 @@
   "files": [
     "dist"
   ],
-  "description": "MCP server middleware for atrib. Signed receipts for every tool call, one-line integration.",
+  "description": "MCP server middleware for Atrib's verifiable action layer. Signs and chains successful tool calls with one-line integration.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

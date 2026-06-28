@@ -1,7 +1,7 @@
 {
   "name": "@atrib/verify-mcp",
   "version": "0.2.17",
-  "description": "MCP server for atrib. Verifies counterparty handoff evidence before an agent links follow-up work through informed_by.",
+  "description": "MCP server for Atrib's verifiable action layer. Verifies handoff evidence before agents link follow-up work.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
     "atrib",

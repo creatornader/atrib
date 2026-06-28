@@ -8,6 +8,7 @@ import * as ed from '@noble/ed25519'
 import { sha512, sha256 } from '@noble/hashes/sha2.js'
 import { canonicalRecord, hexEncode, signRecord, type AtribRecord } from '@atrib/mcp'
 import { startLogServer } from '@atrib/log-node'
+import { encodeX401HeaderObject } from '@atrib/verify'
 import { bindArchiveServer } from '../src/index.js'
 
 ed.hashes.sha512 = sha512
@@ -107,6 +108,116 @@ describe('archive-node HTTP', () => {
       const full = (await retrieved.json()) as { record: AtribRecord; log_proofs: unknown[] }
       expect(full.record.creator_key).toBe(record.creator_key)
       expect(full.log_proofs).toHaveLength(1)
+    } finally {
+      await archive.close()
+      await log.close()
+    }
+  })
+
+  it('projects x401 evidence without exposing raw credential material', async () => {
+    const log = await startLogServer({ port: 0 })
+    const archive = await bindArchiveServer(0, '127.0.0.1', {
+      origin: 'archive.test/v1',
+      trustedLogEndpoints: [`${log.url}/v1`],
+    })
+    try {
+      const record = await makeSignedRecord()
+      const proof = await submitRecord(log.url, record)
+      const hash = hashRecord(record)
+      const proofRequest = encodeX401HeaderObject({
+        scheme: 'x401',
+        version: '0.2.0',
+        credential_requirements: {
+          digital: {
+            requests: [
+              {
+                protocol: 'openid4vp-v1-signed',
+                data: {
+                  client_id: 'https://verifier.example/client.json',
+                  nonce: 'nonce-archive',
+                },
+              },
+            ],
+          },
+        },
+        oauth: { token_endpoint: 'https://verifier.example/oauth/token' },
+        request_id: 'proof-template-basic-v1',
+        payment: { required: true, scheme_hint: 'ap2' },
+      })
+      const proofResponse = encodeX401HeaderObject({
+        request_id: 'proof-template-basic-v1',
+        agent_id: 'did:web:agent.example',
+        credential_result: {
+          protocol: 'openid4vp-v1-signed',
+          data: { vp_token: 'private-vp-token' },
+        },
+      })
+
+      const submit = await fetch(`${archive.url}/v1/records`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          record_hash: hash,
+          record,
+          proof,
+          authorizationEvidence: [
+            {
+              protocol: 'x401',
+              headers: {
+                'PROOF-REQUEST': proofRequest,
+                'PROOF-RESPONSE': proofResponse,
+              },
+              resultVerified: true,
+              expectedRequestId: 'proof-template-basic-v1',
+              expectedAgentId: 'did:web:agent.example',
+              expectedAgentOrigin: 'https://agent.example/origin',
+              agentOrigin: 'https://agent.example/origin',
+              agentOriginVerified: true,
+              issuerTrustVerified: true,
+              issuerTrustRootType: 'proof-trust-list',
+              issuerTrustRootRef: 'https://trust.example/x401.json',
+              proofPaymentBindingVerified: true,
+              proofPaymentBindingRef: 'ap2-receipt:checkout-123',
+            },
+          ],
+        }),
+      })
+      expect(submit.status).toBe(201)
+
+      const evidence = await fetch(`${archive.url}/v1/evidence/${hash.slice('sha256:'.length)}`)
+      expect(evidence.status).toBe(200)
+      const evidenceText = await evidence.text()
+      const body = JSON.parse(evidenceText) as {
+        evidence: Array<{ protocol: string; valid: boolean; details?: Record<string, unknown> }>
+      }
+      expect(body.evidence[0]).toMatchObject({
+        protocol: 'x401',
+        valid: true,
+        details: {
+          proof_gate: { status: 'passed' },
+          payment_separation: { present: true, required: true, scheme_hint: 'ap2' },
+          agent_origin: { verified: true },
+          issuer_trust: { verified: true, root_type: 'proof-trust-list' },
+          proof_payment_binding: { verified: true },
+        },
+      })
+      expect(evidenceText).not.toContain('private-vp-token')
+      expect(evidenceText).not.toContain('vp_token')
+      expect(evidenceText).not.toContain(proofRequest)
+      expect(evidenceText).not.toContain(proofResponse)
+      expect(evidenceText).not.toContain('https://agent.example/origin')
+      expect(evidenceText).not.toContain('https://trust.example/x401.json')
+      expect(evidenceText).not.toContain('ap2-receipt:checkout-123')
+
+      const recordResponse = await fetch(`${archive.url}/v1/record/${hash.slice('sha256:'.length)}`)
+      const recordText = await recordResponse.text()
+      expect(recordText).not.toContain('private-vp-token')
+      expect(recordText).not.toContain('vp_token')
+      expect(recordText).not.toContain(proofRequest)
+      expect(recordText).not.toContain(proofResponse)
+      expect(recordText).not.toContain('https://agent.example/origin')
+      expect(recordText).not.toContain('https://trust.example/x401.json')
+      expect(recordText).not.toContain('ap2-receipt:checkout-123')
     } finally {
       await archive.close()
       await log.close()

@@ -45,6 +45,24 @@ export type {
   OAuthTokenCheck,
 } from './authorization-evidence.js'
 
+export {
+  decodeX401HeaderObject,
+  encodeX401HeaderObject,
+  verifyX401AuthorizationEvidence,
+} from './x401-evidence.js'
+export type {
+  X401AuthorizationEvidenceDetails,
+  X401AuthorizationEvidenceInput,
+  X401AuthorizationEvidenceVerification,
+  X401EvidenceProtocol,
+  X401HeaderSet,
+  X401HeaderSource,
+  X401HeaderValue,
+  X401ProofGateStatus,
+  X401ResponseKind,
+  X401VerificationPolicy,
+} from './x401-evidence.js'
+
 export { verifyAAuthAuthorizationEvidence } from './aauth-evidence.js'
 export type {
   AAuthAccessMode,

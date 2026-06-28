@@ -1,0 +1,54 @@
+{
+  "name": "legacy-draft-headers-strict-fails",
+  "headerObjects": {
+    "PROOF-REQUIRED": {
+      "scheme": "x401",
+      "version": "0.1.0",
+      "presentation_requirements": {
+        "digital": {
+          "requests": [
+            {
+              "protocol": "openid4vp-v1-signed",
+              "data": {
+                "client_id": "https://verifier.example/client.json",
+                "nonce": "nonce-legacy"
+              }
+            }
+          ]
+        }
+      },
+      "oauth": {
+        "token_endpoint": "https://verifier.example/oauth/token"
+      },
+      "request_id": "proof-template-basic-v1"
+    },
+    "PROOF-PRESENTATION": {
+      "request_id": "proof-template-basic-v1",
+      "agent_id": "did:web:agent.example",
+      "credential_result": {
+        "protocol": "openid4vp-v1-signed",
+        "data": {
+          "vp_token": "fixture-vp-token"
+        }
+      }
+    }
+  },
+  "input": {
+    "protocol": "x401",
+    "allowLegacyHeaders": false,
+    "allowLegacyFields": false,
+    "resultVerified": true
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [
+      { "type": "x401.payload.credential_requirements.digital", "status": "failed" }
+    ],
+    "errors": [
+      "x401_evidence legacy proof headers are not allowed",
+      "x401_evidence legacy payload fields are not allowed",
+      "x401_evidence constraint failed: x401.payload.credential_requirements.digital"
+    ]
+  }
+}
+

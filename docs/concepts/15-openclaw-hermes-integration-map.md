@@ -64,18 +64,20 @@ The split:
 
 OpenClaw and Hermes are runtimes. atrib should not try to replace either runtime, memory system, scheduler, tool registry, approval UI, or observability dashboard.
 
+The productized role is a verifiable action layer over selected runtime boundaries: control what runs when the host exposes a pre-action hook, coordinate what carries forward across sessions and agents, and prove what happened after execution or rejection.
+
 The clean role split:
 
 | Layer         | OpenClaw / Hermes role                                                              | atrib role                                                                                |
 | ------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Agent runtime | Own prompt assembly, model calls, tool execution, sessions, approvals, and delivery | Observe or wrap selected boundaries                                                       |
+| Agent runtime | Own prompt assembly, model calls, tool execution, sessions, approvals, and delivery | Wrap selected boundaries, record policy decisions, and verify action evidence             |
 | MCP tools     | Host discovers and invokes external MCP servers                                     | `@atrib/mcp-wrap` signs third-party MCP calls; `@atrib/mcp` signs atrib-owned MCP servers |
 | Native tools  | Host executes built-in and plugin tools                                             | Host adapter signs tool calls at hook or middleware boundary                              |
 | Observability | Host emits diagnostics, spans, Langfuse traces, or local telemetry                  | Use spans as intake only when the span contract is explicit enough                        |
 | Runtime log   | Host owns trajectory, transcript, session log, or job window                        | `@atrib/runtime-log` proves bounded windows without owning raw logs                       |
 | Handoff       | Host passes work between agents or tools                                            | `@atrib/verify` accepts or rejects signed upstream claims before linking                  |
 
-This keeps atrib as signed proof and lineage, not another always-on agent runtime.
+This keeps atrib as signed proof, lineage, and action-layer control points, not another always-on agent runtime.
 
 ## Package decision rules
 

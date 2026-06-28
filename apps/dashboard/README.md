@@ -1,6 +1,6 @@
 # atrib explorer (option 1)
 
-Public read-only inspection surface over [`log.atrib.dev`](https://log.atrib.dev/v1), [`graph.atrib.dev`](https://graph.atrib.dev/v1), [`directory.atrib.dev`](https://directory.atrib.dev/v6), and the optional archive evidence API at `archive.atrib.dev`. Composes data from those services into seven views: overview, identity (by `creator_key`), session (by `context_id`), action (by `record_hash`), live replay, trace (provenance ancestry by `record_hash`), anchoring.
+Public read-only inspection surface over [`log.atrib.dev`](https://log.atrib.dev/v1), [`graph.atrib.dev`](https://graph.atrib.dev/v1), [`directory.atrib.dev`](https://directory.atrib.dev/v6), and the optional archive evidence API at `archive.atrib.dev`. It is the inspection side of Atrib's verifiable action layer: users can see what was signed, what carried forward, and what proves the record. Composes data from those services into seven views: overview, identity (by `creator_key`), session (by `context_id`), action (by `record_hash`), live replay, trace (provenance ancestry by `record_hash`), anchoring.
 
 This is **option 1 of a three-stage build** per [D054](../../DECISIONS.md#d054-unified-public-explorer-vs-per-service-admin-uis): single HTML file, no build step, no framework, vanilla JavaScript with `fetch` against the public APIs.
 
@@ -67,6 +67,8 @@ CORS is configured on log-node, graph-node, directory-node, and archive-node (`A
 `/about` is the static explainer for these views. It is not counted as a data view. Legacy hash routes such as `/#/demo` are accepted as compatibility aliases, but the path routes above are canonical.
 
 Detail views use two different summary patterns. A status row answers whether the view is ready to inspect and what caveats apply. A metric row answers what data shape was loaded. The session view uses both: source/graph/transaction/reference readiness first, then signed records, graph nodes, edges, participants, and composition.
+
+The action view keeps raw log lookup output separate from archive evidence projections. When the archive returns x401 evidence, the evidence table shows proof-gate status, payment separation, and optional origin, issuer-trust, or proof-payment binding verifier outcomes while the raw JSON panel remains the `/v1/lookup` response. Raw credential payloads and proof-response bodies are not rendered by default.
 
 ## Graph surfaces
 

@@ -1,6 +1,6 @@
 # `@atrib/cli`
 
-**The atrib operator CLI. Generate Ed25519 keypairs, manage them in macOS Keychain, and publish identity claims to the atrib directory (spec [§6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#6-key-directory)).**
+**The operator CLI for Atrib's verifiable action layer. Generate Ed25519 keypairs, manage them in macOS Keychain, and publish identity claims to the atrib directory (spec [§6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#6-key-directory)).**
 
 ```bash
 npx @atrib/cli keygen --keychain
@@ -9,7 +9,7 @@ npx @atrib/cli keygen --keychain
 # public key to stdout.
 ```
 
-The CLI is the companion tool to the SDK packages: producers (`@atrib/mcp`, `@atrib/agent`) read keys from environment variables or Keychain entries; this CLI is what creates and manages those entries.
+The CLI is the companion tool to the SDK packages: producers (`@atrib/mcp`, `@atrib/agent`) read keys from environment variables or Keychain entries; this CLI is what creates and manages those entries. Those keys are the signer identities behind the action records that teams control, coordinate, and verify.
 
 ## Subcommands
 

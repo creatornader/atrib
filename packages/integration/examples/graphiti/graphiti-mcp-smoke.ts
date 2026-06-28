@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { canonicalRecord, hexEncode, sha256, verifyRecord, type AtribRecord } from '@atrib/mcp'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { snapshotWrapperMain } from '../mcp-wrap-runtime.js'
 
 const EVENT_TYPE_TOOL_CALL = 'https://atrib.dev/v1/types/tool_call'
 
@@ -124,50 +125,46 @@ function toolText(result: unknown): string {
 async function main(): Promise<void> {
   const exampleDir = dirname(fileURLToPath(import.meta.url))
   const integrationDir = dirname(dirname(exampleDir))
-  const wrapperMain = join(integrationDir, '..', 'mcp-wrap', 'dist', 'main.js')
   const fixtureServer = join(exampleDir, 'graphiti-fixture-mcp.ts')
-
-  if (!existsSync(wrapperMain)) {
-    throw new Error(
-      'missing @atrib/mcp-wrap dist/main.js. Run `pnpm --filter @atrib/mcp-wrap build` first.',
-    )
-  }
 
   const tempDir = mkdtempSync(join(tmpdir(), 'atrib-graphiti-mcp-'))
   const configPath = join(tempDir, 'wrap-config.json')
   const recordFile = join(tempDir, 'records.jsonl')
   const logFile = join(tempDir, 'wrapper.log')
-  const localLog = await startLocalLog()
   const client = new Client({ name: 'graphiti-mcp-smoke-host', version: '0.1.0' })
-
-  const config = {
-    name: 'graphiti',
-    agent: 'graphiti-smoke',
-    upstream: {
-      command: 'pnpm',
-      args: ['exec', 'tsx', fixtureServer],
-    },
-    serverUrl: 'graphiti://mcp.local',
-    logEndpoint: localLog.endpoint,
-    recordFile,
-    logFile,
-    autoChain: true,
-    autoChainFallback: 'fresh',
-    disclosure: {
-      tool_name: 'verbatim',
-      args: 'plain-sha256',
-      result: 'plain-sha256',
-    },
-  }
-  writeFileSync(configPath, JSON.stringify(config, null, 2))
-
-  const transport = new StdioClientTransport({
-    command: 'node',
-    args: [wrapperMain, configPath],
-    env: cleanEnv({ ATRIB_PRIVATE_KEY: randomBytes(32).toString('base64url') }),
-  })
+  let localLog: LocalLogServer | undefined
 
   try {
+    const wrapperMain = await snapshotWrapperMain({ integrationDir, tempDir })
+    const activeLocalLog = await startLocalLog()
+    localLog = activeLocalLog
+    const config = {
+      name: 'graphiti',
+      agent: 'graphiti-smoke',
+      upstream: {
+        command: 'pnpm',
+        args: ['exec', 'tsx', fixtureServer],
+      },
+      serverUrl: 'graphiti://mcp.local',
+      logEndpoint: activeLocalLog.endpoint,
+      recordFile,
+      logFile,
+      autoChain: true,
+      autoChainFallback: 'fresh',
+      disclosure: {
+        tool_name: 'verbatim',
+        args: 'plain-sha256',
+        result: 'plain-sha256',
+      },
+    }
+    writeFileSync(configPath, JSON.stringify(config, null, 2))
+
+    const transport = new StdioClientTransport({
+      command: 'node',
+      args: [wrapperMain, configPath],
+      env: cleanEnv({ ATRIB_PRIVATE_KEY: randomBytes(32).toString('base64url') }),
+    })
+
     await client.connect(transport)
     const tools = await client.listTools()
     const toolNames = new Set(tools.tools.map((tool) => tool.name))
@@ -212,7 +209,7 @@ async function main(): Promise<void> {
     }
 
     await waitFor(() => existsSync(recordFile), 'record mirror')
-    await waitFor(() => localLog.submissions.length >= 3, 'local log submissions')
+    await waitFor(() => activeLocalLog.submissions.length >= 3, 'local log submissions')
 
     const records = mirrorRecords(recordFile)
     const toolNamesSeen = records.map((record) => record.tool_name)
@@ -256,7 +253,7 @@ async function main(): Promise<void> {
           operations: toolNamesSeen,
           record_hashes: recordHashes,
           last_record_hash: recordHashes.at(-1),
-          submissions: localLog.submissions.length,
+          submissions: activeLocalLog.submissions.length,
           public_records_hash_only: true,
         },
         null,
@@ -265,7 +262,7 @@ async function main(): Promise<void> {
     )
   } finally {
     await client.close().catch(() => {})
-    await localLog.close().catch(() => {})
+    await localLog?.close().catch(() => {})
     rmSync(tempDir, { recursive: true, force: true })
   }
 }

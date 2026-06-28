@@ -1,7 +1,7 @@
 {
   "name": "@atrib/primitives-runtime",
   "version": "0.1.19",
-  "description": "Private local MCP runtime that exposes all atrib cognitive primitives from one process.",
+  "description": "Private local MCP runtime for Atrib's verifiable action layer. Exposes all cognitive primitives from one process.",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",

@@ -1,6 +1,6 @@
 # @atrib/verify-mcp
 
-MCP server exposing the `atrib-verify` cognitive primitive. It verifies counterparty handoff evidence before a receiving agent signs follow-up work that cites those records through `informed_by`.
+MCP server exposing the `atrib-verify` cognitive primitive for Atrib's verifiable action layer. It verifies counterparty handoff evidence before a receiving agent signs follow-up work that cites those records through `informed_by`.
 
 The package is read-only. It accepts caller-supplied evidence, returns accepted and rejected hashes, and leaves the follow-up signing step to `atrib-emit` or normal wrapped tool calls.
 

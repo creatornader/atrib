@@ -27,6 +27,7 @@ import { createSubmissionQueue } from './submission.js'
 import { zeroize } from './zeroize.js'
 import { EVENT_TYPE_TOOL_CALL_URI, EVENT_TYPE_TRANSACTION_URI } from './types.js'
 import { buildMcpOAuthEvidenceFromExtra } from './oauth-evidence.js'
+import { buildX401EvidenceFromExtra } from './x401-evidence.js'
 import {
   LOCAL_SUBSTRATE_REQUEST_SCHEMA,
   tryLocalSubstrateCoordinator,
@@ -39,6 +40,7 @@ import {
 import type { AtribRecord, UnsignedAtribRecord } from './types.js'
 import type { ArchiveSubmissionOptions, SubmissionQueue, ProofBundle } from './submission.js'
 import type { CapturedMcpOAuthEvidence, McpOAuthEvidenceCaptureOptions } from './oauth-evidence.js'
+import type { CapturedX401Evidence, X401EvidenceCaptureOptions } from './x401-evidence.js'
 
 const HEX_32 = /^[0-9a-f]{32}$/
 const DEFAULT_LOCAL_SUBSTRATE_SHADOW_DEGRADATION: LocalSubstrateDegradationPolicy = {
@@ -181,7 +183,7 @@ export interface OnRecordSidecar {
   /** Upstream tool's result object, BEFORE atrib mutated _meta with its token. */
   result?: Record<string, unknown>
   /** Verifier-ready authorization evidence captured from MCP request metadata. */
-  authorizationEvidence?: CapturedMcpOAuthEvidence[]
+  authorizationEvidence?: Array<CapturedMcpOAuthEvidence | CapturedX401Evidence>
   /** Local facts callers can feed into @atrib/verify capability_check. */
   resolvedFacts?: {
     tool_name?: string
@@ -242,6 +244,14 @@ export interface AtribOptions {
    * `@atrib/verify` checks.
    */
   authorizationEvidence?: boolean | McpOAuthEvidenceCaptureOptions
+  /**
+   * Opt-in producer-side x401 proof evidence capture. When enabled and the
+   * host passes HTTP proof headers through `extra.requestInfo.headers`, atrib
+   * writes verifier-ready x401 evidence into the local-only sidecar. Raw
+   * credential payloads stay in the header values supplied by the host; archive
+   * projections should store verifier output rather than raw inputs.
+   */
+  x401AuthorizationEvidence?: boolean | X401EvidenceCaptureOptions
   /**
    * Maximum number of records held in the in-memory submission queue while
    * the log is unreachable. When this cap is hit, the queue evicts the
@@ -1219,7 +1229,12 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
           options.authorizationEvidence,
           { serverUrl },
         )
-        if (authorizationEvidence) sidecar.authorizationEvidence = [authorizationEvidence]
+        const x401Evidence = buildX401EvidenceFromExtra(extra, options.x401AuthorizationEvidence)
+        const sidecarEvidence = [authorizationEvidence, x401Evidence].filter(
+          (entry): entry is CapturedMcpOAuthEvidence | CapturedX401Evidence =>
+            entry !== undefined,
+        )
+        if (sidecarEvidence.length > 0) sidecar.authorizationEvidence = sidecarEvidence
         commitRecord(built, resultObj, sidecar)
 
         return result

@@ -1,0 +1,49 @@
+{
+  "name": "unverified-issuer-trust-fails",
+  "input": {
+    "protocol": "x401",
+    "proofRequest": {
+      "scheme": "x401",
+      "version": "0.2.0",
+      "credential_requirements": {
+        "digital": {
+          "requests": [
+            {
+              "protocol": "openid4vp-v1-signed",
+              "data": {
+                "client_id": "https://verifier.example/client.json",
+                "nonce": "nonce-current"
+              }
+            }
+          ]
+        }
+      },
+      "oauth": {
+        "token_endpoint": "https://verifier.example/oauth/token"
+      },
+      "request_id": "proof-template-basic-v1",
+      "satisfied_requirements": ["urn:proof:x401:satisfaction:basic:v1"]
+    },
+    "proofResponse": {
+      "request_id": "proof-template-basic-v1",
+      "agent_id": "did:web:agent.example",
+      "credential_result": {
+        "protocol": "openid4vp-v1-signed",
+        "data": {
+          "vp_token": "fixture-vp-token"
+        }
+      }
+    },
+    "resultVerified": true,
+    "expectedRequestId": "proof-template-basic-v1",
+    "expectedAgentId": "did:web:agent.example",
+    "issuerTrustVerified": false,
+    "issuerTrustRootType": "proof-trust-list",
+    "issuerTrustRootRef": "https://trust.example/x401.json"
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [{ "type": "x401.issuer_trust_verified", "status": "failed" }],
+    "errors": ["x401_evidence issuer trust verification failed"]
+  }
+}

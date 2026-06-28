@@ -1,0 +1,48 @@
+{
+  "name": "unverified-result-artifact-fails",
+  "input": {
+    "protocol": "x401",
+    "proofRequest": {
+      "scheme": "x401",
+      "version": "0.2.0",
+      "credential_requirements": {
+        "digital": {
+          "requests": [
+            {
+              "protocol": "openid4vp-v1-signed",
+              "data": {
+                "client_id": "https://verifier.example/client.json",
+                "nonce": "nonce-unverified"
+              }
+            }
+          ]
+        }
+      },
+      "oauth": {
+        "token_endpoint": "https://verifier.example/oauth/token"
+      },
+      "request_id": "proof-template-basic-v1"
+    },
+    "proofResponse": {
+      "request_id": "proof-template-basic-v1",
+      "agent_id": "did:web:agent.example",
+      "credential_result": {
+        "protocol": "openid4vp-v1-signed",
+        "data": {
+          "vp_token": "fixture-vp-token"
+        }
+      }
+    },
+    "expectedRequestId": "proof-template-basic-v1"
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [
+      { "type": "x401.result_verified", "status": "unresolved" }
+    ],
+    "errors": [
+      "x401_evidence result verification unresolved"
+    ]
+  }
+}
+

@@ -1,0 +1,48 @@
+{
+  "spec_version": "atrib/1.0",
+  "section": "5.5.6",
+  "suite": "x401-authorization-evidence",
+  "description": "Offline verifier cases for x401 proof-requirement authorization evidence blocks.",
+  "cases": [
+    {
+      "name": "current spec result artifact passes",
+      "file": "cases/current-spec-result-artifact-pass.json"
+    },
+    {
+      "name": "unverified result artifact fails",
+      "file": "cases/unverified-result-artifact-fails.json"
+    },
+    {
+      "name": "wrong request id fails",
+      "file": "cases/wrong-request-id-fails.json"
+    },
+    {
+      "name": "proof result error fails",
+      "file": "cases/proof-result-error-fails.json"
+    },
+    {
+      "name": "token proof response passes",
+      "file": "cases/token-proof-response-pass.json"
+    },
+    {
+      "name": "by-reference result artifact passes",
+      "file": "cases/by-reference-result-artifact-pass.json"
+    },
+    {
+      "name": "legacy draft headers fail in strict mode",
+      "file": "cases/legacy-draft-headers-strict-fails.json"
+    },
+    {
+      "name": "payment hint stays informational",
+      "file": "cases/payment-hint-informational-pass.json"
+    },
+    {
+      "name": "external origin trust and binding facts pass",
+      "file": "cases/external-origin-trust-binding-pass.json"
+    },
+    {
+      "name": "unverified issuer trust fails",
+      "file": "cases/unverified-issuer-trust-fails.json"
+    }
+  ]
+}

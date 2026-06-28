@@ -7057,6 +7057,306 @@ Python allow decision -> ADK Python tool outcome.
 - [`packages/integration/test/google-stack-chain.test.ts`](packages/integration/test/google-stack-chain.test.ts),
   deterministic chain proof tests.
 
+## D132: x401 proof evidence stays verifier-side authorization evidence
+
+**Date:** 2026-06-28
+
+**Status:** Accepted
+
+**Extends:** [D089](#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block), [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks), [D119](#d119-aauth-evidence-stays-verifier-side), and [D131](#d131-google-adk-decision-ledger-stays-an-extension-proof).
+
+**Context.** x401 defines an HTTP-native proof requirement flow for protected routes. In the current v0.2.0 spec, the verifier returns `PROOF-REQUEST`, the agent retries with `PROOF-RESPONSE`, and the verifier can return `PROOF-RESULT`. The request payload carries `credential_requirements.digital` and OAuth token exchange metadata. It can also carry an optional `payment` hint, but the spec keeps payment semantics separate: payment remains a `402 Payment Required` concern.
+
+The public x401 surfaces are not perfectly aligned yet. The latest spec uses `PROOF-REQUEST`, `PROOF-RESPONSE`, `PROOF-RESULT`, and `credential_requirements`. The landing page and GitHub README still show older draft names such as `PROOF-REQUIRED`, `PROOF-PRESENTATION`, `PROOF-RESPONSE`, and `presentation_requirements`. atrib needs to accept the current shape while making draft drift visible.
+
+**Decision.** Treat x401 as generic verifier-side authorization evidence in `@atrib/verify`, not as a transaction detector and not as a new atrib event type.
+
+Add `verifyX401AuthorizationEvidence()` plus header encode/decode helpers. The verifier accepts decoded objects or base64url JSON header values, checks the x401 envelope, version, request id, Digital Credentials request shape, OAuth token endpoint, OpenID4VP nonce when visible, result artifact or token object shape, optional agent id, satisfied requirement ids, and the presence of x401 proof-result errors. The verifier records `payment` only as an informational hint and adds an explicit payment-separation check.
+
+Actual credential or token cryptography remains caller-owned. A decoded `PROOF-RESPONSE` proves only that a response object was supplied. The caller must pass `resultVerified: true` or `tokenVerified: true` after its own OpenID4VP, credential, token, or policy validation path succeeds. Missing verification is invalid by default, advisory under `verificationPolicy: "best-effort"`, and skipped only under `verificationPolicy: "off"`.
+
+Legacy x401 draft header and payload names are accepted with warnings by default. Callers can reject them with `allowLegacyHeaders: false` or `allowLegacyFields: false`.
+
+`verifyAuthorizationEvidence()` now dispatches `{ protocol: "x401", x401: ... }` beside MCP/OAuth and AAuth evidence. `verifyRecord()` and `AtribVerifier.verify()` inherit that behavior through their existing `authorizationEvidence` option. x401 evidence does not change base record validity.
+
+**Alternatives considered.**
+
+- _Make x401 a transaction hook because the payload can mention payment._ Rejected. x401 proof requirements do not prove payment completion. x402, MPP, AP2, a2a-x402, ACP, and UCP remain the transaction event hooks.
+- _Fold x401 into the OAuth/MCP evidence adapter._ Rejected. x401 uses its own proof headers and Digital Credentials request/result shape. Its optional OAuth token exchange is one leg of the flow, not the whole evidence model.
+- _Treat x401 and AAuth as the same evidence type._ Rejected. AAuth proves agent/resource authorization, missions, delegation, and proof-of-possession. x401 proves a route-specific credential requirement. A route can require both.
+- _Verify OpenID4VP and credential cryptography inside this first adapter._ Rejected for scope. The first adapter verifies x401 transport and evidence shape, then requires a caller-supplied verification outcome. A later credential verifier can feed that outcome without changing the evidence block contract.
+- _Reject older draft names outright._ Rejected. Current public x401 material still exposes both draft generations. Warnings make the drift visible without breaking early integrations.
+
+**Consequences.**
+
+- x401 composes with AP2 / VI. x401 can prove eligibility or identity for a route, while AP2 / VI proves mandate, intent, receipt, and payment evidence.
+- x401 composes with AAuth. AAuth can prove the agent is authorized to act, while x401 can prove the caller satisfied a credential gate.
+- x401 composes with x402 and MPP. x401 handles `401` proof requirements; x402 and MPP handle payment semantics.
+- `@atrib/agent` transaction detection must ignore `PROOF-REQUEST`, `PROOF-RESPONSE`, and `PROOF-RESULT` unless a real payment signal is also present.
+- Hosts stay responsible for credential trust roots, issuer policy, token exchange, replay policy, and any live network calls.
+
+**Cross-references.**
+
+- [`packages/verify/src/x401-evidence.ts`](packages/verify/src/x401-evidence.ts), x401 verifier evidence adapter.
+- [`packages/verify/test/x401-evidence.test.ts`](packages/verify/test/x401-evidence.test.ts), x401 evidence shape, verification-policy, legacy-drift, and `verifyRecord()` coverage.
+- [`packages/integration/test/x401-evidence-e2e.test.ts`](packages/integration/test/x401-evidence-e2e.test.ts), proof that x401 evidence composes with payment detection without becoming payment detection.
+- [x401 latest spec](https://x401.proof.com/spec/latest/), source for v0.2.0 header names and payment separation.
+
+## D133: Action Gate is a host-owned control/proof package
+
+**Date:** 2026-06-28
+
+**Status:** Accepted
+
+**Extends:** [D117](#d117-demo-records-are-classified-by-execution-surface),
+[D122](#d122-host-runtime-adapters-stay-distinct-from-agent-framework-adapters),
+and [D131](#d131-google-adk-decision-ledger-stays-an-extension-proof).
+
+**Context.** The commercial product direction needs a first slice that changes
+execution, not only retrospective audit. Browser and computer-use agents expose
+that pressure first: a host may need to let an agent observe a page, block a
+payment-impacting form submit, or escalate a customer message before the
+automation body runs.
+
+The existing Browserbase Stagehand proof signs browser-shaped actions and
+produces proof packets. That proof is useful, but it does not give other hosts
+a reusable gate contract. The Google ADK decision-ledger proof already showed a
+runtime-specific version of the pattern: sign a decision before tool dispatch,
+then sign the allowed outcome with `informed_by` pointing at the decision.
+
+**Decision.** Add `@atrib/action-gate` as a host-owned control/proof helper.
+The package defines an action envelope, policy-decision shape, `runGatedAction`
+helper, signed decision and outcome records, and a verifier for the
+decision-to-outcome binding. The first integration proof uses browser-shaped
+fixture actions to cover `allowed`, `blocked`, and `escalated` states.
+
+`@atrib/action-gate` signs two extension record types:
+
+- `https://atrib.dev/v1/extensions/action-gate/decision`
+- `https://atrib.dev/v1/extensions/action-gate/outcome`
+
+These are extension event types, not new normative atrib event types. Public
+records stay hash-only by default. Local sidecars keep the action envelope,
+policy decision, result material, and proof details needed by a host-owned
+packet.
+
+The host owns policy, identity, auth, approval UI, and final execution. Atrib
+proves the decision and outcome. The package gives hosts a reusable control
+surface that Browserbase, Stagehand, browser-use, Playwright, Computer Use,
+support tools, payment workflows, and deployment tooling can call without
+placing browser automation inside Atrib.
+
+**Alternatives considered.**
+
+- _Put the gate into `@atrib/agent`._ Rejected. `@atrib/agent` owns
+  client-side middleware and framework adapters. A host-owned gate needs to
+  compose with browser automation, ADK, hosted runtimes, and support tools
+  without turning `@atrib/agent` into the package for every execution boundary.
+- _Leave the pattern inside integration examples._ Rejected. The commercial
+  slice needs an importable contract. A demo-only pattern would make the
+  Browserbase work and future Computer Use work copy policy logic by hand.
+- _Treat the package as observability._ Rejected. The package can block or
+  escalate before execution. Observability tools may inspect the same run, but
+  this package sits on the execution path when the host opts in.
+- _Promote decision and outcome to normative event types now._ Rejected. The
+  extension event types let the package ship while repeated host integrations
+  prove whether the record shape deserves protocol-level treatment.
+
+**Consequences.**
+
+- The first saleable product slice can be framed as Action Gate for
+  high-impact agent actions: allow, block, escalate, and prove what happened.
+- Browserbase and browser automation demos can embed the gate without owning
+  policy semantics.
+- Blocked, escalated, and policy-error paths can produce signed proof without
+  pretending a tool call executed.
+- A later hosted control plane can build on the package, but the package itself
+  stays a small library with no dashboard, no policy language, and no auth
+  issuer role.
+- If repeated integrations converge on the same shape, a future ADR can decide
+  whether action-gate records become normative event types or remain extension
+  records.
+
+**Cross-references.**
+
+- [`packages/action-gate/`](packages/action-gate/), package contract, tests,
+  and README.
+- [`packages/integration/examples/action-control-gate/`](packages/integration/examples/action-control-gate/),
+  credential-free browser-shaped proof.
+- [`packages/integration/test/action-control-gate.test.ts`](packages/integration/test/action-control-gate.test.ts),
+  integration coverage for allow, block, and escalate.
+- [`packages/integration/examples/browserbase-stagehand/`](packages/integration/examples/browserbase-stagehand/),
+  first browser-demo surface that can embed the gate.
+
+## D134: x401 producer capture and propagation stay sanitized
+
+**Date:** 2026-06-28
+
+**Status:** Accepted
+
+**Extends:** [D111](#d111-host-owned-oauth-evidence-infrastructure),
+[D118](#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain),
+and [D132](#d132-x401-proof-evidence-stays-verifier-side-authorization-evidence).
+
+**Context.** [D132](#d132-x401-proof-evidence-stays-verifier-side-authorization-evidence)
+added the verifier-side x401 evidence adapter. That was enough to model x401 as
+authorization evidence, but it was not enough for an
+end-to-end proof path. A real path must capture the HTTP proof flow at runtime,
+link the attempted and successful actions, preserve enough evidence for later
+verification, keep credential payloads private, and show the proof gate in the
+Explorer without treating x401 as payment.
+
+The current Proof organization surface has five public repositories relevant to
+this work: `proof/x401`, `proof/x401-node`, `proof/proof-vc-common`,
+`proof/proof-vc-web`, and `proof/verifier-vcp-demo`. The hosted x401 spec and
+`proof/x401` spec use the current v0.2 header names: `PROOF-REQUEST`,
+`PROOF-RESPONSE`, `PROOF-RESULT`, and `credential_requirements.digital`.
+The published `@proof.com/x401-node@0.2.0` package and demo surfaces still lag
+on older draft names. That drift means atrib can target the current spec
+locally, but should not claim live npm Proof SDK interop until Proof publishes a
+Node package that matches the current header semantics.
+
+Follow-up on 2026-06-28: atrib opened
+[proof/x401-node#7](https://github.com/proof/x401-node/pull/7), which updates
+the Node SDK to `PROOF-REQUEST`, `PROOF-RESPONSE`, `PROOF-RESULT`,
+`credential_requirements.digital`, and Result Artifact helpers. The private
+`@atrib/integration` package pins that fork commit so its runtime fixture imports
+a real Proof SDK implementation, runs the current-spec verifier and agent
+helpers natively, and proves strict current-spec atrib verification rejects raw
+legacy headers. This closes pinned native Proof SDK interop. It does not claim
+that the live npm package has caught up.
+
+**Decision.** Add an opt-in producer capture path and a local proof-gate E2E
+harness, while keeping x401 as verifier evidence and keeping raw credential
+material out of public storage.
+
+`@atrib/mcp` now accepts `x401AuthorizationEvidence`. When enabled, the
+middleware reads x401 proof headers from the MCP request metadata, captures
+current names plus legacy drift guards, and writes verifier-ready x401 evidence
+into the local sidecar. The option only records caller-supplied verification
+facts such as `resultVerified`, `tokenVerified`, expected request id, expected
+agent id, expected nonce, agent-origin verification, issuer-trust verification,
+proof-payment binding verification, and legacy-name policy. It does not verify
+OpenID4VP, fetch result-by-reference content, call issuers, verify trust-list
+protocols, bind payment receipts, or mint tokens.
+
+`@atrib/integration` now has a local x401 proof-gate harness. It starts a
+protected HTTP endpoint, returns `401` with `PROOF-REQUEST`, rejects wrong
+request ids and stale nonces, accepts a successful `PROOF-RESPONSE`, signs the
+attempted action and successful action, links the successful record to the
+attempted record through `informed_by`, and verifies the resulting x401 evidence
+with `@atrib/verify`.
+
+The same harness also covers multi-endpoint propagation. It runs two protected
+routes with separate request ids and nonces in one `context_id`, signs each
+attempted action and each successful action separately, and links the second
+successful action to both its own attempt and the first successful action
+through `informed_by`. This proves atrib's propagation model without defining a
+combined x401 request format before Proof settles the upstream semantics.
+
+The composition harness verifies x401 and AAuth evidence on the same successful
+action, while payment detection stays on its own rail. In the local fixture,
+x401 proves the protected route's credential gate, AAuth proves agent/resource
+authorization, and x402 is detected as payment evidence. AP2 / VI, MPP, ACP,
+UCP, and a2a-x402 keep the same boundary when used instead of x402.
+
+`@atrib/integration` also has a Proof repo-surface guard. It classifies
+`proof/x401` as the spec source, `proof/x401-node` as the only possible x401
+wire SDK dependency, `proof/proof-vc-common` as a credential-verifier helper,
+`proof/proof-vc-web` as browser-demo scope, and `proof/verifier-vcp-demo` as a
+reference demo. A public package or core runtime dependency is allowed only when
+`proof/x401-node` uses the current header and payload names without legacy x401
+wire names. A private integration fixture may pin a current-spec upstream or
+fork commit before an npm release. A lagging SDK may only be pinned when the
+adapter marks the translation boundary and emits current-spec atrib evidence.
+
+The x401 conformance corpus lives at `spec/conformance/5.5.6/x401/`. It pins
+current headers, result artifacts, token responses, result-by-reference,
+request-id mismatch, proof-result errors, unverified proof failures, legacy
+header strict-mode failures, payment-hint separation, optional agent-origin
+facts, optional issuer-trust facts, and optional proof-payment binding facts.
+
+The archive service sanitizes x401 authorization inputs before storage. It
+projects verifier evidence blocks, stores hashes and safe status fields such as
+`proof_gate`, `payment_separation`, `agent_origin`, `issuer_trust`, and
+`proof_payment_binding`, and removes raw x401 authorization input from the
+stored record body. The public log still receives only the signed atrib record.
+The Explorer action view reads archive evidence projections, shows the x401
+proof gate and payment separation in the evidence table, and keeps the raw JSON
+panel scoped to the `/v1/lookup` log response.
+
+**Alternatives considered.**
+
+- _Depend on `@proof.com/x401-node` from public packages now._ Rejected. The
+  current package surface still uses older draft names, including a conflicting
+  meaning for `PROOF-RESPONSE`. The private integration package may pin it as a
+  compatibility fixture because that fixture translates into current-spec
+  evidence and does not make the SDK part of atrib core.
+- _Claim live npm Proof SDK interop from a fork commit._ Rejected. The forked
+  commit proves native current-spec interop with a pinned Proof SDK
+  implementation and gives Proof an upstream PR to review. It does not change
+  what `npm install @proof.com/x401-node@0.2.0` returns.
+- _Treat the local proof gate as upstream interop._ Rejected. The harness proves
+  atrib's capture, signing, verification, archive, and Explorer path against
+  current x401 semantics. It does not prove compatibility with a Proof SDK
+  release.
+- _Archive raw x401 headers for replay._ Rejected. Raw credential material and
+  proof responses can carry private payloads. Public retrieval should get
+  verifier projections and hashes by default.
+- _Fold x401 into AAuth or AP2 / VI propagation._ Rejected. AAuth can prove
+  agent authorization, AP2 / VI can prove payment intent and receipt, and x401
+  can prove a route-specific proof gate. They compose through `context_id`,
+  `informed_by`, parent hashes, and sidecar evidence refs.
+
+**Consequences.**
+
+- atrib can now claim current-spec local x401 E2E: challenge, retry, success,
+  signed attempted action, signed successful action, verifier evidence, archive
+  projection, and Explorer propagation.
+- Multi-endpoint x401 propagation is covered as separate signed actions in one
+  `context_id`, not as a combined request format.
+- x401 can be verified beside AAuth on the same action, while payment detection
+  remains separate and protocol-specific.
+- atrib can now claim pinned native Proof SDK runtime interop against
+  `creatornader/x401-node@338b785`, with
+  [proof/x401-node#7](https://github.com/proof/x401-node/pull/7) opened
+  upstream. It still cannot claim live npm `@proof.com/x401-node@0.2.0`
+  readiness until Proof publishes the current-spec package.
+- Credential verification remains host-owned or Proof-verifier-owned. atrib
+  accepts the verification outcome, optional origin outcome, optional issuer
+  trust outcome, and optional proof-payment binding outcome as external evidence
+  and makes those outcomes visible in a signed action chain.
+- x401 payment hints stay informational. AP2, x402, MPP, ACP, UCP, or another
+  payment rail must still provide transaction evidence when commerce closes.
+
+**Cross-references.**
+
+- [`packages/mcp/src/x401-evidence.ts`](packages/mcp/src/x401-evidence.ts),
+  producer-side x401 capture helper.
+- [`packages/integration/src/x401-proof-gate.ts`](packages/integration/src/x401-proof-gate.ts),
+  local current-spec proof-gate harness.
+- [`packages/integration/src/proof-x401-node-runtime.ts`](packages/integration/src/proof-x401-node-runtime.ts),
+  private native runtime fixture for the pinned Proof x401 Node SDK commit.
+- [`packages/integration/scripts/proof-x401-node-runtime-interop.ts`](packages/integration/scripts/proof-x401-node-runtime-interop.ts),
+  runnable SDK native interop proof.
+- [`spec/conformance/5.5.6/x401/`](spec/conformance/5.5.6/x401/), x401
+  authorization evidence corpus.
+- [`services/archive-node/src/server.ts`](services/archive-node/src/server.ts),
+  archive x401 sanitization.
+- [`apps/dashboard/index.html`](apps/dashboard/index.html), Explorer evidence
+  table rendering.
+- [`docs/proof-x401-open-threads.md`](docs/proof-x401-open-threads.md),
+  current Proof repo, issue, PR, and upstream-draft map.
+- [`packages/integration/src/proof-x401-sdk-compat.ts`](packages/integration/src/proof-x401-sdk-compat.ts),
+  compatibility classifier for when `@proof.com/x401-node` and the broader
+  Proof repo surface can support a real Proof SDK interop claim.
+- [`packages/integration/scripts/check-proof-x401-sdk-compat.ts`](packages/integration/scripts/check-proof-x401-sdk-compat.ts),
+  live npm readiness guard for the Proof SDK claim.
+- [`packages/integration/scripts/check-proof-repo-interop.ts`](packages/integration/scripts/check-proof-repo-interop.ts),
+  local or live Proof repo-surface readiness guard.
+- [x401 latest spec](https://x401.proof.com/spec/latest/), current public
+  source for v0.2 header names.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

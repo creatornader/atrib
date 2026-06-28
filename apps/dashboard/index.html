@@ -2589,8 +2589,55 @@ function evidenceFlagLabel(value) {
   return 'n/a'
 }
 
+function evidenceDetails(block) {
+  return block && block.details && typeof block.details === 'object' ? block.details : {}
+}
+
+function x401ProofGateLabel(block) {
+  if (block.protocol !== 'x401') return null
+  const proofGate = evidenceDetails(block).proof_gate
+  if (!proofGate || typeof proofGate !== 'object') return null
+  const status = proofGate.status || (block.valid ? 'passed' : 'review')
+  const kind = proofGate.kind ? ` (${proofGate.kind})` : ''
+  return `x401 proof gate ${status}${kind}`
+}
+
+function x401PaymentSeparationLabel(block) {
+  if (block.protocol !== 'x401') return null
+  const payment = evidenceDetails(block).payment_separation
+  if (!payment || typeof payment !== 'object') return 'payment separate'
+  if (!payment.present) return 'payment separate: none'
+  const hint = payment.scheme_hint ? ` (${payment.scheme_hint})` : ''
+  return payment.required ? `payment hint separate${hint}` : `payment separate${hint}`
+}
+
+function x401ExternalFactsLabel(block) {
+  if (block.protocol !== 'x401') return null
+  const details = evidenceDetails(block)
+  const parts = []
+  const origin = details.agent_origin
+  const trust = details.issuer_trust
+  const binding = details.proof_payment_binding
+  if (origin && typeof origin === 'object' && 'verified' in origin) {
+    parts.push(`origin ${evidenceFlagLabel(origin.verified)}`)
+  }
+  if (trust && typeof trust === 'object' && 'verified' in trust) {
+    parts.push(`issuer trust ${evidenceFlagLabel(trust.verified)}`)
+  }
+  if (binding && typeof binding === 'object' && 'verified' in binding) {
+    parts.push(`proof payment binding ${evidenceFlagLabel(binding.verified)}`)
+  }
+  return parts.length ? parts.join(', ') : null
+}
+
 function evidenceAuthorityLabel(block) {
   const parts = []
+  const x401Gate = x401ProofGateLabel(block)
+  const x401Payment = x401PaymentSeparationLabel(block)
+  const x401Facts = x401ExternalFactsLabel(block)
+  if (x401Gate) parts.push(x401Gate)
+  if (x401Payment) parts.push(x401Payment)
+  if (x401Facts) parts.push(x401Facts)
   if ('attenuation_ok' in block) parts.push(`attenuation ${evidenceFlagLabel(block.attenuation_ok)}`)
   if ('delegation_ok' in block) parts.push(`delegation ${evidenceFlagLabel(block.delegation_ok)}`)
   return parts.length ? parts.join(', ') : 'n/a'
@@ -4481,7 +4528,7 @@ async function renderAction(recordHash) {
     ],
   }))
 
-  let entry = await fetchMaybe(`${ep.log}/lookup/${hashHex}`)
+  const entry = await fetchMaybe(`${ep.log}/lookup/${hashHex}`)
   if (!routeGenerationStillCurrent(myGen)) return
   if (entry._error) {
     root.append(el('section', { class: 'panel' },
@@ -4500,13 +4547,13 @@ async function renderAction(recordHash) {
     ? await fetchMaybe(`${ep.archive}/evidence/${hashHex}`, { timeoutMs: 1200 })
     : null
   if (!routeGenerationStillCurrent(myGen)) return
-  entry = mergeArchiveEvidence(entry, archiveEvidence)
+  const entryWithEvidence = mergeArchiveEvidence(entry, archiveEvidence)
 
   if (entry.creator_key) await resolveIdentity(entry.creator_key)
 
   const identityOk = entry.creator_key && identityCache.get(entry.creator_key)?.found === true
   const eventInfo = eventTypeInfo(entry.event_type, entry.creator_key, entry.event_type_uri)
-  const evidence = evidenceBlocks(entry)
+  const evidence = evidenceBlocks(entryWithEvidence)
   root.append(renderDetailStatus([
     {
       label: 'signature',

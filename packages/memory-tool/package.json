@@ -13,7 +13,7 @@
   "files": [
     "dist"
   ],
-  "description": "Memory Tool wrapper for atrib. Signs Anthropic memory commands while leaving storage under the host's control.",
+  "description": "Memory Tool wrapper for Atrib's verifiable action layer. Signs memory commands while leaving storage under the host's control.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

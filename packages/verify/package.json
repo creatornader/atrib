@@ -13,7 +13,7 @@
   "files": [
     "dist"
   ],
-  "description": "Verifier library for atrib. Independent signature, graph-derivation, and settlement-recommendation checks per atrib spec §4.6.",
+  "description": "Verifier library for Atrib's verifiable action layer. Checks records, evidence, handoffs, graph derivation, and settlement documents.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

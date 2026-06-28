@@ -437,7 +437,15 @@ export function createBrowserbaseDemoServer(
             policy_version: BROWSERBASE_ACTION_POLICY_VERSION,
           },
           fixed_flow: ['start', 'navigate', 'observe', 'act', 'extract', 'end'],
-          public_fields: ['tool name', 'args_hash', 'result_hash', 'record hash', 'log index'],
+          public_fields: [
+            'tool name',
+            'args_hash',
+            'result_hash',
+            'record hash',
+            'log index',
+            'Action Gate decision hash',
+            'Action Gate outcome hash',
+          ],
           private_fields: [
             'Browserbase API key',
             'Browserbase project id',
@@ -987,27 +995,27 @@ function renderApp(): string {
   </head>
   <body>
     <main>
-      <header>
-        <div>
-          <h1>Browserbase Atrib Proof</h1>
-          <p>Run a fixed Stagehand workflow in a Browserbase cloud browser and inspect the signed Atrib receipts beside it.</p>
-        </div>
-        <div class="run-controls">
-          <div class="segmented" aria-label="Action policy mode">
-            <button id="policyAllow" type="button" data-policy-mode="allow">Allow</button>
+        <header>
+          <div>
+            <h1>Browserbase Atrib Proof</h1>
+            <p>Run a fixed Stagehand workflow in a Browserbase cloud browser and inspect the signed Atrib receipts beside it.</p>
+          </div>
+          <div class="run-controls">
+            <div class="segmented" aria-label="Action policy mode">
+              <button id="policyAllow" type="button" data-policy-mode="allow">Allow</button>
             <button id="policyBlock" type="button" data-policy-mode="block">Block</button>
             <button id="policyEscalate" type="button" data-policy-mode="escalate">Escalate</button>
+            </div>
+            <button id="runButton" type="button">Run proof</button>
           </div>
-          <button id="runButton" type="button">Run proof</button>
-        </div>
-      </header>
-      <div class="grid">
-        <section>
-          <h2>Browserbase workflow</h2>
-          <div id="workflowPanel" class="workflow">
-            <div class="empty">Loading workflow.</div>
-          </div>
-        </section>
+        </header>
+        <div class="grid">
+          <section>
+            <h2>Browserbase workflow</h2>
+            <div id="workflowPanel" class="workflow">
+              <div class="empty">Loading workflow.</div>
+            </div>
+          </section>
         <section>
           <div class="receipt-header">
             <h2>Atrib receipts</h2>
