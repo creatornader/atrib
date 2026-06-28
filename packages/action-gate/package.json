@@ -1,0 +1,54 @@
+{
+  "name": "@atrib/action-gate",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "description": "Pre-action policy gate helpers for Atrib's verifiable action layer. Signs decisions and outcomes around high-impact agent actions.",
+  "author": "atrib <hello@atrib.dev>",
+  "license": "Apache-2.0",
+  "homepage": "https://atrib.dev",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creatornader/atrib.git",
+    "directory": "packages/action-gate"
+  },
+  "keywords": [
+    "agent",
+    "policy",
+    "approval",
+    "governance",
+    "verifiable",
+    "receipts",
+    "browser-automation",
+    "computer-use",
+    "atrib"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@atrib/mcp": "workspace:*",
+    "canonicalize": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}

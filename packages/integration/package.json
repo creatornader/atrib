@@ -1,7 +1,7 @@
 {
   "name": "@atrib/integration",
   "version": "0.0.36",
-  "description": "Cross-package integration tests + runnable framework examples for atrib (private).",
+  "description": "Cross-package integration tests and runnable framework examples for Atrib's verifiable action layer.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -49,6 +49,7 @@
     "mastra-runtime-smoke": "tsx examples/mastra-runtime/mastra-runtime-smoke.ts",
     "mastra-workflow-suspend-resume-smoke": "tsx examples/mastra-runtime/mastra-workflow-suspend-resume-smoke.ts",
     "microsoft-agent-framework-workflow-smoke": "tsx examples/microsoft-agent-framework/microsoft-agent-framework-smoke.ts",
+    "action-control-gate-smoke": "tsx examples/action-control-gate/action-control-gate-smoke.ts",
     "browser-workflow-receipt-smoke": "tsx examples/browser-workflow/browser-workflow-receipt-smoke.ts",
     "browser-use-workflow-receipt-smoke": "tsx examples/browser-workflow/browser-use-workflow-receipt-smoke.ts",
     "stagehand-workflow-receipt-smoke": "tsx examples/browser-workflow/stagehand-workflow-receipt-smoke.ts",
@@ -65,10 +66,13 @@
     "graphiti-mcp-smoke": "pnpm --filter @atrib/mcp-wrap build && tsx examples/graphiti/graphiti-mcp-smoke.ts",
     "graphiti-core-ollama-smoke": "tsx examples/graphiti/graphiti-core-ollama-smoke.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
-    "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts"
+    "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts",
+    "x401-proof-sdk-compat": "tsx scripts/check-proof-x401-sdk-compat.ts",
+    "proof-repo-interop": "tsx scripts/check-proof-repo-interop.ts"
   },
   "dependencies": {
     "@a2a-js/sdk": "0.3.13",
+    "@atrib/action-gate": "workspace:*",
     "@atrib/agent": "workspace:*",
     "@atrib/archive-node": "workspace:*",
     "@atrib/directory": "workspace:*",
