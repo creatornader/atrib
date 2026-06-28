@@ -49,6 +49,7 @@ async function runPacket(
           decision: string
           decision_hash: string
         }
+        source_e2e?: boolean
       },
       cleanup: () => rmSync(outDir, { recursive: true, force: true }),
     }
@@ -191,6 +192,106 @@ describe('MCP platform proof packets', () => {
       run.cleanup()
     }
   }, 60000)
+
+  it('generates an OpenETR transfer packet with recognition gated', async () => {
+    const run = await runPacket(
+      'examples/openetr-transfer/openetr-transfer-packet-smoke.ts',
+      'atrib-openetr-packet-',
+      { OPENETR_SOURCE_DIR: '', ATRIB_OPENETR_SOURCE_E2E: '' },
+    )
+    try {
+      expect(run.result.ok).toBe(true)
+      expect(run.result.packet).toBe('openetr-transfer')
+      expect(run.result.signed_records).toBe(4)
+      expect(run.result.operations).toEqual([
+        'openetr_issue',
+        'openetr_transfer_initiate',
+        'openetr_transfer_accept',
+        'openetr_query_state',
+      ])
+      expect(run.result.record_hashes).toHaveLength(4)
+      expect(run.result.log_indexes).toEqual([0, 1, 2, 3])
+      expect(run.result.verifier.record_valid).toBe(true)
+      expect(run.result.privacy.public_records_hash_only).toBe(true)
+      expect(run.result.policy_decision).toMatchObject({
+        artifact: 'policy-decision.json',
+        decision: 'escalate_before_title_recognition',
+      })
+      expect(run.result.policy_decision?.decision_hash).toMatch(/^sha256:[0-9a-f]{64}$/u)
+      expect(run.result.source_e2e).toBe(false)
+
+      const text = `${run.stdout}\n${artifactText(run.outDir, [
+        'README.md',
+        'verifier-output.json',
+        'redaction-manifest.json',
+        'policy-decision.json',
+      ])}`
+      expect(text).toContain('signed_openetr_records_present')
+      expect(text).toContain('openetr_chain_observed')
+      expect(text).toContain('acceptance_observed')
+      expect(text).toContain('p_tag_semantics_review_required')
+      expect(text).toContain('title_recognition_requires_attestor')
+      expect(text).toContain('escalate_before_title_recognition')
+      for (const needle of [
+        'sha256:7f4b8b8e2f394fddad1ed04e94c456ff0c8fb7ee6f0c5d5017deac9a0f61d425',
+        'private warehouse receipt WR-2026-0628',
+        'npub1privateissueropenetr20260628',
+        'npub1privatebuyeropenetr20260628',
+        'wss://relay.openetr.example/private-transfer',
+        '1111111111111111111111111111111111111111111111111111111111111111',
+        '2222222222222222222222222222222222222222222222222222222222222222',
+        '3333333333333333333333333333333333333333333333333333333333333333',
+      ]) {
+        expect(text).not.toContain(needle)
+      }
+    } finally {
+      run.cleanup()
+    }
+  }, 60000)
+
+  const sourceBackedOpenEtrTest = process.env.OPENETR_SOURCE_DIR ? it : it.skip
+  sourceBackedOpenEtrTest(
+    'generates an OpenETR packet backed by the upstream implementation',
+    async () => {
+      const run = await runPacket(
+        'examples/openetr-transfer/openetr-transfer-packet-smoke.ts',
+        'atrib-openetr-source-packet-',
+        {
+          OPENETR_SOURCE_DIR: process.env.OPENETR_SOURCE_DIR ?? '',
+          ATRIB_OPENETR_SOURCE_E2E: '1',
+        },
+      )
+      try {
+        expect(run.result.ok).toBe(true)
+        expect(run.result.packet).toBe('openetr-transfer')
+        expect(run.result.source_e2e).toBe(true)
+
+        const text = `${run.stdout}\n${artifactText(run.outDir, [
+          'README.md',
+          'verifier-output.json',
+          'redaction-manifest.json',
+          'policy-decision.json',
+          'source-run-output.json',
+        ])}`
+        expect(text).toContain('actual_openetr_source_run_present')
+        expect(text).toContain('c97eb84f5790ff041ad14a1c30df0f71ceb8d3d9')
+        expect(text).toContain('query_reports_initiator_after_accept')
+        expect(text).toContain('local-websocket-nostr-relay')
+        for (const needle of [
+          'source-backed OpenETR issue',
+          'transfer initiate; object=',
+          'transfer accept; object=',
+          'nsec1',
+          'ws://127.0.0.1',
+        ]) {
+          expect(text).not.toContain(needle)
+        }
+      } finally {
+        run.cleanup()
+      }
+    },
+    60000,
+  )
 
   it('redacts private material from upstream error diagnostics', () => {
     const diagnostic = redactUpstreamDiagnostic(

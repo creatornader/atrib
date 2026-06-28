@@ -7,6 +7,7 @@ platform prospects.
 | --------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path, Browserbase-shaped demo, and public log inclusion. Fixture mode stays available for local tests.          |
 | [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/` | Live Firecrawl MCP path, fixed-input ingestion demo, and downstream policy decision artifact. Fixture mode stays available for local tests. |
+| [OpenETR transfer](openetr-transfer/)               | `packages/integration/examples/openetr-transfer/`        | Source-backed local OpenETR transfer-control path and downstream recognition policy artifact. No public log or public relay proof yet.      |
 
 Each artifact keeps public evidence narrow: tool names, hash disclosures, record
 hashes, log indexes, and verifier output. Private upstream payloads stay out of
@@ -37,6 +38,13 @@ Firecrawl has live demo code at
 fixed-input by design: no arbitrary URL, query, crawl depth, or crawl limit.
 Its packet includes `policy-decision.json`, which binds the signed ingestion
 records to a candidate review gate for sensitive downstream actions.
+
+OpenETR is local-only. Its default packet signs an OpenETR-shaped issue,
+transfer-initiate, transfer-accept, and state-query flow. Its source-backed
+packet runs the pinned upstream Python implementation against a local WebSocket
+Nostr relay, writes a sanitized `source-run-output.json`, and still escalates
+before recognized title transfer because no attestor or title-transfer authority
+evidence is supplied.
 
 ## Contact drafts
 

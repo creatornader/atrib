@@ -1,0 +1,221 @@
+{
+  "schema": "atrib.proof_packet.verifier_output.v1",
+  "packet": "openetr-transfer",
+  "mode": "fixture",
+  "live_upstream": false,
+  "upstream_shape": "trbouma/openetr Python source run against local Nostr relay, surfaced through MCP-shaped tools openetr_issue, openetr_transfer_initiate, openetr_transfer_accept, openetr_query_state",
+  "operations": [
+    "openetr_issue",
+    "openetr_transfer_initiate",
+    "openetr_transfer_accept",
+    "openetr_query_state"
+  ],
+  "records": [
+    {
+      "tool_name": "openetr_issue",
+      "record_hash": "sha256:b1c6ab6216564c8e95d7701a8c9657f6d491673a57e788a4fce5b31d5717618c",
+      "log_index": 0,
+      "proof": {
+        "record_hash": "sha256:b1c6ab6216564c8e95d7701a8c9657f6d491673a57e788a4fce5b31d5717618c",
+        "log_index": 0,
+        "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "checkpoint": "openetr-transfer-local",
+        "inclusion_proof": []
+      }
+    },
+    {
+      "tool_name": "openetr_transfer_initiate",
+      "record_hash": "sha256:4a38b1dc3b01c1a793527177ffbf33f94c1fa731bd12abc11b0e139dbb4dd236",
+      "log_index": 1,
+      "proof": {
+        "record_hash": "sha256:4a38b1dc3b01c1a793527177ffbf33f94c1fa731bd12abc11b0e139dbb4dd236",
+        "log_index": 1,
+        "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "checkpoint": "openetr-transfer-local",
+        "inclusion_proof": []
+      }
+    },
+    {
+      "tool_name": "openetr_transfer_accept",
+      "record_hash": "sha256:541dedbfe619a49e04bd1b8fb3bcb311caca14d3c19680ff2d59a76ea85568ba",
+      "log_index": 2,
+      "proof": {
+        "record_hash": "sha256:541dedbfe619a49e04bd1b8fb3bcb311caca14d3c19680ff2d59a76ea85568ba",
+        "log_index": 2,
+        "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "checkpoint": "openetr-transfer-local",
+        "inclusion_proof": []
+      }
+    },
+    {
+      "tool_name": "openetr_query_state",
+      "record_hash": "sha256:b30afb7f54fd43b5c7863d985cae6198c24489f7be3910735acc5629555a2975",
+      "log_index": 3,
+      "proof": {
+        "record_hash": "sha256:b30afb7f54fd43b5c7863d985cae6198c24489f7be3910735acc5629555a2975",
+        "log_index": 3,
+        "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "checkpoint": "openetr-transfer-local",
+        "inclusion_proof": []
+      }
+    }
+  ],
+  "log": {
+    "mode": "local",
+    "endpoint": "local-fixture-log",
+    "publish_policy": "local-capture-only",
+    "inclusion_verified": false,
+    "proofs": [
+      {
+        "record_hash": "sha256:b1c6ab6216564c8e95d7701a8c9657f6d491673a57e788a4fce5b31d5717618c",
+        "log_index": 0,
+        "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "checkpoint": "openetr-transfer-local",
+        "inclusion_proof": []
+      },
+      {
+        "record_hash": "sha256:4a38b1dc3b01c1a793527177ffbf33f94c1fa731bd12abc11b0e139dbb4dd236",
+        "log_index": 1,
+        "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "checkpoint": "openetr-transfer-local",
+        "inclusion_proof": []
+      },
+      {
+        "record_hash": "sha256:541dedbfe619a49e04bd1b8fb3bcb311caca14d3c19680ff2d59a76ea85568ba",
+        "log_index": 2,
+        "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "checkpoint": "openetr-transfer-local",
+        "inclusion_proof": []
+      },
+      {
+        "record_hash": "sha256:b30afb7f54fd43b5c7863d985cae6198c24489f7be3910735acc5629555a2975",
+        "log_index": 3,
+        "leaf_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "checkpoint": "openetr-transfer-local",
+        "inclusion_proof": []
+      }
+    ]
+  },
+  "verifier": {
+    "record_valid": true,
+    "checked_records": 4,
+    "event_type": "https://atrib.dev/v1/types/tool_call",
+    "args_hash_present": true,
+    "result_hash_present": true
+  },
+  "privacy": {
+    "public_records_hash_only": true,
+    "private_needles_absent_from_public_records": true
+  },
+  "openetr": {
+    "event_kinds": [31415, 31416],
+    "recognized_title_transfer": false,
+    "attestor_evidence_supplied": false,
+    "controller_semantics_pinned": false,
+    "source_e2e": {
+      "schema": "atrib.openetr.source_local_relay_summary.v1",
+      "source": {
+        "repo": "https://github.com/trbouma/openetr",
+        "commit": "c97eb84f5790ff041ad14a1c30df0f71ceb8d3d9",
+        "entrypoints": [
+          "openetr.services.issue_etr.publish_issue_etr",
+          "openetr.commands.publish.transfer initiate",
+          "openetr.commands.publish.transfer accept",
+          "openetr.services.query_etr.build_query_etr_result"
+        ]
+      },
+      "runtime": {
+        "relay": "local-websocket-nostr-relay",
+        "live_public_relay": false,
+        "openetr_user_config_written": false
+      },
+      "object": {
+        "digest_hash": "sha256:41e44a069f2763ebee1f91c1e2c630701ad4a1166ceaecec94b125cb0ee75924",
+        "document_hash": "sha256:804de15e5b57ef80f3290b573ad8c17fbca6dd90cbd28fb8bbff7b2177f19881"
+      },
+      "parties": {
+        "issuer_npub_hash": "sha256:45ed05e260b035d483cc3d666261f179d842287c480b4869fc53076c98d140fb",
+        "buyer_npub_hash": "sha256:b2a25ac27402332ce7a2c5fa7ed6158294bd55e1d0da49e3636845bc8a88a46a",
+        "issuer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
+        "buyer_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16"
+      },
+      "events": [
+        {
+          "role": "origin",
+          "kind": 31415,
+          "event_id_hash": "sha256:121626b6f6a9a8d65c6f80d8bec9902e505ebec149614b82fce6cc2398c11e49",
+          "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
+          "content_hash": "sha256:cedd26997c3b1f1fc6bf2df071538d2aba6db8b6e87fa5001588d6fc3800acac",
+          "tag_names": ["d", "o"],
+          "action": null,
+          "object_digest_hash": "sha256:41e44a069f2763ebee1f91c1e2c630701ad4a1166ceaecec94b125cb0ee75924",
+          "prior_event_id_hash": null,
+          "party_pubkey_hash": null
+        },
+        {
+          "role": "transfer_initiate",
+          "kind": 31416,
+          "event_id_hash": "sha256:3d3a6346e4e29fb404d059a7361720d2f221d1f225658ae58e98d11df49fa8a5",
+          "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
+          "content_hash": "sha256:dd1aeeb74e2a47f4952a3e9de1c6d490b7ad4d3dc66adf7a6beb8beed39b086f",
+          "tag_names": ["d", "o", "e", "origin", "p", "action"],
+          "action": "initiate",
+          "object_digest_hash": "sha256:41e44a069f2763ebee1f91c1e2c630701ad4a1166ceaecec94b125cb0ee75924",
+          "prior_event_id_hash": "sha256:121626b6f6a9a8d65c6f80d8bec9902e505ebec149614b82fce6cc2398c11e49",
+          "party_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16"
+        },
+        {
+          "role": "transfer_accept",
+          "kind": 31416,
+          "event_id_hash": "sha256:d54ad236fafd6c7193180b1d9d9400cff56dd4c5c65dea3b1c684d1d5ff270de",
+          "signer_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
+          "content_hash": "sha256:70b882831ff5d4ed7a1af472010c3a6485a484af6769435d3a80df5a99db31ee",
+          "tag_names": ["d", "o", "e", "p", "action"],
+          "action": "accept",
+          "object_digest_hash": "sha256:41e44a069f2763ebee1f91c1e2c630701ad4a1166ceaecec94b125cb0ee75924",
+          "prior_event_id_hash": "sha256:3d3a6346e4e29fb404d059a7361720d2f221d1f225658ae58e98d11df49fa8a5",
+          "party_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81"
+        }
+      ],
+      "query": {
+        "current_controller_npub_hash": "sha256:45ed05e260b035d483cc3d666261f179d842287c480b4869fc53076c98d140fb",
+        "current_controller_basis": "latest control event transferee",
+        "summary_control_chain_count": 1
+      },
+      "checks": {
+        "accept_action_tag": true,
+        "accept_kind_31416": true,
+        "accept_p_tag_matches_initiator": true,
+        "initiate_action_tag": true,
+        "initiate_kind_31416": true,
+        "initiate_p_tag_matches_buyer": true,
+        "origin_kind_31415": true,
+        "query_controller_is_buyer": false,
+        "query_controller_is_initiator": true
+      },
+      "warnings": [
+        {
+          "id": "accept_p_tag_points_to_initiator",
+          "present": true
+        },
+        {
+          "id": "query_reports_initiator_after_accept",
+          "present": true
+        }
+      ]
+    }
+  },
+  "policy_decision": {
+    "artifact": "policy-decision.json",
+    "decision": "escalate_before_title_recognition",
+    "decision_status": "review_required",
+    "decision_hash": "sha256:85dccc888a31df4263ce9ce30585f2add26501b55f14957cf48aeabafcdf8078",
+    "signed_policy_record": false,
+    "caveat": "Policy decision is a deterministic artifact bound to signed records, not a signed atrib record."
+  },
+  "caveats": [
+    "Fixture run only. It does not prove live OpenETR relay output.",
+    "Private OpenETR object, party, relay, and event-id material are represented by hashes only.",
+    "Title recognition remains a consumer policy decision until attestor evidence is supplied."
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "schema": "atrib.proof_packet.redaction_manifest.v1",
+  "packet": "openetr-transfer",
+  "private_fields": [
+    {
+      "field": "object_digest",
+      "disclosure": "hash-only",
+      "hash": "sha256:37367c642357b2bfae80836cd6bd9d3ef93eb48d567a49194e54a296d6fdc790"
+    },
+    {
+      "field": "document_title",
+      "disclosure": "hash-only",
+      "hash": "sha256:3b9f97d08ffa1b2d0af57ee52ef2d85e0ed5e1f3863a076d546517f2c224bc7f"
+    },
+    {
+      "field": "issuer_npub",
+      "disclosure": "hash-only",
+      "hash": "sha256:2e69a4c8c2d2e53f03214a9e07a48ece794c6edcbfb20f6e4f887078ebb27a03"
+    },
+    {
+      "field": "buyer_npub",
+      "disclosure": "hash-only",
+      "hash": "sha256:e28dcbddafc589c143e507fea1dca5ab7cbce5284962afa0e25e0fa2c9025e3f"
+    },
+    {
+      "field": "relay_url",
+      "disclosure": "hash-only",
+      "hash": "sha256:15ab0597c067054ea28249632fcca7b7c1812bfb1642bb0617e8ab46a67e929a"
+    },
+    {
+      "field": "origin_event_id",
+      "disclosure": "hash-only",
+      "hash": "sha256:3138bb9bc78df27c473ecfd1410f7bd45ebac1f59cf3ff9cfe4db77aab7aedd3"
+    },
+    {
+      "field": "initiate_event_id",
+      "disclosure": "hash-only",
+      "hash": "sha256:4f2e8d65483c641648cdb374ae9d8abd368d269e4ddffe092a8237b8162cddd6"
+    },
+    {
+      "field": "accept_event_id",
+      "disclosure": "hash-only",
+      "hash": "sha256:79bd7d7fd684b399857c582b1b7172ddf277d4fe1b027ec52b28da3ae381e675"
+    },
+    {
+      "field": "source_e2e_private_1",
+      "disclosure": "hash-only",
+      "hash": "sha256:41e44a069f2763ebee1f91c1e2c630701ad4a1166ceaecec94b125cb0ee75924"
+    },
+    {
+      "field": "source_e2e_private_2",
+      "disclosure": "hash-only",
+      "hash": "sha256:b2a25ac27402332ce7a2c5fa7ed6158294bd55e1d0da49e3636845bc8a88a46a"
+    },
+    {
+      "field": "source_e2e_private_3",
+      "disclosure": "hash-only",
+      "hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16"
+    },
+    {
+      "field": "source_e2e_private_4",
+      "disclosure": "hash-only",
+      "hash": "sha256:45ed05e260b035d483cc3d666261f179d842287c480b4869fc53076c98d140fb"
+    },
+    {
+      "field": "source_e2e_private_5",
+      "disclosure": "hash-only",
+      "hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81"
+    },
+    {
+      "field": "source_e2e_private_6",
+      "disclosure": "hash-only",
+      "hash": "sha256:d54ad236fafd6c7193180b1d9d9400cff56dd4c5c65dea3b1c684d1d5ff270de"
+    },
+    {
+      "field": "source_e2e_private_7",
+      "disclosure": "hash-only",
+      "hash": "sha256:70b882831ff5d4ed7a1af472010c3a6485a484af6769435d3a80df5a99db31ee"
+    },
+    {
+      "field": "source_e2e_private_8",
+      "disclosure": "hash-only",
+      "hash": "sha256:ecec683c6efba431fadfcec73f6b3d661d85c1bbb830d3d7baed7c576a1f7e2c"
+    },
+    {
+      "field": "source_e2e_private_9",
+      "disclosure": "hash-only",
+      "hash": "sha256:3d3a6346e4e29fb404d059a7361720d2f221d1f225658ae58e98d11df49fa8a5"
+    },
+    {
+      "field": "source_e2e_private_10",
+      "disclosure": "hash-only",
+      "hash": "sha256:dd1aeeb74e2a47f4952a3e9de1c6d490b7ad4d3dc66adf7a6beb8beed39b086f"
+    },
+    {
+      "field": "source_e2e_private_11",
+      "disclosure": "hash-only",
+      "hash": "sha256:2ee9317bfc38535f5e118155ead71c4b4fd58f00813cced7785afec433b07258"
+    },
+    {
+      "field": "source_e2e_private_12",
+      "disclosure": "hash-only",
+      "hash": "sha256:121626b6f6a9a8d65c6f80d8bec9902e505ebec149614b82fce6cc2398c11e49"
+    },
+    {
+      "field": "source_e2e_private_13",
+      "disclosure": "hash-only",
+      "hash": "sha256:cedd26997c3b1f1fc6bf2df071538d2aba6db8b6e87fa5001588d6fc3800acac"
+    }
+  ]
+}
