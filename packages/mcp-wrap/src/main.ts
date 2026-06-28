@@ -104,7 +104,8 @@ async function main(): Promise<void> {
     serverUrl: config.serverUrl,
     logEndpoint: config.logEndpoint,
     localSubstrateMode: config.localSubstrate?.mode,
-    upstreamCommand: config.upstream.command,
+    upstreamType: config.upstream.type ?? 'stdio',
+    upstreamCommand: config.upstream.type === 'http' ? undefined : config.upstream.command,
     keySource: result.key.source,
     pid: process.pid,
   })

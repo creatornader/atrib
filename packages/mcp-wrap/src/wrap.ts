@@ -20,6 +20,7 @@ import {
   type AtribOptions,
   type AtribProxy,
   type PreCallTransform,
+  type UpstreamTransport,
 } from '@atrib/mcp'
 import type { WrapConfig } from './config.js'
 import { resolveKey, type ResolvedKey } from './keys.js'
@@ -214,6 +215,23 @@ function localSubstrateWarningDetail(detail: unknown): Record<string, unknown> |
   return { detail: String(detail) }
 }
 
+function upstreamFromConfig(config: WrapConfig, upstreamTransport?: Transport): UpstreamTransport {
+  if (upstreamTransport) return { type: 'inMemory', transport: upstreamTransport }
+  if (config.upstream.type === 'http') {
+    return {
+      type: 'http',
+      url: config.upstream.url,
+      ...(config.upstream.headers ? { headers: config.upstream.headers } : {}),
+    }
+  }
+  return {
+    type: 'stdio',
+    command: config.upstream.command,
+    ...(config.upstream.args ? { args: config.upstream.args } : {}),
+    ...(config.upstream.env ? { env: config.upstream.env } : {}),
+  }
+}
+
 /**
  * Wrap an MCP server per the supplied config. Returns the live AtribProxy
  * plus the resolved key info (for caller-side bootstrap logging).
@@ -254,14 +272,7 @@ export async function wrap(
       })
     : undefined
 
-  const upstream = deps.upstreamTransport
-    ? ({ type: 'inMemory', transport: deps.upstreamTransport } as const)
-    : ({
-        type: 'stdio',
-        command: config.upstream.command,
-        ...(config.upstream.args ? { args: config.upstream.args } : {}),
-        ...(config.upstream.env ? { env: config.upstream.env } : {}),
-      } as const)
+  const upstream = upstreamFromConfig(config, deps.upstreamTransport)
 
   const proxy = await createAtribProxy({
     name: `${config.name}-${config.agent}`,

@@ -53,6 +53,19 @@ export const LocalSubstrateSchema = z.object({
 
 export type LocalSubstrateConfig = z.infer<typeof LocalSubstrateSchema>
 
+const StdioUpstreamSchema = z.object({
+  type: z.literal('stdio').optional(),
+  command: z.string().min(1),
+  args: z.array(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+})
+
+const HttpUpstreamSchema = z.object({
+  type: z.literal('http'),
+  url: z.string().url(),
+  headers: z.record(z.string(), z.string()).optional(),
+})
+
 export const WrapConfigSchema = z.object({
   /**
    * Logical name for THIS wrapped server. Used in:
@@ -77,17 +90,7 @@ export const WrapConfigSchema = z.object({
    * Upstream MCP server command. Required. The wrapper spawns this as a
    * child process and proxies tool calls to it via stdio.
    */
-  upstream: z.object({
-    command: z.string().min(1),
-    args: z.array(z.string()).optional(),
-    /**
-     * Extra environment variables to forward to the upstream process. Merged
-     * with `process.env` (process.env wins on key conflicts). Useful for
-     * wrappers that need to forward a config file the upstream reads (e.g.
-     * AGENT_BRIDGE_URL, AGENT_BRIDGE_KEY).
-     */
-    env: z.record(z.string(), z.string()).optional(),
-  }),
+  upstream: z.union([StdioUpstreamSchema, HttpUpstreamSchema]),
 
   /**
    * Canonical URL for content_id derivation per spec §1.2.2. Required for

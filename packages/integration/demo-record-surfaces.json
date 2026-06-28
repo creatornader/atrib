@@ -164,6 +164,34 @@
       ]
     },
     {
+      "id": "browserbase-stagehand",
+      "path": "examples/browserbase-stagehand",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["browserbase-stagehand-packet"]
+    },
+    {
+      "id": "browserbase-stagehand-live-proof",
+      "path": "examples/browserbase-stagehand",
+      "record_class": "public-proof",
+      "endpoint_posture": "public-write",
+      "commands": ["browserbase-stagehand-live-demo"]
+    },
+    {
+      "id": "firecrawl-web-ingestion",
+      "path": "examples/firecrawl-web-ingestion",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["firecrawl-web-ingestion-packet"]
+    },
+    {
+      "id": "firecrawl-web-ingestion-live-proof",
+      "path": "examples/firecrawl-web-ingestion",
+      "record_class": "public-proof",
+      "endpoint_posture": "public-write",
+      "commands": []
+    },
+    {
       "id": "activegraph-runtime-log",
       "path": "examples/activegraph-runtime-log",
       "record_class": "offline-local",

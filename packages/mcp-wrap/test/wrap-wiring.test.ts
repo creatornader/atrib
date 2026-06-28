@@ -171,6 +171,45 @@ describe('wrap wiring', () => {
     })
   })
 
+  it('passes HTTP upstream config to @atrib/mcp', async () => {
+    const { wrap } = await import('../src/wrap.js')
+    const { createAtribProxy } = await import('@atrib/mcp')
+    const createAtribProxyMock = vi.mocked(createAtribProxy)
+    createAtribProxyMock.mockClear()
+
+    const dir = mkdtempSync(join(tmpdir(), 'atrib-wrap-http-upstream-'))
+    const recordFile = join(dir, 'records.jsonl')
+
+    try {
+      await wrap(
+        {
+          ...makeConfig(recordFile),
+          upstream: {
+            type: 'http',
+            url: 'https://mcp.browserbase.com/mcp?browserbaseApiKey=test',
+            headers: { 'x-test': 'yes' },
+          },
+        } as unknown as WrapConfig,
+        {
+          resolveKey: async () => ({
+            seedB64url: 'seed',
+            source: 'env',
+            publicKeyB64url: 'pub',
+          }),
+        },
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+
+    const options = createAtribProxyMock.mock.calls[0]?.[0]
+    expect(options?.upstream).toEqual({
+      type: 'http',
+      url: 'https://mcp.browserbase.com/mcp?browserbaseApiKey=test',
+      headers: { 'x-test': 'yes' },
+    })
+  })
+
   it('passes local substrate shadow config to @atrib/mcp', async () => {
     const { wrap } = await import('../src/wrap.js')
     const { createAtribProxy } = await import('@atrib/mcp')
