@@ -659,7 +659,7 @@ export async function runWrappedMcpPacket(options: {
             kind: 'policy_outcome',
             toolName: call.name,
             content: {
-              schema: 'atrib.browserbase.action_policy_outcome.v1',
+              schema: 'atrib.packet.action_policy_outcome.v1',
               decision: gateDecision.decision,
               executed: false,
               stopped_before: call.name,
@@ -703,7 +703,7 @@ export async function runWrappedMcpPacket(options: {
           kind: 'policy_outcome',
           toolName: call.name,
           content: {
-            schema: 'atrib.browserbase.action_policy_outcome.v1',
+            schema: 'atrib.packet.action_policy_outcome.v1',
             decision: 'allow',
             executed: true,
             action_record_hash: summary.record_hash,

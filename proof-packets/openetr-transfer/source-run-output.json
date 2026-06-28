@@ -1,0 +1,154 @@
+{
+  "schema": "atrib.openetr.source_local_relay_summary.v1",
+  "source": {
+    "repo": "https://github.com/trbouma/openetr",
+    "commit": "c97eb84f5790ff041ad14a1c30df0f71ceb8d3d9",
+    "entrypoints": [
+      "openetr.services.issue_etr.publish_issue_etr",
+      "openetr.commands.publish.transfer initiate",
+      "openetr.commands.publish.transfer accept",
+      "openetr.services.query_etr.build_query_etr_result"
+    ]
+  },
+  "runtime": {
+    "relay": "local-websocket-nostr-relay",
+    "live_public_relay": true,
+    "openetr_user_config_written": false
+  },
+  "object": {
+    "digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
+    "document_hash": "sha256:249b5e7b851bac4863174da570d094fe481d704fa04b413cde93cd7acf36004b"
+  },
+  "parties": {
+    "issuer_npub_hash": "sha256:45ed05e260b035d483cc3d666261f179d842287c480b4869fc53076c98d140fb",
+    "buyer_npub_hash": "sha256:b2a25ac27402332ce7a2c5fa7ed6158294bd55e1d0da49e3636845bc8a88a46a",
+    "issuer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
+    "buyer_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16"
+  },
+  "events": [
+    {
+      "role": "origin",
+      "kind": 31415,
+      "event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+      "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
+      "content_hash": "sha256:cedd26997c3b1f1fc6bf2df071538d2aba6db8b6e87fa5001588d6fc3800acac",
+      "tag_names": [
+        "d",
+        "o"
+      ],
+      "action": null,
+      "object_digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
+      "prior_event_id_hash": null,
+      "party_pubkey_hash": null
+    },
+    {
+      "role": "transfer_initiate",
+      "kind": 31416,
+      "event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+      "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
+      "content_hash": "sha256:234aad8bd2ba36365b52ff5cd42b23d515c4962b5398943db1a3754e00b19d76",
+      "tag_names": [
+        "d",
+        "o",
+        "e",
+        "origin",
+        "p",
+        "action"
+      ],
+      "action": "initiate",
+      "object_digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
+      "prior_event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+      "party_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16"
+    },
+    {
+      "role": "transfer_accept",
+      "kind": 31416,
+      "event_id_hash": "sha256:f1d63b0c48da9deee17604dffad18f75467d2b064bc6ea547918f0afc00d38ee",
+      "signer_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
+      "content_hash": "sha256:9d60b1345f7a4fb7006d9a2c788c92da49c5d5d8b5816f5a2a2726f3d99be44c",
+      "tag_names": [
+        "d",
+        "o",
+        "e",
+        "p",
+        "action"
+      ],
+      "action": "accept",
+      "object_digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
+      "prior_event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+      "party_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81"
+    }
+  ],
+  "query": {
+    "current_controller_npub_hash": "sha256:45ed05e260b035d483cc3d666261f179d842287c480b4869fc53076c98d140fb",
+    "current_controller_basis": "latest control event transferee",
+    "summary_control_chain_count": 1
+  },
+  "public_event_availability": {
+    "schema": "atrib.openetr.public_event_availability_summary.v1",
+    "requested": true,
+    "publish_requested": true,
+    "status": "available",
+    "relay_count": 1,
+    "available_relay_count": 1,
+    "event_roles": [
+      "origin",
+      "transfer_initiate",
+      "transfer_accept"
+    ],
+    "relays": [
+      {
+        "relay_url_hash": "sha256:bae52b1825836341e1007a3c17f20068eb56c2a1ff2e97e885f685db69cc9f54",
+        "exact_found_count": 3,
+        "exact_found_all": true,
+        "events": [
+          {
+            "role": "origin",
+            "event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+            "kind": 31415,
+            "exact_found": true,
+            "returned_count": 1,
+            "error": null
+          },
+          {
+            "role": "transfer_initiate",
+            "event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+            "kind": 31416,
+            "exact_found": true,
+            "returned_count": 1,
+            "error": null
+          },
+          {
+            "role": "transfer_accept",
+            "event_id_hash": "sha256:f1d63b0c48da9deee17604dffad18f75467d2b064bc6ea547918f0afc00d38ee",
+            "kind": 31416,
+            "exact_found": true,
+            "returned_count": 1,
+            "error": null
+          }
+        ]
+      }
+    ]
+  },
+  "checks": {
+    "accept_action_tag": true,
+    "accept_kind_31416": true,
+    "accept_p_tag_matches_initiator": true,
+    "initiate_action_tag": true,
+    "initiate_kind_31416": true,
+    "initiate_p_tag_matches_buyer": true,
+    "origin_kind_31415": true,
+    "query_controller_is_buyer": false,
+    "query_controller_is_initiator": true
+  },
+  "warnings": [
+    {
+      "id": "accept_p_tag_points_to_initiator",
+      "present": true
+    },
+    {
+      "id": "query_reports_initiator_after_accept",
+      "present": true
+    }
+  ]
+}
