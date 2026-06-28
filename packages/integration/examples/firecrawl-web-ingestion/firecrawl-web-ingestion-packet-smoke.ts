@@ -3,7 +3,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { hashText, runWrappedMcpPacket, writeJson } from '../wrapped-mcp-proof-runner.js'
+import {
+  hashText,
+  runWrappedMcpPacket,
+  type WrappedMcpPacketResult,
+  writeJson,
+} from '../wrapped-mcp-proof-runner.js'
 
 const PRIVATE_QUERY = 'private acquisition research query'
 const PRIVATE_URL = 'https://example.invalid/private-firecrawl-source'
@@ -15,6 +20,13 @@ const LIVE_DEFAULT_QUERY = 'site:example.com Example Domain'
 const LIVE_DEFAULT_URL = 'https://example.com'
 const LIVE_DEFAULT_EXTRACT_PROMPT =
   'Extract the organization name and a short account note from this public page.'
+
+const CRAWL_CAP = {
+  maxDepth: 1,
+  limit: 2,
+} as const
+
+type PolicyDecisionArtifact = ReturnType<typeof buildPolicyDecision>
 
 function requiredFirecrawlEnv(): Record<string, string> {
   const env: Record<string, string> = {}
@@ -36,7 +48,105 @@ function artifactDir(integrationDir: string): string | undefined {
   return undefined
 }
 
-function renderReadme(result: Awaited<ReturnType<typeof runWrappedMcpPacket>>): string {
+function stableJsonHash(value: unknown): string {
+  return hashText(JSON.stringify(value))
+}
+
+function buildPolicyDecision(result: WrappedMcpPacketResult) {
+  const base = {
+    schema: 'atrib.proof_packet.policy_decision.v1',
+    packet: result.packet,
+    mode: result.mode,
+    evaluator: 'firecrawl-ingestion-policy-v0',
+    decision: 'escalate_before_customer_email',
+    decision_status: 'review_required',
+    proposed_next_action: {
+      action_type: 'customer_email',
+      description: 'Use web-ingested content in an outbound customer message.',
+      risk_class: 'external_customer_message',
+    },
+    inputs: {
+      operation_order: result.operations,
+      record_hashes: result.record_hashes,
+      log_indexes: result.log_indexes,
+      log_mode: result.log.mode,
+      log_endpoint: result.log.endpoint,
+      crawl_cap: CRAWL_CAP,
+      verifier: result.verifier,
+      privacy: result.privacy,
+    },
+    rule_results: [
+      {
+        id: 'signed_ingestion_records_present',
+        outcome: result.verifier.record_valid ? 'pass' : 'fail',
+        evidence: `${result.signed_records} verified Firecrawl tool-call records`,
+      },
+      {
+        id: 'log_refs_present',
+        outcome: result.log_indexes.length === result.signed_records ? 'pass' : 'fail',
+        evidence:
+          result.log.mode === 'public'
+            ? 'public log indexes and inclusion proofs are present'
+            : 'local capture log indexes are present for the fixture proof',
+      },
+      {
+        id: 'bounded_crawl_cap_present',
+        outcome: 'pass',
+        evidence: `crawl cap maxDepth=${CRAWL_CAP.maxDepth}, limit=${CRAWL_CAP.limit}`,
+      },
+      {
+        id: 'raw_web_content_private',
+        outcome: result.privacy.public_records_hash_only ? 'pass' : 'fail',
+        evidence: 'query, URL, scraped content, extracted text, and crawl job id stay private',
+      },
+      {
+        id: 'customer_message_requires_review',
+        outcome: 'escalate',
+        evidence: 'untrusted web-ingested content would influence an outbound customer message',
+      },
+    ],
+    allowed_without_review: ['internal_research_summary', 'source_triage'],
+    escalated_actions: [
+      'customer_email',
+      'account_update',
+      'refund_or_payment_change',
+      'production_code_change',
+      'vendor_procurement_action',
+    ],
+    public_fields: [
+      'tool_names',
+      'args_hash',
+      'result_hash',
+      'record_hashes',
+      'log_indexes',
+      'crawl_cap',
+      'verifier_result',
+      'policy_decision_hash',
+    ],
+    private_fields: [
+      'raw_query',
+      'source_url',
+      'scraped_content',
+      'extracted_page_text',
+      'crawl_job_id',
+      'auth_token',
+    ],
+    caveats: [
+      'The policy decision artifact is deterministic and hash-bound to signed Firecrawl records.',
+      'The policy decision artifact is not a signed atrib record yet.',
+      'A live enforcement surface would still need to stop or route the downstream action at runtime.',
+    ],
+  }
+  return {
+    decision_hash: stableJsonHash(base),
+    ...base,
+  }
+}
+
+function renderReadme(
+  result: WrappedMcpPacketResult,
+  policyDecision: PolicyDecisionArtifact,
+): string {
   const logLabel = result.log.mode === 'public' ? 'Public log index' : 'Local log index'
   const representativeHash = result.record_hashes[0]
   const representativeHex = representativeHash?.replace('sha256:', '')
@@ -73,7 +183,7 @@ This proof signs a Firecrawl MCP shaped ingestion flow through \`@atrib/mcp-wrap
 
 \`firecrawl_search -> firecrawl_scrape -> firecrawl_extract -> firecrawl_crawl\`
 
-The crawl step is capped to \`maxDepth: 1\` and \`limit: 2\`.
+The crawl step is capped to \`maxDepth: ${CRAWL_CAP.maxDepth}\` and \`limit: ${CRAWL_CAP.limit}\`.
 
 ## What ran
 
@@ -94,6 +204,36 @@ ${publicLinks}
 ## Redaction line
 
 The wrapper saw private Firecrawl-shaped payloads: query, URL, scraped Markdown, HTML, extracted text, and crawl job id. The public artifact stores only hashes for those fields. See \`redaction-manifest.json\`.
+
+## Control-plane fit
+
+Firecrawl is the untrusted web-ingestion boundary, not the sensitive downstream
+action. This packet is meant to sit before a customer email, account update,
+refund or payment change, production code change, or vendor workflow that
+depends on web-derived context.
+
+A verifier can see which ingestion tools ran, that the crawl was capped, that
+records landed in the log, and that raw web content stayed private.
+
+## Policy decision artifact
+
+\`policy-decision.json\` models the next gate after ingestion:
+\`${policyDecision.decision}\`. It binds to the signed Firecrawl records, log
+indexes, crawl cap, verifier result, and redaction boundary.
+
+Allowed without review: \`${policyDecision.allowed_without_review.join('`, `')}\`.
+
+Escalated before execution: \`${policyDecision.escalated_actions.join('`, `')}\`.
+
+Policy decision hash: \`${policyDecision.decision_hash}\`.
+
+The policy decision file is deterministic and hash-bound to the signed
+ingestion records. It is not a signed atrib record yet. The signed evidence in
+this packet is the wrapped Firecrawl tool-call chain.
+
+## Loop receipt
+
+The implementation loop contract and pass receipts live in \`LOOP.md\`.
 
 ## Weakness
 
@@ -185,7 +325,7 @@ async function main(): Promise<void> {
       },
       {
         name: 'firecrawl_crawl',
-        arguments: { url: sourceUrl, maxDepth: 1, limit: 2 },
+        arguments: { url: sourceUrl, ...CRAWL_CAP },
         expectText: liveMode ? undefined : 'queued',
       },
     ],
@@ -200,6 +340,8 @@ async function main(): Promise<void> {
           PRIVATE_CRAWL_JOB_ID,
         ],
   })
+
+  const policyDecision = buildPolicyDecision(result)
 
   const verifierOutput = {
     schema: 'atrib.proof_packet.verifier_output.v1',
@@ -217,9 +359,15 @@ async function main(): Promise<void> {
     log: result.log,
     verifier: result.verifier,
     privacy: result.privacy,
-    crawl_cap: {
-      maxDepth: 1,
-      limit: 2,
+    crawl_cap: CRAWL_CAP,
+    policy_decision: {
+      artifact: 'policy-decision.json',
+      decision: policyDecision.decision,
+      decision_status: policyDecision.decision_status,
+      decision_hash: policyDecision.decision_hash,
+      signed_policy_record: false,
+      caveat:
+        'Policy decision is a deterministic artifact bound to signed records, not a signed atrib record.',
     },
     caveats: [
       result.mode === 'live'
@@ -258,12 +406,27 @@ async function main(): Promise<void> {
   const outDir = artifactDir(integrationDir)
   if (outDir) {
     mkdirSync(outDir, { recursive: true })
-    writeFileSync(join(outDir, 'README.md'), renderReadme(result))
+    writeFileSync(join(outDir, 'README.md'), renderReadme(result, policyDecision))
     writeJson(join(outDir, 'verifier-output.json'), verifierOutput)
     writeJson(join(outDir, 'redaction-manifest.json'), redactionManifest)
+    writeJson(join(outDir, 'policy-decision.json'), policyDecision)
   }
 
-  console.log(JSON.stringify({ ...result, artifact_dir: outDir ?? null }, null, 2))
+  console.log(
+    JSON.stringify(
+      {
+        ...result,
+        policy_decision: {
+          artifact: 'policy-decision.json',
+          decision: policyDecision.decision,
+          decision_hash: policyDecision.decision_hash,
+        },
+        artifact_dir: outDir ?? null,
+      },
+      null,
+      2,
+    ),
+  )
 }
 
 main().catch((err) => {

@@ -8,17 +8,19 @@
   "records": [
     {
       "tool_name": "firecrawl_search",
-      "record_hash": "sha256:1facfd8797d2ea0b69797c8aa56bed257981d3342b654bd5c55079148318d71c",
-      "log_index": 66074,
+      "record_hash": "sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434",
+      "log_index": 66265,
       "proof": {
-        "record_hash": "sha256:1facfd8797d2ea0b69797c8aa56bed257981d3342b654bd5c55079148318d71c",
-        "log_index": 66074,
-        "leaf_hash": "43bT9tYIJ93g8L0NRVeZjghNfUlk1Z0hZRKdaFXHN/E=",
-        "checkpoint": "log.atrib.dev/v1\n66075\nRybm6WXEQ1szPNz13mdf0Ms9L/beud9fMj3DWUlyCFc=\n\n— log.atrib.dev/v1 5awdbW8HACW/Cy1b5+zsSo76Prfz2G1V1kA1AGEApVJoHfakxS9bGrmWtZn6uHOyamU3hJG+7Gfkgw2eG0TgoMsnkwE=\n",
+        "record_hash": "sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434",
+        "log_index": 66265,
+        "leaf_hash": "1s4nOtwDRd+ex6NsI6Xlb52IAkmGKKuaMc7J7Ugxmb0=",
+        "checkpoint": "log.atrib.dev/v1\n66266\nlJ4OjXCQOxOBUML4AAWtOpoSmmiXFkJMvwQuYIe71Hw=\n\n— log.atrib.dev/v1 5awdbb805jtNJ8N3bBju1/oZIsuNQMyoQpZeg2HrXL8IOsWf0RWqgWyKf14nB965xTEAl9g6SGVICFIF7NPBo+hgeAM=\n",
         "inclusion_proof": [
-          "JDe7s1RLMQYiQSspaZDCBIp0fq8ftRCnQMD6OWK4KVA=",
-          "XIivwojnxm9UPtgE9pDtOtugrOlblnk3Fh8FXsKPf+E=",
-          "0QvnRivRurRZtu1ZHVtSQQtaYrLpi4WtGouoe31u7zg=",
+          "TwPYcLCCVDsy9mIHYknLqg8AntNslJYu1rz5Kls5OEU=",
+          "OjqG5zLZUReGt9GfvfxjZ6LAy2Ev4WS6BaG7oLcZYKk=",
+          "qj+9vblBcohVsAMoOWm/Q6rYvxeUYg+EoO98alvW9+M=",
+          "9OUdoZ94bXWmYKL96z4nPXNlZ/cRWYmIFu+HUbxrP/I=",
+          "XHSTcXYj0KAUQf8rwFsNalEHWH+HUrPpvpX9duAQLoQ=",
           "+od/RXv7ukGtnbaVbskeHD/CDJRLWLlpMDf8WFBY9Xo=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
@@ -26,18 +28,19 @@
     },
     {
       "tool_name": "firecrawl_scrape",
-      "record_hash": "sha256:4d0aaf74833ff6ad966c600edf5a1d83bcceaf2c73b80380159b8dc4d68c50a8",
-      "log_index": 66075,
+      "record_hash": "sha256:143f718228e0985156b30cf933ab749527d0f80cf6b586754f0c05d213472e73",
+      "log_index": 66266,
       "proof": {
-        "record_hash": "sha256:4d0aaf74833ff6ad966c600edf5a1d83bcceaf2c73b80380159b8dc4d68c50a8",
-        "log_index": 66075,
-        "leaf_hash": "bmybYbvZC7PXjxEF98WesRy6HALBjiRS9hXLbYtbbuA=",
-        "checkpoint": "log.atrib.dev/v1\n66076\nYW8XmsQyd+SKHNEgRSUfoL2udXaM12HRVgiBvkNyq88=\n\n— log.atrib.dev/v1 5awdbV+kdU08GM0nkjwTGgVlxnOCD0MsQSSd0+tba8bc6/xfwcJ97nyHUxmfG/nnkn8mO16BE2GCqU/e5qzcdq1afA4=\n",
+        "record_hash": "sha256:143f718228e0985156b30cf933ab749527d0f80cf6b586754f0c05d213472e73",
+        "log_index": 66266,
+        "leaf_hash": "2VFxZUPbcE+gkdwqlsAS81+i7PrmH0IX8xB0z7NjJO0=",
+        "checkpoint": "log.atrib.dev/v1\n66267\nbKO7kM1F8Punsja3jGzmXKxIntIHoIuaUxUNi6YAAOQ=\n\n— log.atrib.dev/v1 5awdbRBR66hmJzqV6weHcooQYxk/eTkpGaut59za050xSYGbvq+/8bMdlUW8eLAzuTyWa7R22hToYO61dHLSTOaQAQ4=\n",
         "inclusion_proof": [
-          "43bT9tYIJ93g8L0NRVeZjghNfUlk1Z0hZRKdaFXHN/E=",
-          "JDe7s1RLMQYiQSspaZDCBIp0fq8ftRCnQMD6OWK4KVA=",
-          "XIivwojnxm9UPtgE9pDtOtugrOlblnk3Fh8FXsKPf+E=",
-          "0QvnRivRurRZtu1ZHVtSQQtaYrLpi4WtGouoe31u7zg=",
+          "3TVj0P9/SA3pETYgzOWGxj/VJCtWHFMiRK5N8a7FZFI=",
+          "OjqG5zLZUReGt9GfvfxjZ6LAy2Ev4WS6BaG7oLcZYKk=",
+          "qj+9vblBcohVsAMoOWm/Q6rYvxeUYg+EoO98alvW9+M=",
+          "9OUdoZ94bXWmYKL96z4nPXNlZ/cRWYmIFu+HUbxrP/I=",
+          "XHSTcXYj0KAUQf8rwFsNalEHWH+HUrPpvpX9duAQLoQ=",
           "+od/RXv7ukGtnbaVbskeHD/CDJRLWLlpMDf8WFBY9Xo=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
@@ -45,17 +48,20 @@
     },
     {
       "tool_name": "firecrawl_extract",
-      "record_hash": "sha256:1793215346ec2d2272f070b6388abe8e45fe410d0d63afaf607ddbc9e7a697bb",
-      "log_index": 66076,
+      "record_hash": "sha256:94582f5e78da4ab9be42e2b71db94b4687a8c9db878d23fc839737db5db5fe7a",
+      "log_index": 66267,
       "proof": {
-        "record_hash": "sha256:1793215346ec2d2272f070b6388abe8e45fe410d0d63afaf607ddbc9e7a697bb",
-        "log_index": 66076,
-        "leaf_hash": "7Ub8IcQL3K+PNT5cgjbClxKr0/qT6KI5Sq7iYdWrCEM=",
-        "checkpoint": "log.atrib.dev/v1\n66077\nwU06OKMnIHuATsLOXncMQSmqwLfr6EHPDdrKwqJ857g=\n\n— log.atrib.dev/v1 5awdbUjQqOeJlvSvIHNKunugm9dKWRIYf3m8NMKgOXxJiTAqczsjUITzVgXZWIKPI4kbas1FCG0oQPpn1EQi3hRQig4=\n",
+        "record_hash": "sha256:94582f5e78da4ab9be42e2b71db94b4687a8c9db878d23fc839737db5db5fe7a",
+        "log_index": 66267,
+        "leaf_hash": "w3yLBhdJI9Fv6f7OYxF1W56E6+JBW5bJrDrTntTsPxw=",
+        "checkpoint": "log.atrib.dev/v1\n66268\nFUqFxvcRBPkUhNgl/p1EBPR5r5lhP8ta6Xhy/DCUjSg=\n\n— log.atrib.dev/v1 5awdbbR87pQZc4QJVp6PnbycLViPsXVk7Tmn77CACBXyjPwrwDIX4lsgLlcwjAMTlALaBPamD54BC35n+5L0bIqk1wU=\n",
         "inclusion_proof": [
-          "O4EN2AMwBkgcjsR/KIneB7OTnmmMpwfBv/utvkmhHrU=",
-          "XIivwojnxm9UPtgE9pDtOtugrOlblnk3Fh8FXsKPf+E=",
-          "0QvnRivRurRZtu1ZHVtSQQtaYrLpi4WtGouoe31u7zg=",
+          "2VFxZUPbcE+gkdwqlsAS81+i7PrmH0IX8xB0z7NjJO0=",
+          "3TVj0P9/SA3pETYgzOWGxj/VJCtWHFMiRK5N8a7FZFI=",
+          "OjqG5zLZUReGt9GfvfxjZ6LAy2Ev4WS6BaG7oLcZYKk=",
+          "qj+9vblBcohVsAMoOWm/Q6rYvxeUYg+EoO98alvW9+M=",
+          "9OUdoZ94bXWmYKL96z4nPXNlZ/cRWYmIFu+HUbxrP/I=",
+          "XHSTcXYj0KAUQf8rwFsNalEHWH+HUrPpvpX9duAQLoQ=",
           "+od/RXv7ukGtnbaVbskeHD/CDJRLWLlpMDf8WFBY9Xo=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
@@ -63,18 +69,19 @@
     },
     {
       "tool_name": "firecrawl_crawl",
-      "record_hash": "sha256:ae435980fe28e7f9992948bae8748a04f2c990d83a9fc843045d7a8d378e5ceb",
-      "log_index": 66077,
+      "record_hash": "sha256:4b58bcc5ce9931b5528cb41d9ca0c791baeee122f8ceaaa0270e3f84bfe092cc",
+      "log_index": 66268,
       "proof": {
-        "record_hash": "sha256:ae435980fe28e7f9992948bae8748a04f2c990d83a9fc843045d7a8d378e5ceb",
-        "log_index": 66077,
-        "leaf_hash": "dsg9rK7Nk4A8Z5nlVTBNY7lJAu+04EsnJzHDVqnYeh8=",
-        "checkpoint": "log.atrib.dev/v1\n66078\nNKI1uZLa3P2JZsJoh8mMO+DKNGPDJQ7BLpTd6VUCMjI=\n\n— log.atrib.dev/v1 5awdbUiLfGG+idT7+r7u9+K8XKb0SHJL2BJznM37tQkMUXLk8TRg7ROSbEEoEdr3mwTPViLC/zkWuGuT9DI9HbRkeQE=\n",
+        "record_hash": "sha256:4b58bcc5ce9931b5528cb41d9ca0c791baeee122f8ceaaa0270e3f84bfe092cc",
+        "log_index": 66268,
+        "leaf_hash": "WCvsLg8QOAglZy+zcT+Sm+oWHRW7CpZ1evmAf8GVLlw=",
+        "checkpoint": "log.atrib.dev/v1\n66269\nZf1ooIkg6EGVqHHJDCMNmyjt6/XMPApcPH8ch8tgsMA=\n\n— log.atrib.dev/v1 5awdbZkHcB4nwjYKJr7z9NrTwSUJrISlsAopEFhPs6PlsEnUe5U44LTzJi9xCo0BHSss6toxl7YzX5YU0LPGuz9dIgE=\n",
         "inclusion_proof": [
-          "7Ub8IcQL3K+PNT5cgjbClxKr0/qT6KI5Sq7iYdWrCEM=",
-          "O4EN2AMwBkgcjsR/KIneB7OTnmmMpwfBv/utvkmhHrU=",
-          "XIivwojnxm9UPtgE9pDtOtugrOlblnk3Fh8FXsKPf+E=",
-          "0QvnRivRurRZtu1ZHVtSQQtaYrLpi4WtGouoe31u7zg=",
+          "FBPGFrBntM7VcumePqcQalq1tK6SeRnD68dZ4Dj2toI=",
+          "OjqG5zLZUReGt9GfvfxjZ6LAy2Ev4WS6BaG7oLcZYKk=",
+          "qj+9vblBcohVsAMoOWm/Q6rYvxeUYg+EoO98alvW9+M=",
+          "9OUdoZ94bXWmYKL96z4nPXNlZ/cRWYmIFu+HUbxrP/I=",
+          "XHSTcXYj0KAUQf8rwFsNalEHWH+HUrPpvpX9duAQLoQ=",
           "+od/RXv7ukGtnbaVbskeHD/CDJRLWLlpMDf8WFBY9Xo=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
@@ -88,55 +95,62 @@
     "inclusion_verified": true,
     "proofs": [
       {
-        "record_hash": "sha256:1facfd8797d2ea0b69797c8aa56bed257981d3342b654bd5c55079148318d71c",
-        "log_index": 66074,
-        "leaf_hash": "43bT9tYIJ93g8L0NRVeZjghNfUlk1Z0hZRKdaFXHN/E=",
-        "checkpoint": "log.atrib.dev/v1\n66075\nRybm6WXEQ1szPNz13mdf0Ms9L/beud9fMj3DWUlyCFc=\n\n— log.atrib.dev/v1 5awdbW8HACW/Cy1b5+zsSo76Prfz2G1V1kA1AGEApVJoHfakxS9bGrmWtZn6uHOyamU3hJG+7Gfkgw2eG0TgoMsnkwE=\n",
+        "record_hash": "sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434",
+        "log_index": 66265,
+        "leaf_hash": "1s4nOtwDRd+ex6NsI6Xlb52IAkmGKKuaMc7J7Ugxmb0=",
+        "checkpoint": "log.atrib.dev/v1\n66266\nlJ4OjXCQOxOBUML4AAWtOpoSmmiXFkJMvwQuYIe71Hw=\n\n— log.atrib.dev/v1 5awdbb805jtNJ8N3bBju1/oZIsuNQMyoQpZeg2HrXL8IOsWf0RWqgWyKf14nB965xTEAl9g6SGVICFIF7NPBo+hgeAM=\n",
         "inclusion_proof": [
-          "JDe7s1RLMQYiQSspaZDCBIp0fq8ftRCnQMD6OWK4KVA=",
-          "XIivwojnxm9UPtgE9pDtOtugrOlblnk3Fh8FXsKPf+E=",
-          "0QvnRivRurRZtu1ZHVtSQQtaYrLpi4WtGouoe31u7zg=",
+          "TwPYcLCCVDsy9mIHYknLqg8AntNslJYu1rz5Kls5OEU=",
+          "OjqG5zLZUReGt9GfvfxjZ6LAy2Ev4WS6BaG7oLcZYKk=",
+          "qj+9vblBcohVsAMoOWm/Q6rYvxeUYg+EoO98alvW9+M=",
+          "9OUdoZ94bXWmYKL96z4nPXNlZ/cRWYmIFu+HUbxrP/I=",
+          "XHSTcXYj0KAUQf8rwFsNalEHWH+HUrPpvpX9duAQLoQ=",
           "+od/RXv7ukGtnbaVbskeHD/CDJRLWLlpMDf8WFBY9Xo=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       },
       {
-        "record_hash": "sha256:4d0aaf74833ff6ad966c600edf5a1d83bcceaf2c73b80380159b8dc4d68c50a8",
-        "log_index": 66075,
-        "leaf_hash": "bmybYbvZC7PXjxEF98WesRy6HALBjiRS9hXLbYtbbuA=",
-        "checkpoint": "log.atrib.dev/v1\n66076\nYW8XmsQyd+SKHNEgRSUfoL2udXaM12HRVgiBvkNyq88=\n\n— log.atrib.dev/v1 5awdbV+kdU08GM0nkjwTGgVlxnOCD0MsQSSd0+tba8bc6/xfwcJ97nyHUxmfG/nnkn8mO16BE2GCqU/e5qzcdq1afA4=\n",
+        "record_hash": "sha256:143f718228e0985156b30cf933ab749527d0f80cf6b586754f0c05d213472e73",
+        "log_index": 66266,
+        "leaf_hash": "2VFxZUPbcE+gkdwqlsAS81+i7PrmH0IX8xB0z7NjJO0=",
+        "checkpoint": "log.atrib.dev/v1\n66267\nbKO7kM1F8Punsja3jGzmXKxIntIHoIuaUxUNi6YAAOQ=\n\n— log.atrib.dev/v1 5awdbRBR66hmJzqV6weHcooQYxk/eTkpGaut59za050xSYGbvq+/8bMdlUW8eLAzuTyWa7R22hToYO61dHLSTOaQAQ4=\n",
         "inclusion_proof": [
-          "43bT9tYIJ93g8L0NRVeZjghNfUlk1Z0hZRKdaFXHN/E=",
-          "JDe7s1RLMQYiQSspaZDCBIp0fq8ftRCnQMD6OWK4KVA=",
-          "XIivwojnxm9UPtgE9pDtOtugrOlblnk3Fh8FXsKPf+E=",
-          "0QvnRivRurRZtu1ZHVtSQQtaYrLpi4WtGouoe31u7zg=",
+          "3TVj0P9/SA3pETYgzOWGxj/VJCtWHFMiRK5N8a7FZFI=",
+          "OjqG5zLZUReGt9GfvfxjZ6LAy2Ev4WS6BaG7oLcZYKk=",
+          "qj+9vblBcohVsAMoOWm/Q6rYvxeUYg+EoO98alvW9+M=",
+          "9OUdoZ94bXWmYKL96z4nPXNlZ/cRWYmIFu+HUbxrP/I=",
+          "XHSTcXYj0KAUQf8rwFsNalEHWH+HUrPpvpX9duAQLoQ=",
           "+od/RXv7ukGtnbaVbskeHD/CDJRLWLlpMDf8WFBY9Xo=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       },
       {
-        "record_hash": "sha256:1793215346ec2d2272f070b6388abe8e45fe410d0d63afaf607ddbc9e7a697bb",
-        "log_index": 66076,
-        "leaf_hash": "7Ub8IcQL3K+PNT5cgjbClxKr0/qT6KI5Sq7iYdWrCEM=",
-        "checkpoint": "log.atrib.dev/v1\n66077\nwU06OKMnIHuATsLOXncMQSmqwLfr6EHPDdrKwqJ857g=\n\n— log.atrib.dev/v1 5awdbUjQqOeJlvSvIHNKunugm9dKWRIYf3m8NMKgOXxJiTAqczsjUITzVgXZWIKPI4kbas1FCG0oQPpn1EQi3hRQig4=\n",
+        "record_hash": "sha256:94582f5e78da4ab9be42e2b71db94b4687a8c9db878d23fc839737db5db5fe7a",
+        "log_index": 66267,
+        "leaf_hash": "w3yLBhdJI9Fv6f7OYxF1W56E6+JBW5bJrDrTntTsPxw=",
+        "checkpoint": "log.atrib.dev/v1\n66268\nFUqFxvcRBPkUhNgl/p1EBPR5r5lhP8ta6Xhy/DCUjSg=\n\n— log.atrib.dev/v1 5awdbbR87pQZc4QJVp6PnbycLViPsXVk7Tmn77CACBXyjPwrwDIX4lsgLlcwjAMTlALaBPamD54BC35n+5L0bIqk1wU=\n",
         "inclusion_proof": [
-          "O4EN2AMwBkgcjsR/KIneB7OTnmmMpwfBv/utvkmhHrU=",
-          "XIivwojnxm9UPtgE9pDtOtugrOlblnk3Fh8FXsKPf+E=",
-          "0QvnRivRurRZtu1ZHVtSQQtaYrLpi4WtGouoe31u7zg=",
+          "2VFxZUPbcE+gkdwqlsAS81+i7PrmH0IX8xB0z7NjJO0=",
+          "3TVj0P9/SA3pETYgzOWGxj/VJCtWHFMiRK5N8a7FZFI=",
+          "OjqG5zLZUReGt9GfvfxjZ6LAy2Ev4WS6BaG7oLcZYKk=",
+          "qj+9vblBcohVsAMoOWm/Q6rYvxeUYg+EoO98alvW9+M=",
+          "9OUdoZ94bXWmYKL96z4nPXNlZ/cRWYmIFu+HUbxrP/I=",
+          "XHSTcXYj0KAUQf8rwFsNalEHWH+HUrPpvpX9duAQLoQ=",
           "+od/RXv7ukGtnbaVbskeHD/CDJRLWLlpMDf8WFBY9Xo=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       },
       {
-        "record_hash": "sha256:ae435980fe28e7f9992948bae8748a04f2c990d83a9fc843045d7a8d378e5ceb",
-        "log_index": 66077,
-        "leaf_hash": "dsg9rK7Nk4A8Z5nlVTBNY7lJAu+04EsnJzHDVqnYeh8=",
-        "checkpoint": "log.atrib.dev/v1\n66078\nNKI1uZLa3P2JZsJoh8mMO+DKNGPDJQ7BLpTd6VUCMjI=\n\n— log.atrib.dev/v1 5awdbUiLfGG+idT7+r7u9+K8XKb0SHJL2BJznM37tQkMUXLk8TRg7ROSbEEoEdr3mwTPViLC/zkWuGuT9DI9HbRkeQE=\n",
+        "record_hash": "sha256:4b58bcc5ce9931b5528cb41d9ca0c791baeee122f8ceaaa0270e3f84bfe092cc",
+        "log_index": 66268,
+        "leaf_hash": "WCvsLg8QOAglZy+zcT+Sm+oWHRW7CpZ1evmAf8GVLlw=",
+        "checkpoint": "log.atrib.dev/v1\n66269\nZf1ooIkg6EGVqHHJDCMNmyjt6/XMPApcPH8ch8tgsMA=\n\n— log.atrib.dev/v1 5awdbZkHcB4nwjYKJr7z9NrTwSUJrISlsAopEFhPs6PlsEnUe5U44LTzJi9xCo0BHSss6toxl7YzX5YU0LPGuz9dIgE=\n",
         "inclusion_proof": [
-          "7Ub8IcQL3K+PNT5cgjbClxKr0/qT6KI5Sq7iYdWrCEM=",
-          "O4EN2AMwBkgcjsR/KIneB7OTnmmMpwfBv/utvkmhHrU=",
-          "XIivwojnxm9UPtgE9pDtOtugrOlblnk3Fh8FXsKPf+E=",
-          "0QvnRivRurRZtu1ZHVtSQQtaYrLpi4WtGouoe31u7zg=",
+          "FBPGFrBntM7VcumePqcQalq1tK6SeRnD68dZ4Dj2toI=",
+          "OjqG5zLZUReGt9GfvfxjZ6LAy2Ev4WS6BaG7oLcZYKk=",
+          "qj+9vblBcohVsAMoOWm/Q6rYvxeUYg+EoO98alvW9+M=",
+          "9OUdoZ94bXWmYKL96z4nPXNlZ/cRWYmIFu+HUbxrP/I=",
+          "XHSTcXYj0KAUQf8rwFsNalEHWH+HUrPpvpX9duAQLoQ=",
           "+od/RXv7ukGtnbaVbskeHD/CDJRLWLlpMDf8WFBY9Xo=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
@@ -157,6 +171,14 @@
   "crawl_cap": {
     "maxDepth": 1,
     "limit": 2
+  },
+  "policy_decision": {
+    "artifact": "policy-decision.json",
+    "decision": "escalate_before_customer_email",
+    "decision_status": "review_required",
+    "decision_hash": "sha256:3c186af0a83692a04146bc25b5ef0202c3b4c8901f71cc2ea4d269ddfa02d7c1",
+    "signed_policy_record": false,
+    "caveat": "Policy decision is a deterministic artifact bound to signed records, not a signed atrib record."
   },
   "caveats": [
     "Live Firecrawl MCP command path. Raw Firecrawl content remains private.",

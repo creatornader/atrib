@@ -33,6 +33,13 @@ records locally while the flow is running. After the full flow verifies, it
 submits the accepted record set to `https://log.atrib.dev/v1/entries`, verifies
 inclusion, and writes those public log indexes into the artifact.
 
+The artifact also writes `policy-decision.json`. That file models the next
+gate after ingestion: allow internal research and source triage, but require
+review before a customer email, account update, refund or payment change,
+production code change, or vendor procurement action depends on web-derived
+content. The policy decision is deterministic and hash-bound to the signed
+Firecrawl records, but it is not a signed atrib record yet.
+
 ## Proof and demo boundary
 
 This example has two runnable modes:

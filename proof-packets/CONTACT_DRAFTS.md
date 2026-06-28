@@ -18,9 +18,11 @@ Browserbase Stagehand:
 Firecrawl web ingestion:
 
 - Artifact: [`firecrawl-web-ingestion/verifier-output.json`](firecrawl-web-ingestion/verifier-output.json)
-- Explorer: <https://explore.atrib.dev/action/sha256:bc165654e4b409217dfdb9ecba04ebf9aba89f36938aa6c177110ccffdd795e0>
-- Public log proof: <https://log.atrib.dev/v1/proof/bc165654e4b409217dfdb9ecba04ebf9aba89f36938aa6c177110ccffdd795e0>
-- Public log indexes: `63586`, `63587`, `63588`, `63589`
+- Policy decision: [`firecrawl-web-ingestion/policy-decision.json`](firecrawl-web-ingestion/policy-decision.json)
+- Explorer: <https://explore.atrib.dev/action/sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434>
+- Public log proof: <https://log.atrib.dev/v1/proof/bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434>
+- Public log indexes: `66265`, `66266`, `66267`, `66268`
+- Policy decision hash: `sha256:3c186af0a83692a04146bc25b5ef0202c3b4c8901f71cc2ea4d269ddfa02d7c1`
 - Tools signed: `firecrawl_search`, `firecrawl_scrape`, `firecrawl_extract`, `firecrawl_crawl`
 
 ## Target table
@@ -110,18 +112,27 @@ Proof shape:
 - Wrapper: `@atrib/mcp-wrap`
 - Public fields: tool names, `args_hash`, `result_hash`, record hashes, public log indexes
 - Private fields: query, URL, scraped content, extracted text, crawl job id
+- Policy artifact: `policy-decision.json` models `escalate_before_customer_email`
 
 Public proof:
 
-- Explorer: https://explore.atrib.dev/action/sha256:bc165654e4b409217dfdb9ecba04ebf9aba89f36938aa6c177110ccffdd795e0
-- Log proof: https://log.atrib.dev/v1/proof/bc165654e4b409217dfdb9ecba04ebf9aba89f36938aa6c177110ccffdd795e0
-- Public log indexes: `63586`, `63587`, `63588`, `63589`
+- Explorer: https://explore.atrib.dev/action/sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434
+- Log proof: https://log.atrib.dev/v1/proof/bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434
+- Public log indexes: `66265`, `66266`, `66267`, `66268`
+- Policy decision hash: `sha256:3c186af0a83692a04146bc25b5ef0202c3b4c8901f71cc2ea4d269ddfa02d7c1`
+
+Policy shape:
+
+- Allow internal research and source triage.
+- Escalate before a customer email, account update, refund or payment change, production code change, or vendor workflow depends on the ingested web content.
+- Keep raw web content private while making the ingestion record hashes and verifier output public.
 
 What I want criticism on:
 
+- Whether this is the right evidence shape before a downstream agent uses web-ingested content for a sensitive action.
+- Which fields are missing for policy, trust, or incident review.
 - Whether `search`, `scrape`, `extract`, and `crawl` should all be signed, or whether the right boundary is only recursive or credit-consuming actions.
-- Whether hash-only public records are enough for scraped content and extracted text.
-- Whether the bounded-crawl receipt helps with the concerns in #233, #194, and #211, or whether policy enforcement needs to happen somewhere else.
+- Whether the bounded-crawl receipt helps with the concerns in #233, #194, and #211, or whether enforcement needs to happen somewhere else.
 
 I have not opened a PR because I want maintainer feedback on the record boundary before changing code.
 ```
@@ -129,12 +140,13 @@ I have not opened a PR because I want maintainer feedback on the record boundary
 ## Firecrawl draft: direct note
 
 ```text
-I ran Atrib against Firecrawl MCP and produced a public proof run for search, scrape, extract, and bounded crawl.
+I ran Atrib against Firecrawl MCP and produced a public proof run for search, scrape, extract, and bounded crawl. I also added a small policy decision artifact that allows internal research but escalates before web-ingested content feeds a customer email, account update, refund or payment change, production code change, or vendor workflow.
 
-Explorer: https://explore.atrib.dev/action/sha256:bc165654e4b409217dfdb9ecba04ebf9aba89f36938aa6c177110ccffdd795e0
-Log proof: https://log.atrib.dev/v1/proof/bc165654e4b409217dfdb9ecba04ebf9aba89f36938aa6c177110ccffdd795e0
+Explorer: https://explore.atrib.dev/action/sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434
+Log proof: https://log.atrib.dev/v1/proof/bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434
+Policy decision hash: sha256:3c186af0a83692a04146bc25b5ef0202c3b4c8901f71cc2ea4d269ddfa02d7c1
 
-The public record keeps tool names plus args/result hashes. It does not expose the query, URL, scraped content, extracted text, or crawl job id. I am looking for criticism on whether this proof boundary is useful for MCP ingestion, especially around prompt injection, SSRF, and runaway crawl or credit burn.
+The public record keeps tool names plus args/result hashes. It does not expose the query, URL, scraped content, extracted text, or crawl job id. I am looking for criticism on whether this is the right evidence shape before a downstream agent uses web-ingested content for a sensitive action, and what fields are missing for policy, trust, or incident review.
 ```
 
 ## Remaining demo scope

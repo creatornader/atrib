@@ -21,19 +21,49 @@ The crawl step is capped to `maxDepth: 1` and `limit: 2`.
 
 | Tool              | Record hash                                                             | Public log index |
 | ----------------- | ----------------------------------------------------------------------- | ---------------- |
-| firecrawl_search  | sha256:1facfd8797d2ea0b69797c8aa56bed257981d3342b654bd5c55079148318d71c | 66074            |
-| firecrawl_scrape  | sha256:4d0aaf74833ff6ad966c600edf5a1d83bcceaf2c73b80380159b8dc4d68c50a8 | 66075            |
-| firecrawl_extract | sha256:1793215346ec2d2272f070b6388abe8e45fe410d0d63afaf607ddbc9e7a697bb | 66076            |
-| firecrawl_crawl   | sha256:ae435980fe28e7f9992948bae8748a04f2c990d83a9fc843045d7a8d378e5ceb | 66077            |
+| firecrawl_search  | sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434 | 66265            |
+| firecrawl_scrape  | sha256:143f718228e0985156b30cf933ab749527d0f80cf6b586754f0c05d213472e73 | 66266            |
+| firecrawl_extract | sha256:94582f5e78da4ab9be42e2b71db94b4687a8c9db878d23fc839737db5db5fe7a | 66267            |
+| firecrawl_crawl   | sha256:4b58bcc5ce9931b5528cb41d9ca0c791baeee122f8ceaaa0270e3f84bfe092cc | 66268            |
 
 Representative public links:
 
-- Explorer: <https://explore.atrib.dev/action/sha256:1facfd8797d2ea0b69797c8aa56bed257981d3342b654bd5c55079148318d71c>
-- Log proof: <https://log.atrib.dev/v1/proof/1facfd8797d2ea0b69797c8aa56bed257981d3342b654bd5c55079148318d71c>
+- Explorer: <https://explore.atrib.dev/action/sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434>
+- Log proof: <https://log.atrib.dev/v1/proof/bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434>
 
 ## Redaction line
 
 The wrapper saw private Firecrawl-shaped payloads: query, URL, scraped Markdown, HTML, extracted text, and crawl job id. The public artifact stores only hashes for those fields. See `redaction-manifest.json`.
+
+## Control-plane fit
+
+Firecrawl is the untrusted web-ingestion boundary, not the sensitive downstream
+action. This packet is meant to sit before a customer email, account update,
+refund or payment change, production code change, or vendor workflow that
+depends on web-derived context.
+
+A verifier can see which ingestion tools ran, that the crawl was capped, that
+records landed in the log, and that raw web content stayed private.
+
+## Policy decision artifact
+
+`policy-decision.json` models the next gate after ingestion:
+`escalate_before_customer_email`. It binds to the signed Firecrawl records, log
+indexes, crawl cap, verifier result, and redaction boundary.
+
+Allowed without review: `internal_research_summary`, `source_triage`.
+
+Escalated before execution: `customer_email`, `account_update`, `refund_or_payment_change`, `production_code_change`, `vendor_procurement_action`.
+
+Policy decision hash: `sha256:3c186af0a83692a04146bc25b5ef0202c3b4c8901f71cc2ea4d269ddfa02d7c1`.
+
+The policy decision file is deterministic and hash-bound to the signed
+ingestion records. It is not a signed atrib record yet. The signed evidence in
+this packet is the wrapped Firecrawl tool-call chain.
+
+## Loop receipt
+
+The implementation loop contract and pass receipts live in `LOOP.md`.
 
 ## Weakness
 

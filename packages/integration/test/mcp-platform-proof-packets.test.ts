@@ -45,6 +45,11 @@ async function runPacket(script: string, outPrefix: string) {
         log_indexes: number[]
         verifier: { record_valid: boolean }
         privacy: { public_records_hash_only: boolean }
+        policy_decision?: {
+          artifact: string
+          decision: string
+          decision_hash: string
+        }
         artifact_dir: string
       },
       cleanup: () => rmSync(outDir, { recursive: true, force: true }),
@@ -55,8 +60,11 @@ async function runPacket(script: string, outPrefix: string) {
   }
 }
 
-function artifactText(outDir: string): string {
-  return ['README.md', 'verifier-output.json', 'redaction-manifest.json']
+function artifactText(
+  outDir: string,
+  files = ['README.md', 'verifier-output.json', 'redaction-manifest.json'],
+): string {
+  return files
     .map((file) => {
       const path = join(outDir, file)
       expect(existsSync(path)).toBe(true)
@@ -136,8 +144,23 @@ describe('MCP platform proof packets', () => {
       expect(run.result.log_indexes).toEqual([0, 1, 2, 3])
       expect(run.result.verifier.record_valid).toBe(true)
       expect(run.result.privacy.public_records_hash_only).toBe(true)
+      expect(run.result.policy_decision).toMatchObject({
+        artifact: 'policy-decision.json',
+        decision: 'escalate_before_customer_email',
+      })
+      expect(run.result.policy_decision?.decision_hash).toMatch(/^sha256:[0-9a-f]{64}$/u)
 
-      const text = `${run.stdout}\n${artifactText(run.outDir)}`
+      const text = `${run.stdout}\n${artifactText(run.outDir, [
+        'README.md',
+        'verifier-output.json',
+        'redaction-manifest.json',
+        'policy-decision.json',
+      ])}`
+      expect(text).toContain('signed_ingestion_records_present')
+      expect(text).toContain('bounded_crawl_cap_present')
+      expect(text).toContain('raw_web_content_private')
+      expect(text).toContain('customer_message_requires_review')
+      expect(text).toContain('escalate_before_customer_email')
       for (const needle of [
         'private acquisition research query',
         'https://example.invalid/private-firecrawl-source',

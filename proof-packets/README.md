@@ -3,10 +3,10 @@
 This directory holds artifact-first proof runs for external MCP and tool
 platform prospects.
 
-| Proof                                               | Source example                                           | Status                                                                                                    |
-| --------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path with public log inclusion. Fixture mode stays available for local tests. |
-| [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/` | Live Firecrawl MCP path when generated with credentials. Fixture mode stays available for local tests.    |
+| Proof                                               | Source example                                           | Status                                                                                                            |
+| --------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path with public log inclusion. Fixture mode stays available for local tests.         |
+| [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/` | Live Firecrawl MCP path plus a downstream policy decision artifact. Fixture mode stays available for local tests. |
 
 Each artifact keeps public evidence narrow: tool names, hash disclosures, record
 hashes, log indexes, and verifier output. Private upstream payloads stay out of
@@ -30,7 +30,9 @@ Browserbase has live demo code at
 is still a human gate. Hosted Browserbase fresh runs can fail during temporary
 model-capacity spikes, so the demo must show failed runs plainly and rate-limit
 retries. Firecrawl stays at fixed proof plus rerunnable command until a hosted
-crawl surface has stricter abuse and cost controls.
+crawl surface has stricter abuse and cost controls. Its packet includes
+`policy-decision.json`, which binds the signed ingestion records to a candidate
+review gate for sensitive downstream actions.
 
 ## Contact drafts
 
