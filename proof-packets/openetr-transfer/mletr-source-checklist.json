@@ -1,0 +1,68 @@
+{
+  "schema": "atrib.openetr.mletr_source_checklist.v1",
+  "status": "source_backed_criteria_present",
+  "reviewed_at": "2026-06-28",
+  "sources": [
+    {
+      "id": "openetr-tta-spec",
+      "title": "OpenETR Title Transfer Authority Replaceable Event Specification",
+      "url": "https://github.com/trbouma/openetr/blob/main/docs/specs/TITLE_TRANSFER_AUTHORITY_REPLACEABLE_EVENT_SPEC.md",
+      "role": "Defines recognized TTA pubkeys, replaceable event state, title holder p tags, and validation rules.",
+      "source_hash": "sha256:e64e781d6a293256b5a1240e22502155b3b69091745c34bcd87fef2ddd3e1c6f"
+    },
+    {
+      "id": "openetr-transaction-spec",
+      "title": "OpenETR Canonical ETR Transaction Specification",
+      "url": "https://github.com/trbouma/openetr/blob/main/docs/specs/CANONICAL_ETR_TRANSACTION_SPEC.md",
+      "role": "Defines control-relevant actions, attestation, recognition policy, and signed evidence chains.",
+      "source_hash": "sha256:89efd9d7f4927bc3ddf0f494e025f00ada0c8256d676fc171972db42c9b43c42"
+    },
+    {
+      "id": "uncitral-mletr",
+      "title": "UNCITRAL Model Law on Electronic Transferable Records",
+      "url": "https://uncitral.un.org/en/texts/ecommerce/modellaw/electronic_transferable_records",
+      "role": "Public model-law source for electronic transferable record functional-equivalence criteria.",
+      "source_hash": "sha256:42fbe435d7e8c6dd69e457d51e4aa5427d363c529c172169ed8399a5c73de677"
+    },
+    {
+      "id": "tradetrust-mletr-title-transfer",
+      "title": "TradeTrust MLETR-compliant titles transfer white paper",
+      "url": "https://www.tradetrust.io/happenings-and-resources/white-paper-transfer-of-model-law-on-electronic-transferable-records-compliant-titles/",
+      "role": "Public implementation-oriented source on MLETR-compliant electronic title transfer.",
+      "source_hash": "sha256:a843faee05f908035187ea3642a733229e4bda847bd2372b6276c52aba348627"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "electronic_record_identifiable",
+      "status": "evidence_present",
+      "evidence": "The source-backed run exposes a digest-identified OpenETR object and records only a hash of that digest in public artifacts.",
+      "source_ids": ["openetr-tta-spec", "openetr-transaction-spec"]
+    },
+    {
+      "id": "integrity_history_available",
+      "status": "evidence_present",
+      "evidence": "The source-backed run executed issue, transfer initiate, transfer accept, and query, then committed sanitized event hashes and chain checks.",
+      "source_ids": ["openetr-transaction-spec"]
+    },
+    {
+      "id": "exclusive_control_evidence",
+      "status": "requires_policy_or_legal_review",
+      "evidence": "The packet can show a recognized TTA or operator-demo signer naming the controller, but final control recognition remains a policy or legal decision.",
+      "source_ids": ["openetr-tta-spec", "uncitral-mletr", "tradetrust-mletr-title-transfer"]
+    },
+    {
+      "id": "reliable_method_boundary",
+      "status": "requires_policy_or_legal_review",
+      "evidence": "The cryptographic and relay evidence gives reviewable inputs for a reliability analysis, but this artifact does not decide jurisdictional sufficiency.",
+      "source_ids": ["uncitral-mletr", "tradetrust-mletr-title-transfer"]
+    },
+    {
+      "id": "legal_effect_requires_relying_party_or_law",
+      "status": "requires_policy_or_legal_review",
+      "evidence": "The checklist records criteria evidence only. A relying party, TTA, or legal reviewer must decide legal effect.",
+      "source_ids": ["uncitral-mletr", "openetr-transaction-spec"]
+    }
+  ],
+  "limitation": "This checklist is source-backed criteria evidence for review. It is not legal advice, a registry act, or an MLETR compliance opinion."
+}

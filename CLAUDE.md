@@ -93,7 +93,7 @@ atrib/
         browser-workflow/      # Browser-shaped plus browser-use-hosted observe/click/fill/submit receipt proofs with hash-only atrib records and local sidecars.
         browserbase-stagehand/ # Browserbase MCP-shaped start/navigate/observe/act/extract/end proof artifact through @atrib/mcp-wrap.
         firecrawl-web-ingestion/ # Firecrawl MCP-shaped search/scrape/extract/crawl proof artifact through @atrib/mcp-wrap.
-        openetr-transfer/      # OpenETR-shaped issue/initiate/accept/query transfer-control proof artifact through @atrib/mcp-wrap, with pinned-source local/public relay evidence, signed title-recognition control records, and fixture authority plus legal/MLETR attestations for full public proof mode.
+        openetr-transfer/      # OpenETR-shaped issue/initiate/accept/query transfer-control proof artifact through @atrib/mcp-wrap, with pinned-source local/public relay evidence, signed title-recognition control records, external/operator-demo title-authority evidence, legal/MLETR evidence, and source checklist artifacts for public proof mode.
         activegraph-runtime-log/ # ActiveGraph v1.1.0 export-trace JSONL proof with log_window_manifest and approval-gate receipts.
         reference-runtime-log/ # Local append-only JSONL runtime-log source for window, fork, compaction, and side-effect receipt proofs.
         dogfood-runtime-log/   # Sanitized Agent Bridge job-window proof that binds status, result refs, bridge receipts, and signed atrib refs.

@@ -16,8 +16,8 @@
     "openetr_user_config_written": false
   },
   "object": {
-    "digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
-    "document_hash": "sha256:249b5e7b851bac4863174da570d094fe481d704fa04b413cde93cd7acf36004b"
+    "digest_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+    "document_hash": "sha256:207f80c51d5d70e8a3ccb8a5cc1c1247f37907704f6de247c30fa21e18d9855f"
   },
   "parties": {
     "issuer_npub_hash": "sha256:45ed05e260b035d483cc3d666261f179d842287c480b4869fc53076c98d140fb",
@@ -29,53 +29,37 @@
     {
       "role": "origin",
       "kind": 31415,
-      "event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+      "event_id_hash": "sha256:40f0875cfb3719cfe23bffba106d139a0b514d291b03a1901bc68c65eafc306f",
       "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
       "content_hash": "sha256:cedd26997c3b1f1fc6bf2df071538d2aba6db8b6e87fa5001588d6fc3800acac",
-      "tag_names": [
-        "d",
-        "o"
-      ],
+      "tag_names": ["d", "o"],
       "action": null,
-      "object_digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
+      "object_digest_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
       "prior_event_id_hash": null,
       "party_pubkey_hash": null
     },
     {
       "role": "transfer_initiate",
       "kind": 31416,
-      "event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+      "event_id_hash": "sha256:095b2373eb7f038620404f52ad083494f3c3984a9e045a276f49ce10327b6a95",
       "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
-      "content_hash": "sha256:234aad8bd2ba36365b52ff5cd42b23d515c4962b5398943db1a3754e00b19d76",
-      "tag_names": [
-        "d",
-        "o",
-        "e",
-        "origin",
-        "p",
-        "action"
-      ],
+      "content_hash": "sha256:2316575be6d8febae00f39db5cc9cdaea258c603584faee8dfcc7ef9be9f8aa1",
+      "tag_names": ["d", "o", "e", "origin", "p", "action"],
       "action": "initiate",
-      "object_digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
-      "prior_event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+      "object_digest_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+      "prior_event_id_hash": "sha256:40f0875cfb3719cfe23bffba106d139a0b514d291b03a1901bc68c65eafc306f",
       "party_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16"
     },
     {
       "role": "transfer_accept",
       "kind": 31416,
-      "event_id_hash": "sha256:f1d63b0c48da9deee17604dffad18f75467d2b064bc6ea547918f0afc00d38ee",
+      "event_id_hash": "sha256:d15007b8c68fce1fb49b2c481d5ec511ffa48dddf77e1cb9ef9fdfcab723241a",
       "signer_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
-      "content_hash": "sha256:9d60b1345f7a4fb7006d9a2c788c92da49c5d5d8b5816f5a2a2726f3d99be44c",
-      "tag_names": [
-        "d",
-        "o",
-        "e",
-        "p",
-        "action"
-      ],
+      "content_hash": "sha256:aa1e1cdfbcdb6b58af3f4ba927bfe497316b02997e7be406faad31e2a48bd92d",
+      "tag_names": ["d", "o", "e", "p", "action"],
       "action": "accept",
-      "object_digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
-      "prior_event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+      "object_digest_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+      "prior_event_id_hash": "sha256:095b2373eb7f038620404f52ad083494f3c3984a9e045a276f49ce10327b6a95",
       "party_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81"
     }
   ],
@@ -91,11 +75,7 @@
     "status": "available",
     "relay_count": 1,
     "available_relay_count": 1,
-    "event_roles": [
-      "origin",
-      "transfer_initiate",
-      "transfer_accept"
-    ],
+    "event_roles": ["origin", "transfer_initiate", "transfer_accept"],
     "relays": [
       {
         "relay_url_hash": "sha256:bae52b1825836341e1007a3c17f20068eb56c2a1ff2e97e885f685db69cc9f54",
@@ -104,7 +84,7 @@
         "events": [
           {
             "role": "origin",
-            "event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+            "event_id_hash": "sha256:40f0875cfb3719cfe23bffba106d139a0b514d291b03a1901bc68c65eafc306f",
             "kind": 31415,
             "exact_found": true,
             "returned_count": 1,
@@ -112,7 +92,7 @@
           },
           {
             "role": "transfer_initiate",
-            "event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+            "event_id_hash": "sha256:095b2373eb7f038620404f52ad083494f3c3984a9e045a276f49ce10327b6a95",
             "kind": 31416,
             "exact_found": true,
             "returned_count": 1,
@@ -120,7 +100,7 @@
           },
           {
             "role": "transfer_accept",
-            "event_id_hash": "sha256:f1d63b0c48da9deee17604dffad18f75467d2b064bc6ea547918f0afc00d38ee",
+            "event_id_hash": "sha256:d15007b8c68fce1fb49b2c481d5ec511ffa48dddf77e1cb9ef9fdfcab723241a",
             "kind": 31416,
             "exact_found": true,
             "returned_count": 1,

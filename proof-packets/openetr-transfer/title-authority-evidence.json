@@ -1,0 +1,43 @@
+{
+  "schema": "atrib.openetr.public_title_authority_evidence.v1",
+  "mode": "operator_demo_tta",
+  "status": "operator_demo_tta_event",
+  "title_kind": 31415,
+  "event": {
+    "event_id_hash": "sha256:e40a8d3294d30ff79fccc20ab6b7ca8f03eb7c372d129e8eab0a06a1852cd619",
+    "pubkey_hash": "sha256:2a30bfd900fbe896053c336fd7f5136572c7b07e6bb6877f7620b5818c20983a",
+    "kind": 31415,
+    "created_at": 1782604800,
+    "content_hash": "sha256:4ea8aa0d53f5cff54cc8adf035084eacc9cac92af231237167c5cab8e8356223",
+    "tag_names": [
+      "d",
+      "o",
+      "p",
+      "from",
+      "e",
+      "action",
+      "version",
+      "authority_policy_id",
+      "jurisdiction"
+    ],
+    "d_tag_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+    "o_tag_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+    "p_tag_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
+    "from_tag_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
+    "prior_tta_event_id_hash": "sha256:d15007b8c68fce1fb49b2c481d5ec511ffa48dddf77e1cb9ef9fdfcab723241a",
+    "action": "transfer"
+  },
+  "recognized_tta_pubkey_hashes": [
+    "sha256:2a30bfd900fbe896053c336fd7f5136572c7b07e6bb6877f7620b5818c20983a"
+  ],
+  "event_id_valid": true,
+  "signature_valid": true,
+  "recognized_pubkey": true,
+  "object_digest_hash_matches": true,
+  "recognized_controller_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
+  "statement_hash": "sha256:fc2651538de6ccb3da77abbe2472ba62ef270d68954acf98b4a1a2f22ad08cd4",
+  "limitations": [
+    "Operator-demo TTA evidence uses a local demo signer, not an independent title registry.",
+    "It exercises the same Nostr event ID, signature, digest, controller, and recognized-pubkey checks as external TTA ingestion."
+  ]
+}

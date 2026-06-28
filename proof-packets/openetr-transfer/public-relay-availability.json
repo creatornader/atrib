@@ -5,7 +5,7 @@
     "schema": "atrib.openetr.public_relay_availability.v1",
     "requested": true,
     "status": "available",
-    "checked_at_ms": 1782685540814,
+    "checked_at_ms": 1782689144239,
     "relay_count": 1,
     "reachable_count": 1,
     "relays": [
@@ -15,7 +15,7 @@
         "nostr_response_observed": true,
         "response_type": "EVENT",
         "error": null,
-        "elapsed_ms": 644
+        "elapsed_ms": 577
       }
     ],
     "caveat": "This proves relay WebSocket and Nostr REQ response availability, not that the OpenETR transfer events were published to a public relay."
@@ -27,11 +27,7 @@
     "status": "available",
     "relay_count": 1,
     "available_relay_count": 1,
-    "event_roles": [
-      "origin",
-      "transfer_initiate",
-      "transfer_accept"
-    ],
+    "event_roles": ["origin", "transfer_initiate", "transfer_accept"],
     "relays": [
       {
         "relay_url_hash": "sha256:bae52b1825836341e1007a3c17f20068eb56c2a1ff2e97e885f685db69cc9f54",
@@ -40,7 +36,7 @@
         "events": [
           {
             "role": "origin",
-            "event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+            "event_id_hash": "sha256:40f0875cfb3719cfe23bffba106d139a0b514d291b03a1901bc68c65eafc306f",
             "kind": 31415,
             "exact_found": true,
             "returned_count": 1,
@@ -48,7 +44,7 @@
           },
           {
             "role": "transfer_initiate",
-            "event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+            "event_id_hash": "sha256:095b2373eb7f038620404f52ad083494f3c3984a9e045a276f49ce10327b6a95",
             "kind": 31416,
             "exact_found": true,
             "returned_count": 1,
@@ -56,7 +52,7 @@
           },
           {
             "role": "transfer_accept",
-            "event_id_hash": "sha256:f1d63b0c48da9deee17604dffad18f75467d2b064bc6ea547918f0afc00d38ee",
+            "event_id_hash": "sha256:d15007b8c68fce1fb49b2c481d5ec511ffa48dddf77e1cb9ef9fdfcab723241a",
             "kind": 31416,
             "exact_found": true,
             "returned_count": 1,

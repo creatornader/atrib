@@ -1,32 +1,41 @@
 {
   "schema": "atrib.openetr.signed_external_attestation.v1",
   "kind": "legal_mletr",
-  "key_id": "openetr-demo-legal-mletr-attestor-ed25519",
-  "signer_public_key": "2YZ2PXIpzHdhrOAabpMOUvLCJ3x2TvIUEh-Y_rLg3KE",
-  "signer_public_key_hash": "sha256:71f7f20efa86451843af7708992d944d9dbe594d758bfe263586d802fabb800d",
-  "statement_hash": "sha256:f890ed223825a9c89a750a5a0ef64401d4c33ce4c7afbff22c7c962e8f5a9af8",
-  "signature": "mefNVdPTdqqpGTAPRFKm2tvPx0Eqm9ofeTJGsueIS9O9wHtqTigA6aUGZS-cyjiIyNTrOCJ-aEe71MkkxwEFBg",
+  "key_id": "openetr-operator-demo-legal-mletr-attestor-ed25519",
+  "signer_public_key": "4ZArpj3JSV38F2uAQkpjsX5YW2cTtYP7IGbMQARqVMQ",
+  "signer_public_key_hash": "sha256:eb0805a2de36f8da9018cc0bdc27bc03bdd1b617aa45ee62656ced2b752e299b",
+  "statement_hash": "sha256:be1dd2d46097675c9785cec96752b2814a0e9546b62b14de9ae4dafe8769ba5d",
+  "signature": "isj1_sgXUdDZClUNOkqwryC26M0FlKjCcI8raxIj7eykiEc6FLLi6BFN-drZA2c6_giEQsyoXIhXVgTNkiMUCQ",
   "signature_valid": true,
   "statement": {
     "schema": "atrib.openetr.legal_mletr_statement.v1",
-    "scope": "fixture_attestation",
-    "jurisdiction": "MLETR-model-law-fixture",
+    "scope": "operator_demo_source_checklist",
+    "jurisdiction": "operator-demo-review",
     "proposed_action": "recognize_transfer",
+    "checklist_status": "source_backed_criteria_present",
+    "checklist_hash": "sha256:4cf384b0719b7c51e38409dad67c03187a5d067d4b5482375a0861a30d18069f",
     "criteria": [
       {
         "id": "electronic_record_identifiable",
-        "status": "attested_by_fixture"
+        "status": "evidence_present"
+      },
+      {
+        "id": "integrity_history_available",
+        "status": "evidence_present"
       },
       {
         "id": "exclusive_control_evidence",
-        "status": "attested_by_fixture_authority"
+        "status": "requires_policy_or_legal_review"
       },
       {
-        "id": "integrity_and_transfer_history",
-        "status": "attested_by_fixture"
+        "id": "reliable_method_boundary",
+        "status": "requires_policy_or_legal_review"
+      },
+      {
+        "id": "legal_effect_requires_relying_party_or_law",
+        "status": "requires_policy_or_legal_review"
       }
     ],
-    "public_relay_events_available": true,
-    "limitation": "Fixture legal/MLETR attestation for protocol testing. It is not legal advice or a jurisdictional legal opinion."
+    "limitation": "Operator-demo legal/MLETR attestation for protocol testing. It is not legal advice or a jurisdictional legal opinion."
   }
 }

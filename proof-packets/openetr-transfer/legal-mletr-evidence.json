@@ -1,0 +1,53 @@
+{
+  "schema": "atrib.openetr.legal_mletr_evidence.v1",
+  "mode": "operator_demo_attestation",
+  "status": "operator_demo_attestation",
+  "attestation": {
+    "schema": "atrib.openetr.signed_external_attestation.v1",
+    "kind": "legal_mletr",
+    "key_id": "openetr-operator-demo-legal-mletr-attestor-ed25519",
+    "signer_public_key": "4ZArpj3JSV38F2uAQkpjsX5YW2cTtYP7IGbMQARqVMQ",
+    "signer_public_key_hash": "sha256:eb0805a2de36f8da9018cc0bdc27bc03bdd1b617aa45ee62656ced2b752e299b",
+    "statement_hash": "sha256:be1dd2d46097675c9785cec96752b2814a0e9546b62b14de9ae4dafe8769ba5d",
+    "signature": "isj1_sgXUdDZClUNOkqwryC26M0FlKjCcI8raxIj7eykiEc6FLLi6BFN-drZA2c6_giEQsyoXIhXVgTNkiMUCQ",
+    "signature_valid": true,
+    "statement": {
+      "schema": "atrib.openetr.legal_mletr_statement.v1",
+      "scope": "operator_demo_source_checklist",
+      "jurisdiction": "operator-demo-review",
+      "proposed_action": "recognize_transfer",
+      "checklist_status": "source_backed_criteria_present",
+      "checklist_hash": "sha256:4cf384b0719b7c51e38409dad67c03187a5d067d4b5482375a0861a30d18069f",
+      "criteria": [
+        {
+          "id": "electronic_record_identifiable",
+          "status": "evidence_present"
+        },
+        {
+          "id": "integrity_history_available",
+          "status": "evidence_present"
+        },
+        {
+          "id": "exclusive_control_evidence",
+          "status": "requires_policy_or_legal_review"
+        },
+        {
+          "id": "reliable_method_boundary",
+          "status": "requires_policy_or_legal_review"
+        },
+        {
+          "id": "legal_effect_requires_relying_party_or_law",
+          "status": "requires_policy_or_legal_review"
+        }
+      ],
+      "limitation": "Operator-demo legal/MLETR attestation for protocol testing. It is not legal advice or a jurisdictional legal opinion."
+    }
+  },
+  "signer_recognized": true,
+  "checklist_status": "source_backed_criteria_present",
+  "statement_hash": "sha256:be1dd2d46097675c9785cec96752b2814a0e9546b62b14de9ae4dafe8769ba5d",
+  "limitations": [
+    "Operator-demo legal evidence signs the source checklist with a local demo reviewer key.",
+    "It is not an independent legal opinion or MLETR compliance certification."
+  ]
+}

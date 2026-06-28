@@ -56,6 +56,7 @@ async function runPacket(
         public_relay_events_available?: boolean
         title_authority_attested?: boolean
         legal_mletr_attested?: boolean
+        authorization_basis?: string
       },
       cleanup: () => rmSync(outDir, { recursive: true, force: true }),
     }
@@ -267,6 +268,9 @@ describe('MCP platform proof packets', () => {
         'public-relay-availability.json',
         'recognition-evidence.json',
         'controller-semantics.json',
+        'title-authority-evidence.json',
+        'legal-mletr-evidence.json',
+        'mletr-source-checklist.json',
       ])}`
       expect(text).toContain('signed_openetr_records_present')
       expect(text).toContain('signed_atrib_control_record_policy_decision')
@@ -275,7 +279,9 @@ describe('MCP platform proof packets', () => {
       expect(text).toContain('public_nostr_relay_evidence')
       expect(text).toContain('controller_semantics_review_required')
       expect(text).toContain('title_recognition_requires_attestor')
+      expect(text).toContain('public_title_transfer_authority_or_operator_demo')
       expect(text).toContain('legal_title_transfer_or_mletr_attestation')
+      expect(text).toContain('mletr_source_checklist_present')
       expect(text).toContain('escalate_before_title_recognition')
       for (const needle of [
         'sha256:7f4b8b8e2f394fddad1ed04e94c456ff0c8fb7ee6f0c5d5017deac9a0f61d425',
@@ -319,6 +325,9 @@ describe('MCP platform proof packets', () => {
           'public-relay-availability.json',
           'recognition-evidence.json',
           'controller-semantics.json',
+          'title-authority-evidence.json',
+          'legal-mletr-evidence.json',
+          'mletr-source-checklist.json',
           'source-run-output.json',
         ])}`
         expect(text).toContain('actual_openetr_source_run_present')
@@ -398,6 +407,9 @@ describe('MCP platform proof packets', () => {
           'public-relay-availability.json',
           'recognition-evidence.json',
           'controller-semantics.json',
+          'title-authority-evidence.json',
+          'legal-mletr-evidence.json',
+          'mletr-source-checklist.json',
           'title-authority-attestation.json',
           'legal-mletr-attestation.json',
           'source-run-output.json',
@@ -407,6 +419,55 @@ describe('MCP platform proof packets', () => {
         expect(text).toContain('controller_semantics_resolved')
         expect(text).toContain('title_transfer_authority')
         expect(text).toContain('legal_mletr')
+        expect(text).toContain('fixture_evidence')
+        expect(text).not.toContain('nsec1')
+        expect(text).not.toContain('ws://127.0.0.1')
+      } finally {
+        run.cleanup()
+      }
+    },
+    120000,
+  )
+
+  fullOpenEtrRecognitionTest(
+    'generates an OpenETR packet with operator-demo TTA evidence',
+    async () => {
+      const run = await runPacket(
+        'examples/openetr-transfer/openetr-transfer-packet-smoke.ts',
+        'atrib-openetr-operator-demo-packet-',
+        {
+          OPENETR_SOURCE_DIR: process.env.OPENETR_SOURCE_DIR ?? '',
+          ATRIB_OPENETR_SOURCE_E2E: '1',
+          OPENETR_PUBLIC_RELAY_URLS: process.env.OPENETR_PUBLIC_RELAY_URLS ?? '',
+          OPENETR_PUBLIC_RELAY_PUBLISH: '1',
+          OPENETR_OPERATOR_DEMO_TTA: '1',
+          OPENETR_OPERATOR_DEMO_LEGAL_ATTESTOR: '1',
+          OPENETR_PUBLIC_RUN_ID: `vitest-operator-${Date.now()}`,
+        },
+      )
+      try {
+        expect(run.result.ok).toBe(true)
+        expect(run.result.operations).toContain('openetr_recognize_title_transfer')
+        expect(run.result.recognized_title_transfer).toBe(true)
+        expect(run.result.authorization_basis).toBe('operator_demo_evidence')
+        expect(run.result.public_relay_events_available).toBe(true)
+        expect(run.result.title_authority_attested).toBe(true)
+        expect(run.result.legal_mletr_attested).toBe(true)
+
+        const text = `${run.stdout}\n${artifactText(run.outDir, [
+          'README.md',
+          'verifier-output.json',
+          'policy-decision.json',
+          'public-relay-availability.json',
+          'recognition-evidence.json',
+          'title-authority-evidence.json',
+          'legal-mletr-evidence.json',
+          'mletr-source-checklist.json',
+        ])}`
+        expect(text).toContain('recognize_title_transfer_with_operator_demo_evidence')
+        expect(text).toContain('operator_demo_tta_event')
+        expect(text).toContain('operator_demo_attestation')
+        expect(text).toContain('mletr_source_checklist_present')
         expect(text).not.toContain('nsec1')
         expect(text).not.toContain('ws://127.0.0.1')
       } finally {
