@@ -1,0 +1,104 @@
+{
+  "decision_hash": "sha256:3c186af0a83692a04146bc25b5ef0202c3b4c8901f71cc2ea4d269ddfa02d7c1",
+  "schema": "atrib.proof_packet.policy_decision.v1",
+  "packet": "firecrawl-web-ingestion",
+  "mode": "live",
+  "evaluator": "firecrawl-ingestion-policy-v0",
+  "decision": "escalate_before_customer_email",
+  "decision_status": "review_required",
+  "proposed_next_action": {
+    "action_type": "customer_email",
+    "description": "Use web-ingested content in an outbound customer message.",
+    "risk_class": "external_customer_message"
+  },
+  "inputs": {
+    "operation_order": [
+      "firecrawl_search",
+      "firecrawl_scrape",
+      "firecrawl_extract",
+      "firecrawl_crawl"
+    ],
+    "record_hashes": [
+      "sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434",
+      "sha256:143f718228e0985156b30cf933ab749527d0f80cf6b586754f0c05d213472e73",
+      "sha256:94582f5e78da4ab9be42e2b71db94b4687a8c9db878d23fc839737db5db5fe7a",
+      "sha256:4b58bcc5ce9931b5528cb41d9ca0c791baeee122f8ceaaa0270e3f84bfe092cc"
+    ],
+    "log_indexes": [66265, 66266, 66267, 66268],
+    "log_mode": "public",
+    "log_endpoint": "https://log.atrib.dev/v1/entries",
+    "crawl_cap": {
+      "maxDepth": 1,
+      "limit": 2
+    },
+    "verifier": {
+      "record_valid": true,
+      "checked_records": 4,
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "args_hash_present": true,
+      "result_hash_present": true
+    },
+    "privacy": {
+      "public_records_hash_only": true,
+      "private_needles_absent_from_public_records": true
+    }
+  },
+  "rule_results": [
+    {
+      "id": "signed_ingestion_records_present",
+      "outcome": "pass",
+      "evidence": "4 verified Firecrawl tool-call records"
+    },
+    {
+      "id": "log_refs_present",
+      "outcome": "pass",
+      "evidence": "public log indexes and inclusion proofs are present"
+    },
+    {
+      "id": "bounded_crawl_cap_present",
+      "outcome": "pass",
+      "evidence": "crawl cap maxDepth=1, limit=2"
+    },
+    {
+      "id": "raw_web_content_private",
+      "outcome": "pass",
+      "evidence": "query, URL, scraped content, extracted text, and crawl job id stay private"
+    },
+    {
+      "id": "customer_message_requires_review",
+      "outcome": "escalate",
+      "evidence": "untrusted web-ingested content would influence an outbound customer message"
+    }
+  ],
+  "allowed_without_review": ["internal_research_summary", "source_triage"],
+  "escalated_actions": [
+    "customer_email",
+    "account_update",
+    "refund_or_payment_change",
+    "production_code_change",
+    "vendor_procurement_action"
+  ],
+  "public_fields": [
+    "tool_names",
+    "args_hash",
+    "result_hash",
+    "record_hashes",
+    "log_indexes",
+    "crawl_cap",
+    "verifier_result",
+    "policy_decision_hash"
+  ],
+  "private_fields": [
+    "raw_query",
+    "source_url",
+    "scraped_content",
+    "extracted_page_text",
+    "crawl_job_id",
+    "auth_token"
+  ],
+  "caveats": [
+    "The policy decision artifact is deterministic and hash-bound to signed Firecrawl records.",
+    "The policy decision artifact is not a signed atrib record yet.",
+    "A live enforcement surface would still need to stop or route the downstream action at runtime."
+  ]
+}
