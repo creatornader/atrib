@@ -43,9 +43,11 @@ This proof run signs the wrapper path, record chain, hash-only disclosure, publi
 
 This is a fixed proof artifact plus a rerunnable local command. The resettable
 demo server lives in
-`packages/integration/examples/browserbase-stagehand/live-demo/`. Deployment is
-a human gate. Do not share a hosted URL until demo-only credentials and rate
-limits are in place.
+`packages/integration/examples/browserbase-stagehand/live-demo/` and is deployed
+at <https://atrib-browserbase-stagehand-demo.fly.dev/>. The demo page shows the
+Browserbase session shape, Stagehand `observe`, `act`, and `extract` workflow,
+and Atrib receipt table side by side. Raw Browserbase session and replay URLs
+stay private.
 
 ## Regenerate
 

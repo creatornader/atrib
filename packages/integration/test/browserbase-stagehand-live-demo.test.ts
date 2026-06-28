@@ -2,6 +2,8 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  actionPolicyModeFromEnv,
+  browserbaseWorkflowFromEnv,
   checkRateLimit,
   createBrowserbaseDemoServer,
   deploymentGuardIssues,
@@ -59,15 +61,100 @@ const fixtureResult: WrappedMcpPacketResult = {
   },
 }
 
+const fixturePolicyResult: WrappedMcpPacketResult = {
+  ...fixtureResult,
+  operations: ['start', 'navigate', 'observe', 'end'],
+  record_hashes: [
+    'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+    'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+  ],
+  log_indexes: [0, 1, 2, 5],
+  action_policy: {
+    schema: 'atrib.packet.action_policy.v1',
+    stopped_before: 'act',
+    blocked_tool_executed: false,
+    decisions: [
+      {
+        kind: 'policy_decision',
+        tool_name: 'act',
+        event_type: 'https://browserbase-action-gate.atrib.dev/v1/decision',
+        record_hash: 'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        record: {} as never,
+        chain_root: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        informed_by: ['sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'],
+        args_hash: 'sha256:decision',
+        record_valid: true,
+        content: {
+          decision: 'block',
+          reason_codes: ['operator_policy_block'],
+          observed_record_hash:
+            'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        },
+        proof: {
+          log_index: 3,
+          leaf_hash: 'leaf-decision',
+          checkpoint: 'checkpoint-decision',
+          inclusion_proof: [],
+          public_endpoint: null,
+          inclusion_verified: false,
+        },
+      },
+    ],
+    outcomes: [
+      {
+        kind: 'policy_outcome',
+        tool_name: 'act',
+        event_type: 'https://browserbase-action-gate.atrib.dev/v1/decision',
+        record_hash: 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+        record: {} as never,
+        chain_root: 'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        informed_by: [
+          'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+          'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+        ],
+        args_hash: 'sha256:outcome',
+        record_valid: true,
+        content: {
+          decision: 'block',
+          executed: false,
+          stopped_before: 'act',
+          cleanup_record_hashes: [
+            'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+          ],
+        },
+        proof: {
+          log_index: 4,
+          leaf_hash: 'leaf-outcome',
+          checkpoint: 'checkpoint-outcome',
+          inclusion_proof: [],
+          public_endpoint: null,
+          inclusion_verified: false,
+        },
+      },
+    ],
+  },
+}
+
 describe('Browserbase Stagehand live demo', () => {
   it('maps proof records to explorer and local-log receipt rows', () => {
+    const workflow = browserbaseWorkflowFromEnv({} as NodeJS.ProcessEnv)
     const run = summarizePacketResult({
       runId: 'bb-test',
       startedAt: '2026-06-23T00:00:00.000Z',
       finishedAt: '2026-06-23T00:00:01.000Z',
       result: fixtureResult,
+      workflow,
+      actionPolicyMode: 'allow',
     })
     expect(run.status).toBe('accepted')
+    expect(run.action_policy_mode).toBe('allow')
+    expect(run.workflow?.stagehand_steps.map((step) => step.primitive)).toEqual([
+      'observe',
+      'act',
+      'extract',
+    ])
     expect(run.operations?.[0]).toMatchObject({
       step: 'start',
       log_index: 0,
@@ -75,6 +162,63 @@ describe('Browserbase Stagehand live demo', () => {
         'https://explore.atrib.dev/action/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       log_proof_url: null,
     })
+  })
+
+  it('keeps signed action-policy evidence in accepted runs', () => {
+    const run = summarizePacketResult({
+      runId: 'bb-policy-test',
+      startedAt: '2026-06-23T00:00:00.000Z',
+      finishedAt: '2026-06-23T00:00:01.000Z',
+      result: fixturePolicyResult,
+      workflow: browserbaseWorkflowFromEnv({} as NodeJS.ProcessEnv),
+      actionPolicyMode: 'block',
+    })
+
+    expect(run.action_policy_mode).toBe('block')
+    expect(run.action_policy?.stopped_before).toBe('act')
+    expect(run.action_policy?.decisions[0]?.proof.log_index).toBe(3)
+    expect(run.action_policy?.outcomes[0]?.content).toMatchObject({ executed: false })
+    expect(run.operations?.map((operation) => operation.step)).toEqual([
+      'start',
+      'navigate',
+      'observe',
+      'end',
+    ])
+  })
+
+  it('reads action policy mode from demo env with allow fallback', () => {
+    expect(
+      actionPolicyModeFromEnv({
+        ATRIB_BROWSERBASE_DEMO_ACTION_POLICY: 'block',
+      } as NodeJS.ProcessEnv),
+    ).toBe('block')
+    expect(
+      actionPolicyModeFromEnv({
+        ATRIB_BROWSERBASE_ACTION_POLICY: 'escalate',
+      } as NodeJS.ProcessEnv),
+    ).toBe('escalate')
+    expect(
+      actionPolicyModeFromEnv({
+        ATRIB_BROWSERBASE_DEMO_ACTION_POLICY: 'unexpected',
+        ATRIB_BROWSERBASE_ACTION_POLICY: 'escalate',
+      } as NodeJS.ProcessEnv),
+    ).toBe('allow')
+  })
+
+  it('redacts custom Browserbase target and instructions in workflow metadata', () => {
+    const workflow = browserbaseWorkflowFromEnv({
+      ATRIB_BROWSERBASE_DEMO_URL: 'https://example.invalid/private-target',
+      ATRIB_BROWSERBASE_DEMO_OBSERVE: 'private observe instruction',
+      ATRIB_BROWSERBASE_DEMO_ACT: 'private act instruction',
+      ATRIB_BROWSERBASE_DEMO_EXTRACT: 'private extract instruction',
+    } as NodeJS.ProcessEnv)
+
+    expect(workflow.target_url).toMatchObject({ disclosure: 'hash-only' })
+    expect(workflow.target_url.value).toBeUndefined()
+    expect(
+      workflow.stagehand_steps.every((step) => step.instruction.disclosure === 'hash-only'),
+    ).toBe(true)
+    expect(JSON.stringify(workflow)).not.toContain('private observe instruction')
   })
 
   it('requires only the Browserbase API key for hosted live mode', () => {
@@ -146,8 +290,15 @@ describe('Browserbase Stagehand live demo', () => {
     })
     const baseUrl = await listen(server)
     try {
-      const config = (await fetchJson(`${baseUrl}/api/config`)) as { ok: boolean; mode: string }
+      const config = (await fetchJson(`${baseUrl}/api/config`)) as {
+        ok: boolean
+        mode: string
+        action_policy: { mode: string; modes: string[] }
+        workflow: { stagehand_steps: unknown[] }
+      }
       expect(config).toMatchObject({ ok: true, mode: 'fixture' })
+      expect(config.workflow.stagehand_steps).toHaveLength(3)
+      expect(config.action_policy.modes).toEqual(['allow', 'block', 'escalate'])
 
       const response = (await fetchJson(`${baseUrl}/api/runs`, { method: 'POST' })) as {
         ok: boolean
@@ -160,6 +311,7 @@ describe('Browserbase Stagehand live demo', () => {
 
       const run = await waitForRun(baseUrl, response.run.run_id)
       expect(run.status).toBe('accepted')
+      expect(run.action_policy_mode).toBe('allow')
       expect(run.operations?.map((operation) => operation.step)).toEqual(['start', 'end'])
     } finally {
       await close(server)
@@ -184,6 +336,7 @@ describe('Browserbase Stagehand live demo', () => {
       }
       expect(Date.now() - started).toBeLessThan(500)
       expect(response.run.status).toBe('running')
+      expect(response.run.action_policy_mode).toBe('allow')
 
       const running = (await fetchJson(`${baseUrl}/api/runs/${response.run.run_id}`)) as {
         ok: boolean
@@ -200,6 +353,32 @@ describe('Browserbase Stagehand live demo', () => {
       finishRun?.()
       const accepted = await waitForRun(baseUrl, response.run.run_id)
       expect(accepted.status).toBe('accepted')
+    } finally {
+      await close(server)
+    }
+  })
+
+  it('accepts per-run action policy mode from POST JSON', async () => {
+    const { server } = createBrowserbaseDemoServer({
+      env: {} as NodeJS.ProcessEnv,
+      runner: async ({ actionPolicyMode }) =>
+        actionPolicyMode === 'block' ? fixturePolicyResult : fixtureResult,
+    })
+    const baseUrl = await listen(server)
+    try {
+      const response = (await fetchJson(`${baseUrl}/api/runs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action_policy_mode: 'block' }),
+      })) as {
+        ok: boolean
+        run: BrowserbaseDemoRun
+      }
+      expect(response.run.action_policy_mode).toBe('block')
+
+      const run = await waitForRun(baseUrl, response.run.run_id)
+      expect(run.action_policy_mode).toBe('block')
+      expect(run.action_policy?.stopped_before).toBe('act')
     } finally {
       await close(server)
     }

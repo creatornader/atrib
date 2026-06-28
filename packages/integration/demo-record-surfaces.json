@@ -189,7 +189,7 @@
       "path": "examples/firecrawl-web-ingestion",
       "record_class": "public-proof",
       "endpoint_posture": "public-write",
-      "commands": []
+      "commands": ["firecrawl-web-ingestion-live-demo"]
     },
     {
       "id": "activegraph-runtime-log",
