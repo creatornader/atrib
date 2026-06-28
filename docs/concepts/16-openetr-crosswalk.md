@@ -99,10 +99,19 @@ Fourth, a verifier reviews the packet. It checks atrib signatures and log inclus
 
 The result is not "atrib says title transferred." The result is narrower and stronger: "this agent made these signed calls, under this signed policy decision, against this OpenETR control chain, and these external parties supplied this evidence."
 
-The current proof packet follows that rule. It signs the OpenETR-shaped action
-chain, then signs a control-record policy decision that stops before title
-recognition until public relay evidence, title-transfer authority evidence, and
-legal/MLETR evidence are supplied.
+The current proof packet follows that rule in two modes. The default fixture
+signs the OpenETR-shaped action chain, then signs a control-record policy
+decision that stops before title recognition until public relay evidence,
+title-transfer authority evidence, and legal/MLETR evidence are supplied. The
+source-backed public proof runs the pinned OpenETR implementation, publishes
+exact events to a configured public relay, verifies those events are available,
+signs fixture title-authority and legal/MLETR attestations, resolves controller
+semantics through that authority evidence, executes title recognition, and
+submits the accepted atrib records plus control records to the public log.
+
+That full path proves the technical possibility of the evidence bundle. It does
+not prove a real title registry decision, legal advice, or a jurisdictional
+legal conclusion.
 
 ## Implementation caution
 

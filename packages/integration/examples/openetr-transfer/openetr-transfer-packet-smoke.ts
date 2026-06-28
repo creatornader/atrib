@@ -5,6 +5,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import canonicalize from 'canonicalize'
+import * as ed from '@noble/ed25519'
+import { sha512 } from '@noble/hashes/sha2.js'
 import {
   hashText,
   runWrappedMcpPacket,
@@ -14,6 +17,9 @@ import {
   type WrappedMcpPacketResult,
   writeJson,
 } from '../wrapped-mcp-proof-runner.js'
+
+ed.hashes.sha512 = sha512
+ed.hashes.sha512Async = (message) => Promise.resolve(sha512(message))
 
 const PRIVATE_OBJECT_DIGEST =
   'sha256:7f4b8b8e2f394fddad1ed04e94c456ff0c8fb7ee6f0c5d5017deac9a0f61d425'
@@ -27,6 +33,8 @@ const PRIVATE_ACCEPT_EVENT_ID = '33333333333333333333333333333333333333333333333
 const RECOGNIZE_TOOL_NAME = 'openetr_recognize_title_transfer'
 const OPENETR_POLICY_VERSION = 'openetr-transfer-policy-v1'
 const TITLE_AUTHORITY_POLICY_ID = 'openetr-demo-title-authority-policy'
+const TITLE_AUTHORITY_SEED = new Uint8Array(32).fill(217)
+const LEGAL_ATTESTOR_SEED = new Uint8Array(32).fill(218)
 
 type PacketOptions = Parameters<typeof runWrappedMcpPacket>[0]
 type OpenEtrSourceEvidence = ReturnType<typeof runOpenEtrSourceE2e>
@@ -57,8 +65,65 @@ type OpenEtrSourceRun = {
     current_controller?: { npub?: string; basis?: string; profile?: unknown[] }
     summary_control_chains?: unknown[]
   }
+  public_event_availability?: {
+    schema?: string
+    requested?: boolean
+    publish_requested?: boolean
+    status?: string
+    relay_count?: number
+    available_relay_count?: number
+    event_roles?: string[]
+    relays?: Array<{
+      relay_url?: string
+      relay_url_hash?: string
+      exact_found_count?: number
+      exact_found_all?: boolean
+      events?: Array<{
+        role?: string
+        event_id?: string
+        event_id_hash?: string
+        kind?: number
+        exact_found?: boolean
+        returned_count?: number
+        error?: string | null
+      }>
+    }>
+  }
   checks?: Record<string, boolean>
   warnings?: unknown[]
+}
+
+type SignedExternalAttestation = {
+  schema: 'atrib.openetr.signed_external_attestation.v1'
+  kind: 'title_transfer_authority' | 'legal_mletr'
+  key_id: string
+  signer_public_key: string
+  signer_public_key_hash: string
+  statement_hash: string
+  signature: string
+  signature_valid: boolean
+  statement: Record<string, unknown>
+}
+
+type ControllerSemanticsEvidence = {
+  schema: 'atrib.openetr.controller_semantics_evidence.v1'
+  status: 'resolved_by_authority_attestation' | 'unresolved'
+  source_query_basis: string | null
+  source_query_reports_buyer: boolean | null
+  source_query_reports_initiator: boolean | null
+  accept_p_tag_points_to_initiator: boolean | null
+  authority_attests_acceptor_control: boolean
+  caveat: string
+}
+
+type RecognitionEvidence = {
+  schema: 'atrib.openetr.recognition_evidence.v1'
+  full_fixture_requested: boolean
+  public_relay_events_available: boolean
+  title_authority: SignedExternalAttestation | null
+  legal_mletr: SignedExternalAttestation | null
+  controller_semantics: ControllerSemanticsEvidence
+  authorized_by_fixture: boolean
 }
 
 export type OpenEtrTransferPacketOptions = {
@@ -74,6 +139,8 @@ export type OpenEtrTransferPacketRun = {
   redactionManifest: unknown
   policyDecision: PolicyDecisionArtifact
   publicRelayAvailability: OpenEtrPublicRelayAvailability
+  publicRelayEvidence: ReturnType<typeof buildPublicRelayArtifact>
+  recognitionEvidence: RecognitionEvidence
   artifact_dir: string | null
 }
 
@@ -167,6 +234,37 @@ function sanitizeSourceEvent(role: string, event: OpenEtrSourceEvent | undefined
   }
 }
 
+function sanitizePublicEventAvailability(sourceRun: OpenEtrSourceRun) {
+  const availability = sourceRun.public_event_availability
+  if (!availability) return null
+  return {
+    schema: 'atrib.openetr.public_event_availability_summary.v1',
+    requested: Boolean(availability.requested),
+    publish_requested: Boolean(availability.publish_requested),
+    status: availability.status ?? 'unknown',
+    relay_count: availability.relay_count ?? 0,
+    available_relay_count: availability.available_relay_count ?? 0,
+    event_roles: availability.event_roles ?? [],
+    relays:
+      availability.relays?.map((relay) => ({
+        relay_url_hash:
+          relay.relay_url_hash ?? (relay.relay_url ? hashText(relay.relay_url) : null),
+        exact_found_count: relay.exact_found_count ?? 0,
+        exact_found_all: Boolean(relay.exact_found_all),
+        events:
+          relay.events?.map((event) => ({
+            role: event.role ?? null,
+            event_id_hash:
+              event.event_id_hash ?? (event.event_id ? hashText(event.event_id) : null),
+            kind: event.kind ?? null,
+            exact_found: Boolean(event.exact_found),
+            returned_count: event.returned_count ?? 0,
+            error: event.error ?? null,
+          })) ?? [],
+      })) ?? [],
+  }
+}
+
 function sanitizeSourceRun(sourceRun: OpenEtrSourceRun) {
   return {
     schema: 'atrib.openetr.source_local_relay_summary.v1',
@@ -210,6 +308,7 @@ function sanitizeSourceRun(sourceRun: OpenEtrSourceRun) {
       current_controller_basis: sourceRun.query?.current_controller?.basis ?? null,
       summary_control_chain_count: sourceRun.query?.summary_control_chains?.length ?? 0,
     },
+    public_event_availability: sanitizePublicEventAvailability(sourceRun),
     checks: sourceRun.checks ?? {},
     warnings: sourceRun.warnings ?? [],
   }
@@ -237,39 +336,60 @@ function publicControlRecord(
   }
 }
 
-function openEtrTitleRecognitionPolicyGate(
-  input: PacketPolicyGateInput,
-): PacketPolicyGateDecision | undefined {
-  if (input.call.name !== RECOGNIZE_TOOL_NAME) return undefined
-  return {
-    decision: 'escalate',
-    policy_version: OPENETR_POLICY_VERSION,
-    reason_codes: [
-      'public_relay_availability_missing',
-      'title_transfer_authority_missing',
-      'mletr_legal_conclusion_missing',
-      'controller_semantics_review_required',
-    ],
-    content: {
-      schema: 'atrib.openetr.title_recognition_policy_decision.v1',
-      proposed_action: 'recognize_transfer',
-      action_tool: RECOGNIZE_TOOL_NAME,
-      packet: input.packet,
-      completed_calls: input.completed_calls,
-      previous_record_hashes: input.previous_records.map((entry) => entry.record_hash),
-      evidence_requirements: {
-        public_nostr_relay_availability:
-          'OpenETR issue, initiate, accept, and query events must be available from selected public relays.',
-        title_transfer_authority:
-          'A configured title-transfer authority or recognized attestor must sign the control decision or atrib bytes.',
-        legal_title_transfer:
-          'A jurisdiction-specific legal reviewer or relying-party policy must attest the legal effect.',
-        mletr_compliance:
-          'A legal or policy attestation must map the evidence to MLETR functional-equivalence requirements.',
-        controller_semantics:
-          'The verifier must resolve the OpenETR p-tag controller ambiguity instead of reading latest p tag as title control.',
+function createOpenEtrTitleRecognitionPolicyGate(recognition: RecognitionEvidence) {
+  return (input: PacketPolicyGateInput): PacketPolicyGateDecision | undefined => {
+    if (input.call.name !== RECOGNIZE_TOOL_NAME) return undefined
+    const decision = recognition.authorized_by_fixture ? 'allow' : 'escalate'
+    const missingReasonCodes = [
+      ...(recognition.public_relay_events_available
+        ? []
+        : ['public_relay_event_availability_missing']),
+      ...(recognition.title_authority?.signature_valid ? [] : ['title_transfer_authority_missing']),
+      ...(recognition.legal_mletr?.signature_valid ? [] : ['mletr_legal_conclusion_missing']),
+      ...(recognition.controller_semantics.status === 'resolved_by_authority_attestation'
+        ? []
+        : ['controller_semantics_review_required']),
+    ]
+    return {
+      decision,
+      policy_version: OPENETR_POLICY_VERSION,
+      reason_codes:
+        decision === 'allow'
+          ? [
+              'public_relay_event_availability_present',
+              'title_transfer_authority_attested',
+              'legal_mletr_attested',
+              'controller_semantics_resolved',
+            ]
+          : missingReasonCodes,
+      content: {
+        schema: 'atrib.openetr.title_recognition_policy_decision.v1',
+        proposed_action: 'recognize_transfer',
+        action_tool: RECOGNIZE_TOOL_NAME,
+        packet: input.packet,
+        completed_calls: input.completed_calls,
+        previous_record_hashes: input.previous_records.map((entry) => entry.record_hash),
+        recognition_evidence: {
+          full_fixture_requested: recognition.full_fixture_requested,
+          public_relay_events_available: recognition.public_relay_events_available,
+          title_authority_statement_hash: recognition.title_authority?.statement_hash ?? null,
+          legal_mletr_statement_hash: recognition.legal_mletr?.statement_hash ?? null,
+          controller_semantics_status: recognition.controller_semantics.status,
+        },
+        evidence_requirements: {
+          public_nostr_relay_availability:
+            'OpenETR issue, initiate, accept, and query events must be available from selected public relays.',
+          title_transfer_authority:
+            'A configured title-transfer authority or recognized attestor must sign the control decision or atrib bytes.',
+          legal_title_transfer:
+            'A jurisdiction-specific legal reviewer or relying-party policy must attest the legal effect.',
+          mletr_compliance:
+            'A legal or policy attestation must map the evidence to MLETR functional-equivalence requirements.',
+          controller_semantics:
+            'The verifier must resolve the OpenETR p-tag controller ambiguity instead of reading latest p tag as title control.',
+        },
       },
-    },
+    }
   }
 }
 
@@ -390,6 +510,176 @@ async function runPublicRelayAvailability(env: NodeJS.ProcessEnv) {
   }
 }
 
+function canonicalBytes(value: unknown): Uint8Array {
+  const canonical = canonicalize(value)
+  if (typeof canonical !== 'string') throw new Error('value is not JCS-canonicalizable JSON')
+  return new TextEncoder().encode(canonical)
+}
+
+function recognitionFixtureRequested(env: NodeJS.ProcessEnv): boolean {
+  return (
+    env.OPENETR_FULL_RECOGNITION_FIXTURE === '1' ||
+    (env.OPENETR_TITLE_AUTHORITY_FIXTURE === '1' && env.OPENETR_LEGAL_MLETR_FIXTURE === '1')
+  )
+}
+
+function sourcePublicEventsAvailable(sourceEvidence: OpenEtrSourceEvidence): boolean {
+  return sourceEvidence?.sanitized.public_event_availability?.status === 'available'
+}
+
+async function signedExternalAttestation(input: {
+  kind: SignedExternalAttestation['kind']
+  keyId: string
+  seed: Uint8Array
+  statement: Record<string, unknown>
+}): Promise<SignedExternalAttestation> {
+  const bytes = canonicalBytes(input.statement)
+  const signature = await ed.signAsync(bytes, input.seed)
+  const publicKey = await ed.getPublicKeyAsync(input.seed)
+  return {
+    schema: 'atrib.openetr.signed_external_attestation.v1',
+    kind: input.kind,
+    key_id: input.keyId,
+    signer_public_key: Buffer.from(publicKey).toString('base64url'),
+    signer_public_key_hash: hashText(Buffer.from(publicKey).toString('base64url')),
+    statement_hash: hashText(new TextDecoder().decode(bytes)),
+    signature: Buffer.from(signature).toString('base64url'),
+    signature_valid: await ed.verifyAsync(signature, bytes, publicKey),
+    statement: input.statement,
+  }
+}
+
+function controllerSemanticsEvidence(
+  sourceEvidence: OpenEtrSourceEvidence,
+  authorityAttests: boolean,
+): ControllerSemanticsEvidence {
+  const checks = sourceEvidence?.sanitized.checks ?? {}
+  const sourceQueryReportsBuyer =
+    typeof checks.query_controller_is_buyer === 'boolean' ? checks.query_controller_is_buyer : null
+  const sourceQueryReportsInitiator =
+    typeof checks.query_controller_is_initiator === 'boolean'
+      ? checks.query_controller_is_initiator
+      : null
+  const acceptPTagPointsToInitiator =
+    typeof checks.accept_p_tag_matches_initiator === 'boolean'
+      ? checks.accept_p_tag_matches_initiator
+      : null
+  return {
+    schema: 'atrib.openetr.controller_semantics_evidence.v1',
+    status: authorityAttests ? 'resolved_by_authority_attestation' : 'unresolved',
+    source_query_basis: sourceEvidence?.sanitized.query.current_controller_basis ?? null,
+    source_query_reports_buyer: sourceQueryReportsBuyer,
+    source_query_reports_initiator: sourceQueryReportsInitiator,
+    accept_p_tag_points_to_initiator: acceptPTagPointsToInitiator,
+    authority_attests_acceptor_control: authorityAttests,
+    caveat: authorityAttests
+      ? 'Authority attestation resolves title-recognition policy without treating the latest p tag as controller semantics.'
+      : 'OpenETR query still reports initiator after accept in the reviewed source run.',
+  }
+}
+
+async function buildRecognitionEvidence(
+  env: NodeJS.ProcessEnv,
+  sourceEvidence: OpenEtrSourceEvidence,
+): Promise<RecognitionEvidence> {
+  const fullFixtureRequested = recognitionFixtureRequested(env)
+  const publicRelayEventsAvailable = sourcePublicEventsAvailable(sourceEvidence)
+  const authorityCanAttest =
+    fullFixtureRequested && publicRelayEventsAvailable && Boolean(sourceEvidence)
+  const acceptEvent = sourceEvidence?.sanitized.events.find(
+    (event) => event.role === 'transfer_accept',
+  )
+  const buyerPubkeyHash = sourceEvidence?.sanitized.parties.buyer_pubkey_hash ?? null
+  const titleStatement = {
+    schema: 'atrib.openetr.title_authority_statement.v1',
+    scope: 'fixture_attestation',
+    authority_policy_id: TITLE_AUTHORITY_POLICY_ID,
+    proposed_action: 'recognize_transfer',
+    event_family: [31415, 31416],
+    transfer_accept_event_hash: acceptEvent?.event_id_hash ?? null,
+    recognized_controller_pubkey_hash: buyerPubkeyHash,
+    public_relay_events_available: publicRelayEventsAvailable,
+    source_commit: sourceEvidence?.raw.source?.commit ?? null,
+    limitation: 'Fixture authority recognition. Not a real title registry or legal authority.',
+  }
+  const legalStatement = {
+    schema: 'atrib.openetr.legal_mletr_statement.v1',
+    scope: 'fixture_attestation',
+    jurisdiction: env.OPENETR_LEGAL_JURISDICTION ?? 'MLETR-model-law-fixture',
+    proposed_action: 'recognize_transfer',
+    criteria: [
+      {
+        id: 'electronic_record_identifiable',
+        status: sourceEvidence ? 'attested_by_fixture' : 'missing_source_evidence',
+      },
+      {
+        id: 'exclusive_control_evidence',
+        status: authorityCanAttest ? 'attested_by_fixture_authority' : 'missing_authority',
+      },
+      {
+        id: 'integrity_and_transfer_history',
+        status: sourceEvidence ? 'attested_by_fixture' : 'missing_source_evidence',
+      },
+    ],
+    public_relay_events_available: publicRelayEventsAvailable,
+    limitation:
+      'Fixture legal/MLETR attestation for protocol testing. It is not legal advice or a jurisdictional legal opinion.',
+  }
+  const titleAuthority = authorityCanAttest
+    ? await signedExternalAttestation({
+        kind: 'title_transfer_authority',
+        keyId: 'openetr-demo-title-authority-ed25519',
+        seed: TITLE_AUTHORITY_SEED,
+        statement: titleStatement,
+      })
+    : null
+  const legalMletr = authorityCanAttest
+    ? await signedExternalAttestation({
+        kind: 'legal_mletr',
+        keyId: 'openetr-demo-legal-mletr-attestor-ed25519',
+        seed: LEGAL_ATTESTOR_SEED,
+        statement: legalStatement,
+      })
+    : null
+  const controller = controllerSemanticsEvidence(sourceEvidence, Boolean(titleAuthority))
+  return {
+    schema: 'atrib.openetr.recognition_evidence.v1',
+    full_fixture_requested: fullFixtureRequested,
+    public_relay_events_available: publicRelayEventsAvailable,
+    title_authority: titleAuthority,
+    legal_mletr: legalMletr,
+    controller_semantics: controller,
+    authorized_by_fixture:
+      fullFixtureRequested &&
+      publicRelayEventsAvailable &&
+      Boolean(titleAuthority?.signature_valid) &&
+      Boolean(legalMletr?.signature_valid) &&
+      controller.status === 'resolved_by_authority_attestation',
+  }
+}
+
+function buildPublicRelayArtifact(
+  connectionProbe: OpenEtrPublicRelayAvailability,
+  sourceEvidence: OpenEtrSourceEvidence,
+) {
+  const eventAvailability = sourceEvidence?.sanitized.public_event_availability ?? null
+  return {
+    schema: 'atrib.openetr.public_relay_evidence.v1',
+    status:
+      eventAvailability?.status === 'available'
+        ? 'events_available'
+        : connectionProbe.status === 'available'
+          ? 'relay_available_without_event_proof'
+          : connectionProbe.status,
+    connection_probe: connectionProbe,
+    public_event_availability: eventAvailability,
+    caveat:
+      eventAvailability?.status === 'available'
+        ? 'At least one configured public relay returned the exact OpenETR issue, initiate, and accept events.'
+        : 'Relay connectivity alone is not proof that the OpenETR transfer events are publicly available.',
+  }
+}
+
 function runOpenEtrSourceE2e(
   env: NodeJS.ProcessEnv,
   exampleDir: string,
@@ -436,10 +726,12 @@ function runOpenEtrSourceE2e(
 function buildPolicyDecision(
   result: WrappedMcpPacketResult,
   sourceEvidence: OpenEtrSourceEvidence,
-  publicRelayAvailability: OpenEtrPublicRelayAvailability,
+  publicRelayEvidence: ReturnType<typeof buildPublicRelayArtifact>,
+  recognition: RecognitionEvidence,
 ) {
   const signedPolicyDecision = publicControlRecord(result.action_policy, 'policy_decision')
   const signedPolicyOutcome = publicControlRecord(result.action_policy, 'policy_outcome')
+  const recognitionExecuted = result.operations.includes(RECOGNIZE_TOOL_NAME)
   const sourceRule = sourceEvidence
     ? [
         {
@@ -455,8 +747,10 @@ function buildPolicyDecision(
     packet: result.packet,
     mode: result.mode,
     evaluator: OPENETR_POLICY_VERSION,
-    decision: 'escalate_before_title_recognition',
-    decision_status: 'review_required',
+    decision: recognitionExecuted
+      ? 'recognize_title_transfer_with_fixture_attestations'
+      : 'escalate_before_title_recognition',
+    decision_status: recognitionExecuted ? 'fixture_evidence_complete' : 'review_required',
     proposed_next_action: {
       action_type: 'recognize_transfer',
       description: 'Treat the OpenETR accept event as recognized control transfer.',
@@ -472,7 +766,8 @@ function buildPolicyDecision(
       privacy: result.privacy,
       openetr_event_kinds: [31415, 31416],
       openetr_source_e2e: sourceEvidence?.sanitized ?? null,
-      public_nostr_relay_availability: publicRelayAvailability,
+      public_nostr_relay_evidence: publicRelayEvidence,
+      recognition_evidence: recognition,
       action_policy: {
         schema: result.action_policy?.schema ?? null,
         stopped_before: result.action_policy?.stopped_before ?? null,
@@ -500,7 +795,7 @@ function buildPolicyDecision(
       {
         id: 'openetr_chain_observed',
         outcome:
-          result.operations.join('>') ===
+          result.operations.slice(0, 4).join('>') ===
           'openetr_issue>openetr_transfer_initiate>openetr_transfer_accept>openetr_query_state'
             ? 'pass'
             : 'fail',
@@ -512,30 +807,37 @@ function buildPolicyDecision(
         evidence: 'transfer accept action was signed before state query',
       },
       {
-        id: 'public_nostr_relay_availability',
-        outcome: publicRelayAvailability.status === 'available' ? 'pass' : 'escalate',
+        id: 'public_openetr_event_availability',
+        outcome:
+          publicRelayEvidence.public_event_availability?.status === 'available'
+            ? 'pass'
+            : 'escalate',
         evidence:
-          publicRelayAvailability.status === 'available'
-            ? `${publicRelayAvailability.reachable_count} public relay probe responded`
-            : publicRelayAvailability.caveat,
+          publicRelayEvidence.public_event_availability?.status === 'available'
+            ? `${publicRelayEvidence.public_event_availability.available_relay_count} public relay returned the exact OpenETR events`
+            : publicRelayEvidence.caveat,
       },
       {
-        id: 'p_tag_semantics_review_required',
-        outcome: 'escalate',
-        evidence:
-          'fixture models the reviewed OpenETR p-tag ambiguity after accept; controller recognition must not infer control from latest p tag alone',
+        id: 'controller_semantics_resolved',
+        outcome:
+          recognition.controller_semantics.status === 'resolved_by_authority_attestation'
+            ? 'pass'
+            : 'escalate',
+        evidence: recognition.controller_semantics.caveat,
       },
       {
         id: 'title_recognition_requires_attestor',
-        outcome: 'escalate',
-        evidence:
-          'fixture contains no title-transfer authority or recognized attestor signature over atrib bytes',
+        outcome: recognition.title_authority?.signature_valid ? 'pass' : 'escalate',
+        evidence: recognition.title_authority
+          ? `title authority attestation ${recognition.title_authority.statement_hash} verified`
+          : 'fixture contains no title-transfer authority or recognized attestor signature over atrib bytes',
       },
       {
-        id: 'legal_title_transfer_or_mletr_attestation_missing',
-        outcome: 'escalate',
-        evidence:
-          'packet contains no jurisdiction-specific legal-title-transfer or MLETR compliance attestation',
+        id: 'legal_title_transfer_or_mletr_attestation',
+        outcome: recognition.legal_mletr?.signature_valid ? 'pass' : 'escalate',
+        evidence: recognition.legal_mletr
+          ? `legal/MLETR fixture attestation ${recognition.legal_mletr.statement_hash} verified`
+          : 'packet contains no jurisdiction-specific legal-title-transfer or MLETR compliance attestation',
       },
       {
         id: 'raw_openetr_payload_private',
@@ -570,8 +872,12 @@ function buildPolicyDecision(
     ],
     caveats: [
       'This packet proves the atrib wrapper and policy boundary for an OpenETR-shaped flow.',
-      'It does not prove live OpenETR relay behavior.',
-      'It does not prove legal title transfer or MLETR compliance.',
+      recognitionExecuted
+        ? 'Full fixture mode executed recognition under demo attestations. It is not a real title registry or legal conclusion.'
+        : 'It does not prove live OpenETR relay behavior.',
+      recognition.legal_mletr
+        ? 'Legal/MLETR evidence is a signed fixture attestation, not legal advice or a jurisdictional legal opinion.'
+        : 'It does not prove legal title transfer or MLETR compliance.',
       'The deterministic policy artifact summarizes the signed atrib control-record decision.',
     ],
   }
@@ -585,9 +891,13 @@ function renderReadme(
   result: WrappedMcpPacketResult,
   policyDecision: PolicyDecisionArtifact,
   sourceEvidence: OpenEtrSourceEvidence,
+  publicRelayEvidence: ReturnType<typeof buildPublicRelayArtifact>,
+  recognition: RecognitionEvidence,
 ): string {
   const signedPolicyDecision = publicControlRecord(result.action_policy, 'policy_decision')
   const signedPolicyOutcome = publicControlRecord(result.action_policy, 'policy_outcome')
+  const recognitionExecuted = result.operations.includes(RECOGNIZE_TOOL_NAME)
+  const actionPath = result.operations.join(' -> ')
   const rows = result.operations
     .map(
       (operation, index) =>
@@ -609,9 +919,11 @@ The source-backed run executed:
 - \`openetr commands publish transfer accept\`
 - \`openetr.services.query_etr.build_query_etr_result\`
 
-Those calls ran against a local WebSocket Nostr relay. The proof still does not
-use a public relay or a title-transfer authority. Raw OpenETR event ids, object
-digest, party keys, relay URL, and event JSON stay out of the public artifact.
+Those calls always ran against a local WebSocket Nostr relay. When public relay
+publish is enabled, the same OpenETR calls also publish to configured public
+relays and this artifact checks exact event availability. Raw OpenETR event ids,
+object digest, party keys, relay URL, and event JSON stay out of the public
+artifact.
 `
     : `
 ## Source-backed OpenETR run
@@ -623,19 +935,43 @@ the source-backed local-relay proof and write \`source-run-output.json\`.
   const upstreamSurface = sourceEvidence
     ? 'OpenETR Python source at the pinned commit, executed against a local WebSocket Nostr relay and surfaced through MCP-shaped tools.'
     : 'OpenETR-shaped deterministic MCP fixture.'
-  const weakness = sourceEvidence
-    ? `This is a source-backed local-relay proof. It checks the OpenETR implementation
-entrypoints, local Nostr relay publish/query path, wrapper record chain,
-hash-only disclosure, verifier path, and policy gate. It does not prove hosted
-OpenETR relay behavior, a title-transfer authority decision, legal recognition,
-or public Nostr event availability.`
-    : `This is a fixture proof. It checks the wrapper, record chain, hash-only
-disclosure, verifier path, and policy gate for the OpenETR shape. It does not
-prove hosted OpenETR relay behavior, a title-transfer authority decision, legal
-recognition, or live Nostr event availability.`
+  const weakness = recognitionExecuted
+    ? `This is a source-backed public-relay fixture recognition proof. It checks
+OpenETR source entrypoints, public relay event availability, wrapper record
+chain, hash-only disclosure, verifier path, signed control records, controller
+semantics, and signed fixture attestations. It does not prove a real title
+registry decision, legal advice, or a jurisdictional legal conclusion.`
+    : sourceEvidence
+      ? `This is a source-backed relay proof. It checks OpenETR source
+entrypoints, local Nostr relay publish/query path, optional public relay event
+availability, wrapper record chain, hash-only disclosure, verifier path, and
+policy gate. Recognition remains gated until authority and legal attestations
+are supplied.`
+      : `This is a fixture proof. It checks the wrapper, record chain,
+hash-only disclosure, verifier path, and policy gate for the OpenETR shape. It
+does not prove hosted OpenETR relay behavior, a title-transfer authority
+decision, legal recognition, or live Nostr event availability.`
   const regenerateCommand = sourceEvidence
-    ? `OPENETR_SOURCE_DIR=/path/to/trbouma/openetr ATRIB_PACKET_WRITE_ARTIFACTS=1 pnpm --filter @atrib/integration openetr-transfer-source-packet`
+    ? recognitionExecuted
+      ? `OPENETR_SOURCE_DIR=/path/to/trbouma/openetr \\
+OPENETR_PUBLIC_RELAY_URLS=wss://relay.example \\
+OPENETR_PUBLIC_RELAY_PUBLISH=1 \\
+OPENETR_FULL_RECOGNITION_FIXTURE=1 \\
+ATRIB_PACKET_PUBLIC_LOG=1 \\
+ATRIB_PACKET_WRITE_ARTIFACTS=1 \\
+pnpm --filter @atrib/integration openetr-transfer-source-packet`
+      : `OPENETR_SOURCE_DIR=/path/to/trbouma/openetr ATRIB_PACKET_WRITE_ARTIFACTS=1 pnpm --filter @atrib/integration openetr-transfer-source-packet`
     : `ATRIB_PACKET_WRITE_ARTIFACTS=1 pnpm --filter @atrib/integration openetr-transfer-packet`
+  const logProof = result.log.mode === 'public' ? 'public atrib log' : 'local fixture log only'
+  const recognitionSummary = recognitionExecuted
+    ? `Recognition tool executed under signed fixture evidence. The fixture supplied a
+title-transfer authority attestation, a legal/MLETR attestation, public event
+availability evidence, and controller-semantics evidence.`
+    : `Recognition did not execute. The policy gate recorded which evidence was
+missing or unresolved before title recognition.`
+  const recognitionFit = recognitionExecuted
+    ? 'ran only after public relay event evidence, controller evidence, title authority evidence, and legal/MLETR fixture evidence were present.'
+    : 'still requires attestor or title-transfer authority evidence.'
   const signedPolicySection =
     signedPolicyDecision && signedPolicyOutcome
       ? `
@@ -644,7 +980,7 @@ recognition, or live Nostr event availability.`
 The packet signs the title-recognition policy decision as atrib control evidence
 before the risky recognition action can run.
 
-| Kind | Tool | Record hash | Local log index |
+| Kind | Tool | Record hash | Log index |
 | --- | --- | --- | --- |
 | ${signedPolicyDecision.kind} | ${signedPolicyDecision.tool_name} | ${signedPolicyDecision.record_hash} | ${signedPolicyDecision.proof.log_index} |
 | ${signedPolicyOutcome.kind} | ${signedPolicyOutcome.tool_name} | ${signedPolicyOutcome.record_hash} | ${signedPolicyOutcome.proof.log_index} |
@@ -665,7 +1001,7 @@ This proof signs an OpenETR-shaped transfer-control flow through \`@atrib/mcp-wr
 
 ## Action path
 
-\`openetr_issue -> openetr_transfer_initiate -> openetr_transfer_accept -> openetr_query_state\`
+\`${actionPath}\`
 
 ## What ran
 
@@ -673,18 +1009,18 @@ This proof signs an OpenETR-shaped transfer-control flow through \`@atrib/mcp-wr
 - Atrib path: \`@atrib/mcp-wrap\` around an MCP stdio server.
 - Record policy: public records keep selected tool names plus \`args_hash\` and \`result_hash\`.
 - Verification: \`@atrib/mcp\` verifies each Ed25519 record signature after the wrapper writes its mirror.
-- Log proof: local fixture log only.
+- Log proof: ${logProof}.
 - Publish policy: \`${result.log.publish_policy}\`
 
 ## Record refs
 
-| Tool | Record hash | Local log index |
+| Tool | Record hash | Log index |
 | --- | --- | --- |
 ${rows}
 
 ## Redaction line
 
-The fixture saw private OpenETR-shaped payloads: object digest, document label,
+The packet saw private OpenETR-shaped payloads: object digest, document label,
 controller keys, relay URL, and event ids. The public artifact stores only
 hashes for those fields. See \`redaction-manifest.json\`.
 
@@ -695,8 +1031,8 @@ chain around it. This packet sits before a system recognizes title transfer,
 releases goods, updates an official register, or settles against the record.
 
 A verifier can see which OpenETR-shaped actions ran, that the action records
-verify, that raw OpenETR payloads stayed private, and that recognition still
-requires attestor or title-transfer authority evidence.
+verify, that raw OpenETR payloads stayed private, and that recognition
+${recognitionFit}
 
 ## Policy decision artifact
 
@@ -717,12 +1053,28 @@ ${signedPolicySection}
 ## Public relay availability
 
 \`public-relay-availability.json\` records the relay availability check status:
-\`${policyDecision.inputs.public_nostr_relay_availability.status}\`.
+\`${policyDecision.inputs.public_nostr_relay_evidence.status}\`.
 
 Set \`OPENETR_PUBLIC_RELAY_URLS=wss://relay.example,...\` to probe public Nostr
 relay availability for OpenETR event kinds. That probe checks relay connectivity
-and Nostr responses. It does not prove the transfer events were published to the
-public relay.
+and Nostr responses. When \`OPENETR_PUBLIC_RELAY_PUBLISH=1\` is also set in
+source-backed mode, the artifact also checks whether exact OpenETR events are
+available from those relays.
+
+Event availability status:
+\`${publicRelayEvidence.public_event_availability?.status ?? 'not_requested'}\`.
+
+## Recognition evidence
+
+${recognitionSummary}
+
+Recognition authorized by fixture: \`${String(recognition.authorized_by_fixture)}\`.
+
+Controller semantics: \`${recognition.controller_semantics.status}\`.
+
+Title authority attestation: \`${recognition.title_authority ? recognition.title_authority.statement_hash : 'missing'}\`.
+
+Legal/MLETR attestation: \`${recognition.legal_mletr ? recognition.legal_mletr.statement_hash : 'missing'}\`.
 ${sourceSection}
 
 ## Weakness
@@ -737,10 +1089,10 @@ ${regenerateCommand}
 
 ## Live upstream path
 
-A live proof should wait until OpenETR has a pinned transfer-state fixture or a
-stable adapter command. The live version should capture the OpenETR event ids
-and relay query output as archive evidence, then submit only the verified atrib
-records to the public log after the full flow passes.
+Source-backed mode runs the pinned OpenETR implementation. Full fixture mode can
+publish to public relays, check exact event availability, sign demo authority
+and legal attestations, execute title recognition, and submit accepted atrib
+records to the public log when \`ATRIB_PACKET_PUBLIC_LOG=1\`.
 `
 }
 
@@ -752,6 +1104,9 @@ export async function runOpenEtrTransferPacket(
   const integrationDir = dirname(dirname(exampleDir))
   const sourceEvidence = runOpenEtrSourceE2e(env, exampleDir)
   const publicRelayAvailability = await runPublicRelayAvailability(env)
+  const publicRelayEvidence = buildPublicRelayArtifact(publicRelayAvailability, sourceEvidence)
+  const recognitionEvidence = await buildRecognitionEvidence(env, sourceEvidence)
+  const publicLog = env.ATRIB_PACKET_PUBLIC_LOG === '1'
   const fixtureServer = join(exampleDir, 'openetr-fixture-mcp.ts')
   const upstream = sourceEvidence
     ? {
@@ -762,13 +1117,16 @@ export async function runOpenEtrTransferPacket(
     : undefined
   const packetOptions: PacketOptions = {
     packet: 'openetr-transfer',
-    mode: 'fixture',
-    logMode: 'local',
+    mode: sourceEvidence ? 'live' : 'fixture',
+    logMode: publicLog ? 'public' : 'local',
     upstreamShape: sourceEvidence
       ? 'trbouma/openetr Python source run against local Nostr relay, surfaced through MCP-shaped tools openetr_issue, openetr_transfer_initiate, openetr_transfer_accept, openetr_query_state'
       : 'OpenETR MCP-shaped fixture tools openetr_issue, openetr_transfer_initiate, openetr_transfer_accept, openetr_query_state',
     exampleDir,
     integrationDir,
+    ...(env.ATRIB_PACKET_PUBLIC_LOG_ENDPOINT
+      ? { publicLogEndpoint: env.ATRIB_PACKET_PUBLIC_LOG_ENDPOINT }
+      : {}),
     ...(upstream ? { upstream } : { fixtureServer }),
     expectedTools: [
       'openetr_issue',
@@ -820,7 +1178,7 @@ export async function runOpenEtrTransferPacket(
         },
       },
     ],
-    policyGate: openEtrTitleRecognitionPolicyGate,
+    policyGate: createOpenEtrTitleRecognitionPolicyGate(recognitionEvidence),
     privateNeedles: [
       PRIVATE_OBJECT_DIGEST,
       PRIVATE_DOCUMENT_TITLE,
@@ -836,9 +1194,15 @@ export async function runOpenEtrTransferPacket(
   }
   const result = await runWrappedMcpPacket(packetOptions)
   const publicResult = artifactResult(result)
-  const policyDecision = buildPolicyDecision(publicResult, sourceEvidence, publicRelayAvailability)
+  const policyDecision = buildPolicyDecision(
+    publicResult,
+    sourceEvidence,
+    publicRelayEvidence,
+    recognitionEvidence,
+  )
   const signedPolicyDecision = publicControlRecord(publicResult.action_policy, 'policy_decision')
   const signedPolicyOutcome = publicControlRecord(publicResult.action_policy, 'policy_outcome')
+  const recognitionExecuted = publicResult.operations.includes(RECOGNIZE_TOOL_NAME)
   const verifierOutput = {
     schema: 'atrib.proof_packet.verifier_output.v1',
     packet: publicResult.packet,
@@ -857,11 +1221,13 @@ export async function runOpenEtrTransferPacket(
     privacy: publicResult.privacy,
     openetr: {
       event_kinds: [31415, 31416],
-      recognized_title_transfer: false,
-      attestor_evidence_supplied: false,
-      controller_semantics_pinned: false,
+      recognized_title_transfer: recognitionExecuted && recognitionEvidence.authorized_by_fixture,
+      attestor_evidence_supplied: Boolean(recognitionEvidence.title_authority?.signature_valid),
+      controller_semantics_pinned:
+        recognitionEvidence.controller_semantics.status === 'resolved_by_authority_attestation',
       source_e2e: sourceEvidence?.sanitized ?? null,
-      public_relay_availability: publicRelayAvailability,
+      public_relay_evidence: publicRelayEvidence,
+      recognition_evidence: recognitionEvidence,
       title_recognition_control_record_signed: Boolean(signedPolicyDecision),
       title_recognition_tool_executed:
         publicResult.action_policy?.blocked_tool_executed ??
@@ -878,10 +1244,13 @@ export async function runOpenEtrTransferPacket(
       caveat: 'Policy decision artifact summarizes the signed atrib control-record decision.',
     },
     caveats: [
-      'Fixture run only. It does not prove live OpenETR relay output.',
+      sourceEvidence
+        ? 'Source-backed run against the pinned OpenETR implementation.'
+        : 'Fixture run only. It does not prove live OpenETR relay output.',
       'Private OpenETR object, party, relay, and event-id material are represented by hashes only.',
-      'Title recognition remains a consumer policy decision until attestor evidence is supplied.',
-      'The risky title-recognition tool is present but not executed in the valid packet.',
+      recognitionExecuted
+        ? 'Title recognition executed under signed fixture attestations. It is not a real title registry decision.'
+        : 'Title recognition remains a consumer policy decision until attestor evidence is supplied.',
     ],
   }
   const redactionManifest = {
@@ -920,12 +1289,29 @@ export async function runOpenEtrTransferPacket(
     mkdirSync(outDir, { recursive: true })
     writeFileSync(
       join(outDir, 'README.md'),
-      renderReadme(publicResult, policyDecision, sourceEvidence),
+      renderReadme(
+        publicResult,
+        policyDecision,
+        sourceEvidence,
+        publicRelayEvidence,
+        recognitionEvidence,
+      ),
     )
     writeJson(join(outDir, 'verifier-output.json'), verifierOutput)
     writeJson(join(outDir, 'redaction-manifest.json'), redactionManifest)
     writeJson(join(outDir, 'policy-decision.json'), policyDecision)
-    writeJson(join(outDir, 'public-relay-availability.json'), publicRelayAvailability)
+    writeJson(join(outDir, 'public-relay-availability.json'), publicRelayEvidence)
+    writeJson(join(outDir, 'recognition-evidence.json'), recognitionEvidence)
+    writeJson(join(outDir, 'controller-semantics.json'), recognitionEvidence.controller_semantics)
+    if (recognitionEvidence.title_authority) {
+      writeJson(
+        join(outDir, 'title-authority-attestation.json'),
+        recognitionEvidence.title_authority,
+      )
+    }
+    if (recognitionEvidence.legal_mletr) {
+      writeJson(join(outDir, 'legal-mletr-attestation.json'), recognitionEvidence.legal_mletr)
+    }
     if (sourceEvidence) writeJson(join(outDir, 'source-run-output.json'), sourceEvidence.sanitized)
   }
 
@@ -935,6 +1321,8 @@ export async function runOpenEtrTransferPacket(
     redactionManifest,
     policyDecision,
     publicRelayAvailability,
+    publicRelayEvidence,
+    recognitionEvidence,
     artifact_dir: outDir ?? null,
   }
 }
@@ -957,6 +1345,13 @@ async function main(): Promise<void> {
           signed_policy_record: Boolean(signedPolicyDecision),
           signed_control_record_hash: signedPolicyDecision?.record_hash ?? null,
         },
+        recognized_title_transfer:
+          result.operations.includes(RECOGNIZE_TOOL_NAME) &&
+          packet.recognitionEvidence.authorized_by_fixture,
+        public_relay_events_available:
+          packet.publicRelayEvidence.public_event_availability?.status === 'available',
+        title_authority_attested: Boolean(packet.recognitionEvidence.title_authority),
+        legal_mletr_attested: Boolean(packet.recognitionEvidence.legal_mletr),
         artifact_dir,
       },
       null,

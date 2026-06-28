@@ -52,6 +52,10 @@ async function runPacket(
           signed_control_record_hash?: string | null
         }
         source_e2e?: boolean
+        recognized_title_transfer?: boolean
+        public_relay_events_available?: boolean
+        title_authority_attested?: boolean
+        legal_mletr_attested?: boolean
       },
       cleanup: () => rmSync(outDir, { recursive: true, force: true }),
     }
@@ -221,7 +225,7 @@ describe('MCP platform proof packets', () => {
         decision: 'escalate',
         action_tool: 'openetr_recognize_title_transfer',
         reason_codes: [
-          'public_relay_availability_missing',
+          'public_relay_event_availability_missing',
           'title_transfer_authority_missing',
           'mletr_legal_conclusion_missing',
           'controller_semantics_review_required',
@@ -250,6 +254,10 @@ describe('MCP platform proof packets', () => {
         /^sha256:[0-9a-f]{64}$/u,
       )
       expect(run.result.source_e2e).toBe(false)
+      expect(run.result.recognized_title_transfer).toBe(false)
+      expect(run.result.public_relay_events_available).toBe(false)
+      expect(run.result.title_authority_attested).toBe(false)
+      expect(run.result.legal_mletr_attested).toBe(false)
 
       const text = `${run.stdout}\n${artifactText(run.outDir, [
         'README.md',
@@ -257,15 +265,17 @@ describe('MCP platform proof packets', () => {
         'redaction-manifest.json',
         'policy-decision.json',
         'public-relay-availability.json',
+        'recognition-evidence.json',
+        'controller-semantics.json',
       ])}`
       expect(text).toContain('signed_openetr_records_present')
       expect(text).toContain('signed_atrib_control_record_policy_decision')
       expect(text).toContain('openetr_chain_observed')
       expect(text).toContain('acceptance_observed')
-      expect(text).toContain('public_nostr_relay_availability')
-      expect(text).toContain('p_tag_semantics_review_required')
+      expect(text).toContain('public_nostr_relay_evidence')
+      expect(text).toContain('controller_semantics_review_required')
       expect(text).toContain('title_recognition_requires_attestor')
-      expect(text).toContain('legal_title_transfer_or_mletr_attestation_missing')
+      expect(text).toContain('legal_title_transfer_or_mletr_attestation')
       expect(text).toContain('escalate_before_title_recognition')
       for (const needle of [
         'sha256:7f4b8b8e2f394fddad1ed04e94c456ff0c8fb7ee6f0c5d5017deac9a0f61d425',
@@ -307,6 +317,8 @@ describe('MCP platform proof packets', () => {
           'redaction-manifest.json',
           'policy-decision.json',
           'public-relay-availability.json',
+          'recognition-evidence.json',
+          'controller-semantics.json',
           'source-run-output.json',
         ])}`
         expect(text).toContain('actual_openetr_source_run_present')
@@ -328,6 +340,80 @@ describe('MCP platform proof packets', () => {
       }
     },
     60000,
+  )
+
+  const fullOpenEtrRecognitionTest =
+    process.env.OPENETR_SOURCE_DIR &&
+    process.env.OPENETR_PUBLIC_RELAY_URLS &&
+    process.env.OPENETR_PUBLIC_RELAY_PUBLISH === '1'
+      ? it
+      : it.skip
+  fullOpenEtrRecognitionTest(
+    'generates an OpenETR packet with public relay and recognition fixture evidence',
+    async () => {
+      const run = await runPacket(
+        'examples/openetr-transfer/openetr-transfer-packet-smoke.ts',
+        'atrib-openetr-full-packet-',
+        {
+          OPENETR_SOURCE_DIR: process.env.OPENETR_SOURCE_DIR ?? '',
+          ATRIB_OPENETR_SOURCE_E2E: '1',
+          OPENETR_PUBLIC_RELAY_URLS: process.env.OPENETR_PUBLIC_RELAY_URLS ?? '',
+          OPENETR_PUBLIC_RELAY_PUBLISH: '1',
+          OPENETR_FULL_RECOGNITION_FIXTURE: '1',
+          OPENETR_PUBLIC_RUN_ID: `vitest-${Date.now()}`,
+        },
+      )
+      try {
+        expect(run.result.ok).toBe(true)
+        expect(run.result.operations).toEqual([
+          'openetr_issue',
+          'openetr_transfer_initiate',
+          'openetr_transfer_accept',
+          'openetr_query_state',
+          'openetr_recognize_title_transfer',
+        ])
+        expect(run.result.recognized_title_transfer).toBe(true)
+        expect(run.result.public_relay_events_available).toBe(true)
+        expect(run.result.title_authority_attested).toBe(true)
+        expect(run.result.legal_mletr_attested).toBe(true)
+        expect(run.result.action_policy).toMatchObject({
+          stopped_before: null,
+          blocked_tool_executed: false,
+        })
+        expect(run.result.action_policy?.decisions[0]?.content).toMatchObject({
+          decision: 'allow',
+          reason_codes: [
+            'public_relay_event_availability_present',
+            'title_transfer_authority_attested',
+            'legal_mletr_attested',
+            'controller_semantics_resolved',
+          ],
+        })
+
+        const text = `${run.stdout}\n${artifactText(run.outDir, [
+          'README.md',
+          'verifier-output.json',
+          'redaction-manifest.json',
+          'policy-decision.json',
+          'public-relay-availability.json',
+          'recognition-evidence.json',
+          'controller-semantics.json',
+          'title-authority-attestation.json',
+          'legal-mletr-attestation.json',
+          'source-run-output.json',
+        ])}`
+        expect(text).toContain('recognize_title_transfer_with_fixture_attestations')
+        expect(text).toContain('public_openetr_event_availability')
+        expect(text).toContain('controller_semantics_resolved')
+        expect(text).toContain('title_transfer_authority')
+        expect(text).toContain('legal_mletr')
+        expect(text).not.toContain('nsec1')
+        expect(text).not.toContain('ws://127.0.0.1')
+      } finally {
+        run.cleanup()
+      }
+    },
+    120000,
   )
 
   it('redacts private material from upstream error diagnostics', () => {

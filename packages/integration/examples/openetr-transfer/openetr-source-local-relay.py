@@ -7,10 +7,12 @@ import json
 import logging
 import os
 import subprocess
+import time
 from typing import Any
 
 import websockets
 from click.testing import CliRunner
+from monstr.client.client import ClientPool
 from monstr.encrypt import Keys
 
 from openetr.commands.publish import transfer_group
@@ -19,7 +21,7 @@ from openetr.services.query_etr import build_query_etr_result
 
 
 EXPECTED_OPENETR_COMMIT = "c97eb84f5790ff041ad14a1c30df0f71ceb8d3d9"
-DOCUMENT_BYTES = b"atrib openetr source backed local relay proof"
+DOCUMENT_BYTES = b"atrib openetr source backed relay proof"
 
 
 def stable_key(label: str) -> Keys:
@@ -119,6 +121,112 @@ def event_by_action(events: list[dict[str, Any]], action: str) -> dict[str, Any]
     raise RuntimeError(f"missing OpenETR {action} event")
 
 
+def configured_public_relays() -> list[str]:
+    return [
+        relay.strip()
+        for relay in os.environ.get("OPENETR_PUBLIC_RELAY_URLS", "").split(",")
+        if relay.strip()
+    ]
+
+
+def public_publish_enabled(public_relays: list[str]) -> bool:
+    return bool(public_relays) and os.environ.get("OPENETR_PUBLIC_RELAY_PUBLISH") == "1"
+
+
+def document_bytes_for_run(public_publish: bool) -> bytes:
+    if not public_publish:
+        return DOCUMENT_BYTES
+    run_id = os.environ.get("OPENETR_PUBLIC_RUN_ID") or str(int(time.time()))
+    return DOCUMENT_BYTES + f" public relay run {run_id}".encode("utf-8")
+
+
+async def query_exact_event(
+    relay_url: str, event: dict[str, Any], timeout: int
+) -> dict[str, Any]:
+    try:
+        async with ClientPool(
+            [relay_url],
+            timeout=timeout,
+            query_timeout=timeout,
+        ) as client:
+            events = await client.query(
+                {
+                    "ids": [event["id"]],
+                    "authors": [event["pubkey"]],
+                    "kinds": [event["kind"]],
+                    "limit": 1,
+                },
+                emulate_single=True,
+                wait_connect=True,
+                timeout=timeout,
+            )
+    except Exception as exc:  # noqa: BLE001 - evidence should preserve relay failure class.
+        return {
+            "event_id": event["id"],
+            "event_id_hash": sha256_text(event["id"]),
+            "kind": event.get("kind"),
+            "exact_found": False,
+            "returned_count": 0,
+            "error": type(exc).__name__,
+        }
+
+    exact_found = any(getattr(candidate, "id", None) == event["id"] for candidate in events)
+    return {
+        "event_id": event["id"],
+        "event_id_hash": sha256_text(event["id"]),
+        "kind": event.get("kind"),
+        "exact_found": exact_found,
+        "returned_count": len(events),
+        "error": None,
+    }
+
+
+async def collect_public_event_availability(
+    public_relays: list[str],
+    events: dict[str, dict[str, Any]],
+    timeout: int,
+    publish_requested: bool,
+) -> dict[str, Any]:
+    if not public_relays:
+        return {
+            "schema": "atrib.openetr.public_event_availability.v1",
+            "requested": False,
+            "publish_requested": publish_requested,
+            "status": "not_requested",
+            "relay_count": 0,
+            "event_roles": list(events.keys()),
+            "relays": [],
+        }
+
+    relay_results = []
+    for relay_url in public_relays:
+        event_results = []
+        for role, event in events.items():
+            event_result = await query_exact_event(relay_url, event, timeout)
+            event_results.append({"role": role, **event_result})
+        relay_results.append(
+            {
+                "relay_url": relay_url,
+                "relay_url_hash": sha256_text(relay_url),
+                "exact_found_count": sum(1 for item in event_results if item["exact_found"]),
+                "exact_found_all": all(item["exact_found"] for item in event_results),
+                "events": event_results,
+            }
+        )
+
+    available_relays = sum(1 for relay in relay_results if relay["exact_found_all"])
+    return {
+        "schema": "atrib.openetr.public_event_availability.v1",
+        "requested": True,
+        "publish_requested": publish_requested,
+        "status": "available" if available_relays > 0 else "unavailable",
+        "relay_count": len(relay_results),
+        "available_relay_count": available_relays,
+        "event_roles": list(events.keys()),
+        "relays": relay_results,
+    }
+
+
 async def run_source_e2e() -> dict[str, Any]:
     source_dir = os.environ.get("OPENETR_SOURCE_DIR")
     if not source_dir:
@@ -130,21 +238,30 @@ async def run_source_e2e() -> dict[str, Any]:
     if commit != EXPECTED_OPENETR_COMMIT:
         raise RuntimeError(f"unexpected OpenETR commit {commit}, expected {EXPECTED_OPENETR_COMMIT}")
 
+    public_relays = configured_public_relays()
+    publish_to_public = public_publish_enabled(public_relays)
+    publish_wait = float(
+        os.environ.get("OPENETR_RELAY_PUBLISH_WAIT", "1.5" if publish_to_public else "0.2")
+    )
+    relay_timeout = int(os.environ.get("OPENETR_RELAY_TIMEOUT", "5" if publish_to_public else "2"))
+    relay_limit = int(os.environ.get("OPENETR_RELAY_LIMIT", "50" if publish_to_public else "20"))
+    document_bytes = document_bytes_for_run(publish_to_public)
     seller = stable_key("atrib-openetr-seller")
     buyer = stable_key("atrib-openetr-buyer")
-    digest = hashlib.sha256(DOCUMENT_BYTES).hexdigest()
+    digest = hashlib.sha256(document_bytes).hexdigest()
 
     async with LocalNostrRelay() as relay:
+        relays = ",".join([relay.url, *public_relays]) if publish_to_public else relay.url
         issue = await publish_issue_etr(
             filename="atrib-openetr-source-proof.txt",
-            size_bytes=len(DOCUMENT_BYTES),
+            size_bytes=len(document_bytes),
             digest=digest,
-            relays=relay.url,
+            relays=relays,
             signer_nsec=seller.private_key_bech32(),
             comment="source-backed OpenETR issue",
-            publish_wait=0.2,
-            timeout=2,
-            limit=20,
+            publish_wait=publish_wait,
+            timeout=relay_timeout,
+            limit=relay_limit,
         )
         initiate_output = await asyncio.to_thread(
             invoke_transfer,
@@ -157,19 +274,19 @@ async def run_source_e2e() -> dict[str, Any]:
                 "--as-user",
                 seller.private_key_bech32(),
                 "--relays",
-                relay.url,
+                relays,
                 "--force",
                 "--publish-wait",
-                "0.2",
+                str(publish_wait),
                 "--query-timeout",
-                "2",
+                str(relay_timeout),
                 "--limit",
-                "20",
+                str(relay_limit),
                 "--verify",
                 "any",
             ],
             seller.private_key_bech32(),
-            relay.url,
+            relays,
         )
         initiate_event = event_by_action(relay.events, "initiate")
         accept_output = await asyncio.to_thread(
@@ -181,25 +298,40 @@ async def run_source_e2e() -> dict[str, Any]:
                 "--as-user",
                 buyer.private_key_bech32(),
                 "--relays",
-                relay.url,
+                relays,
                 "--force",
                 "--publish-wait",
-                "0.2",
+                str(publish_wait),
                 "--query-timeout",
-                "2",
+                str(relay_timeout),
                 "--limit",
-                "20",
+                str(relay_limit),
                 "--verify",
                 "any",
             ],
             seller.private_key_bech32(),
-            relay.url,
+            relays,
             "y\n",
         )
         accept_event = event_by_action(relay.events, "accept")
-        query = await build_query_etr_result(digest=digest, relays=relay.url, timeout=2, limit=20)
+        query = await build_query_etr_result(
+            digest=digest,
+            relays=relays,
+            timeout=relay_timeout,
+            limit=relay_limit,
+        )
+        origin_event = next(event for event in relay.events if event.get("kind") == 31415)
+        public_event_availability = await collect_public_event_availability(
+            public_relays,
+            {
+                "origin": origin_event,
+                "transfer_initiate": initiate_event,
+                "transfer_accept": accept_event,
+            },
+            timeout=relay_timeout,
+            publish_requested=publish_to_public,
+        )
 
-    origin_event = next(event for event in relay.events if event.get("kind") == 31415)
     current_controller = query.get("current_controller") or {}
     current_controller_npub = current_controller.get("npub")
     checks = {
@@ -227,12 +359,12 @@ async def run_source_e2e() -> dict[str, Any]:
         },
         "runtime": {
             "relay": "local-websocket-nostr-relay",
-            "live_public_relay": False,
+            "live_public_relay": publish_to_public,
             "openetr_user_config_written": False,
         },
         "object": {
             "digest": digest,
-            "document_hash": sha256_text(DOCUMENT_BYTES.decode("utf-8")),
+            "document_hash": sha256_text(document_bytes.decode("utf-8")),
         },
         "parties": {
             "issuer_npub": seller.public_key_bech32(),
@@ -254,6 +386,7 @@ async def run_source_e2e() -> dict[str, Any]:
             "current_controller": current_controller,
             "summary_control_chains": query.get("summary_control_chains", []),
         },
+        "public_event_availability": public_event_availability,
         "checks": checks,
         "warnings": [
             {

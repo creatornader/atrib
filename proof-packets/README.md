@@ -3,11 +3,11 @@
 This directory holds artifact-first proof runs for external MCP and tool
 platform prospects.
 
-| Proof                                               | Source example                                           | Status                                                                                                                                      |
-| --------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path, Browserbase-shaped demo, and public log inclusion. Fixture mode stays available for local tests.          |
-| [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/` | Live Firecrawl MCP path, fixed-input ingestion demo, and downstream policy decision artifact. Fixture mode stays available for local tests. |
-| [OpenETR transfer](openetr-transfer/)               | `packages/integration/examples/openetr-transfer/`        | Source-backed local OpenETR transfer-control path and downstream recognition policy artifact. No public log or public relay proof yet.      |
+| Proof                                               | Source example                                           | Status                                                                                                                                          |
+| --------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path, Browserbase-shaped demo, and public log inclusion. Fixture mode stays available for local tests.              |
+| [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/` | Live Firecrawl MCP path, fixed-input ingestion demo, and downstream policy decision artifact. Fixture mode stays available for local tests.     |
+| [OpenETR transfer](openetr-transfer/)               | `packages/integration/examples/openetr-transfer/`        | Source-backed OpenETR public-relay fixture recognition path with public log inclusion, signed control records, and signed fixture attestations. |
 
 Each artifact keeps public evidence narrow: tool names, hash disclosures, record
 hashes, log indexes, and verifier output. Private upstream payloads stay out of
@@ -39,14 +39,14 @@ fixed-input by design: no arbitrary URL, query, crawl depth, or crawl limit.
 Its packet includes `policy-decision.json`, which binds the signed ingestion
 records to a candidate review gate for sensitive downstream actions.
 
-OpenETR is local-only. Its default packet signs an OpenETR-shaped issue,
-transfer-initiate, transfer-accept, and state-query flow. Its source-backed
-packet runs the pinned upstream Python implementation against a local WebSocket
-Nostr relay, writes a sanitized `source-run-output.json`, writes
-`public-relay-availability.json`, and signs a control-record policy decision
-that stops before recognized title transfer. The packet still escalates because
-no public event-availability proof, title-transfer authority evidence, or
-legal/MLETR attestation is supplied.
+OpenETR has two paths. The default packet signs an OpenETR-shaped issue,
+transfer-initiate, transfer-accept, and state-query flow, then signs a
+control-record policy decision that stops before recognized title transfer. The
+source-backed public proof runs the pinned upstream Python implementation,
+publishes exact OpenETR events to configured public relays, verifies public
+event availability, signs fixture title-authority and legal/MLETR attestations,
+executes the recognition action, and submits accepted atrib records plus the
+control records to `log.atrib.dev`.
 
 ## Contact drafts
 

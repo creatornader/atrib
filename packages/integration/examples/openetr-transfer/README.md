@@ -38,9 +38,27 @@ transfer-initiate, and transfer-accept events to a local WebSocket Nostr relay,
 queries state through OpenETR's query service, and writes a sanitized
 `source-run-output.json`.
 
+Run the source-backed public-relay fixture-recognition proof:
+
+```bash
+OPENETR_SOURCE_DIR=/path/to/trbouma/openetr \
+  OPENETR_PUBLIC_RELAY_URLS=wss://relay.example \
+  OPENETR_PUBLIC_RELAY_PUBLISH=1 \
+  OPENETR_FULL_RECOGNITION_FIXTURE=1 \
+  ATRIB_PACKET_PUBLIC_LOG=1 \
+  ATRIB_PACKET_WRITE_ARTIFACTS=1 \
+  pnpm --filter @atrib/integration openetr-transfer-source-packet
+```
+
+That path publishes the OpenETR source events to configured public relays,
+queries exact event availability, signs fixture title-authority and legal/MLETR
+attestations, signs the atrib control-record policy decision, executes
+`openetr_recognize_title_transfer`, and submits accepted atrib records to the
+public log.
+
 ## Proof boundary
 
-This is a fixture proof. It proves:
+The default fixture proof proves:
 
 - `@atrib/mcp-wrap` signs each OpenETR-shaped tool call.
 - The signed records verify.
@@ -51,12 +69,13 @@ This is a fixture proof. It proves:
   as recognized title transfer without public relay, title-transfer authority,
   legal-title-transfer, or MLETR evidence.
 
-It does not prove public OpenETR event availability, legal title transfer,
-MLETR compliance, or title-transfer authority recognition.
+The full fixture-recognition path adds public relay event availability and
+signed fixture attestations. It still does not prove a real title registry
+decision, legal advice, or a jurisdictional legal conclusion.
 
 ## Live upstream path
 
-A live proof should wait for a pinned OpenETR state-transition fixture or stable
-adapter command. The live proof should capture OpenETR event ids, relay query
-output, and attestor or title-transfer authority evidence as archive material,
-then submit narrow atrib records only after the whole flow verifies.
+Source-backed mode runs the pinned OpenETR implementation. Full fixture mode can
+publish to public relays, check exact event availability, sign demo authority
+and legal attestations, execute title recognition, and submit accepted atrib
+records to the public log when `ATRIB_PACKET_PUBLIC_LOG=1`.
