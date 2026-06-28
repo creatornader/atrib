@@ -1,0 +1,43 @@
+{
+  "name": "by-reference-result-artifact-pass",
+  "input": {
+    "protocol": "x401",
+    "proofRequest": {
+      "scheme": "x401",
+      "version": "0.2.0",
+      "credential_requirements": {
+        "digital": {
+          "requests": [
+            {
+              "protocol": "openid4vp-v1-signed",
+              "data": {
+                "client_id": "https://verifier.example/client.json",
+                "nonce": "nonce-reference"
+              }
+            }
+          ]
+        }
+      },
+      "oauth": {
+        "token_endpoint": "https://verifier.example/oauth/token"
+      },
+      "request_id": "proof-template-basic-v1"
+    },
+    "proofResponse": {
+      "request_id": "proof-template-basic-v1",
+      "agent_id": "did:web:agent.example",
+      "credential_result_uri": "https://verifier.example/.well-known/x401/results/result-1"
+    },
+    "resultVerified": true,
+    "expectedRequestId": "proof-template-basic-v1"
+  },
+  "expected": {
+    "valid": true,
+    "constraints": [
+      { "type": "x401.result_artifact.exactly_one_result_source", "status": "passed" },
+      { "type": "x401.result_verified", "status": "passed" }
+    ],
+    "errors": []
+  }
+}
+

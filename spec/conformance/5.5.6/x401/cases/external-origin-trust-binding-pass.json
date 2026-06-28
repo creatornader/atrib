@@ -1,0 +1,63 @@
+{
+  "name": "external-origin-trust-binding-pass",
+  "input": {
+    "protocol": "x401",
+    "proofRequest": {
+      "scheme": "x401",
+      "version": "0.2.0",
+      "credential_requirements": {
+        "digital": {
+          "requests": [
+            {
+              "protocol": "openid4vp-v1-signed",
+              "data": {
+                "client_id": "https://verifier.example/client.json",
+                "nonce": "nonce-current"
+              }
+            }
+          ]
+        }
+      },
+      "oauth": {
+        "token_endpoint": "https://verifier.example/oauth/token"
+      },
+      "request_id": "proof-template-basic-v1",
+      "satisfied_requirements": ["urn:proof:x401:satisfaction:basic:v1"]
+    },
+    "proofResponse": {
+      "request_id": "proof-template-basic-v1",
+      "agent_id": "did:web:agent.example",
+      "credential_result": {
+        "protocol": "openid4vp-v1-signed",
+        "data": {
+          "vp_token": "fixture-vp-token"
+        }
+      }
+    },
+    "resultVerified": true,
+    "expectedVersion": "0.2.0",
+    "expectedRequestId": "proof-template-basic-v1",
+    "expectedAgentId": "did:web:agent.example",
+    "expectedAgentOrigin": "https://agent.example/origin",
+    "agentOrigin": "https://agent.example/origin",
+    "agentOriginVerified": true,
+    "issuerTrustVerified": true,
+    "issuerTrustRootType": "proof-trust-list",
+    "issuerTrustRootRef": "https://trust.example/x401.json",
+    "proofPaymentBindingVerified": true,
+    "proofPaymentBindingRef": "ap2-receipt:checkout-123",
+    "expectedCredentialProtocol": "openid4vp-v1-signed",
+    "expectedNonce": "nonce-current",
+    "requiredSatisfiedRequirements": ["urn:proof:x401:satisfaction:basic:v1"]
+  },
+  "expected": {
+    "valid": true,
+    "constraints": [
+      { "type": "x401.agent_origin.value", "status": "passed" },
+      { "type": "x401.agent_origin_verified", "status": "passed" },
+      { "type": "x401.issuer_trust_verified", "status": "passed" },
+      { "type": "x401.proof_payment_binding_verified", "status": "passed" }
+    ],
+    "errors": []
+  }
+}

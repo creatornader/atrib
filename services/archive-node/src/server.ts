@@ -2,6 +2,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { verifyRecord as verifyAtribRecord } from '@atrib/verify'
+import type { AuthorizationEvidenceInput, EvidenceVerificationBlock } from '@atrib/verify'
 import {
   ArchiveStore,
   normalizeArchiveSubmission,
@@ -167,9 +168,11 @@ async function handleSubmit(
     return problem(res, 409, 'log-commitment-missing', 'Conflict', commitment.error)
   }
 
+  const storageSubmission = await sanitizeEvidenceBeforeStorage(submission)
+
   let stored: Awaited<ReturnType<ArchiveStore['put']>>
   try {
-    stored = await store.put(submission)
+    stored = await store.put(storageSubmission)
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('archive-node rejected archive storage', err)
@@ -224,7 +227,7 @@ async function publicRecordResponse(entry: StoredArchiveEntry): Promise<Record<s
   }
   const computedEvidence =
     entry.authorizationEvidence.length > 0
-      ? (await verifyAtribRecord(entry.record, verifyOptions)).evidence ?? []
+      ? ((await verifyAtribRecord(entry.record, verifyOptions)).evidence ?? [])
       : []
   const evidence = dedupeEvidence([...entry.evidence, ...computedEvidence])
   return {
@@ -243,6 +246,48 @@ async function publicRecordResponse(entry: StoredArchiveEntry): Promise<Record<s
     ...(entry.resolvedFacts ? { resolved_facts: entry.resolvedFacts } : {}),
     ...(evidence.length > 0 ? { evidence } : { evidence: [] }),
   }
+}
+
+async function sanitizeEvidenceBeforeStorage(
+  submission: ReturnType<typeof normalizeArchiveSubmission>,
+): Promise<ReturnType<typeof normalizeArchiveSubmission>> {
+  const authorizationEvidence = submission.authorizationEvidence ?? []
+  const x401Inputs = authorizationEvidence.filter(isX401AuthorizationEvidence)
+  if (x401Inputs.length === 0) return submission
+
+  const keptAuthorizationEvidence = authorizationEvidence.filter(
+    (entry) => !isX401AuthorizationEvidence(entry),
+  )
+  const verification = await verifyAtribRecord(submission.record, {
+    authorizationEvidence,
+    ...(submission.resolvedFacts ? { resolvedFacts: submission.resolvedFacts } : {}),
+  })
+  const x401Evidence = (verification.evidence ?? []).filter(
+    (block): block is EvidenceVerificationBlock => block.protocol === 'x401',
+  )
+
+  return {
+    ...submission,
+    authorizationEvidence: keptAuthorizationEvidence,
+    evidence: dedupeEvidence([...(submission.evidence ?? []), ...x401Evidence]),
+  }
+}
+
+function isX401AuthorizationEvidence(value: AuthorizationEvidenceInput): boolean {
+  if (value.protocol === 'x401') return true
+  if ('x401' in value) return true
+  return (
+    'headers' in value ||
+    'headerSet' in value ||
+    'proofRequest' in value ||
+    'proofResponse' in value ||
+    'proofResult' in value ||
+    'resultVerified' in value ||
+    'tokenVerified' in value ||
+    'agentOriginVerified' in value ||
+    'issuerTrustVerified' in value ||
+    'proofPaymentBindingVerified' in value
+  )
 }
 
 async function confirmLogCommitment(

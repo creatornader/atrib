@@ -1,0 +1,51 @@
+{
+  "name": "wrong-request-id-fails",
+  "input": {
+    "protocol": "x401",
+    "proofRequest": {
+      "scheme": "x401",
+      "version": "0.2.0",
+      "credential_requirements": {
+        "digital": {
+          "requests": [
+            {
+              "protocol": "openid4vp-v1-signed",
+              "data": {
+                "client_id": "https://verifier.example/client.json",
+                "nonce": "nonce-request-id"
+              }
+            }
+          ]
+        }
+      },
+      "oauth": {
+        "token_endpoint": "https://verifier.example/oauth/token"
+      },
+      "request_id": "proof-template-basic-v1"
+    },
+    "proofResponse": {
+      "request_id": "wrong-template",
+      "agent_id": "did:web:agent.example",
+      "credential_result": {
+        "protocol": "openid4vp-v1-signed",
+        "data": {
+          "vp_token": "fixture-vp-token"
+        }
+      }
+    },
+    "resultVerified": true,
+    "expectedRequestId": "proof-template-basic-v1"
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [
+      { "type": "x401.request_id", "status": "failed" },
+      { "type": "x401.request_id.binding", "status": "failed" }
+    ],
+    "errors": [
+      "x401_evidence constraint failed: x401.request_id",
+      "x401_evidence constraint failed: x401.request_id.binding"
+    ]
+  }
+}
+

@@ -1,0 +1,51 @@
+{
+  "name": "payment-hint-informational-pass",
+  "input": {
+    "protocol": "x401",
+    "proofRequest": {
+      "scheme": "x401",
+      "version": "0.2.0",
+      "credential_requirements": {
+        "digital": {
+          "requests": [
+            {
+              "protocol": "openid4vp-v1-signed",
+              "data": {
+                "client_id": "https://verifier.example/client.json",
+                "nonce": "nonce-payment"
+              }
+            }
+          ]
+        }
+      },
+      "oauth": {
+        "token_endpoint": "https://verifier.example/oauth/token"
+      },
+      "request_id": "proof-template-basic-v1",
+      "payment": {
+        "required": true,
+        "scheme_hint": "ap2",
+        "notes": "Payment may be required after proof is satisfied."
+      }
+    },
+    "proofResponse": {
+      "request_id": "proof-template-basic-v1",
+      "agent_id": "did:web:agent.example",
+      "credential_result": {
+        "protocol": "openid4vp-v1-signed",
+        "data": {
+          "vp_token": "fixture-vp-token"
+        }
+      }
+    },
+    "resultVerified": true
+  },
+  "expected": {
+    "valid": true,
+    "constraints": [
+      { "type": "x401.payment_separation", "status": "passed" }
+    ],
+    "errors": []
+  }
+}
+
