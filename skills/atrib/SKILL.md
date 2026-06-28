@@ -2,7 +2,7 @@
 name: atrib
 version: 0.3.5
 description: |
-  Use atrib as your literal substrate for memory, reasoning, and getting
+  Use atrib as your literal action layer for memory, reasoning, and getting
   smarter over time, not as instrumentation that observes you from the
   outside. atrib gives the agent seven cognitive primitives (see [D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) and [D106](../../DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7)): three
   write tools (emit, annotate, revise) that produce signed records on
@@ -40,9 +40,11 @@ allowed-tools:
 
 # atrib: use the protocol from the inside out
 
-This skill teaches you to use atrib as substrate for your memory, reasoning, and the way you get smarter across sessions. When the substrate is operational on the host running you, what's missing is YOU using it deliberately at the moments that matter.
+This skill teaches you to use atrib as the verifiable action layer for your memory, reasoning, and the way you get smarter across sessions. When the substrate is operational on the host running you, what's missing is YOU using it deliberately at the moments that matter.
 
 If you're invoked in a Claude Code session and you're not using atrib's primitives during consequential work, **the substrate is fine but the practice is broken**. This skill is the fix.
+
+The product frame is active: control what runs, coordinate what carries forward, and prove what happened. The cognitive primitives are how an agent participates in that layer directly.
 
 ## The seven cognitive primitives ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), [D106](../../DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7))
 

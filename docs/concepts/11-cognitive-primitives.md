@@ -1,6 +1,6 @@
 # The seven cognitive primitives
 
-> atrib's agent-facing surface is exactly seven cognitive primitives. Each meets the bash standard: one purpose, narrow input, composable output, stable API. Three are writes, four are reads.
+> atrib's agent-facing surface is exactly seven cognitive primitives. Each meets the bash standard: one purpose, narrow input, composable output, stable API. Three are writes, four are reads. Together they let agents use the verifiable action layer as a tool, not only leave records behind.
 
 **Status**: STUB
 **Spec anchors**: [D079](../../DECISIONS.md) · [D106](../../DECISIONS.md) · `skills/atrib/SKILL.md`
@@ -9,7 +9,7 @@
 
 ## What this teaches
 
-Why the agent-facing surface is seven primitives, what each one is for, and why verify was promoted after [D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) closed the original six. This is the part of atrib agents actually call.
+Why the agent-facing surface is seven primitives, what each one is for, and why verify was promoted after [D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) closed the original six. This is the part of atrib agents actually call when they record, look up, verify, revise, or carry context forward.
 
 ## What to cover when this gets written
 

@@ -1,8 +1,13 @@
 # @atrib/mcp-wrap
 
-Generic config-driven MCP wrapper. Spawns any upstream MCP server and applies
-the `@atrib/mcp` middleware so every tool call becomes a signed, chain-linked
-record submitted to the atrib log.
+Generic config-driven MCP wrapper for Atrib's verifiable action layer. Spawns
+any upstream MCP server and applies the `@atrib/mcp` middleware so every tool
+call becomes a signed, chain-linked record submitted to the atrib log.
+
+This is the fastest path for existing MCP tools to gain action-layer behavior:
+per-tool config can gate the call before execution, sign the outcome after
+execution, preserve chain context, and keep local mirrors for later recall,
+handoff, or verification.
 
 ## Why this exists
 

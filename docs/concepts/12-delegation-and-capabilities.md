@@ -1,17 +1,17 @@
 # Delegation and capabilities
 
-> atrib verifies the evidence around an action. It does not issue capabilities, run authorization flows, or decide whether an agent was allowed to act.
+> atrib verifies the evidence around an action. The protocol does not issue capabilities or run authorization flows; product integrations can still use Atrib records as the controlled action surface around host policy.
 
 **Status**: DRAFT (v1, 2026-06-01; strategic boundary note)
 **Spec anchors**: [§5.5.6 Generic authorization evidence blocks](../../atrib-spec.md#556-generic-authorization-evidence-blocks), [§6.7 Capability declarations](../../atrib-spec.md#67-capability-declarations), [§8.7 Adversarial Threat Model](../../atrib-spec.md#87-adversarial-threat-model)
 **Builds on**: [Identity & the directory](03-identity-and-directory.md), [The trust model](06-trust-model.md), [Integration patterns](10-integration-patterns.md)
-**Enables**: stable comparisons with OAuth, AP2, Verifiable Intent, ZCAP-LD, Vouch, AINS, UPIP, and other agent authorization systems
+**Enables**: stable comparisons with OAuth, AAuth, x401, AP2, Verifiable Intent, ZCAP-LD, Vouch, AINS, UPIP, and other agent authorization systems
 
 ## Position
 
-atrib is a verifiable action substrate. It records what an agent did, who signed the record, how that action links to earlier work, and which external evidence a verifier accepted.
+atrib is a verifiable action layer and protocol substrate. It records what an agent did, who signed the record, how that action links to earlier work, and which external evidence a verifier accepted. Product integrations can put those records in the action path so teams can allow, block, escalate, and prove high-impact work without making the base protocol an authorization system.
 
-Delegation and capability protocols answer a different question: who may ask whom to do what, under which constraints, and how that authority can be attenuated. OAuth, ZCAP-LD, AP2, Verifiable Intent, Vouch, and host policy engines live in that authorization layer.
+Delegation and capability protocols answer a different question: who may ask whom to do what, under which constraints, and how that authority can be attenuated. OAuth, AAuth, x401, ZCAP-LD, AP2, Verifiable Intent, Vouch, and host policy engines live in that authorization layer.
 
 The intended boundary:
 
@@ -19,6 +19,7 @@ The intended boundary:
 | ---------------------- | ------------------------------------------------------------------------------------------- | -------------- |
 | Authorization protocol | Issue grants, tokens, mandates, capability chains, or delegation credentials                | External input |
 | Host runtime           | Enforce access before a tool runs                                                           | External input |
+| Atrib product/runtime adapter | Present host policy decisions, signed action records, handoffs, and verifier results as one action surface | Native product layer |
 | atrib producer         | Sign the action and optionally capture selected evidence                                    | Native         |
 | atrib verifier         | Verify record signatures, graph structure, evidence blocks, and capability-envelope signals | Native         |
 | Consumer policy        | Decide whether the evidence is enough                                                       | External input |
@@ -29,17 +30,18 @@ atrib should offer native support for delegation and capability systems at the v
 
 - `verifyRecord()` accepts generic `evidence[]` blocks for authorization and delegation evidence.
 - Evidence blocks expose `valid`, `protocol`, `issuer`, `subject`, `scope`, `attenuation_ok`, `delegation_ok`, `constraints`, `errors`, and `warnings`.
-- `@atrib/mcp` can capture MCP/OAuth evidence from already-validated host `authInfo` into local sidecar material.
-- `@atrib/verify` can check OAuth / MCP claims, MCP protected-resource binding, scope attenuation, authorization details, DPoP proof material, and caller-supplied introspection results.
+- `@atrib/mcp` can capture MCP/OAuth evidence from already-validated host `authInfo`, AAuth callback evidence, and opt-in x401 proof headers plus caller-owned verifier facts into local sidecar material.
+- `@atrib/verify` can check OAuth / MCP claims, MCP protected-resource binding, scope attenuation, authorization details, DPoP proof material, caller-supplied introspection results, AAuth token facts, HTTP signature facts, x401 proof-gate shape, and caller-supplied x401 credential, origin, issuer-trust, and proof-payment binding outcomes.
 - Directory identity claims may declare capability envelopes. Verifiers flag out-of-envelope records as signals, not as record-validity failures.
 
-This is native support for assessing external authority. It is not native issuance or enforcement of authority.
+This is native support for assessing external authority and presenting it beside signed action evidence. It is not native issuance or enforcement of authority.
 
 ## What atrib should not do now
 
 atrib should not become a delegation protocol by default.
 
 - It should not mint OAuth tokens, ZCAP chains, Vouch credentials, AP2 mandates, or Verifiable Intent credentials.
+- It should not verify x401 credentials by silently calling issuers, trust registries, Credential Managers, or result-by-reference URLs.
 - Runtime tool access belongs to the host runtime.
 - `verifyRecord()` should not call introspection endpoints. The caller owns network policy, secrets, trust roots, and timeouts.
 - Authorization evidence should stay outside base record validity. A record can be cryptographically valid while its authorization evidence is missing, weak, stale, or failed.
@@ -65,12 +67,14 @@ Until then, the correct product move is adapters and evidence projection, not a 
 | System                  | What it contributes                                                           | How atrib composes                                                                                                               |
 | ----------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | OAuth / MCP             | Tokens, scopes, protected-resource metadata, DPoP, introspection              | Verify as `mcp_oauth` evidence, capture selected host facts, keep raw tokens local                                               |
+| AAuth                   | Agent/resource/auth tokens, missions, HTTP signatures, AAuth-Access          | Verify as `aauth` evidence, capture selected callback facts, keep raw JWTs local                                                 |
+| x401                    | Route-specific proof requirements for credential-gated HTTP routes           | Verify as `x401` evidence, capture proof headers, show proof-gate status, record optional caller-owned origin, issuer-trust, and proof-payment binding outcomes, keep credential payloads local |
 | AP2 / Verifiable Intent | Mandates, receipts, intent credentials, payment authorization evidence        | Verify as AP2 / VI evidence off the transaction detector path                                                                    |
 | ZCAP-LD                 | Capability delegation and attenuation                                         | Candidate evidence adapter when an integrator brings real artifacts                                                              |
 | Vouch                   | Agent identity, intent attestation, heartbeat, and delegation-chain claims    | Candidate evidence adapter if implementation usage appears                                                                       |
 | AINS                    | Agent discovery, endpoints, capability metadata, and registry trust opinions  | Candidate resolver input for directory claims, `resolvedFacts`, or optional evidence blocks; trust scores stay external opinions |
 | UPIP                    | Process-state fork tokens, capability requirements, and continuation evidence | Candidate evidence inside continuation packets or archive bodies; does not replace `informed_by` handoff                         |
-| Host policy engine      | Runtime enforcement before tools execute                                      | Produces local facts and evidence; atrib records and verifies after the fact                                                     |
+| Host policy engine      | Runtime enforcement before tools execute                                      | Produces local facts and evidence; atrib records, verifies, and can present the control point beside the action trail            |
 
 ## Follow-up
 
@@ -79,5 +83,5 @@ A hosted Cloudflare Worker / Durable Object reference for shared DPoP replay-cac
 ## See also
 
 - Spec: [§5.5.6](../../atrib-spec.md#556-generic-authorization-evidence-blocks), [§6.7](../../atrib-spec.md#67-capability-declarations), [§8.7](../../atrib-spec.md#87-adversarial-threat-model)
-- Decisions: [D051 Capability-scoped records](../../DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes), [D109 MCP/OAuth evidence](../../DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks), [D110 producer capture](../../DECISIONS.md#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop), [D111 host-owned OAuth evidence infrastructure](../../DECISIONS.md#d111-host-owned-oauth-evidence-infrastructure)
+- Decisions: [D051 Capability-scoped records](../../DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes), [D109 MCP/OAuth evidence](../../DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks), [D110 producer capture](../../DECISIONS.md#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop), [D111 host-owned OAuth evidence infrastructure](../../DECISIONS.md#d111-host-owned-oauth-evidence-infrastructure), [D119 AAuth evidence](../../DECISIONS.md#d119-aauth-evidence-stays-verifier-side), [D132 x401 evidence](../../DECISIONS.md#d132-x401-proof-evidence-stays-verifier-side-authorization-evidence), [D134 x401 propagation](../../DECISIONS.md#d134-x401-producer-capture-and-propagation-stay-sanitized)
 - Concepts: [The trust model](06-trust-model.md), [Identity & the directory](03-identity-and-directory.md), [Payments integration](08-payments-integration.md), [TIBET and Humotica crosswalk](14-tibet-humotica-crosswalk.md)

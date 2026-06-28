@@ -1,6 +1,6 @@
 # @atrib/primitives-runtime
 
-Private local MCP runtime for atrib dogfood.
+Private local MCP runtime for Atrib's verifiable action layer dogfood.
 
 `atrib-primitives` mounts the seven public cognitive-primitive MCP packages in process and exposes their 15 physical tools through one local runtime. It supports direct stdio for compatibility, Streamable HTTP for host-owned dogfood configs that should share one primitive backend across active threads for the same agent profile, and stdio-to-HTTP proxy mode for clients that only support stdio MCP.
 

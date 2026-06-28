@@ -1,6 +1,6 @@
 # Integration patterns (runtime adapters)
 
-> atrib's SDK can attach to an agent runtime in six structurally distinct ways. Each has different trust/observability trade-offs. Knowing which pattern your runtime supports tells you exactly what kind of atrib integration is available.
+> atrib's SDK can attach to an agent runtime in six structurally distinct ways. Each has different trust, control, and observability trade-offs. Knowing which pattern your runtime supports tells you exactly what kind of atrib integration is available.
 
 **Status**: STUB
 **Spec anchors**: [§9 Harness Integration Patterns](../../atrib-spec.md#9-harness-integration-patterns) · [D069](../../DECISIONS.md)
@@ -9,20 +9,21 @@
 
 ## What this teaches
 
-The six-pattern integration taxonomy (per [D069](../../DECISIONS.md)) — what each pattern looks like, where the signing happens, what it observes, and which agent frameworks each pattern fits.
+The six-pattern integration taxonomy (per [D069](../../DECISIONS.md)): what each pattern looks like, where the signing happens, where host policy can run before execution, what it observes, and which agent frameworks each pattern fits.
 
 ## What to cover when this gets written
 
 The six patterns, briefly:
-- **Pattern 1: MCP middleware** (the `@atrib/mcp-wrap` and `@atrib/mcp` packages). Wraps an MCP server; signs every tool call at the protocol layer; agent doesn't know atrib exists.
+- **Pattern 1: MCP middleware** (the `@atrib/mcp-wrap` and `@atrib/mcp` packages). Wraps an MCP server; can gate a call before execution; signs every successful tool call at the protocol layer; agent doesn't know atrib exists.
 - **Pattern 2: Host-side framework adapter** (the `@atrib/agent` package). Wraps the agent's MCP client at the framework boundary; signs from the caller's side.
-- **Pattern 3: Callback / hook adapter**. Framework provides a tool-execution hook; atrib's adapter is registered and signs each call.
+- **Pattern 3: Callback / hook adapter**. Framework provides a tool-execution hook; atrib's adapter is registered and can sign policy decisions, approvals, tool outcomes, or rejected calls.
 - **Pattern 4: OpenInference SpanProcessor** (the `@atrib/openinference` package). Consumes OpenInference-shaped OpenTelemetry spans; emits signed records. Transitively reaches 20+ agent frameworks via OTel.
 - **Pattern 5: Post-hoc replay**. Replay a recorded trace through atrib's signing pipeline after the fact. For systems where in-line signing isn't feasible.
 - **Pattern 6: Streaming**. The signing pipeline operates on a streaming event source from the agent runtime.
 - For each pattern: which agent frameworks fit (Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS, etc.)
 - The six-pattern decision tree: how to pick the right pattern for a given runtime
 - The trust trade-offs: where signing happens determines what kinds of compromise atrib defends against
+- The action-layer trade-offs: only runtimes with pre-call hooks, middleware, or policy callbacks can use atrib as a control point before a high-impact action runs
 - Worked example: take one runtime (say, Claude Agent SDK in Case A) and trace which pattern its `@atrib/agent` adapter implements and why
 
 ## See also

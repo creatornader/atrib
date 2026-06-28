@@ -5,6 +5,8 @@
 **Builds on**: [Integration patterns](10-integration-patterns.md), [The chain](04-the-chain.md), [The six cognitive primitives](11-cognitive-primitives.md)
 **Enables**: host-owned process control for startup-spawn agents, long-lived local assistants, and watcher WAL pipelines
 
+The coordinator is not the product by itself, but it is one implementation path for the productized action layer: host-owned processes can sign decisions, preserve chain state, join receipts, and keep cross-session context healthy while the runtime still owns execution and policy.
+
 ## The Problem
 
 atrib has several valid ways to sign records today: in-process middleware, CLI helpers, stdio MCP servers, hook scripts, and local watchers. Those paths work, but dogfood has exposed a host-level coordination problem:

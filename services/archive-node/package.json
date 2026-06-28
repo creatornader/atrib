@@ -1,7 +1,7 @@
 {
   "name": "@atrib/archive-node",
   "version": "0.1.33",
-  "description": "atrib spec §2.12 record body archive HTTP service",
+  "description": "Record Body Archive service for Atrib's verifiable action layer. Stores opt-in record bodies and verifier evidence.",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",

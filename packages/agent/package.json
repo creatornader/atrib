@@ -13,7 +13,7 @@
   "files": [
     "dist"
   ],
-  "description": "Agent middleware for atrib. Interceptor plus framework adapters for MCP attribution. Supports raw SDK, Claude Agent SDK, Cloudflare Agents, Vercel AI SDK, LangChain JS.",
+  "description": "Client-side middleware for Atrib's verifiable action layer. Adds chain context, gap records, and transaction fallback records across MCP framework adapters.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

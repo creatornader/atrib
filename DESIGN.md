@@ -6,7 +6,7 @@ Last updated: 2026-05-25
 
 ## Purpose
 
-atrib makes agent activity verifiable. The design system should make that idea feel concrete: not a vague AI platform, not a crypto dashboard, not an observability clone. The interface should feel like a signed receipt becoming part of a chain.
+atrib makes agent activity verifiable. Productized atrib is a verifiable action layer for agents: control what runs, coordinate what carries forward, and prove what happened. The design system should make that idea feel concrete: not a vague AI platform, not a crypto dashboard, not an observability clone. The interface should feel like signed evidence entering a chain and becoming usable by the next agent, team, or verifier.
 
 This document is the design source of truth for the public atrib product surface: the website, explorer, protocol docs, package READMEs, share images, and operator-facing status/error states that users see. It has two jobs:
 
@@ -20,7 +20,7 @@ Do not treat this as only an inventory. A useful design system preserves the cur
 This direction synthesizes six input streams:
 
 - Current atrib surfaces: `atrib.dev`, `explore.atrib.dev`, protocol docs, package docs, the public explorer, and CI/deploy status surfaces.
-- atrib product language: "Verifiable agent actions", "Every action becomes signed context for the next", and "Agents that reason from a past they can prove."
+- atrib product language: "Verifiable agent actions", "Every action becomes signed context for the next", "Agents that reason from a past they can prove", and "A verifiable action layer for agents: control what runs, coordinate what carries forward, and prove what happened."
 - Design-reference synthesis from 2026-05-25, reduced to product principles rather than copied references.
 - Public writing about agent-readable design rules, including Google Labs' Stitch `DESIGN.md` notes.
 - Prior work in the sibling website repo, where the first website-oriented atrib design contract was drafted.
@@ -69,11 +69,19 @@ Canonical tagline:
 Agents that reason from a past they can prove.
 ```
 
-Use these lines exactly unless the protocol positioning changes in `CLAUDE.md`, `README.md`, and `atrib-spec.md` in the same change.
+Canonical product frame:
+
+```text
+A verifiable action layer for agents: control what runs, coordinate what carries forward, and prove what happened.
+```
+
+Use these lines exactly unless the protocol positioning changes in `CLAUDE.md`, `README.md`, and `atrib-spec.md` in the same change. The first three lines define the protocol identity. The product frame defines the commercial surface above it.
 
 ## Design Intent
 
 Scene: a developer is checking whether an agent really did what it claims. The room is dim, the screen is a record surface, and every colored mark should imply evidence rather than decoration.
+
+Product posture: the surface should show action-layer control, coordination, and proof. It should not present atrib as only a passive receipt archive or as a replacement for the runtime, policy engine, memory system, or authorization provider.
 
 Feel:
 
@@ -108,22 +116,23 @@ Still underdesigned:
 
 - The landing page and explorer feel related, but not yet like one product.
 - The explorer has product structure, but its hierarchy still reads closer to an internal tool than a public verification surface.
-- The receipt chain is present as an idea, but not yet strong enough as a visual grammar across all surfaces.
+- The verifiable action layer is now present as product language, but the UI still needs to make control, coordination, and proof feel like one workflow.
 - Docs and package READMEs do not yet carry the same visual and writing system.
 - Open Graph and touch-icon assets now use the same amber seal, near-black canvas, and signed-graph language across `atrib.dev` and `explore.atrib.dev`.
 - CI smoke now catches slow endpoints, but the product does not yet keep historical latency trends or alert routes.
 
 ## North Star
 
-atrib should feel like the canonical place to inspect signed agent activity.
+atrib should feel like the canonical place to control, coordinate, and inspect signed agent activity.
 
-The product should make three things legible within a few seconds:
+The product should make four things legible within a few seconds:
 
+- What is allowed, blocked, or escalated before an action runs.
 - What was signed.
-- What it was chained to.
+- What it was chained to and what carries forward.
 - How to verify it without trusting atrib.
 
-The strongest version of the system is not a prettier dark dashboard. It is a receipt-native interface language: seals, hashes, event labels, proofs, graph paths, and raw records arranged so a technical person can move from claim to evidence without losing context.
+The strongest version of the system is not a prettier dark dashboard. It is an action-native interface language: policy decisions, seals, hashes, event labels, proofs, graph paths, and raw records arranged so a technical person can move from proposed action to signed evidence without losing context.
 
 North-star qualities:
 
@@ -170,7 +179,7 @@ Package READMEs:
 
 - Job: help builders install the right integration.
 - Current focus: package-specific accuracy.
-- Target state: every README should follow the same adoption rhythm: install, wrap or sign, verify, inspect.
+- Target state: every README should follow the same adoption rhythm: install, wrap or sign, control or coordinate where relevant, verify, inspect.
 
 Share images:
 
@@ -236,7 +245,7 @@ This inventory is grounded in `apps/dashboard/index.html` as of 2026-05-25. Upda
 
 ### Documentation system
 
-- [ ] Create README writing patterns for install, sign, verify, inspect.
+- [ ] Create README writing patterns for install, sign, control or coordinate, verify, inspect.
 - [ ] Update package READMEs to use the same verbs and proof language.
 - [ ] Add diagram rules for protocol docs.
 - [ ] Define how much visual design belongs in docs versus the explorer.

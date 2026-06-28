@@ -1,6 +1,6 @@
 {
   "name": "atrib",
-  "description": "Verifiable agent actions: every action becomes signed context for the next.",
+  "description": "Verifiable agent actions. A verifiable action layer for agents: control what runs, coordinate what carries forward, and prove what happened.",
   "private": true,
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

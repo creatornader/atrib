@@ -13,7 +13,7 @@
   "files": [
     "dist"
   ],
-  "description": "OpenTelemetry SpanProcessor for atrib. Reads OpenInference-shaped spans and emits signed atrib records on a parallel pipeline. One integration reaches every framework with OpenInference instrumentation.",
+  "description": "OpenTelemetry SpanProcessor for Atrib's verifiable action layer. Emits signed records from OpenInference-shaped spans.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

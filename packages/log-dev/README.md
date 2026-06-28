@@ -10,7 +10,7 @@
 
 Three concrete use cases. None of them are "running a real attribution log."
 
-1. **Local development of atrib agents and merchants.** When building an agent or merchant integration, you want to point `ATRIB_LOG_ENDPOINT` at _something_ so the submission queue doesn't silently buffer pending records or warn about an unreachable endpoint. This stub is that something.
+1. **Local development of atrib agents, action gates, and merchants.** When building an agent, policy-control, or merchant integration, you want to point `ATRIB_LOG_ENDPOINT` at _something_ so the submission queue doesn't silently buffer pending records or warn about an unreachable endpoint. This stub is that something.
 
 2. **End-to-end demos and developer walkthroughs.** The runnable demo at [`packages/integration/examples/end-to-end/`](../integration/examples/end-to-end/) uses `@atrib/log-dev` so a viewer can run **`pnpm --filter @atrib/integration demo`** and watch real attribution records flow through a fake merchant tool, an agent, and a stubbed x402 payment, all in a single process, without standing up Tessera first. The visible behavior is faithful (real signatures, real chain hashes, real transaction detection) even though the cryptographic guarantees of the log itself are not.
 
