@@ -106,7 +106,7 @@
     "@opentelemetry/exporter-trace-otlp-proto": "^0.219.0",
     "@opentelemetry/sdk-trace-base": "^2.8.0",
     "@opentelemetry/semantic-conventions": "^1.41.1",
-    "@proof.com/x401-node": "0.2.0",
+    "@proof.com/x401-node": "github:creatornader/x401-node#338b785ac60b6021873d384a916fd405f561915a",
     "@types/node": "^25.9.3",
     "ai": "^6.0.205",
     "browser-use": "0.7.3",

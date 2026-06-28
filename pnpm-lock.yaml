@@ -270,8 +270,8 @@ importers:
         specifier: ^1.41.1
         version: 1.41.1
       '@proof.com/x401-node':
-        specifier: 0.2.0
-        version: 0.2.0
+        specifier: github:creatornader/x401-node#338b785ac60b6021873d384a916fd405f561915a
+        version: https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a
       '@types/node':
         specifier: ^25.9.3
         version: 25.9.3
@@ -2751,8 +2751,9 @@ packages:
   '@posthog/types@1.382.0':
     resolution: {integrity: sha512-iK4OcSgvtmS9FZ9EUpvwlRZmHCLXaZ3+6dbRjkE7q9LL0zHLewxJH84H6uGvCw8aGzxs5rIliZqPHgimTcQEaw==}
 
-  '@proof.com/x401-node@0.2.0':
-    resolution: {integrity: sha512-JuIUWLpvUeblINuCqmkKRcWT6Pm1UgYX3v48e1YluRFb1prr4bux2D1lbTvj+RrbG/M+WdBAYka/MpfP9oUVEQ==}
+  '@proof.com/x401-node@https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a':
+    resolution: {tarball: https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a}
+    version: 0.2.0
     engines: {node: '>=22.0.0'}
 
   '@protobufjs/aspromise@1.1.2':
@@ -9504,7 +9505,7 @@ snapshots:
 
   '@posthog/types@1.382.0': {}
 
-  '@proof.com/x401-node@0.2.0':
+  '@proof.com/x401-node@https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a':
     dependencies:
       '@owf/identity-common': 0.3.0
 

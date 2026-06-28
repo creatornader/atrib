@@ -7211,18 +7211,20 @@ this work: `proof/x401`, `proof/x401-node`, `proof/proof-vc-common`,
 `proof/proof-vc-web`, and `proof/verifier-vcp-demo`. The hosted x401 spec and
 `proof/x401` spec use the current v0.2 header names: `PROOF-REQUEST`,
 `PROOF-RESPONSE`, `PROOF-RESULT`, and `credential_requirements.digital`.
-`proof/x401-node` and the demo surfaces still lag on older draft names. That
-drift means atrib can target the current spec locally, but should not claim
-Proof SDK interop until the Node package or a pinned upstream commit matches
-the current header semantics.
+The published `@proof.com/x401-node@0.2.0` package and demo surfaces still lag
+on older draft names. That drift means atrib can target the current spec
+locally, but should not claim live npm Proof SDK interop until Proof publishes a
+Node package that matches the current header semantics.
 
-Follow-up on 2026-06-28: the published `@proof.com/x401-node@0.2.0` package is
-now pinned only inside the private `@atrib/integration` package. The fixture
-imports the real SDK verifier and agent helpers, runs their legacy
-`PROOF-REQUIRED` / `PROOF-PRESENTATION` flow, translates the result into hosted
-current-spec `PROOF-REQUEST` / `PROOF-RESPONSE` evidence, and proves strict
-current-spec verification rejects the raw legacy SDK headers. This closes the
-runtime adapter gap without making a native current-spec SDK claim.
+Follow-up on 2026-06-28: atrib opened
+[proof/x401-node#7](https://github.com/proof/x401-node/pull/7), which updates
+the Node SDK to `PROOF-REQUEST`, `PROOF-RESPONSE`, `PROOF-RESULT`,
+`credential_requirements.digital`, and Result Artifact helpers. The private
+`@atrib/integration` package pins that fork commit so its runtime fixture imports
+a real Proof SDK implementation, runs the current-spec verifier and agent
+helpers natively, and proves strict current-spec atrib verification rejects raw
+legacy headers. This closes pinned native Proof SDK interop. It does not claim
+that the live npm package has caught up.
 
 **Decision.** Add an opt-in producer capture path and a local proof-gate E2E
 harness, while keeping x401 as verifier evidence and keeping raw credential
@@ -7264,8 +7266,9 @@ wire SDK dependency, `proof/proof-vc-common` as a credential-verifier helper,
 `proof/proof-vc-web` as browser-demo scope, and `proof/verifier-vcp-demo` as a
 reference demo. A public package or core runtime dependency is allowed only when
 `proof/x401-node` uses the current header and payload names without legacy x401
-wire names. A private integration fixture may pin a lagging SDK when the adapter
-marks the translation boundary and emits current-spec atrib evidence.
+wire names. A private integration fixture may pin a current-spec upstream or
+fork commit before an npm release. A lagging SDK may only be pinned when the
+adapter marks the translation boundary and emits current-spec atrib evidence.
 
 The x401 conformance corpus lives at `spec/conformance/5.5.6/x401/`. It pins
 current headers, result artifacts, token responses, result-by-reference,
@@ -7289,6 +7292,10 @@ panel scoped to the `/v1/lookup` log response.
   meaning for `PROOF-RESPONSE`. The private integration package may pin it as a
   compatibility fixture because that fixture translates into current-spec
   evidence and does not make the SDK part of atrib core.
+- _Claim live npm Proof SDK interop from a fork commit._ Rejected. The forked
+  commit proves native current-spec interop with a pinned Proof SDK
+  implementation and gives Proof an upstream PR to review. It does not change
+  what `npm install @proof.com/x401-node@0.2.0` returns.
 - _Treat the local proof gate as upstream interop._ Rejected. The harness proves
   atrib's capture, signing, verification, archive, and Explorer path against
   current x401 semantics. It does not prove compatibility with a Proof SDK
@@ -7310,11 +7317,11 @@ panel scoped to the `/v1/lookup` log response.
   `context_id`, not as a combined request format.
 - x401 can be verified beside AAuth on the same action, while payment detection
   remains separate and protocol-specific.
-- atrib can now claim private Proof SDK runtime adapter coverage for
-  `@proof.com/x401-node@0.2.0`. It still cannot claim native current-spec Proof
-  SDK interop. The upstream bar is a fixture-backed issue or PR that helps sync
-  current header names, test vectors, agent-origin binding, request id
-  propagation, issuer trust roots, or result-by-reference behavior.
+- atrib can now claim pinned native Proof SDK runtime interop against
+  `creatornader/x401-node@338b785`, with
+  [proof/x401-node#7](https://github.com/proof/x401-node/pull/7) opened
+  upstream. It still cannot claim live npm `@proof.com/x401-node@0.2.0`
+  readiness until Proof publishes the current-spec package.
 - Credential verification remains host-owned or Proof-verifier-owned. atrib
   accepts the verification outcome, optional origin outcome, optional issuer
   trust outcome, and optional proof-payment binding outcome as external evidence
@@ -7329,9 +7336,9 @@ panel scoped to the `/v1/lookup` log response.
 - [`packages/integration/src/x401-proof-gate.ts`](packages/integration/src/x401-proof-gate.ts),
   local current-spec proof-gate harness.
 - [`packages/integration/src/proof-x401-node-runtime.ts`](packages/integration/src/proof-x401-node-runtime.ts),
-  private runtime adapter fixture for the published Proof x401 Node SDK.
+  private native runtime fixture for the pinned Proof x401 Node SDK commit.
 - [`packages/integration/scripts/proof-x401-node-runtime-interop.ts`](packages/integration/scripts/proof-x401-node-runtime-interop.ts),
-  runnable SDK adapter proof.
+  runnable SDK native interop proof.
 - [`spec/conformance/5.5.6/x401/`](spec/conformance/5.5.6/x401/), x401
   authorization evidence corpus.
 - [`services/archive-node/src/server.ts`](services/archive-node/src/server.ts),

@@ -9,7 +9,7 @@ This document maps the current Proof x401 issue and PR surface to atrib's local 
 | Repo                      | Current use for atrib                                   | Upstream posture                                                                                |
 | ------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `proof/x401`              | Current spec source and issue/PR surface.               | Track first. Any upstream contribution should target this repo unless the change is SDK-only.   |
-| `proof/x401-node`         | Private SDK adapter fixture target.                     | Keep out of core/public runtime deps until the package exposes the hosted current header names. |
+| `proof/x401-node`         | Pinned private SDK fixture target and upstream PR.       | Keep out of core/public runtime deps until npm exposes the hosted current header names.         |
 | `proof/proof-vc-common`   | Possible future credential-verifier fixture helper.     | Use only for Proof-specific E2E once x401 header semantics are stable.                          |
 | `proof/proof-vc-web`      | Credential Manager and browser UX reference.            | Not part of atrib core.                                                                         |
 | `proof/verifier-vcp-demo` | Demo reference for Proof's own route and verifier flow. | Reference only until it updates from old x401 package shapes.                                   |
@@ -26,7 +26,7 @@ The command classifies each Proof repo by role. Only a current-spec x401 wire SD
 
 | Thread                                                                                                 | Proof question                                                                                                          | atrib side                                                                                                                                                                                                                                                                                                                                                        | Upstream contribution path                                                                                                                          |
 | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [proof/x401#21](https://github.com/proof/x401/issues/21), Generalize to Request and Response           | Rename draft headers to `PROOF-REQUEST`, `PROOF-RESPONSE`, and `PROOF-RESULT`.                                          | Implemented. `@atrib/verify`, the x401 corpus, the producer capture helper, and the local proof-gate harness use the current names. The private `@proof.com/x401-node@0.2.0` adapter fixture runs the published SDK and translates its legacy output into current-spec evidence. Legacy names are accepted only as drift guards unless strict mode disables them. | After `x401-node` updates, add or propose SDK test vectors for the three current headers.                                                           |
+| [proof/x401#21](https://github.com/proof/x401/issues/21), Generalize to Request and Response           | Rename draft headers to `PROOF-REQUEST`, `PROOF-RESPONSE`, and `PROOF-RESULT`.                                          | Implemented. `@atrib/verify`, the x401 corpus, the producer capture helper, and the local proof-gate harness use the current names. The private SDK fixture now pins `creatornader/x401-node@338b785` from [proof/x401-node#7](https://github.com/proof/x401-node/pull/7) and runs the current-spec Proof SDK helpers natively. Legacy names are accepted only as drift guards unless strict mode disables them. | Track [proof/x401-node#7](https://github.com/proof/x401-node/pull/7). Add more SDK test vectors if upstream asks for smaller follow-ups.             |
 | [proof/x401#29](https://github.com/proof/x401/issues/29), Multi-endpoint Requests                      | Decide how an agent handles many proof-gated endpoints, either delegated credentials or combined on-behalf-of requests. | Locally addressed by composition, not by inventing x401 semantics. `runX401MultiEndpointHarness()` records each endpoint action and its x401 evidence as separate signed records in one `context_id`, then links follow-up records through `informed_by`. Combined request formats stay upstream-owned.                                                           | Ask for request id, endpoint id, audience, and replay rules for multi-endpoint flows. Add fixture vectors once the request-composition shape lands. |
 | [proof/x401#22](https://github.com/proof/x401/issues/22), Agent-asserted origin for middleman handling | Define how an agent or middleman asserts origin.                                                                        | Locally addressed as caller-owned verifier facts. atrib signs the action with `creator_key`, can require `expectedAgentId`, can record `agentOriginVerified`, hashes origin references in public details, and binds successful actions to prior attempts. It does not claim HTTP Origin semantics.                                                                | Propose guidance for binding `agent_id`, asserted origin, request id, and proof response. Atrib can provide the external audit-log pattern.         |
 | [proof/x401#20](https://github.com/proof/x401/issues/20), Issuer trust list generalization             | Avoid locking trust lists to one DIF shape.                                                                             | Locally addressed as caller-owned verifier facts. `@atrib/verify` accepts `issuerTrustVerified`, `issuerTrustRootType`, and a hashed `issuerTrustRootRef` after the host or Proof verifier evaluates issuer trust. atrib stores the accepted outcome and safe hashes, not the trust registry itself.                                                              | Ask upstream which trust-root fields should become canonical. Do not hard-code DIF, TRQP, OpenID Federation, ETSI, or AKI inside atrib.             |
@@ -51,15 +51,17 @@ The atrib side is done for current-spec local E2E when one command proves:
 - the Explorer shows proof-gate status and payment separation;
 - optional AAuth, AP2 / VI, or x402 evidence remains separate from x401 semantics.
 
-The Proof SDK runtime adapter bar is now met for the published Node package: the private integration fixture imports `@proof.com/x401-node@0.2.0`, runs its real verifier and agent helpers, translates its older `PROOF-REQUIRED` / `PROOF-PRESENTATION` objects into hosted current-spec `PROOF-REQUEST` / `PROOF-RESPONSE` evidence, verifies the resulting atrib action chain, and proves strict current-spec verification rejects the raw legacy headers.
+The pinned native Proof SDK bar is now met for a current-spec Node implementation: the private integration fixture imports `@proof.com/x401-node` from `github:creatornader/x401-node#338b785ac60b6021873d384a916fd405f561915a`, runs its real verifier and agent helpers, emits `PROOF-REQUEST` and `PROOF-RESPONSE` directly, verifies the resulting atrib action chain, and proves strict current-spec verification rejects raw legacy headers.
 
-Run that adapter fixture with:
+Run that native fixture with:
 
 ```bash
 pnpm --filter @atrib/integration proof-x401-node-runtime-interop
 ```
 
-The native Proof-side interop bar is still higher. Do not claim native current-spec Proof SDK interop until a fixture runs against a current-spec `proof/x401-node` or another pinned Proof implementation that uses the same header and payload names as the hosted spec. For `@proof.com/x401-node@0.2.0`, `proof-x401-node-runtime-interop -- --require-current-evidence` should pass, while `proof-x401-node-runtime-interop -- --require-native-current-spec` should fail.
+Use `-- --require-native-current-spec --require-current-evidence` when a check should fail unless the pinned SDK is current-spec and the resulting atrib evidence verifies.
+
+The live npm Proof-side interop bar is still higher. Do not claim live npm current-spec Proof SDK interop until `@proof.com/x401-node` itself publishes the current header and payload names. The pinned fixture can pass while the live npm readiness guard below still fails.
 
 Run the live readiness guard before changing that claim:
 
@@ -71,7 +73,11 @@ The command prints the latest `@proof.com/x401-node` compatibility report from n
 
 ## Upstream Draft
 
-Candidate issue or PR title:
+Upstream PR:
+
+- [proof/x401-node#7](https://github.com/proof/x401-node/pull/7), `fix: sync current x401 wire names`.
+
+Original candidate issue or PR title:
 
 ```text
 fix: sync x401-node examples with current proof headers

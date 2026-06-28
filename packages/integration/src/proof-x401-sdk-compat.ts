@@ -225,7 +225,7 @@ export function classifyProofX401NodeReadme(
     found_legacy_payload_markers: foundLegacyPayloadMarkers,
     recommendation: compatible
       ? 'Proof x401 Node SDK appears aligned with current x401 header and payload names.'
-      : 'Do not claim native current-spec Proof SDK interop. Keep any pinned SDK use behind the private adapter until the SDK exposes current header and payload names.',
+      : 'Do not claim live npm current-spec Proof SDK interop. Keep live package use behind a private adapter or pin a current-spec upstream commit until npm exposes current header and payload names.',
   }
 }
 
@@ -287,7 +287,7 @@ export function classifyProofRepoSurface(input: ProofRepoSurfaceInput): ProofRep
       evidence,
       requiredNextStep: sdk.compatible_with_current_spec
         ? 'Pin a Proof SDK fixture and run the local proof-gate harness against it.'
-        : 'Do not use this SDK as a public package or core runtime dependency yet. Keep private fixture use behind the adapter and sync constants, payload types, examples, and tests to current x401 header names first.',
+        : 'Do not use this SDK as a public package or core runtime dependency yet. Use a private adapter for live legacy packages, or pin a current-spec upstream commit and sync constants, payload types, examples, and tests to current x401 header names first.',
       recommendation: sdk.recommendation,
     })
   }
