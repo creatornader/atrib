@@ -20,7 +20,7 @@ describe('Proof x401 SDK compatibility classifier', () => {
     expect(report.missing_current_headers).toEqual(['PROOF-REQUEST', 'PROOF-RESULT'])
     expect(report.found_legacy_headers).toEqual(['PROOF-REQUIRED', 'PROOF-PRESENTATION'])
     expect(report.found_legacy_payload_markers).toContain('presentation_requirements')
-    expect(report.recommendation).toContain('Do not claim Proof SDK interop')
+    expect(report.recommendation).toContain('Do not claim native current-spec Proof SDK interop')
   })
 
   it('accepts current x401 header and result artifact semantics', () => {
@@ -42,4 +42,3 @@ describe('Proof x401 SDK compatibility classifier', () => {
     expect(report.found_legacy_headers).toEqual([])
   })
 })
-

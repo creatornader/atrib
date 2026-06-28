@@ -269,6 +269,9 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.41.1
         version: 1.41.1
+      '@proof.com/x401-node':
+        specifier: 0.2.0
+        version: 0.2.0
       '@types/node':
         specifier: ^25.9.3
         version: 25.9.3
@@ -2715,6 +2718,9 @@ packages:
     resolution: {integrity: sha512-/UhIkaZgPutTFmQ7RnIJGgDXZmtEJ7Dvi86xNTFWcnRxVRNk/aotsqDJYeEvDP+FSMB2SdW+pQzNMcWP0rwuNA==}
     engines: {node: '>=14'}
 
+  '@owf/identity-common@0.3.0':
+    resolution: {integrity: sha512-Ot+T8zHqb9cPqPdHL2edRXjWtRLng95N+auhb9TZq+Jy4HxjRzBUMVnB0wzeV5GCgoIkINcHAeLXFMsHs77hVQ==}
+
   '@oxc-project/types@0.133.0':
     resolution: {integrity: sha512-KzkdCd6Uxqnf6l3HOw1xfatAlUURA0g14cvBYFyJ5SaNOQbOUvBr9PKArcPcrNIeRsBdgcUzOGrhKveVpvOIGA==}
 
@@ -2744,6 +2750,10 @@ packages:
 
   '@posthog/types@1.382.0':
     resolution: {integrity: sha512-iK4OcSgvtmS9FZ9EUpvwlRZmHCLXaZ3+6dbRjkE7q9LL0zHLewxJH84H6uGvCw8aGzxs5rIliZqPHgimTcQEaw==}
+
+  '@proof.com/x401-node@0.2.0':
+    resolution: {integrity: sha512-JuIUWLpvUeblINuCqmkKRcWT6Pm1UgYX3v48e1YluRFb1prr4bux2D1lbTvj+RrbG/M+WdBAYka/MpfP9oUVEQ==}
+    engines: {node: '>=22.0.0'}
 
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
@@ -9463,6 +9473,8 @@ snapshots:
 
   '@opentelemetry/semantic-conventions@1.41.1': {}
 
+  '@owf/identity-common@0.3.0': {}
+
   '@oxc-project/types@0.133.0': {}
 
   '@pinojs/redact@0.4.0': {}
@@ -9491,6 +9503,10 @@ snapshots:
       '@posthog/types': 1.382.0
 
   '@posthog/types@1.382.0': {}
+
+  '@proof.com/x401-node@0.2.0':
+    dependencies:
+      '@owf/identity-common': 0.3.0
 
   '@protobufjs/aspromise@1.1.2': {}
 

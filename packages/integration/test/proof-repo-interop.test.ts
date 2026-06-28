@@ -31,7 +31,7 @@ describe('Proof repository interop classifier', () => {
     expect(report.runtime_dependency_allowed).toBe(false)
     expect(report.current_spec_wire_ready).toBe(false)
     expect(report.evidence.found_legacy_headers).toEqual(['PROOF-REQUIRED', 'PROOF-PRESENTATION'])
-    expect(report.required_next_step).toContain('Do not depend on this SDK yet')
+    expect(report.required_next_step).toContain('Do not use this SDK as a public package')
   })
 
   it('allows x401-node only when current wire names are present without legacy names', () => {
