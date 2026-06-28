@@ -3,11 +3,11 @@
 This directory holds artifact-first proof runs for external MCP and tool
 platform prospects.
 
-| Proof                                               | Source example                                           | Status                                                                                                                                          |
-| --------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path, Browserbase-shaped demo, and public log inclusion. Fixture mode stays available for local tests.              |
-| [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/` | Live Firecrawl MCP path, fixed-input ingestion demo, and downstream policy decision artifact. Fixture mode stays available for local tests.     |
-| [OpenETR transfer](openetr-transfer/)               | `packages/integration/examples/openetr-transfer/`        | Source-backed OpenETR public-relay fixture recognition path with public log inclusion, signed control records, and signed fixture attestations. |
+| Proof                                               | Source example                                           | Status                                                                                                                                                                                |
+| --------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path, Browserbase-shaped demo, and public log inclusion. Fixture mode stays available for local tests.                                                    |
+| [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/` | Live Firecrawl MCP path, fixed-input ingestion demo, and downstream policy decision artifact. Fixture mode stays available for local tests.                                           |
+| [OpenETR transfer](openetr-transfer/)               | `packages/integration/examples/openetr-transfer/`        | Source-backed OpenETR public-relay recognition path with public log inclusion, signed control records, title-authority evidence, legal/MLETR evidence, and an MLETR source checklist. |
 
 Each artifact keeps public evidence narrow: tool names, hash disclosures, record
 hashes, log indexes, and verifier output. Private upstream payloads stay out of
@@ -44,9 +44,12 @@ transfer-initiate, transfer-accept, and state-query flow, then signs a
 control-record policy decision that stops before recognized title transfer. The
 source-backed public proof runs the pinned upstream Python implementation,
 publishes exact OpenETR events to configured public relays, verifies public
-event availability, signs fixture title-authority and legal/MLETR attestations,
-executes the recognition action, and submits accepted atrib records plus the
-control records to `log.atrib.dev`.
+event availability, verifies title-authority evidence, verifies legal/MLETR
+evidence, writes an MLETR source checklist, executes the recognition action,
+and submits accepted atrib records plus the control records to `log.atrib.dev`.
+The title-authority evidence can be a configured external TTA Nostr event or an
+operator-demo Nostr event. The legal/MLETR evidence can be an external signed
+reviewer attestation or an operator-demo reviewer attestation.
 
 ## Contact drafts
 

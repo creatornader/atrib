@@ -99,19 +99,23 @@ Fourth, a verifier reviews the packet. It checks atrib signatures and log inclus
 
 The result is not "atrib says title transferred." The result is narrower and stronger: "this agent made these signed calls, under this signed policy decision, against this OpenETR control chain, and these external parties supplied this evidence."
 
-The current proof packet follows that rule in two modes. The default fixture
+The current proof packet follows that rule in three modes. The default fixture
 signs the OpenETR-shaped action chain, then signs a control-record policy
 decision that stops before title recognition until public relay evidence,
 title-transfer authority evidence, and legal/MLETR evidence are supplied. The
 source-backed public proof runs the pinned OpenETR implementation, publishes
-exact events to a configured public relay, verifies those events are available,
-signs fixture title-authority and legal/MLETR attestations, resolves controller
-semantics through that authority evidence, executes title recognition, and
-submits the accepted atrib records plus control records to the public log.
+exact events to a configured public relay, and verifies those events are
+available. The recognition step can then use a configured external TTA Nostr
+event, an operator-demo TTA Nostr event, or the legacy deterministic fixture
+attestation. Legal/MLETR evidence follows the same split: external reviewer
+attestation, operator-demo reviewer attestation, or legacy fixture
+attestation.
 
-That full path proves the technical possibility of the evidence bundle. It does
-not prove a real title registry decision, legal advice, or a jurisdictional
-legal conclusion.
+The packet now writes `title-authority-evidence.json`,
+`legal-mletr-evidence.json`, and `mletr-source-checklist.json` alongside the
+signed control-record policy decision. The checklist cites public OpenETR,
+UNCITRAL, and TradeTrust sources as criteria evidence. It does not make atrib a
+title registry, legal reviewer, or MLETR compliance authority.
 
 ## Implementation caution
 
@@ -161,5 +165,6 @@ The positioning sentence:
 - Transfer Validation Guards note: <https://github.com/trbouma/openetr/blob/main/docs/specs/TRANSFER_VALIDATION_GUARDS_DESIGN_NOTE.md>
 - Nostr Silent Payments Spec: <https://github.com/trbouma/openetr/blob/main/docs/specs/NOSTR_SILENT_PAYMENTS_SPEC.md>
 - UNCITRAL MLETR page: <https://uncitral.un.org/en/texts/ecommerce/modellaw/electronic_transferable_records>
+- TradeTrust MLETR title-transfer white paper: <https://www.tradetrust.io/happenings-and-resources/white-paper-transfer-of-model-law-on-electronic-transferable-records-compliant-titles/>
 - Nostr NIP-01: <https://github.com/nostr-protocol/nips/blob/master/01.md>
 - Nostr NIP-33: <https://github.com/nostr-protocol/nips/blob/master/33.md>

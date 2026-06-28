@@ -103,6 +103,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
+    "@noble/secp256k1": "^3.1.0",
     "@openai/agents": "0.11.6",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/context-async-hooks": "^2.8.0",

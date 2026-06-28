@@ -1,11 +1,11 @@
 {
-  "decision_hash": "sha256:a15330b883b5122fb8da0e7ee75e0f3fa07360c64ce3d4997cb17d73be09d70f",
+  "decision_hash": "sha256:c69acf4157e94f86d8cf95a7cdae2d6d6664c1620de26fabb5d07cd3ff36ee36",
   "schema": "atrib.proof_packet.policy_decision.v1",
   "packet": "openetr-transfer",
   "mode": "live",
   "evaluator": "openetr-transfer-policy-v1",
-  "decision": "recognize_title_transfer_with_fixture_attestations",
-  "decision_status": "fixture_evidence_complete",
+  "decision": "recognize_title_transfer_with_operator_demo_evidence",
+  "decision_status": "operator_demo_evidence_complete",
   "proposed_next_action": {
     "action_type": "recognize_transfer",
     "description": "Treat the OpenETR accept event as recognized control transfer.",
@@ -20,19 +20,13 @@
       "openetr_recognize_title_transfer"
     ],
     "record_hashes": [
-      "sha256:10dcfd5dd70069c3bbad66d01e8b1dd1019278cdcb4bcc83c32a47cc2f193239",
-      "sha256:4650779e83aa7700485f92146f1f441d0b4c5a06ff76ffca78246a89444e2282",
-      "sha256:0b9731064b1500502990b9ad45cbe795e0bef43c3625ee98d5fa3feecd32fe73",
-      "sha256:6cc80fd0c7646e75550de7fd3e3d4c309f7c5349f5951f93d689fc857cad7eee",
-      "sha256:2a517d6731303c198dca613ad23f5e27fcebb69bb1091f97674395dbf1d21686"
+      "sha256:6394952c63101e200ef3d70696cb08aa83e4b85a5e91a2ad64fa265993bd5da8",
+      "sha256:398e49b26fd66ec51f19afa33072d935a3f9d803d057fbb6d0c21314e20f03c8",
+      "sha256:39f86c2a63846a0cffaad1cacaf3aefe7446f4edfe41123537b76c2f80dafd2b",
+      "sha256:174749c7c0d00251227651dcd10d0d69b219705da87e476986821552bd8e3f83",
+      "sha256:3802a1db11a84e6514b4a6c01ad6a024a6a22bf1a4e44d5f93e6ec9588e9db5c"
     ],
-    "log_indexes": [
-      67285,
-      67286,
-      67287,
-      67288,
-      67289
-    ],
+    "log_indexes": [67520, 67521, 67522, 67523, 67524],
     "log_mode": "public",
     "log_endpoint": "https://log.atrib.dev/v1/entries",
     "verifier": {
@@ -46,10 +40,7 @@
       "public_records_hash_only": true,
       "private_needles_absent_from_public_records": true
     },
-    "openetr_event_kinds": [
-      31415,
-      31416
-    ],
+    "openetr_event_kinds": [31415, 31416],
     "openetr_source_e2e": {
       "schema": "atrib.openetr.source_local_relay_summary.v1",
       "source": {
@@ -68,8 +59,8 @@
         "openetr_user_config_written": false
       },
       "object": {
-        "digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
-        "document_hash": "sha256:249b5e7b851bac4863174da570d094fe481d704fa04b413cde93cd7acf36004b"
+        "digest_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+        "document_hash": "sha256:207f80c51d5d70e8a3ccb8a5cc1c1247f37907704f6de247c30fa21e18d9855f"
       },
       "parties": {
         "issuer_npub_hash": "sha256:45ed05e260b035d483cc3d666261f179d842287c480b4869fc53076c98d140fb",
@@ -81,53 +72,37 @@
         {
           "role": "origin",
           "kind": 31415,
-          "event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+          "event_id_hash": "sha256:40f0875cfb3719cfe23bffba106d139a0b514d291b03a1901bc68c65eafc306f",
           "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
           "content_hash": "sha256:cedd26997c3b1f1fc6bf2df071538d2aba6db8b6e87fa5001588d6fc3800acac",
-          "tag_names": [
-            "d",
-            "o"
-          ],
+          "tag_names": ["d", "o"],
           "action": null,
-          "object_digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
+          "object_digest_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
           "prior_event_id_hash": null,
           "party_pubkey_hash": null
         },
         {
           "role": "transfer_initiate",
           "kind": 31416,
-          "event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+          "event_id_hash": "sha256:095b2373eb7f038620404f52ad083494f3c3984a9e045a276f49ce10327b6a95",
           "signer_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
-          "content_hash": "sha256:234aad8bd2ba36365b52ff5cd42b23d515c4962b5398943db1a3754e00b19d76",
-          "tag_names": [
-            "d",
-            "o",
-            "e",
-            "origin",
-            "p",
-            "action"
-          ],
+          "content_hash": "sha256:2316575be6d8febae00f39db5cc9cdaea258c603584faee8dfcc7ef9be9f8aa1",
+          "tag_names": ["d", "o", "e", "origin", "p", "action"],
           "action": "initiate",
-          "object_digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
-          "prior_event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+          "object_digest_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+          "prior_event_id_hash": "sha256:40f0875cfb3719cfe23bffba106d139a0b514d291b03a1901bc68c65eafc306f",
           "party_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16"
         },
         {
           "role": "transfer_accept",
           "kind": 31416,
-          "event_id_hash": "sha256:f1d63b0c48da9deee17604dffad18f75467d2b064bc6ea547918f0afc00d38ee",
+          "event_id_hash": "sha256:d15007b8c68fce1fb49b2c481d5ec511ffa48dddf77e1cb9ef9fdfcab723241a",
           "signer_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
-          "content_hash": "sha256:9d60b1345f7a4fb7006d9a2c788c92da49c5d5d8b5816f5a2a2726f3d99be44c",
-          "tag_names": [
-            "d",
-            "o",
-            "e",
-            "p",
-            "action"
-          ],
+          "content_hash": "sha256:aa1e1cdfbcdb6b58af3f4ba927bfe497316b02997e7be406faad31e2a48bd92d",
+          "tag_names": ["d", "o", "e", "p", "action"],
           "action": "accept",
-          "object_digest_hash": "sha256:f711841a7bb22e620e548f3ae0a4bb596e87a02caa9c05c6065b53eace0d0c56",
-          "prior_event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+          "object_digest_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+          "prior_event_id_hash": "sha256:095b2373eb7f038620404f52ad083494f3c3984a9e045a276f49ce10327b6a95",
           "party_pubkey_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81"
         }
       ],
@@ -143,11 +118,7 @@
         "status": "available",
         "relay_count": 1,
         "available_relay_count": 1,
-        "event_roles": [
-          "origin",
-          "transfer_initiate",
-          "transfer_accept"
-        ],
+        "event_roles": ["origin", "transfer_initiate", "transfer_accept"],
         "relays": [
           {
             "relay_url_hash": "sha256:bae52b1825836341e1007a3c17f20068eb56c2a1ff2e97e885f685db69cc9f54",
@@ -156,7 +127,7 @@
             "events": [
               {
                 "role": "origin",
-                "event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+                "event_id_hash": "sha256:40f0875cfb3719cfe23bffba106d139a0b514d291b03a1901bc68c65eafc306f",
                 "kind": 31415,
                 "exact_found": true,
                 "returned_count": 1,
@@ -164,7 +135,7 @@
               },
               {
                 "role": "transfer_initiate",
-                "event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+                "event_id_hash": "sha256:095b2373eb7f038620404f52ad083494f3c3984a9e045a276f49ce10327b6a95",
                 "kind": 31416,
                 "exact_found": true,
                 "returned_count": 1,
@@ -172,7 +143,7 @@
               },
               {
                 "role": "transfer_accept",
-                "event_id_hash": "sha256:f1d63b0c48da9deee17604dffad18f75467d2b064bc6ea547918f0afc00d38ee",
+                "event_id_hash": "sha256:d15007b8c68fce1fb49b2c481d5ec511ffa48dddf77e1cb9ef9fdfcab723241a",
                 "kind": 31416,
                 "exact_found": true,
                 "returned_count": 1,
@@ -211,7 +182,7 @@
         "schema": "atrib.openetr.public_relay_availability.v1",
         "requested": true,
         "status": "available",
-        "checked_at_ms": 1782685540814,
+        "checked_at_ms": 1782689144239,
         "relay_count": 1,
         "reachable_count": 1,
         "relays": [
@@ -221,7 +192,7 @@
             "nostr_response_observed": true,
             "response_type": "EVENT",
             "error": null,
-            "elapsed_ms": 644
+            "elapsed_ms": 577
           }
         ],
         "caveat": "This proves relay WebSocket and Nostr REQ response availability, not that the OpenETR transfer events were published to a public relay."
@@ -233,11 +204,7 @@
         "status": "available",
         "relay_count": 1,
         "available_relay_count": 1,
-        "event_roles": [
-          "origin",
-          "transfer_initiate",
-          "transfer_accept"
-        ],
+        "event_roles": ["origin", "transfer_initiate", "transfer_accept"],
         "relays": [
           {
             "relay_url_hash": "sha256:bae52b1825836341e1007a3c17f20068eb56c2a1ff2e97e885f685db69cc9f54",
@@ -246,7 +213,7 @@
             "events": [
               {
                 "role": "origin",
-                "event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+                "event_id_hash": "sha256:40f0875cfb3719cfe23bffba106d139a0b514d291b03a1901bc68c65eafc306f",
                 "kind": 31415,
                 "exact_found": true,
                 "returned_count": 1,
@@ -254,7 +221,7 @@
               },
               {
                 "role": "transfer_initiate",
-                "event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+                "event_id_hash": "sha256:095b2373eb7f038620404f52ad083494f3c3984a9e045a276f49ce10327b6a95",
                 "kind": 31416,
                 "exact_found": true,
                 "returned_count": 1,
@@ -262,7 +229,7 @@
               },
               {
                 "role": "transfer_accept",
-                "event_id_hash": "sha256:f1d63b0c48da9deee17604dffad18f75467d2b064bc6ea547918f0afc00d38ee",
+                "event_id_hash": "sha256:d15007b8c68fce1fb49b2c481d5ec511ffa48dddf77e1cb9ef9fdfcab723241a",
                 "kind": 31416,
                 "exact_found": true,
                 "returned_count": 1,
@@ -276,64 +243,214 @@
     },
     "recognition_evidence": {
       "schema": "atrib.openetr.recognition_evidence.v1",
-      "full_fixture_requested": true,
+      "full_fixture_requested": false,
+      "operator_demo_requested": true,
       "public_relay_events_available": true,
-      "title_authority": {
-        "schema": "atrib.openetr.signed_external_attestation.v1",
-        "kind": "title_transfer_authority",
-        "key_id": "openetr-demo-title-authority-ed25519",
-        "signer_public_key": "jkGQzWj9wH3aDFnmywc-_S2TEdYio4oy32iFtKQSFVE",
-        "signer_public_key_hash": "sha256:9ae691d8f4bd31910d2c5bfb8dc63637a0fdfa203c4b48b50714e5c7b07b8085",
-        "statement_hash": "sha256:2ca76ce8f984f086ea2e66ffb63964883fb24b45d4b77fdc44c827966967e043",
-        "signature": "ySjKpdUf4BZmrFhzp3hVN5sQBmQciMkBnOaBGrWAOFbJxgEQhRUt3P6ZisaJ--AvR1An3-Lxw6ejmtm_BJLFAg",
-        "signature_valid": true,
-        "statement": {
-          "schema": "atrib.openetr.title_authority_statement.v1",
-          "scope": "fixture_attestation",
-          "authority_policy_id": "openetr-demo-title-authority-policy",
-          "proposed_action": "recognize_transfer",
-          "event_family": [
-            31415,
-            31416
-          ],
-          "transfer_accept_event_hash": "sha256:f1d63b0c48da9deee17604dffad18f75467d2b064bc6ea547918f0afc00d38ee",
-          "recognized_controller_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
-          "public_relay_events_available": true,
-          "source_commit": "c97eb84f5790ff041ad14a1c30df0f71ceb8d3d9",
-          "limitation": "Fixture authority recognition. Not a real title registry or legal authority."
-        }
-      },
+      "title_authority": null,
       "legal_mletr": {
         "schema": "atrib.openetr.signed_external_attestation.v1",
         "kind": "legal_mletr",
-        "key_id": "openetr-demo-legal-mletr-attestor-ed25519",
-        "signer_public_key": "2YZ2PXIpzHdhrOAabpMOUvLCJ3x2TvIUEh-Y_rLg3KE",
-        "signer_public_key_hash": "sha256:71f7f20efa86451843af7708992d944d9dbe594d758bfe263586d802fabb800d",
-        "statement_hash": "sha256:f890ed223825a9c89a750a5a0ef64401d4c33ce4c7afbff22c7c962e8f5a9af8",
-        "signature": "mefNVdPTdqqpGTAPRFKm2tvPx0Eqm9ofeTJGsueIS9O9wHtqTigA6aUGZS-cyjiIyNTrOCJ-aEe71MkkxwEFBg",
+        "key_id": "openetr-operator-demo-legal-mletr-attestor-ed25519",
+        "signer_public_key": "4ZArpj3JSV38F2uAQkpjsX5YW2cTtYP7IGbMQARqVMQ",
+        "signer_public_key_hash": "sha256:eb0805a2de36f8da9018cc0bdc27bc03bdd1b617aa45ee62656ced2b752e299b",
+        "statement_hash": "sha256:be1dd2d46097675c9785cec96752b2814a0e9546b62b14de9ae4dafe8769ba5d",
+        "signature": "isj1_sgXUdDZClUNOkqwryC26M0FlKjCcI8raxIj7eykiEc6FLLi6BFN-drZA2c6_giEQsyoXIhXVgTNkiMUCQ",
         "signature_valid": true,
         "statement": {
           "schema": "atrib.openetr.legal_mletr_statement.v1",
-          "scope": "fixture_attestation",
-          "jurisdiction": "MLETR-model-law-fixture",
+          "scope": "operator_demo_source_checklist",
+          "jurisdiction": "operator-demo-review",
           "proposed_action": "recognize_transfer",
+          "checklist_status": "source_backed_criteria_present",
+          "checklist_hash": "sha256:4cf384b0719b7c51e38409dad67c03187a5d067d4b5482375a0861a30d18069f",
           "criteria": [
             {
               "id": "electronic_record_identifiable",
-              "status": "attested_by_fixture"
+              "status": "evidence_present"
+            },
+            {
+              "id": "integrity_history_available",
+              "status": "evidence_present"
             },
             {
               "id": "exclusive_control_evidence",
-              "status": "attested_by_fixture_authority"
+              "status": "requires_policy_or_legal_review"
             },
             {
-              "id": "integrity_and_transfer_history",
-              "status": "attested_by_fixture"
+              "id": "reliable_method_boundary",
+              "status": "requires_policy_or_legal_review"
+            },
+            {
+              "id": "legal_effect_requires_relying_party_or_law",
+              "status": "requires_policy_or_legal_review"
             }
           ],
-          "public_relay_events_available": true,
-          "limitation": "Fixture legal/MLETR attestation for protocol testing. It is not legal advice or a jurisdictional legal opinion."
+          "limitation": "Operator-demo legal/MLETR attestation for protocol testing. It is not legal advice or a jurisdictional legal opinion."
         }
+      },
+      "title_authority_evidence": {
+        "schema": "atrib.openetr.public_title_authority_evidence.v1",
+        "mode": "operator_demo_tta",
+        "status": "operator_demo_tta_event",
+        "title_kind": 31415,
+        "event": {
+          "event_id_hash": "sha256:e40a8d3294d30ff79fccc20ab6b7ca8f03eb7c372d129e8eab0a06a1852cd619",
+          "pubkey_hash": "sha256:2a30bfd900fbe896053c336fd7f5136572c7b07e6bb6877f7620b5818c20983a",
+          "kind": 31415,
+          "created_at": 1782604800,
+          "content_hash": "sha256:4ea8aa0d53f5cff54cc8adf035084eacc9cac92af231237167c5cab8e8356223",
+          "tag_names": [
+            "d",
+            "o",
+            "p",
+            "from",
+            "e",
+            "action",
+            "version",
+            "authority_policy_id",
+            "jurisdiction"
+          ],
+          "d_tag_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+          "o_tag_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+          "p_tag_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
+          "from_tag_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
+          "prior_tta_event_id_hash": "sha256:d15007b8c68fce1fb49b2c481d5ec511ffa48dddf77e1cb9ef9fdfcab723241a",
+          "action": "transfer"
+        },
+        "recognized_tta_pubkey_hashes": [
+          "sha256:2a30bfd900fbe896053c336fd7f5136572c7b07e6bb6877f7620b5818c20983a"
+        ],
+        "event_id_valid": true,
+        "signature_valid": true,
+        "recognized_pubkey": true,
+        "object_digest_hash_matches": true,
+        "recognized_controller_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
+        "statement_hash": "sha256:fc2651538de6ccb3da77abbe2472ba62ef270d68954acf98b4a1a2f22ad08cd4",
+        "limitations": [
+          "Operator-demo TTA evidence uses a local demo signer, not an independent title registry.",
+          "It exercises the same Nostr event ID, signature, digest, controller, and recognized-pubkey checks as external TTA ingestion."
+        ]
+      },
+      "legal_mletr_evidence": {
+        "schema": "atrib.openetr.legal_mletr_evidence.v1",
+        "mode": "operator_demo_attestation",
+        "status": "operator_demo_attestation",
+        "attestation": {
+          "schema": "atrib.openetr.signed_external_attestation.v1",
+          "kind": "legal_mletr",
+          "key_id": "openetr-operator-demo-legal-mletr-attestor-ed25519",
+          "signer_public_key": "4ZArpj3JSV38F2uAQkpjsX5YW2cTtYP7IGbMQARqVMQ",
+          "signer_public_key_hash": "sha256:eb0805a2de36f8da9018cc0bdc27bc03bdd1b617aa45ee62656ced2b752e299b",
+          "statement_hash": "sha256:be1dd2d46097675c9785cec96752b2814a0e9546b62b14de9ae4dafe8769ba5d",
+          "signature": "isj1_sgXUdDZClUNOkqwryC26M0FlKjCcI8raxIj7eykiEc6FLLi6BFN-drZA2c6_giEQsyoXIhXVgTNkiMUCQ",
+          "signature_valid": true,
+          "statement": {
+            "schema": "atrib.openetr.legal_mletr_statement.v1",
+            "scope": "operator_demo_source_checklist",
+            "jurisdiction": "operator-demo-review",
+            "proposed_action": "recognize_transfer",
+            "checklist_status": "source_backed_criteria_present",
+            "checklist_hash": "sha256:4cf384b0719b7c51e38409dad67c03187a5d067d4b5482375a0861a30d18069f",
+            "criteria": [
+              {
+                "id": "electronic_record_identifiable",
+                "status": "evidence_present"
+              },
+              {
+                "id": "integrity_history_available",
+                "status": "evidence_present"
+              },
+              {
+                "id": "exclusive_control_evidence",
+                "status": "requires_policy_or_legal_review"
+              },
+              {
+                "id": "reliable_method_boundary",
+                "status": "requires_policy_or_legal_review"
+              },
+              {
+                "id": "legal_effect_requires_relying_party_or_law",
+                "status": "requires_policy_or_legal_review"
+              }
+            ],
+            "limitation": "Operator-demo legal/MLETR attestation for protocol testing. It is not legal advice or a jurisdictional legal opinion."
+          }
+        },
+        "signer_recognized": true,
+        "checklist_status": "source_backed_criteria_present",
+        "statement_hash": "sha256:be1dd2d46097675c9785cec96752b2814a0e9546b62b14de9ae4dafe8769ba5d",
+        "limitations": [
+          "Operator-demo legal evidence signs the source checklist with a local demo reviewer key.",
+          "It is not an independent legal opinion or MLETR compliance certification."
+        ]
+      },
+      "mletr_source_checklist": {
+        "schema": "atrib.openetr.mletr_source_checklist.v1",
+        "status": "source_backed_criteria_present",
+        "reviewed_at": "2026-06-28",
+        "sources": [
+          {
+            "id": "openetr-tta-spec",
+            "title": "OpenETR Title Transfer Authority Replaceable Event Specification",
+            "url": "https://github.com/trbouma/openetr/blob/main/docs/specs/TITLE_TRANSFER_AUTHORITY_REPLACEABLE_EVENT_SPEC.md",
+            "role": "Defines recognized TTA pubkeys, replaceable event state, title holder p tags, and validation rules.",
+            "source_hash": "sha256:e64e781d6a293256b5a1240e22502155b3b69091745c34bcd87fef2ddd3e1c6f"
+          },
+          {
+            "id": "openetr-transaction-spec",
+            "title": "OpenETR Canonical ETR Transaction Specification",
+            "url": "https://github.com/trbouma/openetr/blob/main/docs/specs/CANONICAL_ETR_TRANSACTION_SPEC.md",
+            "role": "Defines control-relevant actions, attestation, recognition policy, and signed evidence chains.",
+            "source_hash": "sha256:89efd9d7f4927bc3ddf0f494e025f00ada0c8256d676fc171972db42c9b43c42"
+          },
+          {
+            "id": "uncitral-mletr",
+            "title": "UNCITRAL Model Law on Electronic Transferable Records",
+            "url": "https://uncitral.un.org/en/texts/ecommerce/modellaw/electronic_transferable_records",
+            "role": "Public model-law source for electronic transferable record functional-equivalence criteria.",
+            "source_hash": "sha256:42fbe435d7e8c6dd69e457d51e4aa5427d363c529c172169ed8399a5c73de677"
+          },
+          {
+            "id": "tradetrust-mletr-title-transfer",
+            "title": "TradeTrust MLETR-compliant titles transfer white paper",
+            "url": "https://www.tradetrust.io/happenings-and-resources/white-paper-transfer-of-model-law-on-electronic-transferable-records-compliant-titles/",
+            "role": "Public implementation-oriented source on MLETR-compliant electronic title transfer.",
+            "source_hash": "sha256:a843faee05f908035187ea3642a733229e4bda847bd2372b6276c52aba348627"
+          }
+        ],
+        "criteria": [
+          {
+            "id": "electronic_record_identifiable",
+            "status": "evidence_present",
+            "evidence": "The source-backed run exposes a digest-identified OpenETR object and records only a hash of that digest in public artifacts.",
+            "source_ids": ["openetr-tta-spec", "openetr-transaction-spec"]
+          },
+          {
+            "id": "integrity_history_available",
+            "status": "evidence_present",
+            "evidence": "The source-backed run executed issue, transfer initiate, transfer accept, and query, then committed sanitized event hashes and chain checks.",
+            "source_ids": ["openetr-transaction-spec"]
+          },
+          {
+            "id": "exclusive_control_evidence",
+            "status": "requires_policy_or_legal_review",
+            "evidence": "The packet can show a recognized TTA or operator-demo signer naming the controller, but final control recognition remains a policy or legal decision.",
+            "source_ids": ["openetr-tta-spec", "uncitral-mletr", "tradetrust-mletr-title-transfer"]
+          },
+          {
+            "id": "reliable_method_boundary",
+            "status": "requires_policy_or_legal_review",
+            "evidence": "The cryptographic and relay evidence gives reviewable inputs for a reliability analysis, but this artifact does not decide jurisdictional sufficiency.",
+            "source_ids": ["uncitral-mletr", "tradetrust-mletr-title-transfer"]
+          },
+          {
+            "id": "legal_effect_requires_relying_party_or_law",
+            "status": "requires_policy_or_legal_review",
+            "evidence": "The checklist records criteria evidence only. A relying party, TTA, or legal reviewer must decide legal effect.",
+            "source_ids": ["uncitral-mletr", "openetr-transaction-spec"]
+          }
+        ],
+        "limitation": "This checklist is source-backed criteria evidence for review. It is not legal advice, a registry act, or an MLETR compliance opinion."
       },
       "controller_semantics": {
         "schema": "atrib.openetr.controller_semantics_evidence.v1",
@@ -345,7 +462,173 @@
         "authority_attests_acceptor_control": true,
         "caveat": "Authority attestation resolves title-recognition policy without treating the latest p tag as controller semantics."
       },
-      "authorized_by_fixture": true
+      "authorization_basis": "operator_demo_evidence",
+      "authorized_by_evidence": true,
+      "authorized_by_fixture": false
+    },
+    "title_authority_evidence": {
+      "schema": "atrib.openetr.public_title_authority_evidence.v1",
+      "mode": "operator_demo_tta",
+      "status": "operator_demo_tta_event",
+      "title_kind": 31415,
+      "event": {
+        "event_id_hash": "sha256:e40a8d3294d30ff79fccc20ab6b7ca8f03eb7c372d129e8eab0a06a1852cd619",
+        "pubkey_hash": "sha256:2a30bfd900fbe896053c336fd7f5136572c7b07e6bb6877f7620b5818c20983a",
+        "kind": 31415,
+        "created_at": 1782604800,
+        "content_hash": "sha256:4ea8aa0d53f5cff54cc8adf035084eacc9cac92af231237167c5cab8e8356223",
+        "tag_names": [
+          "d",
+          "o",
+          "p",
+          "from",
+          "e",
+          "action",
+          "version",
+          "authority_policy_id",
+          "jurisdiction"
+        ],
+        "d_tag_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+        "o_tag_hash": "sha256:b81aa8147a8372bd083b43a6818060928e026b788e9790f4ac113df5a14e0727",
+        "p_tag_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
+        "from_tag_hash": "sha256:fe1134f2ae492c2f4aa3d2989ac6a7079384e255098de63ac3201c92289f4d81",
+        "prior_tta_event_id_hash": "sha256:d15007b8c68fce1fb49b2c481d5ec511ffa48dddf77e1cb9ef9fdfcab723241a",
+        "action": "transfer"
+      },
+      "recognized_tta_pubkey_hashes": [
+        "sha256:2a30bfd900fbe896053c336fd7f5136572c7b07e6bb6877f7620b5818c20983a"
+      ],
+      "event_id_valid": true,
+      "signature_valid": true,
+      "recognized_pubkey": true,
+      "object_digest_hash_matches": true,
+      "recognized_controller_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
+      "statement_hash": "sha256:fc2651538de6ccb3da77abbe2472ba62ef270d68954acf98b4a1a2f22ad08cd4",
+      "limitations": [
+        "Operator-demo TTA evidence uses a local demo signer, not an independent title registry.",
+        "It exercises the same Nostr event ID, signature, digest, controller, and recognized-pubkey checks as external TTA ingestion."
+      ]
+    },
+    "legal_mletr_evidence": {
+      "schema": "atrib.openetr.legal_mletr_evidence.v1",
+      "mode": "operator_demo_attestation",
+      "status": "operator_demo_attestation",
+      "attestation": {
+        "schema": "atrib.openetr.signed_external_attestation.v1",
+        "kind": "legal_mletr",
+        "key_id": "openetr-operator-demo-legal-mletr-attestor-ed25519",
+        "signer_public_key": "4ZArpj3JSV38F2uAQkpjsX5YW2cTtYP7IGbMQARqVMQ",
+        "signer_public_key_hash": "sha256:eb0805a2de36f8da9018cc0bdc27bc03bdd1b617aa45ee62656ced2b752e299b",
+        "statement_hash": "sha256:be1dd2d46097675c9785cec96752b2814a0e9546b62b14de9ae4dafe8769ba5d",
+        "signature": "isj1_sgXUdDZClUNOkqwryC26M0FlKjCcI8raxIj7eykiEc6FLLi6BFN-drZA2c6_giEQsyoXIhXVgTNkiMUCQ",
+        "signature_valid": true,
+        "statement": {
+          "schema": "atrib.openetr.legal_mletr_statement.v1",
+          "scope": "operator_demo_source_checklist",
+          "jurisdiction": "operator-demo-review",
+          "proposed_action": "recognize_transfer",
+          "checklist_status": "source_backed_criteria_present",
+          "checklist_hash": "sha256:4cf384b0719b7c51e38409dad67c03187a5d067d4b5482375a0861a30d18069f",
+          "criteria": [
+            {
+              "id": "electronic_record_identifiable",
+              "status": "evidence_present"
+            },
+            {
+              "id": "integrity_history_available",
+              "status": "evidence_present"
+            },
+            {
+              "id": "exclusive_control_evidence",
+              "status": "requires_policy_or_legal_review"
+            },
+            {
+              "id": "reliable_method_boundary",
+              "status": "requires_policy_or_legal_review"
+            },
+            {
+              "id": "legal_effect_requires_relying_party_or_law",
+              "status": "requires_policy_or_legal_review"
+            }
+          ],
+          "limitation": "Operator-demo legal/MLETR attestation for protocol testing. It is not legal advice or a jurisdictional legal opinion."
+        }
+      },
+      "signer_recognized": true,
+      "checklist_status": "source_backed_criteria_present",
+      "statement_hash": "sha256:be1dd2d46097675c9785cec96752b2814a0e9546b62b14de9ae4dafe8769ba5d",
+      "limitations": [
+        "Operator-demo legal evidence signs the source checklist with a local demo reviewer key.",
+        "It is not an independent legal opinion or MLETR compliance certification."
+      ]
+    },
+    "mletr_source_checklist": {
+      "schema": "atrib.openetr.mletr_source_checklist.v1",
+      "status": "source_backed_criteria_present",
+      "reviewed_at": "2026-06-28",
+      "sources": [
+        {
+          "id": "openetr-tta-spec",
+          "title": "OpenETR Title Transfer Authority Replaceable Event Specification",
+          "url": "https://github.com/trbouma/openetr/blob/main/docs/specs/TITLE_TRANSFER_AUTHORITY_REPLACEABLE_EVENT_SPEC.md",
+          "role": "Defines recognized TTA pubkeys, replaceable event state, title holder p tags, and validation rules.",
+          "source_hash": "sha256:e64e781d6a293256b5a1240e22502155b3b69091745c34bcd87fef2ddd3e1c6f"
+        },
+        {
+          "id": "openetr-transaction-spec",
+          "title": "OpenETR Canonical ETR Transaction Specification",
+          "url": "https://github.com/trbouma/openetr/blob/main/docs/specs/CANONICAL_ETR_TRANSACTION_SPEC.md",
+          "role": "Defines control-relevant actions, attestation, recognition policy, and signed evidence chains.",
+          "source_hash": "sha256:89efd9d7f4927bc3ddf0f494e025f00ada0c8256d676fc171972db42c9b43c42"
+        },
+        {
+          "id": "uncitral-mletr",
+          "title": "UNCITRAL Model Law on Electronic Transferable Records",
+          "url": "https://uncitral.un.org/en/texts/ecommerce/modellaw/electronic_transferable_records",
+          "role": "Public model-law source for electronic transferable record functional-equivalence criteria.",
+          "source_hash": "sha256:42fbe435d7e8c6dd69e457d51e4aa5427d363c529c172169ed8399a5c73de677"
+        },
+        {
+          "id": "tradetrust-mletr-title-transfer",
+          "title": "TradeTrust MLETR-compliant titles transfer white paper",
+          "url": "https://www.tradetrust.io/happenings-and-resources/white-paper-transfer-of-model-law-on-electronic-transferable-records-compliant-titles/",
+          "role": "Public implementation-oriented source on MLETR-compliant electronic title transfer.",
+          "source_hash": "sha256:a843faee05f908035187ea3642a733229e4bda847bd2372b6276c52aba348627"
+        }
+      ],
+      "criteria": [
+        {
+          "id": "electronic_record_identifiable",
+          "status": "evidence_present",
+          "evidence": "The source-backed run exposes a digest-identified OpenETR object and records only a hash of that digest in public artifacts.",
+          "source_ids": ["openetr-tta-spec", "openetr-transaction-spec"]
+        },
+        {
+          "id": "integrity_history_available",
+          "status": "evidence_present",
+          "evidence": "The source-backed run executed issue, transfer initiate, transfer accept, and query, then committed sanitized event hashes and chain checks.",
+          "source_ids": ["openetr-transaction-spec"]
+        },
+        {
+          "id": "exclusive_control_evidence",
+          "status": "requires_policy_or_legal_review",
+          "evidence": "The packet can show a recognized TTA or operator-demo signer naming the controller, but final control recognition remains a policy or legal decision.",
+          "source_ids": ["openetr-tta-spec", "uncitral-mletr", "tradetrust-mletr-title-transfer"]
+        },
+        {
+          "id": "reliable_method_boundary",
+          "status": "requires_policy_or_legal_review",
+          "evidence": "The cryptographic and relay evidence gives reviewable inputs for a reliability analysis, but this artifact does not decide jurisdictional sufficiency.",
+          "source_ids": ["uncitral-mletr", "tradetrust-mletr-title-transfer"]
+        },
+        {
+          "id": "legal_effect_requires_relying_party_or_law",
+          "status": "requires_policy_or_legal_review",
+          "evidence": "The checklist records criteria evidence only. A relying party, TTA, or legal reviewer must decide legal effect.",
+          "source_ids": ["uncitral-mletr", "openetr-transaction-spec"]
+        }
+      ],
+      "limitation": "This checklist is source-backed criteria evidence for review. It is not legal advice, a registry act, or an MLETR compliance opinion."
     },
     "action_policy": {
       "schema": "atrib.packet.action_policy.v1",
@@ -358,12 +641,10 @@
       "kind": "policy_decision",
       "tool_name": "openetr_recognize_title_transfer",
       "event_type": "https://openetr-transfer.atrib.dev/v1/control",
-      "record_hash": "sha256:4ca37f5d92a2d7b438d2fac32b16eeda79e0404a874ddde7ef3694b85e4a1f3e",
-      "chain_root": "sha256:6cc80fd0c7646e75550de7fd3e3d4c309f7c5349f5951f93d689fc857cad7eee",
-      "informed_by": [
-        "sha256:6cc80fd0c7646e75550de7fd3e3d4c309f7c5349f5951f93d689fc857cad7eee"
-      ],
-      "args_hash": "sha256:8c05ec5a2b34fc29a16abd43f393bb3c46c7acebc43b9d81cc4dd00ef1f87a86",
+      "record_hash": "sha256:03cf5ce10301a84d618e798c19c3ab90eae2a183ebab7991bb2f388c640f9c46",
+      "chain_root": "sha256:174749c7c0d00251227651dcd10d0d69b219705da87e476986821552bd8e3f83",
+      "informed_by": ["sha256:174749c7c0d00251227651dcd10d0d69b219705da87e476986821552bd8e3f83"],
+      "args_hash": "sha256:3fea2b0c200b1ff46f33a9209962e4b1c63d3be6c82c37977e18020e01c46084",
       "record_valid": true,
       "content": {
         "schema": "atrib.openetr.title_recognition_policy_decision.v1",
@@ -377,16 +658,19 @@
           "openetr_query_state"
         ],
         "previous_record_hashes": [
-          "sha256:10dcfd5dd70069c3bbad66d01e8b1dd1019278cdcb4bcc83c32a47cc2f193239",
-          "sha256:4650779e83aa7700485f92146f1f441d0b4c5a06ff76ffca78246a89444e2282",
-          "sha256:0b9731064b1500502990b9ad45cbe795e0bef43c3625ee98d5fa3feecd32fe73",
-          "sha256:6cc80fd0c7646e75550de7fd3e3d4c309f7c5349f5951f93d689fc857cad7eee"
+          "sha256:6394952c63101e200ef3d70696cb08aa83e4b85a5e91a2ad64fa265993bd5da8",
+          "sha256:398e49b26fd66ec51f19afa33072d935a3f9d803d057fbb6d0c21314e20f03c8",
+          "sha256:39f86c2a63846a0cffaad1cacaf3aefe7446f4edfe41123537b76c2f80dafd2b",
+          "sha256:174749c7c0d00251227651dcd10d0d69b219705da87e476986821552bd8e3f83"
         ],
         "recognition_evidence": {
-          "full_fixture_requested": true,
+          "full_fixture_requested": false,
+          "operator_demo_requested": true,
           "public_relay_events_available": true,
-          "title_authority_statement_hash": "sha256:2ca76ce8f984f086ea2e66ffb63964883fb24b45d4b77fdc44c827966967e043",
-          "legal_mletr_statement_hash": "sha256:f890ed223825a9c89a750a5a0ef64401d4c33ce4c7afbff22c7c962e8f5a9af8",
+          "authorization_basis": "operator_demo_evidence",
+          "authorized_by_evidence": true,
+          "title_authority_statement_hash": "sha256:fc2651538de6ccb3da77abbe2472ba62ef270d68954acf98b4a1a2f22ad08cd4",
+          "legal_mletr_statement_hash": "sha256:be1dd2d46097675c9785cec96752b2814a0e9546b62b14de9ae4dafe8769ba5d",
           "controller_semantics_status": "resolved_by_authority_attestation"
         },
         "evidence_requirements": {
@@ -406,15 +690,15 @@
         ]
       },
       "proof": {
-        "log_index": 67290,
-        "leaf_hash": "LKaAQTcCrjeZVrALUoTDqNjB3M618WI6t9ahmulaCok=",
-        "checkpoint": "log.atrib.dev/v1\n67291\nMrPNm8soMPo0c+gQs77tZkPjCPpuVLvLreQI+Sz9gAI=\n\n— log.atrib.dev/v1 5awdbZUDoYtyDlFy+BvmQ1edzWzUE6JCbVGH7+P58kp1gQqoYLnlI5zusJHRTWpnJSsB+NV31gc8bgC1n7icBHDqagk=\n",
+        "log_index": 67525,
+        "leaf_hash": "V9FyoVlJQNLEJom6625NZCIMaLARObz7nJb7J+yoipk=",
+        "checkpoint": "log.atrib.dev/v1\n67526\n0I8gleO7Q0+eWwS5gGriHKYx9nPu2oUzTu8blOhQ1hk=\n\n— log.atrib.dev/v1 5awdbVtMp66MiD5d7oYq9spYKfDokjr92E6Qs/Cf1f2rZt4+8Gj740vH5ccm7UvCPTa0EiQKp3bSjt4xIVemxDJtugU=\n",
         "inclusion_proof": [
-          "MCZ+IUlxein7679dzgZ4TPcVbNqSTDDQpf6/+rX3Pco=",
-          "2apUYE0VW+ZnhQTvHmD0BRjur3JxSbMJZUaU8mhSu/4=",
-          "zNVjGHlG5bj7t6QucFTNIxJeBRsYzNPEjvbvSp3MLrk=",
-          "JF+c2Y48ueiqZ+OPAKS4/922IcSvXxf4oPePPOdNZ8k=",
-          "FO/5OTWWlNjDIW/dUA5q15sQ5gQuKSuhOGKoIgXDnL4=",
+          "TzggFx7dp7nQWNXIBhea9vLmNbsEk1amPvmC/IlGZmY=",
+          "CGO8wwr+rsXLvgGcA3PPEkwVk8gDuFi+xo4XoQBgakE=",
+          "iqz70mKoxBmohmiKES+HQcQwHOvLtXtUY0t8uQ4K5Jo=",
+          "XfQ7J4bJboUz2fapkiZ/7r+nnZXLn67v2p376SBn45c=",
+          "v3H1sw4qHInwm20ec9GynMNxo2NSOLZobF6WnTUZSW8=",
           "WnJLpIs+9xEDzNMRFJZ29+M7gEXEgNxVBiQfDw0HqOc=",
           "87lU2FKA53MXx0ausziYkbpmMt1d2BvlLXbo/IUkkao=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
@@ -427,32 +711,31 @@
       "kind": "policy_outcome",
       "tool_name": "openetr_recognize_title_transfer",
       "event_type": "https://openetr-transfer.atrib.dev/v1/control",
-      "record_hash": "sha256:9a639a30b2ed8343cf9d45f29fbada62f6ea2c6fe02b464a3236991fac904b21",
-      "chain_root": "sha256:2a517d6731303c198dca613ad23f5e27fcebb69bb1091f97674395dbf1d21686",
+      "record_hash": "sha256:fbcacfe6e0e5f66aa684875a271da1e90d0eb7ef5325aad7197e0c26dc4909ae",
+      "chain_root": "sha256:3802a1db11a84e6514b4a6c01ad6a024a6a22bf1a4e44d5f93e6ec9588e9db5c",
       "informed_by": [
-        "sha256:2a517d6731303c198dca613ad23f5e27fcebb69bb1091f97674395dbf1d21686",
-        "sha256:4ca37f5d92a2d7b438d2fac32b16eeda79e0404a874ddde7ef3694b85e4a1f3e"
+        "sha256:03cf5ce10301a84d618e798c19c3ab90eae2a183ebab7991bb2f388c640f9c46",
+        "sha256:3802a1db11a84e6514b4a6c01ad6a024a6a22bf1a4e44d5f93e6ec9588e9db5c"
       ],
-      "args_hash": "sha256:40851b3ec359e659bead219948d065d73b391b89796c845c6109f9001d4fdc34",
+      "args_hash": "sha256:6b70638052352381644e895bca10da9e1ddc355752ef8bbaf99594de001ba2a7",
       "record_valid": true,
       "content": {
         "schema": "atrib.packet.action_policy_outcome.v1",
         "decision": "allow",
         "executed": true,
-        "action_record_hash": "sha256:2a517d6731303c198dca613ad23f5e27fcebb69bb1091f97674395dbf1d21686",
-        "decision_record_hash": "sha256:4ca37f5d92a2d7b438d2fac32b16eeda79e0404a874ddde7ef3694b85e4a1f3e"
+        "action_record_hash": "sha256:3802a1db11a84e6514b4a6c01ad6a024a6a22bf1a4e44d5f93e6ec9588e9db5c",
+        "decision_record_hash": "sha256:03cf5ce10301a84d618e798c19c3ab90eae2a183ebab7991bb2f388c640f9c46"
       },
       "proof": {
-        "log_index": 67291,
-        "leaf_hash": "E6YjL+2l2hokTG9aAkh7oA4pcHp9ruYq1PeF2IyBNQs=",
-        "checkpoint": "log.atrib.dev/v1\n67292\nnDp7udOD2NMz9SAaNU3Rt2JuJmvuuaia9tcwiHMAU4g=\n\n— log.atrib.dev/v1 5awdbRXL9PxXPGR+SoC3XUeWex9mnzz3Ln3ch8BTqUgbBYqno4Qzf5yNxNY7LhVhNgiK2yPMCJcr1hvr39HIatDTPAs=\n",
+        "log_index": 67526,
+        "leaf_hash": "t2ZGKtGo7C2948N/+lFvnA5lvCDUpFsw6byf2lua+TA=",
+        "checkpoint": "log.atrib.dev/v1\n67527\nmMrUGjiWYsged7S818NiK2TQe5BAP8lqC6KWpEd/6N4=\n\n— log.atrib.dev/v1 5awdbbavtmpF67APAEDqU2l5xoNkICOlfLiBhLZ+wm2uC+B2F/8hxbKaNBwCe9HvjXAIkghy4vDrmdd/7cXyGkKo9wU=\n",
         "inclusion_proof": [
-          "LKaAQTcCrjeZVrALUoTDqNjB3M618WI6t9ahmulaCok=",
-          "MCZ+IUlxein7679dzgZ4TPcVbNqSTDDQpf6/+rX3Pco=",
-          "2apUYE0VW+ZnhQTvHmD0BRjur3JxSbMJZUaU8mhSu/4=",
-          "zNVjGHlG5bj7t6QucFTNIxJeBRsYzNPEjvbvSp3MLrk=",
-          "JF+c2Y48ueiqZ+OPAKS4/922IcSvXxf4oPePPOdNZ8k=",
-          "FO/5OTWWlNjDIW/dUA5q15sQ5gQuKSuhOGKoIgXDnL4=",
+          "oZtqjiAuXQmmrXTD0oDUYyBNmga5UUDWOxjEO1+znak=",
+          "CGO8wwr+rsXLvgGcA3PPEkwVk8gDuFi+xo4XoQBgakE=",
+          "iqz70mKoxBmohmiKES+HQcQwHOvLtXtUY0t8uQ4K5Jo=",
+          "XfQ7J4bJboUz2fapkiZ/7r+nnZXLn67v2p376SBn45c=",
+          "v3H1sw4qHInwm20ec9GynMNxo2NSOLZobF6WnTUZSW8=",
           "WnJLpIs+9xEDzNMRFJZ29+M7gEXEgNxVBiQfDw0HqOc=",
           "87lU2FKA53MXx0ausziYkbpmMt1d2BvlLXbo/IUkkao=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
@@ -476,7 +759,7 @@
     {
       "id": "signed_atrib_control_record_policy_decision",
       "outcome": "pass",
-      "evidence": "policy decision signed as sha256:4ca37f5d92a2d7b438d2fac32b16eeda79e0404a874ddde7ef3694b85e4a1f3e"
+      "evidence": "policy decision signed as sha256:03cf5ce10301a84d618e798c19c3ab90eae2a183ebab7991bb2f388c640f9c46"
     },
     {
       "id": "openetr_chain_observed",
@@ -501,12 +784,22 @@
     {
       "id": "title_recognition_requires_attestor",
       "outcome": "pass",
-      "evidence": "title authority attestation sha256:2ca76ce8f984f086ea2e66ffb63964883fb24b45d4b77fdc44c827966967e043 verified"
+      "evidence": "title authority evidence sha256:fc2651538de6ccb3da77abbe2472ba62ef270d68954acf98b4a1a2f22ad08cd4 verified under operator_demo_tta"
+    },
+    {
+      "id": "public_title_transfer_authority_or_operator_demo",
+      "outcome": "pass",
+      "evidence": "operator-demo TTA Nostr event verified"
     },
     {
       "id": "legal_title_transfer_or_mletr_attestation",
       "outcome": "pass",
-      "evidence": "legal/MLETR fixture attestation sha256:f890ed223825a9c89a750a5a0ef64401d4c33ce4c7afbff22c7c962e8f5a9af8 verified"
+      "evidence": "legal/MLETR evidence sha256:be1dd2d46097675c9785cec96752b2814a0e9546b62b14de9ae4dafe8769ba5d verified under operator_demo_attestation"
+    },
+    {
+      "id": "mletr_source_checklist_present",
+      "outcome": "pass",
+      "evidence": "This checklist is source-backed criteria evidence for review. It is not legal advice, a registry act, or an MLETR compliance opinion."
     },
     {
       "id": "raw_openetr_payload_private",
@@ -514,10 +807,7 @@
       "evidence": "object digest, parties, relay, event ids, and document label stay private in public records"
     }
   ],
-  "allowed_without_review": [
-    "internal_state_query",
-    "proof_packet_review"
-  ],
+  "allowed_without_review": ["internal_state_query", "proof_packet_review"],
   "escalated_actions": [
     "recognize_transfer",
     "release_goods",
@@ -543,8 +833,8 @@
   ],
   "caveats": [
     "This packet proves the atrib wrapper and policy boundary for an OpenETR-shaped flow.",
-    "Full fixture mode executed recognition under demo attestations. It is not a real title registry or legal conclusion.",
-    "Legal/MLETR evidence is a signed fixture attestation, not legal advice or a jurisdictional legal opinion.",
+    "Operator-demo mode executed recognition under local demo TTA and reviewer signatures. It is not a real title registry or legal conclusion.",
+    "Legal/MLETR evidence is signed evidence by the stated signer, not legal advice from atrib.",
     "The deterministic policy artifact summarizes the signed atrib control-record decision."
   ]
 }
