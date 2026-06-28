@@ -23,12 +23,15 @@ ATRIB_PACKET_WRITE_ARTIFACTS=1 pnpm --filter @atrib/integration firecrawl-web-in
 ```
 
 The checked artifact lands in `proof-packets/firecrawl-web-ingestion/`. A live API
-run still needs `FIRECRAWL_API_KEY` or a self-hosted `FIRECRAWL_API_URL` for
-`npx -y firecrawl-mcp`. Live mode follows the Cloudflare proof pattern: the
-runner captures wrapper records locally while the flow is running. After the
-full flow verifies, it submits the accepted record set to
-`https://log.atrib.dev/v1/entries`, verifies inclusion, and writes those public
-log indexes into the artifact.
+run needs `FIRECRAWL_API_KEY` or a self-hosted `FIRECRAWL_API_URL` for
+`npx -y firecrawl-mcp`. The demo reads credentials from the shell environment.
+On the operator machine, `~/.zshenv` follows the cache-first 1Password pattern:
+parent env, `~/.atrib/secrets/firecrawl-api-key`, then `op read` only in an
+interactive shell if the cache is empty. The runner does not call `op read`.
+Live mode follows the Cloudflare proof pattern: the runner captures wrapper
+records locally while the flow is running. After the full flow verifies, it
+submits the accepted record set to `https://log.atrib.dev/v1/entries`, verifies
+inclusion, and writes those public log indexes into the artifact.
 
 ## Proof and demo boundary
 
@@ -48,7 +51,6 @@ Run the live public proof:
 ```bash
 ATRIB_FIRECRAWL_WEB_INGESTION_LIVE=1 \
 ATRIB_PACKET_PUBLIC_LOG=1 \
-FIRECRAWL_API_KEY=... \
 ATRIB_PACKET_WRITE_ARTIFACTS=1 \
   pnpm --filter @atrib/integration firecrawl-web-ingestion-packet
 ```

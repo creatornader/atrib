@@ -5,7 +5,7 @@
     {
       "field": "query",
       "disclosure": "hash-only",
-      "hash": "sha256:13bbd975e774aa2fdc2d9438f1e7a436e3f39e04639e3d4a2ba57d33c399d3a9"
+      "hash": "sha256:915d34631f7ef61ea5d3aa1bc909a039cb5c54c309d4b07c08f2ade063faba3d"
     },
     {
       "field": "source_url",
@@ -15,7 +15,7 @@
     {
       "field": "extract_prompt",
       "disclosure": "hash-only",
-      "hash": "sha256:0c8502445031f72e67a4794f264b366bc45c8aeae610f950b6a3f730c9c1c0e0"
+      "hash": "sha256:527ce95abad9f8d9fe7ed4460573bae1ed96353ed3c30ee579e4c56484c6f874"
     },
     {
       "field": "raw_scraped_content",

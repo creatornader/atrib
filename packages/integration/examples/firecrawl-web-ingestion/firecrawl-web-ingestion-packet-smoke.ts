@@ -11,6 +11,10 @@ const PRIVATE_MARKDOWN = '# Private vendor page\n\nConfidential pricing: private
 const PRIVATE_HTML = '<main><h1>Private vendor page</h1><p>Confidential pricing</p></main>'
 const PRIVATE_EXTRACT = 'private firecrawl extracted account note'
 const PRIVATE_CRAWL_JOB_ID = 'crawl_private_job_20260623'
+const LIVE_DEFAULT_QUERY = 'site:example.com Example Domain'
+const LIVE_DEFAULT_URL = 'https://example.com'
+const LIVE_DEFAULT_EXTRACT_PROMPT =
+  'Extract the organization name and a short account note from this public page.'
 
 function requiredFirecrawlEnv(): Record<string, string> {
   const env: Record<string, string> = {}
@@ -113,10 +117,14 @@ ATRIB_PACKET_WRITE_ARTIFACTS=1 pnpm --filter @atrib/integration firecrawl-web-in
 \`\`\`bash
 ATRIB_FIRECRAWL_WEB_INGESTION_LIVE=1 \\
 ATRIB_PACKET_PUBLIC_LOG=1 \\
-FIRECRAWL_API_KEY=... \\
 ATRIB_PACKET_WRITE_ARTIFACTS=1 \\
   pnpm --filter @atrib/integration firecrawl-web-ingestion-packet
 \`\`\`
+
+Live mode expects \`FIRECRAWL_API_KEY\` in the shell environment. On the operator
+machine, \`~/.zshenv\` seeds it from \`~/.atrib/secrets/firecrawl-api-key\`
+first, then asks 1Password only in an interactive shell if the cache is empty.
+The runner does not call \`op read\`.
 `
 }
 
@@ -125,10 +133,11 @@ async function main(): Promise<void> {
   const integrationDir = dirname(dirname(exampleDir))
   const liveMode = process.env.ATRIB_FIRECRAWL_WEB_INGESTION_LIVE === '1'
   const publicLog = liveMode && process.env.ATRIB_PACKET_PUBLIC_LOG !== '0'
-  const query = process.env.ATRIB_FIRECRAWL_QUERY ?? PRIVATE_QUERY
-  const sourceUrl = process.env.ATRIB_FIRECRAWL_URL ?? PRIVATE_URL
+  const query = process.env.ATRIB_FIRECRAWL_QUERY ?? (liveMode ? LIVE_DEFAULT_QUERY : PRIVATE_QUERY)
+  const sourceUrl = process.env.ATRIB_FIRECRAWL_URL ?? (liveMode ? LIVE_DEFAULT_URL : PRIVATE_URL)
   const extractPrompt =
-    process.env.ATRIB_FIRECRAWL_EXTRACT_PROMPT ?? 'Extract vendor and account note'
+    process.env.ATRIB_FIRECRAWL_EXTRACT_PROMPT ??
+    (liveMode ? LIVE_DEFAULT_EXTRACT_PROMPT : 'Extract vendor and account note')
   const result = await runWrappedMcpPacket({
     packet: 'firecrawl-web-ingestion',
     mode: liveMode ? 'live' : 'fixture',
