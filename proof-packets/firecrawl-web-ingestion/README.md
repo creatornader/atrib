@@ -71,10 +71,12 @@ This proof run signs the wrapper path, record chain, hash-only disclosure, bound
 
 ## Demo boundary
 
-This is a fixed proof artifact plus a rerunnable local command. It is not a
-hosted interactive demo yet. A hosted ingestion demo would let a reviewer run a
-bounded URL or replay a fixed target and inspect receipts without local
-credential setup.
+This is a fixed proof artifact plus a rerunnable local command. The resettable
+demo server lives in
+`packages/integration/examples/firecrawl-web-ingestion/live-demo/`. The demo is
+fixed-input by design: it reruns the same public query, URL, extract prompt, and
+capped crawl while showing the policy decision beside Atrib receipts. It does
+not accept arbitrary crawl targets or crawl depths.
 
 ## Regenerate
 

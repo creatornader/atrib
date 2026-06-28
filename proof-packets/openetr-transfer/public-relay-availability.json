@@ -1,0 +1,70 @@
+{
+  "schema": "atrib.openetr.public_relay_evidence.v1",
+  "status": "events_available",
+  "connection_probe": {
+    "schema": "atrib.openetr.public_relay_availability.v1",
+    "requested": true,
+    "status": "available",
+    "checked_at_ms": 1782685540814,
+    "relay_count": 1,
+    "reachable_count": 1,
+    "relays": [
+      {
+        "url_hash": "sha256:bae52b1825836341e1007a3c17f20068eb56c2a1ff2e97e885f685db69cc9f54",
+        "connected": true,
+        "nostr_response_observed": true,
+        "response_type": "EVENT",
+        "error": null,
+        "elapsed_ms": 644
+      }
+    ],
+    "caveat": "This proves relay WebSocket and Nostr REQ response availability, not that the OpenETR transfer events were published to a public relay."
+  },
+  "public_event_availability": {
+    "schema": "atrib.openetr.public_event_availability_summary.v1",
+    "requested": true,
+    "publish_requested": true,
+    "status": "available",
+    "relay_count": 1,
+    "available_relay_count": 1,
+    "event_roles": [
+      "origin",
+      "transfer_initiate",
+      "transfer_accept"
+    ],
+    "relays": [
+      {
+        "relay_url_hash": "sha256:bae52b1825836341e1007a3c17f20068eb56c2a1ff2e97e885f685db69cc9f54",
+        "exact_found_count": 3,
+        "exact_found_all": true,
+        "events": [
+          {
+            "role": "origin",
+            "event_id_hash": "sha256:34eafce2818adacef4fe8759cfcae08be7cc9398699341dc1ee230e726376aca",
+            "kind": 31415,
+            "exact_found": true,
+            "returned_count": 1,
+            "error": null
+          },
+          {
+            "role": "transfer_initiate",
+            "event_id_hash": "sha256:00b8f4f105df2c740580ba82f7d5a58cc3dcfa81668b36c67e293efbbfa9122d",
+            "kind": 31416,
+            "exact_found": true,
+            "returned_count": 1,
+            "error": null
+          },
+          {
+            "role": "transfer_accept",
+            "event_id_hash": "sha256:f1d63b0c48da9deee17604dffad18f75467d2b064bc6ea547918f0afc00d38ee",
+            "kind": 31416,
+            "exact_found": true,
+            "returned_count": 1,
+            "error": null
+          }
+        ]
+      }
+    ]
+  },
+  "caveat": "At least one configured public relay returned the exact OpenETR issue, initiate, and accept events."
+}

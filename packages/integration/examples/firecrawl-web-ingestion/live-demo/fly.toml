@@ -1,0 +1,40 @@
+app = 'atrib-firecrawl-ingestion-demo'
+primary_region = 'iad'
+
+[build]
+  dockerfile = './Dockerfile'
+
+[env]
+  PORT = '8080'
+  HOST = '0.0.0.0'
+  ATRIB_FIRECRAWL_DEMO_MODE = 'live'
+  ATRIB_FIRECRAWL_DEMO_PUBLIC_LOG = '1'
+  ATRIB_FIRECRAWL_DEMO_DEPLOYED = '1'
+  ATRIB_FIRECRAWL_DEMO_CREDENTIAL_SCOPE = 'demo-only'
+  ATRIB_FIRECRAWL_DEMO_INPUT_SCOPE = 'fixed-public'
+  ATRIB_FIRECRAWL_DEMO_RATE_LIMIT = '1'
+  ATRIB_FIRECRAWL_DEMO_RATE_LIMIT_WINDOW_MS = '3600000'
+  ATRIB_FIRECRAWL_DEMO_MAX_RUNS_PER_WINDOW = '2'
+  ATRIB_FIRECRAWL_DEMO_MAX_RUNS_PER_DAY = '8'
+  ATRIB_FIRECRAWL_DEMO_RUN_TIMEOUT_MS = '90000'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+
+[checks]
+  [checks.health]
+    port = 8080
+    type = 'http'
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '20s'
+    method = 'GET'
+    path = '/health'

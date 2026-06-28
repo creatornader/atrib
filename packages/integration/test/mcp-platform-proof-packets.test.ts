@@ -10,6 +10,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import {
   redactUpstreamDiagnostic,
   runWrappedMcpPacket,
+  type WrappedMcpPacketResult,
 } from '../examples/wrapped-mcp-proof-runner.js'
 
 const execFileAsync = promisify(execFile)
@@ -21,7 +22,11 @@ const tsxBin = join(
   process.platform === 'win32' ? 'tsx.cmd' : 'tsx',
 )
 
-async function runPacket(script: string, outPrefix: string, env: NodeJS.ProcessEnv = {}) {
+async function runPacket(
+  script: string,
+  outPrefix: string,
+  envOverrides: Record<string, string> = {},
+) {
   const outDir = mkdtempSync(join(tmpdir(), outPrefix))
   try {
     const { stdout } = await execFileAsync(tsxBin, [script], {
@@ -31,43 +36,26 @@ async function runPacket(script: string, outPrefix: string, env: NodeJS.ProcessE
       env: {
         ...process.env,
         ATRIB_PACKET_OUT_DIR: outDir,
-        ...env,
+        ...envOverrides,
       },
     })
     return {
       outDir,
       stdout,
-      result: JSON.parse(stdout.trim()) as {
-        ok: boolean
-        packet: string
-        signed_records: number
-        operations: string[]
-        record_hashes: string[]
-        log_indexes: number[]
-        verifier: { record_valid: boolean }
-        privacy: { public_records_hash_only: boolean }
+      result: JSON.parse(stdout.trim()) as WrappedMcpPacketResult & {
+        artifact_dir: string
         policy_decision?: {
           artifact: string
           decision: string
           decision_hash: string
+          signed_policy_record?: boolean
+          signed_control_record_hash?: string | null
         }
-        action_gate?: {
-          enabled: boolean
-          package: '@atrib/action-gate'
-          gated_actions: Array<{
-            action_id: string
-            tool_name: string
-            state: string
-            outcome_status: string
-            action_executed: boolean
-            policy_id: string
-            decision_record_hash: string
-            outcome_record_hash: string
-            outcome_informed_by_decision: boolean
-            verification_valid: boolean
-          }>
-        }
-        artifact_dir: string
+        source_e2e?: boolean
+        recognized_title_transfer?: boolean
+        public_relay_events_available?: boolean
+        title_authority_attested?: boolean
+        legal_mletr_attested?: boolean
       },
       cleanup: () => rmSync(outDir, { recursive: true, force: true }),
     }
@@ -122,7 +110,25 @@ describe('MCP platform proof packets', () => {
         'end',
       ])
       expect(run.result.record_hashes).toHaveLength(6)
-      expect(run.result.log_indexes).toEqual([0, 1, 2, 3, 4, 5])
+      expect(run.result.log_indexes).toEqual([0, 1, 2, 4, 6, 7])
+      expect(run.result.action_policy).toMatchObject({
+        stopped_before: null,
+        blocked_tool_executed: false,
+      })
+      expect(run.result.action_policy?.decisions[0]?.content).toMatchObject({
+        decision: 'allow',
+        reason_codes: ['policy_allow'],
+      })
+      expect(run.result.action_policy?.outcomes[0]?.content).toMatchObject({
+        decision: 'allow',
+        executed: true,
+      })
+      expect(run.result.action_policy?.decisions[0]?.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(run.result.action_policy?.outcomes[0]?.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(run.result.action_policy?.decisions[0]?.record_valid).toBe(true)
+      expect(run.result.action_policy?.outcomes[0]?.record_valid).toBe(true)
+      expect(run.result.action_policy?.decisions[0]?.proof.log_index).toBe(3)
+      expect(run.result.action_policy?.outcomes[0]?.proof.log_index).toBe(5)
       expect(run.result.verifier.record_valid).toBe(true)
       expect(run.result.privacy.public_records_hash_only).toBe(true)
 
@@ -134,54 +140,6 @@ describe('MCP platform proof packets', () => {
         'private browserbase note',
         '<html><body><button id="private-checkout-control">Ship</button></body></html>',
         'Internal quote: private browserbase note',
-      ]) {
-        expect(text).not.toContain(needle)
-      }
-    } finally {
-      run.cleanup()
-    }
-  }, 60000)
-
-  it('embeds Action Gate records in the Browserbase Stagehand packet when enabled', async () => {
-    const run = await runPacket(
-      'examples/browserbase-stagehand/browserbase-stagehand-packet-smoke.ts',
-      'atrib-browserbase-gated-packet-',
-      { ATRIB_BROWSERBASE_ACTION_GATE: '1' },
-    )
-    try {
-      expect(run.result.ok).toBe(true)
-      expect(run.result.packet).toBe('browserbase-stagehand')
-      expect(run.result.signed_records).toBe(6)
-      expect(run.result.action_gate).toMatchObject({
-        enabled: true,
-        package: '@atrib/action-gate',
-      })
-      expect(run.result.action_gate?.gated_actions).toHaveLength(1)
-      expect(run.result.action_gate?.gated_actions[0]).toMatchObject({
-        tool_name: 'act',
-        state: 'allowed',
-        outcome_status: 'executed',
-        action_executed: true,
-        policy_id: 'browserbase-stagehand-action-policy',
-        outcome_informed_by_decision: true,
-        verification_valid: true,
-      })
-      expect(run.result.action_gate?.gated_actions[0]?.decision_record_hash).toMatch(
-        /^sha256:[0-9a-f]{64}$/u,
-      )
-      expect(run.result.action_gate?.gated_actions[0]?.outcome_record_hash).toMatch(
-        /^sha256:[0-9a-f]{64}$/u,
-      )
-
-      const text = `${run.stdout}\n${artifactText(run.outDir)}`
-      expect(text).toContain('@atrib/action-gate')
-      expect(text).toContain('Action Gate')
-      expect(text).toContain('browserbase-stagehand-action-policy')
-      for (const needle of [
-        'bb_session_private_20260623',
-        'https://browserbase.example.invalid/sessions/private-replay-20260623',
-        '#private-checkout-control',
-        'private browserbase note',
       ]) {
         expect(text).not.toContain(needle)
       }
@@ -240,6 +198,223 @@ describe('MCP platform proof packets', () => {
       run.cleanup()
     }
   }, 60000)
+
+  it('generates an OpenETR transfer packet with recognition gated', async () => {
+    const run = await runPacket(
+      'examples/openetr-transfer/openetr-transfer-packet-smoke.ts',
+      'atrib-openetr-packet-',
+      { OPENETR_SOURCE_DIR: '', ATRIB_OPENETR_SOURCE_E2E: '' },
+    )
+    try {
+      expect(run.result.ok).toBe(true)
+      expect(run.result.packet).toBe('openetr-transfer')
+      expect(run.result.signed_records).toBe(4)
+      expect(run.result.operations).toEqual([
+        'openetr_issue',
+        'openetr_transfer_initiate',
+        'openetr_transfer_accept',
+        'openetr_query_state',
+      ])
+      expect(run.result.record_hashes).toHaveLength(4)
+      expect(run.result.log_indexes).toEqual([0, 1, 2, 3])
+      expect(run.result.action_policy).toMatchObject({
+        stopped_before: 'openetr_recognize_title_transfer',
+        blocked_tool_executed: false,
+      })
+      expect(run.result.action_policy?.decisions[0]?.content).toMatchObject({
+        decision: 'escalate',
+        action_tool: 'openetr_recognize_title_transfer',
+        reason_codes: [
+          'public_relay_event_availability_missing',
+          'title_transfer_authority_missing',
+          'mletr_legal_conclusion_missing',
+          'controller_semantics_review_required',
+        ],
+      })
+      expect(run.result.action_policy?.outcomes[0]?.content).toMatchObject({
+        decision: 'escalate',
+        executed: false,
+        stopped_before: 'openetr_recognize_title_transfer',
+      })
+      expect(run.result.action_policy?.decisions[0]?.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(run.result.action_policy?.outcomes[0]?.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(run.result.action_policy?.decisions[0]?.record_valid).toBe(true)
+      expect(run.result.action_policy?.outcomes[0]?.record_valid).toBe(true)
+      expect(run.result.action_policy?.decisions[0]?.proof.log_index).toBe(4)
+      expect(run.result.action_policy?.outcomes[0]?.proof.log_index).toBe(5)
+      expect(run.result.verifier.record_valid).toBe(true)
+      expect(run.result.privacy.public_records_hash_only).toBe(true)
+      expect(run.result.policy_decision).toMatchObject({
+        artifact: 'policy-decision.json',
+        decision: 'escalate_before_title_recognition',
+        signed_policy_record: true,
+      })
+      expect(run.result.policy_decision?.decision_hash).toMatch(/^sha256:[0-9a-f]{64}$/u)
+      expect(run.result.policy_decision?.signed_control_record_hash).toMatch(
+        /^sha256:[0-9a-f]{64}$/u,
+      )
+      expect(run.result.source_e2e).toBe(false)
+      expect(run.result.recognized_title_transfer).toBe(false)
+      expect(run.result.public_relay_events_available).toBe(false)
+      expect(run.result.title_authority_attested).toBe(false)
+      expect(run.result.legal_mletr_attested).toBe(false)
+
+      const text = `${run.stdout}\n${artifactText(run.outDir, [
+        'README.md',
+        'verifier-output.json',
+        'redaction-manifest.json',
+        'policy-decision.json',
+        'public-relay-availability.json',
+        'recognition-evidence.json',
+        'controller-semantics.json',
+      ])}`
+      expect(text).toContain('signed_openetr_records_present')
+      expect(text).toContain('signed_atrib_control_record_policy_decision')
+      expect(text).toContain('openetr_chain_observed')
+      expect(text).toContain('acceptance_observed')
+      expect(text).toContain('public_nostr_relay_evidence')
+      expect(text).toContain('controller_semantics_review_required')
+      expect(text).toContain('title_recognition_requires_attestor')
+      expect(text).toContain('legal_title_transfer_or_mletr_attestation')
+      expect(text).toContain('escalate_before_title_recognition')
+      for (const needle of [
+        'sha256:7f4b8b8e2f394fddad1ed04e94c456ff0c8fb7ee6f0c5d5017deac9a0f61d425',
+        'private warehouse receipt WR-2026-0628',
+        'npub1privateissueropenetr20260628',
+        'npub1privatebuyeropenetr20260628',
+        'wss://relay.openetr.example/private-transfer',
+        '1111111111111111111111111111111111111111111111111111111111111111',
+        '2222222222222222222222222222222222222222222222222222222222222222',
+        '3333333333333333333333333333333333333333333333333333333333333333',
+      ]) {
+        expect(text).not.toContain(needle)
+      }
+    } finally {
+      run.cleanup()
+    }
+  }, 60000)
+
+  const sourceBackedOpenEtrTest = process.env.OPENETR_SOURCE_DIR ? it : it.skip
+  sourceBackedOpenEtrTest(
+    'generates an OpenETR packet backed by the upstream implementation',
+    async () => {
+      const run = await runPacket(
+        'examples/openetr-transfer/openetr-transfer-packet-smoke.ts',
+        'atrib-openetr-source-packet-',
+        {
+          OPENETR_SOURCE_DIR: process.env.OPENETR_SOURCE_DIR ?? '',
+          ATRIB_OPENETR_SOURCE_E2E: '1',
+        },
+      )
+      try {
+        expect(run.result.ok).toBe(true)
+        expect(run.result.packet).toBe('openetr-transfer')
+        expect(run.result.source_e2e).toBe(true)
+
+        const text = `${run.stdout}\n${artifactText(run.outDir, [
+          'README.md',
+          'verifier-output.json',
+          'redaction-manifest.json',
+          'policy-decision.json',
+          'public-relay-availability.json',
+          'recognition-evidence.json',
+          'controller-semantics.json',
+          'source-run-output.json',
+        ])}`
+        expect(text).toContain('actual_openetr_source_run_present')
+        expect(text).toContain('signed_atrib_control_record_policy_decision')
+        expect(text).toContain('c97eb84f5790ff041ad14a1c30df0f71ceb8d3d9')
+        expect(text).toContain('query_reports_initiator_after_accept')
+        expect(text).toContain('local-websocket-nostr-relay')
+        for (const needle of [
+          'source-backed OpenETR issue',
+          'transfer initiate; object=',
+          'transfer accept; object=',
+          'nsec1',
+          'ws://127.0.0.1',
+        ]) {
+          expect(text).not.toContain(needle)
+        }
+      } finally {
+        run.cleanup()
+      }
+    },
+    60000,
+  )
+
+  const fullOpenEtrRecognitionTest =
+    process.env.OPENETR_SOURCE_DIR &&
+    process.env.OPENETR_PUBLIC_RELAY_URLS &&
+    process.env.OPENETR_PUBLIC_RELAY_PUBLISH === '1'
+      ? it
+      : it.skip
+  fullOpenEtrRecognitionTest(
+    'generates an OpenETR packet with public relay and recognition fixture evidence',
+    async () => {
+      const run = await runPacket(
+        'examples/openetr-transfer/openetr-transfer-packet-smoke.ts',
+        'atrib-openetr-full-packet-',
+        {
+          OPENETR_SOURCE_DIR: process.env.OPENETR_SOURCE_DIR ?? '',
+          ATRIB_OPENETR_SOURCE_E2E: '1',
+          OPENETR_PUBLIC_RELAY_URLS: process.env.OPENETR_PUBLIC_RELAY_URLS ?? '',
+          OPENETR_PUBLIC_RELAY_PUBLISH: '1',
+          OPENETR_FULL_RECOGNITION_FIXTURE: '1',
+          OPENETR_PUBLIC_RUN_ID: `vitest-${Date.now()}`,
+        },
+      )
+      try {
+        expect(run.result.ok).toBe(true)
+        expect(run.result.operations).toEqual([
+          'openetr_issue',
+          'openetr_transfer_initiate',
+          'openetr_transfer_accept',
+          'openetr_query_state',
+          'openetr_recognize_title_transfer',
+        ])
+        expect(run.result.recognized_title_transfer).toBe(true)
+        expect(run.result.public_relay_events_available).toBe(true)
+        expect(run.result.title_authority_attested).toBe(true)
+        expect(run.result.legal_mletr_attested).toBe(true)
+        expect(run.result.action_policy).toMatchObject({
+          stopped_before: null,
+          blocked_tool_executed: false,
+        })
+        expect(run.result.action_policy?.decisions[0]?.content).toMatchObject({
+          decision: 'allow',
+          reason_codes: [
+            'public_relay_event_availability_present',
+            'title_transfer_authority_attested',
+            'legal_mletr_attested',
+            'controller_semantics_resolved',
+          ],
+        })
+
+        const text = `${run.stdout}\n${artifactText(run.outDir, [
+          'README.md',
+          'verifier-output.json',
+          'redaction-manifest.json',
+          'policy-decision.json',
+          'public-relay-availability.json',
+          'recognition-evidence.json',
+          'controller-semantics.json',
+          'title-authority-attestation.json',
+          'legal-mletr-attestation.json',
+          'source-run-output.json',
+        ])}`
+        expect(text).toContain('recognize_title_transfer_with_fixture_attestations')
+        expect(text).toContain('public_openetr_event_availability')
+        expect(text).toContain('controller_semantics_resolved')
+        expect(text).toContain('title_transfer_authority')
+        expect(text).toContain('legal_mletr')
+        expect(text).not.toContain('nsec1')
+        expect(text).not.toContain('ws://127.0.0.1')
+      } finally {
+        run.cleanup()
+      }
+    },
+    120000,
+  )
 
   it('redacts private material from upstream error diagnostics', () => {
     const diagnostic = redactUpstreamDiagnostic(

@@ -196,7 +196,14 @@
       "path": "examples/firecrawl-web-ingestion",
       "record_class": "public-proof",
       "endpoint_posture": "public-write",
-      "commands": []
+      "commands": ["firecrawl-web-ingestion-live-demo"]
+    },
+    {
+      "id": "openetr-transfer",
+      "path": "examples/openetr-transfer",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["openetr-transfer-packet", "openetr-transfer-source-packet"]
     },
     {
       "id": "activegraph-runtime-log",

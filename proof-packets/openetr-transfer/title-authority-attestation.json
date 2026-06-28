@@ -1,0 +1,25 @@
+{
+  "schema": "atrib.openetr.signed_external_attestation.v1",
+  "kind": "title_transfer_authority",
+  "key_id": "openetr-demo-title-authority-ed25519",
+  "signer_public_key": "jkGQzWj9wH3aDFnmywc-_S2TEdYio4oy32iFtKQSFVE",
+  "signer_public_key_hash": "sha256:9ae691d8f4bd31910d2c5bfb8dc63637a0fdfa203c4b48b50714e5c7b07b8085",
+  "statement_hash": "sha256:2ca76ce8f984f086ea2e66ffb63964883fb24b45d4b77fdc44c827966967e043",
+  "signature": "ySjKpdUf4BZmrFhzp3hVN5sQBmQciMkBnOaBGrWAOFbJxgEQhRUt3P6ZisaJ--AvR1An3-Lxw6ejmtm_BJLFAg",
+  "signature_valid": true,
+  "statement": {
+    "schema": "atrib.openetr.title_authority_statement.v1",
+    "scope": "fixture_attestation",
+    "authority_policy_id": "openetr-demo-title-authority-policy",
+    "proposed_action": "recognize_transfer",
+    "event_family": [
+      31415,
+      31416
+    ],
+    "transfer_accept_event_hash": "sha256:f1d63b0c48da9deee17604dffad18f75467d2b064bc6ea547918f0afc00d38ee",
+    "recognized_controller_pubkey_hash": "sha256:f19a1534c7c8edcf834bb9ae716a63dc494f44357368fd0f4c5e27ecea787b16",
+    "public_relay_events_available": true,
+    "source_commit": "c97eb84f5790ff041ad14a1c30df0f71ceb8d3d9",
+    "limitation": "Fixture authority recognition. Not a real title registry or legal authority."
+  }
+}

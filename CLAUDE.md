@@ -93,6 +93,7 @@ atrib/
         browser-workflow/      # Browser-shaped plus browser-use-hosted observe/click/fill/submit receipt proofs with hash-only atrib records and local sidecars.
         browserbase-stagehand/ # Browserbase MCP-shaped start/navigate/observe/act/extract/end proof artifact through @atrib/mcp-wrap.
         firecrawl-web-ingestion/ # Firecrawl MCP-shaped search/scrape/extract/crawl proof artifact through @atrib/mcp-wrap.
+        openetr-transfer/      # OpenETR-shaped issue/initiate/accept/query transfer-control proof artifact through @atrib/mcp-wrap, with pinned-source local/public relay evidence, signed title-recognition control records, and fixture authority plus legal/MLETR attestations for full public proof mode.
         activegraph-runtime-log/ # ActiveGraph v1.1.0 export-trace JSONL proof with log_window_manifest and approval-gate receipts.
         reference-runtime-log/ # Local append-only JSONL runtime-log source for window, fork, compaction, and side-effect receipt proofs.
         dogfood-runtime-log/   # Sanitized Agent Bridge job-window proof that binds status, result refs, bridge receipts, and signed atrib refs.
@@ -103,7 +104,7 @@ atrib/
         trace-repair-suspect/  # Offline trace-repair proof: verify current packet, reject stale prior evidence, rank suspect, and sign diagnostic outcome.
         graphiti/              # Graphiti MCP-shaped add/search/get episodes boundary proof through @atrib/mcp-wrap, plus optional real Graphiti core + Ollama proof.
         signer-proxy/          # D102 sandboxed-execution signer proxy example. Sandbox requests signatures, host signer keeps the key outside the sandbox.
-  proof-packets/                # External-facing proof artifacts and draft-only contact copy generated from integration examples. Browserbase Stagehand and Firecrawl web ingestion proofs keep public evidence narrow and private upstream payloads hash-only.
+  proof-packets/                # External-facing proof artifacts and draft-only contact copy generated from integration examples. Browserbase Stagehand, Firecrawl web ingestion, and OpenETR transfer proofs keep public evidence narrow and private upstream payloads hash-only.
   policies/                     # Attribution policy templates and guide (6 templates + README)
   skills/
     atrib/SKILL.md             # The atrib practice doc, agent-facing guidance for using atrib from the inside out (memory, reasoning, getting smarter over time). Source of truth; symlinked to ~/.claude/skills/atrib/SKILL.md so any Claude Code session anywhere on the host machine discovers it.

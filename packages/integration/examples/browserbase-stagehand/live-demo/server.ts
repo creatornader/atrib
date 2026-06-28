@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import { createHash } from 'node:crypto'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { pathToFileURL } from 'node:url'
+import {
+  BROWSERBASE_ACTION_POLICY_EVENT_TYPE,
+  BROWSERBASE_ACTION_POLICY_VERSION,
+  normalizeBrowserbaseActionPolicyMode,
+  type BrowserbaseActionPolicyMode,
+} from '../action-control.js'
 import { runBrowserbaseStagehandPacket } from '../browserbase-stagehand-packet-smoke.js'
 import type { WrappedMcpPacketResult } from '../../wrapped-mcp-proof-runner.js'
 
@@ -29,14 +36,16 @@ export type BrowserbaseDemoRun = {
   run_id: string
   status: RunStatus
   mode: DemoMode
+  action_policy_mode: BrowserbaseActionPolicyMode
   started_at: string
   finished_at?: string
   ok?: boolean
   error?: string
+  workflow?: BrowserbaseWorkflow
   verifier?: WrappedMcpPacketResult['verifier']
   privacy?: WrappedMcpPacketResult['privacy']
   log?: WrappedMcpPacketResult['log']
-  action_gate?: WrappedMcpPacketResult['action_gate']
+  action_policy?: WrappedMcpPacketResult['action_policy']
   operations?: Array<{
     step: string
     record_hash: string
@@ -46,7 +55,40 @@ export type BrowserbaseDemoRun = {
   }>
 }
 
-type Runner = (options: { mode: DemoMode; publicLog: boolean }) => Promise<WrappedMcpPacketResult>
+export type DisclosedValue = {
+  value?: string
+  hash?: string
+  disclosure: 'public-fixed' | 'hash-only'
+}
+
+export type BrowserbaseWorkflow = {
+  name: string
+  target_url: DisclosedValue
+  upstream: 'hosted' | 'stdio'
+  mcp_surface: string
+  browserbase_session: {
+    lifecycle_tools: string[]
+    replay_url: DisclosedValue
+    session_url: DisclosedValue
+    dashboard_note: string
+  }
+  stagehand_steps: Array<{
+    tool: 'observe' | 'act' | 'extract'
+    primitive: 'observe' | 'act' | 'extract'
+    instruction: DisclosedValue
+  }>
+  atrib_receipts: {
+    signed_tools: string[]
+    public_fields: string[]
+    private_fields: string[]
+  }
+}
+
+type Runner = (options: {
+  mode: DemoMode
+  publicLog: boolean
+  actionPolicyMode: BrowserbaseActionPolicyMode
+}) => Promise<WrappedMcpPacketResult>
 
 function numberEnv(name: string, fallback: number, env: NodeJS.ProcessEnv): number {
   const value = env[name]
@@ -60,17 +102,96 @@ function proofRunTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   return Math.max(10_000, Math.trunc(value))
 }
 
+function sha256Text(value: string): string {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`
+}
+
+function discloseValue(value: string, publicValue: boolean): DisclosedValue {
+  return publicValue
+    ? { value, disclosure: 'public-fixed' }
+    : { hash: sha256Text(value), disclosure: 'hash-only' }
+}
+
+export function browserbaseWorkflowFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): BrowserbaseWorkflow {
+  const targetUrl = env.ATRIB_BROWSERBASE_DEMO_URL ?? 'https://example.com'
+  const observeInstruction = env.ATRIB_BROWSERBASE_DEMO_OBSERVE ?? 'Find the More information link'
+  const actAction = env.ATRIB_BROWSERBASE_DEMO_ACT ?? 'Click the More information link'
+  const extractInstruction =
+    env.ATRIB_BROWSERBASE_DEMO_EXTRACT ?? 'Extract the page title and current URL'
+  const exposeTarget =
+    env.ATRIB_BROWSERBASE_DEMO_EXPOSE_TARGET === '1' || targetUrl === 'https://example.com'
+  const exposeInstructions =
+    env.ATRIB_BROWSERBASE_DEMO_EXPOSE_INSTRUCTIONS === '1' ||
+    (!env.ATRIB_BROWSERBASE_DEMO_OBSERVE &&
+      !env.ATRIB_BROWSERBASE_DEMO_ACT &&
+      !env.ATRIB_BROWSERBASE_DEMO_EXTRACT)
+
+  return {
+    name: 'Browserbase hosted Stagehand proof flow',
+    target_url: discloseValue(targetUrl, exposeTarget),
+    upstream: browserbaseUpstreamFromEnv(env),
+    mcp_surface:
+      browserbaseUpstreamFromEnv(env) === 'hosted'
+        ? 'https://mcp.browserbase.com/mcp'
+        : 'npx -y @browserbasehq/mcp',
+    browserbase_session: {
+      lifecycle_tools: ['start', 'navigate', 'end'],
+      replay_url: { disclosure: 'hash-only' },
+      session_url: { disclosure: 'hash-only' },
+      dashboard_note:
+        'Raw Browserbase session and replay URLs stay private. The API-key owner can inspect the session in Browserbase.',
+    },
+    stagehand_steps: [
+      {
+        tool: 'observe',
+        primitive: 'observe',
+        instruction: discloseValue(observeInstruction, exposeInstructions),
+      },
+      {
+        tool: 'act',
+        primitive: 'act',
+        instruction: discloseValue(actAction, exposeInstructions),
+      },
+      {
+        tool: 'extract',
+        primitive: 'extract',
+        instruction: discloseValue(extractInstruction, exposeInstructions),
+      },
+    ],
+    atrib_receipts: {
+      signed_tools: ['start', 'navigate', 'observe', 'act', 'extract', 'end'],
+      public_fields: ['tool name', 'args_hash', 'result_hash', 'record hash', 'log index'],
+      private_fields: [
+        'Browserbase API key',
+        'Browserbase project id',
+        'session URL',
+        'replay URL',
+        'page snapshot',
+        'selectors',
+        'form values',
+        'raw extraction payload',
+      ],
+    },
+  }
+}
+
 export function demoModeFromEnv(env: NodeJS.ProcessEnv = process.env): DemoMode {
   return env.ATRIB_BROWSERBASE_DEMO_MODE === 'live' ? 'live' : 'fixture'
+}
+
+export function actionPolicyModeFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): BrowserbaseActionPolicyMode {
+  return normalizeBrowserbaseActionPolicyMode(
+    env.ATRIB_BROWSERBASE_DEMO_ACTION_POLICY ?? env.ATRIB_BROWSERBASE_ACTION_POLICY,
+  )
 }
 
 export function publicLogFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.ATRIB_BROWSERBASE_DEMO_PUBLIC_LOG === '0') return false
   return demoModeFromEnv(env) === 'live'
-}
-
-export function actionGateFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.ATRIB_BROWSERBASE_ACTION_GATE !== '0'
 }
 
 export function browserbaseUpstreamFromEnv(
@@ -112,9 +233,6 @@ export function deploymentGuardIssues(env: NodeJS.ProcessEnv = process.env): str
   }
   if (!publicLogFromEnv(env)) {
     issues.push('ATRIB_BROWSERBASE_DEMO_PUBLIC_LOG must enable public log publication')
-  }
-  if (!actionGateFromEnv(env)) {
-    issues.push('ATRIB_BROWSERBASE_ACTION_GATE must not be 0')
   }
   for (const name of missingLiveEnv(env)) {
     issues.push(`${name} is required`)
@@ -206,18 +324,22 @@ export function summarizePacketResult(input: {
   startedAt: string
   finishedAt: string
   result: WrappedMcpPacketResult
+  workflow?: BrowserbaseWorkflow
+  actionPolicyMode: BrowserbaseActionPolicyMode
 }): BrowserbaseDemoRun {
   return {
     run_id: input.runId,
     status: 'accepted',
     mode: input.result.mode,
+    action_policy_mode: input.actionPolicyMode,
     started_at: input.startedAt,
     finished_at: input.finishedAt,
     ok: input.result.ok,
     verifier: input.result.verifier,
     privacy: input.result.privacy,
     log: input.result.log,
-    action_gate: input.result.action_gate,
+    ...(input.workflow ? { workflow: input.workflow } : {}),
+    ...(input.result.action_policy ? { action_policy: input.result.action_policy } : {}),
     operations: input.result.operations.map((step, index) => {
       const recordHash = input.result.record_hashes[index] ?? ''
       const recordHex = recordHash.startsWith('sha256:') ? recordHash.slice('sha256:'.length) : ''
@@ -238,6 +360,7 @@ export function summarizePacketResult(input: {
 export async function runBrowserbaseProof(options: {
   mode: DemoMode
   publicLog: boolean
+  actionPolicyMode: BrowserbaseActionPolicyMode
 }): Promise<WrappedMcpPacketResult> {
   return runBrowserbaseStagehandPacket({
     env: process.env,
@@ -249,8 +372,8 @@ export async function runBrowserbaseProof(options: {
     actAction: process.env.ATRIB_BROWSERBASE_DEMO_ACT ?? 'Click the More information link',
     extractInstruction:
       process.env.ATRIB_BROWSERBASE_DEMO_EXTRACT ?? 'Extract the page title and current URL',
+    actionPolicyMode: options.actionPolicyMode,
     timeoutMs: proofRunTimeoutMs(process.env),
-    actionGate: actionGateFromEnv(process.env),
   }).catch((error: unknown) => {
     throw new Error(redactError(error instanceof Error ? error.message : String(error)))
   })
@@ -301,12 +424,18 @@ export function createBrowserbaseDemoServer(
           mode,
           upstream: browserbaseUpstreamFromEnv(env),
           public_log: publicLogFromEnv(env),
-          action_gate: actionGateFromEnv(env),
           live_ready: missingLiveEnv(env).length === 0,
           missing_live_env: mode === 'live' ? missingLiveEnv(env) : [],
           rate_limit: rateLimitConfigFromEnv(env),
           max_attempts: env.ATRIB_BROWSERBASE_LIVE_MAX_ATTEMPTS ?? '3',
           run_timeout_ms: proofRunTimeoutMs(env),
+          workflow: browserbaseWorkflowFromEnv(env),
+          action_policy: {
+            mode: actionPolicyModeFromEnv(env),
+            modes: ['allow', 'block', 'escalate'],
+            event_type: BROWSERBASE_ACTION_POLICY_EVENT_TYPE,
+            policy_version: BROWSERBASE_ACTION_POLICY_VERSION,
+          },
           fixed_flow: ['start', 'navigate', 'observe', 'act', 'extract', 'end'],
           public_fields: [
             'tool name',
@@ -342,7 +471,7 @@ export function createBrowserbaseDemoServer(
       }
 
       if (request.method === 'POST' && url.pathname === '/api/runs') {
-        await readBody(request)
+        const runRequest = await readRunRequest(request, env)
         const guardIssues = deploymentGuardIssues(env)
         if (guardIssues.length > 0) {
           writeJson(response, 503, {
@@ -380,7 +509,14 @@ export function createBrowserbaseDemoServer(
           return
         }
 
-        const queued = startRun({ mode, publicLog: publicLogFromEnv(env), runner, runs })
+        const queued = startRun({
+          mode,
+          publicLog: publicLogFromEnv(env),
+          actionPolicyMode: runRequest.actionPolicyMode,
+          runner,
+          runs,
+          workflow: browserbaseWorkflowFromEnv(env),
+        })
         activeRun = queued.promise.finally(() => {
           activeRun = undefined
         })
@@ -422,8 +558,10 @@ export function createBrowserbaseDemoServer(
 function startRun(options: {
   mode: DemoMode
   publicLog: boolean
+  actionPolicyMode: BrowserbaseActionPolicyMode
   runner: Runner
   runs: Map<string, BrowserbaseDemoRun>
+  workflow: BrowserbaseWorkflow
 }): { run: BrowserbaseDemoRun; promise: Promise<BrowserbaseDemoRun> } {
   const runId = `bb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   const startedAt = new Date().toISOString()
@@ -431,7 +569,9 @@ function startRun(options: {
     run_id: runId,
     status: 'running',
     mode: options.mode,
+    action_policy_mode: options.actionPolicyMode,
     started_at: startedAt,
+    workflow: options.workflow,
   }
   console.log(
     JSON.stringify({
@@ -440,6 +580,7 @@ function startRun(options: {
       run_id: runId,
       mode: options.mode,
       public_log: options.publicLog,
+      action_policy_mode: options.actionPolicyMode,
     }),
   )
   rememberRun(options.runs, running)
@@ -459,18 +600,26 @@ function startRun(options: {
 async function finishRun(options: {
   mode: DemoMode
   publicLog: boolean
+  actionPolicyMode: BrowserbaseActionPolicyMode
   runner: Runner
   runs: Map<string, BrowserbaseDemoRun>
   running: BrowserbaseDemoRun
   startedAt: string
+  workflow: BrowserbaseWorkflow
 }): Promise<BrowserbaseDemoRun> {
   try {
-    const result = await options.runner({ mode: options.mode, publicLog: options.publicLog })
+    const result = await options.runner({
+      mode: options.mode,
+      publicLog: options.publicLog,
+      actionPolicyMode: options.actionPolicyMode,
+    })
     const accepted = summarizePacketResult({
       runId: options.running.run_id,
       startedAt: options.startedAt,
       finishedAt: new Date().toISOString(),
       result,
+      workflow: options.workflow,
+      actionPolicyMode: options.actionPolicyMode,
     })
     rememberRun(options.runs, accepted)
     console.log(
@@ -523,6 +672,23 @@ async function readBody(request: IncomingMessage): Promise<string> {
   let body = ''
   for await (const chunk of request) body += String(chunk)
   return body
+}
+
+async function readRunRequest(
+  request: IncomingMessage,
+  env: NodeJS.ProcessEnv,
+): Promise<{ actionPolicyMode: BrowserbaseActionPolicyMode }> {
+  const body = (await readBody(request)).trim()
+  if (!body) return { actionPolicyMode: actionPolicyModeFromEnv(env) }
+
+  try {
+    const parsed = JSON.parse(body) as { action_policy_mode?: unknown }
+    const value =
+      typeof parsed.action_policy_mode === 'string' ? parsed.action_policy_mode : undefined
+    return { actionPolicyMode: normalizeBrowserbaseActionPolicyMode(value) }
+  } catch {
+    return { actionPolicyMode: actionPolicyModeFromEnv(env) }
+  }
 }
 
 function redactError(message: string): string {
@@ -624,10 +790,35 @@ function renderApp(): string {
         cursor: not-allowed;
         opacity: 0.55;
       }
+      .run-controls {
+        align-items: end;
+        display: grid;
+        gap: 10px;
+        justify-items: end;
+      }
+      .segmented {
+        background: #e9eef6;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: inline-flex;
+        padding: 3px;
+      }
+      .segmented button {
+        background: transparent;
+        border-radius: 6px;
+        color: var(--muted);
+        min-height: 32px;
+        padding: 0 10px;
+      }
+      .segmented button.active {
+        background: white;
+        color: var(--text);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+      }
       .grid {
         display: grid;
         gap: 14px;
-        grid-template-columns: minmax(280px, 0.78fr) minmax(0, 1.4fr);
+        grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1.15fr);
       }
       section {
         background: var(--panel);
@@ -689,6 +880,102 @@ function renderApp(): string {
         color: var(--blue);
         font-weight: 700;
       }
+      .workflow {
+        display: grid;
+        gap: 14px;
+      }
+      .workflow-row {
+        border-top: 1px solid var(--line);
+        display: grid;
+        gap: 6px;
+        padding-top: 12px;
+      }
+      .browser-shell {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .browser-bar {
+        align-items: center;
+        background: #eef2f7;
+        display: flex;
+        gap: 7px;
+        min-height: 34px;
+        padding: 0 10px;
+      }
+      .dot {
+        border-radius: 999px;
+        display: inline-block;
+        height: 8px;
+        width: 8px;
+      }
+      .dot.red { background: #e45a6a; }
+      .dot.amber { background: #e5a029; }
+      .dot.green { background: #31a36c; }
+      .address {
+        background: white;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        flex: 1;
+        font-size: 12px;
+        overflow: hidden;
+        padding: 5px 9px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .browser-body {
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        min-height: 145px;
+        padding: 16px;
+      }
+      .stagehand-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .stagehand-step {
+        border-left: 3px solid var(--blue);
+        padding-left: 10px;
+      }
+      .stagehand-step strong {
+        display: block;
+        font-size: 13px;
+      }
+      .state {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        display: inline-flex;
+        font-size: 11px;
+        font-weight: 760;
+        margin-left: 6px;
+        padding: 2px 7px;
+        text-transform: uppercase;
+      }
+      .state.signed { border-color: #b6ddce; color: var(--green); }
+      .state.stopped { border-color: #ffc1ca; color: var(--red); }
+      .state.skipped { border-color: #facf91; color: var(--amber); }
+      .policy-chain {
+        border-top: 1px solid var(--line);
+        margin-top: 16px;
+        padding-top: 14px;
+      }
+      .policy-chain h3 {
+        font-size: 13px;
+        margin: 0 0 8px;
+      }
+      .subtle {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .receipt-header {
+        align-items: center;
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
       .empty {
         border: 1px dashed var(--line);
         border-radius: 8px;
@@ -698,33 +985,49 @@ function renderApp(): string {
       }
       @media (max-width: 820px) {
         header, .grid { display: block; }
-        header button { margin-top: 14px; width: 100%; }
+        .run-controls { justify-items: stretch; margin-top: 14px; }
+        .segmented { width: 100%; }
+        .segmented button { flex: 1; }
+        header button { width: 100%; }
         section { margin-bottom: 14px; }
       }
     </style>
   </head>
   <body>
     <main>
-      <header>
-        <div>
-          <h1>Browserbase Atrib Proof</h1>
-          <p>Run a fixed Browserbase MCP flow, gate the act step, and inspect signed receipts for the browser action path.</p>
-        </div>
-        <button id="runButton" type="button">Run proof</button>
-      </header>
-      <div class="grid">
+        <header>
+          <div>
+            <h1>Browserbase Atrib Proof</h1>
+            <p>Run a fixed Stagehand workflow in a Browserbase cloud browser and inspect the signed Atrib receipts beside it.</p>
+          </div>
+          <div class="run-controls">
+            <div class="segmented" aria-label="Action policy mode">
+              <button id="policyAllow" type="button" data-policy-mode="allow">Allow</button>
+            <button id="policyBlock" type="button" data-policy-mode="block">Block</button>
+            <button id="policyEscalate" type="button" data-policy-mode="escalate">Escalate</button>
+            </div>
+            <button id="runButton" type="button">Run proof</button>
+          </div>
+        </header>
+        <div class="grid">
+          <section>
+            <h2>Browserbase workflow</h2>
+            <div id="workflowPanel" class="workflow">
+              <div class="empty">Loading workflow.</div>
+            </div>
+          </section>
         <section>
-          <h2>Boundary</h2>
+          <div class="receipt-header">
+            <h2>Atrib receipts</h2>
+            <span id="statusChip" class="chip warn">waiting</span>
+          </div>
           <div class="kv">
             <div><strong>Mode</strong><span id="mode">loading</span></div>
-            <div><strong>Control</strong><span id="control">loading</span></div>
-            <div><strong>Public fields</strong><span>tool name, args hash, result hash, record hash, log index, gate hashes</span></div>
+            <div><strong>Action policy</strong><span id="policyModeLabel">loading</span></div>
+            <div><strong>Public fields</strong><span>tool name, args hash, result hash, record hash, log index</span></div>
             <div><strong>Private fields</strong><span>session URL, replay URL, page snapshot, selectors, form values, raw extraction</span></div>
-            <div><strong>Status</strong><span id="statusChip" class="chip warn">waiting</span></div>
           </div>
-        </section>
-        <section>
-          <h2>Latest run</h2>
+          <div style="height: 14px"></div>
           <div id="runPanel" class="empty">No run yet.</div>
         </section>
       </div>
@@ -733,14 +1036,18 @@ function renderApp(): string {
       const runButton = document.getElementById('runButton');
       const runPanel = document.getElementById('runPanel');
       const modeLabel = document.getElementById('mode');
-      const controlLabel = document.getElementById('control');
+      const policyModeLabel = document.getElementById('policyModeLabel');
       const statusChip = document.getElementById('statusChip');
+      const workflowPanel = document.getElementById('workflowPanel');
+      const policyButtons = Array.from(document.querySelectorAll('[data-policy-mode]'));
+      let selectedPolicyMode = 'allow';
 
       async function loadConfig() {
         const response = await fetch('/api/config');
         const config = await response.json();
+        renderWorkflow(config.workflow);
+        setSelectedPolicyMode((config.action_policy && config.action_policy.mode) || 'allow');
         modeLabel.textContent = config.mode + (config.public_log ? ' with public log' : ' with local log');
-        controlLabel.textContent = config.action_gate ? 'Action Gate on act step' : 'Action Gate off';
         if (config.deployment_guard_issues && config.deployment_guard_issues.length > 0) {
           setStatus('Guard failed', 'err');
           runButton.disabled = true;
@@ -762,7 +1069,11 @@ function renderApp(): string {
         runPanel.className = 'empty';
         runPanel.textContent = 'Starting proof run.';
         try {
-          const response = await fetch('/api/runs', { method: 'POST' });
+          const response = await fetch('/api/runs', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ action_policy_mode: selectedPolicyMode }),
+          });
           const body = await response.json();
           if (!response.ok || !body.run) throw new Error(body.error || body.run?.error || 'run failed');
           renderRun(body.run);
@@ -796,30 +1107,111 @@ function renderApp(): string {
       }
 
       function renderRun(run) {
+        if (run.workflow) renderWorkflow(run.workflow, run);
+        runPanel.className = '';
+        const table = renderOperationTable(run);
+        const policy = renderActionPolicy(run.action_policy);
+        const chipClass = run.status === 'accepted' ? 'ok' : run.status === 'running' ? 'warn' : 'err';
+        runPanel.innerHTML =
+          '<p><span class="chip ' + chipClass + '">' + escapeHtml(run.status) + '</span> ' +
+          escapeHtml(run.run_id) + '</p>' +
+          '<p class="subtle">Requested policy: ' + escapeHtml(run.action_policy_mode || selectedPolicyMode) + '</p>' +
+          table +
+          policy;
+      }
+
+      function renderOperationTable(run) {
         const rows = (run.operations || []).map((operation) => {
           const explorer = operation.explorer_url ? '<a href="' + operation.explorer_url + '" target="_blank" rel="noreferrer">explorer</a>' : '';
           const proof = operation.log_proof_url ? '<a href="' + operation.log_proof_url + '" target="_blank" rel="noreferrer">log proof</a>' : '';
           return '<tr><td>' + escapeHtml(operation.step) + '</td><td><code>' + escapeHtml(operation.record_hash) + '</code></td><td>' + operation.log_index + '</td><td>' + explorer + ' ' + proof + '</td></tr>';
         }).join('');
-        runPanel.className = '';
-        const table = rows
+        return rows
           ? '<table><thead><tr><th>Step</th><th>Record hash</th><th>Index</th><th>Links</th></tr></thead><tbody>' + rows + '</tbody></table>'
           : '<div class="empty">Proof is running.</div>';
-        const gatedActions = (run.action_gate && run.action_gate.gated_actions) || [];
-        const gateRows = gatedActions.map((action) =>
-          '<tr><td>' + escapeHtml(action.tool_name) + '</td><td>' + escapeHtml(action.state) + '</td><td><code>' +
-          escapeHtml(action.decision_record_hash) + '</code></td><td><code>' +
-          escapeHtml(action.outcome_record_hash) + '</code></td></tr>'
+      }
+
+      function renderActionPolicy(policy) {
+        if (!policy) {
+          return '<div class="policy-chain"><h3>Action gate</h3><div class="empty">Waiting for observe and policy decision records.</div></div>';
+        }
+        const rows = (policy.decisions || []).map((decision) => {
+          const outcome = (policy.outcomes || []).find((candidate) => candidate.tool_name === decision.tool_name);
+          const reasons = Array.isArray(decision.content && decision.content.reason_codes)
+            ? decision.content.reason_codes.join(', ')
+            : '';
+          const executed = outcome && outcome.content ? String(outcome.content.executed) : 'pending';
+          return '<tr><td>' + escapeHtml(decision.tool_name) + '</td><td>' +
+            escapeHtml(String((decision.content && decision.content.decision) || decision.kind)) +
+            '</td><td>' + escapeHtml(reasons) + '</td><td><code>' +
+            escapeHtml(decision.record_hash) + '</code><br><span class="subtle">index ' +
+            escapeHtml(String(decision.proof && decision.proof.log_index)) + '</span></td><td>' +
+            escapeHtml(executed) + '</td><td><code>' +
+            escapeHtml((outcome && outcome.record_hash) || 'pending') +
+            '</code><br><span class="subtle">index ' +
+            escapeHtml(String(outcome && outcome.proof ? outcome.proof.log_index : 'pending')) +
+            '</span></td></tr>';
+        }).join('');
+        const stopped = policy.stopped_before || 'none';
+        return '<div class="policy-chain"><h3>Action gate</h3>' +
+          '<p class="subtle">Stopped before: ' + escapeHtml(stopped) +
+          '. Blocked tool executed: ' + escapeHtml(String(policy.blocked_tool_executed)) + '</p>' +
+          '<table><thead><tr><th>Tool</th><th>Decision</th><th>Reasons</th><th>Decision record</th><th>Executed</th><th>Outcome record</th></tr></thead><tbody>' +
+          rows +
+          '</tbody></table></div>';
+      }
+
+      function renderWorkflow(workflow, run) {
+        if (!workflow) {
+          workflowPanel.innerHTML = '<div class="empty">Workflow unavailable.</div>';
+          return;
+        }
+        const target = disclosedValue(workflow.target_url);
+        const stagehand = (workflow.stagehand_steps || []).map((step) =>
+          '<div class="stagehand-step"><strong>' +
+          escapeHtml(step.primitive) +
+          '<span class="state ' + stepState(step.tool, run).className + '">' +
+          escapeHtml(stepState(step.tool, run).label) +
+          '</span>' +
+          '</strong><span class="subtle">' +
+          escapeHtml(disclosedValue(step.instruction)) +
+          '</span></div>'
         ).join('');
-        const gateTable = gateRows
-          ? '<h2>Action Gate</h2><table><thead><tr><th>Tool</th><th>Decision</th><th>Decision hash</th><th>Outcome hash</th></tr></thead><tbody>' + gateRows + '</tbody></table>'
-          : '';
-        const chipClass = run.status === 'accepted' ? 'ok' : run.status === 'running' ? 'warn' : 'err';
-        runPanel.innerHTML =
-          '<p><span class="chip ' + chipClass + '">' + escapeHtml(run.status) + '</span> ' +
-          escapeHtml(run.run_id) + '</p>' +
-          table +
-          gateTable;
+        workflowPanel.innerHTML =
+          '<div class="browser-shell">' +
+          '<div class="browser-bar"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span><span class="address">' +
+          escapeHtml(target) +
+          '</span></div>' +
+          '<div class="browser-body">' +
+          '<p><strong>' + escapeHtml(workflow.name) + '</strong></p>' +
+          '<p class="subtle">MCP surface: ' + escapeHtml(workflow.mcp_surface) + '</p>' +
+          '<div class="stagehand-list">' + stagehand + '</div>' +
+          '</div></div>' +
+          '<div class="workflow-row"><strong>Browserbase session</strong><span class="subtle">Lifecycle tools: ' +
+          escapeHtml((workflow.browserbase_session.lifecycle_tools || []).join(' -> ')) +
+          '</span><span class="subtle">Replay URL: ' +
+          escapeHtml(disclosedValue(workflow.browserbase_session.replay_url)) +
+          '</span><span class="subtle">' +
+          escapeHtml(workflow.browserbase_session.dashboard_note) +
+          '</span></div>';
+      }
+
+      function stepState(tool, run) {
+        if (!run) return { label: 'ready', className: '' };
+        const operations = (run.operations || []).map((operation) => operation.step);
+        if (operations.includes(tool)) return { label: 'signed', className: 'signed' };
+        if (run.action_policy && run.action_policy.stopped_before === tool) {
+          return { label: 'stopped', className: 'stopped' };
+        }
+        if (run.status === 'accepted') return { label: 'skipped', className: 'skipped' };
+        return { label: 'pending', className: '' };
+      }
+
+      function disclosedValue(field) {
+        if (!field) return 'unavailable';
+        if (field.value) return field.value;
+        if (field.hash) return 'private hash ' + field.hash;
+        return 'private hash-only';
       }
 
       function setStatus(label, kind) {
@@ -827,11 +1219,22 @@ function renderApp(): string {
         statusChip.className = 'chip ' + kind;
       }
 
+      function setSelectedPolicyMode(mode) {
+        selectedPolicyMode = ['allow', 'block', 'escalate'].includes(mode) ? mode : 'allow';
+        policyModeLabel.textContent = selectedPolicyMode + ' before act';
+        policyButtons.forEach((button) => {
+          button.classList.toggle('active', button.dataset.policyMode === selectedPolicyMode);
+        });
+      }
+
       function escapeHtml(value) {
         return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
       }
 
       runButton.addEventListener('click', runProof);
+      policyButtons.forEach((button) => {
+        button.addEventListener('click', () => setSelectedPolicyMode(button.dataset.policyMode || 'allow'));
+      });
       loadConfig().catch((error) => {
         setStatus('Config failed', 'err');
         runPanel.textContent = error instanceof Error ? error.message : String(error);

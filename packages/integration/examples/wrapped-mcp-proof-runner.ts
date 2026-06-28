@@ -1,28 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { randomBytes } from 'node:crypto'
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
-  runGatedAction,
-  type ActionGateActionEnvelope,
-  type ActionGateDecisionState,
-  type ActionGateOutcomeStatus,
-  type ActionGatePolicyDecision,
-} from '@atrib/action-gate'
-import {
+  base64urlEncode,
   canonicalRecord,
+  computeContentId,
+  getPublicKey,
   hexEncode,
   sha256,
+  signRecord,
   verifyInclusion,
   verifyRecord,
   type AtribRecord,
@@ -30,7 +20,7 @@ import {
 } from '@atrib/mcp'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
-import { snapshotWrapperMain } from './mcp-wrap-runtime.js'
+import canonicalize from 'canonicalize'
 
 const EVENT_TYPE_TOOL_CALL = 'https://atrib.dev/v1/types/tool_call'
 
@@ -61,36 +51,55 @@ export type CleanupOnFailure = {
   afterTool?: string
 }
 
-export type PacketActionGateContext = {
+export type PacketToolResultSummary = {
+  name: string
+  text_hash: string
+  record_hash: string
+}
+
+export type PacketPolicyGateDecision = {
+  decision: 'allow' | 'block' | 'escalate'
+  content: Record<string, unknown>
+  reason_codes: string[]
+  policy_version: string
+}
+
+export type PacketPolicyGateInput = {
+  packet: string
   call: PacketCall
-  index: number
-  action: ActionGateActionEnvelope
-  timestamp: string
+  call_index: number
+  completed_calls: string[]
+  previous_results: PacketToolResultSummary[]
+  previous_records: Array<{ record: AtribRecord; record_hash: string }>
 }
 
-export type PacketActionGateOptions = {
-  privateKey?: Uint8Array | string
-  contextId?: string
-  runId: string
-  agentId: string
-  surface: string
-  toolNames: string[]
-  policy: (input: PacketActionGateContext) => ActionGatePolicyDecision
-  risk?: (input: { call: PacketCall; index: number }) => readonly string[]
-  refs?: (input: { call: PacketCall; index: number }) => Record<string, string> | undefined
-}
-
-export type PacketActionGateSummary = {
-  action_id: string
+export type PacketControlRecordSummary = {
+  kind: 'policy_decision' | 'policy_outcome'
   tool_name: string
-  state: ActionGateDecisionState
-  outcome_status: ActionGateOutcomeStatus
-  action_executed: boolean
-  policy_id: string
-  decision_record_hash: string
-  outcome_record_hash: string
-  outcome_informed_by_decision: boolean
-  verification_valid: boolean
+  event_type: string
+  record_hash: string
+  record: AtribRecord
+  chain_root: string
+  informed_by: string[]
+  args_hash: string
+  record_valid: boolean
+  content: Record<string, unknown>
+  proof: {
+    log_index: number
+    leaf_hash: string
+    checkpoint: string
+    inclusion_proof: string[]
+    public_endpoint: string | null
+    inclusion_verified: boolean
+  }
+}
+
+export type PacketActionPolicySummary = {
+  schema: 'atrib.packet.action_policy.v1'
+  decisions: PacketControlRecordSummary[]
+  outcomes: PacketControlRecordSummary[]
+  stopped_before: string | null
+  blocked_tool_executed: boolean
 }
 
 type PacketUpstream =
@@ -139,15 +148,17 @@ export type WrappedMcpPacketResult = {
     public_records_hash_only: boolean
     private_needles_absent_from_public_records: boolean
   }
-  action_gate?: {
-    enabled: boolean
-    package: '@atrib/action-gate'
-    gated_actions: PacketActionGateSummary[]
-  }
+  action_policy?: PacketActionPolicySummary
 }
 
 export function hashText(value: string): string {
   return `sha256:${hexEncode(sha256(new TextEncoder().encode(value)))}`
+}
+
+function hashJson(value: unknown): string {
+  const canonical = canonicalize(value)
+  if (typeof canonical !== 'string') throw new Error('value is not JCS-canonicalizable JSON')
+  return hashText(canonical)
 }
 
 export function writeJson(path: string, value: unknown): void {
@@ -174,9 +185,9 @@ function verifyProof(proof: ProofBundle): boolean {
   const checkpoint = parseCheckpoint(proof.checkpoint)
   const rootHash = new Uint8Array(Buffer.from(checkpoint.rootHash, 'base64'))
   const leafHash = new Uint8Array(Buffer.from(proof.leaf_hash, 'base64'))
-  const proofHashes = proof.inclusion_proof.map(
-    (item) => new Uint8Array(Buffer.from(item, 'base64')),
-  )
+  const proofHashes = proof.inclusion_proof.map((item: string) => {
+    return new Uint8Array(Buffer.from(item, 'base64'))
+  })
   return verifyInclusion(proof.log_index, checkpoint.treeSize, leafHash, proofHashes, rootHash)
 }
 
@@ -243,13 +254,13 @@ async function startCaptureLog(options: { checkpoint: string }): Promise<LocalLo
   }
 }
 
-async function submitRecordToPublicLog(
+async function submitRecordToLogEndpoint(
   record: AtribRecord,
-  publicLogEndpoint: string,
+  logEndpoint: string,
 ): Promise<CapturedLogSubmission> {
   const body = JSON.stringify(record)
   const hash = recordHash(record)
-  const upstream = await fetch(publicLogEndpoint, {
+  const upstream = await fetch(logEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -260,14 +271,14 @@ async function submitRecordToPublicLog(
   const responseBody = await upstream.text()
   if (!upstream.ok) {
     throw new Error(
-      `public log submission failed for ${hash}: status ${upstream.status} ${responseBody.slice(0, 300)}`,
+      `log submission failed for ${hash}: status ${upstream.status} ${responseBody.slice(0, 300)}`,
     )
   }
   return {
     record,
     record_hash: hash,
     proof: JSON.parse(responseBody) as ProofBundle,
-    public_endpoint: publicLogEndpoint,
+    public_endpoint: logEndpoint,
   }
 }
 
@@ -277,9 +288,23 @@ async function publishAcceptedRecords(
 ): Promise<CapturedLogSubmission[]> {
   const submissions: CapturedLogSubmission[] = []
   for (const record of records) {
-    submissions.push(await submitRecordToPublicLog(record, publicLogEndpoint))
+    submissions.push(await submitRecordToLogEndpoint(record, publicLogEndpoint))
   }
   return submissions
+}
+
+function controlProofSummary(
+  submission: CapturedLogSubmission,
+  inclusionVerified: boolean,
+): PacketControlRecordSummary['proof'] {
+  return {
+    log_index: submission.proof.log_index,
+    leaf_hash: submission.proof.leaf_hash,
+    checkpoint: submission.proof.checkpoint,
+    inclusion_proof: submission.proof.inclusion_proof,
+    public_endpoint: submission.public_endpoint,
+    inclusion_verified: inclusionVerified,
+  }
 }
 
 function cleanEnv(extra: Record<string, string>): Record<string, string> {
@@ -387,10 +412,18 @@ export async function runWrappedMcpPacket(options: {
   expectedTools: string[]
   calls: PacketCall[]
   cleanupOnFailure?: CleanupOnFailure
+  policyGate?: (input: PacketPolicyGateInput) => PacketPolicyGateDecision | undefined
+  controlEventType?: string
   timeoutMs?: number
   privateNeedles: string[]
-  actionGate?: PacketActionGateOptions
 }): Promise<WrappedMcpPacketResult> {
+  const wrapperMain = join(options.integrationDir, '..', 'mcp-wrap', 'dist', 'main.js')
+  if (!existsSync(wrapperMain)) {
+    throw new Error(
+      'missing @atrib/mcp-wrap dist/main.js. Run `pnpm --filter @atrib/mcp-wrap build` first.',
+    )
+  }
+
   const tempDir = mkdtempSync(join(tmpdir(), `atrib-${options.packet}-`))
   const configPath = join(tempDir, 'wrap-config.json')
   const recordFile = join(tempDir, 'records.jsonl')
@@ -398,80 +431,182 @@ export async function runWrappedMcpPacket(options: {
   const logMode = options.logMode ?? 'local'
   const privateNeedles = options.privateNeedles.filter((needle) => needle.length > 0)
   const publicLogEndpoint = options.publicLogEndpoint ?? 'https://log.atrib.dev/v1/entries'
+  const captureLog = await startCaptureLog({
+    checkpoint: `${options.packet}-local`,
+  })
   const client = new Client({ name: `${options.packet}-packet-host`, version: '0.1.0' })
-  let captureLog: LocalLogServer | undefined
-  let transport: StdioClientTransport | undefined
+  const creatorKeySeed = randomBytes(32)
+  const publicKey = base64urlEncode(await getPublicKey(creatorKeySeed))
+  const upstream =
+    options.upstream ??
+    (options.fixtureServer
+      ? {
+          command: 'pnpm',
+          args: ['exec', 'tsx', options.fixtureServer],
+        }
+      : undefined)
+  if (!upstream) throw new Error('runWrappedMcpPacket requires fixtureServer or upstream')
+
+  const config = {
+    name: options.packet,
+    agent: `${options.packet}-proof`,
+    upstream,
+    serverUrl: `${options.packet}://mcp.local`,
+    logEndpoint: captureLog.endpoint,
+    recordFile,
+    logFile,
+    autoChain: true,
+    autoChainFallback: 'fresh',
+    disclosure: {
+      tool_name: 'verbatim',
+      args: 'plain-sha256',
+      result: 'plain-sha256',
+    },
+  }
+  writeFileSync(configPath, JSON.stringify(config, null, 2))
+
+  const transport = new StdioClientTransport({
+    command: 'node',
+    args: [wrapperMain, configPath],
+    env: cleanEnv({ ATRIB_PRIVATE_KEY: Buffer.from(creatorKeySeed).toString('base64url') }),
+    stderr: 'pipe',
+  })
+  transport.stderr?.on('data', () => {})
   const completedCalls: string[] = []
-  const actionGateResults: PacketActionGateSummary[] = []
+  const previousResults: PacketToolResultSummary[] = []
+  const policyDecisions: PacketControlRecordSummary[] = []
+  const policyOutcomes: PacketControlRecordSummary[] = []
+  const controlRecords: Array<{
+    record: AtribRecord
+    summary: PacketControlRecordSummary
+  }> = []
+  let stoppedBefore: string | null = null
   let timedOut = false
-  let timeout: NodeJS.Timeout | undefined
+  const timeout =
+    options.timeoutMs && options.timeoutMs > 0
+      ? setTimeout(() => {
+          timedOut = true
+          void transport.close().catch(() => {})
+          void client.close().catch(() => {})
+        }, options.timeoutMs)
+      : undefined
+
+  function readMirrorSnapshot(): Array<{ record: AtribRecord; record_hash: string }> {
+    if (!existsSync(recordFile)) return []
+    return mirrorRecords(recordFile).map((record) => ({ record, record_hash: recordHash(record) }))
+  }
+
+  function mirrorRecordCount(): number {
+    try {
+      return readMirrorSnapshot().length
+    } catch {
+      return 0
+    }
+  }
+
+  function capturedToolSubmissions(): CapturedLogSubmission[] {
+    return captureLog.submissions.filter((submission) => {
+      return submission.record.event_type === EVENT_TYPE_TOOL_CALL
+    })
+  }
+
+  async function waitForCompletedCall(
+    toolName: string,
+    result: unknown,
+  ): Promise<PacketToolResultSummary> {
+    await waitFor(() => mirrorRecordCount() >= completedCalls.length, `signed ${toolName} record`)
+    await waitFor(
+      () => capturedToolSubmissions().length >= completedCalls.length,
+      `captured ${toolName} log submission`,
+    )
+    const records = readMirrorSnapshot()
+    const latest = records[completedCalls.length - 1]
+    if (!latest) throw new Error(`missing signed record for ${toolName}`)
+    const summary: PacketToolResultSummary = {
+      name: toolName,
+      text_hash: hashText(toolText(result)),
+      record_hash: latest.record_hash,
+    }
+    previousResults.push(summary)
+    return summary
+  }
+
+  async function signControlRecord(input: {
+    kind: PacketControlRecordSummary['kind']
+    toolName: string
+    content: Record<string, unknown>
+    chainTail: { record: AtribRecord; record_hash: string }
+    informedBy: string[]
+  }): Promise<{ record: AtribRecord; summary: PacketControlRecordSummary }> {
+    const eventType = options.controlEventType ?? `https://${options.packet}.atrib.dev/v1/control`
+    const informedBy = [...new Set(input.informedBy)].sort()
+    const record = await signRecord(
+      {
+        spec_version: 'atrib/1.0',
+        content_id: computeContentId(`${options.packet}://action-policy`, input.kind),
+        creator_key: publicKey,
+        chain_root: input.chainTail.record_hash,
+        event_type: eventType,
+        context_id: input.chainTail.record.context_id,
+        timestamp: Date.now(),
+        signature: '',
+        args_hash: hashJson(input.content),
+        ...(informedBy.length > 0 ? { informed_by: informedBy } : {}),
+        tool_name: input.toolName,
+      } as AtribRecord,
+      creatorKeySeed,
+    )
+    const summary: PacketControlRecordSummary = {
+      kind: input.kind,
+      tool_name: input.toolName,
+      event_type: eventType,
+      record_hash: recordHash(record),
+      record,
+      chain_root: record.chain_root,
+      informed_by: record.informed_by ?? [],
+      args_hash: record.args_hash ?? '',
+      record_valid: await verifyRecord(record),
+      content: input.content,
+      proof: {
+        log_index: -1,
+        leaf_hash: '',
+        checkpoint: '',
+        inclusion_proof: [],
+        public_endpoint: null,
+        inclusion_verified: false,
+      },
+    }
+    if (!summary.record_valid) {
+      throw new Error(`control record signature failed verification for ${input.kind}`)
+    }
+    const submission = await submitRecordToLogEndpoint(record, captureLog.endpoint)
+    summary.proof = controlProofSummary(submission, false)
+    controlRecords.push({ record, summary })
+    return { record, summary }
+  }
 
   async function cleanupAfterFailedRun(): Promise<void> {
+    await cleanupAfterPolicyStop()
+  }
+
+  async function cleanupAfterPolicyStop(): Promise<void> {
     const cleanup = options.cleanupOnFailure
     if (!cleanup) return
     if (cleanup.afterTool && !completedCalls.includes(cleanup.afterTool)) return
     if (completedCalls.includes(cleanup.name)) return
-    await client
+    const result = await client
       .callTool({
         name: cleanup.name,
         arguments: cleanup.arguments ?? {},
       })
-      .catch(() => {})
+      .catch(() => undefined)
+    if (result) {
+      completedCalls.push(cleanup.name)
+      await waitForCompletedCall(cleanup.name, result)
+    }
   }
 
   try {
-    const wrapperMain = await snapshotWrapperMain({
-      integrationDir: options.integrationDir,
-      tempDir,
-    })
-    const activeCaptureLog = await startCaptureLog({
-      checkpoint: `${options.packet}-local`,
-    })
-    captureLog = activeCaptureLog
-    const upstream =
-      options.upstream ??
-      (options.fixtureServer
-        ? {
-            command: 'pnpm',
-            args: ['exec', 'tsx', options.fixtureServer],
-          }
-        : undefined)
-    if (!upstream) throw new Error('runWrappedMcpPacket requires fixtureServer or upstream')
-
-    const config = {
-      name: options.packet,
-      agent: `${options.packet}-proof`,
-      upstream,
-      serverUrl: `${options.packet}://mcp.local`,
-      logEndpoint: activeCaptureLog.endpoint,
-      recordFile,
-      logFile,
-      autoChain: true,
-      autoChainFallback: 'fresh',
-      disclosure: {
-        tool_name: 'verbatim',
-        args: 'plain-sha256',
-        result: 'plain-sha256',
-      },
-    }
-    writeFileSync(configPath, JSON.stringify(config, null, 2))
-
-    transport = new StdioClientTransport({
-      command: 'node',
-      args: [wrapperMain, configPath],
-      env: cleanEnv({ ATRIB_PRIVATE_KEY: randomBytes(32).toString('base64url') }),
-      stderr: 'pipe',
-    })
-    transport.stderr?.on('data', () => {})
-    timeout =
-      options.timeoutMs && options.timeoutMs > 0
-        ? setTimeout(() => {
-            timedOut = true
-            void transport?.close().catch(() => {})
-            void client.close().catch(() => {})
-          }, options.timeoutMs)
-        : undefined
-
     await client.connect(transport)
     const tools = await client.listTools()
     const toolNames = new Set(tools.tools.map((tool) => tool.name))
@@ -481,16 +616,71 @@ export async function runWrappedMcpPacket(options: {
       }
     }
 
-    for (let index = 0; index < options.calls.length; index += 1) {
-      const call = options.calls[index]
-      if (!call) throw new Error(`missing packet call at index ${index}`)
-      const result = await runPacketCall({
-        call,
-        index,
-        client,
+    for (let callIndex = 0; callIndex < options.calls.length; callIndex += 1) {
+      const call = options.calls[callIndex]!
+      const gateDecision = options.policyGate?.({
         packet: options.packet,
-        actionGateResults,
-        ...(options.actionGate ? { actionGate: options.actionGate } : {}),
+        call,
+        call_index: callIndex,
+        completed_calls: [...completedCalls],
+        previous_results: [...previousResults],
+        previous_records: readMirrorSnapshot(),
+      })
+      if (gateDecision) {
+        const tail = readMirrorSnapshot().at(-1)
+        if (!tail) {
+          throw new Error(`policy gate for ${call.name} requires a prior signed record`)
+        }
+        const decisionRecord = await signControlRecord({
+          kind: 'policy_decision',
+          toolName: call.name,
+          content: {
+            ...gateDecision.content,
+            decision: gateDecision.decision,
+            policy_version: gateDecision.policy_version,
+            reason_codes: gateDecision.reason_codes,
+          },
+          chainTail: tail,
+          informedBy: [tail.record_hash],
+        })
+        policyDecisions.push(decisionRecord.summary)
+
+        if (gateDecision.decision !== 'allow') {
+          stoppedBefore = call.name
+          await cleanupAfterPolicyStop()
+          const cleanupTail = readMirrorSnapshot().at(-1) ?? tail
+          const cleanupRecordHashes =
+            cleanupTail.record_hash === tail.record_hash ? [] : [cleanupTail.record_hash]
+          const cleanupTools =
+            cleanupTail.record_hash === tail.record_hash || !cleanupTail.record.tool_name
+              ? []
+              : [cleanupTail.record.tool_name]
+          const outcomeRecord = await signControlRecord({
+            kind: 'policy_outcome',
+            toolName: call.name,
+            content: {
+              schema: 'atrib.packet.action_policy_outcome.v1',
+              decision: gateDecision.decision,
+              executed: false,
+              stopped_before: call.name,
+              decision_record_hash: decisionRecord.summary.record_hash,
+              cleanup_record_hashes: cleanupRecordHashes,
+              cleanup_tools: cleanupTools,
+            },
+            chainTail: {
+              record: decisionRecord.record,
+              record_hash: decisionRecord.summary.record_hash,
+            },
+            informedBy: [decisionRecord.summary.record_hash, ...cleanupRecordHashes],
+          })
+          policyOutcomes.push(outcomeRecord.summary)
+          break
+        }
+      }
+
+      const result = await client.callTool({
+        name: call.name,
+        arguments: call.arguments ?? {},
       })
       if (
         typeof result === 'object' &&
@@ -503,11 +693,32 @@ export async function runWrappedMcpPacket(options: {
         throw new Error(`unexpected ${call.name} result; expected marker was not present`)
       }
       completedCalls.push(call.name)
+      const summary = await waitForCompletedCall(call.name, result)
+      if (gateDecision?.decision === 'allow') {
+        const actionTail = readMirrorSnapshot().at(-1)
+        if (!actionTail) throw new Error(`missing signed action record for ${call.name}`)
+        const decisionRecord = policyDecisions.at(-1)
+        if (!decisionRecord) throw new Error(`missing allow decision record for ${call.name}`)
+        const outcomeRecord = await signControlRecord({
+          kind: 'policy_outcome',
+          toolName: call.name,
+          content: {
+            schema: 'atrib.packet.action_policy_outcome.v1',
+            decision: 'allow',
+            executed: true,
+            action_record_hash: summary.record_hash,
+            decision_record_hash: decisionRecord.record_hash,
+          },
+          chainTail: actionTail,
+          informedBy: [decisionRecord.record_hash, summary.record_hash],
+        })
+        policyOutcomes.push(outcomeRecord.summary)
+      }
     }
 
     await waitFor(() => existsSync(recordFile), 'record mirror')
     await waitFor(
-      () => activeCaptureLog.submissions.length >= options.calls.length,
+      () => capturedToolSubmissions().length >= completedCalls.length,
       `${logMode} log submissions`,
       logMode === 'public' ? 15000 : 5000,
     )
@@ -517,10 +728,10 @@ export async function runWrappedMcpPacket(options: {
       if (!record.tool_name) throw new Error('signed record is missing tool_name')
       return record.tool_name
     })
-    if (records.length !== options.calls.length) {
-      throw new Error(`expected ${options.calls.length} signed records, got ${records.length}`)
+    if (records.length !== completedCalls.length) {
+      throw new Error(`expected ${completedCalls.length} signed records, got ${records.length}`)
     }
-    const expectedOrder = options.calls.map((call) => call.name)
+    const expectedOrder = completedCalls
     if (operations.join(',') !== expectedOrder.join(',')) {
       throw new Error(`unexpected signed tool order: ${operations.join(',')}`)
     }
@@ -548,7 +759,8 @@ export async function runWrappedMcpPacket(options: {
     const recordHashes = records.map(
       (record) => `sha256:${hexEncode(sha256(canonicalRecord(record)))}`,
     )
-    const capturedHashes = activeCaptureLog.submissions.map((submission) => submission.record_hash)
+    const toolSubmissions = capturedToolSubmissions()
+    const capturedHashes = toolSubmissions.map((submission) => submission.record_hash)
     if (capturedHashes.join(',') !== recordHashes.join(',')) {
       throw new Error('captured log submissions did not match verified record mirror')
     }
@@ -556,7 +768,22 @@ export async function runWrappedMcpPacket(options: {
     const acceptedSubmissions =
       logMode === 'public'
         ? await publishAcceptedRecords(records, publicLogEndpoint)
-        : activeCaptureLog.submissions
+        : toolSubmissions
+    if (logMode === 'public' && controlRecords.length > 0) {
+      const acceptedControlSubmissions = await publishAcceptedRecords(
+        controlRecords.map((entry) => entry.record),
+        publicLogEndpoint,
+      )
+      for (let index = 0; index < acceptedControlSubmissions.length; index += 1) {
+        const submission = acceptedControlSubmissions[index]!
+        const target = controlRecords[index]!.summary
+        const verified = verifyProof(submission.proof)
+        if (!verified) {
+          throw new Error(`public log inclusion verification failed for ${target.kind}`)
+        }
+        target.proof = controlProofSummary(submission, true)
+      }
+    }
     const proofs = acceptedSubmissions.map((submission) => ({
       record_hash: submission.record_hash,
       log_index: submission.proof.log_index,
@@ -572,7 +799,7 @@ export async function runWrappedMcpPacket(options: {
       throw new Error('public log inclusion verification failed')
     }
 
-    return {
+    const result: WrappedMcpPacketResult = {
       ok: true,
       mode: options.mode ?? 'fixture',
       packet: options.packet,
@@ -600,16 +827,17 @@ export async function runWrappedMcpPacket(options: {
         public_records_hash_only: true,
         private_needles_absent_from_public_records: true,
       },
-      ...(options.actionGate
-        ? {
-            action_gate: {
-              enabled: true,
-              package: '@atrib/action-gate' as const,
-              gated_actions: actionGateResults,
-            },
-          }
-        : {}),
     }
+    if (policyDecisions.length > 0 || policyOutcomes.length > 0) {
+      result.action_policy = {
+        schema: 'atrib.packet.action_policy.v1',
+        decisions: policyDecisions,
+        outcomes: policyOutcomes,
+        stopped_before: stoppedBefore,
+        blocked_tool_executed: stoppedBefore !== null && operations.includes(stoppedBefore),
+      }
+    }
+    return result
   } catch (error) {
     if (timedOut) {
       throw new Error(`packet timed out after ${options.timeoutMs}ms`)
@@ -619,88 +847,7 @@ export async function runWrappedMcpPacket(options: {
   } finally {
     if (timeout) clearTimeout(timeout)
     await client.close().catch(() => {})
-    await captureLog?.close().catch(() => {})
+    await captureLog.close().catch(() => {})
     rmSync(tempDir, { recursive: true, force: true })
   }
-}
-
-async function runPacketCall({
-  call,
-  index,
-  client,
-  packet,
-  actionGate,
-  actionGateResults,
-}: {
-  call: PacketCall
-  index: number
-  client: Client
-  packet: string
-  actionGate?: PacketActionGateOptions
-  actionGateResults: PacketActionGateSummary[]
-}): Promise<unknown> {
-  if (!actionGate?.toolNames.includes(call.name)) {
-    return client.callTool({
-      name: call.name,
-      arguments: call.arguments ?? {},
-    })
-  }
-
-  const refs = actionGate.refs?.({ call, index })
-  const action: ActionGateActionEnvelope = {
-    run_id: actionGate.runId,
-    action_id: `${packet}:${index}:${call.name}`,
-    agent_id: actionGate.agentId,
-    surface: actionGate.surface,
-    tool_name: call.name,
-    args: call.arguments ?? {},
-    risk: actionGate.risk?.({ call, index }) ?? ['browser_action'],
-    ...(refs ? { refs } : {}),
-  }
-  const privateKey = actionGate.privateKey ?? new Uint8Array(randomBytes(32))
-  const gated = await runGatedAction({
-    privateKey,
-    action,
-    evaluate: ({ timestamp }) =>
-      actionGate.policy({
-        call,
-        index,
-        action,
-        timestamp,
-      }),
-    execute: () =>
-      client.callTool({
-        name: call.name,
-        arguments: call.arguments ?? {},
-      }),
-    ...(actionGate.contextId ? { contextId: actionGate.contextId } : {}),
-  })
-
-  actionGateResults.push({
-    action_id: action.action_id,
-    tool_name: call.name,
-    state: gated.state,
-    outcome_status: gated.outcome.entry.status,
-    action_executed: gated.action_executed,
-    policy_id: gated.decision.entry.policy.policy_id,
-    decision_record_hash: gated.decision.record_hash,
-    outcome_record_hash: gated.outcome.record_hash,
-    outcome_informed_by_decision:
-      gated.outcome.record.informed_by?.includes(gated.decision.record_hash) ?? false,
-    verification_valid: gated.verification.valid,
-  })
-  if (!gated.verification.valid) {
-    throw new Error(
-      `action gate verification failed for ${call.name}: ${gated.verification.issues
-        .map((issue) => issue.code)
-        .join(', ')}`,
-    )
-  }
-  if (!gated.action_executed) {
-    throw new Error(`action gate closed before ${call.name}: ${gated.state}`)
-  }
-  if (gated.error) {
-    throw new Error(`action gate execution failed for ${call.name}: ${gated.error.message}`)
-  }
-  return gated.result
 }

@@ -3,10 +3,11 @@
 This directory holds artifact-first proof runs for external MCP and tool
 platform prospects.
 
-| Proof                                               | Source example                                           | Status                                                                                                            |
-| --------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path with public log inclusion. Fixture mode stays available for local tests.         |
-| [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/` | Live Firecrawl MCP path plus a downstream policy decision artifact. Fixture mode stays available for local tests. |
+| Proof                                               | Source example                                           | Status                                                                                                                                          |
+| --------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path, Browserbase-shaped demo, and public log inclusion. Fixture mode stays available for local tests.              |
+| [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/` | Live Firecrawl MCP path, fixed-input ingestion demo, and downstream policy decision artifact. Fixture mode stays available for local tests.     |
+| [OpenETR transfer](openetr-transfer/)               | `packages/integration/examples/openetr-transfer/`        | Source-backed OpenETR public-relay fixture recognition path with public log inclusion, signed control records, and signed fixture attestations. |
 
 Each artifact keeps public evidence narrow: tool names, hash disclosures, record
 hashes, log indexes, and verifier output. Private upstream payloads stay out of
@@ -25,14 +26,27 @@ The Browserbase and Firecrawl surfaces use these layers:
 - Live demo layer: a UI or runtime where a reviewer can start fresh runs and
   inspect receipt rows.
 
-Browserbase has live demo code at
-`packages/integration/examples/browserbase-stagehand/live-demo/`, but deployment
-is still a human gate. Hosted Browserbase fresh runs can fail during temporary
-model-capacity spikes, so the demo must show failed runs plainly and rate-limit
-retries. Firecrawl stays at fixed proof plus rerunnable command until a hosted
-crawl surface has stricter abuse and cost controls. Its packet includes
-`policy-decision.json`, which binds the signed ingestion records to a candidate
-review gate for sensitive downstream actions.
+Browserbase has a deployed live demo at
+`https://atrib-browserbase-stagehand-demo.fly.dev/`. The page shows the
+Browserbase session shape and Stagehand `observe`, `act`, and `extract`
+workflow beside the Atrib receipt table. Hosted Browserbase fresh runs can fail
+during temporary model-capacity spikes, so the demo must show failed runs plainly
+and rate-limit retries.
+
+Firecrawl has live demo code at
+`packages/integration/examples/firecrawl-web-ingestion/live-demo/`. It stays
+fixed-input by design: no arbitrary URL, query, crawl depth, or crawl limit.
+Its packet includes `policy-decision.json`, which binds the signed ingestion
+records to a candidate review gate for sensitive downstream actions.
+
+OpenETR has two paths. The default packet signs an OpenETR-shaped issue,
+transfer-initiate, transfer-accept, and state-query flow, then signs a
+control-record policy decision that stops before recognized title transfer. The
+source-backed public proof runs the pinned upstream Python implementation,
+publishes exact OpenETR events to configured public relays, verifies public
+event availability, signs fixture title-authority and legal/MLETR attestations,
+executes the recognition action, and submits accepted atrib records plus the
+control records to `log.atrib.dev`.
 
 ## Contact drafts
 

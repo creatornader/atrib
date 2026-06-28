@@ -1,0 +1,10 @@
+{
+  "schema": "atrib.openetr.controller_semantics_evidence.v1",
+  "status": "resolved_by_authority_attestation",
+  "source_query_basis": "latest control event transferee",
+  "source_query_reports_buyer": false,
+  "source_query_reports_initiator": true,
+  "accept_p_tag_points_to_initiator": true,
+  "authority_attests_acceptor_control": true,
+  "caveat": "Authority attestation resolves title-recognition policy without treating the latest p tag as controller semantics."
+}
