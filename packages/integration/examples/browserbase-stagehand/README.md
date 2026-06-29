@@ -56,16 +56,21 @@ This example has three runnable modes:
 - Live public proof: real Browserbase MCP server, public log inclusion, and
   regenerated artifact output. The current public packet uses hosted Browserbase
   MCP through `@atrib/mcp-wrap`'s HTTP upstream support.
-- Live demo: local or hosted proof console that starts fresh runs through the
-  same packet runner and returns receipt rows with explorer and log-proof links.
-  The demo enables Action Gate by default; set `ATRIB_BROWSERBASE_ACTION_GATE=0`
-  only for a browser-receipts-only run.
+- Live demo: local or hosted proof console with an agent-ready WebMCP target
+  page at `/target`. Fresh runs go through the same packet runner and return
+  receipt rows with explorer and log-proof links. The demo enables Action Gate
+  by default; set `ATRIB_BROWSERBASE_ACTION_GATE=0` only for a
+  browser-receipts-only run. The console also shows browser playback: fixture
+  mode uses deterministic cursor and click motion, while live mode can expose
+  Browserbase Live View or Replay URLs as UI-only links when the host provides
+  them.
 
 The live demo is implemented in [`live-demo/`](live-demo/). Deployment is a
 human gate. Do not publish a hosted URL until demo-only credentials and rate
 limits are in place. The Fly config in `live-demo/fly.toml` enforces hosted
-Browserbase mode, public-log publication, demo-only credential scope, and
-bounded run limits before it accepts reviewer-triggered runs.
+Browserbase mode, public-log publication, demo-only credential scope, fixed
+target hosting, and bounded run limits before it accepts reviewer-triggered
+runs.
 
 Current hosted demo: <https://atrib-browserbase-stagehand-demo.fly.dev/>.
 
@@ -100,6 +105,7 @@ ATRIB_BROWSERBASE_DEMO_MODE=live \
 ATRIB_BROWSERBASE_UPSTREAM=hosted \
 ATRIB_BROWSERBASE_DEMO_PUBLIC_LOG=1 \
 ATRIB_BROWSERBASE_ACTION_GATE=1 \
+ATRIB_BROWSERBASE_DEMO_PUBLIC_BASE_URL=https://atrib-browserbase-stagehand-demo.fly.dev \
 BROWSERBASE_API_KEY=... \
   pnpm --filter @atrib/integration browserbase-stagehand-live-demo
 ```

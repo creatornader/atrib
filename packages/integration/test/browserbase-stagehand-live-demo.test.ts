@@ -3,6 +3,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   actionPolicyModeFromEnv,
+  browserbasePrivateMediaFromToolResult,
+  browserbaseDemoTargetUrl,
   browserbaseWorkflowFromEnv,
   checkRateLimit,
   createBrowserbaseDemoServer,
@@ -137,6 +139,25 @@ const fixturePolicyResult: WrappedMcpPacketResult = {
   },
 }
 
+const fixtureAllowResult: WrappedMcpPacketResult = {
+  ...fixtureResult,
+  signed_records: 6,
+  operations: ['start', 'navigate', 'observe', 'act', 'extract', 'end'],
+  record_hashes: [
+    'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+    'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+    'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+  ],
+  log_indexes: [0, 1, 2, 4, 6, 7],
+  verifier: {
+    ...fixtureResult.verifier,
+    checked_records: 6,
+  },
+}
+
 describe('Browserbase Stagehand live demo', () => {
   it('maps proof records to explorer and local-log receipt rows', () => {
     const workflow = browserbaseWorkflowFromEnv({} as NodeJS.ProcessEnv)
@@ -162,6 +183,42 @@ describe('Browserbase Stagehand live demo', () => {
         'https://explore.atrib.dev/action/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       log_proof_url: null,
     })
+    expect(run.visual).toMatchObject({
+      schema: 'atrib.browserbase.visual_run.v1',
+      stage: 'replay',
+      source: 'fixture-simulation',
+      media: { primary: 'simulated' },
+      privacy: { public_records: 'hash-only' },
+    })
+    expect(run.visual?.events.find((event) => event.step === 'act')).toMatchObject({
+      status: 'pending',
+      target_action: 'approve',
+    })
+  })
+
+  it('marks allowed browser act as visual click playback when act is signed', () => {
+    const run = summarizePacketResult({
+      runId: 'bb-allow-test',
+      startedAt: '2026-06-23T00:00:00.000Z',
+      finishedAt: '2026-06-23T00:00:01.000Z',
+      result: fixtureAllowResult,
+      workflow: browserbaseWorkflowFromEnv({} as NodeJS.ProcessEnv),
+      actionPolicyMode: 'allow',
+    })
+
+    expect(run.operations?.map((operation) => operation.step)).toEqual([
+      'start',
+      'navigate',
+      'observe',
+      'act',
+      'extract',
+      'end',
+    ])
+    expect(run.visual?.events.find((event) => event.step === 'act')).toMatchObject({
+      status: 'signed',
+      target_action: 'approve',
+      record_hash: 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+    })
   })
 
   it('keeps signed action-policy evidence in accepted runs', () => {
@@ -184,6 +241,98 @@ describe('Browserbase Stagehand live demo', () => {
       'observe',
       'end',
     ])
+    expect(run.visual?.events.find((event) => event.step === 'policy_decision')).toMatchObject({
+      status: 'blocked',
+      target_action: 'hold',
+    })
+    expect(run.visual?.events.find((event) => event.step === 'act')).toMatchObject({
+      status: 'skipped',
+      target_action: 'hold',
+    })
+  })
+
+  it('keeps Browserbase Live View and Replay refs UI-only', () => {
+    const run = summarizePacketResult({
+      runId: 'bb-visual-test',
+      startedAt: '2026-06-23T00:00:00.000Z',
+      finishedAt: '2026-06-23T00:00:01.000Z',
+      result: fixtureResult,
+      workflow: browserbaseWorkflowFromEnv({} as NodeJS.ProcessEnv),
+      actionPolicyMode: 'allow',
+      env: {
+        ATRIB_BROWSERBASE_DEMO_LIVE_VIEW_URL: 'https://browserbase.example/live/session-token',
+        ATRIB_BROWSERBASE_DEMO_REPLAY_URL: 'http://browserbase.example/unsafe-replay',
+      } as NodeJS.ProcessEnv,
+    })
+
+    expect(run.visual?.media).toMatchObject({
+      primary: 'live',
+      live_view: {
+        available: true,
+        disclosure: 'ui-only-ephemeral',
+      },
+      replay: {
+        available: false,
+        disclosure: 'not-available',
+      },
+    })
+    expect(JSON.stringify(run.operations)).not.toContain('session-token')
+    expect(run.visual?.privacy.ui_only_fields).toContain('Browserbase Live View URL')
+  })
+
+  it('extracts Browserbase media refs from private tool results', () => {
+    const media = browserbasePrivateMediaFromToolResult({
+      name: 'start',
+      result_text: JSON.stringify({
+        id: 'bb_session_private_20260628',
+        debuggerFullscreenUrl: 'https://www.browserbase.com/devtools-fullscreen/session-private',
+        sessionUrl: 'https://www.browserbase.com/sessions/bb_session_private_20260628',
+      }),
+    })
+
+    expect(media).toMatchObject({
+      source: 'tool-result',
+      session_id: 'bb_session_private_20260628',
+      live_view_url: 'https://www.browserbase.com/devtools-fullscreen/session-private',
+      session_url: 'https://www.browserbase.com/sessions/bb_session_private_20260628',
+      detected_from: ['start'],
+    })
+  })
+
+  it('turns run-derived Browserbase session refs into hash-only media state', () => {
+    const run = summarizePacketResult({
+      runId: 'bb-private-media-test',
+      startedAt: '2026-06-23T00:00:00.000Z',
+      finishedAt: '2026-06-23T00:00:01.000Z',
+      result: {
+        ...fixtureAllowResult,
+        mode: 'live',
+      },
+      workflow: browserbaseWorkflowFromEnv({} as NodeJS.ProcessEnv),
+      actionPolicyMode: 'allow',
+      privateMedia: {
+        source: 'tool-result',
+        session_id: 'bb_session_private_20260628',
+        detected_from: ['start'],
+      },
+    })
+
+    expect(run.visual?.media).toMatchObject({
+      primary: 'replay',
+      source: 'tool-result',
+      session: {
+        available: true,
+        disclosure: 'hash-only',
+      },
+      replay: {
+        available: true,
+        proxy_path: '/api/runs/bb-private-media-test/browserbase/replays',
+        disclosure: 'server-proxy',
+      },
+    })
+    expect(run.visual?.media.session.id_hash).toMatch(/^sha256:/u)
+    expect(JSON.stringify(run.operations)).not.toContain('bb_session_private_20260628')
+    expect(JSON.stringify(run.verifier)).not.toContain('bb_session_private_20260628')
   })
 
   it('reads action policy mode from demo env with allow fallback', () => {
@@ -221,6 +370,29 @@ describe('Browserbase Stagehand live demo', () => {
     expect(JSON.stringify(workflow)).not.toContain('private observe instruction')
   })
 
+  it('describes the agent-ready WebMCP target page', () => {
+    expect(
+      browserbaseDemoTargetUrl({
+        ATRIB_BROWSERBASE_DEMO_PUBLIC_BASE_URL: 'https://demo.example/',
+      } as NodeJS.ProcessEnv),
+    ).toBe('https://demo.example/target')
+
+    const workflow = browserbaseWorkflowFromEnv({
+      ATRIB_BROWSERBASE_DEMO_PUBLIC_BASE_URL: 'https://demo.example/',
+    } as NodeJS.ProcessEnv)
+    expect(workflow.target_url.value).toBe('https://demo.example/target')
+    expect(workflow.target_page).toMatchObject({
+      route: '/target',
+      shape: 'webapp',
+      native_webmcp_api: 'document.modelContext',
+    })
+    expect(workflow.target_page.tools.map((tool) => tool.name)).toEqual([
+      'read_vendor_risk',
+      'approve_vendor_renewal',
+      'request_human_review',
+    ])
+  })
+
   it('requires only the Browserbase API key for hosted live mode', () => {
     expect(
       missingLiveEnv({
@@ -250,13 +422,13 @@ describe('Browserbase Stagehand live demo', () => {
     } as NodeJS.ProcessEnv
     expect(deploymentGuardIssues(unsafe)).toEqual([
       'ATRIB_BROWSERBASE_DEMO_CREDENTIAL_SCOPE must be demo-only',
-      'ATRIB_BROWSERBASE_DEMO_URL is required',
+      'ATRIB_BROWSERBASE_DEMO_URL or ATRIB_BROWSERBASE_DEMO_PUBLIC_BASE_URL is required',
     ])
 
     const safe = {
       ...unsafe,
       ATRIB_BROWSERBASE_DEMO_CREDENTIAL_SCOPE: 'demo-only',
-      ATRIB_BROWSERBASE_DEMO_URL: 'https://example.com',
+      ATRIB_BROWSERBASE_DEMO_PUBLIC_BASE_URL: 'https://demo.example',
     } as NodeJS.ProcessEnv
     expect(deploymentGuardIssues(safe)).toEqual([])
   })
@@ -294,10 +466,16 @@ describe('Browserbase Stagehand live demo', () => {
         ok: boolean
         mode: string
         action_policy: { mode: string; modes: string[] }
-        workflow: { stagehand_steps: unknown[] }
+        workflow: { stagehand_steps: unknown[]; target_page: { route: string; tools: unknown[] } }
+        visual: { stage: string; media: { primary: string }; events: unknown[] }
       }
       expect(config).toMatchObject({ ok: true, mode: 'fixture' })
       expect(config.workflow.stagehand_steps).toHaveLength(3)
+      expect(config.workflow.target_page.route).toBe('/target')
+      expect(config.workflow.target_page.tools).toHaveLength(3)
+      expect(config.visual.stage).toBe('idle')
+      expect(config.visual.media.primary).toBe('simulated')
+      expect(config.visual.events).toHaveLength(8)
       expect(config.action_policy.modes).toEqual(['allow', 'block', 'escalate'])
 
       const response = (await fetchJson(`${baseUrl}/api/runs`, { method: 'POST' })) as {
@@ -307,12 +485,18 @@ describe('Browserbase Stagehand live demo', () => {
       }
       expect(response.ok).toBe(true)
       expect(response.run.status).toBe('running')
+      expect(response.run.visual?.stage).toBe('running')
       expect(response.status_url).toBe(`/api/runs/${response.run.run_id}`)
 
       const run = await waitForRun(baseUrl, response.run.run_id)
       expect(run.status).toBe('accepted')
       expect(run.action_policy_mode).toBe('allow')
       expect(run.operations?.map((operation) => operation.step)).toEqual(['start', 'end'])
+      expect(run.visual?.stage).toBe('replay')
+      expect(run.visual?.media).toMatchObject({
+        primary: 'simulated',
+        source: 'none',
+      })
     } finally {
       await close(server)
     }
@@ -398,6 +582,60 @@ describe('Browserbase Stagehand live demo', () => {
       }
       expect(response).toMatchObject({ ok: false, error: 'deployment_guard_failed' })
       expect(response.issues).toContain('ATRIB_BROWSERBASE_DEMO_MODE must be live')
+    } finally {
+      await close(server)
+    }
+  })
+
+  it('serves the WebMCP target app with native API registration fallback', async () => {
+    const { server } = createBrowserbaseDemoServer({
+      env: {} as NodeJS.ProcessEnv,
+      runner: async () => fixtureResult,
+    })
+    const baseUrl = await listen(server)
+    try {
+      const response = await fetch(`${baseUrl}/target`)
+      const html = await response.text()
+      expect(response.headers.get('permissions-policy')).toBeNull()
+      expect(response.headers.get('cross-origin-opener-policy')).toBe('same-origin')
+      expect(html).toContain('document.modelContext')
+      expect(html).toContain('approve_vendor_renewal')
+      expect(html).toContain('data-webmcp-action="approve_vendor_renewal"')
+    } finally {
+      await close(server)
+    }
+  })
+
+  it('keeps the demo brand lowercase and suppresses generated fallback icons', async () => {
+    const { server } = createBrowserbaseDemoServer({
+      env: {} as NodeJS.ProcessEnv,
+      runner: async () => fixtureResult,
+    })
+    const baseUrl = await listen(server)
+    try {
+      const root = await fetch(`${baseUrl}/`)
+      const rootHtml = await root.text()
+      expect(rootHtml).toContain('Browserbase WebMCP atrib proof')
+      expect(rootHtml).toContain('<link rel="icon" href="data:," />')
+      expect(rootHtml).toContain('media-tabs')
+      expect(rootHtml).toContain('data-media-mode')
+      expect(rootHtml).toContain("mediaModeButton('live'")
+      expect(rootHtml).toContain("mediaModeButton('replay'")
+      expect(rootHtml).toContain("fetch('/api/runs')")
+      expect(rootHtml).toContain('visual-cursor')
+      expect(rootHtml).toContain('Replay motion')
+      expect(rootHtml).toContain('Open Live View')
+      expect(rootHtml).toContain('Open Replay')
+      expect(rootHtml).not.toContain('Atrib')
+
+      const target = await fetch(`${baseUrl}/target`)
+      const targetHtml = await target.text()
+      expect(targetHtml).toContain('atrib action gate target')
+      expect(targetHtml).toContain('<link rel="icon" href="data:," />')
+      expect(targetHtml).not.toContain('Atrib')
+
+      const favicon = await fetch(`${baseUrl}/favicon.ico`)
+      expect(favicon.status).toBe(204)
     } finally {
       await close(server)
     }

@@ -9,7 +9,7 @@ This proof signs a Browserbase MCP shaped browser session through `@atrib/mcp-wr
 ## What ran
 
 - Upstream surface: Browserbase hosted Streamable HTTP MCP endpoint.
-- Atrib path: `@atrib/mcp-wrap` around a hosted Streamable HTTP MCP upstream.
+- atrib path: `@atrib/mcp-wrap` around a hosted Streamable HTTP MCP upstream.
 - Record policy: public records keep tool names plus `args_hash` and `result_hash`.
 - Verification: `@atrib/mcp` verifies each Ed25519 record signature after the wrapper writes its mirror.
 - Log proof: accepted records were submitted to `https://log.atrib.dev/v1/entries` after full-flow verification; inclusion was verified.
@@ -45,9 +45,11 @@ This is a fixed proof artifact plus a rerunnable local command. The resettable
 demo server lives in
 `packages/integration/examples/browserbase-stagehand/live-demo/` and is deployed
 at <https://atrib-browserbase-stagehand-demo.fly.dev/>. The demo page shows the
-Browserbase session shape, Stagehand `observe`, `act`, and `extract` workflow,
-and Atrib receipt table side by side. Raw Browserbase session and replay URLs
-stay private.
+agent-ready WebMCP target app that Browserbase controls, Stagehand `observe`,
+`act`, and `extract` workflow, cursor/click playback, and atrib action-gate
+receipts side by side. Fixture playback is deterministic. Live Browserbase
+inspection refs, when present, are shown only as UI links and stay out of the
+public proof artifact.
 
 ## Regenerate
 

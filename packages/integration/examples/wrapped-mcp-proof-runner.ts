@@ -57,6 +57,10 @@ export type PacketToolResultSummary = {
   record_hash: string
 }
 
+export type PacketToolResultEvent = PacketToolResultSummary & {
+  result_text: string
+}
+
 export type PacketPolicyGateDecision = {
   decision: 'allow' | 'block' | 'escalate'
   content: Record<string, unknown>
@@ -413,6 +417,7 @@ export async function runWrappedMcpPacket(options: {
   calls: PacketCall[]
   cleanupOnFailure?: CleanupOnFailure
   policyGate?: (input: PacketPolicyGateInput) => PacketPolicyGateDecision | undefined
+  onToolResult?: ((event: PacketToolResultEvent) => void) | undefined
   controlEventType?: string
   timeoutMs?: number
   privateNeedles: string[]
@@ -514,6 +519,7 @@ export async function runWrappedMcpPacket(options: {
     toolName: string,
     result: unknown,
   ): Promise<PacketToolResultSummary> {
+    const resultText = toolText(result)
     await waitFor(() => mirrorRecordCount() >= completedCalls.length, `signed ${toolName} record`)
     await waitFor(
       () => capturedToolSubmissions().length >= completedCalls.length,
@@ -524,10 +530,14 @@ export async function runWrappedMcpPacket(options: {
     if (!latest) throw new Error(`missing signed record for ${toolName}`)
     const summary: PacketToolResultSummary = {
       name: toolName,
-      text_hash: hashText(toolText(result)),
+      text_hash: hashText(resultText),
       record_hash: latest.record_hash,
     }
     previousResults.push(summary)
+    options.onToolResult?.({
+      ...summary,
+      result_text: resultText,
+    })
     return summary
   }
 
