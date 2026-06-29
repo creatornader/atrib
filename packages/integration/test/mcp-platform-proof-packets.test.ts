@@ -168,11 +168,41 @@ describe('MCP platform proof packets', () => {
       expect(run.result.log_indexes).toEqual([0, 1, 2, 3])
       expect(run.result.verifier.record_valid).toBe(true)
       expect(run.result.privacy.public_records_hash_only).toBe(true)
+      expect(run.result.action_policy).toMatchObject({
+        schema: 'atrib.packet.action_policy.v1',
+        stopped_before: 'customer_email',
+        blocked_tool_executed: false,
+      })
+      expect(run.result.action_policy?.decisions[0]).toMatchObject({
+        kind: 'policy_decision',
+        tool_name: 'customer_email',
+        event_type: 'https://firecrawl-ingestion-policy.atrib.dev/v1/decision',
+        record_valid: true,
+      })
+      expect(run.result.action_policy?.decisions[0]?.content).toMatchObject({
+        decision: 'escalate',
+        action_tool: 'customer_email',
+        decision_boundary: 'post_ingestion_pre_downstream_action',
+      })
+      expect(run.result.action_policy?.outcomes[0]).toMatchObject({
+        kind: 'policy_outcome',
+        tool_name: 'customer_email',
+        record_valid: true,
+      })
+      expect(run.result.action_policy?.outcomes[0]?.content).toMatchObject({
+        decision: 'escalate',
+        executed: false,
+        stopped_before: 'customer_email',
+      })
       expect(run.result.policy_decision).toMatchObject({
         artifact: 'policy-decision.json',
         decision: 'escalate_before_customer_email',
+        signed_policy_record: true,
       })
       expect(run.result.policy_decision?.decision_hash).toMatch(/^sha256:[0-9a-f]{64}$/u)
+      expect(run.result.policy_decision?.signed_control_record_hash).toMatch(
+        /^sha256:[0-9a-f]{64}$/u,
+      )
 
       const text = `${run.stdout}\n${artifactText(run.outDir, [
         'README.md',
@@ -182,6 +212,7 @@ describe('MCP platform proof packets', () => {
       ])}`
       expect(text).toContain('signed_ingestion_records_present')
       expect(text).toContain('bounded_crawl_cap_present')
+      expect(text).toContain('signed_atrib_control_record_policy_decision')
       expect(text).toContain('raw_web_content_private')
       expect(text).toContain('customer_message_requires_review')
       expect(text).toContain('escalate_before_customer_email')

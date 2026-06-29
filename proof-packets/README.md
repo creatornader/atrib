@@ -33,11 +33,23 @@ and the atrib action-gate receipts beside it. Hosted Browserbase fresh runs can
 fail during temporary model-capacity spikes, so the demo must show failed runs
 plainly and rate-limit retries.
 
-Firecrawl has live demo code at
-`packages/integration/examples/firecrawl-web-ingestion/live-demo/`. It stays
-fixed-input by design: no arbitrary URL, query, crawl depth, or crawl limit.
-Its packet includes `policy-decision.json`, which binds the signed ingestion
-records to a candidate review gate for sensitive downstream actions.
+Firecrawl has a deployed live demo at
+`https://atrib-firecrawl-ingestion-demo.fly.dev/`. It stays fixed-input by
+design: no arbitrary URL, query, crawl depth, or crawl limit. Its packet
+includes `policy-decision.json`, which binds the signed ingestion records to a
+signed review gate for sensitive downstream actions.
+
+## Explicit deferrals
+
+- Browserbase Live View deep link: the hosted Browserbase MCP path does not
+  currently return a Live View URL. The demo exposes replay or session refs when
+  the runtime provides them and keeps cursor/click playback in the UI.
+- Shared durable run storage: both hosted demos run one warm Fly machine, so the
+  in-memory active-run lock and rate limiter apply consistently. Shared storage
+  is only needed if either demo scales past one machine.
+- Firecrawl arbitrary-input crawling: the hosted demo stays fixed-input because
+  arbitrary URL, query, depth, or limit input would introduce abuse and cost
+  controls outside this proof packet.
 
 OpenETR has two paths. The default packet signs an OpenETR-shaped issue,
 transfer-initiate, transfer-accept, and state-query flow, then signs a

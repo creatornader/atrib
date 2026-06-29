@@ -6,6 +6,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   hashText,
   runWrappedMcpPacket,
+  type PacketActionPolicySummary,
+  type PacketPolicyGateDecision,
+  type PacketPolicyGateInput,
   type WrappedMcpPacketResult,
   writeJson,
 } from '../wrapped-mcp-proof-runner.js'
@@ -20,6 +23,9 @@ export const LIVE_DEFAULT_QUERY = 'site:example.com Example Domain'
 export const LIVE_DEFAULT_URL = 'https://example.com'
 export const LIVE_DEFAULT_EXTRACT_PROMPT =
   'Extract the organization name and a short account note from this public page.'
+const DOWNSTREAM_CUSTOMER_EMAIL_TOOL = 'customer_email'
+const FIRECRAWL_POLICY_EVENT_TYPE = 'https://firecrawl-ingestion-policy.atrib.dev/v1/decision'
+const FIRECRAWL_POLICY_VERSION = 'firecrawl-ingestion-policy-v0'
 
 export const CRAWL_CAP = {
   maxDepth: 1,
@@ -78,7 +84,68 @@ function stableJsonHash(value: unknown): string {
   return hashText(JSON.stringify(value))
 }
 
+function liveRunTimeoutMs(env: NodeJS.ProcessEnv): number {
+  const parsed = Number(env.ATRIB_FIRECRAWL_PACKET_TIMEOUT_MS ?? env.ATRIB_PACKET_TIMEOUT_MS)
+  if (Number.isFinite(parsed)) return Math.max(10_000, Math.trunc(parsed))
+  return 90_000
+}
+
+function publicControlRecord(
+  actionPolicy: PacketActionPolicySummary | undefined,
+  kind: 'policy_decision' | 'policy_outcome',
+) {
+  const record = actionPolicy?.[kind === 'policy_decision' ? 'decisions' : 'outcomes'].find(
+    (entry) => entry.tool_name === DOWNSTREAM_CUSTOMER_EMAIL_TOOL,
+  )
+  if (!record) return null
+  return {
+    kind: record.kind,
+    tool_name: record.tool_name,
+    event_type: record.event_type,
+    record_hash: record.record_hash,
+    chain_root: record.chain_root,
+    informed_by: record.informed_by,
+    args_hash: record.args_hash,
+    record_valid: record.record_valid,
+    content: record.content,
+    proof: record.proof,
+  }
+}
+
+function createFirecrawlDownstreamPolicyGate() {
+  return (input: PacketPolicyGateInput): PacketPolicyGateDecision | undefined => {
+    if (input.call.name !== DOWNSTREAM_CUSTOMER_EMAIL_TOOL) return undefined
+    const operationOrder = input.previous_records
+      .map((entry) => entry.record.tool_name)
+      .filter((toolName): toolName is string => Boolean(toolName))
+    return {
+      decision: 'escalate',
+      policy_version: FIRECRAWL_POLICY_VERSION,
+      reason_codes: [
+        'web_ingestion_untrusted',
+        'customer_message_requires_review',
+        'raw_content_private',
+      ],
+      content: {
+        schema: 'atrib.firecrawl.ingestion_policy_decision.v1',
+        packet: input.packet,
+        decision_boundary: 'post_ingestion_pre_downstream_action',
+        action_tool: input.call.name,
+        action_class: 'external_customer_message',
+        risk_class: 'web_ingestion_to_customer_action',
+        operation_order: operationOrder,
+        ingestion_record_hashes: input.previous_records.map((entry) => entry.record_hash),
+        result_hashes: input.previous_results.map((entry) => entry.text_hash),
+        crawl_cap: CRAWL_CAP,
+        proposed_next_action: input.call.arguments ?? {},
+      },
+    }
+  }
+}
+
 function buildPolicyDecision(result: WrappedMcpPacketResult) {
+  const signedPolicyDecision = publicControlRecord(result.action_policy, 'policy_decision')
+  const signedPolicyOutcome = publicControlRecord(result.action_policy, 'policy_outcome')
   const base = {
     schema: 'atrib.proof_packet.policy_decision.v1',
     packet: result.packet,
@@ -100,6 +167,15 @@ function buildPolicyDecision(result: WrappedMcpPacketResult) {
       crawl_cap: CRAWL_CAP,
       verifier: result.verifier,
       privacy: result.privacy,
+      action_policy: {
+        schema: result.action_policy?.schema ?? null,
+        stopped_before: result.action_policy?.stopped_before ?? null,
+        blocked_tool_executed: result.action_policy?.blocked_tool_executed ?? null,
+      },
+    },
+    signed_control_records: {
+      policy_decision: signedPolicyDecision,
+      policy_outcome: signedPolicyOutcome,
     },
     rule_results: [
       {
@@ -119,6 +195,13 @@ function buildPolicyDecision(result: WrappedMcpPacketResult) {
         id: 'bounded_crawl_cap_present',
         outcome: 'pass',
         evidence: `crawl cap maxDepth=${CRAWL_CAP.maxDepth}, limit=${CRAWL_CAP.limit}`,
+      },
+      {
+        id: 'signed_atrib_control_record_policy_decision',
+        outcome: signedPolicyDecision?.record_valid ? 'pass' : 'fail',
+        evidence: signedPolicyDecision
+          ? `policy decision signed as ${signedPolicyDecision.record_hash}`
+          : 'no signed policy decision record was present',
       },
       {
         id: 'raw_web_content_private',
@@ -159,8 +242,8 @@ function buildPolicyDecision(result: WrappedMcpPacketResult) {
     ],
     caveats: [
       'The policy decision artifact is deterministic and hash-bound to signed Firecrawl records.',
-      'The policy decision artifact is not a signed atrib record yet.',
-      'A live enforcement surface would still need to stop or route the downstream action at runtime.',
+      'The downstream customer-email decision is also signed as an atrib control record.',
+      'The demo stops before the downstream customer email runs.',
     ],
   }
   return {
@@ -196,6 +279,19 @@ Representative public links:
     result.mode === 'live'
       ? 'Firecrawl MCP server launched with `npx -y firecrawl-mcp`.'
       : 'Firecrawl MCP tool names, backed by a deterministic local fixture.'
+  const signedPolicyDecision = policyDecision.signed_control_records.policy_decision
+  const signedPolicyOutcome = policyDecision.signed_control_records.policy_outcome
+  const signedPolicyRows =
+    signedPolicyDecision && signedPolicyOutcome
+      ? `
+Signed control records:
+
+- Policy decision: \`${signedPolicyDecision.record_hash}\` at log index \`${signedPolicyDecision.proof.log_index}\`
+- Policy outcome: \`${signedPolicyOutcome.record_hash}\` at log index \`${signedPolicyOutcome.proof.log_index}\`
+`
+      : `
+Signed control records: missing.
+`
   const weakness =
     result.mode === 'live'
       ? 'This proof run signs the wrapper path, record chain, hash-only disclosure, bounded crawl cap, public log inclusion, verifier path, and real Firecrawl MCP command path. Hosted Firecrawl content remains private.'
@@ -253,9 +349,10 @@ Escalated before execution: \`${policyDecision.escalated_actions.join('`, `')}\`
 
 Policy decision hash: \`${policyDecision.decision_hash}\`.
 
-The policy decision file is deterministic and hash-bound to the signed
-ingestion records. It is not a signed atrib record yet. The signed evidence in
-this packet is the wrapped Firecrawl tool-call chain.
+${signedPolicyRows}
+The policy decision file summarizes the signed atrib control decision. The
+packet signs both the wrapped Firecrawl tool-call chain and the downstream
+policy decision plus outcome records.
 
 ## Loop receipt
 
@@ -267,10 +364,11 @@ ${weakness}
 
 ## Demo boundary
 
-This is a fixed proof artifact plus a rerunnable local command. It is not a
-hosted interactive demo yet. A hosted ingestion demo would let a reviewer run a
-bounded URL or replay a fixed target and inspect receipts without local
-credential setup.
+This is a fixed proof artifact plus a rerunnable local command. The resettable
+demo server lives in
+\`packages/integration/examples/firecrawl-web-ingestion/live-demo/\`. The demo
+is fixed-input by design: it lets a reviewer run the same bounded public target
+and inspect fresh receipts without exposing arbitrary crawl capability.
 
 ## Regenerate
 
@@ -291,6 +389,8 @@ Live mode expects \`FIRECRAWL_API_KEY\` in the shell environment. On the operato
 machine, \`~/.zshenv\` seeds it from \`~/.atrib/secrets/firecrawl-api-key\`
 first, then asks 1Password only in an interactive shell if the cache is empty.
 The runner does not call \`op read\`.
+Live packet runs default to a 90-second timeout. Override it with
+\`ATRIB_FIRECRAWL_PACKET_TIMEOUT_MS\` or \`ATRIB_PACKET_TIMEOUT_MS\`.
 `
 }
 
@@ -311,6 +411,7 @@ export async function runFirecrawlWebIngestionPacket(
     env.ATRIB_FIRECRAWL_EXTRACT_PROMPT ??
     (liveMode ? LIVE_DEFAULT_EXTRACT_PROMPT : 'Extract vendor and account note')
   const expectText = (value: string) => (liveMode ? {} : { expectText: value })
+  const packetTimeoutMs = options.timeoutMs ?? (liveMode ? liveRunTimeoutMs(env) : undefined)
   const packetOptions: PacketOptions = {
     packet: 'firecrawl-web-ingestion',
     mode: liveMode ? 'live' : 'fixture',
@@ -364,7 +465,17 @@ export async function runFirecrawlWebIngestionPacket(
         arguments: { url: sourceUrl, ...CRAWL_CAP },
         ...expectText('queued'),
       },
+      {
+        name: DOWNSTREAM_CUSTOMER_EMAIL_TOOL,
+        arguments: {
+          action_type: 'customer_email',
+          description: 'Use web-ingested content in an outbound customer message.',
+          risk_class: 'external_customer_message',
+        },
+      },
     ],
+    policyGate: createFirecrawlDownstreamPolicyGate(),
+    controlEventType: FIRECRAWL_POLICY_EVENT_TYPE,
     privateNeedles: liveMode
       ? [query, sourceUrl, extractPrompt]
       : [
@@ -375,11 +486,13 @@ export async function runFirecrawlWebIngestionPacket(
           PRIVATE_EXTRACT,
           PRIVATE_CRAWL_JOB_ID,
         ],
-    ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
+    ...(packetTimeoutMs ? { timeoutMs: packetTimeoutMs } : {}),
   }
   const result = await runWrappedMcpPacket(packetOptions)
 
   const policyDecision = buildPolicyDecision(result)
+  const signedPolicyDecision = publicControlRecord(result.action_policy, 'policy_decision')
+  const signedPolicyOutcome = publicControlRecord(result.action_policy, 'policy_outcome')
 
   const verifierOutput = {
     schema: 'atrib.proof_packet.verifier_output.v1',
@@ -403,9 +516,10 @@ export async function runFirecrawlWebIngestionPacket(
       decision: policyDecision.decision,
       decision_status: policyDecision.decision_status,
       decision_hash: policyDecision.decision_hash,
-      signed_policy_record: false,
-      caveat:
-        'Policy decision is a deterministic artifact bound to signed records, not a signed atrib record.',
+      signed_policy_record: Boolean(signedPolicyDecision),
+      signed_control_record: signedPolicyDecision,
+      signed_outcome_record: signedPolicyOutcome,
+      caveat: 'Policy decision artifact summarizes the signed atrib control-record decision.',
     },
     caveats: [
       result.mode === 'live'
@@ -462,6 +576,7 @@ export async function runFirecrawlWebIngestionPacket(
 async function main(): Promise<void> {
   const packet = await runFirecrawlWebIngestionPacket()
   const { result, policyDecision, artifact_dir } = packet
+  const signedPolicyDecision = publicControlRecord(result.action_policy, 'policy_decision')
   console.log(
     JSON.stringify(
       {
@@ -470,6 +585,8 @@ async function main(): Promise<void> {
           artifact: 'policy-decision.json',
           decision: policyDecision.decision,
           decision_hash: policyDecision.decision_hash,
+          signed_policy_record: Boolean(signedPolicyDecision),
+          signed_control_record_hash: signedPolicyDecision?.record_hash ?? null,
         },
         artifact_dir,
       },
