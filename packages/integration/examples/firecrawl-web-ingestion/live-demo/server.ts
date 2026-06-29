@@ -31,6 +31,11 @@ export type FirecrawlDemoRun = {
     decision: string
     decision_status: string
     decision_hash: string
+    signed_policy_record: boolean
+    signed_control_record_hash: string | null
+    signed_control_record_index: number | null
+    signed_outcome_record_hash: string | null
+    signed_outcome_record_index: number | null
     rule_results: Array<{ id: string; outcome: string }>
   }
   operations?: Array<{
@@ -251,6 +256,8 @@ export function summarizePacketResult(input: {
   packet: FirecrawlWebIngestionPacketRun
 }): FirecrawlDemoRun {
   const result = input.packet.result
+  const signedDecision = input.packet.policyDecision.signed_control_records.policy_decision
+  const signedOutcome = input.packet.policyDecision.signed_control_records.policy_outcome
   return {
     run_id: input.runId,
     status: 'accepted',
@@ -263,6 +270,11 @@ export function summarizePacketResult(input: {
       decision: input.packet.policyDecision.decision,
       decision_status: input.packet.policyDecision.decision_status,
       decision_hash: input.packet.policyDecision.decision_hash,
+      signed_policy_record: Boolean(signedDecision),
+      signed_control_record_hash: signedDecision?.record_hash ?? null,
+      signed_control_record_index: signedDecision?.proof.log_index ?? null,
+      signed_outcome_record_hash: signedOutcome?.record_hash ?? null,
+      signed_outcome_record_index: signedOutcome?.proof.log_index ?? null,
       rule_results: input.packet.policyDecision.rule_results.map((rule) => ({
         id: rule.id,
         outcome: rule.outcome,
@@ -853,7 +865,9 @@ function renderApp(): string {
           ? '<table><thead><tr><th>Step</th><th>Record hash</th><th>Index</th><th>Links</th></tr></thead><tbody>' + rows + '</tbody></table>'
           : '<div class="empty">Proof is running.</div>';
         const policy = run.policy_decision
-          ? '<p><strong>Policy:</strong> ' + escapeHtml(run.policy_decision.decision) + ' <code>' + escapeHtml(run.policy_decision.decision_hash) + '</code></p><table><thead><tr><th>Rule</th><th>Outcome</th></tr></thead><tbody>' + ruleRows + '</tbody></table>'
+          ? '<p><strong>Policy:</strong> ' + escapeHtml(run.policy_decision.decision) + ' <code>' + escapeHtml(run.policy_decision.decision_hash) + '</code></p>' +
+            '<p><strong>Signed control:</strong> decision <code>' + escapeHtml(run.policy_decision.signed_control_record_hash || 'missing') + '</code> at index ' + escapeHtml(run.policy_decision.signed_control_record_index ?? 'missing') + ', outcome <code>' + escapeHtml(run.policy_decision.signed_outcome_record_hash || 'missing') + '</code> at index ' + escapeHtml(run.policy_decision.signed_outcome_record_index ?? 'missing') + '</p>' +
+            '<table><thead><tr><th>Rule</th><th>Outcome</th></tr></thead><tbody>' + ruleRows + '</tbody></table>'
           : '';
         const chipClass = run.status === 'accepted' ? 'ok' : run.status === 'running' ? 'warn' : 'err';
         runPanel.className = '';

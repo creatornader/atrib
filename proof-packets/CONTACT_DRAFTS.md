@@ -19,21 +19,22 @@ Firecrawl web ingestion:
 
 - Artifact: [`firecrawl-web-ingestion/verifier-output.json`](firecrawl-web-ingestion/verifier-output.json)
 - Policy decision: [`firecrawl-web-ingestion/policy-decision.json`](firecrawl-web-ingestion/policy-decision.json)
-- Live demo code: [`../packages/integration/examples/firecrawl-web-ingestion/live-demo/README.md`](../packages/integration/examples/firecrawl-web-ingestion/live-demo/README.md)
-- Explorer: <https://explore.atrib.dev/action/sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434>
-- Public log proof: <https://log.atrib.dev/v1/proof/bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434>
-- Public log indexes: `66265`, `66266`, `66267`, `66268`
-- Policy decision hash: `sha256:3c186af0a83692a04146bc25b5ef0202c3b4c8901f71cc2ea4d269ddfa02d7c1`
+- Live demo: <https://atrib-firecrawl-ingestion-demo.fly.dev/>
+- Explorer: <https://explore.atrib.dev/action/sha256:cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2>
+- Public log proof: <https://log.atrib.dev/v1/proof/cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2>
+- Public proof log indexes: tool records `67668`, `67669`, `67670`, `67671`; control records `67672`, `67673`
+- Latest deployed demo run: tool records `67682`, `67683`, `67684`, `67685`; control records `67686`, `67687`
+- Policy decision hash: `sha256:bf2395e835c18291a1bf05df24c95688a39d1260754f32d20e555fb72a912715`
 - Tools signed: `firecrawl_search`, `firecrawl_scrape`, `firecrawl_extract`, `firecrawl_crawl`
+- Control signed: `policy_decision`, `policy_outcome` before `customer_email`
 
 ## Target table
 
-| Rank | Target                                                                                                      | Channel                                                             | Source-backed reason                                                                                                                                                                              | Draft status               |
-| ---- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| 1    | Browserbase MCP maintainers, top repo contributors include `@Kylejeong2`, `@alexdphan`, `@filip-michalsky`  | New GitHub issue after approval                                     | Repo is active and public. Open issues discuss prompt injection through web content, cloud browser policy enforcement, and orphaned sessions: browserbase/mcp-server-browserbase#159, #176, #187. | Ready for approved issue   |
-| 2    | Firecrawl MCP maintainers, top repo contributors include `@nickscamara`, `@vrknetha`, `@tomkosm`, `@mogery` | Comment on firecrawl/firecrawl-mcp-server#233 after approval        | Repo is active and public. Open issues discuss MCPSafe scan results, SSRF risk, and runaway crawl or credit burn: firecrawl/firecrawl-mcp-server#233, #194, #211.                                 | Ready for approved comment |
-| 3    | Browserbase support                                                                                         | Email only after approval                                           | Browserbase MCP docs list support as a help path, but a GitHub issue keeps the proof and criticism public.                                                                                        | Hold                       |
-| 4    | X or Discord                                                                                                | Only if a source-backed account or community link is selected later | No exact source-backed person or community target was added in this pass.                                                                                                                         | Hold                       |
+| Rank | Target | Channel | Source-backed reason | Draft status |
+| 1 | Browserbase MCP maintainers, top repo contributors include `@Kylejeong2`, `@alexdphan`, `@filip-michalsky` | New GitHub issue after approval | Repo is active and public. Open issues discuss prompt injection through web content, cloud browser policy enforcement, and orphaned sessions: browserbase/mcp-server-browserbase#159, #176, #187. | Ready for approved issue |
+| 2 | Firecrawl MCP maintainers, top repo contributors include `@nickscamara`, `@vrknetha`, `@tomkosm`, `@mogery` | Comment on firecrawl/firecrawl-mcp-server#233 after approval | Repo is active and public. Open issues discuss MCPSafe scan results, SSRF risk, and runaway crawl or credit burn: firecrawl/firecrawl-mcp-server#233, #194, #211. | Ready for approved comment |
+| 3 | Browserbase support | Email only after approval | Browserbase MCP docs list support as a help path, but a GitHub issue keeps the proof and criticism public. | Hold |
+| 4 | X or Discord | Only if a source-backed account or community link is selected later | No exact source-backed person or community target was added in this pass. | Hold |
 
 ## Browserbase draft: GitHub issue or comment
 
@@ -115,19 +116,23 @@ Proof shape:
 - Wrapper: `@atrib/mcp-wrap`
 - Public fields: tool names, `args_hash`, `result_hash`, record hashes, public log indexes
 - Private fields: query, URL, scraped content, extracted text, crawl job id
-- Policy artifact: `policy-decision.json` models `escalate_before_customer_email`
+- Policy artifact: `policy-decision.json` summarizes signed `policy_decision` and `policy_outcome` records before `customer_email`
+- Fixed-input live demo: https://atrib-firecrawl-ingestion-demo.fly.dev/
 
 Public proof:
 
-- Explorer: https://explore.atrib.dev/action/sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434
-- Log proof: https://log.atrib.dev/v1/proof/bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434
-- Public log indexes: `66265`, `66266`, `66267`, `66268`
-- Policy decision hash: `sha256:3c186af0a83692a04146bc25b5ef0202c3b4c8901f71cc2ea4d269ddfa02d7c1`
+- Explorer: https://explore.atrib.dev/action/sha256:cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2
+- Log proof: https://log.atrib.dev/v1/proof/cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2
+- Tool record indexes: `67668`, `67669`, `67670`, `67671`
+- Signed control record indexes: `67672`, `67673`
+- Policy decision hash: `sha256:bf2395e835c18291a1bf05df24c95688a39d1260754f32d20e555fb72a912715`
+- Latest deployed demo run: tool indexes `67682`, `67683`, `67684`, `67685`; control indexes `67686`, `67687`
 
 Policy shape:
 
 - Allow internal research and source triage.
-- Escalate before a customer email, account update, refund or payment change, production code change, or vendor workflow depends on the ingested web content.
+- Sign an escalation decision before a customer email, account update, refund or payment change, production code change, or vendor workflow depends on the ingested web content.
+- Sign an outcome record proving `customer_email` did not execute.
 - Keep raw web content private while making the ingestion record hashes and verifier output public.
 
 What I want criticism on:
@@ -143,13 +148,14 @@ I have not opened a PR because I want maintainer feedback on the record boundary
 ## Firecrawl draft: direct note
 
 ```text
-I ran atrib against Firecrawl MCP and produced a public proof run for search, scrape, extract, and bounded crawl. I also added a small policy decision artifact that allows internal research but escalates before web-ingested content feeds a customer email, account update, refund or payment change, production code change, or vendor workflow.
+I ran atrib against Firecrawl MCP and produced a public proof run for search, scrape, extract, and bounded crawl. I also added a signed policy decision and outcome that allow internal research but escalate before web-ingested content feeds a customer email, account update, refund or payment change, production code change, or vendor workflow.
 
-Explorer: https://explore.atrib.dev/action/sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434
-Log proof: https://log.atrib.dev/v1/proof/bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434
-Policy decision hash: sha256:3c186af0a83692a04146bc25b5ef0202c3b4c8901f71cc2ea4d269ddfa02d7c1
+Demo: https://atrib-firecrawl-ingestion-demo.fly.dev/
+Explorer: https://explore.atrib.dev/action/sha256:cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2
+Log proof: https://log.atrib.dev/v1/proof/cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2
+Policy decision hash: sha256:bf2395e835c18291a1bf05df24c95688a39d1260754f32d20e555fb72a912715
 
-The public record keeps tool names plus args/result hashes. It does not expose the query, URL, scraped content, extracted text, or crawl job id. I am looking for criticism on whether this is the right evidence shape before a downstream agent uses web-ingested content for a sensitive action, and what fields are missing for policy, trust, or incident review.
+The public record keeps tool names plus args/result hashes. It does not expose the query, URL, scraped content, extracted text, or crawl job id. The signed outcome proves the downstream customer-email action did not run. I am looking for criticism on whether this is the right evidence shape before a downstream agent uses web-ingested content for a sensitive action, and what fields are missing for policy, trust, or incident review.
 ```
 
 ## Remaining demo scope
@@ -168,10 +174,10 @@ UI-only links when the runtime provides them.
 Hosted Browserbase fresh runs can still return temporary model-capacity errors.
 The demo shows failed runs plainly and rate-limits retries.
 
-Firecrawl is ready as a fixed proof artifact plus rerunnable command. A hosted
-Firecrawl demo should use the fixed-input ingestion-gate code in
-`packages/integration/examples/firecrawl-web-ingestion/live-demo/`. It must not
-accept arbitrary crawl targets or crawl depths.
+Firecrawl now has a deployed fixed-input demo at
+<https://atrib-firecrawl-ingestion-demo.fly.dev/>. It publishes fresh public log
+records, signs the downstream policy decision and outcome, and refuses
+arbitrary crawl targets or crawl depths.
 
 Public-write guard: hosted demos should use demo-only keys and explicit run
 limits so reviewers can create fresh records without creating unbounded public

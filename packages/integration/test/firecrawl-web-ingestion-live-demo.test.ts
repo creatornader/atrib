@@ -46,6 +46,62 @@ const fixtureResult: WrappedMcpPacketResult = {
     public_records_hash_only: true,
     private_needles_absent_from_public_records: true,
   },
+  action_policy: {
+    schema: 'atrib.packet.action_policy.v1',
+    stopped_before: 'customer_email',
+    blocked_tool_executed: false,
+    decisions: [
+      {
+        kind: 'policy_decision',
+        tool_name: 'customer_email',
+        event_type: 'https://firecrawl-ingestion-policy.atrib.dev/v1/decision',
+        record_hash: 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+        record: {} as never,
+        chain_root: 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+        informed_by: ['sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'],
+        args_hash: 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+        record_valid: true,
+        content: {
+          decision: 'escalate',
+          action_tool: 'customer_email',
+        },
+        proof: {
+          log_index: 4,
+          leaf_hash: 'leaf-decision',
+          checkpoint: 'checkpoint-decision',
+          inclusion_proof: [],
+          public_endpoint: null,
+          inclusion_verified: false,
+        },
+      },
+    ],
+    outcomes: [
+      {
+        kind: 'policy_outcome',
+        tool_name: 'customer_email',
+        event_type: 'https://firecrawl-ingestion-policy.atrib.dev/v1/decision',
+        record_hash: 'sha256:9999999999999999999999999999999999999999999999999999999999999999',
+        record: {} as never,
+        chain_root: 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+        informed_by: ['sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'],
+        args_hash: 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+        record_valid: true,
+        content: {
+          decision: 'escalate',
+          executed: false,
+          stopped_before: 'customer_email',
+        },
+        proof: {
+          log_index: 5,
+          leaf_hash: 'leaf-outcome',
+          checkpoint: 'checkpoint-outcome',
+          inclusion_proof: [],
+          public_endpoint: null,
+          inclusion_verified: false,
+        },
+      },
+    ],
+  },
 }
 
 const fixturePacket: FirecrawlWebIngestionPacketRun = {
@@ -74,9 +130,23 @@ const fixturePacket: FirecrawlWebIngestionPacketRun = {
       crawl_cap: { maxDepth: 1, limit: 2 },
       verifier: fixtureResult.verifier,
       privacy: fixtureResult.privacy,
+      action_policy: {
+        schema: 'atrib.packet.action_policy.v1',
+        stopped_before: 'customer_email',
+        blocked_tool_executed: false,
+      },
+    },
+    signed_control_records: {
+      policy_decision: fixtureResult.action_policy!.decisions[0]!,
+      policy_outcome: fixtureResult.action_policy!.outcomes[0]!,
     },
     rule_results: [
       { id: 'signed_ingestion_records_present', outcome: 'pass', evidence: '4 records' },
+      {
+        id: 'signed_atrib_control_record_policy_decision',
+        outcome: 'pass',
+        evidence: 'signed policy',
+      },
       { id: 'customer_message_requires_review', outcome: 'escalate', evidence: 'review' },
     ],
     allowed_without_review: ['internal_research_summary'],
@@ -109,6 +179,9 @@ describe('Firecrawl web ingestion live demo', () => {
     expect(run.policy_decision).toMatchObject({
       decision: 'escalate_before_customer_email',
       decision_status: 'review_required',
+      signed_policy_record: true,
+      signed_control_record_index: 4,
+      signed_outcome_record_index: 5,
     })
   })
 
@@ -192,6 +265,7 @@ describe('Firecrawl web ingestion live demo', () => {
       const run = await waitForRun(baseUrl, response.run.run_id)
       expect(run.status).toBe('accepted')
       expect(run.policy_decision?.decision).toBe('escalate_before_customer_email')
+      expect(run.policy_decision?.signed_policy_record).toBe(true)
     } finally {
       await close(server)
     }

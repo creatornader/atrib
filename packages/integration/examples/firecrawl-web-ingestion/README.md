@@ -32,13 +32,16 @@ Live mode follows the Cloudflare proof pattern: the runner captures wrapper
 records locally while the flow is running. After the full flow verifies, it
 submits the accepted record set to `https://log.atrib.dev/v1/entries`, verifies
 inclusion, and writes those public log indexes into the artifact.
+Live packet runs default to a 90-second timeout. Override it with
+`ATRIB_FIRECRAWL_PACKET_TIMEOUT_MS` or `ATRIB_PACKET_TIMEOUT_MS`.
 
 The artifact also writes `policy-decision.json`. That file models the next
 gate after ingestion: allow internal research and source triage, but require
 review before a customer email, account update, refund or payment change,
 production code change, or vendor procurement action depends on web-derived
-content. The policy decision is deterministic and hash-bound to the signed
-Firecrawl records, but it is not a signed atrib record yet.
+content. The packet signs that policy decision and outcome as atrib control
+records. The `policy-decision.json` file is the reader-facing summary bound to
+those signed records.
 
 ## Proof and demo boundary
 
@@ -49,9 +52,11 @@ This example has two runnable modes:
 - Live public proof: real Firecrawl MCP server, public log inclusion, and
   regenerated artifact output.
 
-It does not include a hosted interactive demo yet. A Google-workbench-style
-runtime could let a reviewer submit a bounded URL or replay a fixed ingestion
-target and inspect receipts, but that would be a separate demo surface.
+The fixed-input demo server lives in `live-demo/`. It can run locally or on Fly.
+The deployed form must keep fixed public inputs, rate limiting, and demo-only
+credentials so it proves the ingestion gate without exposing arbitrary crawl
+capability.
+Current deployed demo: <https://atrib-firecrawl-ingestion-demo.fly.dev/>.
 
 Run the live public proof:
 

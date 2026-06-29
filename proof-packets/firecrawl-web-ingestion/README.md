@@ -21,15 +21,15 @@ The crawl step is capped to `maxDepth: 1` and `limit: 2`.
 
 | Tool              | Record hash                                                             | Public log index |
 | ----------------- | ----------------------------------------------------------------------- | ---------------- |
-| firecrawl_search  | sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434 | 66265            |
-| firecrawl_scrape  | sha256:143f718228e0985156b30cf933ab749527d0f80cf6b586754f0c05d213472e73 | 66266            |
-| firecrawl_extract | sha256:94582f5e78da4ab9be42e2b71db94b4687a8c9db878d23fc839737db5db5fe7a | 66267            |
-| firecrawl_crawl   | sha256:4b58bcc5ce9931b5528cb41d9ca0c791baeee122f8ceaaa0270e3f84bfe092cc | 66268            |
+| firecrawl_search  | sha256:cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2 | 67668            |
+| firecrawl_scrape  | sha256:0745e948a860f9d0bed287df904db36b797aa066e27a37dc29e1291e9c43fdc0 | 67669            |
+| firecrawl_extract | sha256:22b7e91b2a44c22cfafea66d161dabf8f3407eaec5ce5977b145bc998496da33 | 67670            |
+| firecrawl_crawl   | sha256:e11a6a0f9974fe34533dc2d0aa897ab35fdd21e902ba49284e361f8d0e1767f4 | 67671            |
 
 Representative public links:
 
-- Explorer: <https://explore.atrib.dev/action/sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434>
-- Log proof: <https://log.atrib.dev/v1/proof/bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434>
+- Explorer: <https://explore.atrib.dev/action/sha256:cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2>
+- Log proof: <https://log.atrib.dev/v1/proof/cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2>
 
 ## Redaction line
 
@@ -55,11 +55,16 @@ Allowed without review: `internal_research_summary`, `source_triage`.
 
 Escalated before execution: `customer_email`, `account_update`, `refund_or_payment_change`, `production_code_change`, `vendor_procurement_action`.
 
-Policy decision hash: `sha256:3c186af0a83692a04146bc25b5ef0202c3b4c8901f71cc2ea4d269ddfa02d7c1`.
+Policy decision hash: `sha256:bf2395e835c18291a1bf05df24c95688a39d1260754f32d20e555fb72a912715`.
 
-The policy decision file is deterministic and hash-bound to the signed
-ingestion records. It is not a signed atrib record yet. The signed evidence in
-this packet is the wrapped Firecrawl tool-call chain.
+Signed control records:
+
+- Policy decision: `sha256:f7e3b35cb23e056e19ed6d327ce46a893032db89acc56513cd0fa30d10935930` at log index `67672`
+- Policy outcome: `sha256:a208065d4866df7d5c0c6d914791b74d9d60d0ec72a6dccd886af69352dd1a0d` at log index `67673`
+
+The policy decision file summarizes the signed atrib control decision. The
+packet signs both the wrapped Firecrawl tool-call chain and the downstream
+policy decision plus outcome records.
 
 ## Loop receipt
 
@@ -73,10 +78,11 @@ This proof run signs the wrapper path, record chain, hash-only disclosure, bound
 
 This is a fixed proof artifact plus a rerunnable local command. The resettable
 demo server lives in
-`packages/integration/examples/firecrawl-web-ingestion/live-demo/`. The demo is
-fixed-input by design: it reruns the same public query, URL, extract prompt, and
-capped crawl while showing the policy decision beside Atrib receipts. It does
-not accept arbitrary crawl targets or crawl depths.
+`packages/integration/examples/firecrawl-web-ingestion/live-demo/`. The demo
+is fixed-input by design: it lets a reviewer run the same bounded public target
+and inspect fresh receipts without exposing arbitrary crawl capability.
+
+Hosted demo: <https://atrib-firecrawl-ingestion-demo.fly.dev/>.
 
 ## Regenerate
 
@@ -97,3 +103,5 @@ Live mode expects `FIRECRAWL_API_KEY` in the shell environment. On the operator
 machine, `~/.zshenv` seeds it from `~/.atrib/secrets/firecrawl-api-key`
 first, then asks 1Password only in an interactive shell if the cache is empty.
 The runner does not call `op read`.
+Live packet runs default to a 90-second timeout. Override it with
+`ATRIB_FIRECRAWL_PACKET_TIMEOUT_MS` or `ATRIB_PACKET_TIMEOUT_MS`.

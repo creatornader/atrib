@@ -24,6 +24,8 @@ pnpm --filter @atrib/integration firecrawl-web-ingestion-live-demo
 
 Open `http://127.0.0.1:8789/`, then press **Run ingestion proof**.
 
+Hosted demo: <https://atrib-firecrawl-ingestion-demo.fly.dev/>.
+
 If that port is busy, set `PORT` or let the OS choose one:
 
 ```bash
@@ -56,6 +58,8 @@ Public output:
 - log proof link
 - crawl cap
 - policy decision hash
+- signed policy decision record hash
+- signed policy outcome record hash
 
 Private or redacted:
 
@@ -79,7 +83,6 @@ It does not persist raw Firecrawl content.
 
 ## Deploy boundary
 
-The code is ready for a hosted Node runtime, but deployment remains a human gate.
 A deployed instance refuses `POST /api/runs` unless these conditions are true:
 
 - `ATRIB_FIRECRAWL_DEMO_MODE=live`
