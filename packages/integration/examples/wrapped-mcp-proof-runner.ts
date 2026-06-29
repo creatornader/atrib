@@ -43,6 +43,7 @@ export type PacketCall = {
   name: string
   arguments?: Record<string, unknown>
   expectText?: string
+  delayAfterMs?: number
 }
 
 export type CleanupOnFailure = {
@@ -417,7 +418,7 @@ export async function runWrappedMcpPacket(options: {
   calls: PacketCall[]
   cleanupOnFailure?: CleanupOnFailure
   policyGate?: (input: PacketPolicyGateInput) => PacketPolicyGateDecision | undefined
-  onToolResult?: ((event: PacketToolResultEvent) => void) | undefined
+  onToolResult?: ((event: PacketToolResultEvent) => void | Promise<void>) | undefined
   controlEventType?: string
   timeoutMs?: number
   privateNeedles: string[]
@@ -534,7 +535,7 @@ export async function runWrappedMcpPacket(options: {
       record_hash: latest.record_hash,
     }
     previousResults.push(summary)
-    options.onToolResult?.({
+    await options.onToolResult?.({
       ...summary,
       result_text: resultText,
     })
@@ -723,6 +724,9 @@ export async function runWrappedMcpPacket(options: {
           informedBy: [decisionRecord.record_hash, summary.record_hash],
         })
         policyOutcomes.push(outcomeRecord.summary)
+      }
+      if (call.delayAfterMs && call.delayAfterMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, call.delayAfterMs))
       }
     }
 

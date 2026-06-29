@@ -10,7 +10,10 @@ import {
   type BrowserbaseActionPolicyMode,
 } from '../action-control.js'
 import { runBrowserbaseStagehandPacket } from '../browserbase-stagehand-packet-smoke.js'
-import type { PacketToolResultEvent, WrappedMcpPacketResult } from '../../wrapped-mcp-proof-runner.js'
+import type {
+  PacketToolResultEvent,
+  WrappedMcpPacketResult,
+} from '../../wrapped-mcp-proof-runner.js'
 import { renderBrowserbaseProofApp } from './ui.js'
 
 const serviceName = 'atrib-browserbase-stagehand-demo'
@@ -21,7 +24,8 @@ type DemoMode = 'fixture' | 'live'
 type RunStatus = 'running' | 'accepted' | 'failed'
 type VisualStage = 'idle' | 'running' | 'replay' | 'failed'
 type VisualEventStatus = 'pending' | 'running' | 'signed' | 'blocked' | 'skipped'
-type BrowserbaseMediaSource = 'env' | 'tool-result' | 'none'
+type BrowserbaseMediaSource = 'env' | 'tool-result' | 'browserbase-debug-api' | 'none'
+type PrivateReplayAssetsByRun = Map<string, Map<string, string>>
 
 export type RateLimitConfig = {
   enabled: boolean
@@ -109,7 +113,8 @@ export type BrowserbaseVisualState = {
       available: boolean
       url?: string
       url_hash?: string
-      disclosure: 'not-available' | 'ui-only-ephemeral'
+      proxy_path?: string
+      disclosure: 'not-available' | 'ui-only-ephemeral' | 'server-redirect'
     }
     replay: {
       available: boolean
@@ -174,6 +179,8 @@ type Runner = (options: {
   mode: DemoMode
   publicLog: boolean
   actionPolicyMode: BrowserbaseActionPolicyMode
+  env?: NodeJS.ProcessEnv | undefined
+  onPrivateMedia?: ((media: BrowserbasePrivateSessionMedia) => void | Promise<void>) | undefined
 }) => Promise<BrowserbaseDemoRunnerResult>
 
 function numberEnv(name: string, fallback: number, env: NodeJS.ProcessEnv): number {
@@ -188,8 +195,22 @@ function proofRunTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   return Math.max(10_000, Math.trunc(value))
 }
 
+function browserbaseLiveViewTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const value = numberEnv('ATRIB_BROWSERBASE_DEMO_LIVE_VIEW_TIMEOUT_MS', 3_000, env)
+  return Math.max(500, Math.min(10_000, Math.trunc(value)))
+}
+
+function browserbaseLiveViewHoldMs(env: NodeJS.ProcessEnv = process.env): number {
+  const value = numberEnv('ATRIB_BROWSERBASE_DEMO_LIVE_VIEW_HOLD_MS', 0, env)
+  return Math.max(0, Math.min(30_000, Math.trunc(value)))
+}
+
 function sha256Text(value: string): string {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`
+}
+
+function sha256Hex(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
 }
 
 function mergePrivateSessionMedia(
@@ -198,14 +219,26 @@ function mergePrivateSessionMedia(
 ): BrowserbasePrivateSessionMedia | undefined {
   if (!next) return current
   if (!current) return next
+  const source =
+    privateSessionMediaScore(next) > privateSessionMediaScore(current)
+      ? next.source
+      : current.source
   return {
-    source: current.source === 'tool-result' ? current.source : next.source,
+    source,
     session_id: current.session_id ?? next.session_id,
     live_view_url: current.live_view_url ?? next.live_view_url,
     replay_url: current.replay_url ?? next.replay_url,
     session_url: current.session_url ?? next.session_url,
     detected_from: [...new Set([...current.detected_from, ...next.detected_from])],
   }
+}
+
+function privateSessionMediaScore(media: BrowserbasePrivateSessionMedia): number {
+  if (media.live_view_url) return 4
+  if (media.replay_url) return 3
+  if (media.session_url) return 2
+  if (media.session_id) return 1
+  return 0
 }
 
 function cleanExtractedUrl(value: string): string | undefined {
@@ -240,7 +273,11 @@ function classifyBrowserbaseUrl(url: string): 'live_view' | 'replay' | 'session'
   return undefined
 }
 
-function sessionIdFromBrowserbaseText(toolName: string, text: string, urls: string[]): string | undefined {
+function sessionIdFromBrowserbaseText(
+  toolName: string,
+  text: string,
+  urls: string[],
+): string | undefined {
   for (const url of urls) {
     const match = url.match(/\/(?:v1\/)?sessions\/([^/?#]+)/u)
     if (match?.[1]) return match[1]
@@ -288,6 +325,83 @@ function privateMediaFromEnv(env: NodeJS.ProcessEnv): BrowserbasePrivateSessionM
     live_view_url: liveViewUrl,
     replay_url: replayUrl,
     detected_from: ['env'],
+  }
+}
+
+function firstSafeUrl(values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value !== 'string') continue
+    const safe = safeVisualUrl(value)
+    if (safe) return safe
+  }
+  return undefined
+}
+
+function sessionDebugPayloadUrls(payload: unknown): string[] {
+  const urls: unknown[] = []
+  if (typeof payload !== 'object' || payload === null) return []
+  const object = payload as {
+    debuggerFullscreenUrl?: unknown
+    debuggerUrl?: unknown
+    pages?: unknown
+  }
+  urls.push(object.debuggerFullscreenUrl, object.debuggerUrl)
+  if (Array.isArray(object.pages)) {
+    for (const page of object.pages) {
+      if (typeof page !== 'object' || page === null) continue
+      const pageObject = page as { debuggerFullscreenUrl?: unknown; debuggerUrl?: unknown }
+      urls.push(pageObject.debuggerFullscreenUrl, pageObject.debuggerUrl)
+    }
+  }
+  return urls.filter((value): value is string => typeof value === 'string')
+}
+
+export function browserbasePrivateMediaFromSessionDebugPayload(
+  sessionId: string,
+  payload: unknown,
+): BrowserbasePrivateSessionMedia | undefined {
+  const liveViewUrl = firstSafeUrl(sessionDebugPayloadUrls(payload))
+  if (!liveViewUrl) return undefined
+  return {
+    source: 'browserbase-debug-api',
+    session_id: sessionId,
+    live_view_url: liveViewUrl,
+    session_url: `https://www.browserbase.com/sessions/${encodeURIComponent(sessionId)}`,
+    detected_from: ['browserbase-debug-api'],
+  }
+}
+
+export async function browserbasePrivateMediaFromSessionDebug(input: {
+  sessionId: string
+  env?: NodeJS.ProcessEnv | undefined
+  fetchImpl?: typeof fetch | undefined
+  timeoutMs?: number | undefined
+}): Promise<BrowserbasePrivateSessionMedia | undefined> {
+  const env = input.env ?? process.env
+  const apiKey = env.BROWSERBASE_API_KEY
+  if (!apiKey) return undefined
+  const fetchImpl = input.fetchImpl ?? fetch
+  const controller = new AbortController()
+  const timeout = setTimeout(
+    () => controller.abort(),
+    input.timeoutMs ?? browserbaseLiveViewTimeoutMs(env),
+  )
+  try {
+    const upstream = await fetchImpl(
+      `https://api.browserbase.com/v1/sessions/${encodeURIComponent(input.sessionId)}/debug`,
+      {
+        headers: {
+          'X-BB-API-Key': apiKey,
+        },
+        signal: controller.signal,
+      },
+    )
+    if (!upstream.ok) return undefined
+    return browserbasePrivateMediaFromSessionDebugPayload(input.sessionId, await upstream.json())
+  } catch {
+    return undefined
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
@@ -435,6 +549,7 @@ export function browserbaseWorkflowFromEnv(
         'Browserbase API key',
         'Browserbase project id',
         'session URL',
+        'Live View URL',
         'replay URL',
         'page snapshot',
         'selectors',
@@ -590,15 +705,22 @@ export function checkRateLimit(
 function visualMedia(input: {
   env: NodeJS.ProcessEnv
   mode: DemoMode
+  stage: VisualStage
   runId?: string | undefined
   privateMedia?: BrowserbasePrivateSessionMedia | undefined
 }): BrowserbaseVisualState['media'] {
   const runPrivateMedia = input.mode === 'live' ? input.privateMedia : undefined
   const privateMedia = mergePrivateSessionMedia(privateMediaFromEnv(input.env), runPrivateMedia)
-  const liveViewUrl = safeVisualUrl(privateMedia?.live_view_url)
+  const liveViewUrl =
+    privateMedia?.source === 'env' || input.stage === 'running'
+      ? safeVisualUrl(privateMedia?.live_view_url)
+      : undefined
+  const liveViewProxyPath =
+    liveViewUrl && input.runId ? `/api/runs/${input.runId}/browserbase/live-view` : undefined
   const replayUrl = safeVisualUrl(privateMedia?.replay_url)
   const hasSession = Boolean(privateMedia?.session_id)
-  const replayProxyPath = hasSession && input.runId ? `/api/runs/${input.runId}/browserbase/replays` : undefined
+  const replayProxyPath =
+    hasSession && input.runId ? `/api/runs/${input.runId}/browserbase/replays` : undefined
   const source: BrowserbaseMediaSource = privateMedia?.source ?? 'none'
   const primary = liveViewUrl ? 'live' : replayUrl || replayProxyPath ? 'replay' : 'simulated'
   return {
@@ -610,9 +732,9 @@ function visualMedia(input: {
     live_view: liveViewUrl
       ? {
           available: true,
-          url: liveViewUrl,
           url_hash: sha256Text(liveViewUrl),
-          disclosure: 'ui-only-ephemeral',
+          ...(liveViewProxyPath ? { proxy_path: liveViewProxyPath } : {}),
+          disclosure: liveViewProxyPath ? 'server-redirect' : 'ui-only-ephemeral',
         }
       : { available: false, disclosure: 'not-available' },
     replay:
@@ -757,7 +879,7 @@ function buildVisualState(input: {
   const events = visualEventsForMode(input.actionPolicyMode, operations)
   const current =
     input.stage === 'running'
-      ? events.find((event) => event.status === 'pending') ?? events[0]
+      ? (events.find((event) => event.status === 'pending') ?? events[0])
       : events.at(-1)
   return {
     schema: 'atrib.browserbase.visual_run.v1',
@@ -768,6 +890,7 @@ function buildVisualState(input: {
     media: visualMedia({
       env: input.env ?? process.env,
       mode: input.mode,
+      stage: input.stage,
       runId: input.runId,
       privateMedia: input.privateMedia,
     }),
@@ -849,30 +972,47 @@ export async function runBrowserbaseProofWithMedia(options: {
   mode: DemoMode
   publicLog: boolean
   actionPolicyMode: BrowserbaseActionPolicyMode
+  env?: NodeJS.ProcessEnv | undefined
+  onPrivateMedia?: ((media: BrowserbasePrivateSessionMedia) => void | Promise<void>) | undefined
 }): Promise<{ result: WrappedMcpPacketResult; private_media?: BrowserbasePrivateSessionMedia }> {
-  const targetUrl = browserbaseDemoTargetUrl(process.env)
+  const env = options.env ?? process.env
+  const targetUrl = browserbaseDemoTargetUrl(env)
   let privateMedia: BrowserbasePrivateSessionMedia | undefined
+  const debugResolvedSessionIds = new Set<string>()
+
+  async function mergeAndPublish(media: BrowserbasePrivateSessionMedia | undefined): Promise<void> {
+    privateMedia = mergePrivateSessionMedia(privateMedia, media)
+    if (privateMedia) await options.onPrivateMedia?.(privateMedia)
+  }
+
   const result = await runBrowserbaseStagehandPacket({
-    env: process.env,
+    env,
     liveMode: options.mode === 'live',
     publicLog: options.publicLog,
     proofUrl: targetUrl,
     observeInstruction:
-      process.env.ATRIB_BROWSERBASE_DEMO_OBSERVE ??
+      env.ATRIB_BROWSERBASE_DEMO_OBSERVE ??
       'Find the vendor renewal panel and the WebMCP tools available on the page',
     actAction:
-      process.env.ATRIB_BROWSERBASE_DEMO_ACT ??
-      'Click Approve renewal for the Northstar data room renewal',
+      env.ATRIB_BROWSERBASE_DEMO_ACT ?? 'Click Approve renewal for the Northstar data room renewal',
     extractInstruction:
-      process.env.ATRIB_BROWSERBASE_DEMO_EXTRACT ??
+      env.ATRIB_BROWSERBASE_DEMO_EXTRACT ??
       'Extract the confirmation id, approval status, and WebMCP tool names',
     actionPolicyMode: options.actionPolicyMode,
-    timeoutMs: proofRunTimeoutMs(process.env),
-    onToolResult(event) {
+    timeoutMs: proofRunTimeoutMs(env),
+    holdBeforeEndMs: browserbaseLiveViewHoldMs(env),
+    async onToolResult(event) {
       if (options.mode !== 'live') return
-      privateMedia = mergePrivateSessionMedia(
-        privateMedia,
-        browserbasePrivateMediaFromToolResult(event),
+      const toolMedia = browserbasePrivateMediaFromToolResult(event)
+      await mergeAndPublish(toolMedia)
+      if (!toolMedia?.session_id || debugResolvedSessionIds.has(toolMedia.session_id)) return
+      debugResolvedSessionIds.add(toolMedia.session_id)
+      await mergeAndPublish(
+        await browserbasePrivateMediaFromSessionDebug({
+          sessionId: toolMedia.session_id,
+          env,
+          timeoutMs: browserbaseLiveViewTimeoutMs(env),
+        }),
       )
     },
   }).catch((error: unknown) => {
@@ -886,6 +1026,7 @@ export function createBrowserbaseDemoServer(
 ) {
   const runs = new Map<string, BrowserbaseDemoRun>()
   const privateMediaByRun = new Map<string, BrowserbasePrivateSessionMedia>()
+  const privateReplayAssetsByRun: PrivateReplayAssetsByRun = new Map()
   const rateLimits = new Map<string, RateLimitBucket>()
   let activeRun: Promise<BrowserbaseDemoRun> | undefined
   const runner = options.runner ?? runBrowserbaseProofWithMedia
@@ -942,6 +1083,13 @@ export function createBrowserbaseDemoServer(
           rate_limit: rateLimitConfigFromEnv(env),
           max_attempts: env.ATRIB_BROWSERBASE_LIVE_MAX_ATTEMPTS ?? '3',
           run_timeout_ms: proofRunTimeoutMs(env),
+          live_view_lookup: {
+            enabled: mode === 'live' && Boolean(env.BROWSERBASE_API_KEY),
+            endpoint: 'GET https://api.browserbase.com/v1/sessions/:id/debug',
+            timeout_ms: browserbaseLiveViewTimeoutMs(env),
+            hold_before_end_ms: browserbaseLiveViewHoldMs(env),
+            disclosure: 'ui-only-ephemeral',
+          },
           workflow: browserbaseWorkflowFromEnv(env),
           visual: buildVisualState({
             mode,
@@ -971,6 +1119,7 @@ export function createBrowserbaseDemoServer(
             'Browserbase API key',
             'Browserbase project id',
             'session URL',
+            'Live View URL',
             'replay URL',
             'page snapshot',
             'selectors',
@@ -1037,6 +1186,7 @@ export function createBrowserbaseDemoServer(
           runner,
           runs,
           privateMediaByRun,
+          privateReplayAssetsByRun,
           workflow: browserbaseWorkflowFromEnv(env),
           env,
         })
@@ -1051,6 +1201,17 @@ export function createBrowserbaseDemoServer(
         return
       }
 
+      const liveViewRoute = matchBrowserbaseLiveViewRoute(url.pathname)
+      if (request.method === 'GET' && liveViewRoute) {
+        await writeBrowserbaseLiveViewResponse({
+          response,
+          runId: liveViewRoute.runId,
+          runs,
+          privateMediaByRun,
+        })
+        return
+      }
+
       const replayRoute = matchBrowserbaseReplayRoute(url.pathname)
       if (request.method === 'GET' && replayRoute) {
         await writeBrowserbaseReplayResponse({
@@ -1059,6 +1220,18 @@ export function createBrowserbaseDemoServer(
           runId: replayRoute.runId,
           pageId: replayRoute.pageId,
           privateMediaByRun,
+          privateReplayAssetsByRun,
+        })
+        return
+      }
+
+      const replayAssetRoute = matchBrowserbaseReplayAssetRoute(url.pathname)
+      if (request.method === 'GET' && replayAssetRoute) {
+        await writeBrowserbaseReplayAssetResponse({
+          response,
+          runId: replayAssetRoute.runId,
+          assetId: replayAssetRoute.assetId,
+          privateReplayAssetsByRun,
         })
         return
       }
@@ -1083,8 +1256,10 @@ export function createBrowserbaseDemoServer(
           'GET /api/config',
           'GET /api/runs',
           'POST /api/runs',
+          'GET /api/runs/:runId/browserbase/live-view',
           'GET /api/runs/:runId/browserbase/replays',
           'GET /api/runs/:runId/browserbase/replays/:pageId',
+          'GET /api/runs/:runId/browserbase/replay-assets/:assetId',
         ],
       })
     } catch (error) {
@@ -1105,6 +1280,7 @@ function startRun(options: {
   runner: Runner
   runs: Map<string, BrowserbaseDemoRun>
   privateMediaByRun: Map<string, BrowserbasePrivateSessionMedia>
+  privateReplayAssetsByRun: PrivateReplayAssetsByRun
   workflow: BrowserbaseWorkflow
   env: NodeJS.ProcessEnv
 }): { run: BrowserbaseDemoRun; promise: Promise<BrowserbaseDemoRun> } {
@@ -1155,19 +1331,49 @@ async function finishRun(options: {
   runner: Runner
   runs: Map<string, BrowserbaseDemoRun>
   privateMediaByRun: Map<string, BrowserbasePrivateSessionMedia>
+  privateReplayAssetsByRun: PrivateReplayAssetsByRun
   running: BrowserbaseDemoRun
   startedAt: string
   workflow: BrowserbaseWorkflow
   env: NodeJS.ProcessEnv
 }): Promise<BrowserbaseDemoRun> {
   try {
+    const publishPrivateMedia = (media: BrowserbasePrivateSessionMedia): void => {
+      const merged = mergePrivateSessionMedia(
+        options.privateMediaByRun.get(options.running.run_id),
+        media,
+      )
+      if (!merged) return
+      options.privateMediaByRun.set(options.running.run_id, merged)
+      const current = options.runs.get(options.running.run_id)
+      if (!current || current.status !== 'running') return
+      rememberRun(options.runs, {
+        ...current,
+        visual: buildVisualState({
+          runId: options.running.run_id,
+          mode: options.mode,
+          actionPolicyMode: options.actionPolicyMode,
+          stage: 'running',
+          operations: current.operations,
+          env: options.env,
+          privateMedia: merged,
+        }),
+      })
+    }
+
     const runnerOutput = await options.runner({
       mode: options.mode,
       publicLog: options.publicLog,
       actionPolicyMode: options.actionPolicyMode,
+      env: options.env,
+      onPrivateMedia: publishPrivateMedia,
     })
     const { result, privateMedia } = normalizeRunnerOutput(runnerOutput)
-    if (privateMedia) options.privateMediaByRun.set(options.running.run_id, privateMedia)
+    const finalPrivateMedia = mergePrivateSessionMedia(
+      options.privateMediaByRun.get(options.running.run_id),
+      privateMedia,
+    )
+    if (finalPrivateMedia) options.privateMediaByRun.set(options.running.run_id, finalPrivateMedia)
     const accepted = summarizePacketResult({
       runId: options.running.run_id,
       startedAt: options.startedAt,
@@ -1176,10 +1382,11 @@ async function finishRun(options: {
       workflow: options.workflow,
       actionPolicyMode: options.actionPolicyMode,
       env: options.env,
-      privateMedia,
+      privateMedia: finalPrivateMedia,
     })
     rememberRun(options.runs, accepted)
     prunePrivateMedia(options.privateMediaByRun, options.runs)
+    prunePrivateReplayAssets(options.privateReplayAssetsByRun, options.runs)
     console.log(
       JSON.stringify({
         service: serviceName,
@@ -1207,6 +1414,7 @@ async function finishRun(options: {
     }
     rememberRun(options.runs, failed)
     prunePrivateMedia(options.privateMediaByRun, options.runs)
+    prunePrivateReplayAssets(options.privateReplayAssetsByRun, options.runs)
     console.log(
       JSON.stringify({
         service: serviceName,
@@ -1235,6 +1443,15 @@ function prunePrivateMedia(
 ): void {
   for (const runId of privateMediaByRun.keys()) {
     if (!runs.has(runId)) privateMediaByRun.delete(runId)
+  }
+}
+
+function prunePrivateReplayAssets(
+  privateReplayAssetsByRun: PrivateReplayAssetsByRun,
+  runs: Map<string, BrowserbaseDemoRun>,
+): void {
+  for (const runId of privateReplayAssetsByRun.keys()) {
+    if (!runs.has(runId)) privateReplayAssetsByRun.delete(runId)
   }
 }
 
@@ -1277,12 +1494,139 @@ function matchBrowserbaseReplayRoute(
   }
 }
 
+function matchBrowserbaseReplayAssetRoute(
+  pathname: string,
+): { runId: string; assetId: string } | undefined {
+  const match = /^\/api\/runs\/([^/]+)\/browserbase\/replay-assets\/([a-f0-9]{64})$/u.exec(pathname)
+  if (!match?.[1] || !match[2]) return undefined
+  return { runId: decodeURIComponent(match[1]), assetId: match[2] }
+}
+
+function matchBrowserbaseLiveViewRoute(pathname: string): { runId: string } | undefined {
+  const match = /^\/api\/runs\/([^/]+)\/browserbase\/live-view$/u.exec(pathname)
+  if (!match?.[1]) return undefined
+  return { runId: decodeURIComponent(match[1]) }
+}
+
+function replayPageProxyPath(runId: string, pageId: string): string {
+  return `/api/runs/${encodeURIComponent(runId)}/browserbase/replays/${encodeURIComponent(pageId)}`
+}
+
+function replayAssetProxyPath(runId: string, assetId: string): string {
+  return `/api/runs/${encodeURIComponent(runId)}/browserbase/replay-assets/${assetId}`
+}
+
+function browserbaseReplayPageIdFromUrl(value: string): string | undefined {
+  try {
+    const parsed = new URL(value, 'https://api.browserbase.com')
+    const match = /\/v1\/sessions\/[^/]+\/replays\/([^/?#]+)/u.exec(parsed.pathname)
+    return match?.[1] ? decodeURIComponent(match[1]) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function sanitizeBrowserbaseReplayString(input: {
+  value: string
+  runId: string
+  sessionId: string
+}): string {
+  const pageId = browserbaseReplayPageIdFromUrl(input.value)
+  if (pageId) return replayPageProxyPath(input.runId, pageId)
+  if (input.value.includes(input.sessionId))
+    return `[redacted-browserbase-ref:${sha256Hex(input.value).slice(0, 16)}]`
+  return input.value
+}
+
+export function sanitizeBrowserbaseReplayMetadata(
+  value: unknown,
+  input: { runId: string; sessionId: string },
+): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeBrowserbaseReplayMetadata(item, input))
+  }
+  if (typeof value === 'string') {
+    return sanitizeBrowserbaseReplayString({ value, ...input })
+  }
+  if (typeof value !== 'object' || value === null) return value
+  const output: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value)) {
+    output[key] = sanitizeBrowserbaseReplayMetadata(item, input)
+  }
+  return output
+}
+
+function rememberReplayAsset(
+  runId: string,
+  upstreamUrl: string,
+  privateReplayAssetsByRun: PrivateReplayAssetsByRun,
+): string {
+  const assetId = sha256Hex(upstreamUrl)
+  const assets = privateReplayAssetsByRun.get(runId) ?? new Map<string, string>()
+  assets.set(assetId, upstreamUrl)
+  privateReplayAssetsByRun.set(runId, assets)
+  return assetId
+}
+
+export function rewriteBrowserbaseReplayPlaylist(input: {
+  body: string
+  runId: string
+  privateReplayAssetsByRun: PrivateReplayAssetsByRun
+}): string {
+  return input.body.replace(/https?:\/\/[^\s",]+/gu, (upstreamUrl) => {
+    const safeUrl = safeVisualUrl(upstreamUrl)
+    if (!safeUrl) return upstreamUrl
+    const assetId = rememberReplayAsset(input.runId, safeUrl, input.privateReplayAssetsByRun)
+    return replayAssetProxyPath(input.runId, assetId)
+  })
+}
+
+async function writeBrowserbaseLiveViewResponse(input: {
+  response: ServerResponse
+  runId: string
+  runs: Map<string, BrowserbaseDemoRun>
+  privateMediaByRun: Map<string, BrowserbasePrivateSessionMedia>
+}): Promise<void> {
+  const run = input.runs.get(input.runId)
+  if (!run) {
+    writeJson(input.response, 404, { ok: false, error: 'run_not_found', run_id: input.runId })
+    return
+  }
+  const media = input.privateMediaByRun.get(input.runId)
+  const liveViewUrl = safeVisualUrl(media?.live_view_url)
+  if (!liveViewUrl) {
+    writeJson(input.response, 404, {
+      ok: false,
+      error: 'browserbase_live_view_ref_not_available',
+      run_id: input.runId,
+    })
+    return
+  }
+  if (media?.source !== 'env' && run.status !== 'running') {
+    writeJson(input.response, 410, {
+      ok: false,
+      error: 'browserbase_live_view_closed',
+      run_id: input.runId,
+    })
+    return
+  }
+
+  input.response.writeHead(302, {
+    location: liveViewUrl,
+    'cache-control': 'no-store',
+    'referrer-policy': 'no-referrer',
+    'x-content-type-options': 'nosniff',
+  })
+  input.response.end()
+}
+
 async function writeBrowserbaseReplayResponse(input: {
   response: ServerResponse
   env: NodeJS.ProcessEnv
   runId: string
   pageId?: string | undefined
   privateMediaByRun: Map<string, BrowserbasePrivateSessionMedia>
+  privateReplayAssetsByRun: PrivateReplayAssetsByRun
 }): Promise<void> {
   const media = input.privateMediaByRun.get(input.runId)
   if (!media?.session_id) {
@@ -1309,7 +1653,9 @@ async function writeBrowserbaseReplayResponse(input: {
   })
   const body = await upstream.text()
   if (!upstream.ok) {
-    const detail = redactError(body.slice(0, 500)).split(media.session_id).join('[redacted-browserbase-session]')
+    const detail = redactError(body.slice(0, 500))
+      .split(media.session_id)
+      .join('[redacted-browserbase-session]')
     writeJson(input.response, upstream.status, {
       ok: false,
       error: 'browserbase_replay_fetch_failed',
@@ -1319,13 +1665,71 @@ async function writeBrowserbaseReplayResponse(input: {
     return
   }
 
+  if (input.pageId) {
+    const playlist = rewriteBrowserbaseReplayPlaylist({
+      body,
+      runId: input.runId,
+      privateReplayAssetsByRun: input.privateReplayAssetsByRun,
+    })
+    input.response.writeHead(upstream.status, {
+      'content-type': 'application/vnd.apple.mpegurl; charset=utf-8',
+      'x-content-type-options': 'nosniff',
+      'cache-control': 'no-store',
+    })
+    input.response.end(playlist)
+    return
+  }
+
+  let metadata: unknown
+  try {
+    metadata = JSON.parse(body)
+  } catch {
+    writeJson(input.response, 502, {
+      ok: false,
+      error: 'browserbase_replay_metadata_parse_failed',
+    })
+    return
+  }
+  writeJson(
+    input.response,
+    upstream.status,
+    sanitizeBrowserbaseReplayMetadata(metadata, {
+      runId: input.runId,
+      sessionId: media.session_id,
+    }),
+  )
+}
+
+async function writeBrowserbaseReplayAssetResponse(input: {
+  response: ServerResponse
+  runId: string
+  assetId: string
+  privateReplayAssetsByRun: PrivateReplayAssetsByRun
+}): Promise<void> {
+  const assetUrl = input.privateReplayAssetsByRun.get(input.runId)?.get(input.assetId)
+  if (!assetUrl) {
+    writeJson(input.response, 404, {
+      ok: false,
+      error: 'browserbase_replay_asset_not_available',
+      run_id: input.runId,
+    })
+    return
+  }
+  const upstream = await fetch(assetUrl)
+  if (!upstream.ok || !upstream.body) {
+    writeJson(input.response, upstream.status || 502, {
+      ok: false,
+      error: 'browserbase_replay_asset_fetch_failed',
+      status: upstream.status,
+    })
+    return
+  }
   input.response.writeHead(upstream.status, {
-    'content-type': input.pageId
-      ? 'application/vnd.apple.mpegurl; charset=utf-8'
-      : 'application/json; charset=utf-8',
-    'x-content-type-options': 'nosniff',
+    'content-type': upstream.headers.get('content-type') ?? 'application/octet-stream',
     'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
   })
+  const body = Buffer.from(await upstream.arrayBuffer())
   input.response.end(body)
 }
 

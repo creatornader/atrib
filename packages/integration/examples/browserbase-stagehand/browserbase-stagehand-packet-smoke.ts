@@ -37,6 +37,7 @@ export type BrowserbaseStagehandPacketOptions = {
   allowedOrigins?: string[]
   timeoutMs?: number
   onToolResult?: PacketOptions['onToolResult']
+  holdBeforeEndMs?: number
 }
 
 function requiredEnv(name: string, env: NodeJS.ProcessEnv): string {
@@ -53,6 +54,11 @@ function liveMaxAttempts(env: NodeJS.ProcessEnv): number {
 
 function retryDelayMs(attempt: number): number {
   return Math.min(2500, 500 * attempt)
+}
+
+function positiveMs(value: number | undefined): number | undefined {
+  if (!Number.isFinite(value)) return undefined
+  return value && value > 0 ? Math.trunc(value) : undefined
 }
 
 function isTransientBrowserbaseError(error: unknown): boolean {
@@ -191,7 +197,7 @@ ${policyRows}
         : 'Browserbase MCP tool names, backed by a deterministic local fixture.'
   const weakness =
     result.mode === 'live'
-      ? 'This proof run signs the wrapper path, record chain, hash-only disclosure, public log inclusion, verifier path, and real Browserbase MCP command path. It still keeps Browserbase replay material private. Hosted Browserbase MCP can return temporary model-capacity errors; public publication starts only after the full six-step flow verifies.'
+      ? 'This proof run signs the wrapper path, record chain, hash-only disclosure, public log inclusion, verifier path, and real Browserbase MCP command path. It still keeps Browserbase Live View and replay material private. Hosted Browserbase MCP can return temporary model-capacity errors; public publication starts only after the full six-step flow verifies.'
       : 'The fixture path checks the wrapper, record chain, hash-only disclosure, and verifier path for the Browserbase MCP shape. It does not prove a Browserbase cloud replay. A hosted live run needs `BROWSERBASE_API_KEY`; a self-hosted live run also needs `BROWSERBASE_PROJECT_ID` and a model key for `npx -y @browserbasehq/mcp`.'
   const atribPath =
     result.mode === 'live' && result.upstream_shape.includes('hosted')
@@ -291,6 +297,7 @@ export async function runBrowserbaseStagehandPacket(
     options.actionPolicyMode ?? env.ATRIB_BROWSERBASE_ACTION_POLICY,
   )
   const allowedOrigins = options.allowedOrigins ?? browserbaseAllowedOrigins(env, policyTargetUrl)
+  const holdBeforeEndMs = positiveMs(options.holdBeforeEndMs)
   const packetOptions: PacketOptions = {
     packet: 'browserbase-stagehand',
     mode: liveMode ? 'live' : 'fixture',
@@ -318,7 +325,11 @@ export async function runBrowserbaseStagehandPacket(
           { name: 'navigate', arguments: { url: proofUrl } },
           { name: 'observe', arguments: { instruction: observeInstruction } },
           { name: 'act', arguments: { action: actAction } },
-          { name: 'extract', arguments: { instruction: extractInstruction } },
+          {
+            name: 'extract',
+            arguments: { instruction: extractInstruction },
+            ...(holdBeforeEndMs ? { delayAfterMs: holdBeforeEndMs } : {}),
+          },
           { name: 'end' },
         ]
       : [

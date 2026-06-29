@@ -1060,8 +1060,9 @@ export function renderBrowserbaseProofApp(): string {
         const activeMode = selectedMediaMode || preferredMediaMode(visual);
         const liveAvailable = Boolean(media && media.live_view && media.live_view.available);
         const replayAvailable = Boolean(media && media.replay && media.replay.available);
-        const liveLink = activeMode === 'live' && media && media.live_view && media.live_view.available && media.live_view.url
-          ? '<a class="media-link" href="' + escapeHtml(media.live_view.url) + '" target="_blank" rel="noreferrer">Open Live View</a>'
+        const liveHref = media && media.live_view ? media.live_view.proxy_path || media.live_view.url : '';
+        const liveLink = activeMode === 'live' && media && media.live_view && media.live_view.available && liveHref
+          ? '<a class="media-link" href="' + escapeHtml(liveHref) + '" target="_blank" rel="noreferrer">Open Live View</a>'
           : '';
         const replayLink = activeMode === 'replay' && media && media.replay && media.replay.available && media.replay.url
           ? '<a class="media-link" href="' + escapeHtml(media.replay.url) + '" target="_blank" rel="noreferrer">Open Replay</a>'
@@ -1076,7 +1077,9 @@ export function renderBrowserbaseProofApp(): string {
           activeMode === 'simulated' || (activeMode === 'live' && liveAvailable) || (activeMode === 'replay' && replayAvailable);
         const sourceLabel = activeMode === 'simulated'
           ? 'local playback'
-          : selectedAvailable && media && media.source === 'tool-result'
+          : selectedAvailable && media && media.source === 'browserbase-debug-api'
+            ? 'from Browserbase debug API'
+            : selectedAvailable && media && media.source === 'tool-result'
             ? 'from this run'
             : selectedAvailable && media && media.source === 'env'
               ? 'operator supplied'
@@ -1128,7 +1131,7 @@ export function renderBrowserbaseProofApp(): string {
           media ? media.primary : 'none',
           media && media.session ? media.session.id_hash || '' : '',
           media && media.replay ? media.replay.proxy_path || media.replay.url || '' : '',
-          media && media.live_view ? media.live_view.url_hash || media.live_view.url || '' : '',
+          media && media.live_view ? media.live_view.proxy_path || media.live_view.url_hash || '' : '',
         ].join(':');
         if (selectedMediaKey === nextKey) return;
         selectedMediaKey = nextKey;
@@ -1485,5 +1488,5 @@ export function renderBrowserbaseProofApp(): string {
       });
     </script>
   </body>
-</html>`;
+</html>`
 }
