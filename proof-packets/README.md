@@ -5,7 +5,7 @@ platform prospects.
 
 | Proof                                               | Source example                                           | Status                                                                                                                                                                                |
 | --------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path, Browserbase-shaped demo, and public log inclusion. Fixture mode stays available for local tests.                                                    |
+| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path, WebMCP target app demo, Browserbase replay inspection, and public log inclusion. Fixture mode stays available for local tests.                      |
 | [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/` | Live Firecrawl MCP path, fixed-input ingestion demo, and downstream policy decision artifact. Fixture mode stays available for local tests.                                           |
 | [OpenETR transfer](openetr-transfer/)               | `packages/integration/examples/openetr-transfer/`        | Source-backed OpenETR public-relay recognition path with public log inclusion, signed control records, title-authority evidence, legal/MLETR evidence, and an MLETR source checklist. |
 
@@ -28,10 +28,10 @@ The Browserbase and Firecrawl surfaces use these layers:
 
 Browserbase has a deployed live demo at
 `https://atrib-browserbase-stagehand-demo.fly.dev/`. The page shows the
-Browserbase session shape and Stagehand `observe`, `act`, and `extract`
-workflow beside the Atrib receipt table. Hosted Browserbase fresh runs can fail
-during temporary model-capacity spikes, so the demo must show failed runs plainly
-and rate-limit retries.
+agent-ready WebMCP target app at `/target`, the Browserbase Stagehand workflow,
+and the atrib action-gate receipts beside it. Hosted Browserbase fresh runs can
+fail during temporary model-capacity spikes, so the demo must show failed runs
+plainly and rate-limit retries.
 
 Firecrawl has live demo code at
 `packages/integration/examples/firecrawl-web-ingestion/live-demo/`. It stays

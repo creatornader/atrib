@@ -225,8 +225,8 @@ importers:
         specifier: workspace:^
         version: link:../openinference
       '@browserbasehq/stagehand':
-        specifier: 3.5.0
-        version: 3.5.0(@cfworker/json-schema@4.1.1)(encoding@0.1.13)(playwright-core@1.60.0)(zod@4.4.3)
+        specifier: 3.6.0
+        version: 3.6.0(@cfworker/json-schema@4.1.1)(encoding@0.1.13)(playwright-core@1.60.0)(zod@4.4.3)
       '@google/adk':
         specifier: 1.2.0
         version: 1.2.0(@cfworker/json-schema@4.1.1)(@grpc/grpc-js@1.14.4)(@mikro-orm/mariadb@6.6.14(@mikro-orm/core@6.6.14)(better-sqlite3@12.10.0)(pg@8.21.0))(@mikro-orm/mssql@6.6.14(@mikro-orm/core@6.6.14)(better-sqlite3@12.10.0)(mariadb@3.4.5)(pg@8.21.0))(@mikro-orm/mysql@6.6.14(@mikro-orm/core@6.6.14)(@types/node@25.9.3)(better-sqlite3@12.10.0)(mariadb@3.4.5)(pg@8.21.0))(@mikro-orm/postgresql@6.6.14(@mikro-orm/core@6.6.14)(better-sqlite3@12.10.0)(mariadb@3.4.5))(@mikro-orm/sqlite@6.6.14(@mikro-orm/core@6.6.14)(better-sqlite3@12.10.0)(mariadb@3.4.5)(pg@8.21.0))(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(bufferutil@4.1.0)(encoding@0.1.13)
@@ -1041,6 +1041,12 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
+  '@ai-sdk/anthropic@2.0.83':
+    resolution: {integrity: sha512-R0uwSr9TFuW/lnSE/k9kp/S9U8POXl1/S0IlKgxmAF65P8Jzlr5NwyJER9mlqca0gXbHvx14weob+2zWZfsgrg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^4.4.3
+
   '@ai-sdk/azure@2.0.109':
     resolution: {integrity: sha512-0Cd/YzLkF12v8NEyowNdZ3WLGXzdaQeBd4I6EreuQuCnSgO+SwhsS7RbnVB4/FVISgoctSf8+/ojkO+gAC47Sg==}
     engines: {node: '>=18'}
@@ -1500,8 +1506,8 @@ packages:
   '@browserbasehq/sdk@2.12.0':
     resolution: {integrity: sha512-bwgVjjYc4O54Cvkc5POfZUv0Gl92n1nNfAPueRLQVFsDoPRTw0FS8wKo9/bQCQuyzAg9+RQUDqvUC241ogLRTQ==}
 
-  '@browserbasehq/stagehand@3.5.0':
-    resolution: {integrity: sha512-nmKmi37keeZ8naUTJ4l6nfR8sTCDc5gUIn+fKSzMH8Xy4IW/sFNaA14Gl3OQbUWpthr977yGCBj556WSWONg0w==}
+  '@browserbasehq/stagehand@3.6.0':
+    resolution: {integrity: sha512-wQ3Mv5b2xy64SntWNUbvgd7liWPbQRvGa8KEb1LorwheTkpUZFkt3BpZE8ovMY/lIleV9DfYjbvqghbeOOla4w==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
       patchright-core: ^1.55.2
@@ -4001,8 +4007,8 @@ packages:
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
 
-  devtools-protocol@0.0.1464554:
-    resolution: {integrity: sha512-CAoP3lYfwAGQTaAXYvA6JZR0fjGUb7qec1qf4mToyoH2TZgUFeIqYcjh6f9jNuhHfuZiEdH+PONHYrLhRQX6aw==}
+  devtools-protocol@0.0.1642743:
+    resolution: {integrity: sha512-vTCGze95hGFayPNUXv2H/3cNt/Kqv3J7XqS519j7U8HYhmtD6+eVEPHp6nRHD64dDXJ022TU4reAYhjYyuxm8Q==}
 
   dfa@1.2.0:
     resolution: {integrity: sha512-ED3jP8saaweFTjeGX8HQPjeC1YYyZs98jGNZx6IiBvxW7JG5v492kamAQB3m2wop07CvU/RQmzcKr6bgcC5D/Q==}
@@ -4507,10 +4513,6 @@ packages:
     resolution: {integrity: sha512-YGGyuEdVIjqxkxVH1pUTMY/XtmmsApXrCVv5EU25iX6inEPbV+VakJfLealkBtJN69AQmh1eGOdCl9Sm1UP6XQ==}
     engines: {node: '>=18'}
 
-  gaxios@7.1.4:
-    resolution: {integrity: sha512-bTIgTsM2bWn3XklZISBTQX7ZSddGW+IO3bMdGaemHZ3tbqExMENHLx6kKZ/KlejgrMtj8q7wBItt51yegqalrA==}
-    engines: {node: '>=18'}
-
   gaxios@7.1.5:
     resolution: {integrity: sha512-5FZy72Rh8LhtjmvDrKkI+lVhrsQrVKVsItxMoDm5mNQE+xR0WVIIs+jzPSJgBvKVsLi24fZhXJIsNI0bihDzFg==}
     engines: {node: '>=18'}
@@ -4597,10 +4599,6 @@ packages:
 
   google-auth-library@10.5.0:
     resolution: {integrity: sha512-7ABviyMOlX5hIVD60YOfHw4/CxOfBhyduaYB+wbFWCWoni4N7SLcV46hrVRktuBbZjFC9ONyqamZITN7q3n32w==}
-    engines: {node: '>=18'}
-
-  google-auth-library@10.6.2:
-    resolution: {integrity: sha512-e27Z6EThmVNNvtYASwQxose/G57rkRuaRbQyxM2bvYLLX/GqWZ5chWq2EBoUchJbCc57eC9ArzO5wMsEmWftCw==}
     engines: {node: '>=18'}
 
   google-auth-library@10.7.0:
@@ -7205,6 +7203,13 @@ snapshots:
       zod: 4.4.3
     optional: true
 
+  '@ai-sdk/anthropic@2.0.83(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.3
+      '@ai-sdk/provider-utils': 3.1.0-beta.9(patch_hash=nlp4uak3riqdhuejm64gljdh3m)(zod@4.4.3)
+      zod: 4.4.3
+    optional: true
+
   '@ai-sdk/azure@2.0.109(zod@4.4.3)':
     dependencies:
       '@ai-sdk/openai': 2.0.106(zod@4.4.3)
@@ -7249,7 +7254,7 @@ snapshots:
       '@ai-sdk/openai-compatible': 1.0.39(zod@4.4.3)
       '@ai-sdk/provider': 2.0.3
       '@ai-sdk/provider-utils': 3.1.0-beta.9(patch_hash=nlp4uak3riqdhuejm64gljdh3m)(zod@4.4.3)
-      google-auth-library: 10.6.2
+      google-auth-library: 10.7.0
       zod: 4.4.3
     transitivePeerDependencies:
       - supports-color
@@ -7953,7 +7958,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@browserbasehq/stagehand@3.5.0(@cfworker/json-schema@4.1.1)(encoding@0.1.13)(playwright-core@1.60.0)(zod@4.4.3)':
+  '@browserbasehq/stagehand@3.6.0(@cfworker/json-schema@4.1.1)(encoding@0.1.13)(playwright-core@1.60.0)(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 2.0.3
       '@anthropic-ai/sdk': 0.39.0(encoding@0.1.13)
@@ -7961,7 +7966,7 @@ snapshots:
       '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(bufferutil@4.1.0)
       '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
       ai: 5.0.196(zod@4.4.3)
-      devtools-protocol: 0.0.1464554
+      devtools-protocol: 0.0.1642743
       fetch-cookie: 3.2.0
       openai: 4.104.0(encoding@0.1.13)(ws@8.21.0(bufferutil@4.1.0))(zod@4.4.3)
       pino: 9.14.0
@@ -7972,7 +7977,7 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@4.4.3)
     optionalDependencies:
       '@ai-sdk/amazon-bedrock': 3.0.100(zod@4.4.3)
-      '@ai-sdk/anthropic': 2.0.80(zod@4.4.3)
+      '@ai-sdk/anthropic': 2.0.83(zod@4.4.3)
       '@ai-sdk/azure': 2.0.109(zod@4.4.3)
       '@ai-sdk/cerebras': 1.0.44(zod@4.4.3)
       '@ai-sdk/deepseek': 1.0.41(zod@4.4.3)
@@ -10774,7 +10779,7 @@ snapshots:
     dependencies:
       dequal: 2.0.3
 
-  devtools-protocol@0.0.1464554: {}
+  devtools-protocol@0.0.1642743: {}
 
   dfa@1.2.0: {}
 
@@ -11414,15 +11419,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  gaxios@7.1.4:
-    dependencies:
-      extend: 3.0.2
-      https-proxy-agent: 7.0.6
-      node-fetch: 3.3.2
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
-
   gaxios@7.1.5:
     dependencies:
       extend: 3.0.2
@@ -11552,18 +11548,6 @@ snapshots:
       jws: 4.0.1
     transitivePeerDependencies:
       - supports-color
-
-  google-auth-library@10.6.2:
-    dependencies:
-      base64-js: 1.5.1
-      ecdsa-sig-formatter: 1.0.11
-      gaxios: 7.1.4
-      gcp-metadata: 8.1.2
-      google-logging-utils: 1.1.3
-      jws: 4.0.1
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
 
   google-auth-library@10.7.0:
     dependencies:

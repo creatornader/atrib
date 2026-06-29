@@ -46,7 +46,7 @@ Verifiable Browserbase MCP run: signed start/navigate/observe/act/extract/end re
 Body:
 
 ```markdown
-I ran Atrib against the Browserbase MCP surface rather than writing a generic security suggestion.
+I ran atrib against the Browserbase MCP surface rather than writing a generic security suggestion.
 
 I also built a proof console for fresh runs: https://atrib-browserbase-stagehand-demo.fly.dev/
 
@@ -68,8 +68,10 @@ Public proof:
 Live demo boundary:
 
 - Starts one fixed Browserbase proof run per click.
+- Shows an agent-ready WebMCP target app at `/target`.
 - Queues the run immediately and returns a run id while the proof finishes.
-- Shows step, record hash, public log index, verifier status, explorer link, and log-proof link.
+- Shows the Browserbase Stagehand workflow, action-gate decision, record hashes, public log indexes, verifier status, explorer links, and log-proof links.
+- Shows cursor and click playback so the browser action is visible next to the evidence. If Browserbase Live View or Replay refs are available, the console exposes them as UI-only links.
 - Keeps Browserbase session URL, replay URL, page snapshot, selectors, form values, and raw extraction payload out of the public output.
 
 What I want criticism on:
@@ -84,12 +86,12 @@ I have not opened a PR because I want sharp feedback on the proof boundary first
 ## Browserbase draft: direct note
 
 ```text
-I ran Atrib against Browserbase MCP and produced a public proof run: start, navigate, observe, act, extract, and end were signed through @atrib/mcp-wrap and included in log.atrib.dev. The current accepted proof uses Browserbase hosted Streamable HTTP MCP. I also built a proof console for fresh runs: https://atrib-browserbase-stagehand-demo.fly.dev/
+I ran atrib against Browserbase MCP and produced a public proof run: start, navigate, observe, act, extract, and end were signed through @atrib/mcp-wrap and included in log.atrib.dev. The current accepted proof uses Browserbase hosted Streamable HTTP MCP. I also built a proof console for fresh runs against an agent-ready WebMCP target app, with cursor and click playback beside the evidence timeline: https://atrib-browserbase-stagehand-demo.fly.dev/
 
 Explorer: https://explore.atrib.dev/action/sha256:535201b60e3660f1b2f5babcfdd85f09f3a1503f4ad73cfc419528285c696aae
 Log proof: https://log.atrib.dev/v1/proof/535201b60e3660f1b2f5babcfdd85f09f3a1503f4ad73cfc419528285c696aae
 
-The public record keeps tool names plus args/result hashes. It does not expose the Browserbase session URL, replay URL, selectors, or page snapshot. I am looking for criticism on whether this proof boundary is useful for cloud browser actions, especially around policy enforcement and session cleanup.
+The public record keeps tool names plus args/result hashes. It does not expose the Browserbase session URL, replay URL, selectors, page snapshot, or extracted page text. Browserbase Live View or Replay refs are UI-only when present. I am looking for criticism on whether this proof boundary is useful for cloud browser actions, especially around policy enforcement, WebMCP tool invocation, and session cleanup.
 ```
 
 ## Firecrawl draft: GitHub issue or comment
@@ -103,7 +105,7 @@ Verifiable Firecrawl MCP run: signed search/scrape/extract/bounded-crawl records
 Body:
 
 ```markdown
-I ran Atrib against Firecrawl MCP and built a proof artifact for the ingestion boundary.
+I ran atrib against Firecrawl MCP and built a proof artifact for the ingestion boundary.
 
 Proof shape:
 
@@ -141,7 +143,7 @@ I have not opened a PR because I want maintainer feedback on the record boundary
 ## Firecrawl draft: direct note
 
 ```text
-I ran Atrib against Firecrawl MCP and produced a public proof run for search, scrape, extract, and bounded crawl. I also added a small policy decision artifact that allows internal research but escalates before web-ingested content feeds a customer email, account update, refund or payment change, production code change, or vendor workflow.
+I ran atrib against Firecrawl MCP and produced a public proof run for search, scrape, extract, and bounded crawl. I also added a small policy decision artifact that allows internal research but escalates before web-ingested content feeds a customer email, account update, refund or payment change, production code change, or vendor workflow.
 
 Explorer: https://explore.atrib.dev/action/sha256:bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434
 Log proof: https://log.atrib.dev/v1/proof/bc6424b393edac3a3c9e2b6c203006d0d514cd51b960ca20958d8da174a05434
@@ -155,9 +157,13 @@ The public record keeps tool names plus args/result hashes. It does not expose t
 Browserbase now has live demo code in
 `packages/integration/examples/browserbase-stagehand/live-demo/` and a deployed
 demo at <https://atrib-browserbase-stagehand-demo.fly.dev/>. The deployed demo
-uses hosted Browserbase MCP, public-log publication after verification, a
-120-second proof-run timeout, nonblocking run creation, and a single warm Fly
-machine so the in-memory active run lock and rate limiter apply consistently.
+serves an agent-ready WebMCP target app at `/target`, uses hosted Browserbase
+MCP, publishes to the public log after verification, applies a 120-second
+proof-run timeout, starts runs without blocking the request, and keeps a single
+warm Fly machine so the in-memory active run lock and rate limiter apply
+consistently. The console now shows visible cursor and click playback next to
+the signed evidence. Browserbase Live View and Replay refs can be attached as
+UI-only links when the runtime provides them.
 
 Hosted Browserbase fresh runs can still return temporary model-capacity errors.
 The demo shows failed runs plainly and rate-limits retries.

@@ -10,13 +10,18 @@ import {
   type BrowserbaseActionPolicyMode,
 } from '../action-control.js'
 import { runBrowserbaseStagehandPacket } from '../browserbase-stagehand-packet-smoke.js'
-import type { WrappedMcpPacketResult } from '../../wrapped-mcp-proof-runner.js'
+import type { PacketToolResultEvent, WrappedMcpPacketResult } from '../../wrapped-mcp-proof-runner.js'
+import { renderBrowserbaseProofApp } from './ui.js'
 
 const serviceName = 'atrib-browserbase-stagehand-demo'
 const maxStoredRuns = 12
+const targetRoute = '/target'
 
 type DemoMode = 'fixture' | 'live'
 type RunStatus = 'running' | 'accepted' | 'failed'
+type VisualStage = 'idle' | 'running' | 'replay' | 'failed'
+type VisualEventStatus = 'pending' | 'running' | 'signed' | 'blocked' | 'skipped'
+type BrowserbaseMediaSource = 'env' | 'tool-result' | 'none'
 
 export type RateLimitConfig = {
   enabled: boolean
@@ -46,6 +51,7 @@ export type BrowserbaseDemoRun = {
   privacy?: WrappedMcpPacketResult['privacy']
   log?: WrappedMcpPacketResult['log']
   action_policy?: WrappedMcpPacketResult['action_policy']
+  visual?: BrowserbaseVisualState
   operations?: Array<{
     step: string
     record_hash: string
@@ -53,6 +59,72 @@ export type BrowserbaseDemoRun = {
     explorer_url: string | null
     log_proof_url: string | null
   }>
+}
+
+export type BrowserbasePrivateSessionMedia = {
+  source: Exclude<BrowserbaseMediaSource, 'none'>
+  session_id?: string | undefined
+  live_view_url?: string | undefined
+  replay_url?: string | undefined
+  session_url?: string | undefined
+  detected_from: string[]
+}
+
+export type BrowserbaseDemoRunnerResult =
+  | WrappedMcpPacketResult
+  | {
+      result: WrappedMcpPacketResult
+      private_media?: BrowserbasePrivateSessionMedia
+    }
+
+export type BrowserbaseVisualEvent = {
+  step: string
+  label: string
+  at_ms: number
+  status: VisualEventStatus
+  cursor: {
+    x_pct: number
+    y_pct: number
+  }
+  target_action: 'none' | 'approve' | 'hold'
+  caption: string
+  record_hash?: string | undefined
+}
+
+export type BrowserbaseVisualState = {
+  schema: 'atrib.browserbase.visual_run.v1'
+  stage: VisualStage
+  source: 'fixture-simulation' | 'browserbase-live'
+  current_step: string
+  playback_ms: number
+  media: {
+    primary: 'simulated' | 'live' | 'replay'
+    source: BrowserbaseMediaSource
+    session: {
+      available: boolean
+      id_hash?: string
+      disclosure: 'not-available' | 'hash-only'
+    }
+    live_view: {
+      available: boolean
+      url?: string
+      url_hash?: string
+      disclosure: 'not-available' | 'ui-only-ephemeral'
+    }
+    replay: {
+      available: boolean
+      url?: string
+      url_hash?: string
+      proxy_path?: string
+      disclosure: 'not-available' | 'ui-only-ephemeral' | 'server-proxy'
+    }
+    note: string
+  }
+  events: BrowserbaseVisualEvent[]
+  privacy: {
+    public_records: 'hash-only'
+    ui_only_fields: string[]
+  }
 }
 
 export type DisclosedValue = {
@@ -64,6 +136,13 @@ export type DisclosedValue = {
 export type BrowserbaseWorkflow = {
   name: string
   target_url: DisclosedValue
+  target_page: {
+    route: string
+    shape: 'webapp'
+    native_webmcp_api: 'document.modelContext'
+    tools: WebMcpToolDescriptor[]
+    boundary: string
+  }
   upstream: 'hosted' | 'stdio'
   mcp_surface: string
   browserbase_session: {
@@ -84,11 +163,18 @@ export type BrowserbaseWorkflow = {
   }
 }
 
+export type WebMcpToolDescriptor = {
+  name: string
+  description: string
+  input_schema: Record<string, unknown>
+  output_schema: Record<string, unknown>
+}
+
 type Runner = (options: {
   mode: DemoMode
   publicLog: boolean
   actionPolicyMode: BrowserbaseActionPolicyMode
-}) => Promise<WrappedMcpPacketResult>
+}) => Promise<BrowserbaseDemoRunnerResult>
 
 function numberEnv(name: string, fallback: number, env: NodeJS.ProcessEnv): number {
   const value = env[name]
@@ -106,6 +192,174 @@ function sha256Text(value: string): string {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`
 }
 
+function mergePrivateSessionMedia(
+  current: BrowserbasePrivateSessionMedia | undefined,
+  next: BrowserbasePrivateSessionMedia | undefined,
+): BrowserbasePrivateSessionMedia | undefined {
+  if (!next) return current
+  if (!current) return next
+  return {
+    source: current.source === 'tool-result' ? current.source : next.source,
+    session_id: current.session_id ?? next.session_id,
+    live_view_url: current.live_view_url ?? next.live_view_url,
+    replay_url: current.replay_url ?? next.replay_url,
+    session_url: current.session_url ?? next.session_url,
+    detected_from: [...new Set([...current.detected_from, ...next.detected_from])],
+  }
+}
+
+function cleanExtractedUrl(value: string): string | undefined {
+  const cleaned = value.replace(/[),.;\]}]+$/u, '')
+  return safeVisualUrl(cleaned)
+}
+
+function extractHttpsUrls(text: string): string[] {
+  return [
+    ...new Set(
+      [...text.matchAll(/https:\/\/[^\s"'<>\\]+/gu)]
+        .map((match) => cleanExtractedUrl(match[0]))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ]
+}
+
+function classifyBrowserbaseUrl(url: string): 'live_view' | 'replay' | 'session' | undefined {
+  const lower = url.toLowerCase()
+  if (lower.includes('replays') || lower.includes('replay') || lower.includes('.m3u8')) {
+    return 'replay'
+  }
+  if (
+    lower.includes('debugger') ||
+    lower.includes('devtools') ||
+    lower.includes('live-view') ||
+    lower.includes('liveview')
+  ) {
+    return 'live_view'
+  }
+  if (lower.includes('/sessions/')) return 'session'
+  return undefined
+}
+
+function sessionIdFromBrowserbaseText(toolName: string, text: string, urls: string[]): string | undefined {
+  for (const url of urls) {
+    const match = url.match(/\/(?:v1\/)?sessions\/([^/?#]+)/u)
+    if (match?.[1]) return match[1]
+  }
+  if (toolName !== 'start') return undefined
+  const patterns = [
+    /["'](?:sessionId|session_id|sessionID)["']\s*:\s*["']([A-Za-z0-9_-]{8,})["']/u,
+    /["']id["']\s*:\s*["']([A-Za-z0-9_-]{8,})["']/u,
+    /\b(?:sessionId|session_id|sessionID)\b\s*[:=]\s*["']?([A-Za-z0-9_-]{8,})["']?/u,
+  ]
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    if (match?.[1]) return match[1]
+  }
+  return undefined
+}
+
+export function browserbasePrivateMediaFromToolResult(
+  event: Pick<PacketToolResultEvent, 'name' | 'result_text'>,
+): BrowserbasePrivateSessionMedia | undefined {
+  const urls = extractHttpsUrls(event.result_text)
+  const media: BrowserbasePrivateSessionMedia = {
+    source: 'tool-result',
+    detected_from: [event.name],
+  }
+  for (const url of urls) {
+    const kind = classifyBrowserbaseUrl(url)
+    if (kind === 'live_view' && !media.live_view_url) media.live_view_url = url
+    if (kind === 'replay' && !media.replay_url) media.replay_url = url
+    if (kind === 'session' && !media.session_url) media.session_url = url
+  }
+  media.session_id = sessionIdFromBrowserbaseText(event.name, event.result_text, urls)
+  if (!media.session_id && !media.live_view_url && !media.replay_url && !media.session_url) {
+    return undefined
+  }
+  return media
+}
+
+function privateMediaFromEnv(env: NodeJS.ProcessEnv): BrowserbasePrivateSessionMedia | undefined {
+  const liveViewUrl = safeVisualUrl(env.ATRIB_BROWSERBASE_DEMO_LIVE_VIEW_URL)
+  const replayUrl = safeVisualUrl(env.ATRIB_BROWSERBASE_DEMO_REPLAY_URL)
+  if (!liveViewUrl && !replayUrl) return undefined
+  return {
+    source: 'env',
+    live_view_url: liveViewUrl,
+    replay_url: replayUrl,
+    detected_from: ['env'],
+  }
+}
+
+function webMcpTools(): WebMcpToolDescriptor[] {
+  return [
+    {
+      name: 'read_vendor_risk',
+      description: 'Read the visible renewal risk summary before taking action.',
+      input_schema: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+      output_schema: {
+        type: 'object',
+        properties: {
+          vendor: { type: 'string' },
+          renewal_id: { type: 'string' },
+          risk_level: { type: 'string' },
+          amount_usd: { type: 'number' },
+        },
+        required: ['vendor', 'renewal_id', 'risk_level', 'amount_usd'],
+      },
+    },
+    {
+      name: 'approve_vendor_renewal',
+      description: 'Approve the fixed Northstar data-room renewal and return a confirmation id.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          operator_note: { type: 'string' },
+        },
+        additionalProperties: false,
+      },
+      output_schema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string' },
+          confirmation_id: { type: 'string' },
+        },
+        required: ['status', 'confirmation_id'],
+      },
+    },
+    {
+      name: 'request_human_review',
+      description: 'Route the renewal to a human reviewer without approving it.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          reason: { type: 'string' },
+        },
+        additionalProperties: false,
+      },
+      output_schema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string' },
+          routed_to: { type: 'string' },
+        },
+        required: ['status', 'routed_to'],
+      },
+    },
+  ]
+}
+
+export function browserbaseDemoTargetUrl(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.ATRIB_BROWSERBASE_DEMO_URL) return env.ATRIB_BROWSERBASE_DEMO_URL
+  const publicBaseUrl = env.ATRIB_BROWSERBASE_DEMO_PUBLIC_BASE_URL?.replace(/\/+$/u, '')
+  if (publicBaseUrl) return `${publicBaseUrl}${targetRoute}`
+  return 'https://example.com'
+}
+
 function discloseValue(value: string, publicValue: boolean): DisclosedValue {
   return publicValue
     ? { value, disclosure: 'public-fixed' }
@@ -115,13 +369,19 @@ function discloseValue(value: string, publicValue: boolean): DisclosedValue {
 export function browserbaseWorkflowFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): BrowserbaseWorkflow {
-  const targetUrl = env.ATRIB_BROWSERBASE_DEMO_URL ?? 'https://example.com'
-  const observeInstruction = env.ATRIB_BROWSERBASE_DEMO_OBSERVE ?? 'Find the More information link'
-  const actAction = env.ATRIB_BROWSERBASE_DEMO_ACT ?? 'Click the More information link'
+  const targetUrl = browserbaseDemoTargetUrl(env)
+  const observeInstruction =
+    env.ATRIB_BROWSERBASE_DEMO_OBSERVE ??
+    'Find the vendor renewal panel and the WebMCP tools available on the page'
+  const actAction =
+    env.ATRIB_BROWSERBASE_DEMO_ACT ?? 'Click Approve renewal for the Northstar data room renewal'
   const extractInstruction =
-    env.ATRIB_BROWSERBASE_DEMO_EXTRACT ?? 'Extract the page title and current URL'
+    env.ATRIB_BROWSERBASE_DEMO_EXTRACT ??
+    'Extract the confirmation id, approval status, and WebMCP tool names'
   const exposeTarget =
-    env.ATRIB_BROWSERBASE_DEMO_EXPOSE_TARGET === '1' || targetUrl === 'https://example.com'
+    env.ATRIB_BROWSERBASE_DEMO_EXPOSE_TARGET === '1' ||
+    targetUrl === 'https://example.com' ||
+    targetUrl.endsWith(targetRoute)
   const exposeInstructions =
     env.ATRIB_BROWSERBASE_DEMO_EXPOSE_INSTRUCTIONS === '1' ||
     (!env.ATRIB_BROWSERBASE_DEMO_OBSERVE &&
@@ -129,8 +389,16 @@ export function browserbaseWorkflowFromEnv(
       !env.ATRIB_BROWSERBASE_DEMO_EXTRACT)
 
   return {
-    name: 'Browserbase hosted Stagehand proof flow',
+    name: 'Browserbase Stagehand WebMCP proof flow',
     target_url: discloseValue(targetUrl, exposeTarget),
+    target_page: {
+      route: targetRoute,
+      shape: 'webapp',
+      native_webmcp_api: 'document.modelContext',
+      tools: webMcpTools(),
+      boundary:
+        'The target page exposes first-party WebMCP tools. atrib signs Browserbase MCP calls and policy gate records around the action boundary.',
+    },
     upstream: browserbaseUpstreamFromEnv(env),
     mcp_surface:
       browserbaseUpstreamFromEnv(env) === 'hosted'
@@ -240,8 +508,8 @@ export function deploymentGuardIssues(env: NodeJS.ProcessEnv = process.env): str
   if (env.ATRIB_BROWSERBASE_DEMO_CREDENTIAL_SCOPE !== 'demo-only') {
     issues.push('ATRIB_BROWSERBASE_DEMO_CREDENTIAL_SCOPE must be demo-only')
   }
-  if (!env.ATRIB_BROWSERBASE_DEMO_URL) {
-    issues.push('ATRIB_BROWSERBASE_DEMO_URL is required')
+  if (!env.ATRIB_BROWSERBASE_DEMO_URL && !env.ATRIB_BROWSERBASE_DEMO_PUBLIC_BASE_URL) {
+    issues.push('ATRIB_BROWSERBASE_DEMO_URL or ATRIB_BROWSERBASE_DEMO_PUBLIC_BASE_URL is required')
   }
 
   const rateLimit = rateLimitConfigFromEnv(env)
@@ -319,6 +587,204 @@ export function checkRateLimit(
   return { ok: true }
 }
 
+function visualMedia(input: {
+  env: NodeJS.ProcessEnv
+  mode: DemoMode
+  runId?: string | undefined
+  privateMedia?: BrowserbasePrivateSessionMedia | undefined
+}): BrowserbaseVisualState['media'] {
+  const runPrivateMedia = input.mode === 'live' ? input.privateMedia : undefined
+  const privateMedia = mergePrivateSessionMedia(privateMediaFromEnv(input.env), runPrivateMedia)
+  const liveViewUrl = safeVisualUrl(privateMedia?.live_view_url)
+  const replayUrl = safeVisualUrl(privateMedia?.replay_url)
+  const hasSession = Boolean(privateMedia?.session_id)
+  const replayProxyPath = hasSession && input.runId ? `/api/runs/${input.runId}/browserbase/replays` : undefined
+  const source: BrowserbaseMediaSource = privateMedia?.source ?? 'none'
+  const primary = liveViewUrl ? 'live' : replayUrl || replayProxyPath ? 'replay' : 'simulated'
+  return {
+    primary,
+    source,
+    session: hasSession
+      ? { available: true, id_hash: sha256Text(privateMedia!.session_id!), disclosure: 'hash-only' }
+      : { available: false, disclosure: 'not-available' },
+    live_view: liveViewUrl
+      ? {
+          available: true,
+          url: liveViewUrl,
+          url_hash: sha256Text(liveViewUrl),
+          disclosure: 'ui-only-ephemeral',
+        }
+      : { available: false, disclosure: 'not-available' },
+    replay:
+      replayUrl || replayProxyPath
+        ? {
+            available: true,
+            ...(replayUrl ? { url: replayUrl, url_hash: sha256Text(replayUrl) } : {}),
+            ...(replayProxyPath ? { proxy_path: replayProxyPath } : {}),
+            disclosure: replayUrl ? 'ui-only-ephemeral' : 'server-proxy',
+          }
+        : { available: false, disclosure: 'not-available' },
+    note:
+      input.mode === 'live'
+        ? primary === 'replay'
+          ? 'Browserbase session media is kept UI-only. Public records keep hashes and verifier results.'
+          : 'Live Browserbase proof ran through the MCP path. Replay is available when the run exposes a session ref.'
+        : 'Fixture mode uses deterministic playback because no Browserbase cloud session exists.',
+  }
+}
+
+function safeVisualUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:') return undefined
+    return url.toString()
+  } catch {
+    return undefined
+  }
+}
+
+function visualEventsForMode(
+  actionPolicyMode: BrowserbaseActionPolicyMode,
+  operations: Array<{ step: string; record_hash?: string }> = [],
+): BrowserbaseVisualEvent[] {
+  const byStep = new Map(operations.map((operation) => [operation.step, operation.record_hash]))
+  const blocked = actionPolicyMode !== 'allow'
+  const base: BrowserbaseVisualEvent[] = [
+    {
+      step: 'start',
+      label: 'Start Browserbase session',
+      at_ms: 0,
+      status: byStep.has('start') ? 'signed' : 'pending',
+      cursor: { x_pct: 12, y_pct: 12 },
+      target_action: 'none',
+      caption: 'Opening the remote browser session.',
+      record_hash: byStep.get('start'),
+    },
+    {
+      step: 'navigate',
+      label: 'Navigate to vendor portal',
+      at_ms: 900,
+      status: byStep.has('navigate') ? 'signed' : 'pending',
+      cursor: { x_pct: 42, y_pct: 7 },
+      target_action: 'none',
+      caption: 'Stagehand navigates to the fixed WebMCP target.',
+      record_hash: byStep.get('navigate'),
+    },
+    {
+      step: 'observe',
+      label: 'Observe renewal state',
+      at_ms: 1900,
+      status: byStep.has('observe') ? 'signed' : 'pending',
+      cursor: { x_pct: 31, y_pct: 55 },
+      target_action: 'none',
+      caption: 'Stagehand reads the risk panel and WebMCP tool list.',
+      record_hash: byStep.get('observe'),
+    },
+    {
+      step: 'policy_decision',
+      label: blocked ? 'Policy decision stops act' : 'Policy decision allows act',
+      at_ms: 2800,
+      status: blocked ? 'blocked' : 'signed',
+      cursor: { x_pct: 63, y_pct: 68 },
+      target_action: blocked ? 'hold' : 'none',
+      caption: blocked
+        ? 'The action gate stops before the browser click.'
+        : 'The action gate signs allow before the browser click.',
+    },
+    {
+      step: 'act',
+      label: blocked ? 'Act withheld' : 'Click approve renewal',
+      at_ms: 3900,
+      status: blocked ? 'skipped' : byStep.has('act') ? 'signed' : 'pending',
+      cursor: { x_pct: 69, y_pct: 79 },
+      target_action: blocked ? 'hold' : 'approve',
+      caption: blocked
+        ? 'No act call is made. The approval button is not clicked.'
+        : 'Stagehand clicks the approval action after policy allow.',
+      record_hash: byStep.get('act'),
+    },
+    {
+      step: 'policy_outcome',
+      label: blocked ? 'Policy outcome: stopped' : 'Policy outcome: executed',
+      at_ms: 4700,
+      status: blocked ? 'blocked' : 'signed',
+      cursor: { x_pct: 69, y_pct: 79 },
+      target_action: 'none',
+      caption: blocked
+        ? 'The signed outcome says execution stopped before act.'
+        : 'The signed outcome links the allow decision to the act record.',
+    },
+    {
+      step: 'extract',
+      label: 'Extract confirmation fields',
+      at_ms: 5600,
+      status: blocked ? 'skipped' : byStep.has('extract') ? 'signed' : 'pending',
+      cursor: { x_pct: 63, y_pct: 56 },
+      target_action: 'none',
+      caption: blocked
+        ? 'Extraction is skipped because the action did not run.'
+        : 'Stagehand extracts the confirmation and visible tool names.',
+      record_hash: byStep.get('extract'),
+    },
+    {
+      step: 'end',
+      label: 'End session',
+      at_ms: 6500,
+      status: byStep.has('end') ? 'signed' : 'pending',
+      cursor: { x_pct: 9, y_pct: 12 },
+      target_action: 'none',
+      caption: 'Cleanup closes the browser session boundary.',
+      record_hash: byStep.get('end'),
+    },
+  ]
+  return base
+}
+
+function buildVisualState(input: {
+  runId?: string | undefined
+  mode: DemoMode
+  actionPolicyMode: BrowserbaseActionPolicyMode
+  stage: VisualStage
+  operations?: BrowserbaseDemoRun['operations'] | undefined
+  env?: NodeJS.ProcessEnv | undefined
+  privateMedia?: BrowserbasePrivateSessionMedia | undefined
+}): BrowserbaseVisualState {
+  const operations = input.operations?.map((operation) => ({
+    step: operation.step,
+    record_hash: operation.record_hash,
+  }))
+  const events = visualEventsForMode(input.actionPolicyMode, operations)
+  const current =
+    input.stage === 'running'
+      ? events.find((event) => event.status === 'pending') ?? events[0]
+      : events.at(-1)
+  return {
+    schema: 'atrib.browserbase.visual_run.v1',
+    stage: input.stage,
+    source: input.mode === 'live' ? 'browserbase-live' : 'fixture-simulation',
+    current_step: current?.step ?? 'start',
+    playback_ms: events.at(-1)?.at_ms ?? 0,
+    media: visualMedia({
+      env: input.env ?? process.env,
+      mode: input.mode,
+      runId: input.runId,
+      privateMedia: input.privateMedia,
+    }),
+    events,
+    privacy: {
+      public_records: 'hash-only',
+      ui_only_fields: [
+        'Browserbase Live View URL',
+        'Browserbase Replay URL',
+        'session id',
+        'page pixels',
+        'cursor positions',
+      ],
+    },
+  }
+}
+
 export function summarizePacketResult(input: {
   runId: string
   startedAt: string
@@ -326,8 +792,10 @@ export function summarizePacketResult(input: {
   result: WrappedMcpPacketResult
   workflow?: BrowserbaseWorkflow
   actionPolicyMode: BrowserbaseActionPolicyMode
+  env?: NodeJS.ProcessEnv
+  privateMedia?: BrowserbasePrivateSessionMedia | undefined
 }): BrowserbaseDemoRun {
-  return {
+  const run: BrowserbaseDemoRun = {
     run_id: input.runId,
     status: 'accepted',
     mode: input.result.mode,
@@ -355,6 +823,18 @@ export function summarizePacketResult(input: {
       }
     }),
   }
+  return {
+    ...run,
+    visual: buildVisualState({
+      runId: input.runId,
+      mode: input.result.mode,
+      actionPolicyMode: input.actionPolicyMode,
+      stage: 'replay',
+      operations: run.operations,
+      env: input.env,
+      privateMedia: input.privateMedia,
+    }),
+  }
 }
 
 export async function runBrowserbaseProof(options: {
@@ -362,30 +842,53 @@ export async function runBrowserbaseProof(options: {
   publicLog: boolean
   actionPolicyMode: BrowserbaseActionPolicyMode
 }): Promise<WrappedMcpPacketResult> {
-  return runBrowserbaseStagehandPacket({
+  return (await runBrowserbaseProofWithMedia(options)).result
+}
+
+export async function runBrowserbaseProofWithMedia(options: {
+  mode: DemoMode
+  publicLog: boolean
+  actionPolicyMode: BrowserbaseActionPolicyMode
+}): Promise<{ result: WrappedMcpPacketResult; private_media?: BrowserbasePrivateSessionMedia }> {
+  const targetUrl = browserbaseDemoTargetUrl(process.env)
+  let privateMedia: BrowserbasePrivateSessionMedia | undefined
+  const result = await runBrowserbaseStagehandPacket({
     env: process.env,
     liveMode: options.mode === 'live',
     publicLog: options.publicLog,
-    proofUrl: process.env.ATRIB_BROWSERBASE_DEMO_URL ?? 'https://example.com',
+    proofUrl: targetUrl,
     observeInstruction:
-      process.env.ATRIB_BROWSERBASE_DEMO_OBSERVE ?? 'Find the More information link',
-    actAction: process.env.ATRIB_BROWSERBASE_DEMO_ACT ?? 'Click the More information link',
+      process.env.ATRIB_BROWSERBASE_DEMO_OBSERVE ??
+      'Find the vendor renewal panel and the WebMCP tools available on the page',
+    actAction:
+      process.env.ATRIB_BROWSERBASE_DEMO_ACT ??
+      'Click Approve renewal for the Northstar data room renewal',
     extractInstruction:
-      process.env.ATRIB_BROWSERBASE_DEMO_EXTRACT ?? 'Extract the page title and current URL',
+      process.env.ATRIB_BROWSERBASE_DEMO_EXTRACT ??
+      'Extract the confirmation id, approval status, and WebMCP tool names',
     actionPolicyMode: options.actionPolicyMode,
     timeoutMs: proofRunTimeoutMs(process.env),
+    onToolResult(event) {
+      if (options.mode !== 'live') return
+      privateMedia = mergePrivateSessionMedia(
+        privateMedia,
+        browserbasePrivateMediaFromToolResult(event),
+      )
+    },
   }).catch((error: unknown) => {
     throw new Error(redactError(error instanceof Error ? error.message : String(error)))
   })
+  return privateMedia ? { result, private_media: privateMedia } : { result }
 }
 
 export function createBrowserbaseDemoServer(
   options: { runner?: Runner; env?: NodeJS.ProcessEnv } = {},
 ) {
   const runs = new Map<string, BrowserbaseDemoRun>()
+  const privateMediaByRun = new Map<string, BrowserbasePrivateSessionMedia>()
   const rateLimits = new Map<string, RateLimitBucket>()
   let activeRun: Promise<BrowserbaseDemoRun> | undefined
-  const runner = options.runner ?? runBrowserbaseProof
+  const runner = options.runner ?? runBrowserbaseProofWithMedia
   const env = options.env ?? process.env
 
   const server = createServer((request, response) => {
@@ -404,6 +907,16 @@ export function createBrowserbaseDemoServer(
       const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
       if (request.method === 'GET' && url.pathname === '/') {
         writeHtml(response, renderApp())
+        return
+      }
+
+      if (request.method === 'GET' && url.pathname === targetRoute) {
+        writeTargetHtml(response, renderTargetApp())
+        return
+      }
+
+      if (request.method === 'GET' && url.pathname === '/favicon.ico') {
+        writeNoFavicon(response)
         return
       }
 
@@ -430,12 +943,20 @@ export function createBrowserbaseDemoServer(
           max_attempts: env.ATRIB_BROWSERBASE_LIVE_MAX_ATTEMPTS ?? '3',
           run_timeout_ms: proofRunTimeoutMs(env),
           workflow: browserbaseWorkflowFromEnv(env),
+          visual: buildVisualState({
+            mode,
+            actionPolicyMode: actionPolicyModeFromEnv(env),
+            stage: 'idle',
+            env,
+          }),
           action_policy: {
             mode: actionPolicyModeFromEnv(env),
             modes: ['allow', 'block', 'escalate'],
             event_type: BROWSERBASE_ACTION_POLICY_EVENT_TYPE,
             policy_version: BROWSERBASE_ACTION_POLICY_VERSION,
           },
+          target_route: targetRoute,
+          webmcp_tools: webMcpTools(),
           fixed_flow: ['start', 'navigate', 'observe', 'act', 'extract', 'end'],
           public_fields: [
             'tool name',
@@ -515,7 +1036,9 @@ export function createBrowserbaseDemoServer(
           actionPolicyMode: runRequest.actionPolicyMode,
           runner,
           runs,
+          privateMediaByRun,
           workflow: browserbaseWorkflowFromEnv(env),
+          env,
         })
         activeRun = queued.promise.finally(() => {
           activeRun = undefined
@@ -524,6 +1047,18 @@ export function createBrowserbaseDemoServer(
           ok: true,
           run: queued.run,
           status_url: `/api/runs/${queued.run.run_id}`,
+        })
+        return
+      }
+
+      const replayRoute = matchBrowserbaseReplayRoute(url.pathname)
+      if (request.method === 'GET' && replayRoute) {
+        await writeBrowserbaseReplayResponse({
+          response,
+          env,
+          runId: replayRoute.runId,
+          pageId: replayRoute.pageId,
+          privateMediaByRun,
         })
         return
       }
@@ -542,7 +1077,15 @@ export function createBrowserbaseDemoServer(
       writeJson(response, 404, {
         ok: false,
         error: 'not_found',
-        endpoints: ['GET /', 'GET /health', 'GET /api/config', 'GET /api/runs', 'POST /api/runs'],
+        endpoints: [
+          'GET /',
+          'GET /health',
+          'GET /api/config',
+          'GET /api/runs',
+          'POST /api/runs',
+          'GET /api/runs/:runId/browserbase/replays',
+          'GET /api/runs/:runId/browserbase/replays/:pageId',
+        ],
       })
     } catch (error) {
       writeJson(response, 500, {
@@ -561,7 +1104,9 @@ function startRun(options: {
   actionPolicyMode: BrowserbaseActionPolicyMode
   runner: Runner
   runs: Map<string, BrowserbaseDemoRun>
+  privateMediaByRun: Map<string, BrowserbasePrivateSessionMedia>
   workflow: BrowserbaseWorkflow
+  env: NodeJS.ProcessEnv
 }): { run: BrowserbaseDemoRun; promise: Promise<BrowserbaseDemoRun> } {
   const runId = `bb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   const startedAt = new Date().toISOString()
@@ -572,6 +1117,12 @@ function startRun(options: {
     action_policy_mode: options.actionPolicyMode,
     started_at: startedAt,
     workflow: options.workflow,
+    visual: buildVisualState({
+      mode: options.mode,
+      actionPolicyMode: options.actionPolicyMode,
+      stage: 'running',
+      env: options.env,
+    }),
   }
   console.log(
     JSON.stringify({
@@ -603,16 +1154,20 @@ async function finishRun(options: {
   actionPolicyMode: BrowserbaseActionPolicyMode
   runner: Runner
   runs: Map<string, BrowserbaseDemoRun>
+  privateMediaByRun: Map<string, BrowserbasePrivateSessionMedia>
   running: BrowserbaseDemoRun
   startedAt: string
   workflow: BrowserbaseWorkflow
+  env: NodeJS.ProcessEnv
 }): Promise<BrowserbaseDemoRun> {
   try {
-    const result = await options.runner({
+    const runnerOutput = await options.runner({
       mode: options.mode,
       publicLog: options.publicLog,
       actionPolicyMode: options.actionPolicyMode,
     })
+    const { result, privateMedia } = normalizeRunnerOutput(runnerOutput)
+    if (privateMedia) options.privateMediaByRun.set(options.running.run_id, privateMedia)
     const accepted = summarizePacketResult({
       runId: options.running.run_id,
       startedAt: options.startedAt,
@@ -620,8 +1175,11 @@ async function finishRun(options: {
       result,
       workflow: options.workflow,
       actionPolicyMode: options.actionPolicyMode,
+      env: options.env,
+      privateMedia,
     })
     rememberRun(options.runs, accepted)
+    prunePrivateMedia(options.privateMediaByRun, options.runs)
     console.log(
       JSON.stringify({
         service: serviceName,
@@ -639,8 +1197,16 @@ async function finishRun(options: {
       ok: false,
       finished_at: new Date().toISOString(),
       error: redactError(error instanceof Error ? error.message : String(error)),
+      visual: buildVisualState({
+        mode: options.mode,
+        actionPolicyMode: options.actionPolicyMode,
+        stage: 'failed',
+        operations: options.running.operations,
+        env: options.env,
+      }),
     }
     rememberRun(options.runs, failed)
+    prunePrivateMedia(options.privateMediaByRun, options.runs)
     console.log(
       JSON.stringify({
         service: serviceName,
@@ -663,9 +1229,104 @@ function rememberRun(runs: Map<string, BrowserbaseDemoRun>, run: BrowserbaseDemo
   }
 }
 
+function prunePrivateMedia(
+  privateMediaByRun: Map<string, BrowserbasePrivateSessionMedia>,
+  runs: Map<string, BrowserbaseDemoRun>,
+): void {
+  for (const runId of privateMediaByRun.keys()) {
+    if (!runs.has(runId)) privateMediaByRun.delete(runId)
+  }
+}
+
+function normalizeRunnerOutput(output: BrowserbaseDemoRunnerResult): {
+  result: WrappedMcpPacketResult
+  privateMedia?: BrowserbasePrivateSessionMedia | undefined
+} {
+  const maybeEnvelope = output as {
+    result?: unknown
+    private_media?: BrowserbasePrivateSessionMedia
+  }
+  if (
+    typeof output === 'object' &&
+    output !== null &&
+    'result' in maybeEnvelope &&
+    typeof maybeEnvelope.result === 'object' &&
+    maybeEnvelope.result !== null
+  ) {
+    return {
+      result: maybeEnvelope.result as WrappedMcpPacketResult,
+      privateMedia: maybeEnvelope.private_media,
+    }
+  }
+  return { result: output as WrappedMcpPacketResult }
+}
+
 function runIdFromPath(pathname: string): string | undefined {
   const match = /^\/api\/runs\/([^/]+)$/u.exec(pathname)
   return match?.[1]
+}
+
+function matchBrowserbaseReplayRoute(
+  pathname: string,
+): { runId: string; pageId?: string | undefined } | undefined {
+  const match = /^\/api\/runs\/([^/]+)\/browserbase\/replays(?:\/([^/]+))?$/u.exec(pathname)
+  if (!match?.[1]) return undefined
+  return {
+    runId: decodeURIComponent(match[1]),
+    ...(match[2] ? { pageId: decodeURIComponent(match[2]) } : {}),
+  }
+}
+
+async function writeBrowserbaseReplayResponse(input: {
+  response: ServerResponse
+  env: NodeJS.ProcessEnv
+  runId: string
+  pageId?: string | undefined
+  privateMediaByRun: Map<string, BrowserbasePrivateSessionMedia>
+}): Promise<void> {
+  const media = input.privateMediaByRun.get(input.runId)
+  if (!media?.session_id) {
+    writeJson(input.response, 404, {
+      ok: false,
+      error: 'browserbase_session_ref_not_available',
+      run_id: input.runId,
+    })
+    return
+  }
+  const apiKey = input.env.BROWSERBASE_API_KEY
+  if (!apiKey) {
+    writeJson(input.response, 503, { ok: false, error: 'browserbase_api_key_not_configured' })
+    return
+  }
+
+  const sessionId = encodeURIComponent(media.session_id)
+  const pagePath = input.pageId ? `/${encodeURIComponent(input.pageId)}` : ''
+  const upstreamUrl = `https://api.browserbase.com/v1/sessions/${sessionId}/replays${pagePath}`
+  const upstream = await fetch(upstreamUrl, {
+    headers: {
+      'X-BB-API-Key': apiKey,
+    },
+  })
+  const body = await upstream.text()
+  if (!upstream.ok) {
+    const detail = redactError(body.slice(0, 500)).split(media.session_id).join('[redacted-browserbase-session]')
+    writeJson(input.response, upstream.status, {
+      ok: false,
+      error: 'browserbase_replay_fetch_failed',
+      status: upstream.status,
+      detail,
+    })
+    return
+  }
+
+  input.response.writeHead(upstream.status, {
+    'content-type': input.pageId
+      ? 'application/vnd.apple.mpegurl; charset=utf-8'
+      : 'application/json; charset=utf-8',
+    'x-content-type-options': 'nosniff',
+    'cache-control': 'no-store',
+  })
+  input.response.end(body)
 }
 
 async function readBody(request: IncomingMessage): Promise<string> {
@@ -723,525 +1384,588 @@ function writeHtml(response: ServerResponse, html: string): void {
   response.end(html)
 }
 
-function renderApp(): string {
+function writeTargetHtml(response: ServerResponse, html: string): void {
+  response.writeHead(200, {
+    'content-type': 'text/html; charset=utf-8',
+    'x-content-type-options': 'nosniff',
+    'cross-origin-opener-policy': 'same-origin',
+    'cross-origin-embedder-policy': 'credentialless',
+    'origin-agent-cluster': '?1',
+  })
+  response.end(html)
+}
+
+function writeNoFavicon(response: ServerResponse): void {
+  response.writeHead(204, {
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+  })
+  response.end()
+}
+
+function renderTargetApp(): string {
+  const tools = JSON.stringify(webMcpTools())
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Browserbase Atrib Proof</title>
+    <link rel="icon" href="data:," />
+    <title>atrib action gate target</title>
     <style>
       :root {
         color-scheme: light;
-        --bg: #f6f8fb;
+        --bg: #f4f7fb;
+        --nav: #081527;
+        --nav-soft: #10233d;
         --panel: #ffffff;
-        --text: #111827;
-        --muted: #526070;
+        --text: #0f172a;
+        --muted: #5d697b;
         --line: #d7dee8;
-        --blue: #2558d5;
-        --green: #0f6b4f;
-        --red: #b91c35;
-        --amber: #9a4d00;
+        --blue: #2458d3;
+        --blue-soft: #e8efff;
+        --green: #147a54;
+        --green-soft: #e8f6ef;
+        --amber: #946200;
+        --amber-soft: #fff4dc;
+        --shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
       }
-
       * { box-sizing: border-box; }
       body {
-        margin: 0;
         background: var(--bg);
         color: var(--text);
-        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif;
+        font-family: "Geist", "Aptos", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-variant-numeric: tabular-nums;
+        -moz-osx-font-smoothing: grayscale;
+        -webkit-font-smoothing: antialiased;
+        margin: 0;
       }
-      main {
-        margin: 0 auto;
-        max-width: 1180px;
-        padding: 24px;
+      h1,
+      h2,
+      h3 {
+        text-wrap: balance;
       }
-      header {
-        align-items: start;
-        display: flex;
-        gap: 18px;
-        justify-content: space-between;
-        margin-bottom: 18px;
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      textarea:focus-visible {
+        outline: 3px solid rgba(36, 88, 211, 0.34);
+        outline-offset: 2px;
+      }
+      .portal {
+        display: grid;
+        grid-template-columns: 182px minmax(0, 1fr);
+        min-height: 760px;
+      }
+      .sidebar {
+        background: linear-gradient(180deg, var(--nav), #07111f);
+        color: #dce7f7;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        padding: 22px 18px;
+      }
+      .brand {
+        display: grid;
+        gap: 2px;
+        margin-bottom: 24px;
       }
       h1 {
-        font-size: 28px;
+        color: #fff;
+        font-size: 24px;
         letter-spacing: 0;
-        line-height: 1.15;
-        margin: 0 0 6px;
+        line-height: 1;
+        margin: 0;
       }
+      .brand span,
+      .user span,
       p {
         color: var(--muted);
         font-size: 14px;
         line-height: 1.45;
         margin: 0;
       }
+      .brand span,
+      .user span {
+        color: #9fb0c7;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .nav {
+        display: grid;
+        gap: 8px;
+        align-content: start;
+      }
+      .nav a,
+      .user {
+        align-items: center;
+        border-radius: 8px;
+        color: #dce7f7;
+        display: flex;
+        gap: 9px;
+        min-height: 44px;
+        min-width: 0;
+        overflow: hidden;
+        padding: 0 10px;
+        text-decoration: none;
+      }
+      .user div {
+        min-width: 0;
+      }
+      .user strong,
+      .user span {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .nav a.active {
+        background: #1e5dd8;
+        color: #fff;
+      }
+      .nav .glyph,
+      .user .avatar {
+        align-items: center;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 999px;
+        display: inline-flex;
+        height: 22px;
+        justify-content: center;
+        width: 22px;
+      }
+      .workspace {
+        display: grid;
+        gap: 16px;
+        padding: 22px;
+      }
+      .topline {
+        align-items: center;
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+      }
+      .back-link {
+        align-items: center;
+        color: var(--blue);
+        display: inline-flex;
+        font-size: 13px;
+        font-weight: 740;
+        min-height: 44px;
+        text-decoration: none;
+      }
+      .renewal-id {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .renewal-id strong {
+        color: var(--text);
+      }
+      .page-title h2 {
+        font-size: 24px;
+        letter-spacing: 0;
+        margin: 0;
+      }
+      .page-grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 0.92fr);
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+        min-width: 0;
+        padding: 16px;
+        transition-duration: 260ms;
+        transition-property: box-shadow, transform, border-color, background-color;
+        transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      body[data-stage-step="observe"] section[aria-label="Risk assessment"],
+      body[data-stage-step="observe"] section[aria-label="WebMCP tools"],
+      body[data-stage-step="policy_decision"] section[aria-label="Approval action"],
+      body[data-stage-step="act"] section[aria-label="Approval action"],
+      body[data-stage-step="policy_outcome"] section[aria-label="Approval action"],
+      body[data-stage-step="extract"] .confirmation {
+        border-color: rgba(36, 88, 211, 0.42);
+        box-shadow:
+          0 0 0 3px rgba(36, 88, 211, 0.11),
+          0 20px 44px rgba(15, 23, 42, 0.14);
+        transform: translateY(-2px);
+      }
+      body[data-stage-step="act"] #approve-renewal {
+        box-shadow: 0 0 0 5px rgba(20, 122, 84, 0.16);
+      }
+      body[data-stage-step="policy_decision"] #approve-renewal,
+      body[data-stage-step="policy_outcome"] #approve-renewal {
+        box-shadow: 0 0 0 5px rgba(36, 88, 211, 0.13);
+      }
+      .card h3 {
+        font-size: 16px;
+        margin: 0 0 14px;
+      }
+      .facts {
+        display: grid;
+        gap: 10px;
+      }
+      .facts div {
+        align-items: center;
+        display: flex;
+        justify-content: space-between;
+      }
+      .facts span:first-child {
+        color: #334155;
+        font-size: 13px;
+        font-weight: 760;
+      }
+      .facts span:last-child {
+        font-size: 13px;
+        text-align: right;
+      }
+      .risk-score {
+        align-items: baseline;
+        color: var(--green);
+        display: flex;
+        gap: 4px;
+        font-size: 34px;
+        font-weight: 760;
+      }
+      .risk-score small {
+        color: var(--muted);
+        font-size: 16px;
+        font-weight: 500;
+      }
+      .status {
+        align-items: center;
+        background: var(--amber-soft);
+        border: 1px solid #ffd894;
+        border-radius: 999px;
+        color: var(--amber);
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 760;
+        min-height: 26px;
+        padding: 4px 9px;
+        width: fit-content;
+      }
+      body[data-approved="true"] .status {
+        background: var(--green-soft);
+        border-color: #b6dfc9;
+        color: var(--green);
+      }
+      .tool-list {
+        display: grid;
+        gap: 10px;
+      }
+      .tool {
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 10px;
+        grid-template-columns: 34px minmax(0, 1fr) auto;
+        padding: 10px;
+      }
+      .tool::before {
+        align-items: center;
+        background: var(--blue-soft);
+        border: 1px solid #bbccfb;
+        border-radius: 8px;
+        color: var(--blue);
+        content: attr(data-index);
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 780;
+        height: 30px;
+        justify-content: center;
+        width: 30px;
+      }
+      .tool code {
+        color: var(--text);
+        display: block;
+        font-size: 13px;
+        font-weight: 760;
+      }
+      .tool p {
+        font-size: 12px;
+      }
+      .tool button {
+        background: #fff;
+        border: 1px solid var(--line);
+        color: var(--blue);
+        min-height: 44px;
+        padding: 0 9px;
+      }
+      .approval {
+        display: grid;
+        gap: 10px;
+      }
+      .policy-line {
+        align-items: center;
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+      }
+      .policy-chip {
+        background: var(--green-soft);
+        border: 1px solid #b6dfc9;
+        border-radius: 999px;
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 760;
+        padding: 4px 9px;
+      }
+      textarea {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        min-height: 64px;
+        padding: 10px;
+        resize: none;
+        width: 100%;
+      }
       button {
         background: var(--blue);
-        border: 0;
+        border: 1px solid var(--blue);
         border-radius: 8px;
         color: white;
         cursor: pointer;
         font: inherit;
-        font-weight: 750;
-        min-height: 42px;
-        padding: 0 15px;
+        font-weight: 760;
+        min-height: 44px;
+        padding: 0 14px;
+        transition-duration: 160ms;
+        transition-property: background-color, border-color, color, transform;
+        transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
       }
-      button:disabled {
-        cursor: not-allowed;
-        opacity: 0.55;
-      }
-      .run-controls {
-        align-items: end;
-        display: grid;
-        gap: 10px;
-        justify-items: end;
-      }
-      .segmented {
-        background: #e9eef6;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        display: inline-flex;
-        padding: 3px;
-      }
-      .segmented button {
-        background: transparent;
-        border-radius: 6px;
-        color: var(--muted);
-        min-height: 32px;
-        padding: 0 10px;
-      }
-      .segmented button.active {
-        background: white;
+      button.secondary {
+        background: #fff;
+        border-color: var(--line);
         color: var(--text);
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
       }
-      .grid {
-        display: grid;
-        gap: 14px;
-        grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1.15fr);
+      button:active {
+        transform: scale(0.97);
       }
-      section {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 16px;
-      }
-      h2 {
-        font-size: 13px;
-        letter-spacing: 0.08em;
-        margin: 0 0 12px;
-        text-transform: uppercase;
-      }
-      .kv {
-        display: grid;
-        gap: 9px;
-      }
-      .kv div {
-        display: grid;
-        gap: 3px;
-      }
-      .kv strong {
-        font-size: 12px;
-        text-transform: uppercase;
-      }
-      .chip {
-        align-items: center;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        display: inline-flex;
-        font-size: 12px;
-        font-weight: 760;
-        min-height: 28px;
-        padding: 5px 9px;
-      }
-      .chip.ok { border-color: #b6ddce; color: var(--green); }
-      .chip.warn { border-color: #facf91; color: var(--amber); }
-      .chip.err { border-color: #ffc1ca; color: var(--red); }
-      table {
-        border-collapse: collapse;
-        font-size: 13px;
-        width: 100%;
-      }
-      th, td {
-        border-bottom: 1px solid var(--line);
-        padding: 9px 8px;
-        text-align: left;
-        vertical-align: top;
-      }
-      th {
-        color: var(--muted);
-        font-size: 12px;
-        text-transform: uppercase;
-      }
-      code {
-        overflow-wrap: anywhere;
-      }
-      a {
-        color: var(--blue);
-        font-weight: 700;
-      }
-      .workflow {
-        display: grid;
-        gap: 14px;
-      }
-      .workflow-row {
-        border-top: 1px solid var(--line);
-        display: grid;
-        gap: 6px;
-        padding-top: 12px;
-      }
-      .browser-shell {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        overflow: hidden;
-      }
-      .browser-bar {
-        align-items: center;
-        background: #eef2f7;
-        display: flex;
-        gap: 7px;
-        min-height: 34px;
-        padding: 0 10px;
-      }
-      .dot {
-        border-radius: 999px;
-        display: inline-block;
-        height: 8px;
-        width: 8px;
-      }
-      .dot.red { background: #e45a6a; }
-      .dot.amber { background: #e5a029; }
-      .dot.green { background: #31a36c; }
-      .address {
-        background: white;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        color: var(--muted);
-        flex: 1;
-        font-size: 12px;
-        overflow: hidden;
-        padding: 5px 9px;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .browser-body {
-        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-        min-height: 145px;
-        padding: 16px;
-      }
-      .stagehand-list {
+      .actions {
         display: grid;
         gap: 10px;
-        margin-top: 12px;
+        grid-template-columns: 1fr 0.72fr;
       }
-      .stagehand-step {
-        border-left: 3px solid var(--blue);
-        padding-left: 10px;
+      .confirmation {
+        background: var(--green-soft);
+        border: 1px solid #b6dfc9;
+        border-radius: 8px;
+        color: var(--green);
+        display: none;
+        padding: 10px;
       }
-      .stagehand-step strong {
+      body[data-approved="true"] .confirmation {
         display: block;
-        font-size: 13px;
       }
-      .state {
-        border: 1px solid var(--line);
-        border-radius: 999px;
+      .footer {
         color: var(--muted);
-        display: inline-flex;
-        font-size: 11px;
-        font-weight: 760;
-        margin-left: 6px;
-        padding: 2px 7px;
-        text-transform: uppercase;
-      }
-      .state.signed { border-color: #b6ddce; color: var(--green); }
-      .state.stopped { border-color: #ffc1ca; color: var(--red); }
-      .state.skipped { border-color: #facf91; color: var(--amber); }
-      .policy-chain {
-        border-top: 1px solid var(--line);
-        margin-top: 16px;
-        padding-top: 14px;
-      }
-      .policy-chain h3 {
-        font-size: 13px;
-        margin: 0 0 8px;
-      }
-      .subtle {
-        color: var(--muted);
-        font-size: 12px;
-      }
-      .receipt-header {
-        align-items: center;
         display: flex;
-        gap: 10px;
-        justify-content: space-between;
-        margin-bottom: 12px;
+        font-size: 12px;
+        gap: 18px;
+        justify-content: center;
+        padding: 8px;
       }
-      .empty {
-        border: 1px dashed var(--line);
-        border-radius: 8px;
-        color: var(--muted);
-        padding: 18px;
-        text-align: center;
+      @media (max-width: 760px) {
+        .portal { grid-template-columns: 1fr; }
+        .sidebar { display: none; }
+        .workspace { padding: 16px; }
+        .page-grid { grid-template-columns: 1fr; }
+        .topline {
+          align-items: start;
+          display: grid;
+          gap: 8px;
+        }
+        .tool {
+          align-items: start;
+          grid-template-columns: 34px minmax(0, 1fr);
+        }
+        .tool button {
+          grid-column: 1 / -1;
+          width: 100%;
+        }
+        .actions { grid-template-columns: 1fr; }
       }
-      @media (max-width: 820px) {
-        header, .grid { display: block; }
-        .run-controls { justify-items: stretch; margin-top: 14px; }
-        .segmented { width: 100%; }
-        .segmented button { flex: 1; }
-        header button { width: 100%; }
-        section { margin-bottom: 14px; }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          scroll-behavior: auto !important;
+          transition-duration: 0.001ms !important;
+        }
       }
     </style>
   </head>
-  <body>
-    <main>
-        <header>
-          <div>
-            <h1>Browserbase Atrib Proof</h1>
-            <p>Run a fixed Stagehand workflow in a Browserbase cloud browser and inspect the signed Atrib receipts beside it.</p>
+  <body data-approved="false" data-review-routed="false" data-stage-step="idle">
+    <main class="portal">
+      <aside class="sidebar" aria-label="Vendor portal navigation">
+        <div>
+          <div class="brand">
+            <h1>Northstar</h1>
+            <span>Vendor portal</span>
           </div>
-          <div class="run-controls">
-            <div class="segmented" aria-label="Action policy mode">
-              <button id="policyAllow" type="button" data-policy-mode="allow">Allow</button>
-            <button id="policyBlock" type="button" data-policy-mode="block">Block</button>
-            <button id="policyEscalate" type="button" data-policy-mode="escalate">Escalate</button>
+          <nav class="nav">
+            <a href="#"><span class="glyph">D</span><span>Dashboard</span></a>
+            <a href="#"><span class="glyph">V</span><span>Vendors</span></a>
+            <a class="active" href="#"><span class="glyph">R</span><span>Renewals</span></a>
+            <a href="#"><span class="glyph">C</span><span>Contracts</span></a>
+            <a href="#"><span class="glyph">S</span><span>Settings</span></a>
+          </nav>
+        </div>
+        <div></div>
+        <div class="user"><span class="avatar">M</span><div><strong>Mira Shah</strong><span>Procurement</span></div></div>
+      </aside>
+      <section class="workspace" aria-label="Vendor renewal workspace">
+        <div class="topline">
+          <a class="back-link" href="#">Back to renewals</a>
+          <span class="renewal-id">Renewal ID <strong>NS-2026-447</strong></span>
+        </div>
+        <div class="page-title">
+          <h2>Renewal details</h2>
+        </div>
+        <div class="page-grid">
+          <section class="card" aria-label="Pending renewal">
+            <div class="topline">
+              <h3>Pending renewal</h3>
+              <span id="approval-status" class="status">pending approval</span>
             </div>
-            <button id="runButton" type="button">Run proof</button>
-          </div>
-        </header>
-        <div class="grid">
-          <section>
-            <h2>Browserbase workflow</h2>
-            <div id="workflowPanel" class="workflow">
-              <div class="empty">Loading workflow.</div>
+            <div class="facts">
+              <div><span>Vendor</span><span>Northstar Data Room</span></div>
+              <div><span>Contract</span><span>MSA-2023-078</span></div>
+              <div><span>Start date</span><span>Jun 1, 2025</span></div>
+              <div><span>End date</span><span>May 31, 2026</span></div>
+              <div><span>Contract value</span><span>$12,400</span></div>
+              <div><span>Auto-renewal</span><span>Disabled</span></div>
             </div>
           </section>
-        <section>
-          <div class="receipt-header">
-            <h2>Atrib receipts</h2>
-            <span id="statusChip" class="chip warn">waiting</span>
-          </div>
-          <div class="kv">
-            <div><strong>Mode</strong><span id="mode">loading</span></div>
-            <div><strong>Action policy</strong><span id="policyModeLabel">loading</span></div>
-            <div><strong>Public fields</strong><span>tool name, args hash, result hash, record hash, log index</span></div>
-            <div><strong>Private fields</strong><span>session URL, replay URL, page snapshot, selectors, form values, raw extraction</span></div>
-          </div>
-          <div style="height: 14px"></div>
-          <div id="runPanel" class="empty">No run yet.</div>
-        </section>
-      </div>
+          <section class="card" aria-label="Risk assessment">
+            <h3>Risk assessment</h3>
+            <div class="risk-score">32 <small>/100</small></div>
+            <div class="facts">
+              <div><span>Risk level</span><span class="policy-chip">Low risk</span></div>
+              <div><span>Last assessed</span><span>May 20, 2026</span></div>
+            </div>
+          </section>
+          <section class="card" aria-label="WebMCP tools">
+            <h3>WebMCP tools <span class="renewal-id">Available to agent</span></h3>
+            <div id="tool-list" class="tool-list"></div>
+          </section>
+          <section class="card approval" aria-label="Approval action">
+            <h3>Approval</h3>
+            <div class="policy-line"><strong>Policy</strong><span class="policy-chip">Auto-approval eligible</span></div>
+            <p>Risk score below 40 and no policy exceptions.</p>
+            <label>
+              <strong>Notes (optional)</strong>
+              <textarea placeholder="Add notes for the approval."></textarea>
+            </label>
+            <div class="actions">
+              <button id="approve-renewal" type="button" data-webmcp-action="approve_vendor_renewal">Approve renewal</button>
+              <button id="route-review" class="secondary" type="button" data-webmcp-action="request_human_review">Request review</button>
+            </div>
+            <div id="confirmation" class="confirmation" data-confirmation-id="atrib-browserbase-webmcp-001">
+              Approved. Confirmation id: atrib-browserbase-webmcp-001
+            </div>
+          </section>
+        </div>
+        <div class="footer"><span>Privacy policy</span><span>Terms of service</span></div>
+      </section>
     </main>
+    <script type="application/json" id="atrib-webmcp-tools">${tools.replace(/</gu, '\\u003c')}</script>
     <script>
-      const runButton = document.getElementById('runButton');
-      const runPanel = document.getElementById('runPanel');
-      const modeLabel = document.getElementById('mode');
-      const policyModeLabel = document.getElementById('policyModeLabel');
-      const statusChip = document.getElementById('statusChip');
-      const workflowPanel = document.getElementById('workflowPanel');
-      const policyButtons = Array.from(document.querySelectorAll('[data-policy-mode]'));
-      let selectedPolicyMode = 'allow';
+      const tools = JSON.parse(document.getElementById('atrib-webmcp-tools').textContent || '[]');
+      window.__atribWebMcpTools = tools;
 
-      async function loadConfig() {
-        const response = await fetch('/api/config');
-        const config = await response.json();
-        renderWorkflow(config.workflow);
-        setSelectedPolicyMode((config.action_policy && config.action_policy.mode) || 'allow');
-        modeLabel.textContent = config.mode + (config.public_log ? ' with public log' : ' with local log');
-        if (config.deployment_guard_issues && config.deployment_guard_issues.length > 0) {
-          setStatus('Guard failed', 'err');
-          runButton.disabled = true;
-          runPanel.className = 'empty';
-          runPanel.textContent = config.deployment_guard_issues.join('; ');
-          return;
-        }
-        if (config.mode === 'live' && !config.live_ready) {
-          setStatus('Missing live env', 'err');
-          runButton.disabled = true;
-          return;
-        }
-        setStatus('Ready', 'ok');
+      function renewalSnapshot() {
+        return {
+          vendor: 'Northstar Data Room',
+          renewal_id: 'NS-2026-447',
+          risk_level: 'medium',
+          amount_usd: 12400,
+          status: document.body.dataset.approved === 'true' ? 'approved' : 'pending',
+          confirmation_id:
+            document.body.dataset.approved === 'true' ? 'atrib-browserbase-webmcp-001' : null,
+        };
       }
 
-      async function runProof() {
-        runButton.disabled = true;
-        setStatus('Running', 'warn');
-        runPanel.className = 'empty';
-        runPanel.textContent = 'Starting proof run.';
-        try {
-          const response = await fetch('/api/runs', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ action_policy_mode: selectedPolicyMode }),
-          });
-          const body = await response.json();
-          if (!response.ok || !body.run) throw new Error(body.error || body.run?.error || 'run failed');
-          renderRun(body.run);
-          const run = body.run.status === 'running' ? await pollRun(body.run.run_id) : body.run;
-          renderRun(run);
-          setStatus(run.status === 'accepted' ? 'Accepted' : 'Failed', run.status === 'accepted' ? 'ok' : 'err');
-        } catch (error) {
-          runPanel.className = 'empty';
-          runPanel.textContent = error instanceof Error ? error.message : String(error);
-          setStatus('Failed', 'err');
-        } finally {
-          runButton.disabled = false;
-        }
+      async function approveVendorRenewal() {
+        document.body.dataset.approved = 'true';
+        document.getElementById('approval-status').textContent = 'approved';
+        return { status: 'approved', confirmation_id: 'atrib-browserbase-webmcp-001' };
       }
 
-      async function pollRun(runId) {
-        const started = Date.now();
-        while (Date.now() - started < 135000) {
-          await delay(1000);
-          const response = await fetch('/api/runs/' + encodeURIComponent(runId));
-          const body = await response.json();
-          if (!response.ok || !body.run) throw new Error(body.error || 'run lookup failed');
-          renderRun(body.run);
-          if (body.run.status !== 'running') return body.run;
-        }
-        throw new Error('proof run timed out');
+      async function requestHumanReview(input) {
+        document.body.dataset.reviewRouted = 'true';
+        document.getElementById('approval-status').textContent = 'human review requested';
+        return { status: 'review_requested', routed_to: 'finance-ops', reason: input && input.reason ? input.reason : 'operator request' };
       }
 
-      function delay(ms) {
-        return new Promise((resolve) => setTimeout(resolve, ms));
-      }
+      const handlers = {
+        read_vendor_risk: renewalSnapshot,
+        approve_vendor_renewal: approveVendorRenewal,
+        request_human_review: requestHumanReview,
+      };
 
-      function renderRun(run) {
-        if (run.workflow) renderWorkflow(run.workflow, run);
-        runPanel.className = '';
-        const table = renderOperationTable(run);
-        const policy = renderActionPolicy(run.action_policy);
-        const chipClass = run.status === 'accepted' ? 'ok' : run.status === 'running' ? 'warn' : 'err';
-        runPanel.innerHTML =
-          '<p><span class="chip ' + chipClass + '">' + escapeHtml(run.status) + '</span> ' +
-          escapeHtml(run.run_id) + '</p>' +
-          '<p class="subtle">Requested policy: ' + escapeHtml(run.action_policy_mode || selectedPolicyMode) + '</p>' +
-          table +
-          policy;
-      }
-
-      function renderOperationTable(run) {
-        const rows = (run.operations || []).map((operation) => {
-          const explorer = operation.explorer_url ? '<a href="' + operation.explorer_url + '" target="_blank" rel="noreferrer">explorer</a>' : '';
-          const proof = operation.log_proof_url ? '<a href="' + operation.log_proof_url + '" target="_blank" rel="noreferrer">log proof</a>' : '';
-          return '<tr><td>' + escapeHtml(operation.step) + '</td><td><code>' + escapeHtml(operation.record_hash) + '</code></td><td>' + operation.log_index + '</td><td>' + explorer + ' ' + proof + '</td></tr>';
-        }).join('');
-        return rows
-          ? '<table><thead><tr><th>Step</th><th>Record hash</th><th>Index</th><th>Links</th></tr></thead><tbody>' + rows + '</tbody></table>'
-          : '<div class="empty">Proof is running.</div>';
-      }
-
-      function renderActionPolicy(policy) {
-        if (!policy) {
-          return '<div class="policy-chain"><h3>Action gate</h3><div class="empty">Waiting for observe and policy decision records.</div></div>';
-        }
-        const rows = (policy.decisions || []).map((decision) => {
-          const outcome = (policy.outcomes || []).find((candidate) => candidate.tool_name === decision.tool_name);
-          const reasons = Array.isArray(decision.content && decision.content.reason_codes)
-            ? decision.content.reason_codes.join(', ')
-            : '';
-          const executed = outcome && outcome.content ? String(outcome.content.executed) : 'pending';
-          return '<tr><td>' + escapeHtml(decision.tool_name) + '</td><td>' +
-            escapeHtml(String((decision.content && decision.content.decision) || decision.kind)) +
-            '</td><td>' + escapeHtml(reasons) + '</td><td><code>' +
-            escapeHtml(decision.record_hash) + '</code><br><span class="subtle">index ' +
-            escapeHtml(String(decision.proof && decision.proof.log_index)) + '</span></td><td>' +
-            escapeHtml(executed) + '</td><td><code>' +
-            escapeHtml((outcome && outcome.record_hash) || 'pending') +
-            '</code><br><span class="subtle">index ' +
-            escapeHtml(String(outcome && outcome.proof ? outcome.proof.log_index : 'pending')) +
-            '</span></td></tr>';
-        }).join('');
-        const stopped = policy.stopped_before || 'none';
-        return '<div class="policy-chain"><h3>Action gate</h3>' +
-          '<p class="subtle">Stopped before: ' + escapeHtml(stopped) +
-          '. Blocked tool executed: ' + escapeHtml(String(policy.blocked_tool_executed)) + '</p>' +
-          '<table><thead><tr><th>Tool</th><th>Decision</th><th>Reasons</th><th>Decision record</th><th>Executed</th><th>Outcome record</th></tr></thead><tbody>' +
-          rows +
-          '</tbody></table></div>';
-      }
-
-      function renderWorkflow(workflow, run) {
-        if (!workflow) {
-          workflowPanel.innerHTML = '<div class="empty">Workflow unavailable.</div>';
-          return;
-        }
-        const target = disclosedValue(workflow.target_url);
-        const stagehand = (workflow.stagehand_steps || []).map((step) =>
-          '<div class="stagehand-step"><strong>' +
-          escapeHtml(step.primitive) +
-          '<span class="state ' + stepState(step.tool, run).className + '">' +
-          escapeHtml(stepState(step.tool, run).label) +
-          '</span>' +
-          '</strong><span class="subtle">' +
-          escapeHtml(disclosedValue(step.instruction)) +
-          '</span></div>'
+      function renderTools() {
+        document.getElementById('tool-list').innerHTML = tools.map((tool, index) =>
+          '<div class="tool" data-index="' +
+          escapeHtml(String(index + 1)) +
+          '"><div><code>' +
+          escapeHtml(tool.name) +
+          '</code><p>' +
+          escapeHtml(tool.description) +
+          '</p></div><button type="button" data-tool-preview="' +
+          escapeHtml(tool.name) +
+          '">Use tool</button></div>'
         ).join('');
-        workflowPanel.innerHTML =
-          '<div class="browser-shell">' +
-          '<div class="browser-bar"><span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span><span class="address">' +
-          escapeHtml(target) +
-          '</span></div>' +
-          '<div class="browser-body">' +
-          '<p><strong>' + escapeHtml(workflow.name) + '</strong></p>' +
-          '<p class="subtle">MCP surface: ' + escapeHtml(workflow.mcp_surface) + '</p>' +
-          '<div class="stagehand-list">' + stagehand + '</div>' +
-          '</div></div>' +
-          '<div class="workflow-row"><strong>Browserbase session</strong><span class="subtle">Lifecycle tools: ' +
-          escapeHtml((workflow.browserbase_session.lifecycle_tools || []).join(' -> ')) +
-          '</span><span class="subtle">Replay URL: ' +
-          escapeHtml(disclosedValue(workflow.browserbase_session.replay_url)) +
-          '</span><span class="subtle">' +
-          escapeHtml(workflow.browserbase_session.dashboard_note) +
-          '</span></div>';
       }
 
-      function stepState(tool, run) {
-        if (!run) return { label: 'ready', className: '' };
-        const operations = (run.operations || []).map((operation) => operation.step);
-        if (operations.includes(tool)) return { label: 'signed', className: 'signed' };
-        if (run.action_policy && run.action_policy.stopped_before === tool) {
-          return { label: 'stopped', className: 'stopped' };
+      async function registerNativeWebMcp() {
+        const modelContext = document.modelContext;
+        if (!modelContext || typeof modelContext.registerTool !== 'function') {
+          document.body.dataset.webmcp = 'manifest-fallback';
+          return;
         }
-        if (run.status === 'accepted') return { label: 'skipped', className: 'skipped' };
-        return { label: 'pending', className: '' };
-      }
-
-      function disclosedValue(field) {
-        if (!field) return 'unavailable';
-        if (field.value) return field.value;
-        if (field.hash) return 'private hash ' + field.hash;
-        return 'private hash-only';
-      }
-
-      function setStatus(label, kind) {
-        statusChip.textContent = label;
-        statusChip.className = 'chip ' + kind;
-      }
-
-      function setSelectedPolicyMode(mode) {
-        selectedPolicyMode = ['allow', 'block', 'escalate'].includes(mode) ? mode : 'allow';
-        policyModeLabel.textContent = selectedPolicyMode + ' before act';
-        policyButtons.forEach((button) => {
-          button.classList.toggle('active', button.dataset.policyMode === selectedPolicyMode);
-        });
+        for (const tool of tools) {
+          await modelContext.registerTool({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.input_schema,
+            outputSchema: tool.output_schema,
+            execute: handlers[tool.name],
+          });
+        }
+        document.body.dataset.webmcp = 'native-registered';
       }
 
       function escapeHtml(value) {
         return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
       }
 
-      runButton.addEventListener('click', runProof);
-      policyButtons.forEach((button) => {
-        button.addEventListener('click', () => setSelectedPolicyMode(button.dataset.policyMode || 'allow'));
+      document.getElementById('approve-renewal').addEventListener('click', () => {
+        void approveVendorRenewal();
       });
-      loadConfig().catch((error) => {
-        setStatus('Config failed', 'err');
-        runPanel.textContent = error instanceof Error ? error.message : String(error);
+      document.getElementById('route-review').addEventListener('click', () => {
+        void requestHumanReview({ reason: 'manual target-page click' });
       });
+      renderTools();
+      void registerNativeWebMcp();
     </script>
   </body>
 </html>`
+}
+
+function renderApp(): string {
+  return renderBrowserbaseProofApp()
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

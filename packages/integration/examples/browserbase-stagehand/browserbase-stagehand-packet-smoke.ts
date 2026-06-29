@@ -36,6 +36,7 @@ export type BrowserbaseStagehandPacketOptions = {
   actionPolicyMode?: BrowserbaseActionPolicyMode
   allowedOrigins?: string[]
   timeoutMs?: number
+  onToolResult?: PacketOptions['onToolResult']
 }
 
 function requiredEnv(name: string, env: NodeJS.ProcessEnv): string {
@@ -235,9 +236,10 @@ ${weakness}
 
 This is a fixed proof artifact plus a rerunnable local command. The resettable
 demo server lives in
-\`packages/integration/examples/browserbase-stagehand/live-demo/\`. Deployment is
-a human gate. Do not share a hosted URL until demo-only credentials and rate
-limits are in place.
+\`packages/integration/examples/browserbase-stagehand/live-demo/\`. It serves an
+agent-ready WebMCP target app at \`/target\` and a proof console at \`/\`.
+Deployment is a human gate. Do not share a hosted URL until demo-only
+credentials and rate limits are in place.
 
 ## Regenerate
 
@@ -302,6 +304,7 @@ export async function runBrowserbaseStagehandPacket(
     exampleDir,
     integrationDir,
     expectedTools: ['start', 'navigate', 'observe', 'act', 'extract', 'end'],
+    onToolResult: options.onToolResult,
     controlEventType: BROWSERBASE_ACTION_POLICY_EVENT_TYPE,
     policyGate: createBrowserbaseActionPolicyGate({
       mode: actionPolicyMode,
