@@ -29,9 +29,12 @@ The Browserbase and Firecrawl surfaces use these layers:
 Browserbase has a deployed live demo at
 `https://atrib-browserbase-stagehand-demo.fly.dev/`. The page shows the
 agent-ready WebMCP target app at `/target`, the Browserbase Stagehand workflow,
-and the atrib action-gate receipts beside it. Hosted Browserbase fresh runs can
-fail during temporary model-capacity spikes, so the demo must show failed runs
-plainly and rate-limit retries.
+and the atrib action-gate receipts beside it. Live runs derive Browserbase Live
+View from the MCP-returned session id through Browserbase's session debug API.
+The run JSON carries a Live View hash and local redirect path, not the raw
+upstream URL. Public records keep hashes. Hosted
+Browserbase fresh runs can fail during temporary model-capacity spikes, so the
+demo must show failed runs plainly and rate-limit retries.
 
 Firecrawl has a deployed live demo at
 `https://atrib-firecrawl-ingestion-demo.fly.dev/`. It stays fixed-input by
@@ -41,9 +44,6 @@ signed review gate for sensitive downstream actions.
 
 ## Explicit deferrals
 
-- Browserbase Live View deep link: the hosted Browserbase MCP path does not
-  currently return a Live View URL. The demo exposes replay or session refs when
-  the runtime provides them and keeps cursor/click playback in the UI.
 - Shared durable run storage: both hosted demos run one warm Fly machine, so the
   in-memory active-run lock and rate limiter apply consistently. Shared storage
   is only needed if either demo scales past one machine.

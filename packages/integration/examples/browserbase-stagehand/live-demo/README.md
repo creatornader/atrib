@@ -25,16 +25,23 @@ surface second. A reviewer should see a remote browser session or replay, then
 the signed atrib record that explains each critical step. The evidence rail is
 not the demo's main object.
 
-Live mode watches private Browserbase tool output during the run. If the MCP
-result exposes a Browserbase session id, Live View URL, session URL, or replay
-URL, the server turns that material into UI-only media state:
+Live mode watches private Browserbase tool output during the run. Browserbase
+MCP `start` returns a session id. The demo uses that id to call Browserbase's
+session debug endpoint, `GET /v1/sessions/:id/debug`, and derives the Live View
+URL while the session is still open. If the MCP result also exposes a session
+URL or replay URL directly, the server folds those refs into the same UI-only
+media state:
 
 - raw session ids stay in private server memory
 - session ids appear in API responses only as hashes
-- replay playback uses a server proxy route so `BROWSERBASE_API_KEY` stays
-  server-side
-- raw Live View or direct replay URLs are rendered only as UI links, never as
-  public atrib records
+- Live View URLs are fetched server-side and exposed to the UI as a local
+  redirect path plus hash
+- replay playback uses server proxy routes so Browserbase session ids, signed
+  segment URLs, and `BROWSERBASE_API_KEY` stay server-side
+- run-derived Live View redirects are available only while the run is active;
+  accepted runs prefer replay after `end`
+- raw Live View or direct replay URLs are never written to public atrib records
+  or returned in run JSON
 
 Fixture mode uses deterministic click playback because no Browserbase cloud
 session exists in that mode. The playback cursor still follows `start ->
@@ -166,10 +173,15 @@ should not create partial public proof rows.
 - `GET /api/runs`: recent in-memory runs.
 - `POST /api/runs`: queues one fresh proof run and returns `202` with a run id.
 - `GET /api/runs/:runId`: returns one run.
+- `GET /api/runs/:runId/browserbase/live-view`: redirects to the private
+  Browserbase Live View URL while a run is active.
 - `GET /api/runs/:runId/browserbase/replays`: server-side Browserbase replay
-  metadata proxy when a private session id exists.
+  metadata proxy when a private session id exists. Page URLs are rewritten to
+  local paths.
 - `GET /api/runs/:runId/browserbase/replays/:pageId`: server-side HLS playlist
-  proxy for one replay page.
+  proxy for one replay page. Segment URLs are rewritten to local asset paths.
+- `GET /api/runs/:runId/browserbase/replay-assets/:assetId`: server-side proxy
+  for one Browserbase replay media asset.
 
 The server allows one active run at a time and keeps only recent run summaries in
 memory. Clients poll `GET /api/runs/:runId` until the run is accepted or failed.
@@ -178,6 +190,12 @@ It does not persist raw Browserbase material.
 The returned run summary includes `visual`, a UI schema that describes media
 availability, playback steps, cursor positions, and the privacy boundary. Treat
 it as presentation state, not as a protocol record.
+
+Live View lookup is best-effort and bounded. `ATRIB_BROWSERBASE_DEMO_LIVE_VIEW_TIMEOUT_MS`
+controls the Browserbase debug API timeout. `ATRIB_BROWSERBASE_DEMO_LIVE_VIEW_HOLD_MS`
+keeps the Browserbase session open after `extract` and before `end` so a
+reviewer can inspect the live browser before cleanup. The committed deployment
+uses a 3 second lookup timeout and an 8 second pre-cleanup hold.
 
 ## Deploy boundary
 
@@ -215,6 +233,8 @@ ATRIB_BROWSERBASE_DEMO_RATE_LIMIT_WINDOW_MS=3600000
 ATRIB_BROWSERBASE_DEMO_MAX_RUNS_PER_WINDOW=2
 ATRIB_BROWSERBASE_DEMO_MAX_RUNS_PER_DAY=8
 ATRIB_BROWSERBASE_DEMO_RUN_TIMEOUT_MS=120000
+ATRIB_BROWSERBASE_DEMO_LIVE_VIEW_TIMEOUT_MS=3000
+ATRIB_BROWSERBASE_DEMO_LIVE_VIEW_HOLD_MS=8000
 ```
 
 Keep the demo at one machine unless the rate limiter and active-run lock move to

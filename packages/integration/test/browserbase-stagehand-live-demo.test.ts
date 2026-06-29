@@ -3,6 +3,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   actionPolicyModeFromEnv,
+  browserbasePrivateMediaFromSessionDebug,
+  browserbasePrivateMediaFromSessionDebugPayload,
   browserbasePrivateMediaFromToolResult,
   browserbaseDemoTargetUrl,
   browserbaseWorkflowFromEnv,
@@ -11,6 +13,8 @@ import {
   deploymentGuardIssues,
   missingLiveEnv,
   rateLimitConfigFromEnv,
+  rewriteBrowserbaseReplayPlaylist,
+  sanitizeBrowserbaseReplayMetadata,
   summarizePacketResult,
   type BrowserbaseDemoRun,
 } from '../examples/browserbase-stagehand/live-demo/server.js'
@@ -269,13 +273,15 @@ describe('Browserbase Stagehand live demo', () => {
       primary: 'live',
       live_view: {
         available: true,
-        disclosure: 'ui-only-ephemeral',
+        proxy_path: '/api/runs/bb-visual-test/browserbase/live-view',
+        disclosure: 'server-redirect',
       },
       replay: {
         available: false,
         disclosure: 'not-available',
       },
     })
+    expect(run.visual?.media.live_view.url).toBeUndefined()
     expect(JSON.stringify(run.operations)).not.toContain('session-token')
     expect(run.visual?.privacy.ui_only_fields).toContain('Browserbase Live View URL')
   })
@@ -296,6 +302,64 @@ describe('Browserbase Stagehand live demo', () => {
       live_view_url: 'https://www.browserbase.com/devtools-fullscreen/session-private',
       session_url: 'https://www.browserbase.com/sessions/bb_session_private_20260628',
       detected_from: ['start'],
+    })
+  })
+
+  it('extracts Live View URLs from Browserbase session debug payloads', () => {
+    const media = browserbasePrivateMediaFromSessionDebugPayload('bb_session_private_20260628', {
+      debuggerFullscreenUrl: 'https://www.browserbase.com/devtools-fullscreen/session-private',
+      debuggerUrl: 'https://www.browserbase.com/devtools/session-private',
+      wsUrl: 'wss://connect.browserbase.com/private',
+      pages: [
+        {
+          id: '0',
+          url: 'https://example.com',
+          debuggerFullscreenUrl: 'https://www.browserbase.com/devtools-fullscreen/page-private',
+          debuggerUrl: 'https://www.browserbase.com/devtools/page-private',
+        },
+      ],
+    })
+
+    expect(media).toMatchObject({
+      source: 'browserbase-debug-api',
+      session_id: 'bb_session_private_20260628',
+      live_view_url: 'https://www.browserbase.com/devtools-fullscreen/session-private',
+      session_url: 'https://www.browserbase.com/sessions/bb_session_private_20260628',
+      detected_from: ['browserbase-debug-api'],
+    })
+  })
+
+  it('fetches Browserbase Live View media from the session debug API', async () => {
+    let requestedUrl = ''
+    let apiKey = ''
+    const media = await browserbasePrivateMediaFromSessionDebug({
+      sessionId: 'bb_session_private_20260628',
+      env: { BROWSERBASE_API_KEY: 'bb-secret-test-key' } as NodeJS.ProcessEnv,
+      timeoutMs: 500,
+      fetchImpl: async (url, init) => {
+        requestedUrl = String(url)
+        apiKey = String((init?.headers as Record<string, string>)['X-BB-API-Key'])
+        return new Response(
+          JSON.stringify({
+            debuggerFullscreenUrl:
+              'https://www.browserbase.com/devtools-fullscreen/session-private',
+            debuggerUrl: 'https://www.browserbase.com/devtools/session-private',
+            pages: [],
+            wsUrl: 'wss://connect.browserbase.com/private',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      },
+    })
+
+    expect(requestedUrl).toBe(
+      'https://api.browserbase.com/v1/sessions/bb_session_private_20260628/debug',
+    )
+    expect(apiKey).toBe('bb-secret-test-key')
+    expect(media).toMatchObject({
+      source: 'browserbase-debug-api',
+      session_id: 'bb_session_private_20260628',
+      live_view_url: 'https://www.browserbase.com/devtools-fullscreen/session-private',
     })
   })
 
@@ -333,6 +397,52 @@ describe('Browserbase Stagehand live demo', () => {
     expect(run.visual?.media.session.id_hash).toMatch(/^sha256:/u)
     expect(JSON.stringify(run.operations)).not.toContain('bb_session_private_20260628')
     expect(JSON.stringify(run.verifier)).not.toContain('bb_session_private_20260628')
+  })
+
+  it('rewrites Browserbase replay metadata to local proxy paths', () => {
+    const sanitized = sanitizeBrowserbaseReplayMetadata(
+      {
+        pages: [
+          {
+            pageId: '0',
+            url: '/v1/sessions/bb_session_private_20260628/replays/0',
+            startedAt: '2026-06-29T00:00:00.000Z',
+          },
+        ],
+        privateRef: 'session bb_session_private_20260628 hidden',
+      },
+      { runId: 'bb-replay-test', sessionId: 'bb_session_private_20260628' },
+    )
+
+    expect(sanitized).toMatchObject({
+      pages: [
+        {
+          pageId: '0',
+          url: '/api/runs/bb-replay-test/browserbase/replays/0',
+        },
+      ],
+    })
+    expect(JSON.stringify(sanitized)).not.toContain('bb_session_private_20260628')
+    expect(JSON.stringify(sanitized)).toContain('[redacted-browserbase-ref:')
+  })
+
+  it('rewrites Browserbase replay playlists to local asset proxy paths', () => {
+    const privateReplayAssetsByRun = new Map<string, Map<string, string>>()
+    const rewritten = rewriteBrowserbaseReplayPlaylist({
+      runId: 'bb-replay-test',
+      privateReplayAssetsByRun,
+      body: [
+        '#EXTM3U',
+        '#EXT-X-MAP:URI="https://cdn.example.com/project/bb_session_private_20260628/0/init.mp4?token=secret"',
+        '#EXTINF:1.000,',
+        'https://cdn.example.com/project/bb_session_private_20260628/0/segment00000000.m4s?token=secret',
+      ].join('\n'),
+    })
+
+    expect(rewritten).toContain('/api/runs/bb-replay-test/browserbase/replay-assets/')
+    expect(rewritten).not.toContain('bb_session_private_20260628')
+    expect(rewritten).not.toContain('token=secret')
+    expect(privateReplayAssetsByRun.get('bb-replay-test')?.size).toBe(2)
   })
 
   it('reads action policy mode from demo env with allow fallback', () => {
@@ -542,6 +652,83 @@ describe('Browserbase Stagehand live demo', () => {
     }
   })
 
+  it('updates a running live run when Browserbase Live View media arrives', async () => {
+    let finishRun: (() => void) | undefined
+    const { server } = createBrowserbaseDemoServer({
+      env: {
+        ATRIB_BROWSERBASE_DEMO_MODE: 'live',
+        ATRIB_BROWSERBASE_UPSTREAM: 'hosted',
+        BROWSERBASE_API_KEY: 'bb-test-key',
+      } as NodeJS.ProcessEnv,
+      runner: async ({ onPrivateMedia }) => {
+        await onPrivateMedia?.({
+          source: 'browserbase-debug-api',
+          session_id: 'bb_session_private_20260628',
+          live_view_url: 'https://www.browserbase.com/devtools-fullscreen/session-private',
+          detected_from: ['browserbase-debug-api'],
+        })
+        return new Promise<WrappedMcpPacketResult>((resolve) => {
+          finishRun = () => resolve({ ...fixtureAllowResult, mode: 'live' })
+        })
+      },
+    })
+    const baseUrl = await listen(server)
+    try {
+      const response = (await fetchJson(`${baseUrl}/api/runs`, { method: 'POST' })) as {
+        ok: boolean
+        run: BrowserbaseDemoRun
+      }
+      expect(response.run.status).toBe('running')
+
+      const running = await waitForRunMedia(baseUrl, response.run.run_id)
+      expect(running.status).toBe('running')
+      expect(running.visual?.media).toMatchObject({
+        primary: 'live',
+        source: 'browserbase-debug-api',
+        session: {
+          available: true,
+          disclosure: 'hash-only',
+        },
+        live_view: {
+          available: true,
+          proxy_path: `/api/runs/${response.run.run_id}/browserbase/live-view`,
+          disclosure: 'server-redirect',
+        },
+      })
+      expect(running.visual?.media.live_view.url_hash).toMatch(/^sha256:/u)
+      expect(running.visual?.media.live_view.url).toBeUndefined()
+      expect(JSON.stringify(running.visual?.media)).not.toContain(
+        'https://www.browserbase.com/devtools-fullscreen/session-private',
+      )
+      expect(JSON.stringify(running.operations ?? [])).not.toContain('bb_session_private_20260628')
+
+      const liveViewRedirect = await fetch(
+        `${baseUrl}/api/runs/${response.run.run_id}/browserbase/live-view`,
+        { redirect: 'manual' },
+      )
+      expect(liveViewRedirect.status).toBe(302)
+      expect(liveViewRedirect.headers.get('location')).toBe(
+        'https://www.browserbase.com/devtools-fullscreen/session-private',
+      )
+
+      finishRun?.()
+      const accepted = await waitForRun(baseUrl, response.run.run_id)
+      expect(accepted.visual?.media.primary).toBe('replay')
+      expect(accepted.visual?.media.live_view.available).toBe(false)
+      expect(accepted.visual?.media.replay).toMatchObject({
+        available: true,
+        proxy_path: `/api/runs/${response.run.run_id}/browserbase/replays`,
+      })
+      const closedLiveView = await fetch(
+        `${baseUrl}/api/runs/${response.run.run_id}/browserbase/live-view`,
+        { redirect: 'manual' },
+      )
+      expect(closedLiveView.status).toBe(410)
+    } finally {
+      await close(server)
+    }
+  })
+
   it('accepts per-run action policy mode from POST JSON', async () => {
     const { server } = createBrowserbaseDemoServer({
       env: {} as NodeJS.ProcessEnv,
@@ -677,4 +864,16 @@ async function waitForRun(baseUrl: string, runId: string): Promise<BrowserbaseDe
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
   throw new Error(`run ${runId} did not finish`)
+}
+
+async function waitForRunMedia(baseUrl: string, runId: string): Promise<BrowserbaseDemoRun> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = (await fetchJson(`${baseUrl}/api/runs/${runId}`)) as {
+      ok: boolean
+      run: BrowserbaseDemoRun
+    }
+    if (response.run.visual?.media.live_view.available) return response.run
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error(`run ${runId} did not expose live media`)
 }

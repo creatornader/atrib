@@ -61,9 +61,11 @@ This example has three runnable modes:
   receipt rows with explorer and log-proof links. The demo enables Action Gate
   by default; set `ATRIB_BROWSERBASE_ACTION_GATE=0` only for a
   browser-receipts-only run. The console also shows browser playback: fixture
-  mode uses deterministic cursor and click motion, while live mode can expose
-  Browserbase Live View or Replay URLs as UI-only links when the host provides
-  them.
+  mode uses deterministic cursor and click motion, while live mode derives
+  Browserbase Live View from the session id through Browserbase's session debug
+  API. Run JSON exposes only the Live View hash and local redirect path. Replay
+  uses server proxy paths that rewrite metadata, playlists, and media assets.
+  Raw Browserbase refs stay out of public records.
 
 The live demo is implemented in [`live-demo/`](live-demo/). Deployment is a
 human gate. Do not publish a hosted URL until demo-only credentials and rate
@@ -109,6 +111,11 @@ ATRIB_BROWSERBASE_DEMO_PUBLIC_BASE_URL=https://atrib-browserbase-stagehand-demo.
 BROWSERBASE_API_KEY=... \
   pnpm --filter @atrib/integration browserbase-stagehand-live-demo
 ```
+
+The hosted demo calls `GET /v1/sessions/:id/debug` after Browserbase MCP
+`start` returns a session id. Set `ATRIB_BROWSERBASE_DEMO_LIVE_VIEW_HOLD_MS`
+when a reviewer needs time to inspect the Live View before the proof runner
+calls `end`. The Fly deployment uses an 8 second hold.
 
 Credentials should come from the operator's cache-first `.zshenv` path. The demo
 server reads environment variables only; it does not call 1Password directly.
