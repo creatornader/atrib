@@ -61,6 +61,7 @@ describe('Proof repository interop classifier', () => {
     expect(report.interop_status).toBe('current_spec_sdk_ready')
     expect(report.runtime_dependency_allowed).toBe(true)
     expect(report.current_spec_wire_ready).toBe(true)
+    expect(report.required_next_step).toContain('Run the released Proof SDK fixture')
   })
 
   it('classifies Proof credential and browser packages as helpers, not wire SDKs', () => {
@@ -100,6 +101,7 @@ describe('Proof repository interop classifier', () => {
       interop_status: 'credential_verifier_helper',
       runtime_dependency_allowed: false,
     })
+    expect(reports[0]?.required_next_step).toContain('Run the opt-in Proof VC Common fixture')
     expect(reports[0]?.evidence.found_helper_markers).toEqual(
       expect.arrayContaining(['verifyVPToken', '@sd-jwt/sd-jwt-vc']),
     )

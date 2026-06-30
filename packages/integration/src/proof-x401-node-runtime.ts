@@ -29,6 +29,7 @@ export type ProofX401NodeRuntimeMode = 'current_spec_native'
 export interface ProofX401NodeRuntimeInteropResult {
   sdk_package: '@proof.com/x401-node'
   sdk_version: string
+  x401_spec_version: string
   sdk_package_ref: string
   adapter_mode: ProofX401NodeRuntimeMode
   sdk_direct_current_spec_compatible: boolean
@@ -46,6 +47,7 @@ export interface ProofX401NodeRuntimeInteropResult {
   public_packet: {
     sdk_package: '@proof.com/x401-node'
     sdk_version: string
+    x401_spec_version: string
     sdk_package_ref: string
     adapter_mode: ProofX401NodeRuntimeMode
     sdk_runtime_exercised: true
@@ -66,8 +68,8 @@ const REQUEST_ID = 'proof-sdk-runtime-basic-v1'
 const AGENT_ID = 'did:web:agent.example'
 const NONCE = 'proof-sdk-runtime-nonce-1'
 const PROTECTED_URL = 'https://verifier.example/sdk-protected'
-const SDK_PACKAGE_REF =
-  'github:creatornader/x401-node#338b785ac60b6021873d384a916fd405f561915a'
+const SDK_PACKAGE_VERSION = '0.3.0'
+const SDK_PACKAGE_REF = `npm:@proof.com/x401-node@${SDK_PACKAGE_VERSION}`
 
 const CURRENT_HEADERS = {
   PROOF_REQUEST: 'PROOF-REQUEST',
@@ -266,7 +268,8 @@ export async function runProofX401NodeRuntimeInterop(): Promise<ProofX401NodeRun
       method: 'GET',
       url: PROTECTED_URL,
       sdk_package: '@proof.com/x401-node',
-      sdk_version: X401_VERSION,
+      sdk_version: SDK_PACKAGE_VERSION,
+      x401_spec_version: X401_VERSION,
       sdk_package_ref: SDK_PACKAGE_REF,
       adapter_mode: 'current_spec_native',
       sdk_header_names: Object.values(headers),
@@ -280,7 +283,8 @@ export async function runProofX401NodeRuntimeInterop(): Promise<ProofX401NodeRun
       method: 'GET',
       url: PROTECTED_URL,
       sdk_package: '@proof.com/x401-node',
-      sdk_version: X401_VERSION,
+      sdk_version: SDK_PACKAGE_VERSION,
+      x401_spec_version: X401_VERSION,
       sdk_package_ref: SDK_PACKAGE_REF,
       adapter_mode: 'current_spec_native',
       proof_request_hash: objectHash(currentPayload),
@@ -300,7 +304,8 @@ export async function runProofX401NodeRuntimeInterop(): Promise<ProofX401NodeRun
 
   return {
     sdk_package: '@proof.com/x401-node',
-    sdk_version: X401_VERSION,
+    sdk_version: SDK_PACKAGE_VERSION,
+    x401_spec_version: X401_VERSION,
     sdk_package_ref: SDK_PACKAGE_REF,
     adapter_mode: 'current_spec_native',
     sdk_direct_current_spec_compatible: sdkDirectCurrentSpecCompatible,
@@ -321,7 +326,8 @@ export async function runProofX401NodeRuntimeInterop(): Promise<ProofX401NodeRun
     public_evidence: publicEvidence,
     public_packet: {
       sdk_package: '@proof.com/x401-node',
-      sdk_version: X401_VERSION,
+      sdk_version: SDK_PACKAGE_VERSION,
+      x401_spec_version: X401_VERSION,
       sdk_package_ref: SDK_PACKAGE_REF,
       adapter_mode: 'current_spec_native',
       sdk_runtime_exercised: true,
