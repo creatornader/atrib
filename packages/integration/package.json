@@ -72,6 +72,7 @@
     "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts",
     "x401-proof-sdk-compat": "tsx scripts/check-proof-x401-sdk-compat.ts",
     "proof-x401-node-runtime-interop": "tsx scripts/proof-x401-node-runtime-interop.ts",
+    "proof-vc-common-x401-interop": "tsx scripts/proof-vc-common-x401-interop.ts",
     "proof-repo-interop": "tsx scripts/check-proof-repo-interop.ts"
   },
   "dependencies": {
@@ -110,7 +111,8 @@
     "@opentelemetry/exporter-trace-otlp-proto": "^0.219.0",
     "@opentelemetry/sdk-trace-base": "^2.8.0",
     "@opentelemetry/semantic-conventions": "^1.41.1",
-    "@proof.com/x401-node": "github:creatornader/x401-node#338b785ac60b6021873d384a916fd405f561915a",
+    "@proof.com/proof-vc-common": "0.2.0",
+    "@proof.com/x401-node": "^0.3.0",
     "@types/node": "^25.9.3",
     "ai": "^6.0.205",
     "browser-use": "0.7.3",

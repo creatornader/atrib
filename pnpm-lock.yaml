@@ -272,9 +272,12 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.41.1
         version: 1.41.1
+      '@proof.com/proof-vc-common':
+        specifier: 0.2.0
+        version: 0.2.0
       '@proof.com/x401-node':
-        specifier: github:creatornader/x401-node#338b785ac60b6021873d384a916fd405f561915a
-        version: https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a
+        specifier: ^0.3.0
+        version: 0.3.0
       '@types/node':
         specifier: ^25.9.3
         version: 25.9.3
@@ -2730,6 +2733,12 @@ packages:
     resolution: {integrity: sha512-/UhIkaZgPutTFmQ7RnIJGgDXZmtEJ7Dvi86xNTFWcnRxVRNk/aotsqDJYeEvDP+FSMB2SdW+pQzNMcWP0rwuNA==}
     engines: {node: '>=14'}
 
+  '@owf/crypto@0.2.0':
+    resolution: {integrity: sha512-pOaaJP900Ki/5zla+H4bresdDkMjmpY0vxSmHraJx3m19V00qZMXsGRJfClGlzwszfXJTciFN0dN2Qb8y1Q6OA==}
+
+  '@owf/identity-common@0.2.0':
+    resolution: {integrity: sha512-liOcJpoUxKkvAOko93VvrpC0w9ft+/D6lalrLoXrgrdd3/q3kGx2IeQ8fcrspw+F3IURfcvdDEH/RwEMx0DKMg==}
+
   '@owf/identity-common@0.3.0':
     resolution: {integrity: sha512-Ot+T8zHqb9cPqPdHL2edRXjWtRLng95N+auhb9TZq+Jy4HxjRzBUMVnB0wzeV5GCgoIkINcHAeLXFMsHs77hVQ==}
 
@@ -2763,9 +2772,12 @@ packages:
   '@posthog/types@1.382.0':
     resolution: {integrity: sha512-iK4OcSgvtmS9FZ9EUpvwlRZmHCLXaZ3+6dbRjkE7q9LL0zHLewxJH84H6uGvCw8aGzxs5rIliZqPHgimTcQEaw==}
 
-  '@proof.com/x401-node@https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a':
-    resolution: {tarball: https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a}
-    version: 0.2.0
+  '@proof.com/proof-vc-common@0.2.0':
+    resolution: {integrity: sha512-RbmdV8uyQdnqvvffop9F8+mhdurMfpZ7Ob/GP43psh54VqpUAVt4zy7KxgOLRwMNdmX6ba459VvN9tRhNHYadg==}
+    engines: {node: '>=22.0.0'}
+
+  '@proof.com/x401-node@0.3.0':
+    resolution: {integrity: sha512-ela9xgJ2wiSa3Hn0fW9oaM7KmRI30kurk3W4jJWp6UomRsvTXvWaB4ltgcX9tAyZ7bkm8Qs1QJViXZ8lR5B/4A==}
     engines: {node: '>=22.0.0'}
 
   '@protobufjs/aspromise@1.1.2':
@@ -2960,14 +2972,17 @@ packages:
   '@sd-jwt/decode@0.19.0':
     resolution: {integrity: sha512-gRfpJseFRy3bFMdlmJjVjuEcLNuekpiZJD2F2luJIKVlk26AEjZSJf6377vwNySa8hb+i4MZDwdy14lcTTmqtA==}
     engines: {node: '>=20'}
+    deprecated: 'Merged into @sd-jwt/core (>= 0.20.0). Security: GHSA-f9j6-8p6x-r9j6.'
 
   '@sd-jwt/jwt-status-list@0.19.0':
     resolution: {integrity: sha512-Xhh0n0DKe3paEtNNQSScy4dtA0ZVKF2OrmDcIB2jm77Doh4xsSs1pOseGEWBs9fmAe5Y0m082wgkmQnWEV53IQ==}
     engines: {node: '>=20'}
+    deprecated: Package moved to @owf/token-status-list, please use this instead
 
   '@sd-jwt/present@0.19.0':
     resolution: {integrity: sha512-WXDwqwUXmtyj7YZ5c+wb26ZBeVOsKXCbCI7s1pRH9ngIjFNDGgAZoVCOmLq8pPgWSJzOTgJe3ErO2k63ZwhyeQ==}
     engines: {node: '>=20'}
+    deprecated: Package got merged into @sd-jwt/core, please use this instead
 
   '@sd-jwt/sd-jwt-vc@0.19.0':
     resolution: {integrity: sha512-sjX9/E32X0HNpOM5b9np2fHSS9CJu72JDkGEuaHTfZTLTmgh1Cj6KhP7kwI1Bxhw0CCt7tjhrAmMvEEIbgIwVg==}
@@ -2976,10 +2991,12 @@ packages:
   '@sd-jwt/types@0.19.0':
     resolution: {integrity: sha512-nfuC9zRLKe7o4HSvc+N4ojWRAxo4JGfgcNWpR7bJloLUlnE9eQuu9h9pEaJZht7KRwMpGorNTIdYpoi1btuiew==}
     engines: {node: '>=20'}
+    deprecated: Package got merged into @sd-jwt/core, please use this instead
 
   '@sd-jwt/utils@0.19.0':
     resolution: {integrity: sha512-bDwDRjfxMBNOsAXY8q8hnxQq7jdOWxrdqTK926Mxt8DN+ttXbXbZIPLwSh84M90WP0V7+WdkXlZD31iISzUR3w==}
     engines: {node: '>=20'}
+    deprecated: Package got merged into @sd-jwt/core, please use this instead
 
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
@@ -9487,6 +9504,13 @@ snapshots:
 
   '@opentelemetry/semantic-conventions@1.41.1': {}
 
+  '@owf/crypto@0.2.0':
+    dependencies:
+      '@noble/hashes': 2.2.0
+      '@owf/identity-common': 0.2.0
+
+  '@owf/identity-common@0.2.0': {}
+
   '@owf/identity-common@0.3.0': {}
 
   '@oxc-project/types@0.133.0': {}
@@ -9518,7 +9542,14 @@ snapshots:
 
   '@posthog/types@1.382.0': {}
 
-  '@proof.com/x401-node@https://codeload.github.com/creatornader/x401-node/tar.gz/338b785ac60b6021873d384a916fd405f561915a':
+  '@proof.com/proof-vc-common@0.2.0':
+    dependencies:
+      '@owf/crypto': 0.2.0
+      '@owf/identity-common': 0.2.0
+      '@sd-jwt/core': 0.19.0
+      '@sd-jwt/sd-jwt-vc': 0.19.0
+
+  '@proof.com/x401-node@0.3.0':
     dependencies:
       '@owf/identity-common': 0.3.0
 

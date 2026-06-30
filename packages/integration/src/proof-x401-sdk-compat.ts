@@ -286,7 +286,7 @@ export function classifyProofRepoSurface(input: ProofRepoSurfaceInput): ProofRep
       safeInAtribCore: sdk.compatible_with_current_spec,
       evidence,
       requiredNextStep: sdk.compatible_with_current_spec
-        ? 'Pin a Proof SDK fixture and run the local proof-gate harness against it.'
+        ? 'Run the released Proof SDK fixture and keep the local proof-gate harness green.'
         : 'Do not use this SDK as a public package or core runtime dependency yet. Use a private adapter for live legacy packages, or pin a current-spec upstream commit and sync constants, payload types, examples, and tests to current x401 header names first.',
       recommendation: sdk.recommendation,
     })
@@ -326,9 +326,9 @@ export function classifyProofRepoSurface(input: ProofRepoSurfaceInput): ProofRep
       safeInAtribCore: false,
       evidence,
       requiredNextStep:
-        'Add an opt-in verifier fixture that turns Proof credential verification output into caller-owned x401 resultVerified evidence.',
+        'Run the opt-in Proof VC Common fixture to turn Proof credential verification output into caller-owned x401 resultVerified evidence.',
       recommendation:
-        'Use as a future credential-verifier fixture helper. Do not treat it as the x401 wire implementation.',
+        'Use as an opt-in credential-verifier fixture helper. Do not treat it as the x401 wire implementation.',
     })
   }
 

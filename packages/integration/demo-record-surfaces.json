@@ -324,6 +324,13 @@
       "commands": ["proof-x401-node-runtime-interop"]
     },
     {
+      "id": "proof-vc-common-x401-interop",
+      "path": "scripts/proof-vc-common-x401-interop.ts",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["proof-vc-common-x401-interop"]
+    },
+    {
       "id": "proof-repo-interop",
       "path": "scripts/check-proof-repo-interop.ts",
       "record_class": "offline-local",

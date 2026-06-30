@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { runProofX401NodeRuntimeInterop } from '../src/proof-x401-node-runtime.js'
 
 describe('Proof x401 Node native runtime interop', () => {
-  it('runs a pinned current-spec Proof SDK while producing strict atrib evidence', async () => {
+  it('runs the released current-spec Proof SDK while producing strict atrib evidence', async () => {
     const result = await runProofX401NodeRuntimeInterop()
     const x401Evidence = result.public_evidence.find((block) => block.protocol === 'x401')
     const details = x401Evidence?.details as
@@ -16,10 +16,9 @@ describe('Proof x401 Node native runtime interop', () => {
       | undefined
 
     expect(result.sdk_package).toBe('@proof.com/x401-node')
-    expect(result.sdk_version).toBe('0.2.0')
-    expect(result.sdk_package_ref).toBe(
-      'github:creatornader/x401-node#338b785ac60b6021873d384a916fd405f561915a',
-    )
+    expect(result.sdk_version).toBe('0.3.0')
+    expect(result.x401_spec_version).toBe('0.2.0')
+    expect(result.sdk_package_ref).toBe('npm:@proof.com/x401-node@0.3.0')
     expect(result.adapter_mode).toBe('current_spec_native')
     expect(result.sdk_direct_current_spec_compatible).toBe(true)
     expect(result.strict_legacy_evidence_rejected).toBe(true)
@@ -32,8 +31,9 @@ describe('Proof x401 Node native runtime interop', () => {
 
     expect(result.public_packet).toMatchObject({
       sdk_package: '@proof.com/x401-node',
-      sdk_version: '0.2.0',
-      sdk_package_ref: 'github:creatornader/x401-node#338b785ac60b6021873d384a916fd405f561915a',
+      sdk_version: '0.3.0',
+      x401_spec_version: '0.2.0',
+      sdk_package_ref: 'npm:@proof.com/x401-node@0.3.0',
       adapter_mode: 'current_spec_native',
       sdk_runtime_exercised: true,
       sdk_direct_current_spec_compatible: true,
