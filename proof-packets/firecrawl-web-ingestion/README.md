@@ -82,6 +82,12 @@ demo server lives in
 is fixed-input by design: it lets a reviewer run the same bounded public target
 and inspect fresh receipts without exposing arbitrary crawl capability.
 
+The hosted page now presents the proof as a source-to-context pipeline:
+discover a source, ground it with scrape, structure fields with extract, cap the
+crawl, then stop before `customer_email` unless a reviewer accepts the policy
+decision. This matches Firecrawl's public RAG, AI search, research, enrichment,
+scrape, extract, and crawl examples better than a click-replay UI would.
+
 Hosted demo: <https://atrib-firecrawl-ingestion-demo.fly.dev/>.
 
 ## Regenerate
