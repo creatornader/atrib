@@ -5,6 +5,7 @@ import {
   checkRateLimit,
   createFirecrawlDemoServer,
   deploymentGuardIssues,
+  firecrawlDemoSurfaceFromWorkflow,
   firecrawlWorkflowFromEnv,
   missingLiveEnv,
   rateLimitConfigFromEnv,
@@ -193,6 +194,26 @@ describe('Firecrawl web ingestion live demo', () => {
     expect(missingLiveEnv({} as NodeJS.ProcessEnv)).toEqual(['FIRECRAWL_API_KEY'])
   })
 
+  it('describes Firecrawl as a grounding pipeline instead of browser playback', () => {
+    const workflow = firecrawlWorkflowFromEnv({} as NodeJS.ProcessEnv)
+    const surface = firecrawlDemoSurfaceFromWorkflow(workflow)
+
+    expect(surface.category).toBe('grounding-pipeline')
+    expect(surface.stages.map((stage) => stage.tool)).toEqual([
+      'firecrawl_search',
+      'firecrawl_scrape',
+      'firecrawl_extract',
+      'firecrawl_crawl',
+    ])
+    expect(surface.source_pattern.join(' ')).toContain('source-to-context pipeline')
+    expect(surface.source_pattern.join(' ')).toContain('not a remote browser replay')
+    expect(surface.guardrail).toMatchObject({
+      next_action: 'customer_email',
+      decision: 'escalate_before_customer_email',
+      stopped_before: 'customer_email',
+    })
+  })
+
   it('blocks deployed mode unless inputs are fixed and public', () => {
     const unsafe = {
       ATRIB_FIRECRAWL_DEMO_DEPLOYED: '1',
@@ -246,12 +267,21 @@ describe('Firecrawl web ingestion live demo', () => {
         ok: boolean
         mode: string
         workflow: { input_policy: string }
+        demo_surface: { category: string; stages: Array<{ tool: string }> }
       }
       expect(config).toMatchObject({
         ok: true,
         mode: 'fixture',
         workflow: { input_policy: 'fixed-public' },
+        demo_surface: { category: 'grounding-pipeline' },
       })
+      expect(config.demo_surface.stages.map((stage) => stage.tool)).toContain('firecrawl_extract')
+
+      const rootHtml = await fetchText(`${baseUrl}/`)
+      expect(rootHtml).toContain('Source to context pipeline')
+      expect(rootHtml).toContain('Web data in. Signed ingestion and policy evidence out.')
+      expect(rootHtml).toContain('The hosted demo does not accept arbitrary URLs')
+      expect(rootHtml).toContain('customer_email is stopped before execution')
 
       const response = (await fetchJson(`${baseUrl}/api/runs`, { method: 'POST' })) as {
         ok: boolean
@@ -314,6 +344,11 @@ async function close(
 async function fetchJson(url: string, init?: RequestInit): Promise<unknown> {
   const response = await fetch(url, init)
   return response.json()
+}
+
+async function fetchText(url: string, init?: RequestInit): Promise<string> {
+  const response = await fetch(url, init)
+  return response.text()
 }
 
 async function waitForRun(baseUrl: string, runId: string): Promise<FirecrawlDemoRun> {

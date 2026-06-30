@@ -58,6 +58,12 @@ credentials so it proves the ingestion gate without exposing arbitrary crawl
 capability.
 Current deployed demo: <https://atrib-firecrawl-ingestion-demo.fly.dev/>.
 
+The demo shape follows Firecrawl's own public examples: web sources become clean
+markdown, structured extraction, crawler output, or RAG/search/research input.
+It is intentionally different from the Browserbase demo. Browserbase needs a
+visible remote browser and replay surface; Firecrawl needs a source-to-context
+pipeline with a downstream action gate.
+
 Run the live public proof:
 
 ```bash

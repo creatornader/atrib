@@ -4,6 +4,24 @@ This is the resettable demo layer for the Firecrawl proof packet. It serves a
 small ingestion-gate console and calls the existing Firecrawl packet runner when
 a reviewer presses **Run ingestion proof**.
 
+## Demo shape
+
+This surface is a Firecrawl-style web-data pipeline, not browser playback.
+Firecrawl's own examples and agent guidance center on RAG, AI search, research,
+lead enrichment, scraping, extraction, and crawler bounds. The first screen
+therefore shows a source-to-context lane:
+
+```text
+fixed public source -> clean context -> structured extraction -> bounded crawl -> policy gate
+```
+
+The signed records stay visible, but they support the main demo rather than
+becoming the whole screen. Browserbase needs a visible browser session because
+that product is about browser actions. Firecrawl needs the reviewer to see which
+source was discovered, what was turned into context, which fields were
+structured, which crawl cap was enforced, and where atrib stopped the downstream
+customer action.
+
 The demo does not accept arbitrary URLs or crawl depths. It uses the fixed
 public input from the proof packet:
 

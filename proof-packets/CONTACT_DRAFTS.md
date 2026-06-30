@@ -23,7 +23,7 @@ Firecrawl web ingestion:
 - Explorer: <https://explore.atrib.dev/action/sha256:cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2>
 - Public log proof: <https://log.atrib.dev/v1/proof/cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2>
 - Public proof log indexes: tool records `67668`, `67669`, `67670`, `67671`; control records `67672`, `67673`
-- Latest deployed demo run: tool records `67682`, `67683`, `67684`, `67685`; control records `67686`, `67687`
+- Latest deployed demo run: tool records `68465`, `68466`, `68467`, `68468`; control records `68469`, `68470`
 - Policy decision hash: `sha256:bf2395e835c18291a1bf05df24c95688a39d1260754f32d20e555fb72a912715`
 - Tools signed: `firecrawl_search`, `firecrawl_scrape`, `firecrawl_extract`, `firecrawl_crawl`
 - Control signed: `policy_decision`, `policy_outcome` before `customer_email`
@@ -118,6 +118,7 @@ Proof shape:
 - Private fields: query, URL, scraped content, extracted text, crawl job id
 - Policy artifact: `policy-decision.json` summarizes signed `policy_decision` and `policy_outcome` records before `customer_email`
 - Fixed-input live demo: https://atrib-firecrawl-ingestion-demo.fly.dev/
+- Demo shape: source-to-context pipeline, not browser replay
 
 Public proof:
 
@@ -126,7 +127,7 @@ Public proof:
 - Tool record indexes: `67668`, `67669`, `67670`, `67671`
 - Signed control record indexes: `67672`, `67673`
 - Policy decision hash: `sha256:bf2395e835c18291a1bf05df24c95688a39d1260754f32d20e555fb72a912715`
-- Latest deployed demo run: tool indexes `67682`, `67683`, `67684`, `67685`; control indexes `67686`, `67687`
+- Latest deployed demo run: tool indexes `68465`, `68466`, `68467`, `68468`; control indexes `68469`, `68470`
 
 Policy shape:
 
@@ -134,6 +135,7 @@ Policy shape:
 - Sign an escalation decision before a customer email, account update, refund or payment change, production code change, or vendor workflow depends on the ingested web content.
 - Sign an outcome record proving `customer_email` did not execute.
 - Keep raw web content private while making the ingestion record hashes and verifier output public.
+- Show discovery, scrape, extraction, bounded crawl, and policy stop as the reviewer-facing story.
 
 What I want criticism on:
 
@@ -142,7 +144,10 @@ What I want criticism on:
 - Whether `search`, `scrape`, `extract`, and `crawl` should all be signed, or whether the right boundary is only recursive or credit-consuming actions.
 - Whether the bounded-crawl receipt helps with the concerns in #233, #194, and #211, or whether enforcement needs to happen somewhere else.
 
-I have not opened a PR because I want maintainer feedback on the record boundary before changing code.
+I shaped the demo as a source-to-context pipeline because that is how Firecrawl
+presents most of its public examples: RAG, AI search, research, enrichment,
+scraping, extraction, and bounded crawl. I have not opened a PR because I want
+maintainer feedback on the record boundary before changing code.
 ```
 
 ## Firecrawl draft: direct note
@@ -155,7 +160,9 @@ Explorer: https://explore.atrib.dev/action/sha256:cdbb6231c47eae72f8be703ebf9eca
 Log proof: https://log.atrib.dev/v1/proof/cdbb6231c47eae72f8be703ebf9eca4a5ee0af45d0edcc2e97c40ca4e2587ea2
 Policy decision hash: sha256:bf2395e835c18291a1bf05df24c95688a39d1260754f32d20e555fb72a912715
 
-The public record keeps tool names plus args/result hashes. It does not expose the query, URL, scraped content, extracted text, or crawl job id. The signed outcome proves the downstream customer-email action did not run. I am looking for criticism on whether this is the right evidence shape before a downstream agent uses web-ingested content for a sensitive action, and what fields are missing for policy, trust, or incident review.
+The demo is shaped like a Firecrawl source-to-context pipeline rather than a browser replay: fixed public source, scrape, extract, bounded crawl, signed records, then a policy stop before customer_email. The public record keeps tool names plus args/result hashes. It does not expose the query, URL, scraped content, extracted text, or crawl job id. The signed outcome proves the downstream customer-email action did not run.
+
+I am looking for criticism on whether this is the right evidence shape before a downstream agent uses web-ingested content for a sensitive action, and what fields are missing for policy, trust, or incident review.
 ```
 
 ## Remaining demo scope
@@ -177,7 +184,8 @@ The demo shows failed runs plainly and rate-limits retries.
 Firecrawl now has a deployed fixed-input demo at
 <https://atrib-firecrawl-ingestion-demo.fly.dev/>. It publishes fresh public log
 records, signs the downstream policy decision and outcome, and refuses
-arbitrary crawl targets or crawl depths.
+arbitrary crawl targets or crawl depths. The next demo-shape pass presents it
+as a source-to-context pipeline rather than a receipt console.
 
 Public-write guard: hosted demos should use demo-only keys and explicit run
 limits so reviewers can create fresh records without creating unbounded public
