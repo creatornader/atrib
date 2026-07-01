@@ -331,6 +331,13 @@
       "commands": ["proof-vc-common-x401-interop"]
     },
     {
+      "id": "proof-vc-token-capture",
+      "path": "scripts/proof-vc-token-capture.ts",
+      "record_class": "live-capture",
+      "endpoint_posture": "local-only",
+      "commands": ["proof-vc-token-capture"]
+    },
+    {
       "id": "proof-repo-interop",
       "path": "scripts/check-proof-repo-interop.ts",
       "record_class": "offline-local",

@@ -273,8 +273,11 @@ importers:
         specifier: ^1.41.1
         version: 1.41.1
       '@proof.com/proof-vc-common':
-        specifier: 0.2.0
-        version: 0.2.0
+        specifier: 0.3.0
+        version: 0.3.0
+      '@proof.com/proof-vc-server':
+        specifier: 0.3.0
+        version: 0.3.0
       '@proof.com/x401-node':
         specifier: ^0.3.0
         version: 0.3.0
@@ -2733,14 +2736,14 @@ packages:
     resolution: {integrity: sha512-/UhIkaZgPutTFmQ7RnIJGgDXZmtEJ7Dvi86xNTFWcnRxVRNk/aotsqDJYeEvDP+FSMB2SdW+pQzNMcWP0rwuNA==}
     engines: {node: '>=14'}
 
-  '@owf/crypto@0.2.0':
-    resolution: {integrity: sha512-pOaaJP900Ki/5zla+H4bresdDkMjmpY0vxSmHraJx3m19V00qZMXsGRJfClGlzwszfXJTciFN0dN2Qb8y1Q6OA==}
-
-  '@owf/identity-common@0.2.0':
-    resolution: {integrity: sha512-liOcJpoUxKkvAOko93VvrpC0w9ft+/D6lalrLoXrgrdd3/q3kGx2IeQ8fcrspw+F3IURfcvdDEH/RwEMx0DKMg==}
+  '@owf/crypto@0.3.1':
+    resolution: {integrity: sha512-8yLJLZh/D7s588UwwmtOLbfShxv6UwvMYAB9lt1xIqDS51b6Kx7T0Yf9U0qvebibXIZYB+EaPG8uGGG330CX+w==}
 
   '@owf/identity-common@0.3.0':
     resolution: {integrity: sha512-Ot+T8zHqb9cPqPdHL2edRXjWtRLng95N+auhb9TZq+Jy4HxjRzBUMVnB0wzeV5GCgoIkINcHAeLXFMsHs77hVQ==}
+
+  '@owf/identity-common@0.3.1':
+    resolution: {integrity: sha512-DLDZtZYMDiV58zpTYVoDc0uFPdZBkmNL31Az5X7sMEttmnU5JvArw3dqPwSMMlT2VfeB0SiPHsuM5dcnqaeNnw==}
 
   '@oxc-project/types@0.133.0':
     resolution: {integrity: sha512-KzkdCd6Uxqnf6l3HOw1xfatAlUURA0g14cvBYFyJ5SaNOQbOUvBr9PKArcPcrNIeRsBdgcUzOGrhKveVpvOIGA==}
@@ -2772,8 +2775,12 @@ packages:
   '@posthog/types@1.382.0':
     resolution: {integrity: sha512-iK4OcSgvtmS9FZ9EUpvwlRZmHCLXaZ3+6dbRjkE7q9LL0zHLewxJH84H6uGvCw8aGzxs5rIliZqPHgimTcQEaw==}
 
-  '@proof.com/proof-vc-common@0.2.0':
-    resolution: {integrity: sha512-RbmdV8uyQdnqvvffop9F8+mhdurMfpZ7Ob/GP43psh54VqpUAVt4zy7KxgOLRwMNdmX6ba459VvN9tRhNHYadg==}
+  '@proof.com/proof-vc-common@0.3.0':
+    resolution: {integrity: sha512-it2eJzhYk2ZeaxREhb8aift73MOEn0b7nc7tm5Ks6tuZGG9tKmhI34tiGAYpJm031Hs2O4ijHYQ//smBd1yBhQ==}
+    engines: {node: '>=22.0.0'}
+
+  '@proof.com/proof-vc-server@0.3.0':
+    resolution: {integrity: sha512-uwV2e3tZE6wwoiHuTI6US4Y1hCgxagM1f9Z+tn309KBZqASozGHSEMhH0TR4um3dgxfK0bpupfZUDqT+JpTxrg==}
     engines: {node: '>=22.0.0'}
 
   '@proof.com/x401-node@0.3.0':
@@ -9504,14 +9511,14 @@ snapshots:
 
   '@opentelemetry/semantic-conventions@1.41.1': {}
 
-  '@owf/crypto@0.2.0':
+  '@owf/crypto@0.3.1':
     dependencies:
       '@noble/hashes': 2.2.0
-      '@owf/identity-common': 0.2.0
-
-  '@owf/identity-common@0.2.0': {}
+      '@owf/identity-common': 0.3.1
 
   '@owf/identity-common@0.3.0': {}
+
+  '@owf/identity-common@0.3.1': {}
 
   '@oxc-project/types@0.133.0': {}
 
@@ -9542,10 +9549,13 @@ snapshots:
 
   '@posthog/types@1.382.0': {}
 
-  '@proof.com/proof-vc-common@0.2.0':
+  '@proof.com/proof-vc-common@0.3.0': {}
+
+  '@proof.com/proof-vc-server@0.3.0':
     dependencies:
-      '@owf/crypto': 0.2.0
-      '@owf/identity-common': 0.2.0
+      '@owf/crypto': 0.3.1
+      '@owf/identity-common': 0.3.0
+      '@proof.com/proof-vc-common': 0.3.0
       '@sd-jwt/core': 0.19.0
       '@sd-jwt/sd-jwt-vc': 0.19.0
 

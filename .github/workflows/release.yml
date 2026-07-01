@@ -84,18 +84,14 @@ jobs:
       # Secrets:
       #   RELEASE_APP_ID         - the App's Client ID (the "Iv23li..."
       #                            string shown on the App settings page).
-      #                            The action also accepts the numeric App
-      #                            ID, but GitHub recommends Client ID
-      #                            going forward (App ID may be deprecated
-      #                            in some interfaces). The action's
-      #                            `app-id` input name is historical; it
-      #                            handles both transparently.
+      #                            The secret name is historical; this workflow
+      #                            passes it as `client-id`.
       #   RELEASE_APP_PRIVATE_KEY - the PEM contents (multiline)
       - name: Mint GitHub App installation token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
+          client-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - name: Checkout

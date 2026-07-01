@@ -70,14 +70,15 @@ describe('Proof repository interop classifier', () => {
         repo: 'proof/proof-vc-common',
         packageJson: {
           name: '@proof.com/proof-vc-common',
-          version: '0.2.0',
+          version: '0.3.0',
           dependencies: {
+            '@proof.com/proof-vc-server': '^0.3.0',
             '@sd-jwt/sd-jwt-vc': '^1.0.0',
             '@owf/identity-common': '^0.8.0',
           },
         },
         sourceText: `
-          export { verifyVPToken, getDCAPIAuthorizationRequest, ProofCredentialV1 };
+          export { createClient, createVerifier, verifyVPToken, ProofCredentialV1 };
         `,
       },
       {
@@ -86,7 +87,7 @@ describe('Proof repository interop classifier', () => {
           name: '@proof.com/proof-vc-web',
           version: '0.2.0',
           dependencies: {
-            '@proof.com/proof-vc-common': '^0.2.0',
+            '@proof.com/proof-vc-common': '^0.3.0',
           },
         },
         sourceText: `
@@ -101,9 +102,9 @@ describe('Proof repository interop classifier', () => {
       interop_status: 'credential_verifier_helper',
       runtime_dependency_allowed: false,
     })
-    expect(reports[0]?.required_next_step).toContain('Run the opt-in Proof VC Common fixture')
+    expect(reports[0]?.required_next_step).toContain('Run the opt-in Proof VC fixture')
     expect(reports[0]?.evidence.found_helper_markers).toEqual(
-      expect.arrayContaining(['verifyVPToken', '@sd-jwt/sd-jwt-vc']),
+      expect.arrayContaining(['verifyVPToken', 'createVerifier', '@proof.com/proof-vc-server']),
     )
     expect(reports[1]).toMatchObject({
       role: 'browser credential UI reference',

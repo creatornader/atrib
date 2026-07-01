@@ -29,7 +29,7 @@
     "typos": "typos .",
     "clean": "turbo clean",
     "version-packages": "changeset version",
-    "release": "pnpm -r build && changeset publish"
+    "release": "node scripts/check-release-publish-readiness.mjs && pnpm -r build && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

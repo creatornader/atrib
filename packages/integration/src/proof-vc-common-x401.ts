@@ -6,11 +6,8 @@ import {
   verifier as proofVerifier,
   X401_VERSION,
 } from '@proof.com/x401-node'
-import {
-  init as initProofVcCommon,
-  verifyVPToken as proofVerifyVPToken,
-} from '@proof.com/proof-vc-common'
-import type { TrustRoot, VerifyVPTokenParams, VPToken } from '@proof.com/proof-vc-common'
+import { createVerifier as createProofVcVerifier } from '@proof.com/proof-vc-server'
+import type { ProofCredential, TrustRoot, VPToken } from '@proof.com/proof-vc-server'
 import {
   encodeX401HeaderObject,
   verifyAuthorizationEvidence,
@@ -20,7 +17,13 @@ import {
 
 export type ProofVcCommonFixtureMode = 'fixture' | 'native'
 
-export type ProofVcCommonVerifier = (params: VerifyVPTokenParams) => Promise<VPToken>
+export interface ProofVcCommonVerifierInput {
+  encodedVPToken: string
+  nonce?: string
+  aud?: string
+}
+
+export type ProofVcCommonVerifier = (params: ProofVcCommonVerifierInput) => Promise<VPToken>
 
 export interface ProofVcCommonX401InteropOptions {
   mode?: ProofVcCommonFixtureMode
@@ -28,10 +31,14 @@ export interface ProofVcCommonX401InteropOptions {
   verifier?: ProofVcCommonVerifier
   nonce?: string
   trustRoot?: TrustRoot
+  aud?: string
 }
 
 export interface ProofVcCommonX401InteropResult {
-  credential_verifier_package: '@proof.com/proof-vc-common'
+  credential_request_package: '@proof.com/proof-vc-common'
+  credential_request_version: string
+  credential_request_ref: string
+  credential_verifier_package: '@proof.com/proof-vc-server'
   credential_verifier_version: string
   credential_verifier_ref: string
   credential_verifier_mode: ProofVcCommonFixtureMode
@@ -41,10 +48,14 @@ export interface ProofVcCommonX401InteropResult {
   verifier_invoked: boolean
   credential_result_verified: boolean
   credential_subject_over_18: boolean | null
+  credential_nonce_verified: boolean
   verification: EvidenceVerificationBlock
   authorization_evidence: AuthorizationEvidenceInput
   public_packet: {
-    credential_verifier_package: '@proof.com/proof-vc-common'
+    credential_request_package: '@proof.com/proof-vc-common'
+    credential_request_version: string
+    credential_request_ref: string
+    credential_verifier_package: '@proof.com/proof-vc-server'
     credential_verifier_version: string
     credential_verifier_ref: string
     credential_verifier_mode: ProofVcCommonFixtureMode
@@ -54,6 +65,7 @@ export interface ProofVcCommonX401InteropResult {
     verifier_invoked: boolean
     credential_result_verified: boolean
     credential_subject_over_18: boolean | null
+    credential_nonce_verified: boolean
     proof_gate_status: string | null
     proof_request_hash: string | null
     proof_response_hash: string | null
@@ -61,23 +73,23 @@ export interface ProofVcCommonX401InteropResult {
   }
 }
 
-const PROOF_VC_COMMON_VERSION = '0.2.0'
+const PROOF_VC_COMMON_VERSION = '0.3.0'
 const PROOF_VC_COMMON_REF = `npm:@proof.com/proof-vc-common@${PROOF_VC_COMMON_VERSION}`
+const PROOF_VC_SERVER_VERSION = '0.3.0'
+const PROOF_VC_SERVER_REF = `npm:@proof.com/proof-vc-server@${PROOF_VC_SERVER_VERSION}`
 const X401_NODE_VERSION = '0.3.0'
 const X401_NODE_REF = `npm:@proof.com/x401-node@${X401_NODE_VERSION}`
 const REQUEST_ID = 'proof-vc-common-x401-basic-v1'
 const AGENT_ID = 'did:web:agent.example'
 const DEFAULT_NONCE = 'proof-vc-common-x401-nonce-1'
-let proofVcCommonNativeInitialized = false
 
-function ensureProofVcCommonNativeInitialized(trustRoot: TrustRoot): void {
-  if (proofVcCommonNativeInitialized) return
-  try {
-    initProofVcCommon({ trustRoot })
-  } catch (err) {
-    if (!String(err).includes('already initialized')) throw err
-  }
-  proofVcCommonNativeInitialized = true
+function createNativeProofVcVerifier(trustRoot: TrustRoot): ProofVcCommonVerifier {
+  const verifier = createProofVcVerifier({ trustRoot })
+  return ({ encodedVPToken, aud }) =>
+    verifier.verifyVPToken({
+      encodedVPToken,
+      ...(aud !== undefined ? { aud } : {}),
+    })
 }
 
 function unsecuredJwt(payload: Record<string, unknown>): string {
@@ -94,11 +106,14 @@ function fixtureCredential(over18: boolean) {
       age_is_over: { '18': over18 },
     }),
     getSDJWT: () => ({}) as never,
+    getNonce: () => DEFAULT_NONCE,
     isOver18: over18,
   }
 }
 
-export async function verifyFixtureVPToken({ nonce }: VerifyVPTokenParams): Promise<VPToken> {
+export async function verifyFixtureVPToken({
+  nonce,
+}: ProofVcCommonVerifierInput): Promise<VPToken> {
   if (nonce !== DEFAULT_NONCE) {
     throw new Error('fixture Proof VP token nonce mismatch')
   }
@@ -110,6 +125,7 @@ export async function verifyFixtureVPToken({ nonce }: VerifyVPTokenParams): Prom
 function firstProofCredential(presentation: VPToken): {
   isOver18?: boolean
   credentialType?: () => string
+  getNonce?: ProofCredential['getNonce']
 } | null {
   const credentials = presentation.proof_id_default
   const credential = credentials[0]
@@ -117,6 +133,7 @@ function firstProofCredential(presentation: VPToken): {
   return credential as {
     isOver18?: boolean
     credentialType?: () => string
+    getNonce?: ProofCredential['getNonce']
   }
 }
 
@@ -172,11 +189,11 @@ export async function runProofVcCommonX401Interop(
   const mode = options.mode ?? 'fixture'
   const nonce = options.nonce ?? DEFAULT_NONCE
   const encodedVPToken = options.encodedVPToken ?? 'fixture-proof-vc-common-vp-token'
-  if (mode === 'native' && !options.verifier) {
-    ensureProofVcCommonNativeInitialized(options.trustRoot ?? 'production')
-  }
   const verifyVPToken =
-    options.verifier ?? (mode === 'native' ? proofVerifyVPToken : verifyFixtureVPToken)
+    options.verifier ??
+    (mode === 'native'
+      ? createNativeProofVcVerifier(options.trustRoot ?? 'production')
+      : verifyFixtureVPToken)
 
   const proofRequest = buildProofRequest(nonce)
   const proofRequestHeader = proofVerifier.encodePayload(proofRequest)
@@ -185,17 +202,25 @@ export async function runProofVcCommonX401Interop(
   })
   if (!requirement) throw new Error('Proof x401 SDK did not detect the Proof VC requirement')
 
-  const presentation = await verifyVPToken({ encodedVPToken, nonce })
+  const presentation = await verifyVPToken({
+    encodedVPToken,
+    nonce,
+    ...(options.aud !== undefined ? { aud: options.aud } : {}),
+  })
   const credential = firstProofCredential(presentation)
+  const credentialNonceVerified = credential?.getNonce?.() === nonce
   const credentialResultVerified =
-    credential?.credentialType?.() === 'ProofCredentialV1' && credential.isOver18 === true
+    credential?.credentialType?.() === 'ProofCredentialV1' &&
+    credential.isOver18 === true &&
+    credentialNonceVerified
 
   const resultArtifact = proofAgent.buildResultArtifact({
     credentialResult: {
       protocol: 'openid4vp-v1-signed',
       data: {
         vp_token: encodedVPToken,
-        verifier_package: PROOF_VC_COMMON_REF,
+        request_package: PROOF_VC_COMMON_REF,
+        verifier_package: PROOF_VC_SERVER_REF,
       },
     },
     requestId: REQUEST_ID,
@@ -221,7 +246,7 @@ export async function runProofVcCommonX401Interop(
       resultVerified: credentialResultVerified,
       issuerTrustVerified: credentialResultVerified,
       issuerTrustRootType: 'proof-vc-common',
-      issuerTrustRootRef: PROOF_VC_COMMON_REF,
+      issuerTrustRootRef: PROOF_VC_SERVER_REF,
       allowLegacyHeaders: false,
       allowLegacyFields: false,
     },
@@ -234,9 +259,12 @@ export async function runProofVcCommonX401Interop(
   const details = detailsFromEvidence(verification)
 
   return {
-    credential_verifier_package: '@proof.com/proof-vc-common',
-    credential_verifier_version: PROOF_VC_COMMON_VERSION,
-    credential_verifier_ref: PROOF_VC_COMMON_REF,
+    credential_request_package: '@proof.com/proof-vc-common',
+    credential_request_version: PROOF_VC_COMMON_VERSION,
+    credential_request_ref: PROOF_VC_COMMON_REF,
+    credential_verifier_package: '@proof.com/proof-vc-server',
+    credential_verifier_version: PROOF_VC_SERVER_VERSION,
+    credential_verifier_ref: PROOF_VC_SERVER_REF,
     credential_verifier_mode: mode,
     x401_sdk_package: '@proof.com/x401-node',
     x401_sdk_version: X401_NODE_VERSION,
@@ -244,12 +272,16 @@ export async function runProofVcCommonX401Interop(
     verifier_invoked: true,
     credential_result_verified: credentialResultVerified,
     credential_subject_over_18: credential?.isOver18 ?? null,
+    credential_nonce_verified: credentialNonceVerified,
     verification,
     authorization_evidence: authorizationEvidence,
     public_packet: {
-      credential_verifier_package: '@proof.com/proof-vc-common',
-      credential_verifier_version: PROOF_VC_COMMON_VERSION,
-      credential_verifier_ref: PROOF_VC_COMMON_REF,
+      credential_request_package: '@proof.com/proof-vc-common',
+      credential_request_version: PROOF_VC_COMMON_VERSION,
+      credential_request_ref: PROOF_VC_COMMON_REF,
+      credential_verifier_package: '@proof.com/proof-vc-server',
+      credential_verifier_version: PROOF_VC_SERVER_VERSION,
+      credential_verifier_ref: PROOF_VC_SERVER_REF,
       credential_verifier_mode: mode,
       x401_sdk_package: '@proof.com/x401-node',
       x401_sdk_version: X401_NODE_VERSION,
@@ -257,6 +289,7 @@ export async function runProofVcCommonX401Interop(
       verifier_invoked: true,
       credential_result_verified: credentialResultVerified,
       credential_subject_over_18: credential?.isOver18 ?? null,
+      credential_nonce_verified: credentialNonceVerified,
       proof_gate_status: details.proof_gate_status,
       proof_request_hash: details.proof_request_hash,
       proof_response_hash: details.proof_response_hash,
@@ -267,5 +300,6 @@ export async function runProofVcCommonX401Interop(
 
 export const proofVcCommonX401Packages = {
   proof_vc_common: PROOF_VC_COMMON_REF,
+  proof_vc_server: PROOF_VC_SERVER_REF,
   x401_node: X401_NODE_REF,
 } as const
