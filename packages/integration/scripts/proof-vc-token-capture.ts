@@ -55,6 +55,20 @@ function send(res: ServerResponse, status: number, body: string, contentType = '
   res.end(body)
 }
 
+function sendInternalError(res: ServerResponse): void {
+  if (res.writableEnded) return
+  if (res.headersSent) {
+    res.end()
+    return
+  }
+  send(res, 500, 'Proof credential capture failed')
+}
+
+function describeError(err: unknown): string {
+  if (err instanceof Error) return err.stack ?? err.message
+  return String(err)
+}
+
 function readRequestBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = ''
@@ -203,7 +217,8 @@ async function main(): Promise<void> {
         }
         send(res, 404, 'not found')
       } catch (err) {
-        send(res, 500, err instanceof Error ? err.message : String(err))
+        sendInternalError(res)
+        console.error(describeError(err))
         reject(err)
       }
     })
@@ -219,6 +234,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : String(err))
+  console.error(describeError(err))
   process.exitCode = 2
 })
