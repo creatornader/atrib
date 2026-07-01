@@ -15,3 +15,9 @@ proof-payment binding verifier outcomes. Those cases pin atrib's evidence
 contract only: explicit failed verifier outcomes fail the block, and public
 details carry hashes for origin, trust-root, and binding references. They do
 not define Proof's upstream trust-list, origin, or payment-binding semantics.
+
+`upstream-open-threads.json` tracks the Proof-side semantic questions that
+atrib deliberately keeps out of the verifier core until upstream lands a
+canonical shape. The current set covers multi-endpoint request composition,
+agent-asserted origin, user-interaction non-goals, agent identifiers with
+proof/payment binding, and TRQP trusted authorities.

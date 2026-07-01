@@ -145,6 +145,7 @@ function dependencyNames(packageJson: Record<string, unknown> | null): string[] 
 function reportEvidence(text: string, packageJson: Record<string, unknown> | null) {
   const helperMarkers = [
     'verifyVPToken',
+    'createVerifier',
     'getDCAPIAuthorizationRequest',
     'ProofCredentialV1',
     'proof-verify-id',
@@ -152,6 +153,7 @@ function reportEvidence(text: string, packageJson: Record<string, unknown> | nul
     '@sd-jwt/sd-jwt-vc',
     '@owf/identity-common',
     '@proof.com/x401-node',
+    '@proof.com/proof-vc-server',
   ]
   const dependencies = dependencyNames(packageJson)
   const dependencyText = dependencies.join('\n')
@@ -326,9 +328,9 @@ export function classifyProofRepoSurface(input: ProofRepoSurfaceInput): ProofRep
       safeInAtribCore: false,
       evidence,
       requiredNextStep:
-        'Run the opt-in Proof VC Common fixture to turn Proof credential verification output into caller-owned x401 resultVerified evidence.',
+        'Run the opt-in Proof VC fixture to turn Proof credential verification output into caller-owned x401 resultVerified evidence.',
       recommendation:
-        'Use as an opt-in credential-verifier fixture helper. Do not treat it as the x401 wire implementation.',
+        'Use as an opt-in credential request and verifier helper. Do not treat it as the x401 wire implementation.',
     })
   }
 

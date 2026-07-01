@@ -7233,6 +7233,15 @@ verification output into caller-owned x401 `resultVerified` and issuer-trust
 evidence. The default fixture path uses local credential-verifier output; a live
 Proof VP token can be checked by the Proof verifier when the operator opts in.
 
+Follow-up on 2026-07-01: Proof published the `0.3.0` credential package split.
+`@proof.com/proof-vc-common@0.3.0` now owns OID4VP request and browser response
+helpers, while `@proof.com/proof-vc-server@0.3.0` owns Node-side credential
+verification. atrib follows that split: the live bridge verifies a VP token with
+`proof-vc-server`, checks that the verified credential nonce matches the x401
+nonce, and only then sets caller-owned `resultVerified` and issuer-trust
+evidence. A local capture helper can obtain a real Proof VP token through a
+localhost browser callback without writing raw credential payloads to the repo.
+
 **Decision.** Add an opt-in producer capture path and a local proof-gate E2E
 harness, while keeping x401 as verifier evidence and keeping raw credential
 material out of public storage.
@@ -7269,14 +7278,16 @@ UCP, and a2a-x402 keep the same boundary when used instead of x402.
 
 `@atrib/integration` also has a Proof repo-surface guard. It classifies
 `proof/x401` as the spec source, `proof/x401-node` as the x401 wire SDK
-dependency, `proof/proof-vc-common` as a credential-verifier helper,
+dependency, `proof/proof-vc-common` as a credential request and verifier helper
+surface,
 `proof/proof-vc-web` as browser-demo scope, and `proof/verifier-vcp-demo` as a
 reference demo. A public package or core runtime dependency is allowed only when
 `proof/x401-node` uses the current header and payload names without legacy x401
 wire names. The released `@proof.com/x401-node@0.3.0` package now clears that
-bar for private integration use. `proof-vc-common` remains a verifier helper:
-it can feed caller-owned credential-verification outcomes into x401 evidence,
-but it is not the x401 wire implementation.
+bar for private integration use. `proof-vc-common` remains a helper surface:
+`@proof.com/proof-vc-common` can request VP tokens and
+`@proof.com/proof-vc-server` can verify them, but neither package is the x401
+wire implementation.
 
 The x401 conformance corpus lives at `spec/conformance/5.5.6/x401/`. It pins
 current headers, result artifacts, token responses, result-by-reference,
@@ -7325,9 +7336,11 @@ panel scoped to the `/v1/lookup` log response.
 - atrib can now claim native Proof SDK runtime interop against released
   `@proof.com/x401-node@0.3.0`.
 - atrib can now show a Proof credential-verifier bridge through
-  `@proof.com/proof-vc-common@0.2.0`: Proof VC acceptance becomes caller-owned
-  `resultVerified` evidence, while raw credential payloads stay out of public
-  records and archive projections by default.
+  `@proof.com/proof-vc-common@0.3.0` plus
+  `@proof.com/proof-vc-server@0.3.0`: Proof VC acceptance becomes caller-owned
+  `resultVerified` evidence only when the verified credential nonce binds to the
+  x401 request nonce, while raw credential payloads stay out of public records
+  and archive projections by default.
 - Credential verification remains host-owned or Proof-verifier-owned. atrib
   accepts the verification outcome, optional origin outcome, optional issuer
   trust outcome, and optional proof-payment binding outcome as external evidence
@@ -7349,6 +7362,9 @@ panel scoped to the `/v1/lookup` log response.
   Proof VC Common verifier bridge into caller-owned x401 evidence.
 - [`packages/integration/scripts/proof-vc-common-x401-interop.ts`](packages/integration/scripts/proof-vc-common-x401-interop.ts),
   runnable Proof VC Common x401 evidence proof.
+- [`packages/integration/scripts/proof-vc-token-capture.ts`](packages/integration/scripts/proof-vc-token-capture.ts),
+  localhost capture helper for a real Proof VP token and sanitized x401 evidence
+  packet.
 - [`spec/conformance/5.5.6/x401/`](spec/conformance/5.5.6/x401/), x401
   authorization evidence corpus.
 - [`services/archive-node/src/server.ts`](services/archive-node/src/server.ts),

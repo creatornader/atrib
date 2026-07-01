@@ -267,7 +267,7 @@ The composition harness verifies x401 and AAuth evidence on the same successful 
 
 The harness is intentionally local. It proves atrib's capture, signing, verification, archive, and Explorer path against current x401 semantics.
 
-`src/proof-x401-node-runtime.ts` is the private Proof SDK native interop fixture. It imports `@proof.com/x401-node` from `github:creatornader/x401-node#338b785ac60b6021873d384a916fd405f561915a`, the fork commit behind [proof/x401-node#7](https://github.com/proof/x401-node/pull/7). The fixture runs the real Proof verifier and agent helpers with `PROOF-REQUEST`, `PROOF-RESPONSE`, `PROOF-RESULT`, `credential_requirements.digital`, and Result Artifacts before calling `@atrib/verify`. It also proves strict current-spec verification rejects raw legacy headers.
+`src/proof-x401-node-runtime.ts` is the private Proof SDK native interop fixture. It imports released `@proof.com/x401-node@0.3.0`. The fixture runs the real Proof verifier and agent helpers with `PROOF-REQUEST`, `PROOF-RESPONSE`, `PROOF-RESULT`, `credential_requirements.digital`, and Result Artifacts before calling `@atrib/verify`. It also proves strict current-spec verification rejects raw legacy headers.
 
 Run the SDK native fixture with:
 
@@ -275,7 +275,23 @@ Run the SDK native fixture with:
 pnpm --filter @atrib/integration proof-x401-node-runtime-interop
 ```
 
-Use `-- --require-native-current-spec --require-current-evidence` when a check should fail unless the pinned SDK exposes the hosted current header names and the resulting atrib evidence verifies.
+Use `-- --require-native-current-spec --require-current-evidence` when a check should fail unless the released SDK exposes the hosted current header names and the resulting atrib evidence verifies.
+
+Check the Proof credential verifier handoff into x401 evidence with:
+
+```bash
+pnpm --filter @atrib/integration proof-vc-common-x401-interop -- --require-current-evidence --require-proof-vc-common
+```
+
+The default path uses a local fixture verifier. The live path uses `@proof.com/proof-vc-server@0.3.0` to verify a real Proof `vp_token`, checks that the credential key-binding nonce matches the x401 nonce, and then feeds only caller-owned verifier outcomes into x401 evidence.
+
+To obtain a real Proof `vp_token` without pasting it into chat or writing it to the repo, run the localhost capture helper:
+
+```bash
+pnpm --filter @atrib/integration proof-vc-token-capture -- --open
+```
+
+The helper uses `@proof.com/proof-vc-common@0.3.0` to generate an OID4VP authorization URL, serves a local callback page that reads the `vp_token` from the browser fragment, verifies it in memory through `@proof.com/proof-vc-server@0.3.0`, and prints the sanitized atrib public packet. Use `-- --print-url` to print the authorization URL without starting the callback server. Override the Proof OAuth client and environment with `ATRIB_PROOF_VC_CAPTURE_CLIENT_ID`, `ATRIB_PROOF_VC_CAPTURE_ENVIRONMENT`, `ATRIB_PROOF_VC_CAPTURE_PORT`, `ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT`, `ATRIB_PROOF_VC_CAPTURE_TRUST_ROOT`, and `ATRIB_PROOF_VC_CAPTURE_AUD`. The default client is Proof's `verifier-demo`; a real client may be needed if Proof rejects localhost redirect URIs for that demo client.
 
 Check the live `@proof.com/x401-node` package before changing that claim:
 
@@ -291,7 +307,7 @@ Check the broader Proof repo surface from local clones or an explicit live clone
 pnpm --filter @atrib/integration proof-repo-interop -- --repo-root /tmp/proof-repos-x401-map
 ```
 
-The report classifies `proof/x401`, `proof/x401-node`, `proof/proof-vc-common`, `proof/proof-vc-web`, and `proof/verifier-vcp-demo` separately. Only a current-spec x401 wire SDK is allowed as a public package or core runtime dependency. A private integration fixture can pin a current-spec upstream or fork commit before an npm release. A lagging SDK can only be pinned when the adapter marks the translation boundary and proves the emitted atrib evidence uses current header and payload names. Proof credential verifier packages and browser components stay opt-in fixture helpers until a pinned E2E run proves the verifier output maps into caller-owned x401 evidence.
+The report classifies `proof/x401`, `proof/x401-node`, `proof/proof-vc-common`, `proof/proof-vc-web`, and `proof/verifier-vcp-demo` separately. Only a current-spec x401 wire SDK is allowed as a public package or core runtime dependency. Proof credential request and verifier packages, including `@proof.com/proof-vc-common` and `@proof.com/proof-vc-server`, stay opt-in fixture helpers. They can feed caller-owned verifier outcomes into x401 evidence, but they are not the x401 wire implementation.
 
 ## Tests
 
@@ -303,7 +319,8 @@ Run with `pnpm --filter @atrib/integration test`. Focused cross-package tests in
 - **`test/ap2-local-participant.test.ts`** (3 tests), local AP2 participant artifact generation. It proves an AP2 result plus AP2 / VI evidence bundle can be rehydrated into live interop artifacts and paired with a counterparty-signed atrib transaction record, including upstream AP2 full-chain mandate normalization.
 - **`test/google-ap2-sample-extract.test.ts`** (2 tests), official Google AP2 sample extraction. It proves captured A2A function-response events plus the sample `.temp-db` full mandate chains can be converted into the live interop contract and verified with counterparty transaction attestation.
 - **`test/x401-evidence-e2e.test.ts`** (4 tests), x401 authorization evidence propagation. It proves x401 remains separate from payment detection, runs the local proof-gate harness through archive projection without exposing private credential payloads, composes x401 with AAuth plus separate x402 payment detection, and runs a two-endpoint proof-gate propagation chain with separate request ids and signed action records.
-- **`test/proof-x401-node-runtime-interop.test.ts`** (1 test), pinned Proof SDK native interop coverage. It runs `@proof.com/x401-node` from the fork commit behind [proof/x401-node#7](https://github.com/proof/x401-node/pull/7), proves the SDK exposes current header and payload names, verifies the resulting atrib x401 evidence, and proves strict legacy headers are rejected.
+- **`test/proof-x401-node-runtime-interop.test.ts`** (1 test), released Proof SDK native interop coverage. It runs `@proof.com/x401-node@0.3.0`, proves the SDK exposes current header and payload names, verifies the resulting atrib x401 evidence, and proves strict legacy headers are rejected.
+- **`test/proof-vc-common-x401-interop.test.ts`** (3 tests), Proof credential verifier bridge coverage. It proves Proof verifier acceptance becomes caller-owned x401 `resultVerified` evidence, raw VP tokens stay out of the public packet, and over-18 or nonce-binding failures fail the x401 evidence block.
 - **`test/proof-x401-sdk-compat.test.ts`** (2 tests), Proof SDK compatibility guard. It rejects old `x401-node` header semantics and accepts the current x401 header/result-artifact shape.
 - **`test/proof-repo-interop.test.ts`** (5 tests), Proof organization interop guard. It classifies `proof/x401-node`, `proof/proof-vc-common`, `proof/proof-vc-web`, and `proof/verifier-vcp-demo` so atrib does not confuse a spec source, credential verifier helper, browser UI component, or legacy demo with a current x401 wire SDK.
 - **`test/ap2-reference-artifacts.test.ts`** (1 test), official AP2 Python SDK receipt artifacts. It proves compact receipt JWTs generated by `ap2.sdk.receipt_wrapper.ReceiptClient` and `ap2.sdk.jwt_helper.create_jwt` pass through the live interop harness, verify against caller-supplied JWKS roots, and compose with a counterparty-signed atrib transaction record.

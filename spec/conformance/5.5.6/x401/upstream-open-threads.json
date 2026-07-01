@@ -1,0 +1,45 @@
+{
+  "checked_on": "2026-07-01",
+  "purpose": "Track x401 semantics that atrib deliberately keeps as caller-owned verifier facts until Proof lands canonical upstream rules.",
+  "threads": [
+    {
+      "id": "proof/x401#29",
+      "title": "Multi-endpoint Requests",
+      "status": "open",
+      "atrib_comment": "https://github.com/proof/x401/issues/29#issuecomment-4859577541",
+      "atrib_boundary": "Represent each proof-gated endpoint as its own signed action and x401 evidence block in one context_id. Do not invent a combined request format before Proof defines endpoint id, audience, replay, and delegation rules.",
+      "local_fixture": "packages/integration/src/x401-proof-gate.ts::runX401MultiEndpointHarness"
+    },
+    {
+      "id": "proof/x401#22",
+      "title": "Agent-asserted origin for middleman handling",
+      "status": "open",
+      "atrib_comment": "https://github.com/proof/x401/issues/22#issuecomment-4859578727",
+      "atrib_boundary": "Treat asserted origin as a caller-owned verifier outcome. Store only the verification status and safe hashes until Proof defines canonical origin fields.",
+      "local_fixture": "spec/conformance/5.5.6/x401/cases/external-origin-trust-binding-pass.json"
+    },
+    {
+      "id": "proof/x401#19",
+      "title": "Non-Goals: add user interaction requirements",
+      "status": "open",
+      "atrib_comment": "https://github.com/proof/x401/issues/19#issuecomment-4859581084",
+      "atrib_boundary": "Do not infer user presence from x401. If a host needs human approval or consent, record it as separate action-gate or approval evidence and link it through informed_by.",
+      "local_fixture": "packages/integration/test/x401-evidence-e2e.test.ts"
+    },
+    {
+      "id": "proof/x401#17",
+      "title": "Agent Identifiers and proof/payment binding",
+      "status": "open",
+      "atrib_comment": "https://github.com/proof/x401/pull/17#issuecomment-4859579935",
+      "atrib_boundary": "Keep proof identity and payment rails separate. Store agent_id and proofPaymentBindingVerified as verifier facts, while AP2, x402, MPP, ACP, UCP, and a2a-x402 remain transaction evidence.",
+      "local_fixture": "spec/conformance/5.5.6/x401/cases/external-origin-trust-binding-pass.json"
+    },
+    {
+      "id": "proof/x401#32",
+      "title": "trqp_v2 trusted authorities",
+      "status": "open",
+      "atrib_boundary": "Do not implement TRQP verification inside atrib yet. Map landed upstream authority fields into issuerTrustRootType and issuerTrustRootRef after Proof settles the trust-root model.",
+      "local_fixture": "spec/conformance/5.5.6/x401/cases/unverified-issuer-trust-fails.json"
+    }
+  ]
+}
