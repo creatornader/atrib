@@ -15,7 +15,9 @@ import {
 const PRIVATE_KEY = new Uint8Array(32).fill(7)
 const CONTEXT_ID = '5f9a8a2b68f94a5cb7f9361b2c8d4e10'
 
-function browserAction(overrides: Partial<ActionGateActionEnvelope> = {}): ActionGateActionEnvelope {
+function browserAction(
+  overrides: Partial<ActionGateActionEnvelope> = {},
+): ActionGateActionEnvelope {
   return {
     run_id: 'browser-run-1',
     action_id: 'action-1',
@@ -137,6 +139,56 @@ describe('@atrib/action-gate', () => {
     expect(result.verification.valid).toBe(true)
   })
 
+  it('keeps the decision/outcome proof intact when record delivery fails', async () => {
+    let executed = 0
+    const result = await runGatedAction({
+      privateKey: PRIVATE_KEY,
+      contextId: CONTEXT_ID,
+      action: browserAction({
+        action_id: 'action-delivery-failure',
+        args: { instruction: 'read customer tier' },
+        risk: ['read_only'],
+      }),
+      evaluate: () => ({
+        outcome: 'allow',
+        policy_id: 'browser-risk-policy',
+        policy_version: '2026-06-28.1',
+        reason: 'read-only action is allowed',
+      }),
+      execute: () => {
+        executed += 1
+        return { ok: true }
+      },
+      onRecord: (_record, sidecar) => {
+        throw new Error(`mirror write failed for ${sidecar.record_kind}`)
+      },
+      now: (() => {
+        let tick = 1_780_000_000_200
+        return () => tick++
+      })(),
+    })
+
+    expect(executed).toBe(1)
+    expect(result.state).toBe('allowed')
+    expect(result.action_executed).toBe(true)
+    expect(result.outcome.record.informed_by).toEqual([result.decision.record_hash])
+    expect(result.verification.valid).toBe(true)
+    expect(result.record_delivery_errors).toEqual([
+      {
+        record_kind: 'decision',
+        record_hash: result.decision.record_hash,
+        name: 'Error',
+        message: 'mirror write failed for decision',
+      },
+      {
+        record_kind: 'outcome',
+        record_hash: result.outcome.record_hash,
+        name: 'Error',
+        message: 'mirror write failed for outcome',
+      },
+    ])
+  })
+
   it('rejects an outcome that points at the wrong decision hash', async () => {
     const { result } = await runOutcome('allow')
     const badEntry = buildActionGateOutcomeEntry({
@@ -154,8 +206,7 @@ describe('@atrib/action-gate', () => {
       action: browserAction({ action_id: 'action-allow' }),
       privateKey: PRIVATE_KEY,
       contextId: CONTEXT_ID,
-      decisionRecordHash:
-        'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+      decisionRecordHash: 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
       timestampMs: 1_780_000_000_010,
     })
     const verification = await verifyActionGateRun({

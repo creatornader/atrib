@@ -43,6 +43,10 @@ pnpm doc-sync
 git diff --check
 ```
 
+This repo pins `pnpm@9.15.4`. If the shell resolves a different pnpm version,
+run the same commands through `npx -y pnpm@9.15.4 ...` so frozen installs and
+workspace publish rewriting match CI.
+
 Inspect the tarball that npm will receive:
 
 ```bash
@@ -199,24 +203,28 @@ Expect no `workspace:` dependency in the packed manifest. Expect
 After the package exists, configure npm trusted publishing for the package:
 
 ```bash
-npm trust github <package-name> \
+npx -y npm@latest trust github <package-name> \
   --repo creatornader/atrib \
   --file release.yml \
   --allow-publish \
   -y
 ```
 
-This requires an authenticated npm owner account with 2FA. Current npm CLI docs
-state that `npm trust` requires the package to already exist and does not support
-granular access tokens with bypass 2FA for this configuration step. As of npm
-11.12.1 on this machine, `npm trust github --help` rejects `--allow-publish`.
-If that still happens, omit `--allow-publish` and run the same command with
-`-y`.
+This requires an authenticated npm owner account with 2FA. npm's trusted
+publishing docs require npm CLI `11.5.1` or later and Node `22.14.0` or later;
+using `npx -y npm@latest` avoids a local system npm that does not have
+`npm trust`.
+
+Trusted-publisher configurations created after 2026-05-20 must explicitly allow
+at least one action. Use `--allow-publish` for the normal release workflow. If a
+future npm CLI rejects that documented flag, stop and configure the package
+through the npm package access page instead of creating a permissionless or
+ambiguous trust relationship.
 
 Verify the trust relationship:
 
 ```bash
-npm trust list <package-name> --json
+npx -y npm@latest trust list <package-name> --json
 ```
 
 The expected relationship is:
@@ -224,6 +232,7 @@ The expected relationship is:
 - provider: GitHub Actions.
 - repository: `creatornader/atrib`.
 - workflow filename: `release.yml`.
+- allowed action: `npm publish`.
 
 ## Post-publish verification
 

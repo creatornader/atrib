@@ -155,10 +155,7 @@ export interface RunGatedActionInput<TResult> {
   readonly evaluate: (input: ActionGatePolicyInput) => MaybePromise<ActionGatePolicyDecision>
   readonly execute: () => MaybePromise<TResult>
   readonly now?: () => number
-  readonly onRecord?: (
-    record: AtribRecord,
-    sidecar: ActionGateLocalSidecar,
-  ) => MaybePromise<void>
+  readonly onRecord?: (record: AtribRecord, sidecar: ActionGateLocalSidecar) => MaybePromise<void>
 }
 
 export interface ActionGateRunResult<TResult> {
@@ -169,6 +166,7 @@ export interface ActionGateRunResult<TResult> {
   readonly signed_records: readonly AtribRecord[]
   readonly sidecars: readonly ActionGateLocalSidecar[]
   readonly verification: ActionGateVerificationResult
+  readonly record_delivery_errors: readonly ActionGateRecordDeliveryError[]
   readonly result?: TResult
   readonly error?: { readonly name: string; readonly message: string }
 }
@@ -199,9 +197,17 @@ export interface ActionGateVerificationResult {
   readonly issues: readonly ActionGateVerificationIssue[]
 }
 
+export interface ActionGateRecordDeliveryError {
+  readonly record_kind: 'decision' | 'outcome'
+  readonly record_hash: Sha256Uri
+  readonly name: string
+  readonly message: string
+}
+
 export async function runGatedAction<TResult>(
   input: RunGatedActionInput<TResult>,
 ): Promise<ActionGateRunResult<TResult>> {
+  const recordDeliveryErrors: ActionGateRecordDeliveryError[] = []
   const privateKey = resolveActionGatePrivateKey(input.privateKey)
   const now = input.now ?? Date.now
   const contextId = input.contextId ?? randomContextId()
@@ -231,7 +237,7 @@ export async function runGatedAction<TResult>(
     serverUrl,
     timestampMs,
   })
-  await input.onRecord?.(decision.record, decision.sidecar)
+  await notifyRecord(input.onRecord, decision.record, decision.sidecar, recordDeliveryErrors)
 
   const outcomeInput = await resolveOutcomeInput({
     state: decisionEntry.decision_state,
@@ -258,7 +264,7 @@ export async function runGatedAction<TResult>(
     chainTailHex: decision.record_hash.slice('sha256:'.length),
     timestampMs: now(),
   })
-  await input.onRecord?.(outcome.record, outcome.sidecar)
+  await notifyRecord(input.onRecord, outcome.record, outcome.sidecar, recordDeliveryErrors)
 
   const verification = await verifyActionGateRun({ decision, outcome })
   const base = {
@@ -269,6 +275,7 @@ export async function runGatedAction<TResult>(
     signed_records: [decision.record, outcome.record],
     sidecars: [decision.sidecar, outcome.sidecar],
     verification,
+    record_delivery_errors: recordDeliveryErrors,
   } satisfies Omit<ActionGateRunResult<TResult>, 'result' | 'error'>
 
   if (outcomeInput.status === 'executed') {
@@ -714,8 +721,28 @@ function snapshotCanonical(value: unknown): unknown | undefined {
   }
 }
 
+async function notifyRecord(
+  onRecord: RunGatedActionInput<unknown>['onRecord'],
+  record: AtribRecord,
+  sidecar: ActionGateLocalSidecar,
+  errors: ActionGateRecordDeliveryError[],
+): Promise<void> {
+  if (!onRecord) return
+  try {
+    await onRecord(record, sidecar)
+  } catch (error) {
+    errors.push({
+      record_kind: sidecar.record_kind,
+      record_hash: sidecar.record_hash,
+      ...normalizeError(error),
+    })
+  }
+}
+
 function sortedRecord(input: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(Object.entries(input).sort(([left], [right]) => left.localeCompare(right)))
+  return Object.fromEntries(
+    Object.entries(input).sort(([left], [right]) => left.localeCompare(right)),
+  )
 }
 
 function normalizeRecordHashes(values: readonly string[]): Sha256Uri[] {

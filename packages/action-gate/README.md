@@ -1,17 +1,24 @@
 # @atrib/action-gate
 
 `@atrib/action-gate` signs policy decisions and outcomes around high-impact
-agent actions.
+agent actions before the action body runs.
 
-Use it when a host already knows where a risky action boundary is: browser
+Use it when a host already knows where an action boundary is: browser
 automation, computer use, support tooling, payment workflows, admin changes, or
 production writes. The host owns policy, identity, approval UI, and execution.
 Atrib records what the host decided and what happened next.
 
-The core use case is a high-impact action that must outlive the session that
-proposed it. One browser or computer-use run can sign the proposed action,
-decision, and outcome. A later session, a different agent, or a reviewer team
-can accept those hashes as verifiable context before continuing work.
+The core use case is an action that must outlive the session that proposed it.
+One browser or computer-use run can sign the proposed action, policy decision,
+and outcome. A later session, a different agent, or a reviewer team can accept
+those hashes as verifiable context before continuing work.
+
+## Release state
+
+`@atrib/action-gate` is a publish target, but the package has not been created
+on npm yet. Use the workspace dependency or a packed tarball until the manual
+first publish creates version `0.0.1`. Later releases use npm Trusted Publisher
+through `.github/workflows/release.yml`.
 
 ## Install
 
@@ -19,6 +26,19 @@ Inside the monorepo, depend on the workspace package:
 
 ```json
 "@atrib/action-gate": "workspace:*"
+```
+
+Before the first npm publish, test the packed tarball from a clean temp project:
+
+```bash
+npx -y pnpm@9.15.4 --filter @atrib/action-gate build
+cd packages/action-gate
+tarball=$(npx -y pnpm@9.15.4 --silent pack --pack-destination /tmp | tail -n 1)
+tmpdir=$(mktemp -d)
+cd "$tmpdir"
+npm init -y
+npm install "$tarball"
+node --input-type=module -e "import('@atrib/action-gate').then((m) => console.log(Object.keys(m).sort()))"
 ```
 
 After the first npm release:
@@ -55,22 +75,41 @@ const result = await runGatedAction({
 
 console.log(result.decision.record_hash)
 console.log(result.outcome.record_hash)
+console.log(result.verification.valid)
 ```
 
 ## Contract
 
 The package has four gate states:
 
-| State | Runtime behavior | Proof behavior |
-| --- | --- | --- |
-| `allowed` | Runs the action body. | Signs a decision, then signs an outcome with `informed_by` pointing at the decision. |
-| `blocked` | Does not run the action body. | Signs the closed decision and blocked outcome. |
-| `escalated` | Does not run until the host approval path resolves. | Signs the escalation decision and outcome. |
-| `policy_error` | Does not run the action body. | Signs that the policy evaluator failed closed. |
+| State          | Runtime behavior                                    | Proof behavior                                                                       |
+| -------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `allowed`      | Runs the action body.                               | Signs a decision, then signs an outcome with `informed_by` pointing at the decision. |
+| `blocked`      | Does not run the action body.                       | Signs the closed decision and blocked outcome.                                       |
+| `escalated`    | Does not run until the host approval path resolves. | Signs the escalation decision and outcome.                                           |
+| `policy_error` | Does not run the action body.                       | Signs that the policy evaluator failed closed.                                       |
 
 `verifyActionGateRun()` checks signatures, record hashes, decision-to-outcome
 binding, action id consistency, and the rule that blocked, escalated, and
 policy-error states did not execute.
+
+`runGatedAction()` returns both signed records and local sidecars. If `onRecord`
+throws while delivering a signed record to a mirror, log sink, or proof-packet
+writer, the action result still returns a complete decision/outcome pair and
+adds the callback failure to `record_delivery_errors`.
+
+## Privacy and degradation
+
+Signed records carry canonical hashes of the action arguments and outcome
+material. Raw action arguments and results stay in local sidecars returned to
+the host. The package does not submit records to the public log by itself.
+Hosts choose whether `onRecord` writes a local mirror, submits to a log, writes
+a proof packet, or does nothing.
+
+Policy failures fail closed. If the policy evaluator throws, the package signs a
+`policy_error` decision and a `policy_error` outcome, and the action body does
+not run. If an allowed action body throws, the package signs an
+`execution_error` outcome tied to the decision record.
 
 ## Boundary
 
@@ -88,3 +127,12 @@ contract:
 Browserbase, Stagehand, browser-use, Playwright, OpenAI Computer Use, hosted
 desktop runtimes, and support tools can keep their own automation layer while
 using this package for the gate.
+
+## Local verification
+
+```bash
+npx -y pnpm@9.15.4 --filter @atrib/action-gate typecheck
+npx -y pnpm@9.15.4 --filter @atrib/action-gate test
+npx -y pnpm@9.15.4 --filter @atrib/action-gate build
+npx -y pnpm@9.15.4 --filter @atrib/integration action-control-gate-smoke
+```

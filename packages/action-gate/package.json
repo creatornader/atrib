@@ -13,7 +13,7 @@
   "files": [
     "dist"
   ],
-  "description": "Pre-action policy gate helpers for Atrib's verifiable action layer. Signs decisions and outcomes around high-impact agent actions.",
+  "description": "Host-owned action gate helpers for Atrib's verifiable action layer. Signs policy decisions and outcomes before high-impact agent actions run.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
@@ -26,10 +26,14 @@
     "directory": "packages/action-gate"
   },
   "keywords": [
+    "action-gate",
+    "action-control",
     "agent",
     "policy",
     "approval",
     "governance",
+    "human-in-the-loop",
+    "agent-control",
     "verifiable",
     "receipts",
     "browser-automation",
