@@ -64,7 +64,7 @@ The split:
 
 OpenClaw and Hermes are runtimes. atrib should not try to replace either runtime, memory system, scheduler, tool registry, approval UI, or observability dashboard.
 
-The productized role is a verifiable action layer over selected runtime boundaries: control what runs when the host exposes a pre-action hook, coordinate what carries forward across sessions and agents, and prove what happened after execution or rejection.
+atrib's role is a verifiable action layer over selected runtime boundaries: control what runs when the host exposes a pre-action hook, coordinate what carries forward across sessions and agents, and prove what happened after execution or rejection.
 
 The clean role split:
 

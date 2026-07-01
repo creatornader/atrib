@@ -2,14 +2,13 @@
 
 How the protocol works, what the trust model actually guarantees, and why the design is the way it is. If you want the pitch, read the [README](README.md). If you want every normative detail, read the [spec](atrib-spec.md). This is the middle layer: enough to evaluate whether atrib is worth building on.
 
-Productized atrib uses the same substrate as a verifiable action layer: a runtime can check policy before execution, sign the decision, sign or reject the action, and pass the resulting evidence forward across sessions, agents, and teams. The protocol does not become the authorization issuer. It supplies the records, graph, log, and verifier rules that make the product layer possible.
+atrib's action layer uses the same substrate as the protocol: a runtime can check policy before execution, sign the decision and outcome, and carry that evidence into recall, handoff, review, and verifier flows. The protocol does not become the authorization issuer. It supplies the records, graph, log, and verifier rules that make the action layer possible.
 
-The browser and computer-use wedge should be read through that lens. A click,
-form fill, desktop action, support reply, admin change, or payment-impacting
-step is useful only if later actors can trust the trail. atrib makes the
-control result portable: a later session can recall it, another agent can verify
-it before continuing, and a reviewer team can inspect the same hashes and
-selected evidence.
+Browser and computer-use flows are concrete examples. A click, form fill,
+desktop action, support reply, admin change, or payment-impacting step is easier
+to trust when it has a signed decision, outcome hash, and selected evidence.
+atrib keeps that trail portable without putting raw selectors, page pixels,
+desktop state, or private runtime payloads in public records.
 
 Architectural decisions and rejected alternatives are logged in [DECISIONS.md](DECISIONS.md).
 
@@ -245,7 +244,7 @@ Patterns 1–4 ship reference implementations in atrib v1. Pattern 7 ships a tes
 
 OpenTelemetry and OpenInference span trees are intake and correlation surfaces. They are not the canonical evidence shape. `@atrib/openinference` consumes the same runtime spans that Langfuse or Phoenix can ingest, then emits signed `AtribRecord` bytes plus a local sidecar. The public log receives only the signed record commitment. The local mirror receives span payload fields such as trace id, span id, model name, prompt version, input/output snippets, usage, cost, score, and metadata.
 
-This keeps the product boundary clean. Langfuse-style systems remain the right place for trace inspection, latency, cost, prompt-management workflows, and eval dashboards. atrib uses the span tree to produce verifier-grade signed records and local cognitive payload. Recall, trace, and summarize read that payload from `_local.content`; verifier-grade replay uses `args_hash`, `result_hash`, local mirror bodies, or archive bodies when a consumer needs proof of specific bytes.
+This keeps responsibilities clear. Langfuse-style systems remain the right place for trace inspection, latency, cost, prompt-management workflows, and eval dashboards. atrib uses the span tree to produce verifier-grade signed records and local cognitive payload. Recall, trace, and summarize read that payload from `_local.content`; verifier-grade replay uses `args_hash`, `result_hash`, local mirror bodies, or archive bodies when a consumer needs proof of specific bytes.
 
 `informed_by` is narrower than OTel parent-child nesting. Parent-child span structure says the runtime correlated two spans inside one trace. It does not prove that a later signed action depended on the earlier signed action's output. atrib only emits `informed_by` when an explicit rule can run before signing, such as the current LLM `tool_call.id` to matching TOOL `tool_call.id` rule.
 

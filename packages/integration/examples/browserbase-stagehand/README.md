@@ -38,14 +38,13 @@ ATRIB_BROWSERBASE_ACTION_GATE=1 pnpm --filter @atrib/integration browserbase-sta
 
 With the gate on, `@atrib/action-gate` evaluates the `act` step before the
 Browserbase MCP call runs. Browserbase and Stagehand still own browser
-automation. Atrib signs separate decision and outcome extension records and
-adds their hashes to the packet.
+automation. atrib signs separate decision and outcome extension records and adds
+their hashes to the packet.
 
-That is the product boundary the demo is meant to show. Browserbase makes the
-browser action happen. Atrib makes the action trail portable across sessions,
-agents, and teams: the next session can recall it, another agent can verify it
-before continuing, and a reviewer can inspect the same decision and outcome
-hashes without needing raw selectors or replay URLs in public records.
+The boundary is simple: Browserbase makes the browser action happen. atrib adds
+signed decision and outcome records that can move into recall, handoff, review,
+or verifier workflows without putting raw selectors or replay URLs in public
+records.
 
 ## Proof and demo boundary
 
