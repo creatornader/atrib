@@ -1,5 +1,12 @@
 # @atrib/integration
 
+## 0.0.37
+
+### Patch Changes
+
+- Updated dependencies [236d65f]
+  - @atrib/action-gate@0.0.3
+
 ## 0.0.36
 
 ### Patch Changes
