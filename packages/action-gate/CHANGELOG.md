@@ -1,5 +1,11 @@
 # @atrib/action-gate
 
+## 0.0.3
+
+### Patch Changes
+
+- 236d65f: Tighten the public README copy around action-gate continuity and follow-up workflows.
+
 ## 0.0.2
 
 ### Patch Changes
