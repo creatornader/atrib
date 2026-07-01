@@ -1,17 +1,17 @@
 # @atrib/action-gate
 
-`@atrib/action-gate` signs policy decisions and outcomes around high-impact
-agent actions before the action body runs.
+`@atrib/action-gate` signs policy decisions and outcomes for actions a host
+needs to check before execution.
 
 Use it when a host already knows where an action boundary is: browser
 automation, computer use, support tooling, payment workflows, admin changes, or
 production writes. The host owns policy, identity, approval UI, and execution.
 atrib records what the host decided and what happened next.
 
-The core use case is an action that must outlive the session that proposed it.
-One browser or computer-use run can sign the proposed action, policy decision,
-and outcome. A later session, a different agent, or a reviewer team can accept
-those hashes as verifiable context before continuing work.
+Use the signed hashes when follow-up work needs a stable reference to the same
+action. A browser click, desktop action, support reply, admin change, or
+payment-impacting step can move through recall, handoff, review, or verifier
+workflows without exposing raw runtime payloads in public records.
 
 ## Install
 
@@ -86,15 +86,15 @@ not run. If an allowed action body throws, the package signs an
 ## Boundary
 
 This package does not issue authorization, run a browser, store raw session
-data, or replace a host policy engine. It gives hosts a small control/proof
+data, or replace a host policy engine. It gives hosts a small action-gate
 contract:
 
 1. propose an action;
 2. evaluate policy before execution;
 3. run only when allowed;
 4. sign the decision and outcome;
-5. pass the accepted record hashes to a later session, another agent, a reviewer
-   team, or a proof packet.
+5. pass the accepted record hashes into recall, handoff, review, verifier, or
+   proof-packet workflows.
 
 Browserbase, Stagehand, browser-use, Playwright, OpenAI Computer Use, hosted
 desktop runtimes, and support tools can keep their own automation layer while

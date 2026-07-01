@@ -70,10 +70,9 @@ adds decision and outcome hashes to the run result. Set
 `ATRIB_BROWSERBASE_ACTION_GATE=0` only when testing browser receipts without the
 control layer.
 
-Read the demo as a cross-session and cross-team proof, not only as a browser
-replay. Browserbase shows the browser run. Atrib shows the decision and outcome
-hashes that a later session, another agent, or a reviewer team can verify before
-continuing from that action.
+Read the demo as an action-gate proof, not only as a browser replay. Browserbase
+shows the browser run. atrib shows the signed decision and outcome records that
+can move into recall, handoff, review, or verifier workflows.
 
 ## Run locally
 

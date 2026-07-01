@@ -14,16 +14,17 @@ retrieve. atrib signs the agent's action trail, then lets memory systems,
 auditors, payment rails, and other agents cite that same verifiable record
 without trusting the runtime that stored it.
 
-That record is useful before and after execution. A harness can use it as a
-control point before a high-impact action runs, as a handoff packet while work
-moves between agents or teams, as recall input in a later session, and as proof
-when a person or verifier needs to replay the path.
+That record is useful before and after execution. Before a high-impact action
+runs, a harness can sign a policy decision that allows, blocks, or escalates the
+action. Afterward, the signed decision and outcome can travel with follow-up
+work as recall input, handoff evidence, review material, or verifier-accepted
+context.
 
-For browser and computer-use agents, the product story is cross-session,
-cross-agent, and cross-team continuity around high-impact actions. One session
-can gate and sign a browser click or desktop action. A later session can recall
-it. Another agent can verify it before continuing. A reviewer team can inspect
-the same decision and outcome hashes without trusting the original runtime.
+Browser and computer-use agents make this concrete. A click, form fill, desktop
+action, support reply, admin change, or payment-impacting step can carry a signed
+decision, outcome hash, and selected evidence. Follow-up work can cite that
+record without exposing raw browser state, desktop state, or private runtime
+payloads in public records.
 
 The graph is one graph with two reading planes. The chronology plane preserves
 event history and continuity. The declared-relationship plane preserves signed
@@ -40,7 +41,7 @@ happens and remains verifiable later.
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Verifiable action layer                 | A shared surface where agents and teams can control what runs, coordinate what carries forward, and prove what happened across sessions, agents, teams, organizations, and protocols.                                                                                        | Agent runtimes, policy engines, approval flows, memory, handoffs, audits           |
 | High-impact action control              | Host policies can allow, block, escalate, or require approval before execution. atrib records the decision, the action, and the outcome as verifiable context without becoming the authorization issuer.                                                                     | Browser and computer use, admin workflows, support tools, payments, deployments    |
-| Cross-session and team continuity       | Accepted action hashes can become the input to a later session, another agent, or a reviewer team. Browser and computer-use actions stop being isolated UI events and become verifiable coordination state.                                                                  | Browserbase, browser-use, OpenAI Computer Use, support teams, admin teams          |
+| Portable action context                 | Signed action hashes can travel with follow-up work. Browser clicks, desktop actions, support replies, and admin changes become decision/outcome pairs that can be recalled or verified later.                                                                               | Browserbase, browser-use, OpenAI Computer Use, support teams, admin teams          |
 | Verifiable agent work                   | A signed trail of the actions, evidence, handoffs, revisions, outputs, and verifier results behind a task. atrib proves the action history; other layers decide whether the work was authorized, correct, payable, or compliant.                                             | Tools, memory, identity, authorization, observability, evals, commerce, governance |
 | Provable cognition                      | An agent can read prior records and re-verify them locally. Its continuity can survive platform, model, and harness changes because the cryptography is independent.                                                                                                         | Memory systems, shared context layers, recall tools                                |
 | Privacy-preserving evidence             | The public log stores commitments, not private work product. Verifiers can check signatures, hashes, inclusion proofs, and selected evidence without dumping tool arguments, tool results, memory text, authorization material, or workflow context into the public payload. | Local mirrors, sidecars, opt-in archive evidence, private evidence stores          |
@@ -297,7 +298,7 @@ x401 is intentionally not in this table. It is a `401` proof-requirement protoco
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [`@atrib/mcp`](packages/mcp/README.md)                             | Server middleware. Wraps an MCP server, emits signed records.                                                                                                                                                                                                                                                            |
 | [`@atrib/agent`](packages/agent/README.md)                         | Agent middleware. Interceptor + framework adapters.                                                                                                                                                                                                                                                                      |
-| [`@atrib/action-gate`](packages/action-gate/README.md)             | Host-owned control/proof helper. Signs policy decisions and outcomes around high-impact actions before the action body runs.                                                                                                                                                                                             |
+| [`@atrib/action-gate`](packages/action-gate/README.md)             | Host-owned action gate. Signs policy decisions and outcomes before selected high-impact actions run.                                                                                                                                                                                                                     |
 | [`@atrib/verify`](packages/verify/README.md)                       | Merchant verification. Re-runs the calculation locally, checks AP2 / VI evidence, verifies authorization evidence such as MCP/OAuth, AAuth, and x401, and verifies Pattern 3 handoff claims.                                                                                                                             |
 | [`@atrib/cli`](packages/cli/README.md)                             | CLI: keygen, Keychain key management, identity-claim ops, key rotation and revocation.                                                                                                                                                                                                                                   |
 | [`@atrib/mcp-wrap`](packages/mcp-wrap/README.md)                   | Generic config-driven MCP wrapper. Multiplies coverage to any MCP server at zero per-server code cost.                                                                                                                                                                                                                   |
