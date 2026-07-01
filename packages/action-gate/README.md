@@ -6,42 +6,14 @@ agent actions before the action body runs.
 Use it when a host already knows where an action boundary is: browser
 automation, computer use, support tooling, payment workflows, admin changes, or
 production writes. The host owns policy, identity, approval UI, and execution.
-Atrib records what the host decided and what happened next.
+atrib records what the host decided and what happened next.
 
 The core use case is an action that must outlive the session that proposed it.
 One browser or computer-use run can sign the proposed action, policy decision,
 and outcome. A later session, a different agent, or a reviewer team can accept
 those hashes as verifiable context before continuing work.
 
-## Release state
-
-`@atrib/action-gate` is a publish target, but the package has not been created
-on npm yet. Use the workspace dependency or a packed tarball until the manual
-first publish creates version `0.0.1`. Later releases use npm Trusted Publisher
-through `.github/workflows/release.yml`.
-
 ## Install
-
-Inside the monorepo, depend on the workspace package:
-
-```json
-"@atrib/action-gate": "workspace:*"
-```
-
-Before the first npm publish, test the packed tarball from a clean temp project:
-
-```bash
-npx -y pnpm@9.15.4 --filter @atrib/action-gate build
-cd packages/action-gate
-tarball=$(npx -y pnpm@9.15.4 --silent pack --pack-destination /tmp | tail -n 1)
-tmpdir=$(mktemp -d)
-cd "$tmpdir"
-npm init -y
-npm install "$tarball"
-node --input-type=module -e "import('@atrib/action-gate').then((m) => console.log(Object.keys(m).sort()))"
-```
-
-After the first npm release:
 
 ```bash
 pnpm add @atrib/action-gate

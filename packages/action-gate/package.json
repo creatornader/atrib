@@ -1,6 +1,6 @@
 {
   "name": "@atrib/action-gate",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,7 +13,7 @@
   "files": [
     "dist"
   ],
-  "description": "Host-owned action gate helpers for Atrib's verifiable action layer. Signs policy decisions and outcomes before high-impact agent actions run.",
+  "description": "Host-owned action gate helpers for atrib's verifiable action layer. Signs policy decisions and outcomes before high-impact agent actions run.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
