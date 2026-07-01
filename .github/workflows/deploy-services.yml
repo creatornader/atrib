@@ -38,7 +38,7 @@ jobs:
       directory_node: ${{ steps.changed.outputs.directory_node }}
       archive_node: ${{ steps.changed.outputs.archive_node }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 2
@@ -142,7 +142,7 @@ jobs:
     if: needs.changes.outputs.log_node == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
@@ -178,7 +178,7 @@ jobs:
     if: needs.changes.outputs.graph_node == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
@@ -194,7 +194,7 @@ jobs:
     if: needs.changes.outputs.directory_node == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
@@ -210,7 +210,7 @@ jobs:
     if: needs.changes.outputs.archive_node == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
