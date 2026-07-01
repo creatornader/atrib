@@ -70,6 +70,22 @@ npm view <package-name> version --json
 
 Expected result for a new package: `E404`.
 
+If first publish will happen after the implementation PR lands, add the package
+to `.changeset/config.json` `ignore` in the same PR. Keep it ignored until an
+npm owner completes first publish and configures trusted publishing. This keeps
+`release.yml` from trying to create the package through OIDC, which npm rejects
+for package names that do not exist yet.
+
+Check the release gate before merging:
+
+```bash
+node scripts/check-release-publish-readiness.mjs
+```
+
+The gate queries npm for every non-private workspace package that Changesets is
+allowed to publish. It exits non-zero if an unignored public package is missing
+from npm.
+
 ## Repo docs
 
 Update these in the same PR:
@@ -85,6 +101,8 @@ Update these in the same PR:
 - `DECISIONS.md`: an ADR for the package boundary, rejected alternatives, and
   degradation behavior.
 - `DOC-SYNC-TRIGGERS.md`: if this runsheet changes the new-package checklist.
+- `.changeset/config.json`: add the package to `ignore` while first publish is
+  pending, then remove it after trusted publishing verifies.
 - This runsheet if the first-publish process changes.
 
 Add a changeset for the new package and any changed existing package. Do not
@@ -102,10 +120,11 @@ gh pr diff <release-pr-number> --name-only
 gh pr diff <release-pr-number> --patch
 ```
 
-Merge only after checks pass and the first-publish plan is ready. If the release
-PR lands before first publish, the normal release job can fail with npm `E404`.
-That means the package does not exist yet. Do not rerun the job until the first
-publish and trusted-publisher setup are complete.
+Merge only after checks pass and the first-publish plan is ready. If first
+publish has not happened yet, the package must still be listed in
+`.changeset/config.json` `ignore`. A failed release run with npm `E404` means
+the package was not gated before merge. Add the ignore entry or complete first
+publish and trusted-publisher setup before rerunning the job.
 
 ## First publish
 
@@ -157,6 +176,10 @@ npm deprecate <package-name>@<bad-version> \
 
 Do not create or store an `NPM_TOKEN` secret for this step. The normal release
 workflow uses OIDC trusted publishing, not long-lived npm tokens.
+
+Do not remove the package from `.changeset/config.json` `ignore` immediately
+after manual publish. Remove it only after the trusted-publisher relationship is
+configured and verified.
 
 After publish, verify:
 
@@ -245,6 +268,8 @@ release note manually unless the package page, changelog, and tag all agree.
 
 After npm and GitHub agree:
 
+- Remove the package from `.changeset/config.json` `ignore`, then run
+  `node scripts/check-release-publish-readiness.mjs`.
 - Change README wording from "publish-target" to "published" and update the
   package count.
 - If any broken first-publish version reached npm, confirm it is deprecated or
