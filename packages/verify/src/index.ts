@@ -13,7 +13,7 @@ export type {
 // Per-record verification (single AtribRecord). Distinct from
 // AtribVerifier.verify which operates on a settlement RecommendationDocument.
 // Surfaces the implemented D044, D041, D045, D051, D052, and D094 annotations.
-export { verifyRecord } from './verify-record.js'
+export { verifyRecord, isTrustedCrossAttested } from './verify-record.js'
 export type {
   RecordVerificationResult,
   ProvenanceAnnotation,

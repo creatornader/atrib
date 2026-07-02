@@ -7417,6 +7417,83 @@ panel scoped to the `/v1/lookup` log response.
 - [x401 latest spec](https://x401.proof.com/spec/latest/), current public
   source for v0.2 header names.
 
+## D135: Cross-attestation composes with a trust set for Sybil resistance
+
+**Date:** 2026-07-02
+
+**Status:** Accepted
+
+**Extends:** [D052](#d052-cross-attestation-requirement-for-transaction-records)
+and [D107](#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes).
+
+**Context.** [D052](#d052-cross-attestation-requirement-for-transaction-records)
+requires transaction records to carry ≥2 distinct verified signer keys, and
+`verifyRecord` surfaces this as `cross_attestation.signers_valid`. That count
+proves two distinct keys signed the same canonical bytes. It does not prove the
+two keys belong to independent parties the verifier trusts. Two keys an attacker
+controls satisfy the count without adding authority: a Sybil, or corroboration,
+attack. A consumer that reads `signers_valid >= 2` as "cross-attested, safe" is
+fooled by two untrusted keys. The trust vocabulary needed to catch this
+(`trusted_creator_keys`) already existed, but only on the separate handoff
+verification path ([§5.5.5](atrib-spec.md#555-handoff-claim-verification)), never
+composed with the cross-attestation annotation. So `verifyRecord`'s
+cross-attestation surface was Sybil-malleable.
+
+**Decision.** Compose the trust set with the cross-attestation annotation as an
+opt-in, signal-only extension. `VerifyRecordOptions` gains
+`trustedCreatorKeys?: string[]`. When supplied, `cross_attestation` additionally
+carries `signers_trusted` (distinct verified keys that are also in the trust set)
+and `sybil_suspected` (`signers_valid >= 2` but `signers_trusted < 2`).
+`@atrib/verify` exports `isTrustedCrossAttested(annotation)`, which returns true
+iff `signers_trusted >= 2`. That predicate is the guarded gate a consumer
+requiring non-malleable transaction authority MUST use, in place of the footgun
+`signers_valid >= 2`. The spec adds a normative **Trusted signer composition**
+paragraph to [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+and names the Sybil channel in the [§8.7.2](atrib-spec.md#872-layered-trust-assessment)
+Layer 5 threat-model row.
+
+**Invariants preserved.**
+
+- `signers_valid` and `missing` keep their trust-blind semantics on every path;
+  the trust fields are additive.
+- The trust fields are omitted entirely when no trust set is supplied, so
+  existing callers and the seven pre-existing [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+  conformance vectors deep-equal unchanged (backward compatible).
+- Signal not block: like `cross_attestation_missing` and [§6.7](atrib-spec.md#67-capability-declarations)
+  `in_envelope`, the trust signal never pushes to `warnings[]` and never flips
+  `record.valid`. A Sybil-suspected record stays cryptographically valid; the
+  gate is consumer-side policy.
+
+**Alternatives considered.**
+
+- Redefine `signers_valid` to count only trusted keys. Rejected: breaks
+  [D052](#d052-cross-attestation-requirement-for-transaction-records)'s
+  distinct-verified-key contract and the existing conformance vectors, and
+  conflates two independent facts (a key verified; a key is trusted).
+- Gate on `!sybil_suspected`. Rejected as the documented consumer gate: a single
+  trusted signer (`signers_valid < 2`) is not `sybil_suspected` yet is not
+  attested, so `!sybil_suspected` re-opens a footgun. The correct predicate is
+  `signers_trusted >= 2`, exposed as `isTrustedCrossAttested`.
+- Reuse the handoff path's `verifyTrustedSigner`. Rejected: it checks one key
+  (the record creator) and carries a handoff-rejection side effect; only its
+  pure membership core (`trust set includes key`) is reused.
+
+**Conformance.** Two vectors added to
+[`spec/conformance/1.7.6/`](spec/conformance/1.7.6/): `sybil-two-untrusted-signers`
+(two valid signers, trust set excludes both: `signers_valid: 2`, `missing: false`,
+`signers_trusted: 0`, `sybil_suspected: true`, record still valid) and
+`two-trusted-signers` (`signers_trusted: 2`, `sybil_suspected: false`).
+
+**Cross-references.**
+
+- [D052](#d052-cross-attestation-requirement-for-transaction-records), the
+  distinct-verified-key requirement this composes with.
+- [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+  Trusted signer composition; [§8.7.2](atrib-spec.md#872-layered-trust-assessment)
+  Layer 5.
+- [`packages/verify/src/verify-record.ts`](packages/verify/src/verify-record.ts),
+  `resolveCrossAttestation` trust intersection and `isTrustedCrossAttested`.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

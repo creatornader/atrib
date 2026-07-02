@@ -310,6 +310,78 @@ async function main(): Promise<void> {
     },
   })
 
+  // ── Case 8: sybil-two-untrusted-signers ─────────────────────────────
+  // Two distinct valid signers (agent + counterparty) that are NOT in the
+  // caller's trust set (trust set = facilitator only). signers_valid stays 2
+  // and missing stays false (the footgun), but with a trust set supplied the
+  // verifier surfaces signers_trusted: 0 and sybil_suspected: true. Signal
+  // only: the record remains cryptographically valid (§1.7.6 trusted signer
+  // composition).
+  const r8 = await buildSignedTransaction('08', 8000, [
+    { seed: AGENT_SEED, label: 'agent' },
+    { seed: COUNTERPARTY_SEED, label: 'counterparty' },
+  ])
+  const facilitatorPubKey = base64urlEncode(await getPublicKey(FACILITATOR_SEED))
+  writeCase('sybil-two-untrusted-signers', {
+    name: 'sybil-two-untrusted-signers',
+    spec_section: '1.7.6',
+    description:
+      'Two distinct valid signer keys that are NOT in the trust set (a Sybil / corroboration posture). signers_valid: 2 and missing: false are unchanged (the footgun a naive signers_valid>=2 gate falls for), but with trusted_creator_keys supplied the verifier surfaces signers_trusted: 0 and sybil_suspected: true. Per §1.7.6 trusted signer composition this is a SIGNAL, not invalidation: the record stays cryptographically valid.',
+    input: {
+      record: r8,
+      signer_seeds_hex: { agent: hex(AGENT_SEED), counterparty: hex(COUNTERPARTY_SEED) },
+      trusted_creator_keys: [facilitatorPubKey],
+    },
+    expected: {
+      record_hash_hex: recordHashHex(r8),
+      cross_attestation: {
+        signers_count: 2,
+        signers_valid: 2,
+        missing: false,
+        signers_trusted: 0,
+        sybil_suspected: true,
+      },
+      verifier_signature_ok: true,
+      validator_should_accept: true,
+      valid_after_signal: true,
+    },
+  })
+
+  // ── Case 9: two-trusted-signers ─────────────────────────────────────
+  // Two distinct valid signers, both in the trust set: the non-malleable
+  // authority case. signers_trusted: 2 and sybil_suspected: false, so
+  // isTrustedCrossAttested returns true.
+  const r9 = await buildSignedTransaction('09', 9000, [
+    { seed: AGENT_SEED, label: 'agent' },
+    { seed: COUNTERPARTY_SEED, label: 'counterparty' },
+  ])
+  const agentPubKey = base64urlEncode(await getPublicKey(AGENT_SEED))
+  const counterpartyPubKey = base64urlEncode(await getPublicKey(COUNTERPARTY_SEED))
+  writeCase('two-trusted-signers', {
+    name: 'two-trusted-signers',
+    spec_section: '1.7.6',
+    description:
+      'Two distinct valid signers, both members of the trust set: non-malleable transaction authority. signers_trusted: 2 and sybil_suspected: false; isTrustedCrossAttested returns true. Contrast with sybil-two-untrusted-signers, which has the identical signers_valid: 2 but zero trusted signers.',
+    input: {
+      record: r9,
+      signer_seeds_hex: { agent: hex(AGENT_SEED), counterparty: hex(COUNTERPARTY_SEED) },
+      trusted_creator_keys: [agentPubKey, counterpartyPubKey],
+    },
+    expected: {
+      record_hash_hex: recordHashHex(r9),
+      cross_attestation: {
+        signers_count: 2,
+        signers_valid: 2,
+        missing: false,
+        signers_trusted: 2,
+        sybil_suspected: false,
+      },
+      verifier_signature_ok: true,
+      validator_should_accept: true,
+      valid_after_signal: true,
+    },
+  })
+
   // ── Manifest ───────────────────────────────────────────────────────
   const manifest = {
     spec_section: '1.7.6',
@@ -325,13 +397,15 @@ async function main(): Promise<void> {
       { file: 'cases/tampered-second-signature.json', name: 'tampered-second-signature' },
       { file: 'cases/creator-signer-missing.json', name: 'creator-signer-missing' },
       { file: 'cases/duplicate-signer-key.json', name: 'duplicate-signer-key' },
+      { file: 'cases/sybil-two-untrusted-signers.json', name: 'sybil-two-untrusted-signers' },
+      { file: 'cases/two-trusted-signers.json', name: 'two-trusted-signers' },
     ],
     keys: {
       agent_pubkey: base64urlEncode(await getPublicKey(AGENT_SEED)),
       counterparty_pubkey: base64urlEncode(await getPublicKey(COUNTERPARTY_SEED)),
       facilitator_pubkey: base64urlEncode(await getPublicKey(FACILITATOR_SEED)),
     },
-    note: 'The seven cases collectively exercise the §1.7.6 cross_attestation algorithm: legacy single-sig (case 1), below-minimum signer counts (cases 1-2 and case 7), the canonical happy path (case 3), above-minimum (case 4), tamper-detection (case 5), creator-signer separation (case 6), and duplicate-signer rejection (case 7). Per §1.7.6 missing cross-attestation is a signal, not invalidation: legacy, tampered, and duplicate-signer records remain cryptographically valid via the underlying signature path when the creator signer verifies, while a signers[] record with no creator signer is invalid even when two counterparty signatures verify.',
+    note: 'The nine cases collectively exercise the §1.7.6 cross_attestation algorithm: legacy single-sig (case 1), below-minimum signer counts (cases 1-2 and case 7), the canonical happy path (case 3), above-minimum (case 4), tamper-detection (case 5), creator-signer separation (case 6), duplicate-signer rejection (case 7), and trusted signer composition (cases 8-9). Per §1.7.6 missing cross-attestation is a signal, not invalidation: legacy, tampered, and duplicate-signer records remain cryptographically valid via the underlying signature path when the creator signer verifies, while a signers[] record with no creator signer is invalid even when two counterparty signatures verify. Cases 8-9 add trust-set composition: two verified signer keys not in the trust set (case 8) surface signers_trusted: 0 and sybil_suspected: true while staying valid, whereas two trusted signer keys (case 9) surface signers_trusted: 2 and sybil_suspected: false. signers_valid and missing keep their trust-blind semantics on every case.',
   }
 
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')

@@ -1,0 +1,47 @@
+{
+  "name": "sybil-two-untrusted-signers",
+  "spec_section": "1.7.6",
+  "description": "Two distinct valid signer keys that are NOT in the trust set (a Sybil / corroboration posture). signers_valid: 2 and missing: false are unchanged (the footgun a naive signers_valid>=2 gate falls for), but with trusted_creator_keys supplied the verifier surfaces signers_trusted: 0 and sybil_suspected: true. Per §1.7.6 trusted signer composition this is a SIGNAL, not invalidation: the record stays cryptographically valid.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0808080808080808080808080808080808080808080808080808080808080808",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225608000,
+      "signature": "",
+      "signers": [
+        {
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "signature": "mhOWFrB8EuhdWtlxWtKJW7vlf54ksZbOR5-O7yHSWUKiC_H7-4bp-1t1wOSrL4P9PAYsxmXB8NrRRbhSrW2HBA"
+        },
+        {
+          "creator_key": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+          "signature": "WttDXCuCJyTwqPWmQzkLKKBjAjURhSkm_Mojj-uKQUTUrc7S9jDj0xHIC5px6FYXqf0ul26UYxrkw_4R6EXkAA"
+        }
+      ]
+    },
+    "signer_seeds_hex": {
+      "agent": "1111111111111111111111111111111111111111111111111111111111111111",
+      "counterparty": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "trusted_creator_keys": [
+      "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4"
+    ]
+  },
+  "expected": {
+    "record_hash_hex": "34e444065a58842d33dd86f9f077a089fdc63b295bee5240cec32aedcf48ca35",
+    "cross_attestation": {
+      "signers_count": 2,
+      "signers_valid": 2,
+      "missing": false,
+      "signers_trusted": 0,
+      "sybil_suspected": true
+    },
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "valid_after_signal": true
+  }
+}
