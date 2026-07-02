@@ -70,16 +70,33 @@ describe('buildCausalBrief', () => {
     expect(atrib).toContain('rule B @ cccccccccccccccc')
   })
 
-  it('holds content budget constant: the chronology block is byte-identical across modes', async () => {
-    const flat = await buildCausalBrief(DOC, 'flat')
+  it('atrib_tree is the ablation midpoint: tree without the anomaly appendix', async () => {
+    const tree = await buildCausalBrief(DOC, 'atrib_tree')
+    expect(tree).toContain('Causal structure (atrib graph:')
+    expect(tree).not.toContain('Mechanical anomaly appendix')
+    // The causal tree itself is identical to the full atrib mode's tree.
     const atrib = await buildCausalBrief(DOC, 'atrib')
+    const grabTree = (s: string): string => {
+      const start = s.indexOf('## Causal structure')
+      const rest = s.slice(start)
+      const next = rest.indexOf('\n## ', 3)
+      return (next === -1 ? rest : rest.slice(0, next)).trim()
+    }
+    expect(grabTree(tree)).toBe(grabTree(atrib))
+  })
+
+  it('holds content budget constant: the chronology block is byte-identical across all three modes', async () => {
     const grab = (s: string): string => {
       const start = s.indexOf('## Chronology')
       const rest = s.slice(start)
       const next = rest.indexOf('\n## ', 3)
       return (next === -1 ? rest : rest.slice(0, next)).trim()
     }
+    const flat = await buildCausalBrief(DOC, 'flat')
+    const treeOnly = await buildCausalBrief(DOC, 'atrib_tree')
+    const atrib = await buildCausalBrief(DOC, 'atrib')
     expect(grab(flat)).toBe(grab(atrib))
+    expect(grab(flat)).toBe(grab(treeOnly))
   })
 
   it('truncates span content to the shared budget in both modes', async () => {

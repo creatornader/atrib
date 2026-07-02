@@ -23,8 +23,8 @@ async function main(): Promise<void> {
     process.stderr.write('usage: cli.js <tracedoc.json> --mode atrib|flat\n')
     process.exit(2)
   }
-  if (modeArg !== 'atrib' && modeArg !== 'flat') {
-    process.stderr.write(`invalid --mode: ${modeArg}\n`)
+  if (modeArg !== 'atrib' && modeArg !== 'flat' && modeArg !== 'atrib_tree') {
+    process.stderr.write(`invalid --mode: ${modeArg} (expected flat|atrib_tree|atrib)\n`)
     process.exit(2)
   }
   const doc = JSON.parse(readFileSync(path, 'utf8')) as TraceDoc
