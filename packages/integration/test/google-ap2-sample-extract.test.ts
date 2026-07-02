@@ -58,6 +58,7 @@ describe('Google AP2 sample extraction', () => {
         signers_count: 2,
         signers_valid: 2,
         missing: false,
+        trust_evaluated: false,
       })
     } finally {
       await rm(outDir, { recursive: true, force: true })

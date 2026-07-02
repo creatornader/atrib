@@ -132,7 +132,7 @@ async function main(): Promise<void> {
     input: { record: r1, signer_seed_hex: hex(AGENT_SEED) },
     expected: {
       record_hash_hex: recordHashHex(r1),
-      cross_attestation: { signers_count: 0, signers_valid: 0, missing: true },
+      cross_attestation: { signers_count: 0, signers_valid: 0, missing: true, trust_evaluated: false },
       verifier_signature_ok: true,
       validator_should_accept: true,
       valid_after_signal: true,
@@ -150,7 +150,7 @@ async function main(): Promise<void> {
     input: { record: r2, signer_seed_hex: hex(AGENT_SEED) },
     expected: {
       record_hash_hex: recordHashHex(r2),
-      cross_attestation: { signers_count: 1, signers_valid: 1, missing: true },
+      cross_attestation: { signers_count: 1, signers_valid: 1, missing: true, trust_evaluated: false },
       validator_should_accept: true,
       valid_after_signal: true,
     },
@@ -172,7 +172,7 @@ async function main(): Promise<void> {
     },
     expected: {
       record_hash_hex: recordHashHex(r3),
-      cross_attestation: { signers_count: 2, signers_valid: 2, missing: false },
+      cross_attestation: { signers_count: 2, signers_valid: 2, missing: false, trust_evaluated: false },
       validator_should_accept: true,
     },
   })
@@ -198,7 +198,7 @@ async function main(): Promise<void> {
     },
     expected: {
       record_hash_hex: recordHashHex(r4),
-      cross_attestation: { signers_count: 3, signers_valid: 3, missing: false },
+      cross_attestation: { signers_count: 3, signers_valid: 3, missing: false, trust_evaluated: false },
       validator_should_accept: true,
     },
   })
@@ -226,7 +226,7 @@ async function main(): Promise<void> {
     },
     expected: {
       record_hash_hex: recordHashHex(r5),
-      cross_attestation: { signers_count: 2, signers_valid: 1, missing: true },
+      cross_attestation: { signers_count: 2, signers_valid: 1, missing: true, trust_evaluated: false },
       validator_should_accept: true,
       valid_after_signal: true,
     },
@@ -278,7 +278,7 @@ async function main(): Promise<void> {
     },
     expected: {
       record_hash_hex: recordHashHex(r6),
-      cross_attestation: { signers_count: 2, signers_valid: 2, missing: false },
+      cross_attestation: { signers_count: 2, signers_valid: 2, missing: false, trust_evaluated: false },
       verifier_signature_ok: false,
       validator_should_accept: false,
     },
@@ -303,7 +303,7 @@ async function main(): Promise<void> {
     },
     expected: {
       record_hash_hex: recordHashHex(r7),
-      cross_attestation: { signers_count: 2, signers_valid: 1, missing: true },
+      cross_attestation: { signers_count: 2, signers_valid: 1, missing: true, trust_evaluated: false },
       verifier_signature_ok: true,
       validator_should_accept: true,
       valid_after_signal: true,
@@ -338,6 +338,7 @@ async function main(): Promise<void> {
         signers_count: 2,
         signers_valid: 2,
         missing: false,
+        trust_evaluated: true,
         signers_trusted: 0,
         sybil_suspected: true,
       },
@@ -373,6 +374,7 @@ async function main(): Promise<void> {
         signers_count: 2,
         signers_valid: 2,
         missing: false,
+        trust_evaluated: true,
         signers_trusted: 2,
         sybil_suspected: false,
       },

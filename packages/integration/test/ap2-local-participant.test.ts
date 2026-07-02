@@ -81,6 +81,7 @@ describe('AP2 local participant artifacts', () => {
         signers_count: 2,
         signers_valid: 2,
         missing: false,
+        trust_evaluated: false,
       })
     } finally {
       await rm(outDir, { recursive: true, force: true })

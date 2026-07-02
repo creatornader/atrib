@@ -143,8 +143,13 @@ describe('spec §1.7.6 conformance corpus', () => {
     // single trusted signer must NOT read as attested via the guarded gate.
     const fixture = loadCase('one-signer')
     const noTrust = await verifyRecord(fixture.input.record)
+    // Loud absence: trust_evaluated is always present so `false` is a visible
+    // signal that only the trust-blind count was computed; the trust-relative
+    // fields are omitted until a trust set is supplied.
+    expect(noTrust.cross_attestation?.trust_evaluated).toBe(false)
     expect(noTrust.cross_attestation).not.toHaveProperty('signers_trusted')
     expect(noTrust.cross_attestation).not.toHaveProperty('sybil_suspected')
+    expect(isTrustedCrossAttested(noTrust.cross_attestation)).toBe(false)
     // one-signer has signers_valid 1; even if that key were trusted, it is
     // below the 2-distinct-verified minimum, so the gate must be false.
     const signerKey = fixture.input.record.signers?.[0]?.creator_key

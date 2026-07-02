@@ -20,7 +20,8 @@
     "cross_attestation": {
       "signers_count": 0,
       "signers_valid": 0,
-      "missing": true
+      "missing": true,
+      "trust_evaluated": false
     },
     "verifier_signature_ok": true,
     "validator_should_accept": true,

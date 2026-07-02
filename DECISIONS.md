@@ -7443,7 +7443,11 @@ cross-attestation surface was Sybil-malleable.
 opt-in, signal-only extension. `VerifyRecordOptions` gains
 `trustedCreatorKeys?: string[]`. When supplied, `cross_attestation` additionally
 carries `signers_trusted` (distinct verified keys that are also in the trust set)
-and `sybil_suspected` (`signers_valid >= 2` but `signers_trusted < 2`).
+and `sybil_suspected` (`signers_valid >= 2` but `signers_trusted < 2`). A
+`trust_evaluated` boolean is always present on transaction cross_attestation, so
+`false` is a loud signal that no trust set was supplied and only the trust-blind
+count was computed; a consumer gating a consequential action can tell the trust
+check was skipped rather than silently reading `signers_valid >= 2` as authority.
 `@atrib/verify` exports `isTrustedCrossAttested(annotation)`, which returns true
 iff `signers_trusted >= 2`. That predicate is the guarded gate a consumer
 requiring non-malleable transaction authority MUST use, in place of the footgun

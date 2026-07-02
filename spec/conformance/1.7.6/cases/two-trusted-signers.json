@@ -38,6 +38,7 @@
       "signers_count": 2,
       "signers_valid": 2,
       "missing": false,
+      "trust_evaluated": true,
       "signers_trusted": 2,
       "sybil_suspected": false
     },

@@ -95,6 +95,7 @@ describe('AP2 plus VI e2e', () => {
       signers_count: 2,
       signers_valid: 2,
       missing: false,
+      trust_evaluated: false,
     })
     expect(result.ap2_vi_evidence?.valid).toBe(true)
     expect(result.ap2_vi_evidence?.vi.mode).toBe('autonomous')

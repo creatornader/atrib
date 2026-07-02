@@ -183,11 +183,22 @@ export interface CrossAttestationAnnotation {
    */
   missing: boolean
   /**
+   * `true` iff a trust set (`VerifyRecordOptions.trustedCreatorKeys`) was
+   * supplied and the trusted-signer composition was evaluated. Always present
+   * on transaction cross_attestation, so that `false` is a LOUD signal: the
+   * annotation reflects only the trust-blind verified-key count, and a
+   * consumer gating a consequential action MUST NOT read `signers_valid >= 2`
+   * as trusted authority without supplying a trust set. Per §1.7.6 trusted
+   * signer composition. `signers_trusted` / `sybil_suspected` are present only
+   * when this is `true`.
+   */
+  trust_evaluated: boolean
+  /**
    * Number of distinct verified signer keys that are ALSO members of the
    * trust set supplied via `VerifyRecordOptions.trustedCreatorKeys`. A
    * verified signer key is not necessarily a trusted one: `signers_valid`
    * counts distinct keys whose signatures verify, this counts how many of
-   * those keys the caller trusts. Present ONLY when a trust set is supplied;
+   * those keys the caller trusts. Present ONLY when `trust_evaluated` is true;
    * omitted otherwise. Non-malleable transaction authority requires
    * `signers_trusted >= 2` (see `isTrustedCrossAttested`), per §1.7.6.
    */
@@ -783,22 +794,23 @@ async function resolveCrossAttestation(
   trustedCreatorKeys?: string[],
 ): Promise<CrossAttestationAnnotation> {
   // §1.7.6 trusted signer composition. `signers_valid` and `missing` keep
-  // their existing (trust-blind) semantics on every path; when a trust set is
-  // supplied we ADD `signers_trusted` / `sybil_suspected` by intersecting the
-  // already-verified keys with the trust set. Absent a trust set the trust
-  // fields are omitted, so the annotation is byte-identical to its pre-trust
-  // shape (backward compat; existing §1.7.6 vectors deep-equal unchanged).
-  // Signal only: never pushes to warnings[] or flips `valid`.
+  // their existing (trust-blind) semantics on every path. `trust_evaluated`
+  // is ALWAYS attached, so `false` is a loud signal that only the trust-blind
+  // count was computed. When a trust set is supplied we additionally attach
+  // `signers_trusted` / `sybil_suspected` by intersecting the already-verified
+  // keys with the trust set. Signal only: never pushes to warnings[] or flips
+  // `valid`.
   const withTrust = (
-    base: CrossAttestationAnnotation,
+    base: { signers_count: number; signers_valid: number; missing: boolean },
     validKeys: ReadonlySet<string>,
   ): CrossAttestationAnnotation => {
-    if (trustedCreatorKeys === undefined) return base
+    if (trustedCreatorKeys === undefined) return { ...base, trust_evaluated: false }
     const trustSet = new Set(trustedCreatorKeys)
     let signers_trusted = 0
     for (const key of validKeys) if (trustSet.has(key)) signers_trusted++
     return {
       ...base,
+      trust_evaluated: true,
       signers_trusted,
       sybil_suspected: base.signers_valid >= 2 && signers_trusted < 2,
     }

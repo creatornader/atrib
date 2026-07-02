@@ -494,6 +494,7 @@ describe('verifyRecord, cross_attestation (D052 / §1.7.6)', () => {
       signers_count: 0,
       signers_valid: 0,
       missing: true,
+      trust_evaluated: false,
     })
     // Legacy single-sig keeps the record cryptographically valid.
     expect(result.signatureOk).toBe(true)
@@ -590,6 +591,7 @@ describe('verifyRecord, cross_attestation (D052 / §1.7.6)', () => {
       signers_count: 2,
       signers_valid: 2,
       missing: false,
+      trust_evaluated: false,
     })
   })
 
