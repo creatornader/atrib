@@ -66,10 +66,6 @@ The policy decision file summarizes the signed atrib control decision. The
 packet signs both the wrapped Firecrawl tool-call chain and the downstream
 policy decision plus outcome records.
 
-## Loop receipt
-
-The implementation loop contract and pass receipts live in `LOOP.md`.
-
 ## Weakness
 
 This proof run signs the wrapper path, record chain, hash-only disclosure, bounded crawl cap, public log inclusion, verifier path, and real Firecrawl MCP command path. Hosted Firecrawl content remains private.

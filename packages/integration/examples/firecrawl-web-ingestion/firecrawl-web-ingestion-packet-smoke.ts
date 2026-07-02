@@ -354,10 +354,6 @@ The policy decision file summarizes the signed atrib control decision. The
 packet signs both the wrapped Firecrawl tool-call chain and the downstream
 policy decision plus outcome records.
 
-## Loop receipt
-
-The implementation loop contract and pass receipts live in \`LOOP.md\`.
-
 ## Weakness
 
 ${weakness}
