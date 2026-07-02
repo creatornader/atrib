@@ -67,7 +67,7 @@ paths = [
 [[allowlists]]
 description = "atrib protocol field names, never credentials"
 regexes = [
-  '''(creator_key|revoked_key|successor_key|lookup_for_key|signing_key|signature|chain_root|content_id|record_hash|provenance_token|session_token)''',
+  '''(creator_key|revoked_key|successor_key|lookup_for_key|signing_key|key_thumbprint|signature|chain_root|content_id|record_hash|provenance_token|session_token)''',
 ]
 # regexTarget = "line" matches the entire flagged line. The atrib protocol
 # field names appear as JSON keys NEXT TO their high-entropy values, not

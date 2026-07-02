@@ -1,0 +1,73 @@
+{
+  "schema": "atrib.proof_packet.verifier_output.v1",
+  "packet": "x401-open-credential-e2e",
+  "mode": "offline-local",
+  "live_upstream": false,
+  "upstream_shape": "@proof.com/x401-node@0.3.0 current-spec x401 wire SDK with local JWT VC / signed VP verifier",
+  "operations": ["protected_fetch_attempt", "stale_nonce_retry", "protected_fetch_success"],
+  "attempts": {
+    "initial_status": 401,
+    "stale_nonce_status": 401,
+    "success_status": 200
+  },
+  "records": [
+    {
+      "tool_name": "open_x401_credential_fetch_attempt",
+      "record_hash": "sha256:0ec1d91882fabd731352f13d29a8922f16818911cd375ce95c3a2e9852e984ef",
+      "log_index": null
+    },
+    {
+      "tool_name": "open_x401_credential_fetch_success",
+      "record_hash": "sha256:ac1ef0b343e7d052777028b1b03e2e69bda90fb72a91d442f91e34c7ffe35d05",
+      "log_index": null,
+      "informed_by": ["sha256:0ec1d91882fabd731352f13d29a8922f16818911cd375ce95c3a2e9852e984ef"]
+    }
+  ],
+  "verifier": {
+    "record_valid": true,
+    "warnings": [],
+    "x401_evidence_valid": true,
+    "informed_by_resolved": [
+      "sha256:0ec1d91882fabd731352f13d29a8922f16818911cd375ce95c3a2e9852e984ef"
+    ]
+  },
+  "credential_verification": {
+    "valid": true,
+    "credential_result_verified": true,
+    "nonce_verified": true,
+    "issuer_trust_verified": true,
+    "subject_over_18": true,
+    "credential_format": "jwt_vc_json",
+    "issuer": "did:web:issuer.example",
+    "subject": "did:example:holder-open-x401",
+    "errors": []
+  },
+  "public_packet": {
+    "provider_profile": "open-local-jwt-vc",
+    "x401_sdk_package": "@proof.com/x401-node",
+    "x401_spec_version": "0.2.0",
+    "credential_protocol": "openid4vp-v1-signed",
+    "credential_format": "jwt_vc_json",
+    "credential_result_verified": true,
+    "credential_nonce_verified": true,
+    "issuer_trust_verified": true,
+    "subject_over_18": true,
+    "issuer_key_thumbprint": "b8aziKmxQ_ojUTzaiOVhoRAHM1cQfWgcE7RD42D9fgQ",
+    "holder_key_thumbprint": "qNmCYAXEh395ViOcabEcv_Ixu6ZHqACNT5idQ2mrMcY",
+    "proof_gate_status": "passed",
+    "proof_request_hash": "sha256:9b6b1fb8e1a8290a3a48185e23bd5e3d9d72f59ce6c42f6d7d077ac90916abe9",
+    "proof_response_hash": "sha256:cb63359f74fe0777a73582c48a4e5f73dbacbf80dcd7f17940717e72c8c02615",
+    "proof_result_hash": "sha256:cd5fb0c71228b8898b327b69e109d65e5a01224299a00207715c2f228dfa7d35",
+    "informed_by_resolved": [
+      "sha256:0ec1d91882fabd731352f13d29a8922f16818911cd375ce95c3a2e9852e984ef"
+    ],
+    "raw_credential_material_stored": false,
+    "payment_detected": false
+  },
+  "privacy": {
+    "raw_credential_material_stored": false,
+    "public_packet_contains_raw_presentation_token_field": false,
+    "public_packet_contains_verifiable_credential_field": false,
+    "public_evidence_contains_raw_presentation_token_field": false
+  }
+}

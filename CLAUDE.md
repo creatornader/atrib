@@ -70,6 +70,7 @@ atrib/
         ap2-live-interop.ts    # Opt-in AP2 reference artifact harness. Reads AP2 result + AP2/VI evidence JSON, optionally verifies an atrib transaction-record artifact with counterparty attestation, and exits nonzero on drift.
         mcp-oauth-evidence.ts  # Local MCP/OAuth producer-to-verifier harness. Captures validated authInfo into sidecar evidence, verifies DPoP and scope constraints through `verifyRecord().evidence[]`, and proves raw bearer tokens stay local-only.
         open-x401-credential-e2e.ts # Open local x401 credential-verifier proof. Issues and verifies a local JWT VC / VP, binds it to the x401 nonce, and prints sanitized evidence without needing a Proof account.
+        open-x401-credential-packet.ts # Durable packet writer for the open x401 credential-verifier proof. Writes verifier output, provenance, and redaction manifest under proof-packets/x401-open-credential-e2e/.
         proof-x401-node-runtime-interop.ts # Private Proof x401 Node SDK native proof. Runs the released SDK, emits current-spec x401 evidence, and keeps live npm readiness gated.
         proof-vc-common-x401-interop.ts # Private Proof VC verifier bridge. Turns Proof credential-verifier output into caller-owned x401 resultVerified evidence.
         proof-vc-token-capture.ts # Localhost Proof VP token capture helper. Uses caller-supplied Proof OAuth client config, verifies a real VP token in memory, and prints sanitized x401 evidence.
@@ -112,7 +113,7 @@ atrib/
         trace-repair-suspect/  # Offline trace-repair proof: verify current packet, reject stale prior evidence, rank suspect, and sign diagnostic outcome.
         graphiti/              # Graphiti MCP-shaped add/search/get episodes boundary proof through @atrib/mcp-wrap, plus optional real Graphiti core + Ollama proof.
         signer-proxy/          # D102 sandboxed-execution signer proxy example. Sandbox requests signatures, host signer keeps the key outside the sandbox.
-  proof-packets/                # External-facing proof artifacts and draft-only contact copy generated from integration examples. Browserbase Stagehand, Firecrawl web ingestion, and OpenETR transfer proofs keep public evidence narrow and private upstream payloads hash-only.
+  proof-packets/                # External-facing proof artifacts and draft-only contact copy generated from integration examples. Browserbase Stagehand, Firecrawl web ingestion, OpenETR transfer, and x401 open credential proofs keep public evidence narrow and private upstream payloads hash-only.
   policies/                     # Attribution policy templates and guide (6 templates + README)
   skills/
     atrib/SKILL.md             # The atrib practice doc, agent-facing guidance for using atrib from the inside out (memory, reasoning, getting smarter over time). Source of truth; symlinked to ~/.claude/skills/atrib/SKILL.md so any Claude Code session anywhere on the host machine discovers it.

@@ -7360,6 +7360,9 @@ panel scoped to the `/v1/lookup` log response.
   platform account: local JWT VC issuance, signed VP presentation, local issuer
   trust, nonce binding, proof response acceptance, and signed action
   propagation.
+- The public x401 credential-verifier proof now has a durable sanitized packet
+  at `proof-packets/x401-open-credential-e2e/`, so upstream-facing evidence is
+  checked in instead of depending only on a rerunnable local command.
 - atrib can now show a Proof credential-verifier bridge through
   `@proof.com/proof-vc-common@0.3.0` plus
   `@proof.com/proof-vc-server@0.3.0`: Proof VC acceptance becomes caller-owned
@@ -7383,6 +7386,8 @@ panel scoped to the `/v1/lookup` log response.
   open local JWT VC / VP credential-verifier harness.
 - [`packages/integration/scripts/open-x401-credential-e2e.ts`](packages/integration/scripts/open-x401-credential-e2e.ts),
   runnable public x401 credential-verifier proof.
+- [`packages/integration/scripts/open-x401-credential-packet.ts`](packages/integration/scripts/open-x401-credential-packet.ts),
+  durable public packet writer for the open local credential-verifier proof.
 - [`packages/integration/src/proof-x401-node-runtime.ts`](packages/integration/src/proof-x401-node-runtime.ts),
   private native runtime fixture for the released Proof x401 Node SDK.
 - [`packages/integration/scripts/proof-x401-node-runtime-interop.ts`](packages/integration/scripts/proof-x401-node-runtime-interop.ts),

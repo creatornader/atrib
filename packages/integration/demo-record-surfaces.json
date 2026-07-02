@@ -324,6 +324,13 @@
       "commands": ["open-x401-credential-e2e"]
     },
     {
+      "id": "open-x401-credential-packet",
+      "path": "scripts/open-x401-credential-packet.ts",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["open-x401-credential-packet"]
+    },
+    {
       "id": "proof-x401-node-runtime-interop",
       "path": "scripts/proof-x401-node-runtime-interop.ts",
       "record_class": "offline-local",

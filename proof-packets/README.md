@@ -3,11 +3,12 @@
 This directory holds artifact-first proof runs for external MCP and tool
 platform prospects.
 
-| Proof                                               | Source example                                           | Status                                                                                                                                                                                |
-| --------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`   | Live hosted Browserbase MCP path, WebMCP target app demo, Browserbase replay inspection, and public log inclusion. Fixture mode stays available for local tests.                      |
-| [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/` | Live Firecrawl MCP path, fixed-input ingestion demo, and downstream policy decision artifact. Fixture mode stays available for local tests.                                           |
-| [OpenETR transfer](openetr-transfer/)               | `packages/integration/examples/openetr-transfer/`        | Source-backed OpenETR public-relay recognition path with public log inclusion, signed control records, title-authority evidence, legal/MLETR evidence, and an MLETR source checklist. |
+| Proof                                               | Source example                                                | Status                                                                                                                                                                                |
+| --------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`        | Live hosted Browserbase MCP path, WebMCP target app demo, Browserbase replay inspection, and public log inclusion. Fixture mode stays available for local tests.                      |
+| [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/`      | Live Firecrawl MCP path, fixed-input ingestion demo, and downstream policy decision artifact. Fixture mode stays available for local tests.                                           |
+| [OpenETR transfer](openetr-transfer/)               | `packages/integration/examples/openetr-transfer/`             | Source-backed OpenETR public-relay recognition path with public log inclusion, signed control records, title-authority evidence, legal/MLETR evidence, and an MLETR source checklist. |
+| [x401 open credential](x401-open-credential-e2e/)   | `packages/integration/scripts/open-x401-credential-packet.ts` | Current-spec x401 challenge, retry, result, local JWT VC / signed VP verifier, and signed atrib action chain. Sanitized offline-local packet, no Proof platform account required.     |
 
 Each artifact keeps public evidence narrow: tool names, hash disclosures, record
 hashes, log indexes, and verifier output. Private upstream payloads stay out of
@@ -15,7 +16,7 @@ the public artifact and appear only as hashes in the redaction manifest.
 
 ## Proof and demo model
 
-The Browserbase and Firecrawl surfaces use these layers:
+Browserbase and Firecrawl use these layers:
 
 - Fixture integration example: deterministic local MCP server, local capture
   log, no public log writes. This is the CI-safe proof path.
@@ -41,6 +42,12 @@ Firecrawl has a deployed live demo at
 design: no arbitrary URL, query, crawl depth, or crawl limit. Its packet
 includes `policy-decision.json`, which binds the signed ingestion records to a
 signed review gate for sensitive downstream actions.
+
+x401 uses a different proof shape. The committed packet is an offline-local
+protocol artifact, not a live public-log run. It uses the released
+`@proof.com/x401-node@0.3.0` wire SDK, then verifies a local JWT VC and signed
+VP token so the public packet can show the x401 proof gate without requiring a
+Proof platform account or publishing credential material.
 
 ## Explicit deferrals
 
