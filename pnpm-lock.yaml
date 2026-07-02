@@ -87,6 +87,9 @@ importers:
       '@atrib/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@atrib/verify':
+        specifier: workspace:*
+        version: link:../verify
       canonicalize:
         specifier: ^3.0.0
         version: 3.0.0
@@ -11070,7 +11073,7 @@ snapshots:
 
   eventsource@3.0.7:
     dependencies:
-      eventsource-parser: 3.0.8
+      eventsource-parser: 3.1.0
 
   execa@9.6.1:
     dependencies:

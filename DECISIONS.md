@@ -7497,6 +7497,15 @@ Layer 5 threat-model row.
   Layer 5.
 - [`packages/verify/src/verify-record.ts`](packages/verify/src/verify-record.ts),
   `resolveCrossAttestation` trust intersection and `isTrustedCrossAttested`.
+- [D133](#d133-action-gate-is-a-host-owned-controlproof-package), the host-owned
+  enforcement layer. `@atrib/action-gate`'s `requireTrustedTransaction` turns the
+  [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+  trust signal into a fail-closed authorization requirement: it authorizes
+  a transaction only when `isTrustedCrossAttested` holds, and blocks (or
+  escalates) on no trust set, a non-transaction record, an invalid signature, or
+  a merely-verified signer set. The verifier stays signal-not-block; the
+  action-gate is where the safe path
+  is made mandatory.
 
 # Pending decisions
 
