@@ -7507,6 +7507,95 @@ Layer 5 threat-model row.
   action-gate is where the safe path
   is made mandatory.
 
+## D136: Attestation is corroboration generalized off transactions (extension-first)
+
+**Date:** 2026-07-02
+
+**Status:** Accepted
+
+**Extends:** [D052](#d052-cross-attestation-requirement-for-transaction-records),
+[D135](#d135-cross-attestation-composes-with-a-trust-set-for-sybil-resistance),
+and [D133](#d133-action-gate-is-a-host-owned-controlproof-package).
+
+**Context.** Cross-attestation ([§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records))
+lets a second party corroborate a claim only by CO-SIGNING the same transaction
+bytes, so it is bound to the `transaction` event_type and to synchronous
+signature over shared bytes. There was no way for a signer Z to durably vouch for
+an arbitrary record X that Z did not produce. The only multi-party attestation
+surface was transaction co-signing, which forced any corroboration use case (for
+example a memory-poisoning defense that elevates a record only on multiple
+independent trusted vouchers) to be modeled as a transaction. Annotation
+([D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) /
+[§1.2.7](atrib-spec.md#127-annotates)) references arbitrary records but is
+commentary/importance, and atrib explicitly does not certify that an annotation
+characterizes its target, so counting annotators as vouchers would overload a
+primitive defined not to mean that.
+
+**Decision.** Add attestation as the general form of Layer 5 corroboration,
+lifted off transactions and off shared-bytes co-signing. An attestation is a
+signer Z's separate signed record that vouches for a target record X by
+reference. Extension-first per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)
+/ [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion):
+an attestation is an extension-URI record (`https://atrib.dev/v1/extensions/attestation`),
+NOT a new normative event_type byte, whose content `{ attests: 'reliable',
+target, reason? }` is committed via `args_hash` ([D099](#d099-explicit-emit-records-commit-local-content-through-default-args_hash))
+so it is tamper-evident. `@atrib/verify` adds `resolveAttestationCorroboration`,
+which aggregates distinct verified attestors of X and, reusing the
+[D135](#d135-cross-attestation-composes-with-a-trust-set-for-sybil-resistance)
+trust-set model, surfaces `attestors_valid` / `attestors_trusted` /
+`under_corroborated` / `trust_evaluated`; `isCorroborated(result, N)` is the
+guarded gate (`attestors_trusted >= N`, default 2). `@atrib/action-gate` adds
+`requireCorroborated`, the fail-closed enforcement parallel to
+`requireTrustedTransaction`.
+
+**Invariants and guards.**
+
+- Signal not block: the verdict never flips any record's validity, matching
+  [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+  / [§6.7](atrib-spec.md#67-capability-declarations) / [D135](#d135-cross-attestation-composes-with-a-trust-set-for-sybil-resistance).
+  The fail-closed requirement lives only in the action-gate.
+- The verifier counts ONLY records carrying the reserved `attests: 'reliable'`
+  marker at the attestation extension URI, and NEVER annotation records, so
+  recall-tagging cannot masquerade as corroboration.
+- Self-attestation is rejected: an attestor whose key equals the target
+  producer's key does not count (a producer cannot corroborate itself).
+- `trust_evaluated` is always present so a trust-blind verdict is a loud signal,
+  and the guarded gate is `attestors_trusted >= N`, not `!under_corroborated`
+  (the same footgun [D135](#d135-cross-attestation-composes-with-a-trust-set-for-sybil-resistance) rejected).
+
+**Alternatives considered.**
+
+- Generalize `signers[]` co-signing to all event types. Rejected: co-signing
+  asserts joint authorship of one record and collides with the creator-signature
+  rule; it cannot express "Z vouches for X's record" (that is reference-based,
+  not co-authoring).
+- Overload annotation with a `reliable` importance. Rejected: annotation is
+  defined as commentary that atrib does not certify; a distinct marker keeps
+  trust and recall-tagging separate.
+- Ship a new normative event_type byte (0x07) + a tenth edge type now. Rejected
+  as premature per [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion):
+  prove the boundary-drawing test with real use first; the extension-URI content
+  convention carries the full semantics with a smaller footprint.
+
+**Deferred.** Promotion to a normative event_type byte and a dedicated ATTESTS
+edge type, once real use (for example the memory-poisoning-defense eval) shows
+the edge semantics are distinct enough to justify the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)
+/ [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion)
+gate. A formal conformance corpus lands at promotion; unit tests in
+[`packages/verify/test/attestation.test.ts`](packages/verify/test/attestation.test.ts)
+and [`packages/action-gate/test/corroboration.test.ts`](packages/action-gate/test/corroboration.test.ts)
+are the current coverage.
+
+**Cross-references.**
+
+- [D052](#d052-cross-attestation-requirement-for-transaction-records) /
+  [D135](#d135-cross-attestation-composes-with-a-trust-set-for-sybil-resistance),
+  the co-signature special case and the reused trust kernel.
+- [D133](#d133-action-gate-is-a-host-owned-controlproof-package), the enforcement
+  home for `requireCorroborated`.
+- [`packages/verify/src/attestation.ts`](packages/verify/src/attestation.ts),
+  [`packages/action-gate/src/index.ts`](packages/action-gate/src/index.ts).
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

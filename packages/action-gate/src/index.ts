@@ -20,6 +20,9 @@ import type { AtribRecord } from '@atrib/mcp'
 import {
   verifyRecord as verifyRecordAnnotated,
   isTrustedCrossAttested,
+  resolveAttestationCorroboration,
+  isCorroborated,
+  type AttestationInput,
 } from '@atrib/verify'
 
 export const ACTION_GATE_DECISION_EVENT_TYPE_URI =
@@ -683,6 +686,79 @@ export async function requireTrustedTransaction(
     reason: 'transaction is trusted-cross-attested',
     evidence,
   }
+}
+
+/** Options for {@link requireCorroborated}. */
+export interface RequireCorroboratedOptions {
+  /** `'sha256:<64-hex>'` record_hash of the record whose corroboration is required. */
+  readonly targetRecordHash: string
+  /** creator_key of the target, so self-attestation is rejected. Recommended. */
+  readonly targetCreatorKey?: string
+  /** Attestation records vouching for the target. */
+  readonly attestations: readonly AttestationInput[]
+  /** Trust set: base64url keys the host trusts as independent attestors. Empty/absent fails closed. */
+  readonly trustedCreatorKeys?: readonly string[]
+  /** Corroboration minimum. Default 2. */
+  readonly minCorroborators?: number
+  /** Outcome when not corroborated. Default `'block'` (fail closed). */
+  readonly onUncorroborated?: 'block' | 'escalate'
+  readonly policyId?: string
+  readonly policyVersion?: string
+  readonly authority?: ActionGateAuthority
+  readonly approval?: ActionGateApproval
+}
+
+/**
+ * Host-owned fail-closed policy requiring trusted corroboration of a target
+ * record before an action proceeds (D133 + D136). The verifier aggregation
+ * (`resolveAttestationCorroboration`) is signal-not-block; this policy turns it
+ * into a requirement. Returns `allow` only when the target is corroborated by at
+ * least `minCorroborators` (default 2) distinct verified attestors in the trust
+ * set (`isCorroborated`). Fails closed on no trust set or too few trusted
+ * attestors, blocking by default or escalating on request. The signed decision's
+ * `evidence` carries the corroboration posture.
+ */
+export async function requireCorroborated(
+  opts: RequireCorroboratedOptions,
+): Promise<ActionGatePolicyDecision> {
+  const policy_id = opts.policyId ?? 'atrib-corroboration-gate'
+  const policy_version = opts.policyVersion ?? '1'
+  const min = opts.minCorroborators ?? 2
+  const uncorroborated = opts.onUncorroborated ?? 'block'
+  const base = {
+    policy_id,
+    policy_version,
+    ...(opts.authority ? { authority: opts.authority } : {}),
+    ...(opts.approval ? { approval: opts.approval } : {}),
+  }
+
+  if (!opts.trustedCreatorKeys || opts.trustedCreatorKeys.length === 0) {
+    return { ...base, outcome: uncorroborated, reason: 'no trust set supplied; cannot establish trusted corroboration' }
+  }
+
+  const result = await resolveAttestationCorroboration({
+    targetRecordHash: opts.targetRecordHash,
+    ...(opts.targetCreatorKey ? { targetCreatorKey: opts.targetCreatorKey } : {}),
+    attestations: [...opts.attestations],
+    trustedCreatorKeys: [...opts.trustedCreatorKeys],
+    minCorroborators: min,
+  })
+  const evidence: Record<string, string> = {
+    attestors_valid: String(result.attestors_valid),
+    attestors_trusted: String(result.attestors_trusted ?? 0),
+    under_corroborated: String(result.under_corroborated ?? false),
+    trust_evaluated: String(result.trust_evaluated),
+    min_corroborators: String(min),
+  }
+  if (!isCorroborated(result, min)) {
+    return {
+      ...base,
+      outcome: uncorroborated,
+      reason: `target not corroborated by ${min} distinct trusted attestors`,
+      evidence,
+    }
+  }
+  return { ...base, outcome: 'allow', reason: 'target is trusted-corroborated', evidence }
 }
 
 export function digestCanonical(value: unknown): Sha256Uri {
