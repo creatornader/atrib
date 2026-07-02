@@ -72,10 +72,12 @@ The default path uses a local fixture verifier. Set `ATRIB_PROOF_VC_COMMON_LIVE=
 To obtain a real Proof VP token, run the localhost capture helper:
 
 ```bash
+ATRIB_PROOF_VC_CAPTURE_CLIENT_ID=<proof-oauth-client-id> \
+ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT=<holder-email> \
 pnpm --filter @atrib/integration proof-vc-token-capture -- --open
 ```
 
-That helper uses `@proof.com/proof-vc-common@0.3.0` to create the OID4VP authorization URL, captures the browser fragment on a local callback page, verifies the token in memory through `@proof.com/proof-vc-server@0.3.0`, and prints only the sanitized x401 evidence packet. Use `-- --print-url` to print the authorization URL without waiting for a browser callback. A real Proof credential and an OAuth client whose redirect policy accepts the local callback are still required. Set `ATRIB_PROOF_VC_CAPTURE_AUD` when the verifier must check an expected audience.
+That helper uses `@proof.com/proof-vc-common@0.3.0` to create the OID4VP authorization URL, captures the browser fragment on a local callback page, verifies the token in memory through `@proof.com/proof-vc-server@0.3.0`, and prints only the sanitized x401 evidence packet. Use `-- --print-url` to print the authorization URL without waiting for a browser callback. A real Proof credential, a Proof OAuth Application client id, a registered redirect URI matching the local callback, and the holder email as `ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT` are required. Set `ATRIB_PROOF_VC_CAPTURE_AUD` when the verifier must check an expected audience.
 
 The live npm Proof-side SDK interop bar is now met by `@proof.com/x401-node@0.3.0`. Keep the readiness guard so future releases fail closed if old wire names reappear.
 

@@ -71,7 +71,7 @@ atrib/
         mcp-oauth-evidence.ts  # Local MCP/OAuth producer-to-verifier harness. Captures validated authInfo into sidecar evidence, verifies DPoP and scope constraints through `verifyRecord().evidence[]`, and proves raw bearer tokens stay local-only.
         proof-x401-node-runtime-interop.ts # Private Proof x401 Node SDK native proof. Runs the released SDK, emits current-spec x401 evidence, and keeps live npm readiness gated.
         proof-vc-common-x401-interop.ts # Private Proof VC verifier bridge. Turns Proof credential-verifier output into caller-owned x401 resultVerified evidence.
-        proof-vc-token-capture.ts # Localhost Proof VP token capture helper. Requests a real VP token, verifies it in memory, and prints sanitized x401 evidence.
+        proof-vc-token-capture.ts # Localhost Proof VP token capture helper. Uses caller-supplied Proof OAuth client config, verifies a real VP token in memory, and prints sanitized x401 evidence.
         extract-google-ap2-sample-artifacts.ts # Official Google AP2 sample extractor. Converts captured A2A events plus the sample .temp-db into live interop artifacts.
         generate-ap2-local-participant-artifacts.ts # Local AP2 participant generator. Rehydrates AP2 / VI artifact bundles and writes an atrib transaction record with agent and counterparty signers over transaction bytes.
         generate-ap2-reference-receipts.py # Opt-in generator that imports the official google-agentic-commerce/AP2 Python SDK from a local checkout and writes compact receipt-JWT fixtures for the AP2 interop harness.

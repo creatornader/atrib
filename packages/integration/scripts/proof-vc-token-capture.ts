@@ -14,6 +14,12 @@ function env(name: string): string | undefined {
   return value === undefined || value === '' ? undefined : value
 }
 
+function requireEnv(name: string): string {
+  const value = env(name)
+  if (value !== undefined) return value
+  throw new Error(`${name} is required for Proof VP token capture`)
+}
+
 function numberEnv(name: string, fallback: number): number {
   const raw = env(name)
   if (raw === undefined) return fallback
@@ -138,10 +144,11 @@ async function main(): Promise<void> {
   const trustRoot = readTrustRoot(proofEnvironment)
   const host = env('ATRIB_PROOF_VC_CAPTURE_HOST') ?? '127.0.0.1'
   const port = numberEnv('ATRIB_PROOF_VC_CAPTURE_PORT', 8765)
-  const clientId = env('ATRIB_PROOF_VC_CAPTURE_CLIENT_ID') ?? 'verifier-demo'
+  const clientId = requireEnv('ATRIB_PROOF_VC_CAPTURE_CLIENT_ID')
   const callbackPath = env('ATRIB_PROOF_VC_CAPTURE_CALLBACK_PATH') ?? '/proof-vc/callback'
   const nonce = env('ATRIB_PROOF_VC_CAPTURE_NONCE') ?? randomUUID()
   const state = env('ATRIB_PROOF_VC_CAPTURE_STATE') ?? randomUUID()
+  const loginHint = requireEnv('ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT')
   const aud = env('ATRIB_PROOF_VC_CAPTURE_AUD') ?? env('ATRIB_PROOF_VC_COMMON_AUD')
   const callbackUri = `http://${host}:${port}${callbackPath}`
   const proof = createClient({
@@ -153,9 +160,7 @@ async function main(): Promise<void> {
     nonce,
     scope: BASIC_SCOPE,
     state,
-    ...(env('ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT')
-      ? { loginHint: env('ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT') }
-      : {}),
+    loginHint,
   })
   if (process.argv.includes('--print-url')) {
     console.log(
