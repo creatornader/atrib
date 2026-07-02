@@ -2,58 +2,46 @@
 
 **Verifiable agent actions.** Every action becomes signed context for the next.
 
-Agent work moves through tools, memory, identity, authorization, observability,
-evals, handoffs, and payments. Those layers should stay specialized. atrib gives
-them a common signed record they can all use. The record carries the action,
-selected evidence, and graph structure across sessions, agents, teams,
-organizations, and protocols.
+atrib signs agent actions as records that later agents, teams, and verifiers can
+check. A record can describe a tool call, browser click, desktop action, policy
+decision, handoff, transaction, or intentional note from the agent.
 
-Product teams can put that record in the action path. A harness can decide which
-actions run before execution. Later work can carry the signed context forward,
-and reviewers can prove the path without turning atrib into the runtime, memory
-system, or authorization issuer.
+Agent work already crosses tools, memory, identity, authorization,
+observability, evals, handoffs, and payment rails. atrib does not replace those
+systems. It gives them a common record that carries the action, selected
+evidence, and graph links across sessions, agents, teams, organizations, and
+protocols.
 
-Shared memory and context systems decide what an agent should remember or
-retrieve. atrib signs the agent's action trail, then lets memory systems,
-auditors, payment rails, and other agents cite that same verifiable record
-without trusting the runtime that stored it.
+Product teams can put atrib in the execution path. A harness can sign an allow,
+block, or escalate decision before a high-impact browser click, desktop action,
+support reply, admin change, deployment, or payment-impacting step. The outcome
+then becomes signed context for later recall, review, handoff, or verification.
 
-That record is useful before and after execution. Before a high-impact action
-runs, a harness can sign a policy decision that allows, blocks, or escalates the
-action. Afterward, the signed decision and outcome can travel with follow-up
-work as recall input, handoff evidence, review material, or verifier-accepted
-context.
+Browser and computer-use agents make the product concrete.
+Follow-up work can cite the decision and outcome without exposing raw browser
+state, desktop state, private tool payloads, or full runtime logs in public
+records.
 
-Browser and computer-use agents make this concrete. A click, form fill, desktop
-action, support reply, admin change, or payment-impacting step can carry a signed
-decision, outcome hash, and selected evidence. Follow-up work can cite that
-record without exposing raw browser state, desktop state, or private runtime
-payloads in public records.
-
-The graph is one graph with two reading planes. The chronology plane preserves
-event history and continuity. The declared-relationship plane preserves signed
-claims about which records informed, anchored, annotated, or revised other
-records. The explorer's primary trace path gives readers one first path through
-that graph without flattening the graph itself.
+Shared memory and context systems still decide what an agent should remember.
+Observability tools still inspect live runs. Authorization systems still issue
+policy and credentials. atrib signs the action trail so those systems can carry
+forward the same verifiable facts without trusting the runtime that stored them.
 
 ## What this enables
 
 Everything below depends on one substrate property: an action is signed when it
 happens and remains verifiable later.
 
-| Surface                                 | What atrib gives you                                                                                                                                                                                                                                                         | What it composes with                                                              |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Verifiable action layer                 | A shared record surface for agent work. Hosts can check actions before they run. Later sessions, agents, teams, organizations, and protocols can carry the signed context forward and verify the path.                                                                       | Agent runtimes, policy engines, approval flows, memory, handoffs, audits           |
-| High-impact action control              | Host policies can allow, block, escalate, or require approval before execution. atrib records the decision, the action, and the outcome as verifiable context without becoming the authorization issuer.                                                                     | Browser and computer use, admin workflows, support tools, payments, deployments    |
-| Portable action context                 | Signed action hashes can travel with follow-up work. Browser clicks, desktop actions, support replies, and admin changes become decision/outcome pairs that can be recalled or verified later.                                                                               | Browserbase, browser-use, OpenAI Computer Use, support teams, admin teams          |
-| Verifiable agent work                   | A signed trail of the actions, evidence, handoffs, revisions, outputs, and verifier results behind a task. atrib proves the action history; other layers decide whether the work was authorized, correct, payable, or compliant.                                             | Tools, memory, identity, authorization, observability, evals, commerce, governance |
-| Provable cognition                      | An agent can read prior records and re-verify them locally. Its continuity can survive platform, model, and harness changes because the cryptography is independent.                                                                                                         | Memory systems, shared context layers, recall tools                                |
-| Privacy-preserving evidence             | The public log stores commitments, not private work product. Verifiers can check signatures, hashes, inclusion proofs, and selected evidence without dumping tool arguments, tool results, memory text, authorization material, or workflow context into the public payload. | Local mirrors, sidecars, opt-in archive evidence, private evidence stores          |
-| Independent audit                       | A third party can verify what an agent did, in what order, and with what signed structure without trusting the agent operator, platform, or intermediary.                                                                                                                    | Audit trails, SOC 2 evidence, AI governance tooling, incident review               |
-| Verifiable evals                        | A harness can link task setup, tool calls, verifier checks, diagnostic outcomes, and scorer output through `informed_by`, then publish the result as evidence another team can replay.                                                                                       | Eval harnesses, benchmark reports, inspection tools                                |
-| Cross-agent provenance                  | Agents that hand off work to subagents carry session scope, chain tail, and parent dispatch refs together. Receiving agents can verify the handoff before signing follow-up work.                                                                                            | A2A, agent bridges, orchestrators, subagent runtimes                               |
-| Verifiable investigations               | Support, incident, billing, and RCA agents can sign the investigation trail: ticket intake, tenant-scoped log queries, code-path reads, hypotheses, diagnostics, revisions, and human handoffs.                                                                              | Observability tools, logs, traces, support systems                                 |
-| Settlement when commerce closes a chain | The same signed record set can feed a deterministic settlement document under an agreed policy. Any merchant or auditor can recompute the [§4.6](atrib-spec.md#46-the-calculation-algorithm) result.                                                                         | AP2, Verifiable Intent, x402, ACP, merchant policies                               |
+| Surface                          | What atrib gives you                                                                                                                                                                                                                                                         | What it composes with                                                              |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Action control                   | A host can sign an allow, block, escalate, or approval decision before a selected action runs. The outcome cites the decision, so later review can see what was proposed and what actually happened.                                                                         | [`@atrib/action-gate`](packages/action-gate/README.md), policy engines, approvals  |
+| Cross-session continuity         | Signed action hashes can travel with follow-up work. Later sessions and agents can cite accepted records instead of relying on a transcript, replay link, or runtime-local memory.                                                                                          | Memory systems, shared context layers, recall tools, agent runtimes                |
+| Browser and desktop review       | Clicks, form fills, desktop actions, support replies, admin changes, and payment-impacting steps become decision/outcome pairs that can be recalled or verified later.                                                                                                      | Browserbase, browser-use, OpenAI Computer Use, support teams, admin teams          |
+| Verified handoffs                | A receiving agent can verify incoming record hashes, body commitments, signer trust, context policy, freshness, and inclusion proofs before signing follow-up work through `informed_by`.                                                                                  | [`@atrib/verify`](packages/verify/README.md), [`@atrib/verify-mcp`](services/atrib-verify/README.md), [continuation packets](packages/verify/README.md#verifyhandoffclaimsclaims-options-promisehandoffverificationresult) |
+| Investigations and audit         | Support, incident, billing, and RCA agents can sign ticket intake, scoped log reads, code-path checks, hypotheses, diagnostics, revisions, and human handoffs. A reviewer can verify the path without trusting the original runtime.                                       | Observability tools, logs, traces, support systems, SOC 2 evidence                 |
+| Evals and repair loops           | A harness can link task setup, tool calls, verifier checks, diagnostic outcomes, and scorer output through `informed_by`, then publish evidence another team can replay.                                                                                                   | Eval harnesses, benchmark reports, inspection tools                                |
+| Commerce settlement              | The same signed record set can feed a deterministic settlement document under an agreed policy. Any merchant or auditor can recompute the [§4.6](atrib-spec.md#46-the-calculation-algorithm) result.                                                                         | AP2, Verifiable Intent, x402, ACP, merchant policies                               |
+| Private evidence by default      | The public log stores commitments, not private work product. Verifiers can check signatures, hashes, inclusion proofs, and selected evidence without dumping tool arguments, tool results, memory text, authorization material, or workflow context into the public payload. | Local mirrors, sidecars, opt-in archive evidence, private evidence stores          |
 
 ## Substrate vs harness
 
@@ -80,11 +68,11 @@ can point at several different objects. The boundary matters.
 | What you already have                                                                            | Use                                                                                                                                       | What atrib adds                                                                                                                                                  |
 | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Tool calls through MCP or an SDK callback                                                        | [`@atrib/mcp`](packages/mcp/README.md), [`@atrib/mcp-wrap`](packages/mcp-wrap/README.md), or [`@atrib/agent`](packages/agent/README.md)   | Signed action records with chain continuity and optional local sidecars.                                                                                         |
-| Pre-action policy gates, approval hooks, or host lifecycle hooks                                 | [`@atrib/action-gate`](packages/action-gate/README.md), `@atrib/mcp-wrap` pre-call transforms, host-specific adapters, and signer proxies | Verifiable control points around high-impact actions. The host records the decision, execution result, outcome hash, and selected evidence.                      |
+| Pre-action policy gates, approval hooks, or host lifecycle hooks                                 | [`@atrib/action-gate`](packages/action-gate/README.md), [`@atrib/mcp-wrap`](packages/mcp-wrap/README.md) `preCallTransform`, host-specific adapters, and [signer proxies](packages/integration/examples/signer-proxy/README.md) | Verifiable control points around high-impact actions. The host records the decision, execution result, outcome hash, and selected evidence.                      |
 | OpenTelemetry or OpenInference spans                                                             | [`@atrib/openinference`](packages/openinference/README.md)                                                                                | Signed records and recall-readable sidecars from the span stream, while Langfuse, Phoenix, LangSmith, Braintrust, or another backend keeps the operations view.  |
 | A host-owned run log, event stream, session history, checkpoint log, fork log, or compaction log | [`@atrib/runtime-log`](packages/runtime-log/README.md)                                                                                    | A `log_window_manifest` that commits to the bounded run window, roots, projections, receipts, and redaction policy without publishing raw log bodies by default. |
 | A hosted runtime API that exports session events after the fact                                  | A future per-runtime adapter under [Pattern 5](ARCHITECTURE.md#runtime-integration-patterns)                                              | Consumer-side attestation over what the vendor reported, not a claim that the vendor's private runtime state is itself true.                                     |
-| A handoff, support investigation, or continuation packet                                         | [`@atrib/verify`](packages/verify/README.md), `@atrib/verify-mcp`, and continuation packet patterns                                       | Verifier-accepted record hashes that the receiving agent can cite through `informed_by`.                                                                         |
+| A handoff, support investigation, or continuation packet                                         | [`@atrib/verify`](packages/verify/README.md), [`@atrib/verify-mcp`](services/atrib-verify/README.md), and [continuation packets](packages/verify/README.md#verifyhandoffclaimsclaims-options-promisehandoffverificationresult) | Verifier-accepted record hashes that the receiving agent can cite through `informed_by`.                                                                         |
 
 The short rule: observability tools inspect and debug live traces; runtime
 systems own logs that reconstruct or resume a run; atrib signs actions and
@@ -96,18 +84,22 @@ collapse into one product.
 The "any agent framework" claim is about tool-call middleware, not every host
 runtime feature. It covers SDK and MCP surfaces where application code owns the
 agent loop: raw MCP SDK, Claude Agent SDK, Cloudflare Agents, Vercel AI SDK,
-LangChain JS, and similar SDKs. Those integrations live in `@atrib/agent`,
-`@atrib/mcp`, and `@atrib/mcp-wrap`.
+LangChain JS, and similar SDKs. Those integrations live in
+[`@atrib/agent`](packages/agent/README.md),
+[`@atrib/mcp`](packages/mcp/README.md), and
+[`@atrib/mcp-wrap`](packages/mcp-wrap/README.md).
 
 Host runtime adapters cover a different shell: Claude Code, Codex, OpenClaw,
 Hermes, Cursor, Goose, hosted runtimes, or another harness that owns sessions,
 lifecycle hooks, approvals, subagents, checkpoints, telemetry, and run logs.
-Those adapters compose existing packages: `@atrib/mcp-wrap` for MCP tool calls,
-host-specific signing code for native tool hooks, `@atrib/openinference` for
-OpenInference-shaped span intake, `@atrib/runtime-log` for bounded run windows,
-`@atrib/action-gate` for pre-action policy gates, `@atrib/verify` for accepted
-handoff claims, and `atrib-emit-cli` or the local substrate for hook-class
-observations.
+Those adapters use [`@atrib/mcp-wrap`](packages/mcp-wrap/README.md) for MCP
+tool calls, host-specific signing code for native tool hooks,
+[`@atrib/openinference`](packages/openinference/README.md) for
+OpenInference-shaped span intake,
+[`@atrib/runtime-log`](packages/runtime-log/README.md) for bounded run windows,
+[`@atrib/action-gate`](packages/action-gate/README.md) for pre-action policy
+gates, [`@atrib/verify`](packages/verify/README.md) for accepted handoff claims,
+and `atrib-emit-cli` or the local substrate for hook-class observations.
 
 The implementation rule: one host event has one signing owner. If an MCP wrapper
 already signs a tool call, the host adapter should correlate ids and skip a
@@ -177,12 +169,12 @@ The signatures, chain hashes, and transaction detection are production code. Onl
 
 Now that you've seen the demo, pick the install path that matches what you're doing:
 
-- Sign tool calls your MCP server handles: `@atrib/mcp` ([below](#sign-tool-calls-your-mcp-server))
-- Sign tool calls your agent makes: `@atrib/agent` ([below](#sign-tool-calls-your-agent))
-- Gate high-impact actions before they run: `@atrib/action-gate`
-- Attach signed records to an existing OpenInference span stream: `@atrib/openinference`
-- Prove a bounded run window from a host-owned runtime log: `@atrib/runtime-log`
-- Verify records someone else produced: `@atrib/verify` ([below](#verify-records-any-third-party))
+- Sign tool calls your MCP server handles: [`@atrib/mcp`](packages/mcp/README.md) ([below](#sign-tool-calls-your-mcp-server))
+- Sign tool calls your agent makes: [`@atrib/agent`](packages/agent/README.md) ([below](#sign-tool-calls-your-agent))
+- Gate high-impact actions before they run: [`@atrib/action-gate`](packages/action-gate/README.md)
+- Attach signed records to an existing OpenInference span stream: [`@atrib/openinference`](packages/openinference/README.md)
+- Prove a bounded run window from a host-owned runtime log: [`@atrib/runtime-log`](packages/runtime-log/README.md)
+- Verify records someone else produced: [`@atrib/verify`](packages/verify/README.md) ([below](#verify-records-any-third-party))
 
 ### Sign tool calls (your MCP server)
 
@@ -200,9 +192,10 @@ One line. Every successful tool call emits a signed attribution record, propagat
 
 ### Sign tool calls (your agent)
 
-`@atrib/agent` exports one interceptor plus a helper per framework. Some runtime
-examples use the host's native callback surface while keeping the same
-hash-only record shape. Start with the row matching your stack:
+[`@atrib/agent`](packages/agent/README.md) exports one interceptor plus a helper
+per framework. Some runtime examples use the host's native callback surface
+while keeping the same hash-only record shape. Start with the row matching your
+stack:
 
 | Example                                 | Path                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -220,7 +213,7 @@ hash-only record shape. Start with the row matching your stack:
 | Google stack chain proof                | [`packages/integration/examples/google-stack-chain/`](packages/integration/examples/google-stack-chain/) links AP2 / VI receipt verification, A2A signed handoff evidence, a Google ADK Python allow decision, and the ADK Python tool outcome through verifier-resolved `informed_by` records, with a deterministic snapshot, BigQuery Agent Analytics-shaped local fixture, Cloud Run-backed runtime path, and a visual workbench.                                                                                                                                                                                 |
 | OpenAI runtime receipts                 | [`packages/integration/examples/openai-agents-runtime/`](packages/integration/examples/openai-agents-runtime/) and [`packages/integration/examples/openai-responses/`](packages/integration/examples/openai-responses/)                                                                                                                                                                                                                                                                                                                                                                                              |
 | Mastra runtime receipts                 | [`packages/integration/examples/mastra-runtime/`](packages/integration/examples/mastra-runtime/)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Action-control gate proof               | [`packages/integration/examples/action-control-gate/`](packages/integration/examples/action-control-gate/) lets one browser-shaped read run, blocks one payment-impacting write, escalates one customer message, and proves each decision-to-outcome binding with `@atrib/action-gate`.                                                                                                                                                                                                                                                                                                                              |
+| Action-control gate proof               | [`packages/integration/examples/action-control-gate/`](packages/integration/examples/action-control-gate/) lets one browser-shaped read run, blocks one payment-impacting write, escalates one customer message, and proves each decision-to-outcome binding with [`@atrib/action-gate`](packages/action-gate/README.md).                                                                                                                                                                                                                                                                                      |
 | Browser workflow receipt                | [`packages/integration/examples/browser-workflow/`](packages/integration/examples/browser-workflow/)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Browserbase Stagehand proof             | [`packages/integration/examples/browserbase-stagehand/`](packages/integration/examples/browserbase-stagehand/) and [`proof-packets/browserbase-stagehand/`](proof-packets/browserbase-stagehand/)                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Firecrawl web ingestion proof           | [`packages/integration/examples/firecrawl-web-ingestion/`](packages/integration/examples/firecrawl-web-ingestion/) and [`proof-packets/firecrawl-web-ingestion/`](proof-packets/firecrawl-web-ingestion/)                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -294,7 +287,7 @@ atrib detects transaction events from all six simultaneously. It does not move m
 | **AP2**      | Google              | Successful CheckoutReceipt or PaymentReceipt | [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402)                |
 | **a2a-x402** | Google              | A2A task metadata `payment-completed`        | [§1.7.5](atrib-spec.md#175-ap2-and-a2a-x402)                |
 
-x401 is intentionally not in this table. It is a `401` proof-requirement protocol for credential-gated HTTP routes, so `@atrib/verify` treats x401 artifacts as authorization evidence rather than transaction signals. The current Proof issue and PR map lives in [`docs/proof-x401-open-threads.md`](docs/proof-x401-open-threads.md).
+x401 is intentionally not in this table. It is a `401` proof-requirement protocol for credential-gated HTTP routes, so [`@atrib/verify`](packages/verify/README.md) treats x401 artifacts as authorization evidence rather than transaction signals. The current Proof issue and PR map lives in [`docs/proof-x401-open-threads.md`](docs/proof-x401-open-threads.md).
 
 ## Packages
 
