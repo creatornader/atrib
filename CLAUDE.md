@@ -69,6 +69,7 @@ atrib/
       scripts/
         ap2-live-interop.ts    # Opt-in AP2 reference artifact harness. Reads AP2 result + AP2/VI evidence JSON, optionally verifies an atrib transaction-record artifact with counterparty attestation, and exits nonzero on drift.
         mcp-oauth-evidence.ts  # Local MCP/OAuth producer-to-verifier harness. Captures validated authInfo into sidecar evidence, verifies DPoP and scope constraints through `verifyRecord().evidence[]`, and proves raw bearer tokens stay local-only.
+        open-x401-credential-e2e.ts # Open local x401 credential-verifier proof. Issues and verifies a local JWT VC / VP, binds it to the x401 nonce, and prints sanitized evidence without needing a Proof account.
         proof-x401-node-runtime-interop.ts # Private Proof x401 Node SDK native proof. Runs the released SDK, emits current-spec x401 evidence, and keeps live npm readiness gated.
         proof-vc-common-x401-interop.ts # Private Proof VC verifier bridge. Turns Proof credential-verifier output into caller-owned x401 resultVerified evidence.
         proof-vc-token-capture.ts # Localhost Proof VP token capture helper. Uses caller-supplied Proof OAuth client config, verifies a real VP token in memory, and prints sanitized x401 evidence.

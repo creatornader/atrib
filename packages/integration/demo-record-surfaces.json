@@ -317,6 +317,13 @@
       "commands": ["x401-proof-sdk-compat"]
     },
     {
+      "id": "open-x401-credential-e2e",
+      "path": "scripts/open-x401-credential-e2e.ts",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["open-x401-credential-e2e"]
+    },
+    {
       "id": "proof-x401-node-runtime-interop",
       "path": "scripts/proof-x401-node-runtime-interop.ts",
       "record_class": "offline-local",

@@ -7244,6 +7244,15 @@ localhost browser callback when the operator supplies a Proof OAuth Application
 client id, a registered callback URI, and the holder email. The helper verifies
 the token without writing raw credential payloads to the repo.
 
+Follow-up on 2026-07-02: the public x401 E2E bar no longer depends on Proof
+platform account access. `@atrib/integration` now has an open local credential
+verifier path that uses the released `@proof.com/x401-node@0.3.0` wire SDK,
+issues a local JWT VC, presents it inside a signed VP token, verifies the holder
+signature, issuer signature, trusted issuer key, audience, x401 nonce, age, and
+KYC claims, accepts the `PROOF-RESPONSE`, and signs the atrib action chain. The
+Proof Cloud Wallet path remains optional provider interop, not the definition of
+x401 E2E.
+
 **Decision.** Add an opt-in producer capture path and a local proof-gate E2E
 harness, while keeping x401 as verifier evidence and keeping raw credential
 material out of public storage.
@@ -7264,6 +7273,12 @@ request ids and stale nonces, accepts a successful `PROOF-RESPONSE`, signs the
 attempted action and successful action, links the successful record to the
 attempted record through `informed_by`, and verifies the resulting x401 evidence
 with `@atrib/verify`.
+
+The open credential-verifier harness adds credential cryptography to that local
+path without making Proof the required issuer. It creates local issuer and holder
+ES256 keys, signs a JWT VC, signs a VP token, verifies issuer trust through a
+local key thumbprint, checks the VP audience and nonce against the x401 request,
+and stores only hashes plus verifier outcomes in the public packet.
 
 The same harness also covers multi-endpoint propagation. It runs two protected
 routes with separate request ids and nonces in one `context_id`, signs each
@@ -7314,6 +7329,10 @@ panel scoped to the `/v1/lookup` log response.
 - _Keep the private fixture pinned to the fork after the npm release._ Rejected.
   Once Proof released `@proof.com/x401-node@0.3.0`, the stronger interop claim
   comes from the public package, not the fork.
+- _Treat Proof platform account access as required for x401 E2E._ Rejected.
+  x401 is a public HTTP proof-requirement protocol. A Proof-issued credential is
+  one provider profile, not the only way to run the current-spec challenge,
+  response, result, credential-verifier, and signed-action chain.
 - _Treat the local proof gate as upstream interop._ Rejected. The harness proves
   atrib's capture, signing, verification, archive, and Explorer path against
   current x401 semantics. It does not prove compatibility with a Proof SDK
@@ -7337,6 +7356,10 @@ panel scoped to the `/v1/lookup` log response.
   remains separate and protocol-specific.
 - atrib can now claim native Proof SDK runtime interop against released
   `@proof.com/x401-node@0.3.0`.
+- atrib can now claim public x401 credential-verifier E2E without a Proof
+  platform account: local JWT VC issuance, signed VP presentation, local issuer
+  trust, nonce binding, proof response acceptance, and signed action
+  propagation.
 - atrib can now show a Proof credential-verifier bridge through
   `@proof.com/proof-vc-common@0.3.0` plus
   `@proof.com/proof-vc-server@0.3.0`: Proof VC acceptance becomes caller-owned
@@ -7356,6 +7379,10 @@ panel scoped to the `/v1/lookup` log response.
   producer-side x401 capture helper.
 - [`packages/integration/src/x401-proof-gate.ts`](packages/integration/src/x401-proof-gate.ts),
   local current-spec proof-gate harness.
+- [`packages/integration/src/open-x401-credential-e2e.ts`](packages/integration/src/open-x401-credential-e2e.ts),
+  open local JWT VC / VP credential-verifier harness.
+- [`packages/integration/scripts/open-x401-credential-e2e.ts`](packages/integration/scripts/open-x401-credential-e2e.ts),
+  runnable public x401 credential-verifier proof.
 - [`packages/integration/src/proof-x401-node-runtime.ts`](packages/integration/src/proof-x401-node-runtime.ts),
   private native runtime fixture for the released Proof x401 Node SDK.
 - [`packages/integration/scripts/proof-x401-node-runtime-interop.ts`](packages/integration/scripts/proof-x401-node-runtime-interop.ts),

@@ -4,6 +4,7 @@ import { detectTransaction } from '@atrib/agent'
 import { bindArchiveServer } from '@atrib/archive-node'
 import { base64urlEncode, signRecord, type AtribRecord } from '@atrib/mcp'
 import { encodeX401HeaderObject, verifyAuthorizationEvidence, verifyRecord } from '@atrib/verify'
+import { runOpenX401CredentialE2E } from '../src/open-x401-credential-e2e.js'
 import {
   runX401AAuthPaymentChainHarness,
   runX401MultiEndpointHarness,
@@ -263,5 +264,49 @@ describe('x401 evidence e2e', () => {
         first.record_hashes.successful_action,
       ]),
     )
+  })
+
+  it('runs open current-spec x401 E2E with local JWT VC verification', async () => {
+    const run = await runOpenX401CredentialE2E()
+
+    expect(run.attempts).toEqual({
+      initial_status: 401,
+      stale_nonce_status: 401,
+      success_status: 200,
+    })
+    expect(run.credential_verification).toMatchObject({
+      valid: true,
+      credential_result_verified: true,
+      nonce_verified: true,
+      issuer_trust_verified: true,
+      subject_over_18: true,
+      credential_format: 'jwt_vc_json',
+    })
+    expect(run.verification.valid).toBe(true)
+    expect(run.verification.warnings).toEqual([])
+    expect(run.verification.informed_by_resolution?.resolved).toEqual([
+      run.record_hashes.attempted_action,
+    ])
+    expect(run.public_packet).toMatchObject({
+      provider_profile: 'open-local-jwt-vc',
+      x401_sdk_package: '@proof.com/x401-node',
+      x401_spec_version: '0.2.0',
+      credential_protocol: 'openid4vp-v1-signed',
+      credential_format: 'jwt_vc_json',
+      credential_result_verified: true,
+      credential_nonce_verified: true,
+      issuer_trust_verified: true,
+      subject_over_18: true,
+      proof_gate_status: 'passed',
+      raw_credential_material_stored: false,
+      payment_detected: false,
+      informed_by_resolved: [run.record_hashes.attempted_action],
+    })
+    expect(run.public_packet.proof_request_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(run.public_packet.proof_response_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(run.public_packet.proof_result_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(JSON.stringify(run.public_packet)).not.toContain('vp_token')
+    expect(JSON.stringify(run.public_packet)).not.toContain('verifiableCredential')
+    expect(JSON.stringify(run.public_evidence)).not.toContain('vp_token')
   })
 })
