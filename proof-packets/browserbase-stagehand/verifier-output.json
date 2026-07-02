@@ -4,113 +4,245 @@
   "mode": "live",
   "live_upstream": true,
   "upstream_shape": "Browserbase hosted Streamable HTTP MCP endpoint at https://mcp.browserbase.com/mcp",
-  "operations": [
-    "start",
-    "navigate",
-    "observe",
-    "act",
-    "extract",
-    "end"
-  ],
+  "operations": ["start", "navigate", "observe", "act", "extract", "end"],
   "records": [
     {
       "tool_name": "start",
-      "record_hash": "sha256:535201b60e3660f1b2f5babcfdd85f09f3a1503f4ad73cfc419528285c696aae",
-      "log_index": 65792,
+      "record_hash": "sha256:3fec4c4fe89b52120116e10df30738e735305622a5d11b5e6a58044bd79c8a35",
+      "log_index": 69802,
       "proof": {
-        "record_hash": "sha256:535201b60e3660f1b2f5babcfdd85f09f3a1503f4ad73cfc419528285c696aae",
-        "log_index": 65792,
-        "leaf_hash": "hF3FOLKuakfSnYrHClWtWvCBUMwu3YvuBCsHnCcsdtM=",
-        "checkpoint": "log.atrib.dev/v1\n65793\n/L9AkxO1l4gYZ+0jvV4IykBp3hQlnwt9lAO7Mm5Iuqo=\n\n— log.atrib.dev/v1 5awdbXYgbT9OcEuWNlxQZip71l2WtZBOUyTez73Caa08XddhkxH9IyRmn1NPBOUuTE0kDNkemTweq8B86o5AzExfEQo=\n",
+        "record_hash": "sha256:3fec4c4fe89b52120116e10df30738e735305622a5d11b5e6a58044bd79c8a35",
+        "log_index": 69802,
+        "leaf_hash": "MLYOIwy+iwCHDEFKBzok/KaHBDWqjmvhPU2FUlT75/Y=",
+        "checkpoint": "log.atrib.dev/v1\n69803\nDiFvOcs8nklLE4lV5Vkxkde3Z9gwG7gaTGXGjCTW/6U=\n\n— log.atrib.dev/v1 5awdbdp3/ju0iIs1etE/7um+D8bktl4S1O76Fgvp+j2eGT/30Nu0OhKp+xSZDyQ+VwcgtUTMLZy9ZbHUekKuVlqBVgo=\n",
         "inclusion_proof": [
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "Y+npUg9niSNYzflTPgr92mkbWND1oWH6dvc9EB6mkAw=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       }
     },
     {
       "tool_name": "navigate",
-      "record_hash": "sha256:1f92f466f3bcbab058f9dc2fec99c5536a6d2f9f71fd21aa6b1b48417f1ad19d",
-      "log_index": 65793,
+      "record_hash": "sha256:310c9186053fc9aca97c18535634862e1698d29e94f10e611ededca406a349fd",
+      "log_index": 69803,
       "proof": {
-        "record_hash": "sha256:1f92f466f3bcbab058f9dc2fec99c5536a6d2f9f71fd21aa6b1b48417f1ad19d",
-        "log_index": 65793,
-        "leaf_hash": "bziullJnLXeQLO+vFgwhjMOCY4jY1lC/nWEB6e34A7M=",
-        "checkpoint": "log.atrib.dev/v1\n65794\n0FYhrPzgy3Pygd+KUHkRL0H9D1c7UYe3nLUiaX8thWw=\n\n— log.atrib.dev/v1 5awdbTJh6qaRIxJdUjljws4A7UflTv7hKHQmJD/UL5fp2AU9Z0ZyV+dbWoDwknDhfg6SBHWrDAcdnmVmWDj+CHmW9wU=\n",
+        "record_hash": "sha256:310c9186053fc9aca97c18535634862e1698d29e94f10e611ededca406a349fd",
+        "log_index": 69803,
+        "leaf_hash": "1dcBvzzePDWpNH4iLzpmgciu1RtfNgQKakK7mmvyCL0=",
+        "checkpoint": "log.atrib.dev/v1\n69804\nZh85rFW0Yh/v/IHFAkAPnMSD9vcGFtGHUUu72ChjM+A=\n\n— log.atrib.dev/v1 5awdbcie3fbiloQfFPIYMMlNaRB6XOPSh7xAvD9stzCAL2pVrDJP3yflNEVj0yBiXp2E5+VnpswlzRbwa/w7DJ9baQc=\n",
         "inclusion_proof": [
-          "hF3FOLKuakfSnYrHClWtWvCBUMwu3YvuBCsHnCcsdtM=",
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "MLYOIwy+iwCHDEFKBzok/KaHBDWqjmvhPU2FUlT75/Y=",
+          "Y+npUg9niSNYzflTPgr92mkbWND1oWH6dvc9EB6mkAw=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       }
     },
     {
       "tool_name": "observe",
-      "record_hash": "sha256:4fd3e736c98b2652fda30963ff5d379db210b4dff71db401c39805936a1361d4",
-      "log_index": 65794,
+      "record_hash": "sha256:afb2d48ba555b06efd1ea7feaf052a0e630f8bb57167990782d0ade5c383030a",
+      "log_index": 69804,
       "proof": {
-        "record_hash": "sha256:4fd3e736c98b2652fda30963ff5d379db210b4dff71db401c39805936a1361d4",
-        "log_index": 65794,
-        "leaf_hash": "gydof70inI1slLiLr+zyHYBVViEoU03aBK5bGBMnYVc=",
-        "checkpoint": "log.atrib.dev/v1\n65795\nLj0VufAzQ25MlTNx37hOkojOkQliW2o8c7+XQkT+x9U=\n\n— log.atrib.dev/v1 5awdbVnX7STCml4NSF7u+8wqpvLrKhNb1sssYRNuaLvj5xn1G2KLip++dMFxbH8thunwe1zt61s8FHRZOA6oiBTkAQc=\n",
+        "record_hash": "sha256:afb2d48ba555b06efd1ea7feaf052a0e630f8bb57167990782d0ade5c383030a",
+        "log_index": 69804,
+        "leaf_hash": "F4zPXq4lAJ1/QZXIhStZsuD9DFScmVFr5oLtP6FAn8s=",
+        "checkpoint": "log.atrib.dev/v1\n69805\nvGfKlVvDC6uV2Cd81JoTvk5iIyYlmxyPRVN4GvP0R0s=\n\n— log.atrib.dev/v1 5awdbQwsPM+TT5EhKh9pouHyXvqWH+spnouFstYZAqyFT78IJ6saAs7gobFA0vn4Cc8nbma69M4vo/mI9oN3Du5xdA4=\n",
         "inclusion_proof": [
-          "qWqZ9LIL9qYZi+aZcvvZXPShuVTxKF8i+dhI0S1OLyw=",
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "dbT4F/TuSClaYrpVRoiMNwQs0K+IjLaOeNezpevDlws=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       }
     },
     {
       "tool_name": "act",
-      "record_hash": "sha256:9295f755361578f90242fe7e5d3d59c99a76e36942dfd2f7b34277dcf70cb65c",
-      "log_index": 65795,
+      "record_hash": "sha256:3afb35ced45576a91d7b870520adfeab16a8e20503eef8527c0b313cd2eea5c3",
+      "log_index": 69805,
       "proof": {
-        "record_hash": "sha256:9295f755361578f90242fe7e5d3d59c99a76e36942dfd2f7b34277dcf70cb65c",
-        "log_index": 65795,
-        "leaf_hash": "YuYFkoymF9iXsCUzDt1lele5IcNe/NS1ca8qnJQqFtM=",
-        "checkpoint": "log.atrib.dev/v1\n65796\n/rZX0FBs7m4p/WIPdzeHm54l8fu+seZG/GLO/TQMxA4=\n\n— log.atrib.dev/v1 5awdbbF6t63wdQOJx4hGBYLxrYiJY2hYzwgbwN1Tw2m51Qgozc+sFNcBzIvB4ppfn2n7KOPxeXx8azmzm4V2M3jHXA8=\n",
+        "record_hash": "sha256:3afb35ced45576a91d7b870520adfeab16a8e20503eef8527c0b313cd2eea5c3",
+        "log_index": 69805,
+        "leaf_hash": "lGGHaluRQ2YIZuy/9hNe3kuoBCQU7kag7g4cgaoA8tw=",
+        "checkpoint": "log.atrib.dev/v1\n69806\ndRxSQcOciRpf1HBcyBek0+sMujgPPl7Q0TErUOMn65w=\n\n— log.atrib.dev/v1 5awdbYVCB3cDCly1DrsPXJF00G4Qt7brX96TNIPLMONAPDOIEDtXctOPA536AhKzwxvL2EwxoqxXTe3R5Ta452J4MAk=\n",
         "inclusion_proof": [
-          "gydof70inI1slLiLr+zyHYBVViEoU03aBK5bGBMnYVc=",
-          "qWqZ9LIL9qYZi+aZcvvZXPShuVTxKF8i+dhI0S1OLyw=",
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "F4zPXq4lAJ1/QZXIhStZsuD9DFScmVFr5oLtP6FAn8s=",
+          "dbT4F/TuSClaYrpVRoiMNwQs0K+IjLaOeNezpevDlws=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       }
     },
     {
       "tool_name": "extract",
-      "record_hash": "sha256:8910a05fcfc243096e9238c311218304af569c1cc7e71774ccd834531d2ec028",
-      "log_index": 65796,
+      "record_hash": "sha256:4dd3490d3eaed99cd2abc4ea112cf8d87970d9f591e5c73c0366c5cf270ccb85",
+      "log_index": 69806,
       "proof": {
-        "record_hash": "sha256:8910a05fcfc243096e9238c311218304af569c1cc7e71774ccd834531d2ec028",
-        "log_index": 65796,
-        "leaf_hash": "yCMWmcTEvwbuWRhnlx6VkxXQJ2g9wVpkSopGT+igl3g=",
-        "checkpoint": "log.atrib.dev/v1\n65797\nZICdcHtVN0JfSQ5rPXubTKEwK4MAJpUy2h2mzfaEd6Y=\n\n— log.atrib.dev/v1 5awdbV1Vysf4LB2jqgS0Tce5h1YdmXKTsISrv7DWtIKuNfoFJ/e+5OAD8OOgcyi7lgsjdERVBloQqebJOYSXToSImA0=\n",
+        "record_hash": "sha256:4dd3490d3eaed99cd2abc4ea112cf8d87970d9f591e5c73c0366c5cf270ccb85",
+        "log_index": 69806,
+        "leaf_hash": "+PUo45b82+BS2Mw6Iun+jg819vbyxCcIeG3xnxDwKfs=",
+        "checkpoint": "log.atrib.dev/v1\n69807\nZtxZvCwxi2FJlxQkSzpkC9MT2ZbtQ8DIxj4RZgG4KbM=\n\n— log.atrib.dev/v1 5awdbV3shEtHiupCS0NtrVfRw7GAU85i2HxG549If1w+a0WSXVpcyZVILjkIbrgfZwFUM6riZh0Wjk1xpwVhmi7q1wY=\n",
         "inclusion_proof": [
-          "tyrU4x5LYJghmLVZBjD6waaevtUXw/mDgdntjz15t6g=",
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "Nay3nnKdddYiblHAz/Z08U8TTmRBvXi/4hcALVoPmS8=",
+          "dbT4F/TuSClaYrpVRoiMNwQs0K+IjLaOeNezpevDlws=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       }
     },
     {
       "tool_name": "end",
-      "record_hash": "sha256:a78400352f4daab9d03ae606854c36565bbd911dba736ece22535f8a8ffec4a6",
-      "log_index": 65797,
+      "record_hash": "sha256:9a9a4833f9df89deb95742d8a61781695fe2435e514b688fd7b9efcc033dbf8c",
+      "log_index": 69807,
       "proof": {
-        "record_hash": "sha256:a78400352f4daab9d03ae606854c36565bbd911dba736ece22535f8a8ffec4a6",
-        "log_index": 65797,
-        "leaf_hash": "wn4MdRClO0wnWnqs4Kcmaoflm3QfSMcihE0s6fbOObk=",
-        "checkpoint": "log.atrib.dev/v1\n65798\nc01DryO3TGSCTsKqh5Jv/KknvSwqcC4MUeMsdEAc5MA=\n\n— log.atrib.dev/v1 5awdbUmghAV6aMBqQGNz/QnLjqy6lyxQPnn7lYqvMZhBWSbRHIpTk1r+XvAVLFEPTVDvHvfiJzg2rbAZEzKkCTxFdAM=\n",
+        "record_hash": "sha256:9a9a4833f9df89deb95742d8a61781695fe2435e514b688fd7b9efcc033dbf8c",
+        "log_index": 69807,
+        "leaf_hash": "TxE/ORa2VOG/Xxi6pHarbTe6xKrELXdliwngsCQe9Ek=",
+        "checkpoint": "log.atrib.dev/v1\n69808\nyCVLhd3WNyoX8bSJh5pgoI4HpbjkHatOGNLZCOejwC8=\n\n— log.atrib.dev/v1 5awdbRv/IqXWyhXx4YM+xDcv3nOSn8vmvwFPsg+dyK/OCv4OMuGTM7PtrKDNuBnO1MAM3YamMJK6a4ecIftc2iBp2QQ=\n",
         "inclusion_proof": [
-          "yCMWmcTEvwbuWRhnlx6VkxXQJ2g9wVpkSopGT+igl3g=",
-          "tyrU4x5LYJghmLVZBjD6waaevtUXw/mDgdntjz15t6g=",
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "+PUo45b82+BS2Mw6Iun+jg819vbyxCcIeG3xnxDwKfs=",
+          "Nay3nnKdddYiblHAz/Z08U8TTmRBvXi/4hcALVoPmS8=",
+          "dbT4F/TuSClaYrpVRoiMNwQs0K+IjLaOeNezpevDlws=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       }
     }
   ],
+  "action_policy": {
+    "schema": "atrib.packet.action_policy.v1",
+    "decisions": [
+      {
+        "kind": "policy_decision",
+        "tool_name": "act",
+        "event_type": "https://browserbase-action-gate.atrib.dev/v1/decision",
+        "record_hash": "sha256:f69c1470d23ffc99eff13b53b9b623770db6671a72596683dfe925e1af16c113",
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:e21c37845b851b8a5b3819ea01c7cebd7be3d45440a8a1e6e622806e4dde2cf8",
+          "creator_key": "Dupw5vSWN0U-kPw5LpmlUuiWLr92OOSmL5BUso9E4RI",
+          "chain_root": "sha256:afb2d48ba555b06efd1ea7feaf052a0e630f8bb57167990782d0ade5c383030a",
+          "event_type": "https://browserbase-action-gate.atrib.dev/v1/decision",
+          "context_id": "81b9c034801db162e0b756c3be19467c",
+          "timestamp": 1782978882206,
+          "signature": "cUni5xxAvfgEF-8chOobLzOr7S-AM6oa4NV3Tb0rQtiiSD5J9uqXZpQ3wR-vvK-QGb-6AEWkr46NvKJlV7QtDw",
+          "args_hash": "sha256:d2bc70700e963691f6812353754363fb54108ee0b2b3fdbd194e17941377f576",
+          "informed_by": [
+            "sha256:afb2d48ba555b06efd1ea7feaf052a0e630f8bb57167990782d0ade5c383030a"
+          ],
+          "tool_name": "act"
+        },
+        "chain_root": "sha256:afb2d48ba555b06efd1ea7feaf052a0e630f8bb57167990782d0ade5c383030a",
+        "informed_by": ["sha256:afb2d48ba555b06efd1ea7feaf052a0e630f8bb57167990782d0ade5c383030a"],
+        "args_hash": "sha256:d2bc70700e963691f6812353754363fb54108ee0b2b3fdbd194e17941377f576",
+        "record_valid": true,
+        "content": {
+          "schema": "atrib.browserbase.action_policy_decision.v1",
+          "packet": "browserbase-stagehand",
+          "tool_name": "act",
+          "decision_boundary": "pre_action",
+          "action_class": "browser_act",
+          "risk_class": "browser_state_change",
+          "target_url_hash": "sha256:7ff155fa92253f1e49f79487c507bb8d9d0f3e6d388ba410889dbdc64495b7cb",
+          "proposed_action_hash": "sha256:d929ca76215e074a44d023f0bc0aa8b1f25638c45e70e2d6497edbad3a89bda7",
+          "observed_state_hash": "sha256:0cc101ae51f1f16dc0e917e6672f48eae44b31a1193d429f146ac3f6baeeb382",
+          "observed_record_hash": "sha256:afb2d48ba555b06efd1ea7feaf052a0e630f8bb57167990782d0ade5c383030a",
+          "allowed_origin_hashes": [
+            "sha256:fd609c659c0cddeaaaf430a9074de8d41f244c66d9bbdc8bea1e523cc38c4b79"
+          ],
+          "decision": "allow",
+          "policy_version": "browserbase-action-gate-v0",
+          "reason_codes": ["policy_allow"]
+        },
+        "proof": {
+          "log_index": 69808,
+          "leaf_hash": "niCUx1EicLFhPwGjvmaNJ87q/dHsMYbHXPV7M8694/U=",
+          "checkpoint": "log.atrib.dev/v1\n69809\n9XfxyEpZs/2tvTdT6dNG2osa/62ZCT+R/zH+StG2Yng=\n\n— log.atrib.dev/v1 5awdbXYrhK+SAEZjfVOcGMvXO+XqDVDsPh8gVv8RY2H3kad7IyCCo9R3+YYwkXXj/nHYs84KDB5wXN+GW/3w8AVJZwc=\n",
+          "inclusion_proof": [
+            "9xnK37mcc2QMVS8XClGxvXsuUys0qtjtiJi9fISXatQ=",
+            "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+            "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+            "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
+            "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+          ],
+          "public_endpoint": "https://log.atrib.dev/v1/entries",
+          "inclusion_verified": true
+        }
+      }
+    ],
+    "outcomes": [
+      {
+        "kind": "policy_outcome",
+        "tool_name": "act",
+        "event_type": "https://browserbase-action-gate.atrib.dev/v1/decision",
+        "record_hash": "sha256:d5ea20d9ef67977ba3d37dc1c1579fbc2c121d8ee160e9fa8a17b3bfd0874c0a",
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:7363919f1ad5a114f5d29768384000a50ec6ba19eb5256b666fc361723c8fbf1",
+          "creator_key": "Dupw5vSWN0U-kPw5LpmlUuiWLr92OOSmL5BUso9E4RI",
+          "chain_root": "sha256:3afb35ced45576a91d7b870520adfeab16a8e20503eef8527c0b313cd2eea5c3",
+          "event_type": "https://browserbase-action-gate.atrib.dev/v1/decision",
+          "context_id": "fbc9fccbcc37d559e63b69eb53d635e0",
+          "timestamp": 1782978884516,
+          "signature": "O-PGtWRIbGQg0zmF0YQzzTmyHwITVu9sOnfx9eN9niW9ojlQsO0voh36j7s8tGDL6i2uk1Uhg4e0ZBU1jTwHAA",
+          "args_hash": "sha256:ac7ff83f9e29b9287d2e3fa992ce16e10aa3e77b788c5aa70f53b4d131ef72d8",
+          "informed_by": [
+            "sha256:3afb35ced45576a91d7b870520adfeab16a8e20503eef8527c0b313cd2eea5c3",
+            "sha256:f69c1470d23ffc99eff13b53b9b623770db6671a72596683dfe925e1af16c113"
+          ],
+          "tool_name": "act"
+        },
+        "chain_root": "sha256:3afb35ced45576a91d7b870520adfeab16a8e20503eef8527c0b313cd2eea5c3",
+        "informed_by": [
+          "sha256:3afb35ced45576a91d7b870520adfeab16a8e20503eef8527c0b313cd2eea5c3",
+          "sha256:f69c1470d23ffc99eff13b53b9b623770db6671a72596683dfe925e1af16c113"
+        ],
+        "args_hash": "sha256:ac7ff83f9e29b9287d2e3fa992ce16e10aa3e77b788c5aa70f53b4d131ef72d8",
+        "record_valid": true,
+        "content": {
+          "schema": "atrib.packet.action_policy_outcome.v1",
+          "decision": "allow",
+          "executed": true,
+          "action_record_hash": "sha256:3afb35ced45576a91d7b870520adfeab16a8e20503eef8527c0b313cd2eea5c3",
+          "decision_record_hash": "sha256:f69c1470d23ffc99eff13b53b9b623770db6671a72596683dfe925e1af16c113"
+        },
+        "proof": {
+          "log_index": 69809,
+          "leaf_hash": "xtH7xZW1LiIyCMrFMcbSUQXZXcVhtU/XrWepaQMb+m8=",
+          "checkpoint": "log.atrib.dev/v1\n69810\nZizHmNVbvTspufFLhdfX+JsWNGhiH8cpCBUnP6KyT+4=\n\n— log.atrib.dev/v1 5awdbWKisYho4+KwfbAxfXZT2T+kvTD2fYppp78rJJWb5rzsTRRzv/xKg8vBMZ9EUKcdfUflyVeJkuARjS1djuTlHgc=\n",
+          "inclusion_proof": [
+            "niCUx1EicLFhPwGjvmaNJ87q/dHsMYbHXPV7M8694/U=",
+            "9xnK37mcc2QMVS8XClGxvXsuUys0qtjtiJi9fISXatQ=",
+            "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+            "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+            "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
+            "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
+          ],
+          "public_endpoint": "https://log.atrib.dev/v1/entries",
+          "inclusion_verified": true
+        }
+      }
+    ],
+    "stopped_before": null,
+    "blocked_tool_executed": false
+  },
   "log": {
     "mode": "public",
     "endpoint": "https://log.atrib.dev/v1/entries",
@@ -118,69 +250,91 @@
     "inclusion_verified": true,
     "proofs": [
       {
-        "record_hash": "sha256:535201b60e3660f1b2f5babcfdd85f09f3a1503f4ad73cfc419528285c696aae",
-        "log_index": 65792,
-        "leaf_hash": "hF3FOLKuakfSnYrHClWtWvCBUMwu3YvuBCsHnCcsdtM=",
-        "checkpoint": "log.atrib.dev/v1\n65793\n/L9AkxO1l4gYZ+0jvV4IykBp3hQlnwt9lAO7Mm5Iuqo=\n\n— log.atrib.dev/v1 5awdbXYgbT9OcEuWNlxQZip71l2WtZBOUyTez73Caa08XddhkxH9IyRmn1NPBOUuTE0kDNkemTweq8B86o5AzExfEQo=\n",
+        "record_hash": "sha256:3fec4c4fe89b52120116e10df30738e735305622a5d11b5e6a58044bd79c8a35",
+        "log_index": 69802,
+        "leaf_hash": "MLYOIwy+iwCHDEFKBzok/KaHBDWqjmvhPU2FUlT75/Y=",
+        "checkpoint": "log.atrib.dev/v1\n69803\nDiFvOcs8nklLE4lV5Vkxkde3Z9gwG7gaTGXGjCTW/6U=\n\n— log.atrib.dev/v1 5awdbdp3/ju0iIs1etE/7um+D8bktl4S1O76Fgvp+j2eGT/30Nu0OhKp+xSZDyQ+VwcgtUTMLZy9ZbHUekKuVlqBVgo=\n",
         "inclusion_proof": [
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "Y+npUg9niSNYzflTPgr92mkbWND1oWH6dvc9EB6mkAw=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       },
       {
-        "record_hash": "sha256:1f92f466f3bcbab058f9dc2fec99c5536a6d2f9f71fd21aa6b1b48417f1ad19d",
-        "log_index": 65793,
-        "leaf_hash": "bziullJnLXeQLO+vFgwhjMOCY4jY1lC/nWEB6e34A7M=",
-        "checkpoint": "log.atrib.dev/v1\n65794\n0FYhrPzgy3Pygd+KUHkRL0H9D1c7UYe3nLUiaX8thWw=\n\n— log.atrib.dev/v1 5awdbTJh6qaRIxJdUjljws4A7UflTv7hKHQmJD/UL5fp2AU9Z0ZyV+dbWoDwknDhfg6SBHWrDAcdnmVmWDj+CHmW9wU=\n",
+        "record_hash": "sha256:310c9186053fc9aca97c18535634862e1698d29e94f10e611ededca406a349fd",
+        "log_index": 69803,
+        "leaf_hash": "1dcBvzzePDWpNH4iLzpmgciu1RtfNgQKakK7mmvyCL0=",
+        "checkpoint": "log.atrib.dev/v1\n69804\nZh85rFW0Yh/v/IHFAkAPnMSD9vcGFtGHUUu72ChjM+A=\n\n— log.atrib.dev/v1 5awdbcie3fbiloQfFPIYMMlNaRB6XOPSh7xAvD9stzCAL2pVrDJP3yflNEVj0yBiXp2E5+VnpswlzRbwa/w7DJ9baQc=\n",
         "inclusion_proof": [
-          "hF3FOLKuakfSnYrHClWtWvCBUMwu3YvuBCsHnCcsdtM=",
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "MLYOIwy+iwCHDEFKBzok/KaHBDWqjmvhPU2FUlT75/Y=",
+          "Y+npUg9niSNYzflTPgr92mkbWND1oWH6dvc9EB6mkAw=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       },
       {
-        "record_hash": "sha256:4fd3e736c98b2652fda30963ff5d379db210b4dff71db401c39805936a1361d4",
-        "log_index": 65794,
-        "leaf_hash": "gydof70inI1slLiLr+zyHYBVViEoU03aBK5bGBMnYVc=",
-        "checkpoint": "log.atrib.dev/v1\n65795\nLj0VufAzQ25MlTNx37hOkojOkQliW2o8c7+XQkT+x9U=\n\n— log.atrib.dev/v1 5awdbVnX7STCml4NSF7u+8wqpvLrKhNb1sssYRNuaLvj5xn1G2KLip++dMFxbH8thunwe1zt61s8FHRZOA6oiBTkAQc=\n",
+        "record_hash": "sha256:afb2d48ba555b06efd1ea7feaf052a0e630f8bb57167990782d0ade5c383030a",
+        "log_index": 69804,
+        "leaf_hash": "F4zPXq4lAJ1/QZXIhStZsuD9DFScmVFr5oLtP6FAn8s=",
+        "checkpoint": "log.atrib.dev/v1\n69805\nvGfKlVvDC6uV2Cd81JoTvk5iIyYlmxyPRVN4GvP0R0s=\n\n— log.atrib.dev/v1 5awdbQwsPM+TT5EhKh9pouHyXvqWH+spnouFstYZAqyFT78IJ6saAs7gobFA0vn4Cc8nbma69M4vo/mI9oN3Du5xdA4=\n",
         "inclusion_proof": [
-          "qWqZ9LIL9qYZi+aZcvvZXPShuVTxKF8i+dhI0S1OLyw=",
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "dbT4F/TuSClaYrpVRoiMNwQs0K+IjLaOeNezpevDlws=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       },
       {
-        "record_hash": "sha256:9295f755361578f90242fe7e5d3d59c99a76e36942dfd2f7b34277dcf70cb65c",
-        "log_index": 65795,
-        "leaf_hash": "YuYFkoymF9iXsCUzDt1lele5IcNe/NS1ca8qnJQqFtM=",
-        "checkpoint": "log.atrib.dev/v1\n65796\n/rZX0FBs7m4p/WIPdzeHm54l8fu+seZG/GLO/TQMxA4=\n\n— log.atrib.dev/v1 5awdbbF6t63wdQOJx4hGBYLxrYiJY2hYzwgbwN1Tw2m51Qgozc+sFNcBzIvB4ppfn2n7KOPxeXx8azmzm4V2M3jHXA8=\n",
+        "record_hash": "sha256:3afb35ced45576a91d7b870520adfeab16a8e20503eef8527c0b313cd2eea5c3",
+        "log_index": 69805,
+        "leaf_hash": "lGGHaluRQ2YIZuy/9hNe3kuoBCQU7kag7g4cgaoA8tw=",
+        "checkpoint": "log.atrib.dev/v1\n69806\ndRxSQcOciRpf1HBcyBek0+sMujgPPl7Q0TErUOMn65w=\n\n— log.atrib.dev/v1 5awdbYVCB3cDCly1DrsPXJF00G4Qt7brX96TNIPLMONAPDOIEDtXctOPA536AhKzwxvL2EwxoqxXTe3R5Ta452J4MAk=\n",
         "inclusion_proof": [
-          "gydof70inI1slLiLr+zyHYBVViEoU03aBK5bGBMnYVc=",
-          "qWqZ9LIL9qYZi+aZcvvZXPShuVTxKF8i+dhI0S1OLyw=",
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "F4zPXq4lAJ1/QZXIhStZsuD9DFScmVFr5oLtP6FAn8s=",
+          "dbT4F/TuSClaYrpVRoiMNwQs0K+IjLaOeNezpevDlws=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       },
       {
-        "record_hash": "sha256:8910a05fcfc243096e9238c311218304af569c1cc7e71774ccd834531d2ec028",
-        "log_index": 65796,
-        "leaf_hash": "yCMWmcTEvwbuWRhnlx6VkxXQJ2g9wVpkSopGT+igl3g=",
-        "checkpoint": "log.atrib.dev/v1\n65797\nZICdcHtVN0JfSQ5rPXubTKEwK4MAJpUy2h2mzfaEd6Y=\n\n— log.atrib.dev/v1 5awdbV1Vysf4LB2jqgS0Tce5h1YdmXKTsISrv7DWtIKuNfoFJ/e+5OAD8OOgcyi7lgsjdERVBloQqebJOYSXToSImA0=\n",
+        "record_hash": "sha256:4dd3490d3eaed99cd2abc4ea112cf8d87970d9f591e5c73c0366c5cf270ccb85",
+        "log_index": 69806,
+        "leaf_hash": "+PUo45b82+BS2Mw6Iun+jg819vbyxCcIeG3xnxDwKfs=",
+        "checkpoint": "log.atrib.dev/v1\n69807\nZtxZvCwxi2FJlxQkSzpkC9MT2ZbtQ8DIxj4RZgG4KbM=\n\n— log.atrib.dev/v1 5awdbV3shEtHiupCS0NtrVfRw7GAU85i2HxG549If1w+a0WSXVpcyZVILjkIbrgfZwFUM6riZh0Wjk1xpwVhmi7q1wY=\n",
         "inclusion_proof": [
-          "tyrU4x5LYJghmLVZBjD6waaevtUXw/mDgdntjz15t6g=",
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "Nay3nnKdddYiblHAz/Z08U8TTmRBvXi/4hcALVoPmS8=",
+          "dbT4F/TuSClaYrpVRoiMNwQs0K+IjLaOeNezpevDlws=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       },
       {
-        "record_hash": "sha256:a78400352f4daab9d03ae606854c36565bbd911dba736ece22535f8a8ffec4a6",
-        "log_index": 65797,
-        "leaf_hash": "wn4MdRClO0wnWnqs4Kcmaoflm3QfSMcihE0s6fbOObk=",
-        "checkpoint": "log.atrib.dev/v1\n65798\nc01DryO3TGSCTsKqh5Jv/KknvSwqcC4MUeMsdEAc5MA=\n\n— log.atrib.dev/v1 5awdbUmghAV6aMBqQGNz/QnLjqy6lyxQPnn7lYqvMZhBWSbRHIpTk1r+XvAVLFEPTVDvHvfiJzg2rbAZEzKkCTxFdAM=\n",
+        "record_hash": "sha256:9a9a4833f9df89deb95742d8a61781695fe2435e514b688fd7b9efcc033dbf8c",
+        "log_index": 69807,
+        "leaf_hash": "TxE/ORa2VOG/Xxi6pHarbTe6xKrELXdliwngsCQe9Ek=",
+        "checkpoint": "log.atrib.dev/v1\n69808\nyCVLhd3WNyoX8bSJh5pgoI4HpbjkHatOGNLZCOejwC8=\n\n— log.atrib.dev/v1 5awdbRv/IqXWyhXx4YM+xDcv3nOSn8vmvwFPsg+dyK/OCv4OMuGTM7PtrKDNuBnO1MAM3YamMJK6a4ecIftc2iBp2QQ=\n",
         "inclusion_proof": [
-          "yCMWmcTEvwbuWRhnlx6VkxXQJ2g9wVpkSopGT+igl3g=",
-          "tyrU4x5LYJghmLVZBjD6waaevtUXw/mDgdntjz15t6g=",
-          "ZV83qCoPnzCly4eoxyPhpPhN2oJWIZDWoNevTfbpAA0=",
+          "+PUo45b82+BS2Mw6Iun+jg819vbyxCcIeG3xnxDwKfs=",
+          "Nay3nnKdddYiblHAz/Z08U8TTmRBvXi/4hcALVoPmS8=",
+          "dbT4F/TuSClaYrpVRoiMNwQs0K+IjLaOeNezpevDlws=",
+          "ZaOxlErriC96ucQXMj6y79Fh+DRGv5xTCcU0mPCpYXk=",
+          "fZHoK+H0M7BQin2US0eRHmNbEa4A6Iu55rP2qCTfA3s=",
+          "HcZtUVZRP+HXDTORtD/kRcEMNANWMXVEyGSKpf83er0=",
+          "2pDff3zwAQzktu9hNp41Ceb+kv4a8ZbeMhN2+qSeYGA=",
           "idRTcZ7NhgM/Ud1gqKPXa2s/xkJgqzG+kXE6C5rD+wQ="
         ]
       }
@@ -199,6 +353,7 @@
   },
   "caveats": [
     "Live Browserbase MCP command path. Browserbase replay material remains private.",
-    "Private Browserbase session and page material are represented by hashes only."
+    "Private Browserbase session and page material are represented by hashes only.",
+    "Action policy decisions use browserbase-action-gate-v0 and are exported as signed policy records."
   ]
 }

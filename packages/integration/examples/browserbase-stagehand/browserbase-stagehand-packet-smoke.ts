@@ -215,7 +215,7 @@ This proof signs a Browserbase MCP shaped browser session through \`@atrib/mcp-w
 ## What ran
 
 - Upstream surface: ${upstreamLine}
-- Atrib path: ${atribPath}
+- atrib path: ${atribPath}
 - Control path: ${result.action_policy ? `\`${BROWSERBASE_ACTION_POLICY_VERSION}\` signs the \`act\` decision and outcome before the Browserbase action runs.` : 'not enabled for this artifact.'}
 - Record policy: public records keep tool names plus \`args_hash\` and \`result_hash\`.
 - Verification: \`@atrib/mcp\` verifies each Ed25519 record signature after the wrapper writes its mirror.
