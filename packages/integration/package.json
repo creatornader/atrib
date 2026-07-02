@@ -71,6 +71,7 @@
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
     "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts",
     "x401-proof-sdk-compat": "tsx scripts/check-proof-x401-sdk-compat.ts",
+    "open-x401-credential-e2e": "tsx scripts/open-x401-credential-e2e.ts",
     "proof-x401-node-runtime-interop": "tsx scripts/proof-x401-node-runtime-interop.ts",
     "proof-vc-common-x401-interop": "tsx scripts/proof-vc-common-x401-interop.ts",
     "proof-vc-token-capture": "tsx scripts/proof-vc-token-capture.ts",

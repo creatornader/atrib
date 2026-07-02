@@ -42,6 +42,7 @@ The atrib side is done for current-spec local E2E when one command proves:
 - a protected endpoint emits `PROOF-REQUEST`;
 - an agent retries with `PROOF-RESPONSE`;
 - wrong request id and stale nonce fail;
+- local credential verification can accept a signed JWT VC / VP without a Proof platform account;
 - a successful action is signed and linked to the attempted action;
 - multi-endpoint propagation keeps separate request ids and signed action records in one context;
 - x401 evidence verifies through `@atrib/verify`;
@@ -52,6 +53,14 @@ The atrib side is done for current-spec local E2E when one command proves:
 - optional AAuth, AP2 / VI, or x402 evidence remains separate from x401 semantics.
 
 The native Proof SDK bar is now met against the released npm SDK: the private integration fixture imports `@proof.com/x401-node@0.3.0`, runs its real verifier and agent helpers, emits `PROOF-REQUEST` and `PROOF-RESPONSE` directly, verifies the resulting atrib action chain, and proves strict current-spec verification rejects raw legacy headers.
+
+The public x401 E2E bar is met without a Proof platform account by the open local credential verifier:
+
+```bash
+pnpm --filter @atrib/integration open-x401-credential-e2e
+```
+
+That path issues a local JWT VC, presents it inside a signed VP token, verifies holder signature, issuer signature, trusted issuer key, audience, x401 nonce, age, and KYC claims, accepts the `PROOF-RESPONSE`, and signs the atrib action chain. It uses `@proof.com/x401-node@0.3.0` for current x401 wire semantics but keeps credential verification provider-neutral.
 
 Run that native fixture with:
 
@@ -67,7 +76,7 @@ Use the Proof VC verifier fixture when checking the credential-verifier handoff 
 pnpm --filter @atrib/integration proof-vc-common-x401-interop -- --require-current-evidence --require-proof-vc-common
 ```
 
-The default path uses a local fixture verifier. Set `ATRIB_PROOF_VC_COMMON_LIVE=1` and `ATRIB_PROOF_VC_COMMON_VP_TOKEN=<token>` only when a real Proof VP token should be verified by `@proof.com/proof-vc-server`. The live path verifies that the credential key-binding nonce matches the x401 nonce before setting `resultVerified: true`. Set `ATRIB_PROOF_VC_COMMON_TRUST_ROOT=development` for sandbox or development credentials, or `production` for production credentials.
+The default path uses a local fixture verifier. Set `ATRIB_PROOF_VC_COMMON_LIVE=1` and `ATRIB_PROOF_VC_COMMON_VP_TOKEN=<token>` only when a real Proof VP token should be verified by `@proof.com/proof-vc-server`. The live path verifies that the credential key-binding nonce matches the x401 nonce before setting `resultVerified: true`. This is Proof Cloud Wallet interop, not the public x401 E2E gate. Set `ATRIB_PROOF_VC_COMMON_TRUST_ROOT=development` for sandbox or development credentials, or `production` for production credentials.
 
 To obtain a real Proof VP token, run the localhost capture helper:
 
