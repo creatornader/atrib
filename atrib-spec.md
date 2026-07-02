@@ -4,7 +4,7 @@
 
 Editor: Nader Helmy
 
-This specification defines the atrib protocol for verifiable agent actions. When an AI agent calls a tool, atrib creates a signed record at the moment of action, chains it forward into the next call, and commits it to an append-only Merkle log. Any party can independently verify what an agent did, in what order, with what signed structure and declared relationships. The same record set forms a verifiable action layer for agents and teams: control what runs, coordinate what carries forward, and prove what happened across sessions, agents, teams, organizations, and protocols. When tool calls converge on a transaction, a deterministic algorithm computes a value distribution from the resulting graph under an agreed policy, producing a settlement document anyone can recompute. The spec covers the record format ([§1](#1-attribution-record-format)) including key rotation ([§1.9](#19-key-rotation-and-revocation)) and URI-typed event vocabulary ([§1.2.4](#124-event_type-values), [§1.4.5](#145-event_type-uri-validation)), the log protocol ([§2](#2-merkle-log-protocol)), the graph model ([§3](#3-graph-query-interface)), policies and the distribution algorithm ([§4](#4-attribution-policy-format)), the SDK middleware contracts ([§5](#5-sdk-specification)), the public-key directory ([§6](#6-key-directory)), informative integration patterns for agent harnesses ([§7](#7-harness-integration-patterns)), privacy postures ([§8](#8-privacy-postures)), and informative runtime integration patterns ([§9](#9-runtime-integration-patterns)).
+This specification defines the atrib protocol for verifiable agent actions. When an AI agent calls a tool, atrib creates a signed record at the moment of action, chains it forward into the next call, and commits it to an append-only Merkle log. Any party can independently verify what an agent did, in what order, with what signed structure and declared relationships. When tool calls converge on a transaction, a deterministic algorithm computes a value distribution from the resulting graph under an agreed policy, producing a settlement document anyone can recompute. The spec covers the record format ([§1](#1-attribution-record-format)) including key rotation ([§1.9](#19-key-rotation-and-revocation)) and URI-typed event vocabulary ([§1.2.4](#124-event_type-values), [§1.4.5](#145-event_type-uri-validation)), the log protocol ([§2](#2-merkle-log-protocol)), the graph model ([§3](#3-graph-query-interface)), policies and the distribution algorithm ([§4](#4-attribution-policy-format)), the SDK middleware contracts ([§5](#5-sdk-specification)), the public-key directory ([§6](#6-key-directory)), informative integration patterns for agent harnesses ([§7](#7-harness-integration-patterns)), privacy postures ([§8](#8-privacy-postures)), and informative runtime integration patterns ([§9](#9-runtime-integration-patterns)).
 
 ---
 
@@ -37,12 +37,11 @@ Contents
 - [Principle IV: No central arbiter of value](#principle-iv-no-central-arbiter-of-value)
 - [Principle V: The protocol is open. The product is commercial.](#principle-v-the-protocol-is-open-the-product-is-commercial)
 - [What the Substrate Enables](#what-the-substrate-enables)
-  - [I. Verifiable action layer](#i-verifiable-action-layer)
-  - [II. Provable cognition (recall)](#ii-provable-cognition-recall)
-  - [III. Independent audit and compliance](#iii-independent-audit-and-compliance)
-  - [IV. Cross-agent provenance and handoffs](#iv-cross-agent-provenance-and-handoffs)
-  - [V. Verifiable investigations and repair](#v-verifiable-investigations-and-repair)
-  - [VI. Settlement, attribution, and the post-advertising web](#vi-settlement-attribution-and-the-post-advertising-web)
+  - [I. Provable cognition (recall)](#i-provable-cognition-recall)
+  - [II. Independent audit and compliance](#ii-independent-audit-and-compliance)
+  - [III. Cross-agent provenance and handoffs](#iii-cross-agent-provenance-and-handoffs)
+  - [IV. Verifiable investigations and repair](#iv-verifiable-investigations-and-repair)
+  - [V. Settlement, attribution, and the post-advertising web](#v-settlement-attribution-and-the-post-advertising-web)
 
 _On the relationship between transparency, trust, and value in a world where agents act on our behalf._
 
@@ -74,9 +73,9 @@ The window to build this substrate before platforms absorb the problem (and solv
 
 ## What We Are Building
 
-atrib is the substrate that makes agent actions verifiable. Every action becomes signed context for the next, anchored in a Merkle log, independently verifiable by anyone. Productized atrib uses that substrate as a verifiable action layer for agents: control what runs, coordinate what carries forward, and prove what happened. Not an identity layer. Not a payment layer. Not a content attribution system. The thing that sits underneath all of those: **a substrate where agents reason from a past they can prove, and downstream consumers (merchants, auditors, other agents) verify that past without trusting any operator.**
+atrib is the substrate that makes agent actions verifiable. Every action becomes signed context for the next, anchored in a Merkle log, independently verifiable by anyone. Not an identity layer. Not a payment layer. Not a content attribution system. The thing that sits underneath all of those: **a substrate where agents reason from a past they can prove, and downstream consumers (merchants, auditors, other agents) verify that past without trusting any operator.**
 
-The central claim is this: it is possible to make the structural relationships of agent activity transparent (what tool calls preceded what outcomes, how contributions linked together within a session, what the observable shape of an agent's reasoning trail actually was) without making the content of those interactions visible to anyone who should not see it. Several distinct uses follow from this substrate: pre-action control for high-impact actions, provable recall by the agent itself, independent audit by third parties, settlement when commerce closes a chain, and verifiable continuity across handoffs between agents.
+The central claim is this: it is possible to make the structural relationships of agent activity transparent (what tool calls preceded what outcomes, how contributions linked together within a session, what the observable shape of an agent's reasoning trail actually was) without making the content of those interactions visible to anyone who should not see it. Several distinct uses follow from this substrate: provable recall by the agent itself, independent audit by third parties, settlement when commerce closes a chain, and verifiable continuity across handoffs between agents.
 
 This is observability without surveillance. The system becomes legible to itself (to its participants, to the parties with a legitimate stake in its outcomes) without becoming legible to surveillance. Accountability without inspection. Transparency without exposure.
 
@@ -118,15 +117,9 @@ The specification, the signing libraries, the calculation algorithm, and the log
 
 The five principles above describe a substrate. What the substrate enables is a set of distinct uses, each of which collapses without it. None of them is the central claim. atrib is not "for" any single one. The claim is that the substrate is a precondition for all of them, and that no other piece of infrastructure today provides it.
 
-The six uses below are ordered by how directly each relies on the substrate's core property: an agent's actions are signed at the moment they happen and remain independently verifiable thereafter.
+The five uses below are ordered by how directly each relies on the substrate's core property: an agent's actions are signed at the moment they happen and remain independently verifiable thereafter.
 
-### I. Verifiable action layer
-
-Agent work becomes easier to control and coordinate when actions are durable objects, not transient runtime events. A host can run policy before a high-impact action, sign the decision or attach approval evidence, execute or refuse the action, and then sign the outcome. Later agents and teams can cite the same records rather than relying on summaries.
-
-This product layer is active, but the protocol boundary stays clear. Authorization systems decide what an agent may do. Host runtimes enforce whether a tool call runs. atrib records the decision surface, the action trail, the attached evidence, and the accepted context that crosses sessions, agents, and teams. That gives products a shared action layer without making the base protocol an authorization issuer.
-
-### II. Provable cognition (recall)
+### I. Provable cognition (recall)
 
 An agent that can verify its own past has a kind of memory the agent ecosystem has not previously had. Every prior tool call is a signed claim the agent itself can re-verify locally; every chain is a structured artifact the agent can reason from; every transaction it participated in is anchored in a public log it cannot be gaslit about. This is the loop the locked positioning points at: _agents that reason from a past they can prove._
 
@@ -134,19 +127,19 @@ The cognitive consequence is concrete. An agent restoring context from its own a
 
 This is the use case the protocol's recall pattern ([§7](#7-harness-integration-patterns)) tests in practice: real agents (Claude Code, Cursor, custom harnesses) consuming the substrate they themselves produce. If the substrate works, the agent is more capable. If the substrate is broken, the agent is no worse off than today.
 
-### III. Independent audit and compliance
+### II. Independent audit and compliance
 
 Once an agent's actions are signed and committed to a public log, third parties can audit them without trusting the agent or the platform. A user can prove what an agent did on their behalf. A regulator can query "what did this agent do at time T?" and get a cryptographic answer. A merchant disputing a transaction can verify the chain that led to it. None of this requires the agent operator to cooperate, share data, or even be online.
 
 This is the property that compliance-coded products (audit trail, SOC 2 reporting, AI governance tooling) approximate without the underlying substrate. The substrate does it correctly: not by collecting more data centrally but by making the data anyone already had cryptographically verifiable.
 
-### IV. Cross-agent provenance and handoffs
+### III. Cross-agent provenance and handoffs
 
 Agents that hand off work to other agents (a delegation flow, a multi-agent system, a marketplace of specialized agents) face the same provenance problem at higher complexity. A signed action by agent A passing context to agent B carries verifiable continuity across the handoff: B can prove A actually requested this, A can prove B actually completed it, and any later observer can reconstruct the path.
 
 Without the substrate, multi-agent flows reduce to "trust whoever is closest to the platform." With it, the signed record graph becomes the shared evidence base.
 
-### V. Verifiable investigations and repair
+### IV. Verifiable investigations and repair
 
 Support, incident, billing, and RCA workflows expose another use of the same substrate. An investigation is not a single answer; it is a sequence of ticket reads, tenant-scoped log queries, code-path checks, hypotheses, diagnostics, revisions, and handoffs. Each step needs to be inspected later without pretending the public log can carry the private ticket or log body.
 
@@ -154,7 +147,7 @@ atrib makes that trail verifiable without replacing observability systems. The l
 
 This is the support/RCA form of repair: a future agent can trace a bad hypothesis, read the signed diagnostic that corrected it, and continue from the latest chain tail instead of replaying the whole investigation from memory or platform chat history.
 
-### VI. Settlement, attribution, and the post-advertising web
+### V. Settlement, attribution, and the post-advertising web
 
 The substrate produces a useful side effect: when commerce closes a chain (an agent purchases something, a tool is invoked in service of a transaction), the same signed record set is what a settlement document is computed from. The [§4.6](#46-the-calculation-algorithm) algorithm runs deterministically over the graph and produces a value distribution any merchant or auditor can recompute. This is the attribution-economy use case, and it is genuinely real, but it is one consequence of the substrate, not the reason for it.
 
@@ -4420,15 +4413,15 @@ The sidecar is a free-form JSON object carrying pre-sign payload context that th
 
 The following field names are normative when present (producers SHOULD use these names; consumers SHOULD recognize them):
 
-| Field                   | Type   | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ----------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `producer`              | string | Identifies the producer that wrote this entry, for cross-source disambiguation when multiple producers write to the same mirror directory. Values are producer-specific (e.g. `"atrib-emit"`, or any other wrapper / emitter package name).                                                                                                                                                                                                                                                                |
-| `toolName`              | string | The MCP tool name as invoked. Populated by wrapper-side producers; absent for emit-side producers (which have no tool name to record).                                                                                                                                                                                                                                                                                                                                                                     |
-| `args`                  | object | The MCP tool call arguments as invoked. Populated by wrapper-side producers per the wrapped call.                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `result`                | object | The MCP tool's result object, captured BEFORE any host-side mutation (e.g. before atrib middleware writes its propagation token to `result._meta`). Populated by wrapper-side producers.                                                                                                                                                                                                                                                                                                                   |
-| `content`               | object | The pre-sign content payload as supplied to the producer, or a normalized local content payload derived from the producer's runtime evidence. Populated by `atrib-emit`-style producers per the `content` argument the agent passed; typically carries `what`, `why_noted`, `intent`, `rationale`, `topics`, `summary`, `importance` (depending on `event_type`). OpenInference producers SHOULD use this field for recall-readable span metadata rather than adding span metadata to the signed `record`. |
+| Field                   | Type   | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `producer`              | string | Identifies the producer that wrote this entry, for cross-source disambiguation when multiple producers write to the same mirror directory. Values are producer-specific (e.g. `"atrib-emit"`, or any other wrapper / emitter package name).                                                                                                                                                                                                                                                                                 |
+| `toolName`              | string | The MCP tool name as invoked. Populated by wrapper-side producers; absent for emit-side producers (which have no tool name to record).                                                                                                                                                                                                                                                                                                                                                                                      |
+| `args`                  | object | The MCP tool call arguments as invoked. Populated by wrapper-side producers per the wrapped call.                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `result`                | object | The MCP tool's result object, captured BEFORE any host-side mutation (e.g. before atrib middleware writes its propagation token to `result._meta`). Populated by wrapper-side producers.                                                                                                                                                                                                                                                                                                                                    |
+| `content`               | object | The pre-sign content payload as supplied to the producer, or a normalized local content payload derived from the producer's runtime evidence. Populated by `atrib-emit`-style producers per the `content` argument the agent passed; typically carries `what`, `why_noted`, `intent`, `rationale`, `topics`, `summary`, `importance` (depending on `event_type`). OpenInference producers SHOULD use this field for recall-readable span metadata rather than adding span metadata to the signed `record`.                  |
 | `authorizationEvidence` | array  | Optional verifier-ready external authorization evidence captured from the host runtime, such as MCP/OAuth evidence from already-validated `authInfo`, AAuth evidence from already-validated callbacks, or x401 proof evidence from a verifier-controlled credential result or token check. This field is local-only and MUST NOT include raw bearer tokens, raw AAuth JWTs, or private credential payloads by default. Consumers can pass it to `verifyRecord(record, { authorizationEvidence })` to populate `evidence[]`. |
-| `resolvedFacts`         | object | Optional local facts resolved from the payload or runtime event, such as `{ "tool_name": "read_file" }`. Consumers can pass it to `verifyRecord(record, { resolvedFacts })` so capability-envelope checks can use facts that are not in the compact signed record.                                                                                                                                                                                                                                         |
+| `resolvedFacts`         | object | Optional local facts resolved from the payload or runtime event, such as `{ "tool_name": "read_file" }`. Consumers can pass it to `verifyRecord(record, { resolvedFacts })` so capability-envelope checks can use facts that are not in the compact signed record.                                                                                                                                                                                                                                                          |
 
 Producers MAY add additional fields beyond this list. Consumers MUST tolerate unknown fields and SHOULD pass them through unchanged when re-emitting (e.g. when `atrib-trace` surfaces a sidecar summary for downstream tools).
 

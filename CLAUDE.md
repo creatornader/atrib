@@ -17,14 +17,22 @@ revised other records. `/v1/chain` and `/v1/trace` are projections over that
 graph, and the explorer primary trace path is a product presentation rule over
 both projections.
 
-The canonical positioning used across the README, spec abstract, and per-package READMEs:
+The canonical protocol identity used across the README top, spec abstract, root
+package metadata, and GitHub repo description:
 
 - **Headline:** Verifiable agent actions.
 - **Sub-line:** Every action becomes signed context for the next.
 - **Tagline:** Agents that reason from a past they can prove.
-- **Product frame:** atrib is the verifiable action layer for agent work. Hosts can check actions before they run. Later sessions, agents, teams, organizations, and protocols can carry the signed context forward and verify the path.
 
-Use this language in any new docs or commit messages that need a one-line description of the project. The headline, sub-line, and tagline define the protocol identity. The product frame defines the commercial surface built on top of it. Don't reword either layer without an accompanying change to the README and spec.
+The GitHub repo description adds the concrete proof mechanism: `Ed25519
+signatures, Merkle log proofs, independently verifiable by anyone.`
+
+Product docs and README sections can use the commercial frame when they explain
+host integrations. In that context, atrib records can sit in the action path, so
+a host can check actions before they run and later sessions, agents, teams,
+organizations, and protocols can verify what carried forward. Do not put that
+commercial framing in the spec abstract or GitHub repo description unless the
+protocol identity itself changes.
 
 The complete protocol specification is in `atrib-spec.md` ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns)). The technical architecture overview is in `ARCHITECTURE.md`. Read the spec before making any implementation decisions.
 
@@ -116,7 +124,7 @@ atrib/
   proof-packets/                # External-facing proof artifacts and draft-only contact copy generated from integration examples. Browserbase Stagehand, Firecrawl web ingestion, OpenETR transfer, and x401 open credential proofs keep public evidence narrow and private upstream payloads hash-only.
   policies/                     # Attribution policy templates and guide (6 templates + README)
   skills/
-    atrib/SKILL.md             # The atrib practice doc, agent-facing guidance for using atrib from the inside out (memory, reasoning, getting smarter over time). Source of truth; symlinked to ~/.claude/skills/atrib/SKILL.md so any Claude Code session anywhere on the host machine discovers it.
+    atrib/SKILL.md             # The atrib practice doc, agent-facing guidance for using atrib from the inside out (memory, reasoning, and continuity across sessions). Source of truth; symlinked into ~/.agents/skills/atrib/SKILL.md and ~/.claude/skills/atrib/SKILL.md so supported local agent hosts discover the same copy.
   apps/
     dashboard/                  # Public explorer (D054 option 1): vanilla HTML/CSS/JS served from log-node's Docker image. Composes log + graph + directory + archive read APIs into 7 views (overview, identity, session, action, demo, anchoring, trace). Defaults to https://log.atrib.dev / graph.atrib.dev / directory.atrib.dev / archive.atrib.dev; URL params override for local services. Pure graph-rendering helpers extracted to `graph-utils.mjs` (sibling module, served at `/graph-utils.mjs` by log-node) so they're unit-testable without a browser; `test/graph-utils.test.mjs` exercises layout selection, degree computation, node-size encoding, bbox math, and Sigma 3 framed-default camera state.
   services/
@@ -129,7 +137,7 @@ atrib/
     atrib-annotate/            # MCP server exposing the `atrib-annotate` tool. Producer-side cognitive primitive #2 of D079: marks a past record's importance / summary / topics. Adds an ANNOTATES graph edge per §3.2.4 step 8. Specialized form of @atrib/emit per D079's package layering. Stdio binary; same process model as atrib-emit.
     atrib-revise/              # MCP server exposing the `atrib-revise` tool. Producer-side cognitive primitive #3 of D079: supersedes a prior position with a stated reason. Adds a REVISES graph edge per §3.2.4 step 9. Specialized form of @atrib/emit per D079's package layering. Stdio binary; same process model as atrib-emit.
     atrib-recall/              # MCP server exposing the `recall_my_attribution_history` tool. Consumer-side cognitive primitive #4 of D079: reads the local mirror (per §5.9), filters by creator_key / context_id / time window / event_type, and indexes normalized sidecar content, including OpenInference span payload fields when present. Read-only; does not sign. Stdio binary; same process model as atrib-emit. The harness design is documented in D040.
-    atrib-trace/               # MCP server for backward declared-relationship walking. Consumer-side cognitive primitive #5 of D079: reads the local mirror (per §5.9), follows `informed_by` edges backward from a starting record_hash, surfaces sidecar_summary per visited record (tool_name, span kind/name, model, prompt version, topics, importance). Read-only; does not sign. Stdio binary; same process model as atrib-emit.
+    atrib-trace/               # MCP server for declared-relationship walks. Consumer-side cognitive primitive #5 of D079: reads the local mirror (per §5.9), follows `informed_by` edges backward from a starting record_hash or forward to records that built on it, surfaces sidecar_summary per visited record (tool_name, span kind/name, model, prompt version, topics, importance). Read-only; does not sign. Stdio binary; same process model as atrib-emit.
     atrib-summarize/           # MCP server for narrative synthesis across N records. Consumer-side cognitive primitive #6 of D079: reads N records by context_id and/or record_hashes from the local mirror, calls an OpenAI-compatible LLM (defaults to NIM qwen3.5-397b) to produce a narrative, including normalized sidecar content such as OpenInference prompt/output/usage/cost metadata when present. Closes the consumer-side cognitive loop (agents read context, not raw records). Stdio binary; same process model as atrib-emit.
     atrib-verify/              # MCP server exposing the `atrib-verify` tool. Consumer-side cognitive primitive #7 of D079/D106: verifies counterparty handoff evidence before a receiving agent links follow-up work through `informed_by`. Read-only; does not sign. Stdio binary; same process model as atrib-emit.
     atrib-primitives/          # Private local MCP runtime. Mounts the seven primitive packages in process and exposes their 15 physical MCP tools through direct stdio, Streamable HTTP, or a stdio-to-HTTP proxy for dogfood harnesses that would otherwise spawn seven atrib child processes per thread.
