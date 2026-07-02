@@ -2,12 +2,16 @@
 
 **Verifiable agent actions.** Every action becomes signed context for the next.
 
-atrib gives agents and teams a verifiable action layer: control what runs,
-coordinate what carries forward, and prove what happened. Agent work moves
-through tools, memory, identity, authorization, observability, evals, handoffs,
-and payments. Those layers should stay specialized. atrib gives them a common
-record to use and verify: signed actions, attached evidence, and graph structure
-that can cross sessions, agents, teams, organizations, and protocols.
+Agent work moves through tools, memory, identity, authorization, observability,
+evals, handoffs, and payments. Those layers should stay specialized. atrib gives
+them a common signed record they can all use. The record carries the action,
+selected evidence, and graph structure across sessions, agents, teams,
+organizations, and protocols.
+
+Product teams can put that record in the action path. A harness can decide which
+actions run before execution. Later work can carry the signed context forward,
+and reviewers can prove the path without turning atrib into the runtime, memory
+system, or authorization issuer.
 
 Shared memory and context systems decide what an agent should remember or
 retrieve. atrib signs the agent's action trail, then lets memory systems,
@@ -39,7 +43,7 @@ happens and remains verifiable later.
 
 | Surface                                 | What atrib gives you                                                                                                                                                                                                                                                         | What it composes with                                                              |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Verifiable action layer                 | A shared surface where agents and teams can control what runs, coordinate what carries forward, and prove what happened across sessions, agents, teams, organizations, and protocols.                                                                                        | Agent runtimes, policy engines, approval flows, memory, handoffs, audits           |
+| Verifiable action layer                 | A shared record surface for agent work. Hosts can check actions before they run. Later sessions, agents, teams, organizations, and protocols can carry the signed context forward and verify the path.                                                                       | Agent runtimes, policy engines, approval flows, memory, handoffs, audits           |
 | High-impact action control              | Host policies can allow, block, escalate, or require approval before execution. atrib records the decision, the action, and the outcome as verifiable context without becoming the authorization issuer.                                                                     | Browser and computer use, admin workflows, support tools, payments, deployments    |
 | Portable action context                 | Signed action hashes can travel with follow-up work. Browser clicks, desktop actions, support replies, and admin changes become decision/outcome pairs that can be recalled or verified later.                                                                               | Browserbase, browser-use, OpenAI Computer Use, support teams, admin teams          |
 | Verifiable agent work                   | A signed trail of the actions, evidence, handoffs, revisions, outputs, and verifier results behind a task. atrib proves the action history; other layers decide whether the work was authorized, correct, payable, or compliant.                                             | Tools, memory, identity, authorization, observability, evals, commerce, governance |
@@ -76,7 +80,7 @@ can point at several different objects. The boundary matters.
 | What you already have                                                                            | Use                                                                                                                                       | What atrib adds                                                                                                                                                  |
 | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Tool calls through MCP or an SDK callback                                                        | [`@atrib/mcp`](packages/mcp/README.md), [`@atrib/mcp-wrap`](packages/mcp-wrap/README.md), or [`@atrib/agent`](packages/agent/README.md)   | Signed action records with chain continuity and optional local sidecars.                                                                                         |
-| Pre-action policy gates, approval hooks, or host lifecycle hooks                                 | [`@atrib/action-gate`](packages/action-gate/README.md), `@atrib/mcp-wrap` pre-call transforms, host-specific adapters, and signer proxies | Verifiable control points around high-impact actions: decision, execution, outcome, and evidence.                                                                |
+| Pre-action policy gates, approval hooks, or host lifecycle hooks                                 | [`@atrib/action-gate`](packages/action-gate/README.md), `@atrib/mcp-wrap` pre-call transforms, host-specific adapters, and signer proxies | Verifiable control points around high-impact actions. The host records the decision, execution result, outcome hash, and selected evidence.                      |
 | OpenTelemetry or OpenInference spans                                                             | [`@atrib/openinference`](packages/openinference/README.md)                                                                                | Signed records and recall-readable sidecars from the span stream, while Langfuse, Phoenix, LangSmith, Braintrust, or another backend keeps the operations view.  |
 | A host-owned run log, event stream, session history, checkpoint log, fork log, or compaction log | [`@atrib/runtime-log`](packages/runtime-log/README.md)                                                                                    | A `log_window_manifest` that commits to the bounded run window, roots, projections, receipts, and redaction policy without publishing raw log bodies by default. |
 | A hosted runtime API that exports session events after the fact                                  | A future per-runtime adapter under [Pattern 5](ARCHITECTURE.md#runtime-integration-patterns)                                              | Consumer-side attestation over what the vendor reported, not a claim that the vendor's private runtime state is itself true.                                     |

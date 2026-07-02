@@ -5,7 +5,7 @@
 **Builds on**: [Integration patterns](10-integration-patterns.md), [The chain](04-the-chain.md), [The six cognitive primitives](11-cognitive-primitives.md)
 **Enables**: host-owned process control for startup-spawn agents, long-lived local assistants, and watcher WAL pipelines
 
-The coordinator is not the product by itself. It is one implementation path for the action layer: host-owned processes can sign decisions, preserve chain state, join receipts, and keep cross-session context healthy while the runtime still owns execution and policy.
+The coordinator is not the product by itself. It is one implementation path for the action layer. Host-owned processes can sign decisions, preserve chain state, join receipts, and keep cross-session context healthy while the runtime still owns execution and policy.
 
 ## The Problem
 
