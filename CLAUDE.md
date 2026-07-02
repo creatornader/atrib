@@ -2,7 +2,11 @@
 
 ## What this is
 
-atrib makes the actions an AI agent takes provable. Every agent action becomes a signed, chain-linked record committed to a public Merkle log; downstream consumers (the agent itself, merchants, auditors, other agents) can independently verify what happened without trusting any operator. Productized atrib gives agents and teams a verifiable action layer: control what runs, coordinate what carries forward, and prove what happened across sessions, agents, teams, organizations, and protocols. "Agent action" covers three categories that all land on the same log: tool calls (MCP via `@atrib/mcp-wrap`, framework-native via `@atrib/agent` or `@atrib/openinference`), transactions (six payment protocols detected: ACP, UCP, x402, MPP, AP2, a2a-x402), and the agent's own intentional records and reads via the seven cognitive primitives (`atrib-emit`, `atrib-annotate`, `atrib-revise` writes; `atrib-recall`, `atrib-trace`, `atrib-summarize`, `atrib-verify` reads). The substrate enables several use cases: provable recall by the agent, independent audit by third parties, settlement when commerce closes a chain, verifiable continuity across agent handoffs, and controlled high-impact actions when a harness or runtime puts Atrib records in the action path. atrib sits between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP/AP2). It also makes post-hoc claims about agent activity provable.
+atrib makes the actions an AI agent takes provable. Every agent action becomes a signed, chain-linked record committed to a public Merkle log. Downstream consumers (the agent itself, merchants, auditors, other agents) can independently verify what happened without trusting any operator.
+
+Product teams can put that record in the action path. A host can check an action before it runs, and later work can carry the signed context forward. atrib records tool calls (MCP via `@atrib/mcp-wrap`, framework-native via `@atrib/agent` or `@atrib/openinference`), transactions (six payment protocols detected: ACP, UCP, x402, MPP, AP2, a2a-x402), and the agent's own intentional records and reads through the seven cognitive primitives (`atrib-emit`, `atrib-annotate`, `atrib-revise` writes; `atrib-recall`, `atrib-trace`, `atrib-summarize`, `atrib-verify` reads).
+
+The same substrate supports agent recall, third-party audit, commerce settlement, handoffs, and controlled high-impact actions when a harness or runtime puts atrib records in the action path. atrib sits between identity (DIF/W3C) and payment rails (ACP/UCP/x402/MPP/AP2). It also makes post-hoc claims about agent activity provable.
 
 When explaining the graph, keep the
 [D118](DECISIONS.md#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain)
@@ -18,7 +22,7 @@ The canonical positioning used across the README, spec abstract, and per-package
 - **Headline:** Verifiable agent actions.
 - **Sub-line:** Every action becomes signed context for the next.
 - **Tagline:** Agents that reason from a past they can prove.
-- **Product frame:** A verifiable action layer for agents: control what runs, coordinate what carries forward, and prove what happened.
+- **Product frame:** atrib is the verifiable action layer for agent work. Hosts can check actions before they run. Later sessions, agents, teams, organizations, and protocols can carry the signed context forward and verify the path.
 
 Use this language in any new docs or commit messages that need a one-line description of the project. The headline, sub-line, and tagline define the protocol identity. The product frame defines the commercial surface built on top of it. Don't reword either layer without an accompanying change to the README and spec.
 

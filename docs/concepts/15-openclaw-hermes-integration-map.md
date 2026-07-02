@@ -64,7 +64,7 @@ The split:
 
 OpenClaw and Hermes are runtimes. atrib should not try to replace either runtime, memory system, scheduler, tool registry, approval UI, or observability dashboard.
 
-atrib's role is a verifiable action layer over selected runtime boundaries: control what runs when the host exposes a pre-action hook, coordinate what carries forward across sessions and agents, and prove what happened after execution or rejection.
+atrib is the verifiable action layer over selected runtime boundaries. When a host exposes a pre-action hook, atrib records the decision before execution and the result afterward. Those records can carry context across sessions and agents without making atrib responsible for the runtime itself.
 
 The clean role split:
 

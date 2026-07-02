@@ -1,6 +1,6 @@
 # Delegation and capabilities
 
-> atrib verifies the evidence around an action. The protocol does not issue capabilities or run authorization flows; product integrations can still use Atrib records as the controlled action surface around host policy.
+> atrib verifies the evidence around an action. The protocol does not issue capabilities or run authorization flows; product integrations can still put atrib records in the host policy path.
 
 **Status**: DRAFT (v1, 2026-06-01; strategic boundary note)
 **Spec anchors**: [§5.5.6 Generic authorization evidence blocks](../../atrib-spec.md#556-generic-authorization-evidence-blocks), [§6.7 Capability declarations](../../atrib-spec.md#67-capability-declarations), [§8.7 Adversarial Threat Model](../../atrib-spec.md#87-adversarial-threat-model)
@@ -9,20 +9,20 @@
 
 ## Position
 
-atrib is a verifiable action layer and protocol substrate. It records what an agent did, who signed the record, how that action links to earlier work, and which external evidence a verifier accepted. Product integrations can put those records in the action path so teams can allow, block, escalate, and prove high-impact work without making the base protocol an authorization system.
+atrib is a verifiable action layer and protocol substrate. It records what an agent did, who signed the record, how that action links to earlier work, and which external evidence a verifier accepted. Product integrations can put those records in the action path, where the host still owns policy and execution.
 
 Delegation and capability protocols answer a different question: who may ask whom to do what, under which constraints, and how that authority can be attenuated. OAuth, AAuth, x401, ZCAP-LD, AP2, Verifiable Intent, Vouch, and host policy engines live in that authorization layer.
 
 The intended boundary:
 
-| Layer                  | Responsibility                                                                              | atrib role     |
-| ---------------------- | ------------------------------------------------------------------------------------------- | -------------- |
-| Authorization protocol | Issue grants, tokens, mandates, capability chains, or delegation credentials                | External input |
-| Host runtime           | Enforce access before a tool runs                                                           | External input |
-| Atrib product/runtime adapter | Present host policy decisions, signed action records, handoffs, and verifier results as one action surface | Native product layer |
-| atrib producer         | Sign the action and optionally capture selected evidence                                    | Native         |
-| atrib verifier         | Verify record signatures, graph structure, evidence blocks, and capability-envelope signals | Native         |
-| Consumer policy        | Decide whether the evidence is enough                                                       | External input |
+| Layer                         | Responsibility                                                                                             | atrib role           |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------- |
+| Authorization protocol        | Issue grants, tokens, mandates, capability chains, or delegation credentials                               | External input       |
+| Host runtime                  | Enforce access before a tool runs                                                                          | External input       |
+| atrib product/runtime adapter | Present host policy decisions, signed action records, handoffs, and verifier results as one action surface | Native product layer |
+| atrib producer                | Sign the action and optionally capture selected evidence                                                   | Native               |
+| atrib verifier                | Verify record signatures, graph structure, evidence blocks, and capability-envelope signals                | Native               |
+| Consumer policy               | Decide whether the evidence is enough                                                                      | External input       |
 
 ## Native support
 
@@ -64,17 +64,17 @@ Until then, the correct product move is adapters and evidence projection, not a 
 
 ## Comparison map
 
-| System                  | What it contributes                                                           | How atrib composes                                                                                                               |
-| ----------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| OAuth / MCP             | Tokens, scopes, protected-resource metadata, DPoP, introspection              | Verify as `mcp_oauth` evidence, capture selected host facts, keep raw tokens local                                               |
-| AAuth                   | Agent/resource/auth tokens, missions, HTTP signatures, AAuth-Access          | Verify as `aauth` evidence, capture selected callback facts, keep raw JWTs local                                                 |
-| x401                    | Route-specific proof requirements for credential-gated HTTP routes           | Verify as `x401` evidence, capture proof headers, show proof-gate status, record optional caller-owned origin, issuer-trust, and proof-payment binding outcomes, keep credential payloads local |
-| AP2 / Verifiable Intent | Mandates, receipts, intent credentials, payment authorization evidence        | Verify as AP2 / VI evidence off the transaction detector path                                                                    |
-| ZCAP-LD                 | Capability delegation and attenuation                                         | Candidate evidence adapter when an integrator brings real artifacts                                                              |
-| Vouch                   | Agent identity, intent attestation, heartbeat, and delegation-chain claims    | Candidate evidence adapter if implementation usage appears                                                                       |
-| AINS                    | Agent discovery, endpoints, capability metadata, and registry trust opinions  | Candidate resolver input for directory claims, `resolvedFacts`, or optional evidence blocks; trust scores stay external opinions |
-| UPIP                    | Process-state fork tokens, capability requirements, and continuation evidence | Candidate evidence inside continuation packets or archive bodies; does not replace `informed_by` handoff                         |
-| Host policy engine      | Runtime enforcement before tools execute                                      | Produces local facts and evidence; atrib records, verifies, and can present the control point beside the action trail            |
+| System                  | What it contributes                                                           | How atrib composes                                                                                                                                                                              |
+| ----------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OAuth / MCP             | Tokens, scopes, protected-resource metadata, DPoP, introspection              | Verify as `mcp_oauth` evidence, capture selected host facts, keep raw tokens local                                                                                                              |
+| AAuth                   | Agent/resource/auth tokens, missions, HTTP signatures, AAuth-Access           | Verify as `aauth` evidence, capture selected callback facts, keep raw JWTs local                                                                                                                |
+| x401                    | Route-specific proof requirements for credential-gated HTTP routes            | Verify as `x401` evidence, capture proof headers, show proof-gate status, record optional caller-owned origin, issuer-trust, and proof-payment binding outcomes, keep credential payloads local |
+| AP2 / Verifiable Intent | Mandates, receipts, intent credentials, payment authorization evidence        | Verify as AP2 / VI evidence off the transaction detector path                                                                                                                                   |
+| ZCAP-LD                 | Capability delegation and attenuation                                         | Candidate evidence adapter when an integrator brings real artifacts                                                                                                                             |
+| Vouch                   | Agent identity, intent attestation, heartbeat, and delegation-chain claims    | Candidate evidence adapter if implementation usage appears                                                                                                                                      |
+| AINS                    | Agent discovery, endpoints, capability metadata, and registry trust opinions  | Candidate resolver input for directory claims, `resolvedFacts`, or optional evidence blocks; trust scores stay external opinions                                                                |
+| UPIP                    | Process-state fork tokens, capability requirements, and continuation evidence | Candidate evidence inside continuation packets or archive bodies; does not replace `informed_by` handoff                                                                                        |
+| Host policy engine      | Runtime enforcement before tools execute                                      | Produces local facts and evidence; atrib records, verifies, and can present the control point beside the action trail                                                                           |
 
 ## Follow-up
 
