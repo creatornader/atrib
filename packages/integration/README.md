@@ -288,10 +288,12 @@ The default path uses a local fixture verifier. The live path uses `@proof.com/p
 To obtain a real Proof `vp_token` without pasting it into chat or writing it to the repo, run the localhost capture helper:
 
 ```bash
+ATRIB_PROOF_VC_CAPTURE_CLIENT_ID=<proof-oauth-client-id> \
+ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT=<holder-email> \
 pnpm --filter @atrib/integration proof-vc-token-capture -- --open
 ```
 
-The helper uses `@proof.com/proof-vc-common@0.3.0` to generate an OID4VP authorization URL, serves a local callback page that reads the `vp_token` from the browser fragment, verifies it in memory through `@proof.com/proof-vc-server@0.3.0`, and prints the sanitized atrib public packet. Use `-- --print-url` to print the authorization URL without starting the callback server. Override the Proof OAuth client and environment with `ATRIB_PROOF_VC_CAPTURE_CLIENT_ID`, `ATRIB_PROOF_VC_CAPTURE_ENVIRONMENT`, `ATRIB_PROOF_VC_CAPTURE_PORT`, `ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT`, `ATRIB_PROOF_VC_CAPTURE_TRUST_ROOT`, and `ATRIB_PROOF_VC_CAPTURE_AUD`. The default client is Proof's `verifier-demo`; a real client may be needed if Proof rejects localhost redirect URIs for that demo client.
+The helper uses `@proof.com/proof-vc-common@0.3.0` to generate an OID4VP authorization URL, serves a local callback page that reads the `vp_token` from the browser fragment, verifies it in memory through `@proof.com/proof-vc-server@0.3.0`, and prints the sanitized atrib public packet. Use `-- --print-url` to print the authorization URL without starting the callback server. `ATRIB_PROOF_VC_CAPTURE_CLIENT_ID` must name a Proof OAuth Application whose registered redirect URI matches the local callback, which defaults to `http://127.0.0.1:8765/proof-vc/callback`. `ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT` must be the holder email for the Proof credential flow. Override the environment, port, trust root, and expected audience with `ATRIB_PROOF_VC_CAPTURE_ENVIRONMENT`, `ATRIB_PROOF_VC_CAPTURE_PORT`, `ATRIB_PROOF_VC_CAPTURE_TRUST_ROOT`, and `ATRIB_PROOF_VC_CAPTURE_AUD`.
 
 Check the live `@proof.com/x401-node` package before changing that claim:
 

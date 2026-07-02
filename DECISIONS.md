@@ -7240,7 +7240,9 @@ verification. atrib follows that split: the live bridge verifies a VP token with
 `proof-vc-server`, checks that the verified credential nonce matches the x401
 nonce, and only then sets caller-owned `resultVerified` and issuer-trust
 evidence. A local capture helper can obtain a real Proof VP token through a
-localhost browser callback without writing raw credential payloads to the repo.
+localhost browser callback when the operator supplies a Proof OAuth Application
+client id, a registered callback URI, and the holder email. The helper verifies
+the token without writing raw credential payloads to the repo.
 
 **Decision.** Add an opt-in producer capture path and a local proof-gate E2E
 harness, while keeping x401 as verifier evidence and keeping raw credential
@@ -7363,8 +7365,8 @@ panel scoped to the `/v1/lookup` log response.
 - [`packages/integration/scripts/proof-vc-common-x401-interop.ts`](packages/integration/scripts/proof-vc-common-x401-interop.ts),
   runnable Proof VC Common x401 evidence proof.
 - [`packages/integration/scripts/proof-vc-token-capture.ts`](packages/integration/scripts/proof-vc-token-capture.ts),
-  localhost capture helper for a real Proof VP token and sanitized x401 evidence
-  packet.
+  localhost capture helper for a real Proof VP token with caller-supplied Proof
+  OAuth client configuration and a sanitized x401 evidence packet.
 - [`spec/conformance/5.5.6/x401/`](spec/conformance/5.5.6/x401/), x401
   authorization evidence corpus.
 - [`services/archive-node/src/server.ts`](services/archive-node/src/server.ts),
