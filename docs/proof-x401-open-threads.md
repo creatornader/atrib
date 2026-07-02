@@ -1,6 +1,6 @@
 # Proof x401 Open-Thread Map
 
-Status checked on 2026-07-01 with `gh issue view`, `gh pr view`, `gh release list`, `npm view`, and the local Proof repo-surface guard.
+Status checked on 2026-07-02 with `gh issue view`, `gh pr view`, `gh release list`, `npm view`, and the local Proof repo-surface guard.
 
 This document maps the current Proof x401 issue and PR surface to atrib's local implementation. It is a working integration map, not an upstream spec fork.
 
@@ -11,8 +11,8 @@ This document maps the current Proof x401 issue and PR surface to atrib's local 
 | `proof/x401`              | Current spec source and issue/PR surface.               | Track first. Any upstream contribution should target this repo unless the change is SDK-only. |
 | `proof/x401-node`         | Released current-spec x401 wire SDK.                    | Private integration dependency is now allowed through `@proof.com/x401-node@0.3.0`.           |
 | `proof/proof-vc-common`   | Opt-in credential request and verifier helper surface.  | `@proof.com/proof-vc-common` requests VP tokens; `@proof.com/proof-vc-server` verifies them.  |
-| `proof/proof-vc-web`      | Credential Manager and browser UX reference.            | Browser-demo scope only.                                                                      |
-| `proof/verifier-vcp-demo` | Demo reference for Proof's own route and verifier flow. | Reference only until it updates from old x401 package shapes.                                 |
+| `proof/proof-vc-web`      | Credential Manager and browser UX reference.            | Browser-demo scope only. It is not an x401 wire implementation.                               |
+| `proof/verifier-vcp-demo` | Demo reference for Proof's own route and verifier flow. | Reference only until it uses current x401 wire names.                                         |
 
 The local guard for this table is:
 
@@ -20,7 +20,7 @@ The local guard for this table is:
 pnpm --filter @atrib/integration proof-repo-interop -- --repo-root /tmp/proof-repos-x401-map
 ```
 
-The command classifies each Proof repo by role. Only a current-spec x401 wire SDK can become an atrib public package or core runtime dependency. `proof-vc-common` is a credential request and verifier helper surface, `proof-vc-web` stays browser-demo scoped, and `verifier-vcp-demo` stays reference-only while it uses legacy x401 headers.
+The command classifies each Proof repo by role. Only a current-spec x401 wire SDK can become an atrib public package or core runtime dependency. `proof-vc-common` is a credential request and verifier helper surface. `proof-vc-web` stays browser-demo scoped because it is a credential collection UX surface. `verifier-vcp-demo` stays reference-only while it uses legacy x401 headers. That is a scope judgment for atrib's interop claim, not a judgment that either repo is poorly built.
 
 ## Tracked Issues And PRs
 
@@ -30,7 +30,7 @@ The command classifies each Proof repo by role. Only a current-spec x401 wire SD
 | [proof/x401#29](https://github.com/proof/x401/issues/29), Multi-endpoint Requests                      | Decide how an agent handles many proof-gated endpoints, either delegated credentials or combined on-behalf-of requests. | Locally addressed by composition, not by inventing x401 semantics. `runX401MultiEndpointHarness()` records each endpoint action and its x401 evidence as separate signed records in one `context_id`, then links follow-up records through `informed_by`. Combined request formats stay upstream-owned.                           | Commented with the separate-record composition pattern on 2026-07-01: [issue comment](https://github.com/proof/x401/issues/29#issuecomment-4859577541). Add fixture vectors once the request-composition shape lands. |
 | [proof/x401#22](https://github.com/proof/x401/issues/22), Agent-asserted origin for middleman handling | Define how an agent or middleman asserts origin.                                                                        | Locally addressed as caller-owned verifier facts. atrib signs the action with `creator_key`, can require `expectedAgentId`, can record `agentOriginVerified`, hashes origin references in public details, and binds successful actions to prior attempts. It does not claim HTTP Origin semantics.                                | Commented with the caller-owned origin evidence boundary on 2026-07-01: [issue comment](https://github.com/proof/x401/issues/22#issuecomment-4859578727).                                                             |
 | [proof/x401#20](https://github.com/proof/x401/issues/20), Issuer trust list generalization             | Avoid locking trust lists to one DIF shape.                                                                             | Closed upstream on 2026-06-29. atrib keeps issuer trust caller-owned: `@atrib/verify` accepts `issuerTrustVerified`, `issuerTrustRootType`, and a hashed `issuerTrustRootRef` after the host or Proof verifier evaluates issuer trust.                                                                                            | Track PR #32 for concrete trusted-authority fields. Do not hard-code DIF, TRQP, OpenID Federation, ETSI, or AKI inside atrib.                                                                                         |
-| [proof/x401#19](https://github.com/proof/x401/issues/19), User interaction non-goal                    | Clarify whether user interaction is required.                                                                           | Addressed by boundary. x401 evidence says a proof gate was checked. It does not say the user was present. If a host needs human approval, use a separate signed approval or action-gate decision and link it through `informed_by`.                                                                                               | Commented in support of the non-goal on 2026-07-01: [issue comment](https://github.com/proof/x401/issues/19#issuecomment-4859581084).                                                                                 |
+| [proof/x401#19](https://github.com/proof/x401/issues/19), User interaction non-goal                    | Clarify whether user interaction is required.                                                                           | Addressed by local boundary only. x401 evidence says a proof gate was checked. It does not say the user was present. If a host needs human approval, use a separate signed approval or action-gate decision and link it through `informed_by`.                                                                                    | No active atrib comment. The prior comment was deliberately deleted because the thread did not need another implementer note.                                                                                         |
 | [proof/x401#18](https://github.com/proof/x401/issues/18), Credential Manager terminology               | Use Credential Manager instead of wallet in technical docs.                                                             | Closed upstream on 2026-06-29. atrib docs avoid wallet-native wording unless quoting upstream PR text or a chain-specific profile name.                                                                                                                                                                                           | Done unless upstream asks for doc review.                                                                                                                                                                             |
 | [proof/x401#17](https://github.com/proof/x401/pull/17), Agent Identifiers and proof/payment binding    | Bind agent identity to proof and optional payment.                                                                      | Locally addressed at the evidence boundary. atrib treats `agent_id` as x401 evidence, records optional `proofPaymentBindingVerified` plus a hashed binding reference, and keeps AP2, x402, MPP, ACP, UCP, or a2a-x402 payment evidence separate. The action record's `creator_key` proves which atrib signer produced the action. | Commented with the separate proof/payment evidence boundary on 2026-07-01: [PR comment](https://github.com/proof/x401/pull/17#issuecomment-4859579935).                                                               |
 | [proof/x401#32](https://github.com/proof/x401/pull/32), `trqp_v2` trusted authorities                  | Add TRQP v2 trusted authority type.                                                                                     | Locally addressed as caller-owned trust evidence. The current adapter can record a host-accepted `issuerTrustVerified` outcome, `issuerTrustRootType`, and a hashed root reference, but does not verify TRQP.                                                                                                                     | Wait for x401's issuer-trust model. Then map the upstream authority fields into the neutral evidence shape if needed.                                                                                                 |
@@ -62,6 +62,14 @@ pnpm --filter @atrib/integration open-x401-credential-e2e
 
 That path issues a local JWT VC, presents it inside a signed VP token, verifies holder signature, issuer signature, trusted issuer key, audience, x401 nonce, age, and KYC claims, accepts the `PROOF-RESPONSE`, and signs the atrib action chain. It uses `@proof.com/x401-node@0.3.0` for current x401 wire semantics but keeps credential verification provider-neutral.
 
+Write the durable public packet for that path with:
+
+```bash
+pnpm --filter @atrib/integration open-x401-credential-packet
+```
+
+The packet lands in `proof-packets/x401-open-credential-e2e/` with verifier output, provenance, and a redaction manifest. It is the upstream-facing artifact for public x401 protocol evidence. It is offline-local by design and does not claim Proof-hosted credential acceptance.
+
 Run that native fixture with:
 
 ```bash
@@ -76,7 +84,7 @@ Use the Proof VC verifier fixture when checking the credential-verifier handoff 
 pnpm --filter @atrib/integration proof-vc-common-x401-interop -- --require-current-evidence --require-proof-vc-common
 ```
 
-The default path uses a local fixture verifier. Set `ATRIB_PROOF_VC_COMMON_LIVE=1` and `ATRIB_PROOF_VC_COMMON_VP_TOKEN=<token>` only when a real Proof VP token should be verified by `@proof.com/proof-vc-server`. The live path verifies that the credential key-binding nonce matches the x401 nonce before setting `resultVerified: true`. This is Proof Cloud Wallet interop, not the public x401 E2E gate. Set `ATRIB_PROOF_VC_COMMON_TRUST_ROOT=development` for sandbox or development credentials, or `production` for production credentials.
+The default path uses a local fixture verifier. Set `ATRIB_PROOF_VC_COMMON_LIVE=1` and `ATRIB_PROOF_VC_COMMON_VP_TOKEN=<token>` only when a real Proof VP token should be verified by `@proof.com/proof-vc-server`. The live path verifies that the credential key-binding nonce matches the x401 nonce before setting `resultVerified: true`. This is Proof-hosted credential interop, not the public x401 E2E gate. It is worth running when the question is Proof-specific: whether a Proof-issued credential and Proof verifier can feed atrib's caller-owned x401 evidence. It is not the first priority for the public protocol claim. Set `ATRIB_PROOF_VC_COMMON_TRUST_ROOT=development` for sandbox or development credentials, or `production` for production credentials.
 
 To obtain a real Proof VP token, run the localhost capture helper:
 

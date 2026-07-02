@@ -1,0 +1,21 @@
+{
+  "schema": "atrib.proof_packet.provenance.v1",
+  "packet": "x401-open-credential-e2e",
+  "generated_at": "2026-07-02T03:59:10.633Z",
+  "source_command": "pnpm --filter @atrib/integration open-x401-credential-packet",
+  "source_files": [
+    "packages/integration/src/open-x401-credential-e2e.ts",
+    "packages/integration/scripts/open-x401-credential-packet.ts",
+    "packages/integration/test/x401-evidence-e2e.test.ts"
+  ],
+  "dependencies": {
+    "@proof.com/x401-node": "^0.3.0",
+    "jose": "6.2.3"
+  },
+  "verification_commands": [
+    "pnpm --filter @atrib/integration open-x401-credential-e2e",
+    "pnpm --filter @atrib/integration test -- test/x401-evidence-e2e.test.ts"
+  ],
+  "public_log_submission": false,
+  "public_log_reason": "The packet proves the x401 credential gate and signed action chain while keeping raw credential material local."
+}

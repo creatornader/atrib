@@ -20,7 +20,7 @@ describe('x401 upstream-open thread boundaries', () => {
       }>
     }
 
-    expect(fixture.checked_on).toBe('2026-07-01')
+    expect(fixture.checked_on).toBe('2026-07-02')
     expect(fixture.threads.map((thread) => thread.id).sort()).toEqual([
       'proof/x401#17',
       'proof/x401#19',

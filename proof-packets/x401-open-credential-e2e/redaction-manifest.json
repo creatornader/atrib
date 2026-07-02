@@ -1,0 +1,41 @@
+{
+  "schema": "atrib.proof_packet.redaction_manifest.v1",
+  "packet": "x401-open-credential-e2e",
+  "private_fields": [
+    {
+      "field": "issuer_private_key",
+      "disclosure": "omitted-local-only"
+    },
+    {
+      "field": "holder_private_key",
+      "disclosure": "omitted-local-only"
+    },
+    {
+      "field": "jwt_vc",
+      "disclosure": "omitted-local-only"
+    },
+    {
+      "field": "signed_vp_token",
+      "disclosure": "omitted-local-only"
+    },
+    {
+      "field": "proof_response_header",
+      "disclosure": "hash-only",
+      "hash": "sha256:cb63359f74fe0777a73582c48a4e5f73dbacbf80dcd7f17940717e72c8c02615"
+    },
+    {
+      "field": "proof_request_header",
+      "disclosure": "hash-only",
+      "hash": "sha256:9b6b1fb8e1a8290a3a48185e23bd5e3d9d72f59ce6c42f6d7d077ac90916abe9"
+    },
+    {
+      "field": "proof_result_header",
+      "disclosure": "hash-only",
+      "hash": "sha256:cd5fb0c71228b8898b327b69e109d65e5a01224299a00207715c2f228dfa7d35"
+    },
+    {
+      "field": "private_authorization_evidence",
+      "disclosure": "omitted-public-evidence-only"
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import * as ed from '@noble/ed25519'
 import { detectTransaction } from '@atrib/agent'
@@ -308,5 +310,63 @@ describe('x401 evidence e2e', () => {
     expect(JSON.stringify(run.public_packet)).not.toContain('vp_token')
     expect(JSON.stringify(run.public_packet)).not.toContain('verifiableCredential')
     expect(JSON.stringify(run.public_evidence)).not.toContain('vp_token')
+  })
+
+  it('keeps the checked x401 proof packet sanitized', () => {
+    const packetRoot = new URL('../../../proof-packets/x401-open-credential-e2e/', import.meta.url)
+    const verifierOutput = JSON.parse(
+      readFileSync(fileURLToPath(new URL('verifier-output.json', packetRoot)), 'utf8'),
+    ) as {
+      schema: string
+      mode: string
+      live_upstream: boolean
+      verifier: {
+        record_valid: boolean
+        x401_evidence_valid: boolean
+        informed_by_resolved: string[]
+      }
+      public_packet: {
+        raw_credential_material_stored: boolean
+        proof_request_hash: string
+        proof_response_hash: string
+        proof_result_hash: string
+      }
+      privacy: Record<string, boolean>
+    }
+    const redactionManifest = JSON.parse(
+      readFileSync(fileURLToPath(new URL('redaction-manifest.json', packetRoot)), 'utf8'),
+    ) as {
+      private_fields: Array<{ field: string; disclosure: string; hash?: string }>
+    }
+
+    expect(verifierOutput).toMatchObject({
+      schema: 'atrib.proof_packet.verifier_output.v1',
+      mode: 'offline-local',
+      live_upstream: false,
+      verifier: {
+        record_valid: true,
+        x401_evidence_valid: true,
+      },
+      public_packet: {
+        raw_credential_material_stored: false,
+      },
+    })
+    expect(verifierOutput.verifier.informed_by_resolved).toHaveLength(1)
+    expect(verifierOutput.public_packet.proof_request_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(verifierOutput.public_packet.proof_response_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(verifierOutput.public_packet.proof_result_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(verifierOutput.privacy).toMatchObject({
+      raw_credential_material_stored: false,
+      public_packet_contains_raw_presentation_token_field: false,
+      public_packet_contains_verifiable_credential_field: false,
+      public_evidence_contains_raw_presentation_token_field: false,
+    })
+    expect(redactionManifest.private_fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'proof_response_header', disclosure: 'hash-only' }),
+        expect.objectContaining({ field: 'jwt_vc', disclosure: 'omitted-local-only' }),
+        expect.objectContaining({ field: 'signed_vp_token', disclosure: 'omitted-local-only' }),
+      ]),
+    )
   })
 })
