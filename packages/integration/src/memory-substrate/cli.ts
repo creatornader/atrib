@@ -43,6 +43,7 @@ async function main(): Promise<void> {
       retrieveMemory(records, query, {
         budgetTokens,
         expandChains: !process.argv.includes('--no-chains'),
+        compact: process.argv.includes('--compact'),
         ...(windowEndRaw !== undefined ? { windowEnd: Number(windowEndRaw) } : {}),
       }),
     )

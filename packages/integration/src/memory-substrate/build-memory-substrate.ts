@@ -170,16 +170,31 @@ export interface RetrieveOptions {
   expandChains?: boolean
   /** only records with msg_end < windowEnd are visible (question-time windowing) */
   windowEnd?: number
+  /**
+   * Compact rendering: one line per record with reasons truncated, mirroring
+   * atrib-recall's compact mode (sidecar_summary one-liners). Default false
+   * (verbose verbatim reasons). Verbose rendering fits ~6 entries in a 2k-token
+   * budget vs ~40+ compact lines; coverage usually beats verbatim depth.
+   */
+  compact?: boolean
+}
+
+const clip = (s: unknown, n: number): string => {
+  const t = String(s ?? '').replace(/\s+/g, ' ').trim()
+  return t.length <= n ? t : t.slice(0, n) + '…'
 }
 
 /** Render one record as a memory line; revisions carry the reason and the superseded position. */
-function renderLine(m: SignedMemory, byHash: Map<string, SignedMemory>): string {
+function renderLine(m: SignedMemory, byHash: Map<string, SignedMemory>, compact = false): string {
   const c = m.content
   if (m.record.event_type === EVENT_TYPE_REVISION_URI || c.prior_position !== undefined) {
     const prior = byHash.get(m.revises ?? '')
     const priorText = prior ? String(prior.content.statement ?? prior.content.new_position ?? '') : String(c.prior_position ?? '')
+    if (compact)
+      return `- [REVISED] was: "${clip(priorText, 90)}" -> now: "${clip(c.new_position, 90)}" BECAUSE: "${clip(c.reason, 140)}"${c.topic ? ` (${c.topic})` : ''}`
     return `- [REVISED] was: "${priorText}" -> now: "${c.new_position}" BECAUSE: "${c.reason}"${c.topic ? ` (${c.topic})` : ''}`
   }
+  if (compact) return `- ${clip(c.statement, 110)}${c.reason ? ` (reason: ${clip(c.reason, 90)})` : ''}${c.topic ? ` [${c.topic}]` : ''}`
   return `- ${c.statement}${c.reason ? ` (reason: ${c.reason})` : ''}${c.topic ? ` [${c.topic}]` : ''}`
 }
 
@@ -212,10 +227,10 @@ export function retrieveMemory(records: SignedMemory[], query: string, opts: Ret
       const rev = revisedBy.get(m.hash)
       if (rev) { push(rev); if (rev.revises) push(byHash.get(rev.revises)) }
     }
-    const rendered = chosen.map((c) => renderLine(c, byHash)).join('\n')
+    const rendered = chosen.map((c) => renderLine(c, byHash, opts.compact)).join('\n')
     if (rendered.length > budget) break
   }
-  let lines = chosen.map((c) => renderLine(c, byHash))
+  let lines = chosen.map((c) => renderLine(c, byHash, opts.compact))
   while (lines.join('\n').length > budget && lines.length > 1) lines = lines.slice(0, -1)
   return lines.join('\n')
 }
