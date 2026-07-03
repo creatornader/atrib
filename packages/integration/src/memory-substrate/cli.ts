@@ -44,6 +44,7 @@ async function main(): Promise<void> {
         budgetTokens,
         expandChains: !process.argv.includes('--no-chains'),
         compact: process.argv.includes('--compact'),
+        noteForm: process.argv.includes('--note-form'),
         ...(windowEndRaw !== undefined ? { windowEnd: Number(windowEndRaw) } : {}),
       }),
     )

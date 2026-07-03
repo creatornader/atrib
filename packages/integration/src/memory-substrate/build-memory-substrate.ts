@@ -177,6 +177,13 @@ export interface RetrieveOptions {
    * budget vs ~40+ compact lines; coverage usually beats verbatim depth.
    */
   compact?: boolean
+  /**
+   * Note-form rendering: render each record as a natural-language memory note
+   * (no [REVISED]/field markup), clipped like compact. The signed layer is
+   * representation-independent; this adopts the note representation while
+   * keeping records, chains, and chain-expansion retrieval intact.
+   */
+  noteForm?: boolean
 }
 
 const clip = (s: unknown, n: number): string => {
@@ -185,9 +192,19 @@ const clip = (s: unknown, n: number): string => {
 }
 
 /** Render one record as a memory line; revisions carry the reason and the superseded position. */
-function renderLine(m: SignedMemory, byHash: Map<string, SignedMemory>, compact = false): string {
+function renderLine(m: SignedMemory, byHash: Map<string, SignedMemory>, compact = false, noteForm = false): string {
   const c = m.content
-  if (m.record.event_type === EVENT_TYPE_REVISION_URI || c.prior_position !== undefined) {
+  const isRevision = m.record.event_type === EVENT_TYPE_REVISION_URI || c.prior_position !== undefined
+  if (noteForm) {
+    // Natural-language note form: same information, no field markup.
+    if (isRevision) {
+      const prior = byHash.get(m.revises ?? '')
+      const priorText = prior ? String(prior.content.statement ?? prior.content.new_position ?? '') : String(c.prior_position ?? '')
+      return `- User previously ${clip(priorText, 90)}, but now ${clip(c.new_position, 90)} because ${clip(c.reason, 140)}`
+    }
+    return `- ${clip(c.statement, 110)}${c.reason ? ` because ${clip(c.reason, 90)}` : ''}`
+  }
+  if (isRevision) {
     const prior = byHash.get(m.revises ?? '')
     const priorText = prior ? String(prior.content.statement ?? prior.content.new_position ?? '') : String(c.prior_position ?? '')
     if (compact)
@@ -227,10 +244,10 @@ export function retrieveMemory(records: SignedMemory[], query: string, opts: Ret
       const rev = revisedBy.get(m.hash)
       if (rev) { push(rev); if (rev.revises) push(byHash.get(rev.revises)) }
     }
-    const rendered = chosen.map((c) => renderLine(c, byHash, opts.compact)).join('\n')
+    const rendered = chosen.map((c) => renderLine(c, byHash, opts.compact, opts.noteForm)).join('\n')
     if (rendered.length > budget) break
   }
-  let lines = chosen.map((c) => renderLine(c, byHash, opts.compact))
+  let lines = chosen.map((c) => renderLine(c, byHash, opts.compact, opts.noteForm))
   while (lines.join('\n').length > budget && lines.length > 1) lines = lines.slice(0, -1)
   return lines.join('\n')
 }
