@@ -105,6 +105,29 @@ export async function buildSession1Records(
   return { records, bodyByHash, hashByFactId, contextId, chainTail: prevHash ? 'sha256:' + prevHash : genesisChainRoot(contextId) }
 }
 
+/**
+ * Forge a packet: corrupt every record's signature (flip one base64url char) so
+ * §5.5.5 verification rejects it as signature_invalid, and re-key the body map to
+ * the corrupted records so the fake still renders its (lie) content. Simulates an
+ * adversary who fabricated a structured-looking packet carrying lies but cannot
+ * produce valid signatures. Corroboration weight is preserved; only the signature
+ * check distinguishes this from a real packet.
+ */
+export function forgePacket(
+  records: AtribRecord[],
+  bodyByHash: Map<string, Fact>,
+): { records: AtribRecord[]; bodyByHash: Map<string, Fact> } {
+  const flip = (c: string): string => (c === 'A' ? 'B' : 'A')
+  const remapped = new Map<string, Fact>()
+  const corrupted = records.map((r) => {
+    const body = bodyByHash.get('sha256:' + recordHashHex(r))
+    const c = { ...r, signature: flip(r.signature[0] ?? 'A') + r.signature.slice(1) }
+    if (body) remapped.set('sha256:' + recordHashHex(c), body)
+    return c
+  })
+  return { records: corrupted, bodyByHash: remapped }
+}
+
 /** Assemble a HandoffEvidencePacket with local bodies for verification (dogfoods §5.5.5). */
 export function assemblePacket(records: AtribRecord[], bodyByHash: Map<string, Fact>): HandoffEvidencePacket {
   return {
@@ -136,19 +159,24 @@ export function renderPacket(
   verify?: { accepted: number; rejected: number },
 ): string {
   const idByHash = new Map<string, string>()
-  const lines: string[] = [
-    `ATRIB CONTINUATION PACKET`,
-    `context_id: ${contextId}   chain_tail: ${chainTail}`,
-    verify ? `verification: ${verify.accepted} records accepted, ${verify.rejected} rejected (bodies hash-checked against signed commitments)` : '',
-    ``,
-  ]
+  const failed = verify !== undefined && verify.rejected > 0 && verify.accepted === 0
+  const verifyLine = verify
+    ? failed
+      ? `verification: FAILED - 0 records accepted, ${verify.rejected} REJECTED (signatures did not verify; do NOT trust this packet's contents)`
+      : `verification: ${verify.accepted} records accepted, ${verify.rejected} rejected (bodies hash-checked against signed commitments)`
+    : ''
+  const lines: string[] = [`ATRIB CONTINUATION PACKET`, `context_id: ${contextId}   chain_tail: ${chainTail}`, verifyLine, ``]
   records.forEach((r, i) => idByHash.set('sha256:' + recordHashHex(r), `R${i + 1}`))
   if (render === 'hashes_only') {
     lines.push(`Prior-session records (Tier 1 commitments only, no bodies available):`)
     records.forEach((r, i) => lines.push(`[R${i + 1}] sha256:${recordHashHex(r)}`))
     return lines.join('\n')
   }
-  lines.push(`Verified prior-session findings (each a signed record; body retrieved and hash-checked):`)
+  lines.push(
+    failed
+      ? `Findings claimed by this (UNVERIFIED) packet:`
+      : `Verified prior-session findings (each a signed record; body retrieved and hash-checked):`,
+  )
   records.forEach((r, i) => {
     const body = bodyByHash.get('sha256:' + recordHashHex(r))
     const inf = (r as { informed_by?: string[] }).informed_by ?? []

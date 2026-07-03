@@ -11,6 +11,7 @@ import {
   assemblePacket,
   verifyPacket,
   renderPacket,
+  forgePacket,
   type FactsDoc,
   type PacketRender,
 } from './build-continuation-packet.js'
@@ -23,8 +24,11 @@ async function main(): Promise<void> {
   // isolate whether the crypto verification signal (not just the structure) drives
   // a downstream reader's trust.
   const showVerify = !args.includes('--no-verify')
+  // --forge corrupts signatures so the packet fails §5.5.5 verification: a
+  // structured-looking fake that only the signature check can distinguish.
+  const forge = args.includes('--forge')
   if (!path) {
-    process.stderr.write('usage: cli.js <facts.json> --render full|no_lineage|hashes_only [--no-verify]\n')
+    process.stderr.write('usage: cli.js <facts.json> --render full|no_lineage|hashes_only [--no-verify] [--forge]\n')
     process.exit(2)
   }
   const raw = JSON.parse(readFileSync(path, 'utf8'))
@@ -33,9 +37,12 @@ async function main(): Promise<void> {
     facts: raw.facts,
     chain_fact_ids: raw.chain_fact_ids,
   }
-  const { records, bodyByHash, contextId, chainTail } = await buildSession1Records(doc)
+  const built = await buildSession1Records(doc)
+  const { records, bodyByHash } = forge
+    ? forgePacket(built.records, built.bodyByHash)
+    : { records: built.records, bodyByHash: built.bodyByHash }
   const verify = showVerify ? await verifyPacket(assemblePacket(records, bodyByHash)) : undefined
-  process.stdout.write(renderPacket(render, records, bodyByHash, contextId, chainTail, verify))
+  process.stdout.write(renderPacket(render, records, bodyByHash, built.contextId, built.chainTail, verify))
 }
 
 main().catch((err) => {
