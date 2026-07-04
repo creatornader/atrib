@@ -49,4 +49,29 @@ describe('memory substrate', () => {
     const after = retrieveMemory(signed, 'podcasting', { budgetTokens: 400, windowEnd: 100 })
     expect(after).toContain('BECAUSE')
   })
+
+  it("renders the revision's own signed prior_position even when the REVISES link is wrong", async () => {
+    const items: MemoryItem[] = [
+      { type: 'preference', statement: 'Prefers tea with milk in the morning', topic: 'drinks', msg_start: 1, msg_end: 2 },
+      { type: 'revision', prior: 'Prefers coffee with milk in the morning', new: 'Drinks only water now', reason: 'doctor recommended cutting caffeine', topic: 'drinks', msg_start: 10, msg_end: 12 },
+    ]
+    const signed = await signMemoryItems(items, 'ctx-mislink')
+
+    expect(signed[1]!.revises).toBe(signed[0]!.hash)
+    expect(signed[1]!.record.event_type).toBe('https://atrib.dev/v1/types/revision')
+
+    const out = retrieveMemory(signed, 'water caffeine', { budgetTokens: 400 })
+    const revisedLine = out.split('\n').find((line) => line.includes('[REVISED]'))
+    expect(revisedLine).toBeDefined()
+    expect(revisedLine).toContain('coffee')
+    expect(revisedLine).not.toContain('tea')
+
+    const noteOut = retrieveMemory(signed, 'water caffeine', { budgetTokens: 400, noteForm: true })
+    const noteLine = noteOut.split('\n').find((line) => line.includes('User previously'))
+    expect(noteLine).toBeDefined()
+    expect(noteLine).toContain('coffee')
+    expect(noteLine).not.toContain('tea')
+
+    expect(out).toContain('tea')
+  })
 })

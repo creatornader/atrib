@@ -7596,6 +7596,20 @@ are the current coverage.
 - [`packages/verify/src/attestation.ts`](packages/verify/src/attestation.ts),
   [`packages/action-gate/src/index.ts`](packages/action-gate/src/index.ts).
 
+## D137: Own signed content wins over chain-derived text in rendering
+
+**Date:** 2026-07-04
+
+**Status:** Accepted
+
+**Extends:** [D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06).
+
+**Context.** A revision record carries its own signed `prior_position`, `new_position`, and `reason`, plus an optional `revises` reference to the superseded record. The memory-substrate reference integration in `@atrib/integration` rendered a revision's "was" clause from the LINKED record's statement whenever a `revises` link existed, and used the record's own `prior_position` only as a fallback. When links are inferred rather than producer-declared (the reference integration approximates [D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06) links by text similarity), a mis-link makes the renderer display a prior the revision's signer never signed. The rendered causal claim is then covered by no signature on that record. That is a fabricated-prior integrity failure in a protocol whose purpose is that displayed history be verifiable.
+
+**Decision.** State the rendering rule generally: own signed content wins over chain-derived text. A renderer MUST present a record's own signed fields as that record's claim. Declared references (`revises`, `informed_by`) drive chain expansion, which surfaces the linked record as its own separately attributed line. They never substitute the linked record's text into the referencing record's rendered claim. `renderLine` in `build-memory-substrate.ts` now always renders the revision's own `prior_position` and takes no lookup map; retrieval chain expansion is the only consumer of the `revises` link. The same rule governs atrib-recall and atrib-trace display surfaces.
+
+**Alternatives considered.** (a) Substitute linked text only above a similarity threshold: still renders unsigned text as a signed claim, rejected. (b) Render both texts inline: conflates two records' content in one attributed line and spends budget; chain expansion already shows the linked record separately. (c) Fall back to linked text when the own `prior_position` is empty: reopens the fabrication channel exactly where the record is weakest, rejected. An empty own prior renders empty.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

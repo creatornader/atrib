@@ -191,22 +191,20 @@ const clip = (s: unknown, n: number): string => {
   return t.length <= n ? t : t.slice(0, n) + '…'
 }
 
-/** Render one record as a memory line; revisions carry the reason and the superseded position. */
-function renderLine(m: SignedMemory, byHash: Map<string, SignedMemory>, compact = false, noteForm = false): string {
+/** Render one record as a memory line; own signed content renders, while `revises` only drives chain expansion. */
+function renderLine(m: SignedMemory, compact = false, noteForm = false): string {
   const c = m.content
   const isRevision = m.record.event_type === EVENT_TYPE_REVISION_URI || c.prior_position !== undefined
   if (noteForm) {
     // Natural-language note form: same information, no field markup.
     if (isRevision) {
-      const prior = byHash.get(m.revises ?? '')
-      const priorText = prior ? String(prior.content.statement ?? prior.content.new_position ?? '') : String(c.prior_position ?? '')
+      const priorText = String(c.prior_position ?? '')
       return `- User previously ${clip(priorText, 90)}, but now ${clip(c.new_position, 90)} because ${clip(c.reason, 140)}`
     }
     return `- ${clip(c.statement, 110)}${c.reason ? ` because ${clip(c.reason, 90)}` : ''}`
   }
   if (isRevision) {
-    const prior = byHash.get(m.revises ?? '')
-    const priorText = prior ? String(prior.content.statement ?? prior.content.new_position ?? '') : String(c.prior_position ?? '')
+    const priorText = String(c.prior_position ?? '')
     if (compact)
       return `- [REVISED] was: "${clip(priorText, 90)}" -> now: "${clip(c.new_position, 90)}" BECAUSE: "${clip(c.reason, 140)}"${c.topic ? ` (${c.topic})` : ''}`
     return `- [REVISED] was: "${priorText}" -> now: "${c.new_position}" BECAUSE: "${c.reason}"${c.topic ? ` (${c.topic})` : ''}`
@@ -244,10 +242,10 @@ export function retrieveMemory(records: SignedMemory[], query: string, opts: Ret
       const rev = revisedBy.get(m.hash)
       if (rev) { push(rev); if (rev.revises) push(byHash.get(rev.revises)) }
     }
-    const rendered = chosen.map((c) => renderLine(c, byHash, opts.compact, opts.noteForm)).join('\n')
+    const rendered = chosen.map((c) => renderLine(c, opts.compact, opts.noteForm)).join('\n')
     if (rendered.length > budget) break
   }
-  let lines = chosen.map((c) => renderLine(c, byHash, opts.compact, opts.noteForm))
+  let lines = chosen.map((c) => renderLine(c, opts.compact, opts.noteForm))
   while (lines.join('\n').length > budget && lines.length > 1) lines = lines.slice(0, -1)
   return lines.join('\n')
 }
