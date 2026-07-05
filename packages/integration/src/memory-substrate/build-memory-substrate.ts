@@ -209,6 +209,7 @@ export interface RetrieveStats {
   backfilled_seeds: number
   chain_members_considered: number
   chain_members_admitted: number
+  chains_compacted?: number
   echo_skipped: number
   budget_chars: number
   rendered_chars: number
@@ -273,6 +274,22 @@ function chainTopic(records: SignedMemory[]): string {
   return 'untopiced'
 }
 
+function shortForm(record: SignedMemory): string {
+  return clip(record.content.new_position ?? record.content.what ?? record.record.content_id, 48)
+}
+
+function chainPathLine(label: 'earlier' | 'later', records: SignedMemory[]): string | undefined {
+  if (!records.length) return undefined
+  const prefix = `  ${label} (${records.length} ${records.length === 1 ? 'step' : 'steps'}): `
+  const forms = records.map(shortForm)
+  const full = prefix + forms.join(' -> ')
+  if (full.length <= 240) return full
+
+  if (forms.length < 2) return undefined
+  const compact = `${prefix}${forms[0]} -> ... -> ${forms[forms.length - 1]}`
+  return compact.length <= 240 ? compact : undefined
+}
+
 function orderRevisionLineage(seed: SignedMemory, members: SignedMemory[]): { ordered: SignedMemory[]; rest: SignedMemory[] } {
   const local = new Map<string, SignedMemory>([[seed.hash, seed]])
   for (const member of members) local.set(member.hash, member)
@@ -317,21 +334,54 @@ function orderRevisionLineage(seed: SignedMemory, members: SignedMemory[]): { or
  * D143 composition: signed revision edges must render as lineage. A disconnected
  * reverse-order list discards the edge information that the graph certifies.
  */
-function renderSeedWithLineage(seed: SignedMemory, members: SignedMemory[], compact: boolean, noteForm: boolean): string[] {
-  if (!members.length) return [renderLine(seed, compact, noteForm)]
+function composeSeedWithLineage(
+  seed: SignedMemory,
+  members: SignedMemory[],
+  compact: boolean,
+  noteForm: boolean,
+  opts: {
+    droppedMembers?: SignedMemory[]
+    admitCompactLine?: (line: string) => boolean
+  } = {},
+): { lines: string[]; chainsCompacted: number } {
+  if (!members.length) return { lines: [renderLine(seed, compact, noteForm)], chainsCompacted: 0 }
 
   const { ordered, rest } = orderRevisionLineage(seed, members)
   const hasLineageMembers = ordered.some((record) => record.hash !== seed.hash)
   if (!hasLineageMembers) {
-    return [seed, ...members].map((record) => renderLine(record, compact, noteForm))
+    return { lines: [seed, ...members].map((record) => renderLine(record, compact, noteForm)), chainsCompacted: 0 }
   }
 
+  const droppedMembers = opts.droppedMembers ?? []
+  const droppedHashes = new Set(droppedMembers.map((record) => record.hash))
+  const droppedOrdered = droppedHashes.size > 0 ? orderRevisionLineage(seed, [...members, ...droppedMembers]).ordered : []
+  const droppedSeedIndex = droppedOrdered.findIndex((record) => record.hash === seed.hash)
+  const earlierDropped = droppedSeedIndex >= 0
+    ? droppedOrdered.slice(0, droppedSeedIndex).filter((record) => droppedHashes.has(record.hash))
+    : []
+  const laterDropped = droppedSeedIndex >= 0
+    ? droppedOrdered.slice(droppedSeedIndex + 1).filter((record) => droppedHashes.has(record.hash))
+    : []
+
   const n = ordered.length
-  const lines = [
-    `- [chain: ${chainTopic(ordered)}, ${n} steps]`,
-    ...ordered.map((record, index) => `  step ${index + 1}/${n}: ${renderLine(record, compact, noteForm)}`),
-  ]
-  return [...lines, ...rest.map((record) => renderLine(record, compact, noteForm))]
+  const lines = [`- [chain: ${chainTopic(ordered)}, ${n} steps]`]
+  let chainsCompacted = 0
+
+  const earlierLine = chainPathLine('earlier', earlierDropped)
+  if (earlierLine && (opts.admitCompactLine?.(earlierLine) ?? true)) {
+    lines.push(earlierLine)
+    chainsCompacted = 1
+  }
+
+  lines.push(...ordered.map((record, index) => `  step ${index + 1}/${n}: ${renderLine(record, compact, noteForm)}`))
+
+  const laterLine = chainPathLine('later', laterDropped)
+  if (laterLine && (opts.admitCompactLine?.(laterLine) ?? true)) {
+    lines.push(laterLine)
+    chainsCompacted = 1
+  }
+
+  return { lines: [...lines, ...rest.map((record) => renderLine(record, compact, noteForm))], chainsCompacted }
 }
 
 function revisionChainMembers(
@@ -379,7 +429,7 @@ interface NormalizedRetrieveOptions {
 }
 
 type MutableSelectedSeed = SelectedSeed
-type Choice = { seed: SignedMemory; score: number; members: SignedMemory[] }
+type Choice = { seed: SignedMemory; score: number; members: SignedMemory[]; droppedMembers: SignedMemory[] }
 
 interface RankedRecords {
   visible: SignedMemory[]
@@ -527,10 +577,12 @@ interface ExpandSeed {
   record: SignedMemory
   score?: number
   onAdmit?: (member: SignedMemory) => void
+  onDrop?: (member: SignedMemory) => void
 }
 
 interface SharedExpandResult {
   members: ExpandedMember[]
+  dropped: ExpandedMember[]
   considered: number
   admitted: number
   echoSkipped: number
@@ -545,6 +597,7 @@ function expandSeedMembers(
   skipNonPositiveScores: boolean,
 ): SharedExpandResult {
   const members: ExpandedMember[] = []
+  const dropped: ExpandedMember[] = []
   let considered = 0
   let admittedCount = 0
   let echoSkipped = 0
@@ -560,7 +613,11 @@ function expandSeedMembers(
       }
 
       const line = renderLine(member, opts.compact, opts.noteForm)
-      if (admission.lineLengthAfterAppend(line) > opts.budget) continue
+      if (admission.lineLengthAfterAppend(line) > opts.budget) {
+        seed.onDrop?.(member)
+        dropped.push({ record: member, from: seed.record.hash })
+        continue
+      }
       seed.onAdmit?.(member)
       admission.admitLine(line)
       admitted.add(member.hash)
@@ -569,7 +626,7 @@ function expandSeedMembers(
     }
   }
 
-  return { members, considered, admitted: admittedCount, echoSkipped }
+  return { members, dropped, considered, admitted: admittedCount, echoSkipped }
 }
 
 /**
@@ -642,11 +699,19 @@ export function expandMemory(records: SignedMemory[], seeds: SignedMemory[], opt
   )
   const text = seeds.flatMap((seed) => {
     const members = expanded.members.filter((member) => member.from === seed.hash).map((member) => member.record)
+    const droppedMembers = expanded.dropped.filter((member) => member.from === seed.hash).map((member) => member.record)
     if (!members.length) return []
     const { ordered } = orderRevisionLineage(seed, members)
     const hasLineageMembers = ordered.some((record) => record.hash !== seed.hash)
     if (!hasLineageMembers) return members.map((member) => renderLine(member, normalized.compact, normalized.noteForm))
-    return renderSeedWithLineage(seed, members, normalized.compact, normalized.noteForm)
+    return composeSeedWithLineage(seed, members, normalized.compact, normalized.noteForm, {
+      droppedMembers,
+      admitCompactLine: (line: string) => {
+        if (admission.lineLengthAfterAppend(line) > normalized.budget) return false
+        admission.admitLine(line)
+        return true
+      },
+    }).lines
   }).join('\n')
   return { members: expanded.members, text, considered: expanded.considered, echo_skipped: expanded.echoSkipped }
 }
@@ -666,6 +731,7 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
         backfilled_seeds: 0,
         chain_members_considered: 0,
         chain_members_admitted: 0,
+        chains_compacted: 0,
         echo_skipped: 0,
         budget_chars: budget,
         rendered_chars: text.length,
@@ -695,7 +761,7 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
     admission,
     normalized.compact,
     normalized.noteForm,
-    (seed, score) => ({ seed, score, members: [] }),
+    (seed, score) => ({ seed, score, members: [], droppedMembers: [] }),
   )
 
   if (!choices.length && ranked.order.length) {
@@ -707,7 +773,7 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
       admission,
       normalized.compact,
       normalized.noteForm,
-      (seed, score) => ({ seed, score, members: [] }),
+      (seed, score) => ({ seed, score, members: [], droppedMembers: [] }),
     )
   }
 
@@ -721,6 +787,7 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
         record: choice.seed,
         score: choice.score,
         onAdmit: (member: SignedMemory) => choice.members.push(member),
+        onDrop: (member: SignedMemory) => choice.droppedMembers.push(member),
       })),
       index,
       normalized,
@@ -746,11 +813,25 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
     admission,
     normalized.compact,
     normalized.noteForm,
-    (seed, score) => ({ seed, score, members: [] }),
+    (seed, score) => ({ seed, score, members: [], droppedMembers: [] }),
   )
 
+  let chainsCompacted = 0
+  const choiceLines = choices.flatMap((choice) => {
+    const rendered = composeSeedWithLineage(choice.seed, choice.members, normalized.compact, normalized.noteForm, {
+      droppedMembers: choice.droppedMembers,
+      admitCompactLine: (line: string) => {
+        if (admission.lineLengthAfterAppend(line) > budget) return false
+        admission.admitLine(line)
+        return true
+      },
+    })
+    chainsCompacted += rendered.chainsCompacted
+    return rendered.lines
+  })
+
   const text = [
-    ...choices.flatMap((choice) => renderSeedWithLineage(choice.seed, choice.members, normalized.compact, normalized.noteForm)),
+    ...choiceLines,
     ...backfilled.map((choice) => renderLine(choice.seed, normalized.compact, normalized.noteForm)),
   ].join('\n')
   return {
@@ -760,6 +841,7 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
       backfilled_seeds: backfilled.length,
       chain_members_considered: chainMembersConsidered,
       chain_members_admitted: chainMembersAdmitted,
+      chains_compacted: chainsCompacted,
       echo_skipped: echoSkipped,
       budget_chars: budget,
       rendered_chars: text.length,

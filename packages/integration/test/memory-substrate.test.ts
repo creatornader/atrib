@@ -39,6 +39,20 @@ const CHAINLESS_ITEMS: MemoryItem[] = [
   { type: 'fact', statement: 'SIXTHCHAINLESS cobalt recall zeta', topic: 'chainless', msg_start: 11, msg_end: 12 },
 ]
 
+const COMPACT_CHAIN_QUERY = 'terminal current state marker'
+const COMPACT_CHAIN_ITEMS: MemoryItem[] = [
+  { type: 'revision', prior: 'node000', new: 'node001', reason: 'reason01 extra admission padding', topic: 'deep-chain', msg_start: 1, msg_end: 2 },
+  { type: 'revision', prior: 'node001', new: 'node002', reason: 'reason02 extra admission padding', topic: 'deep-chain', msg_start: 3, msg_end: 4 },
+  { type: 'revision', prior: 'node002', new: 'node003', reason: 'reason03 extra admission padding', topic: 'deep-chain', msg_start: 5, msg_end: 6 },
+  { type: 'revision', prior: 'node003', new: 'node004', reason: 'reason04 extra admission padding', topic: 'deep-chain', msg_start: 7, msg_end: 8 },
+  { type: 'revision', prior: 'node004', new: 'node005', reason: 'reason05 extra admission padding', topic: 'deep-chain', msg_start: 9, msg_end: 10 },
+  { type: 'revision', prior: 'node005', new: 'node006', reason: 'reason06 extra admission padding', topic: 'deep-chain', msg_start: 11, msg_end: 12 },
+  { type: 'revision', prior: 'node006', new: 'node007', reason: 'reason07 extra admission padding', topic: 'deep-chain', msg_start: 13, msg_end: 14 },
+  { type: 'revision', prior: 'node007', new: 'node008', reason: 'reason08 extra admission padding', topic: 'deep-chain', msg_start: 15, msg_end: 16 },
+  { type: 'revision', prior: 'node008', new: 'node009', reason: 'reason09 extra admission padding', topic: 'deep-chain', msg_start: 17, msg_end: 18 },
+  { type: 'revision', prior: 'node009', new: 'node010 terminal current state', reason: 'reason10 terminal marker padding', topic: 'deep-chain', msg_start: 19, msg_end: 20 },
+]
+
 const EXPECTED_SATURATION_HEADROOM = `- SECOND saffron pilot recall field recorder beta [saturation]
 - TOPSEED saffron pilot recall field recorder priority alpha [saturation]
 - THIRD saffron pilot recall field notes gamma [saturation]
@@ -58,6 +72,18 @@ const EXPECTED_SATURATION_COMPOSED = `- SECOND saffron pilot recall field record
 - [chain: saturation, 2 steps]
   step 1/2: - Catalogs nebula cadet repair notes (reason: amberwhy98 marker explains the old repair choice) [saturation]
   step 2/2: - [REVISED] was: "Catalogs nebula cadet repair notes" -> now: "Uses field recorder for saffron pilot recall" BECAUSE: "hands needed to stay free during repairs" (saturation)`
+
+const EXPECTED_COMPACT_CHAIN_FULL = `- [chain: deep-chain, 10 steps]
+  step 1/10: - [REVISED] was: "node000" -> now: "node001" BECAUSE: "reason01 extra admission padding" (deep-chain)
+  step 2/10: - [REVISED] was: "node001" -> now: "node002" BECAUSE: "reason02 extra admission padding" (deep-chain)
+  step 3/10: - [REVISED] was: "node002" -> now: "node003" BECAUSE: "reason03 extra admission padding" (deep-chain)
+  step 4/10: - [REVISED] was: "node003" -> now: "node004" BECAUSE: "reason04 extra admission padding" (deep-chain)
+  step 5/10: - [REVISED] was: "node004" -> now: "node005" BECAUSE: "reason05 extra admission padding" (deep-chain)
+  step 6/10: - [REVISED] was: "node005" -> now: "node006" BECAUSE: "reason06 extra admission padding" (deep-chain)
+  step 7/10: - [REVISED] was: "node006" -> now: "node007" BECAUSE: "reason07 extra admission padding" (deep-chain)
+  step 8/10: - [REVISED] was: "node007" -> now: "node008" BECAUSE: "reason08 extra admission padding" (deep-chain)
+  step 9/10: - [REVISED] was: "node008" -> now: "node009" BECAUSE: "reason09 extra admission padding" (deep-chain)
+  step 10/10: - [REVISED] was: "node009" -> now: "node010 terminal current state" BECAUSE: "reason10 terminal marker padding" (deep-chain)`
 
 describe('memory substrate', () => {
   it('signs verifiable records and links revisions to the superseded record', async () => {
@@ -262,6 +288,41 @@ describe('memory substrate', () => {
     expect(chainlessOut).not.toMatch(/step [0-9]+\/[0-9]+/)
   })
 
+  it('preserves dropped chain members as a compact ordered path line', async () => {
+    const signed = await signMemoryItems(COMPACT_CHAIN_ITEMS, 'ctx-compact-chain')
+    const compactResult = retrieveMemoryDetailed(signed, COMPACT_CHAIN_QUERY, { budgetTokens: 180, chainDepth: 12 })
+    const lines = compactResult.text.split('\n')
+    const headerIndex = lines.findIndex((line) => line.startsWith('- [chain: deep-chain, '))
+
+    expect(headerIndex).toBeGreaterThanOrEqual(0)
+    const earlierLines = lines.filter((line) => /earlier \([0-9]+ steps?\): /.test(line))
+    expect(earlierLines).toHaveLength(1)
+    expect(lines[headerIndex + 1]).toBe(earlierLines[0])
+
+    const earlierLine = earlierLines[0]!
+    const earlierCount = Number(earlierLine.match(/earlier \(([0-9]+) steps?\): /)?.[1] ?? 0)
+    expect(earlierCount).toBeGreaterThanOrEqual(4)
+    let cursor = -1
+    for (const short of ['node001', 'node002', 'node003', 'node004']) {
+      const next = earlierLine.indexOf(short)
+      expect(next).toBeGreaterThan(cursor)
+      cursor = next
+    }
+
+    const stepLines = lines.filter((line) => line.startsWith('  step '))
+    expect(stepLines.length).toBeGreaterThan(1)
+    for (let index = 0; index < stepLines.length; index++) {
+      expect(stepLines[index]).toMatch(new RegExp(`^  step ${index + 1}/${stepLines.length}: - \\[REVISED\\]`))
+    }
+    expect(compactResult.text).toContain('node010 terminal current state')
+    expect(compactResult.stats.chains_compacted).toBe(1)
+
+    const fullResult = retrieveMemoryDetailed(signed, COMPACT_CHAIN_QUERY, { budgetTokens: 1000, chainDepth: 12 })
+    expect(fullResult.text).toBe(EXPECTED_COMPACT_CHAIN_FULL)
+    expect(fullResult.text).not.toMatch(/earlier \([0-9]+ steps?\): /)
+    expect(fullResult.stats.chains_compacted).toBe(0)
+  })
+
   it('reserved expansion share admits chain members under seed saturation', async () => {
     const signed = await signMemoryItems(SATURATION_ITEMS, 'ctx-reserved-share-saturation')
 
@@ -372,6 +433,7 @@ describe('memory substrate', () => {
       backfilled_seeds: 0,
       chain_members_considered: 1,
       chain_members_admitted: 1,
+      chains_compacted: 0,
       echo_skipped: 0,
       budget_chars: SATURATION_BUDGET * 4,
       rendered_chars: EXPECTED_SATURATION_COMPOSED.length,

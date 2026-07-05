@@ -7696,6 +7696,20 @@ are the current coverage.
 
 **Alternatives considered.** (a) Keep recency-first rendering and rely on the model to reassemble order from content: measured to forfeit the graph's distinctive value, rejected. (b) Render edge hashes inline for full fidelity: hashes spend budget on tokens no judge model uses; step labels carry the ordering information at negligible cost. (c) Emit a separate machine-readable lineage appendix: doubles the budget cost of every chain and splits one fact across two places, rejected for the composed path while remaining open to callers via expandMemory's structured members.
 
+## D144: Dropped chain members render as a compact ordered path line
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D139](#d139-chain-expansion-competes-through-a-reserved-budget-share), [D140](#d140-memory-retrieval-separates-selection-from-expansion), and [D143](#d143-revision-lineage-renders-as-an-ordered-connected-chain).
+
+**Context.** Retrieval walks certified revision lineages, but budget admission can reject lineage members the walk found. The rejection was silent: the composed block showed a shorter chain with no indication that certified history was missing. Measured on a depth-stressed corpus, gold-lineage coverage decayed from 0.997 to 0.707 as chains outgrew the budget, and answer accuracy about current state and trajectory decayed with it. The information lost is precisely what the graph certifies and what a consumer cannot reconstruct: which records exist in the lineage and in what order.
+
+**Decision.** When a seed's chain block omits walked lineage members for budget reasons, the block carries one compact path line naming the omitted members in causal order, using each record's own short form. The line never displaces admitted members, is capped with middle-ellipsis, and is counted in a new `chains_compacted` retrieval statistic. Full rendering remains the default whenever the lineage fits; chainless output is byte-unchanged. Per [D137](#d137-own-signed-content-wins-over-chain-derived-text-in-rendering), the line presents each omitted record's own content in short form; it borrows nothing across records.
+
+**Alternatives considered.** (a) Silent truncation (status quo): measured to discard certified order and depress deep-chain accuracy, rejected. (b) Compress admitted members instead, fitting more of the chain at lower fidelity per member: changes rendering of records that do fit and violates least-surprise for shallow chains, rejected. (c) Raise the expansion budget share: trades seed diversity for chain depth globally, when the failure is per-seed, rejected.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
