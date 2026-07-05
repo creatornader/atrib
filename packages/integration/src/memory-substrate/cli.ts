@@ -5,7 +5,7 @@
 //   sign:     node cli.js sign <items.json> --context <label> --out <signed.json>
 //             items.json = {"items":[MemoryItem...]} (extractor output)
 //   retrieve: node cli.js retrieve <signed.json> --query "<text>" [--budget 2000]
-//             [--window-end N] [--no-chains]
+//             [--window-end N] [--no-chains] [--verbose]
 //             prints the rendered memory block to stdout.
 //
 // The retrieve path implements the shipped recall semantics locally (BM25 per
@@ -43,14 +43,14 @@ async function main(): Promise<void> {
       retrieveMemory(records, query, {
         budgetTokens,
         expandChains: !process.argv.includes('--no-chains'),
-        compact: process.argv.includes('--compact'),
+        ...(process.argv.includes('--verbose') ? { compact: false } : {}),
         noteForm: process.argv.includes('--note-form'),
         ...(windowEndRaw !== undefined ? { windowEnd: Number(windowEndRaw) } : {}),
       }),
     )
     return
   }
-  process.stderr.write('usage: cli.js sign <items.json> --context <label> [--out f] | retrieve <signed.json> --query <q> [--budget N] [--window-end N] [--no-chains]\n')
+  process.stderr.write('usage: cli.js sign <items.json> --context <label> [--out f] | retrieve <signed.json> --query <q> [--budget N] [--window-end N] [--no-chains] [--verbose]\n')
   process.exit(2)
 }
 

@@ -74,4 +74,35 @@ describe('memory substrate', () => {
 
     expect(out).toContain('tea')
   })
+
+  it('defaults to compact rendering with verbose opt-in via compact false', async () => {
+    const longReason = `${'the same long explanation keeps repeating here '.repeat(6).trim()} final sentinel tail stays visible only in verbose mode`
+    const items: MemoryItem[] = [
+      {
+        type: 'preference',
+        statement: 'Prefers azure saffron memory defaults',
+        reason: longReason,
+        topic: 'compact-rendering',
+        msg_start: 21,
+        msg_end: 22,
+      },
+    ]
+    const signed = await signMemoryItems(items, 'ctx-compact-default')
+    const q = 'azure saffron memory defaults'
+
+    const defaultOut = retrieveMemory(signed, q, { budgetTokens: 400 })
+    const explicitCompactOut = retrieveMemory(signed, q, { budgetTokens: 400, compact: true })
+    expect(defaultOut).toBe(explicitCompactOut)
+
+    const defaultLine = defaultOut.split('\n').find((line) => line.includes('azure saffron'))
+    expect(defaultLine).toBeDefined()
+    expect(defaultLine).toContain('…')
+    expect(defaultLine).not.toContain('final sentinel tail stays visible only in verbose mode')
+
+    const verboseOut = retrieveMemory(signed, q, { budgetTokens: 400, compact: false })
+    const verboseLine = verboseOut.split('\n').find((line) => line.includes('azure saffron'))
+    expect(verboseLine).toBeDefined()
+    expect(verboseLine).toContain(longReason)
+    expect(verboseLine).not.toContain('…')
+  })
 })

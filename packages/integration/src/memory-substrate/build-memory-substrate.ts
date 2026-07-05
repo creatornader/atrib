@@ -172,9 +172,10 @@ export interface RetrieveOptions {
   windowEnd?: number
   /**
    * Compact rendering: one line per record with reasons truncated, mirroring
-   * atrib-recall's compact mode (sidecar_summary one-liners). Default false
-   * (verbose verbatim reasons). Verbose rendering fits ~6 entries in a 2k-token
-   * budget vs ~40+ compact lines; coverage usually beats verbatim depth.
+   * atrib-recall's compact mode (sidecar_summary one-liners). Default true
+   * (compact). Verbose verbatim reasons are the opt-in via compact: false.
+   * Verbose rendering fits ~6 entries in a 2k-token budget vs ~40+ compact
+   * lines; coverage usually beats verbatim depth.
    */
   compact?: boolean
   /**
@@ -221,6 +222,7 @@ function renderLine(m: SignedMemory, compact = false, noteForm = false): string 
 export function retrieveMemory(records: SignedMemory[], query: string, opts: RetrieveOptions = {}): string {
   const budget = (opts.budgetTokens ?? 2000) * 4 // chars
   const expand = opts.expandChains !== false
+  const compact = opts.compact ?? true
   const visible = records.filter((m) => opts.windowEnd === undefined || m.msg_end < opts.windowEnd)
   if (!visible.length) return '(no memory)'
   const byHash = new Map(visible.map((m) => [m.hash, m]))
@@ -242,10 +244,10 @@ export function retrieveMemory(records: SignedMemory[], query: string, opts: Ret
       const rev = revisedBy.get(m.hash)
       if (rev) { push(rev); if (rev.revises) push(byHash.get(rev.revises)) }
     }
-    const rendered = chosen.map((c) => renderLine(c, opts.compact, opts.noteForm)).join('\n')
+    const rendered = chosen.map((c) => renderLine(c, compact, opts.noteForm)).join('\n')
     if (rendered.length > budget) break
   }
-  let lines = chosen.map((c) => renderLine(c, opts.compact, opts.noteForm))
+  let lines = chosen.map((c) => renderLine(c, compact, opts.noteForm))
   while (lines.join('\n').length > budget && lines.length > 1) lines = lines.slice(0, -1)
   return lines.join('\n')
 }
