@@ -7682,6 +7682,20 @@ are the current coverage.
 
 **Alternatives considered.** (a) Index-time inclusion toggle: args were always indexed, so this misdiagnoses the mechanism, rejected. (b) Global config to disable suppression: reintroduces the noise problem the calibration solved, rejected. (c) Automatic lift when the query matches few non-tool_call records: implicit magic that makes ranking unpredictable, rejected in favor of an explicit per-query flag.
 
+## D143: Revision lineage renders as an ordered, connected chain
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D137](#d137-own-signed-content-wins-over-chain-derived-text-in-rendering), [D139](#d139-chain-expansion-competes-through-a-reserved-budget-share), and [D140](#d140-memory-retrieval-separates-selection-from-expansion).
+
+**Context.** Retrieval walked certified revision chains and then rendered the visited records as disconnected lines in reverse-causal order with no linkage information. A reader of the composed block could not tell that the lines formed one ordered history: the connectivity and ordering that the signed edges certify, which is precisely the information a flat prose memory cannot carry with any guarantee, was discarded at the presentation boundary. Measured across an extended evaluation program, the multi-hop advantage of the graph never reached the consuming model in any configuration, and arm accuracy converged to information-equivalence with unordered prose notes.
+
+**Decision.** When a seed's admitted expansion members form a revision lineage with it, the block renders in causal order, root first and seed last with forward revisions continuing the sequence, each step labeled with its position and the block introduced by a chain header naming the topic thread and step count. Chainless rendering is byte-unchanged. Own signed content still wins over chain-derived text per [D137](#d137-own-signed-content-wins-over-chain-derived-text-in-rendering): ordering and labels present the relationship between records; no record's rendered claim borrows another's content. The composed block is thereby the faithful projection of what the graph knows: not a bag of change notes but a certified sequence.
+
+**Alternatives considered.** (a) Keep recency-first rendering and rely on the model to reassemble order from content: measured to forfeit the graph's distinctive value, rejected. (b) Render edge hashes inline for full fidelity: hashes spend budget on tokens no judge model uses; step labels carry the ordering information at negligible cost. (c) Emit a separate machine-readable lineage appendix: doubles the budget cost of every chain and splits one fact across two places, rejected for the composed path while remaining open to callers via expandMemory's structured members.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

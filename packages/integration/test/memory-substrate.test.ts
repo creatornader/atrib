@@ -55,8 +55,9 @@ const EXPECTED_CHAINLESS_HEADROOM = `- TOPCHAINLESS cobalt orchard recall field 
 const EXPECTED_SATURATION_COMPOSED = `- SECOND saffron pilot recall field recorder beta [saturation]
 - TOPSEED saffron pilot recall field recorder priority alpha [saturation]
 - THIRD saffron pilot recall field notes gamma [saturation]
-- [REVISED] was: "Catalogs nebula cadet repair notes" -> now: "Uses field recorder for saffron pilot recall" BECAUSE: "hands needed to stay free during repairs" (saturation)
-- Catalogs nebula cadet repair notes (reason: amberwhy98 marker explains the old repair choice) [saturation]`
+- [chain: saturation, 2 steps]
+  step 1/2: - Catalogs nebula cadet repair notes (reason: amberwhy98 marker explains the old repair choice) [saturation]
+  step 2/2: - [REVISED] was: "Catalogs nebula cadet repair notes" -> now: "Uses field recorder for saffron pilot recall" BECAUSE: "hands needed to stay free during repairs" (saturation)`
 
 describe('memory substrate', () => {
   it('signs verifiable records and links revisions to the superseded record', async () => {
@@ -196,7 +197,8 @@ describe('memory substrate', () => {
     expect(transitiveOut).toContain('audiobooks kept mind racing')
     expect(transitiveOut).toContain('eye strain')
     expect(transitiveOut).toContain('screens disrupt sleep')
-    expect(transitiveOut.split('\n')[0]).toContain('meditation')
+    expect(transitiveOut.split('\n')[0]).toBe('- [chain: reading, 3 steps]')
+    expect(transitiveOut).toMatch(/step 3\/3: .*meditation/)
 
     const budgetOut = retrieveMemory(signed, 'meditation notebook', { budgetTokens: 50 })
     expect(budgetOut).toContain('meditation practice notebook')
@@ -211,6 +213,53 @@ describe('memory substrate', () => {
     const echoOut = retrieveMemory(echoSigned, 'sells collection moving abroad', { budgetTokens: 400 })
     expect(echoOut.split('\n').length).toBe(1)
     expect(echoOut).toContain('moving abroad soon')
+  })
+
+  it('renders revision chains as ordered connected sequences', async () => {
+    const chainItems: MemoryItem[] = [
+      { type: 'preference', statement: 'Reads print books before bed', reason: 'screens disrupt sleep', topic: 'reading', msg_start: 1, msg_end: 2 },
+      { type: 'revision', prior: 'Reads print books before bed', new: 'Listens to audiobooks before bed', reason: 'eye strain in the evening', topic: 'reading', msg_start: 5, msg_end: 6 },
+      { type: 'revision', prior: 'Listens to audiobooks before bed', new: 'Practices meditation before bed', reason: 'audiobooks kept mind racing', topic: 'reading', msg_start: 9, msg_end: 10 },
+    ]
+    const signed = await signMemoryItems(chainItems, 'ctx-chain-render')
+
+    const out = retrieveMemory(signed, 'meditation mind racing', { budgetTokens: 400 })
+    const lines = out.split('\n')
+    const headerIndex = lines.findIndex((line) => line === '- [chain: reading, 3 steps]')
+    expect(headerIndex).toBeGreaterThanOrEqual(0)
+    const block = lines.slice(headerIndex, headerIndex + 4)
+    expect(block[1]).toMatch(/step [0-9]+\/[0-9]+/)
+    expect(block[1]).toContain('Reads print books before bed')
+    expect(block[2]).toMatch(/step [0-9]+\/[0-9]+/)
+    expect(block[2]).toContain('Listens to audiobooks before bed')
+    expect(block[3]).toMatch(/step [0-9]+\/[0-9]+/)
+    expect(block[3]).toContain('Practices meditation before bed')
+
+    const noteOut = retrieveMemory(signed, 'meditation mind racing', { budgetTokens: 400, noteForm: true })
+    const noteLines = noteOut.split('\n')
+    const noteHeaderIndex = noteLines.findIndex((line) => line === '- [chain: reading, 3 steps]')
+    expect(noteHeaderIndex).toBeGreaterThanOrEqual(0)
+    const noteBlock = noteLines.slice(noteHeaderIndex, noteHeaderIndex + 4)
+    expect(noteBlock[1]).toMatch(/step [0-9]+\/[0-9]+/)
+    expect(noteBlock[1]).toContain('Reads print books before bed')
+    expect(noteBlock[2]).toMatch(/step [0-9]+\/[0-9]+/)
+    expect(noteBlock[2]).toContain('Listens to audiobooks before bed')
+    expect(noteBlock[3]).toMatch(/step [0-9]+\/[0-9]+/)
+    expect(noteBlock[3]).toContain('Practices meditation before bed')
+
+    const selected = selectMemory(signed, 'meditation mind racing', { budgetTokens: 400 })
+    const expanded = expandMemory(signed, selected.seeds.map(({ record }) => record), { budgetTokens: 400 })
+    const expandedLines = expanded.text.split('\n')
+    const expandedHeaderIndex = expandedLines.findIndex((line) => line === '- [chain: reading, 3 steps]')
+    expect(expandedHeaderIndex).toBeGreaterThanOrEqual(0)
+    expect(expandedLines[expandedHeaderIndex + 1]).toContain('Reads print books before bed')
+    expect(expandedLines[expandedHeaderIndex + 2]).toContain('Listens to audiobooks before bed')
+    expect(expandedLines[expandedHeaderIndex + 3]).toContain('Practices meditation before bed')
+
+    const chainless = await signMemoryItems(CHAINLESS_ITEMS, 'ctx-reserved-share-chainless')
+    const chainlessOut = retrieveMemory(chainless, CHAINLESS_QUERY, { budgetTokens: CHAINLESS_BUDGET })
+    expect(chainlessOut).not.toContain('[chain:')
+    expect(chainlessOut).not.toMatch(/step [0-9]+\/[0-9]+/)
   })
 
   it('reserved expansion share admits chain members under seed saturation', async () => {
@@ -254,7 +303,7 @@ describe('memory substrate', () => {
     expect(saturationResult.stats.echo_skipped).toBeGreaterThanOrEqual(0)
     expect(saturationResult.stats.budget_chars).toBe(SATURATION_BUDGET * 4)
     expect(saturationResult.stats.rendered_chars).toBe(saturationResult.text.length)
-    expect(saturationResult.stats.seeds + saturationResult.stats.backfilled_seeds).toBe(saturationResult.text.split('\n').length - saturationResult.stats.chain_members_admitted)
+    expect(saturationResult.text).toContain('- [chain: saturation, 2 steps]')
 
     const chainless = await signMemoryItems(CHAINLESS_ITEMS, 'ctx-reserved-share-chainless')
     const chainlessResult = retrieveMemoryDetailed(chainless, CHAINLESS_QUERY, { budgetTokens: CHAINLESS_BUDGET })

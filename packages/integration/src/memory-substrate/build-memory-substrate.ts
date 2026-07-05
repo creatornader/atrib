@@ -243,7 +243,7 @@ const clip = (s: unknown, n: number): string => {
   return t.length <= n ? t : t.slice(0, n) + '…'
 }
 
-/** Render one record as a memory line; own signed content renders, while `revises` only drives chain expansion. */
+/** Render one record as a memory line; own signed content renders, while `revises` drives expansion and chain composition. */
 function renderLine(m: SignedMemory, compact = false, noteForm = false): string {
   const c = m.content
   const isRevision = m.record.event_type === EVENT_TYPE_REVISION_URI || c.prior_position !== undefined
@@ -263,6 +263,75 @@ function renderLine(m: SignedMemory, compact = false, noteForm = false): string 
   }
   if (compact) return `- ${clip(c.statement, 110)}${c.reason ? ` (reason: ${clip(c.reason, 90)})` : ''}${c.topic ? ` [${c.topic}]` : ''}`
   return `- ${c.statement}${c.reason ? ` (reason: ${c.reason})` : ''}${c.topic ? ` [${c.topic}]` : ''}`
+}
+
+function chainTopic(records: SignedMemory[]): string {
+  for (const record of records) {
+    const topic = record.content.topic
+    if (topic !== undefined && String(topic).trim()) return String(topic)
+  }
+  return 'untopiced'
+}
+
+function orderRevisionLineage(seed: SignedMemory, members: SignedMemory[]): { ordered: SignedMemory[]; rest: SignedMemory[] } {
+  const local = new Map<string, SignedMemory>([[seed.hash, seed]])
+  for (const member of members) local.set(member.hash, member)
+
+  const orderedMembers = new Set<string>()
+  const backward: SignedMemory[] = []
+  let cursor: SignedMemory | undefined = seed
+  while (cursor?.revises) {
+    const next = local.get(cursor.revises)
+    if (!next || orderedMembers.has(next.hash) || next.hash === seed.hash) break
+    orderedMembers.add(next.hash)
+    backward.push(next)
+    cursor = next
+  }
+
+  const memberOrder = new Map(members.map((member, index) => [member.hash, index]))
+  const forward: SignedMemory[] = []
+  let frontier = [seed]
+  const seenForward = new Set<string>([seed.hash, ...orderedMembers])
+  while (frontier.length) {
+    const nextFrontier: SignedMemory[] = []
+    for (const current of frontier) {
+      const nextMembers = members
+        .filter((member) => member.revises === current.hash && !seenForward.has(member.hash))
+        .sort((a, b) => (memberOrder.get(a.hash) ?? 0) - (memberOrder.get(b.hash) ?? 0))
+      for (const next of nextMembers) {
+        seenForward.add(next.hash)
+        orderedMembers.add(next.hash)
+        forward.push(next)
+        nextFrontier.push(next)
+      }
+    }
+    frontier = nextFrontier
+  }
+
+  const ordered = [...backward.reverse(), seed, ...forward]
+  const rest = members.filter((member) => !orderedMembers.has(member.hash))
+  return { ordered, rest }
+}
+
+/**
+ * D143 composition: signed revision edges must render as lineage. A disconnected
+ * reverse-order list discards the edge information that the graph certifies.
+ */
+function renderSeedWithLineage(seed: SignedMemory, members: SignedMemory[], compact: boolean, noteForm: boolean): string[] {
+  if (!members.length) return [renderLine(seed, compact, noteForm)]
+
+  const { ordered, rest } = orderRevisionLineage(seed, members)
+  const hasLineageMembers = ordered.some((record) => record.hash !== seed.hash)
+  if (!hasLineageMembers) {
+    return [seed, ...members].map((record) => renderLine(record, compact, noteForm))
+  }
+
+  const n = ordered.length
+  const lines = [
+    `- [chain: ${chainTopic(ordered)}, ${n} steps]`,
+    ...ordered.map((record, index) => `  step ${index + 1}/${n}: ${renderLine(record, compact, noteForm)}`),
+  ]
+  return [...lines, ...rest.map((record) => renderLine(record, compact, noteForm))]
 }
 
 function revisionChainMembers(
@@ -571,7 +640,14 @@ export function expandMemory(records: SignedMemory[], seeds: SignedMemory[], opt
     admission,
     false,
   )
-  const text = expanded.members.map(({ record }) => renderLine(record, normalized.compact, normalized.noteForm)).join('\n')
+  const text = seeds.flatMap((seed) => {
+    const members = expanded.members.filter((member) => member.from === seed.hash).map((member) => member.record)
+    if (!members.length) return []
+    const { ordered } = orderRevisionLineage(seed, members)
+    const hasLineageMembers = ordered.some((record) => record.hash !== seed.hash)
+    if (!hasLineageMembers) return members.map((member) => renderLine(member, normalized.compact, normalized.noteForm))
+    return renderSeedWithLineage(seed, members, normalized.compact, normalized.noteForm)
+  }).join('\n')
   return { members: expanded.members, text, considered: expanded.considered, echo_skipped: expanded.echoSkipped }
 }
 
@@ -674,9 +750,9 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
   )
 
   const text = [
-    ...choices.flatMap((choice) => [choice.seed, ...choice.members]),
-    ...backfilled.map((choice) => choice.seed),
-  ].map((m) => renderLine(m, normalized.compact, normalized.noteForm)).join('\n')
+    ...choices.flatMap((choice) => renderSeedWithLineage(choice.seed, choice.members, normalized.compact, normalized.noteForm)),
+    ...backfilled.map((choice) => renderLine(choice.seed, normalized.compact, normalized.noteForm)),
+  ].join('\n')
   return {
     text,
     stats: {
