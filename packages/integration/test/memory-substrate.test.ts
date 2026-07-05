@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { verifyRecord } from '@atrib/verify'
 import { signMemoryItems, retrieveMemory, type MemoryItem } from '../src/memory-substrate/build-memory-substrate.js'
+import { retrieveMemoryDetailed } from '../src/memory-substrate/build-memory-substrate.js'
 
 const ITEMS: MemoryItem[] = [
   { type: 'preference', statement: 'Loves podcasting about music trends', reason: 'positive listener feedback', topic: 'music', msg_start: 3, msg_end: 5 },
@@ -10,6 +11,45 @@ const ITEMS: MemoryItem[] = [
   { type: 'preference', statement: 'Enjoys morning trail runs', topic: 'fitness', msg_start: 12, msg_end: 14 },
   { type: 'revision', prior: 'Loves podcasting about music trends', new: 'No longer enjoys podcasting', reason: 'it began to feel like a chore rather than a passion', topic: 'music', msg_start: 40, msg_end: 44 },
 ]
+
+const SATURATION_QUERY = 'saffron pilot recall field recorder'
+const SATURATION_BUDGET = 125
+const SATURATION_ITEMS: MemoryItem[] = [
+  { type: 'preference', statement: 'Catalogs nebula cadet repair notes', reason: 'amberwhy98 marker explains the old repair choice', topic: 'saturation', msg_start: 1, msg_end: 2 },
+  { type: 'revision', prior: 'Catalogs nebula cadet repair notes', new: 'Uses field recorder for saffron pilot recall', reason: 'hands needed to stay free during repairs', topic: 'saturation', msg_start: 3, msg_end: 4 },
+  { type: 'fact', statement: 'TOPSEED saffron pilot recall field recorder priority alpha', topic: 'saturation', msg_start: 5, msg_end: 6 },
+  { type: 'fact', statement: 'SECOND saffron pilot recall field recorder beta', topic: 'saturation', msg_start: 7, msg_end: 8 },
+  { type: 'fact', statement: 'THIRD saffron pilot recall field notes gamma', topic: 'saturation', msg_start: 9, msg_end: 10 },
+  { type: 'fact', statement: 'FOURTH saffron pilot recall checklist delta', topic: 'saturation', msg_start: 11, msg_end: 12 },
+  { type: 'fact', statement: 'FIFTH saffron pilot review epsilon', topic: 'saturation', msg_start: 13, msg_end: 14 },
+  { type: 'fact', statement: 'SIXTH saffron recall zeta', topic: 'saturation', msg_start: 15, msg_end: 16 },
+  { type: 'fact', statement: 'SEVENTH pilot recall eta', topic: 'saturation', msg_start: 17, msg_end: 18 },
+  { type: 'fact', statement: 'EIGHTH saffron theta', topic: 'saturation', msg_start: 19, msg_end: 20 },
+]
+
+const CHAINLESS_QUERY = 'cobalt orchard recall field recorder'
+const CHAINLESS_BUDGET = 85
+const CHAINLESS_ITEMS: MemoryItem[] = [
+  { type: 'fact', statement: 'TOPCHAINLESS cobalt orchard recall field recorder alpha', topic: 'chainless', msg_start: 1, msg_end: 2 },
+  { type: 'fact', statement: 'SECONDCHAINLESS cobalt orchard recall field recorder beta', topic: 'chainless', msg_start: 3, msg_end: 4 },
+  { type: 'fact', statement: 'THIRDCHAINLESS cobalt orchard recall field notes gamma', topic: 'chainless', msg_start: 5, msg_end: 6 },
+  { type: 'fact', statement: 'FOURTHCHAINLESS cobalt orchard recall checklist delta', topic: 'chainless', msg_start: 7, msg_end: 8 },
+  { type: 'fact', statement: 'FIFTHCHAINLESS cobalt orchard review epsilon', topic: 'chainless', msg_start: 9, msg_end: 10 },
+  { type: 'fact', statement: 'SIXTHCHAINLESS cobalt recall zeta', topic: 'chainless', msg_start: 11, msg_end: 12 },
+]
+
+const EXPECTED_SATURATION_HEADROOM = `- SECOND saffron pilot recall field recorder beta [saturation]
+- TOPSEED saffron pilot recall field recorder priority alpha [saturation]
+- THIRD saffron pilot recall field notes gamma [saturation]
+- [REVISED] was: "Catalogs nebula cadet repair notes" -> now: "Uses field recorder for saffron pilot recall" BECAUSE: "hands needed to stay free during repairs" (saturation)
+- FOURTH saffron pilot recall checklist delta [saturation]
+- SEVENTH pilot recall eta [saturation]`
+
+const EXPECTED_CHAINLESS_HEADROOM = `- TOPCHAINLESS cobalt orchard recall field recorder alpha [chainless]
+- SECONDCHAINLESS cobalt orchard recall field recorder beta [chainless]
+- THIRDCHAINLESS cobalt orchard recall field notes gamma [chainless]
+- FOURTHCHAINLESS cobalt orchard recall checklist delta [chainless]
+- SIXTHCHAINLESS cobalt recall zeta [chainless]`
 
 describe('memory substrate', () => {
   it('signs verifiable records and links revisions to the superseded record', async () => {
@@ -164,5 +204,54 @@ describe('memory substrate', () => {
     const echoOut = retrieveMemory(echoSigned, 'sells collection moving abroad', { budgetTokens: 400 })
     expect(echoOut.split('\n').length).toBe(1)
     expect(echoOut).toContain('moving abroad soon')
+  })
+
+  it('reserved expansion share admits chain members under seed saturation', async () => {
+    const signed = await signMemoryItems(SATURATION_ITEMS, 'ctx-reserved-share-saturation')
+
+    const defaultOut = retrieveMemory(signed, SATURATION_QUERY, { budgetTokens: SATURATION_BUDGET })
+    const headroomOnlyOut = retrieveMemory(signed, SATURATION_QUERY, { budgetTokens: SATURATION_BUDGET, expansionShare: 0 })
+
+    expect(defaultOut).toContain('amberwhy98 marker')
+    expect(headroomOnlyOut).not.toContain('amberwhy98 marker')
+    expect(defaultOut).toContain('SECOND saffron pilot recall')
+    expect(headroomOnlyOut).toContain('SECOND saffron pilot recall')
+    expect(headroomOnlyOut).toContain('FOURTH saffron pilot recall checklist')
+    expect(headroomOnlyOut).toContain('SEVENTH pilot recall eta')
+    expect(defaultOut).not.toContain('FOURTH saffron pilot recall checklist')
+    expect(defaultOut).not.toContain('SEVENTH pilot recall eta')
+  })
+
+  it('expansionShare zero restores headroom-only behavior byte for byte', async () => {
+    const chainless = await signMemoryItems(CHAINLESS_ITEMS, 'ctx-reserved-share-chainless')
+    const saturation = await signMemoryItems(SATURATION_ITEMS, 'ctx-reserved-share-saturation')
+
+    expect(retrieveMemory(chainless, CHAINLESS_QUERY, { budgetTokens: CHAINLESS_BUDGET, expansionShare: 0 })).toBe(EXPECTED_CHAINLESS_HEADROOM)
+    expect(retrieveMemory(saturation, SATURATION_QUERY, { budgetTokens: SATURATION_BUDGET, expansionShare: 0 })).toBe(EXPECTED_SATURATION_HEADROOM)
+  })
+
+  it('reserve backfills seeds when no chain members are admissible', async () => {
+    const signed = await signMemoryItems(CHAINLESS_ITEMS, 'ctx-reserved-share-chainless')
+    const defaultOut = retrieveMemory(signed, CHAINLESS_QUERY, { budgetTokens: CHAINLESS_BUDGET })
+    const headroomOnlyOut = retrieveMemory(signed, CHAINLESS_QUERY, { budgetTokens: CHAINLESS_BUDGET, expansionShare: 0 })
+
+    expect(defaultOut).toBe(headroomOnlyOut)
+  })
+
+  it('retrieveMemoryDetailed reports engagement stats', async () => {
+    const saturation = await signMemoryItems(SATURATION_ITEMS, 'ctx-reserved-share-saturation')
+    const saturationResult = retrieveMemoryDetailed(saturation, SATURATION_QUERY, { budgetTokens: SATURATION_BUDGET })
+
+    expect(saturationResult.stats.expansion_engaged).toBe(true)
+    expect(saturationResult.stats.chain_members_admitted).toBeGreaterThanOrEqual(1)
+    expect(saturationResult.stats.echo_skipped).toBeGreaterThanOrEqual(0)
+    expect(saturationResult.stats.budget_chars).toBe(SATURATION_BUDGET * 4)
+    expect(saturationResult.stats.rendered_chars).toBe(saturationResult.text.length)
+    expect(saturationResult.stats.seeds + saturationResult.stats.backfilled_seeds).toBe(saturationResult.text.split('\n').length - saturationResult.stats.chain_members_admitted)
+
+    const chainless = await signMemoryItems(CHAINLESS_ITEMS, 'ctx-reserved-share-chainless')
+    const chainlessResult = retrieveMemoryDetailed(chainless, CHAINLESS_QUERY, { budgetTokens: CHAINLESS_BUDGET })
+
+    expect(chainlessResult.stats.expansion_engaged).toBe(false)
   })
 })

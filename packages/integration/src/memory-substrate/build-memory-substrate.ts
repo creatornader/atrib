@@ -172,6 +172,8 @@ export interface RetrieveOptions {
   budgetTokens?: number
   /** include revision-chain expansion (the atrib-distinctive step). Default true. */
   expandChains?: boolean
+  /** fraction of the budget reserved for chain-expansion members before seeds consume it all; 0 disables the reserve (headroom-only expansion); default 0.25. */
+  expansionShare?: number
   /** maximum revision-chain hops walked in each direction from a hit during expansion; default 3. */
   chainDepth?: number
   /** only records with msg_end < windowEnd are visible (question-time windowing) */
@@ -191,6 +193,17 @@ export interface RetrieveOptions {
    * keeping records, chains, and chain-expansion retrieval intact.
    */
   noteForm?: boolean
+}
+
+export interface RetrieveStats {
+  seeds: number
+  backfilled_seeds: number
+  chain_members_considered: number
+  chain_members_admitted: number
+  echo_skipped: number
+  budget_chars: number
+  rendered_chars: number
+  expansion_engaged: boolean
 }
 
 const clip = (s: unknown, n: number): string => {
@@ -263,12 +276,32 @@ function revisionChainMembers(
  * hit on either end of a change surfaces the change AND its reason.
  */
 export function retrieveMemory(records: SignedMemory[], query: string, opts: RetrieveOptions = {}): string {
+  return retrieveMemoryDetailed(records, query, opts).text
+}
+
+export function retrieveMemoryDetailed(records: SignedMemory[], query: string, opts: RetrieveOptions = {}): { text: string; stats: RetrieveStats } {
   const budget = (opts.budgetTokens ?? 2000) * 4 // chars
   const expand = opts.expandChains !== false
+  const share = expand === false ? 0 : Math.min(0.9, Math.max(0, opts.expansionShare ?? 0.25))
   const chainDepth = Number.isFinite(opts.chainDepth) ? Math.max(0, Math.floor(opts.chainDepth!)) : 3
   const compact = opts.compact ?? true
   const visible = records.filter((m) => opts.windowEnd === undefined || m.msg_end < opts.windowEnd)
-  if (!visible.length) return '(no memory)'
+  if (!visible.length) {
+    const text = '(no memory)'
+    return {
+      text,
+      stats: {
+        seeds: 0,
+        backfilled_seeds: 0,
+        chain_members_considered: 0,
+        chain_members_admitted: 0,
+        echo_skipped: 0,
+        budget_chars: budget,
+        rendered_chars: text.length,
+        expansion_engaged: false,
+      },
+    }
+  }
   const byHash = new Map(visible.map((m) => [m.hash, m]))
   const revisedBy = new Map<string, SignedMemory[]>()
   for (const m of visible) {
@@ -283,37 +316,66 @@ export function retrieveMemory(records: SignedMemory[], query: string, opts: Ret
 
   type Choice = { seed: SignedMemory; score: number; members: SignedMemory[] }
   const choices: Choice[] = []
+  const backfilled: Choice[] = []
   const admitted = new Set<string>()
-  const renderChoices = (): string =>
-    choices.flatMap((choice) => [choice.seed, ...choice.members]).map((m) => renderLine(m, compact, opts.noteForm)).join('\n')
-  const canAddSeed = (seed: SignedMemory): boolean => {
-    choices.push({ seed, score: 0, members: [] })
-    const fits = renderChoices().length <= budget
-    choices.pop()
-    return fits
+  let renderedLength = 0
+  let renderedLineCount = 0
+  const lineLengthAfterAppend = (line: string): number =>
+    renderedLength + line.length + (renderedLineCount > 0 ? 1 : 0)
+  const admitLine = (line: string): void => {
+    renderedLength = lineLengthAfterAppend(line)
+    renderedLineCount++
   }
-  const addSeed = (seed: SignedMemory, score: number): void => {
+  const forceAddSeed = (target: Choice[], seed: SignedMemory, score: number): void => {
     admitted.add(seed.hash)
-    choices.push({ seed, score, members: [] })
+    target.push({ seed, score, members: [] })
+    admitLine(renderLine(seed, compact, opts.noteForm))
   }
-
-  for (const i of order) {
-    const score = scores[i]!
-    const seed = visible[i]!
-    if (score <= 0) {
-      if (!choices.length) addSeed(seed, score)
-      break
+  const tryAddSeed = (target: Choice[], seed: SignedMemory, score: number, targetBudget: number): boolean => {
+    const line = renderLine(seed, compact, opts.noteForm)
+    if (lineLengthAfterAppend(line) > targetBudget) return false
+    admitted.add(seed.hash)
+    target.push({ seed, score, members: [] })
+    admitLine(line)
+    return true
+  }
+  const admitRankedSeeds = (
+    startIndex: number,
+    target: Choice[],
+    targetBudget: number,
+    stopOnOverflow: boolean,
+    fallbackWhenEmpty: boolean,
+  ): number => {
+    for (let orderIndex = startIndex; orderIndex < order.length; orderIndex++) {
+      const i = order[orderIndex]!
+      const score = scores[i]!
+      const seed = visible[i]!
+      if (score <= 0) {
+        if (fallbackWhenEmpty && !choices.length) forceAddSeed(target, seed, score)
+        return orderIndex + 1
+      }
+      if (admitted.has(seed.hash)) continue
+      if (!tryAddSeed(target, seed, score, targetBudget) && stopOnOverflow) return orderIndex
     }
-    if (!admitted.has(seed.hash) && canAddSeed(seed)) addSeed(seed, score)
+    return order.length
   }
 
-  if (!choices.length && order.length) addSeed(visible[order[0]!]!, scores[order[0]!]!)
+  const seedBudget = (1 - share) * budget
+  // When share > 0, A1 stops at first overflow so the reserve prefix stays contiguous.
+  // share === 0 keeps trying smaller seeds to preserve pre-reserve behavior.
+  const backfillStart = admitRankedSeeds(0, choices, seedBudget, share > 0, true)
 
+  if (!choices.length && order.length) forceAddSeed(choices, visible[order[0]!]!, scores[order[0]!]!)
+
+  let chainMembersConsidered = 0
+  let chainMembersAdmitted = 0
+  let echoSkipped = 0
   if (expand) {
     for (const choice of choices) {
       if (choice.score <= 0) continue
       const seedTokens = new Set(contentTokens(renderLine(choice.seed, compact, opts.noteForm)))
       for (const member of revisionChainMembers(choice.seed, byHash, revisedBy, chainDepth)) {
+        chainMembersConsidered++
         if (admitted.has(member.hash)) continue
         const memberTokens = new Set(contentTokens(renderLine(member, compact, opts.noteForm)))
         let isEchoSubset = true
@@ -323,17 +385,39 @@ export function retrieveMemory(records: SignedMemory[], query: string, opts: Ret
             break
           }
         }
-        if (isEchoSubset) continue
-
-        choice.members.push(member)
-        if (renderChoices().length <= budget) {
-          admitted.add(member.hash)
-        } else {
-          choice.members.pop()
+        if (isEchoSubset) {
+          echoSkipped++
+          continue
         }
+
+        const line = renderLine(member, compact, opts.noteForm)
+        if (lineLengthAfterAppend(line) > budget) continue
+        choice.members.push(member)
+        admitLine(line)
+        admitted.add(member.hash)
+        chainMembersAdmitted++
       }
     }
   }
 
-  return renderChoices()
+  // Backfilled seeds never expand; expansion only sees the A1 seed prefix.
+  admitRankedSeeds(backfillStart, backfilled, budget, false, false)
+
+  const text = [
+    ...choices.flatMap((choice) => [choice.seed, ...choice.members]),
+    ...backfilled.map((choice) => choice.seed),
+  ].map((m) => renderLine(m, compact, opts.noteForm)).join('\n')
+  return {
+    text,
+    stats: {
+      seeds: choices.length,
+      backfilled_seeds: backfilled.length,
+      chain_members_considered: chainMembersConsidered,
+      chain_members_admitted: chainMembersAdmitted,
+      echo_skipped: echoSkipped,
+      budget_chars: budget,
+      rendered_chars: text.length,
+      expansion_engaged: chainMembersAdmitted > 0,
+    },
+  }
 }

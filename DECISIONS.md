@@ -7624,6 +7624,20 @@ are the current coverage.
 
 **Alternatives considered.** (a) Sign the banner line itself: adds a signer for derived state and still requires the consumer to verify, so it collapses into the same rule. (b) Strip banner-shaped prose from bodies before display: blocklists over attacker-shaped text are unwinnable; the verdict's position and provenance carry the guarantee, not content filtering. (c) Keep trusting rendered banners: rejected, that is the vulnerability.
 
+## D139: Chain expansion competes through a reserved budget share
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D137](#d137-own-signed-content-wins-over-chain-derived-text-in-rendering). Supersedes, in part, the headroom-only expansion rule shipped with the memory-substrate retrieval rewrite.
+
+**Context.** The memory-substrate retrieval in `@atrib/integration` admitted chain-expansion members only into budget left over after BM25-ranked seeds. At saturating budgets seeds consume everything, so expansion never runs and callers silently receive chain-less retrieval. A paired accuracy pilot on PersonaMem (956 cells) measured the consequence: on reason-type questions where expansion had material to add, the chain-less configuration lost 22.9 accuracy points to a flat-notes baseline, recovered to parity when budget headroom let chains run, and the no-material control subset was unchanged at both budgets. The mechanism carries real accuracy value precisely because records that answer "why" often share few tokens with the query: lexical seeding cannot find them, which is the reason the graph walk exists. A rule that lets any weak lexical tail hit outrank any structurally linked record inverts the value ordering the walk is meant to express.
+
+**Decision.** Reserve a configurable share of the retrieval budget for chain-expansion members. Selection is three-phase: seeds fill up to (1 minus share) of the budget in rank order; chain members compete for the remainder under the existing depth bound, echo rule, and dedup; remaining seeds backfill whatever expansion does not use. The share defaults to 0.25; zero restores headroom-only behavior; `expandChains: false` still disables expansion entirely. Strong seeds can lose at most the reserve, weak tail seeds yield to structurally linked records, and no budget is wasted when chains have nothing to add. `retrieveMemoryDetailed` exposes engagement statistics so hosts and evaluations can observe whether expansion operated instead of inferring it from output text. The same observability principle applies to `atrib-recall` surfaces if they grow inline chain expansion.
+
+**Alternatives considered.** (a) Keep headroom-only expansion: measured starvation at default budgets, rejected. (b) Unrestricted displacement (the pre-rewrite behavior): evicts strong seeds and was measured harmful in aggregate, rejected. (c) Unified scoring where chain members inherit a fraction of their seed's relevance and compete record by record: more granular but breaks seed-adjacent rendering, adds a decay knob per hop, and its failure modes are harder to predict; the reserve achieves the same priority correction with one bounded parameter, so it wins on legibility.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
