@@ -15,6 +15,15 @@
  * Retrieval surfaces the full revision chain for any hit, so the REASON a
  * position changed arrives with the latest position: exactly the property a
  * flat/semantic store does not give you structurally.
+ *
+ * Stage mapping:
+ *   - selectMemory maps to atrib-recall (look-up): text-ranked seed selection.
+ *   - expandMemory maps to atrib-trace (lineage): hash-and-edge traversal from seeds.
+ *   - retrieveMemoryDetailed composes recall then trace for callers that need one context block.
+ *
+ * Lexical and structural relevance do not share a principled exchange rate.
+ * The composed path states its arbitration as a reserve: expansionShare is two
+ * budgets expressed as one fraction.
  */
 
 import {
@@ -206,6 +215,29 @@ export interface RetrieveStats {
   expansion_engaged: boolean
 }
 
+export interface SelectedSeed {
+  record: SignedMemory
+  score: number
+}
+
+export interface SelectResult {
+  seeds: SelectedSeed[]
+  text: string
+  rendered_chars: number
+}
+
+export interface ExpandedMember {
+  record: SignedMemory
+  from: string
+}
+
+export interface ExpandResult {
+  members: ExpandedMember[]
+  text: string
+  considered: number
+  echo_skipped: number
+}
+
 const clip = (s: unknown, n: number): string => {
   const t = String(s ?? '').replace(/\s+/g, ' ').trim()
   return t.length <= n ? t : t.slice(0, n) + '…'
@@ -243,9 +275,9 @@ function revisionChainMembers(
   const members: SignedMemory[] = []
   const seen = new Set<string>([seed.hash])
 
-  let backward: SignedMemory | undefined = seed
+  let backward: SignedMemory = seed
   for (let hop = 0; hop < depth; hop++) {
-    const next = backward.revises ? byHash.get(backward.revises) : undefined
+    const next: SignedMemory | undefined = backward.revises ? byHash.get(backward.revises) : undefined
     if (!next || seen.has(next.hash)) break
     seen.add(next.hash)
     members.push(next)
@@ -270,6 +302,207 @@ function revisionChainMembers(
   return members
 }
 
+interface NormalizedRetrieveOptions {
+  budget: number
+  compact: boolean
+  noteForm: boolean
+  chainDepth: number
+}
+
+type MutableSelectedSeed = SelectedSeed
+type Choice = { seed: SignedMemory; score: number; members: SignedMemory[] }
+
+interface RankedRecords {
+  visible: SignedMemory[]
+  scores: number[]
+  order: number[]
+}
+
+interface RevisionIndex {
+  byHash: Map<string, SignedMemory>
+  revisedBy: Map<string, SignedMemory[]>
+}
+
+interface LineAdmission {
+  renderedLength: number
+  renderedLineCount: number
+  lineLengthAfterAppend(line: string): number
+  admitLine(line: string): void
+}
+
+function normalizeRetrieveOptions(opts: RetrieveOptions): NormalizedRetrieveOptions {
+  return {
+    budget: (opts.budgetTokens ?? 2000) * 4,
+    compact: opts.compact ?? true,
+    noteForm: opts.noteForm ?? false,
+    chainDepth: Number.isFinite(opts.chainDepth) ? Math.max(0, Math.floor(opts.chainDepth!)) : 3,
+  }
+}
+
+function visibleRecords(records: SignedMemory[], opts: RetrieveOptions): SignedMemory[] {
+  return records.filter((m) => opts.windowEnd === undefined || m.msg_end < opts.windowEnd)
+}
+
+function rankVisibleRecords(visible: SignedMemory[], query: string): RankedRecords {
+  const scores = bm25Rank(visible.map(contentText), query)
+  const order = visible.map((_, i) => i).sort((a, b) => scores[b]! - scores[a]!)
+  return { visible, scores, order }
+}
+
+function buildRevisionIndex(visible: SignedMemory[]): RevisionIndex {
+  const byHash = new Map(visible.map((m) => [m.hash, m]))
+  const revisedBy = new Map<string, SignedMemory[]>()
+  for (const m of visible) {
+    if (!m.revises) continue
+    const next = revisedBy.get(m.revises) ?? []
+    next.push(m)
+    revisedBy.set(m.revises, next)
+  }
+  return { byHash, revisedBy }
+}
+
+function createLineAdmission(): LineAdmission {
+  return {
+    renderedLength: 0,
+    renderedLineCount: 0,
+    lineLengthAfterAppend(line: string): number {
+      return this.renderedLength + line.length + (this.renderedLineCount > 0 ? 1 : 0)
+    },
+    admitLine(line: string): void {
+      this.renderedLength = this.lineLengthAfterAppend(line)
+      this.renderedLineCount++
+    },
+  }
+}
+
+function renderSelectedText(seeds: SelectedSeed[], compact: boolean, noteForm: boolean): string {
+  return seeds.map(({ record }) => renderLine(record, compact, noteForm)).join('\n')
+}
+
+function forceAddSeed<T extends MutableSelectedSeed | Choice>(
+  target: T[],
+  seed: SignedMemory,
+  score: number,
+  admitted: Set<string>,
+  admission: LineAdmission,
+  compact: boolean,
+  noteForm: boolean,
+  makeEntry: (seed: SignedMemory, score: number) => T,
+): void {
+  admitted.add(seed.hash)
+  target.push(makeEntry(seed, score))
+  admission.admitLine(renderLine(seed, compact, noteForm))
+}
+
+function tryAddSeed<T extends MutableSelectedSeed | Choice>(
+  target: T[],
+  seed: SignedMemory,
+  score: number,
+  targetBudget: number,
+  admitted: Set<string>,
+  admission: LineAdmission,
+  compact: boolean,
+  noteForm: boolean,
+  makeEntry: (seed: SignedMemory, score: number) => T,
+): boolean {
+  const line = renderLine(seed, compact, noteForm)
+  if (admission.lineLengthAfterAppend(line) > targetBudget) return false
+  admitted.add(seed.hash)
+  target.push(makeEntry(seed, score))
+  admission.admitLine(line)
+  return true
+}
+
+function admitRankedSeeds<T extends MutableSelectedSeed | Choice>(
+  ranked: RankedRecords,
+  startIndex: number,
+  target: T[],
+  targetBudget: number,
+  stopOnOverflow: boolean,
+  fallbackWhenEmpty: boolean,
+  fallbackTarget: T[],
+  admitted: Set<string>,
+  admission: LineAdmission,
+  compact: boolean,
+  noteForm: boolean,
+  makeEntry: (seed: SignedMemory, score: number) => T,
+): number {
+  for (let orderIndex = startIndex; orderIndex < ranked.order.length; orderIndex++) {
+    const i = ranked.order[orderIndex]!
+    const score = ranked.scores[i]!
+    const seed = ranked.visible[i]!
+    if (score <= 0) {
+      if (fallbackWhenEmpty && !fallbackTarget.length) {
+        forceAddSeed(target, seed, score, admitted, admission, compact, noteForm, makeEntry)
+      }
+      return orderIndex + 1
+    }
+    if (admitted.has(seed.hash)) continue
+    if (!tryAddSeed(target, seed, score, targetBudget, admitted, admission, compact, noteForm, makeEntry) && stopOnOverflow) {
+      return orderIndex
+    }
+  }
+  return ranked.order.length
+}
+
+function isEchoSubset(seed: SignedMemory, member: SignedMemory, compact: boolean, noteForm: boolean): boolean {
+  const seedTokens = new Set(contentTokens(renderLine(seed, compact, noteForm)))
+  const memberTokens = new Set(contentTokens(renderLine(member, compact, noteForm)))
+  for (const token of memberTokens) {
+    if (!seedTokens.has(token)) return false
+  }
+  return true
+}
+
+interface ExpandSeed {
+  record: SignedMemory
+  score?: number
+  onAdmit?: (member: SignedMemory) => void
+}
+
+interface SharedExpandResult {
+  members: ExpandedMember[]
+  considered: number
+  admitted: number
+  echoSkipped: number
+}
+
+function expandSeedMembers(
+  seeds: ExpandSeed[],
+  index: RevisionIndex,
+  opts: NormalizedRetrieveOptions,
+  admitted: Set<string>,
+  admission: LineAdmission,
+  skipNonPositiveScores: boolean,
+): SharedExpandResult {
+  const members: ExpandedMember[] = []
+  let considered = 0
+  let admittedCount = 0
+  let echoSkipped = 0
+
+  for (const seed of seeds) {
+    if (skipNonPositiveScores && (seed.score ?? 0) <= 0) continue
+    for (const member of revisionChainMembers(seed.record, index.byHash, index.revisedBy, opts.chainDepth)) {
+      considered++
+      if (admitted.has(member.hash)) continue
+      if (isEchoSubset(seed.record, member, opts.compact, opts.noteForm)) {
+        echoSkipped++
+        continue
+      }
+
+      const line = renderLine(member, opts.compact, opts.noteForm)
+      if (admission.lineLengthAfterAppend(line) > opts.budget) continue
+      seed.onAdmit?.(member)
+      admission.admitLine(line)
+      admitted.add(member.hash)
+      members.push({ record: member, from: seed.record.hash })
+      admittedCount++
+    }
+  }
+
+  return { members, considered, admitted: admittedCount, echoSkipped }
+}
+
 /**
  * Retrieve memory for a query. BM25 ranks all visible records; for each hit the
  * full revision chain (superseded record + revising record) is pulled in, so a
@@ -279,13 +512,75 @@ export function retrieveMemory(records: SignedMemory[], query: string, opts: Ret
   return retrieveMemoryDetailed(records, query, opts).text
 }
 
+export function selectMemory(records: SignedMemory[], query: string, opts: RetrieveOptions = {}): SelectResult {
+  const normalized = normalizeRetrieveOptions(opts)
+  const visible = visibleRecords(records, opts)
+  if (!visible.length) {
+    const text = '(no memory)'
+    return { seeds: [], text, rendered_chars: text.length }
+  }
+
+  const ranked = rankVisibleRecords(visible, query)
+  const seeds: MutableSelectedSeed[] = []
+  const admitted = new Set<string>()
+  const admission = createLineAdmission()
+  admitRankedSeeds(
+    ranked,
+    0,
+    seeds,
+    normalized.budget,
+    false,
+    true,
+    seeds,
+    admitted,
+    admission,
+    normalized.compact,
+    normalized.noteForm,
+    (record, score) => ({ record, score }),
+  )
+  if (!seeds.length && ranked.order.length) {
+    forceAddSeed(
+      seeds,
+      visible[ranked.order[0]!]!,
+      ranked.scores[ranked.order[0]!]!,
+      admitted,
+      admission,
+      normalized.compact,
+      normalized.noteForm,
+      (record, score) => ({ record, score }),
+    )
+  }
+
+  const text = renderSelectedText(seeds, normalized.compact, normalized.noteForm)
+  return { seeds, text, rendered_chars: text.length }
+}
+
+export function expandMemory(records: SignedMemory[], seeds: SignedMemory[], opts: RetrieveOptions = {}): ExpandResult {
+  const normalized = normalizeRetrieveOptions(opts)
+  const visible = visibleRecords(records, opts)
+  if (!visible.length || !seeds.length) return { members: [], text: '', considered: 0, echo_skipped: 0 }
+
+  const index = buildRevisionIndex(visible)
+  const admitted = new Set(seeds.map((seed) => seed.hash))
+  const admission = createLineAdmission()
+  const expanded = expandSeedMembers(
+    seeds.map((record) => ({ record })),
+    index,
+    normalized,
+    admitted,
+    admission,
+    false,
+  )
+  const text = expanded.members.map(({ record }) => renderLine(record, normalized.compact, normalized.noteForm)).join('\n')
+  return { members: expanded.members, text, considered: expanded.considered, echo_skipped: expanded.echoSkipped }
+}
+
 export function retrieveMemoryDetailed(records: SignedMemory[], query: string, opts: RetrieveOptions = {}): { text: string; stats: RetrieveStats } {
-  const budget = (opts.budgetTokens ?? 2000) * 4 // chars
+  const normalized = normalizeRetrieveOptions(opts)
+  const budget = normalized.budget
   const expand = opts.expandChains !== false
   const share = expand === false ? 0 : Math.min(0.9, Math.max(0, opts.expansionShare ?? 0.25))
-  const chainDepth = Number.isFinite(opts.chainDepth) ? Math.max(0, Math.floor(opts.chainDepth!)) : 3
-  const compact = opts.compact ?? true
-  const visible = records.filter((m) => opts.windowEnd === undefined || m.msg_end < opts.windowEnd)
+  const visible = visibleRecords(records, opts)
   if (!visible.length) {
     const text = '(no memory)'
     return {
@@ -302,111 +597,86 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
       },
     }
   }
-  const byHash = new Map(visible.map((m) => [m.hash, m]))
-  const revisedBy = new Map<string, SignedMemory[]>()
-  for (const m of visible) {
-    if (!m.revises) continue
-    const next = revisedBy.get(m.revises) ?? []
-    next.push(m)
-    revisedBy.set(m.revises, next)
-  }
 
-  const scores = bm25Rank(visible.map(contentText), query)
-  const order = visible.map((_, i) => i).sort((a, b) => scores[b]! - scores[a]!)
-
-  type Choice = { seed: SignedMemory; score: number; members: SignedMemory[] }
+  const ranked = rankVisibleRecords(visible, query)
   const choices: Choice[] = []
   const backfilled: Choice[] = []
   const admitted = new Set<string>()
-  let renderedLength = 0
-  let renderedLineCount = 0
-  const lineLengthAfterAppend = (line: string): number =>
-    renderedLength + line.length + (renderedLineCount > 0 ? 1 : 0)
-  const admitLine = (line: string): void => {
-    renderedLength = lineLengthAfterAppend(line)
-    renderedLineCount++
-  }
-  const forceAddSeed = (target: Choice[], seed: SignedMemory, score: number): void => {
-    admitted.add(seed.hash)
-    target.push({ seed, score, members: [] })
-    admitLine(renderLine(seed, compact, opts.noteForm))
-  }
-  const tryAddSeed = (target: Choice[], seed: SignedMemory, score: number, targetBudget: number): boolean => {
-    const line = renderLine(seed, compact, opts.noteForm)
-    if (lineLengthAfterAppend(line) > targetBudget) return false
-    admitted.add(seed.hash)
-    target.push({ seed, score, members: [] })
-    admitLine(line)
-    return true
-  }
-  const admitRankedSeeds = (
-    startIndex: number,
-    target: Choice[],
-    targetBudget: number,
-    stopOnOverflow: boolean,
-    fallbackWhenEmpty: boolean,
-  ): number => {
-    for (let orderIndex = startIndex; orderIndex < order.length; orderIndex++) {
-      const i = order[orderIndex]!
-      const score = scores[i]!
-      const seed = visible[i]!
-      if (score <= 0) {
-        if (fallbackWhenEmpty && !choices.length) forceAddSeed(target, seed, score)
-        return orderIndex + 1
-      }
-      if (admitted.has(seed.hash)) continue
-      if (!tryAddSeed(target, seed, score, targetBudget) && stopOnOverflow) return orderIndex
-    }
-    return order.length
-  }
+  const admission = createLineAdmission()
 
   const seedBudget = (1 - share) * budget
   // When share > 0, A1 stops at first overflow so the reserve prefix stays contiguous.
   // share === 0 keeps trying smaller seeds to preserve pre-reserve behavior.
-  const backfillStart = admitRankedSeeds(0, choices, seedBudget, share > 0, true)
+  const backfillStart = admitRankedSeeds(
+    ranked,
+    0,
+    choices,
+    seedBudget,
+    share > 0,
+    true,
+    choices,
+    admitted,
+    admission,
+    normalized.compact,
+    normalized.noteForm,
+    (seed, score) => ({ seed, score, members: [] }),
+  )
 
-  if (!choices.length && order.length) forceAddSeed(choices, visible[order[0]!]!, scores[order[0]!]!)
+  if (!choices.length && ranked.order.length) {
+    forceAddSeed(
+      choices,
+      visible[ranked.order[0]!]!,
+      ranked.scores[ranked.order[0]!]!,
+      admitted,
+      admission,
+      normalized.compact,
+      normalized.noteForm,
+      (seed, score) => ({ seed, score, members: [] }),
+    )
+  }
 
   let chainMembersConsidered = 0
   let chainMembersAdmitted = 0
   let echoSkipped = 0
   if (expand) {
-    for (const choice of choices) {
-      if (choice.score <= 0) continue
-      const seedTokens = new Set(contentTokens(renderLine(choice.seed, compact, opts.noteForm)))
-      for (const member of revisionChainMembers(choice.seed, byHash, revisedBy, chainDepth)) {
-        chainMembersConsidered++
-        if (admitted.has(member.hash)) continue
-        const memberTokens = new Set(contentTokens(renderLine(member, compact, opts.noteForm)))
-        let isEchoSubset = true
-        for (const token of memberTokens) {
-          if (!seedTokens.has(token)) {
-            isEchoSubset = false
-            break
-          }
-        }
-        if (isEchoSubset) {
-          echoSkipped++
-          continue
-        }
-
-        const line = renderLine(member, compact, opts.noteForm)
-        if (lineLengthAfterAppend(line) > budget) continue
-        choice.members.push(member)
-        admitLine(line)
-        admitted.add(member.hash)
-        chainMembersAdmitted++
-      }
-    }
+    const index = buildRevisionIndex(visible)
+    const expanded = expandSeedMembers(
+      choices.map((choice) => ({
+        record: choice.seed,
+        score: choice.score,
+        onAdmit: (member: SignedMemory) => choice.members.push(member),
+      })),
+      index,
+      normalized,
+      admitted,
+      admission,
+      true,
+    )
+    chainMembersConsidered = expanded.considered
+    chainMembersAdmitted = expanded.admitted
+    echoSkipped = expanded.echoSkipped
   }
 
   // Backfilled seeds never expand; expansion only sees the A1 seed prefix.
-  admitRankedSeeds(backfillStart, backfilled, budget, false, false)
+  admitRankedSeeds(
+    ranked,
+    backfillStart,
+    backfilled,
+    budget,
+    false,
+    false,
+    choices,
+    admitted,
+    admission,
+    normalized.compact,
+    normalized.noteForm,
+    (seed, score) => ({ seed, score, members: [] }),
+  )
 
   const text = [
     ...choices.flatMap((choice) => [choice.seed, ...choice.members]),
     ...backfilled.map((choice) => choice.seed),
-  ].map((m) => renderLine(m, compact, opts.noteForm)).join('\n')
+  ].map((m) => renderLine(m, normalized.compact, normalized.noteForm)).join('\n')
   return {
     text,
     stats: {

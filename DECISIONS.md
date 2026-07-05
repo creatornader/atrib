@@ -7640,6 +7640,20 @@ are the current coverage.
 
 **Correction (2026-07-05).** Follow-up isolation runs bounded the accuracy attribution in the Context paragraph. With the reserve forcing full chain engagement at a fixed 2000-token budget, engaged-subset accuracy moved from 0.686 to 0.714 on the original corpus, and to 0.743 after the corpus was re-signed with the precision-filtered matcher, which kept only 81 of 480 revision links and exposed that the prior measurements walked a mostly spurious graph. The earlier 22.9-point recovery therefore cannot be attributed to chain content alone; deeper lexical seeding at larger budgets accounts for most of it. The reserve's justification stands on the mechanical evidence (measured starvation, bounded displacement, no wasted budget), not on an accuracy lift: with clean edges the chain contribution at fixed budget measured roughly three points and was not statistically significant on this benchmark. The engagement diagnostics exist precisely so hosts can measure this on their own corpora.
 
+## D140: Memory retrieval separates selection from expansion
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) and [D139](#d139-chain-expansion-competes-through-a-reserved-budget-share).
+
+**Context.** The memory-substrate retrieval answered two categorically different questions inside one function: which records are about the query, a similarity question anchored in text, and which records explain already-relevant records, a traversal question anchored in record hashes and typed edges. The two have different relevance criteria, different failure modes, and no principled exchange rate between their scores, which is why the composed function needed a reserved share at all. Collapsing them also hid the traversal stage's real input contract: when the corpus's revision links were later re-signed with the precision-filtered matcher, only 81 of 480 links survived, and no observer of the composed call could have seen that the walk had been following a mostly spurious graph. The protocol's agent surface already separates these verbs as `atrib-recall` and `atrib-trace`; the reference implementation should model the same two-call pattern instead of blurring it.
+
+**Decision.** Export the stages separately. `selectMemory` performs ranking and admission only. `expandMemory` walks caller-provided seeds with the existing depth bound and echo rule, reports per-member provenance, and budgets member lines alone. `retrieveMemoryDetailed` remains the composed convenience, built from the same internals, because one context window ultimately needs one arbitration; its reserve is now legible as two budgets expressed as one fraction. Composition is the only stage where the two evidence families meet. Each stage now has its own contract to test and calibrate: selection against retrieval relevance, expansion against edge quality, which the isolation runs showed is the traversal stage's controlling input.
+
+**Alternatives considered.** (a) Keep the single function and document the phases: leaves the stages uncalibratable in isolation and the edge-quality dependency invisible, rejected. (b) Split retrieval AND composition, making callers assemble text themselves: pushes budget arbitration onto every caller and forfeits the one-call convenience the harness and simple hosts legitimately want. (c) Replace the reserve with unified cross-family scoring: re-rejected for the reasons recorded in [D139](#d139-chain-expansion-competes-through-a-reserved-budget-share); a fabricated exchange rate hidden in a decay constant is not more principled than a stated fraction.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

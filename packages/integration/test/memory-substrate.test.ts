@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { verifyRecord } from '@atrib/verify'
 import { signMemoryItems, retrieveMemory, type MemoryItem } from '../src/memory-substrate/build-memory-substrate.js'
 import { retrieveMemoryDetailed } from '../src/memory-substrate/build-memory-substrate.js'
+import { selectMemory, expandMemory } from '../src/memory-substrate/build-memory-substrate.js'
 
 const ITEMS: MemoryItem[] = [
   { type: 'preference', statement: 'Loves podcasting about music trends', reason: 'positive listener feedback', topic: 'music', msg_start: 3, msg_end: 5 },
@@ -50,6 +51,12 @@ const EXPECTED_CHAINLESS_HEADROOM = `- TOPCHAINLESS cobalt orchard recall field 
 - THIRDCHAINLESS cobalt orchard recall field notes gamma [chainless]
 - FOURTHCHAINLESS cobalt orchard recall checklist delta [chainless]
 - SIXTHCHAINLESS cobalt recall zeta [chainless]`
+
+const EXPECTED_SATURATION_COMPOSED = `- SECOND saffron pilot recall field recorder beta [saturation]
+- TOPSEED saffron pilot recall field recorder priority alpha [saturation]
+- THIRD saffron pilot recall field notes gamma [saturation]
+- [REVISED] was: "Catalogs nebula cadet repair notes" -> now: "Uses field recorder for saffron pilot recall" BECAUSE: "hands needed to stay free during repairs" (saturation)
+- Catalogs nebula cadet repair notes (reason: amberwhy98 marker explains the old repair choice) [saturation]`
 
 describe('memory substrate', () => {
   it('signs verifiable records and links revisions to the superseded record', async () => {
@@ -253,5 +260,73 @@ describe('memory substrate', () => {
     const chainlessResult = retrieveMemoryDetailed(chainless, CHAINLESS_QUERY, { budgetTokens: CHAINLESS_BUDGET })
 
     expect(chainlessResult.stats.expansion_engaged).toBe(false)
+  })
+
+  it('selectMemory matches chainless retrieval byte for byte', async () => {
+    const cases = [
+      {
+        items: ITEMS,
+        context: 'ctx-test',
+        query: 'podcasting',
+        opts: { budgetTokens: 400, expandChains: true, expansionShare: 0.9, chainDepth: 1 },
+      },
+      {
+        items: SATURATION_ITEMS,
+        context: 'ctx-reserved-share-saturation',
+        query: SATURATION_QUERY,
+        opts: { budgetTokens: SATURATION_BUDGET, expandChains: true, expansionShare: 0.9, chainDepth: 1 },
+      },
+      {
+        items: CHAINLESS_ITEMS,
+        context: 'ctx-reserved-share-chainless',
+        query: CHAINLESS_QUERY,
+        opts: { budgetTokens: CHAINLESS_BUDGET, expandChains: true, expansionShare: 0.9, chainDepth: 1 },
+      },
+    ] as const
+
+    for (const testCase of cases) {
+      const signed = await signMemoryItems(testCase.items, testCase.context)
+      expect(selectMemory(signed, testCase.query, testCase.opts).text).toBe(
+        retrieveMemory(signed, testCase.query, { ...testCase.opts, expandChains: false }),
+      )
+    }
+  })
+
+  it('expandMemory walks provided seeds with provenance', async () => {
+    const chainItems: MemoryItem[] = [
+      { type: 'preference', statement: 'Reads print books before bed', reason: 'screens disrupt sleep', topic: 'reading', msg_start: 1, msg_end: 2 },
+      { type: 'revision', prior: 'Reads print books before bed', new: 'Listens to audiobooks before bed', reason: 'eye strain in the evening', topic: 'reading', msg_start: 5, msg_end: 6 },
+      { type: 'revision', prior: 'Listens to audiobooks before bed', new: 'Practices meditation before bed', reason: 'audiobooks kept mind racing', topic: 'reading', msg_start: 9, msg_end: 10 },
+      { type: 'fact', statement: 'Keeps a meditation practice notebook', topic: 'notes', msg_start: 12, msg_end: 13 },
+    ]
+    const signed = await signMemoryItems(chainItems, 'ctx-chain-walk')
+    const selected = selectMemory(signed, 'meditation mind racing', { budgetTokens: 400 })
+    const meditationSeed = selected.seeds.find(({ record }) => record.hash === signed[2]!.hash)
+
+    expect(meditationSeed).toBeDefined()
+
+    const expanded = expandMemory(signed, selected.seeds.map(({ record }) => record), { budgetTokens: 400 })
+    const rootMember = expanded.members.find(({ record }) => record.hash === signed[0]!.hash)
+
+    expect(rootMember).toBeDefined()
+    expect(rootMember?.from).toBe(meditationSeed?.record.hash)
+    expect(expanded.text).toContain('screens disrupt sleep')
+  })
+
+  it('composed retrieval is the same before and after the split', async () => {
+    const signed = await signMemoryItems(SATURATION_ITEMS, 'ctx-reserved-share-saturation')
+    const result = retrieveMemoryDetailed(signed, SATURATION_QUERY, { budgetTokens: SATURATION_BUDGET })
+
+    expect(result.text).toBe(EXPECTED_SATURATION_COMPOSED)
+    expect(result.stats).toEqual({
+      seeds: 4,
+      backfilled_seeds: 0,
+      chain_members_considered: 1,
+      chain_members_admitted: 1,
+      echo_skipped: 0,
+      budget_chars: SATURATION_BUDGET * 4,
+      rendered_chars: EXPECTED_SATURATION_COMPOSED.length,
+      expansion_engaged: true,
+    })
   })
 })
