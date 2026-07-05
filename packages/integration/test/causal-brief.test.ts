@@ -8,6 +8,7 @@ import {
   type TraceDoc,
   type TraceSpan,
 } from '../src/causal-brief/build-causal-brief.js'
+import { ANOMALY_RULES } from '../src/causal-brief/build-causal-brief.js'
 
 const span = (o: Partial<TraceSpan> & { span_id: string }): TraceSpan => ({
   parent_span_id: null,
@@ -114,5 +115,47 @@ describe('buildCausalBrief', () => {
     const truncated = 'x'.repeat(CONTENT_TRUNC) + '…'
     expect(flat).toContain(truncated)
     expect(atrib).toContain(truncated)
+  })
+
+  it('anomaly appendix drops duration and empty-output rules', async () => {
+    const doc: TraceDoc = {
+      trace_id: 'trace_c2_prune',
+      spans: [
+        span({
+          span_id: 'p1',
+          span_name: 'slow_step',
+          timestamp_ms: 100,
+          duration_ms: 10000,
+          input_value: 'slow input',
+          output_value: 'slow output',
+        }),
+        span({
+          span_id: 'p2',
+          span_name: 'empty_step',
+          timestamp_ms: 110,
+          duration_ms: 10,
+          input_value: 'empty output input',
+          output_value: '',
+        }),
+        span({
+          span_id: 'p3',
+          span_name: 'normal_step',
+          timestamp_ms: 120,
+          duration_ms: 12,
+          input_value: 'normal input',
+          output_value: 'normal output',
+        }),
+      ],
+    }
+
+    const brief = await buildCausalBrief(doc, 'atrib')
+
+    expect(brief).toContain('Mechanical anomaly appendix')
+    expect(brief).toContain('- none')
+    expect(brief).not.toContain('rule D')
+    expect(brief).not.toContain('rule E')
+    expect(ANOMALY_RULES.length).toBe(3)
+    expect(ANOMALY_RULES.join(' ')).not.toContain('duration')
+    expect(ANOMALY_RULES.join(' ')).not.toContain('empty output')
   })
 })
