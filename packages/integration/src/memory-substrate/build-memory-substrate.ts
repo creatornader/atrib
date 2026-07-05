@@ -57,11 +57,13 @@ function recordHashHex(r: AtribRecord): string {
 }
 
 const tokens = (s: string): string[] => (s ?? '').toLowerCase().match(/[a-z0-9']+/g) ?? []
+const STOPWORDS = new Set(['a','an','the','and','or','but','with','without','of','in','on','at','to','for','from','by','as','is','are','was','were','be','been','being','do','does','did','has','have','had','will','would','can','could','should','may','might','not','no','that','this','these','those','it','its','they','them','their','he','she','his','her','i','my','me','we','our','us','you','your','so','too','very','just','than','then','there','here','when','while','about'])
+const contentTokens = (s: string): string[] => tokens(s).filter((t) => t.length >= 3 && !STOPWORDS.has(t))
 
 /** Token-overlap similarity for matching a revision's `prior` text to an earlier record. */
 function overlap(a: string, b: string): number {
-  const ta = new Set(tokens(a))
-  const tb = new Set(tokens(b))
+  const ta = new Set(contentTokens(a))
+  const tb = new Set(contentTokens(b))
   if (!ta.size || !tb.size) return 0
   let n = 0
   for (const t of ta) if (tb.has(t)) n++
@@ -70,9 +72,10 @@ function overlap(a: string, b: string): number {
 
 /**
  * Sign memory items in order as a chained atrib record set. Revisions link to
- * the best-matching earlier record (same-topic preferred, token overlap >= 0.3);
- * when no prior matches, the change is signed as an observation that still
- * carries prior/new/reason content (nothing is dropped).
+ * the best-matching earlier record (content-token overlap >= 0.5, same-topic
+ * bonus, different-topic candidates skipped); when no prior matches, the change
+ * is signed as an observation that still carries prior/new/reason content
+ * (nothing is dropped).
  */
 export async function signMemoryItems(items: MemoryItem[], contextLabel: string): Promise<SignedMemory[]> {
   const contextId = hexEncode(sha256(new TextEncoder().encode(contextLabel))).slice(0, 32)
@@ -91,9 +94,10 @@ export async function signMemoryItems(items: MemoryItem[], contextLabel: string)
       let best: { h: string; score: number } | null = null
       for (const prev of out) {
         const prevText = String(prev.content.statement ?? prev.content.new_position ?? '')
+        if (prev.content.topic && it.topic && prev.content.topic !== it.topic) continue
         const topicBonus = prev.content.topic && it.topic && prev.content.topic === it.topic ? 0.15 : 0
         const score = overlap(it.prior ?? '', prevText) + topicBonus
-        if (score >= 0.3 && (!best || score > best.score)) best = { h: prev.hash, score }
+        if (score >= 0.5 && (!best || score > best.score)) best = { h: prev.hash, score }
       }
       content = {
         prior_position: it.prior ?? '',

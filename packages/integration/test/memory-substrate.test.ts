@@ -105,4 +105,31 @@ describe('memory substrate', () => {
     expect(verboseLine).toContain(longReason)
     expect(verboseLine).not.toContain('…')
   })
+
+  it('stopword-only text overlap no longer links a revision to an unrelated record', async () => {
+    const stopwordItems: MemoryItem[] = [
+      { type: 'fact', statement: 'It was a day with a plan', topic: 'planning', msg_start: 1, msg_end: 2 },
+      { type: 'revision', prior: 'Went with a friend', new: 'Goes alone now', reason: 'schedules stopped lining up', msg_start: 5, msg_end: 6 },
+    ]
+    const stopwordSigned = await signMemoryItems(stopwordItems, 'ctx-stopword-only')
+    expect(stopwordSigned[1]!.revises).toBeUndefined()
+    expect(stopwordSigned[1]!.record.event_type).toBe('https://atrib.dev/v1/types/observation')
+    expect('revises' in stopwordSigned[1]!.record).toBe(false)
+    expect(stopwordSigned[1]!.content.prior_position).toBe('Went with a friend')
+
+    const sameTopicItems: MemoryItem[] = [
+      { type: 'preference', statement: 'Enjoys hiking mountain trails on weekends', topic: 'fitness', msg_start: 1, msg_end: 2 },
+      { type: 'revision', prior: 'Enjoys hiking mountain trails often', new: 'Prefers indoor climbing now', reason: 'knee surgery recovery', topic: 'fitness', msg_start: 5, msg_end: 6 },
+    ]
+    const sameTopicSigned = await signMemoryItems(sameTopicItems, 'ctx-same-topic-content')
+    expect(sameTopicSigned[1]!.revises).toBe(sameTopicSigned[0]!.hash)
+    expect(sameTopicSigned[1]!.record.event_type).toBe('https://atrib.dev/v1/types/revision')
+
+    const differentTopicItems: MemoryItem[] = [
+      { type: 'fact', statement: 'Tracks daily spending in a notebook', topic: 'finance', msg_start: 1, msg_end: 2 },
+      { type: 'revision', prior: 'Tracks daily spending in a notebook', new: 'Uses an app now', reason: 'notebook kept getting lost', topic: 'health', msg_start: 5, msg_end: 6 },
+    ]
+    const differentTopicSigned = await signMemoryItems(differentTopicItems, 'ctx-different-topic')
+    expect(differentTopicSigned[1]!.revises).toBeUndefined()
+  })
 })
