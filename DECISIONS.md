@@ -7654,6 +7654,20 @@ are the current coverage.
 
 **Alternatives considered.** (a) Keep the single function and document the phases: leaves the stages uncalibratable in isolation and the edge-quality dependency invisible, rejected. (b) Split retrieval AND composition, making callers assemble text themselves: pushes budget arbitration onto every caller and forfeits the one-call convenience the harness and simple hosts legitimately want. (c) Replace the reserve with unified cross-family scoring: re-rejected for the reasons recorded in [D139](#d139-chain-expansion-competes-through-a-reserved-budget-share); a fabricated exchange rate hidden in a decay constant is not more principled than a stated fraction.
 
+## D141: Write-primitive refusals are error-shaped
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Clarifies the boundary of [§5.8](atrib-spec.md#58-degradation-contract).
+
+**Context.** The emit family returned one success-shaped output for two different situations: validation refusals where nothing was signed and the caller made a correctable mistake, and degradations where a record was signed but a downstream step deferred. The refusal carried `record_hash: "sha256:unknown"` plus a warnings entry, so any consumer that did not parse warnings text read a refusal as a signed record. The degradation contract exists so that instrumentation never breaks a wrapped primary tool call; an explicit write primitive is not instrumentation, the write IS its primary path, and a refused write reported as success is the same failure class as a database that returns OK for a rejected INSERT.
+
+**Decision.** `handleEmit` returns a discriminated result: `signed: true` with the record hash and any degradation warnings whenever a record was signed, `signed: false` with verbatim refusal reasons and no fabricated hash whenever validation refused the write. The MCP tool layer maps refusals to tool errors for emit, annotate, and revise alike. Hook-class producers stay unbreakable: `emitInProcess` never throws and the CLI signals refusal through exit code 3 plus machine-readable JSON, which hook helpers already absorb as silent failure. Degradations that sign a record (queued log submission, mirror-only operation, synthesized orphan context) remain quiet successes with warnings, exactly as [§5.8](atrib-spec.md#58-degradation-contract) intends.
+
+**Alternatives considered.** (a) Keep the success shape and rely on consumers checking warnings: produced a real false-signed belief in practice, rejected. (b) Throw from `handleEmit` itself: breaks hook-class producers whose primary path must never fail on atrib's account, rejected. (c) A `signed` boolean on an otherwise success-shaped payload without a tool-layer error: agents skimming tool results still misread refusals, and MCP has a first-class error channel for exactly this, rejected as insufficient alone.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

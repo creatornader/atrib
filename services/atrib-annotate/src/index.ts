@@ -72,6 +72,7 @@ export const AnnotateInput = z.object({
 type AnnotateInputT = z.infer<typeof AnnotateInput>
 
 type AnnotateOutput = {
+  signed: true
   record_hash: string
   log_index: number | null
   inclusion_proof: unknown
@@ -152,7 +153,14 @@ export async function createAtribAnnotateServer(
         producer: 'atrib-annotate',
         localSubstrate,
       })
+      if (!result.signed) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: result.refusals.join('\n') }],
+        }
+      }
       const out: AnnotateOutput = {
+        signed: true,
         record_hash: result.record_hash,
         log_index: result.log_index,
         inclusion_proof: result.inclusion_proof,

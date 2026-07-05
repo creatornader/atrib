@@ -137,7 +137,7 @@ const EmitInput = z.object({
         'under one context_id (e.g. multi-record watcher pipelines). When omitted ' +
         'with context_id present, atrib-emit synthesizes the genesis chain_root ' +
         'per spec §1.2.3. Without context_id, this field is meaningless and ' +
-        'returns a warnings-only response.',
+        'returns a signed:false refusal.',
     ),
   provenance_token: z
     .string()
@@ -147,8 +147,7 @@ const EmitInput = z.object({
       '22-char base64url cross-session causal anchor per spec §1.2.6 / D044. ' +
         'Genesis-record-only: atrib-emit refuses to sign a record that carries ' +
         'this field if its chain_root is not the genesis chain_root for the ' +
-        'context_id (per §5.8 graceful-degradation, this returns a warnings-only ' +
-        'response rather than a malformed record).',
+        'context_id (this returns a signed:false refusal rather than a malformed record).',
     ),
   annotates: z
     .string()
@@ -158,7 +157,7 @@ const EmitInput = z.object({
       "'sha256:<64-hex>' record_hash this annotation describes per spec §1.2.7 / D058. " +
         'REQUIRED when event_type is the annotation URI; FORBIDDEN on any other event_type. ' +
         'atrib-emit enforces the require/forbid invariant per §1.2.7 (validators MUST reject ' +
-        'violations) and returns a warnings-only response rather than signing a malformed record.',
+        'violations) and returns a signed:false refusal rather than signing a malformed record.',
     ),
   revises: z
     .string()
@@ -168,7 +167,7 @@ const EmitInput = z.object({
       "'sha256:<64-hex>' record_hash this revision supersedes per spec §1.2.9 / D059. " +
         'REQUIRED when event_type is the revision URI; FORBIDDEN on any other event_type. ' +
         'atrib-emit enforces the require/forbid invariant per §1.2.9 (validators MUST reject ' +
-        'violations) and returns a warnings-only response rather than signing a malformed record.',
+        'violations) and returns a signed:false refusal rather than signing a malformed record.',
     ),
   tool_name: z
     .string()
@@ -204,7 +203,8 @@ const EmitInput = z.object({
     ),
 })
 
-type EmitOutput = {
+type EmitSignedOutput = {
+  signed: true
   record_hash: string
   log_index: number | null
   inclusion_proof: ProofBundle['inclusion_proof'] | null
@@ -212,6 +212,14 @@ type EmitOutput = {
   receipt_id?: string
   warnings: string[]
 }
+
+type EmitRefusalOutput = {
+  signed: false
+  context_id: string
+  refusals: string[]
+}
+
+type EmitOutput = EmitSignedOutput | EmitRefusalOutput
 
 export interface EmitLocalSubstrateShadowAttempt {
   result: TryLocalSubstrateCoordinatorResult
@@ -380,9 +388,10 @@ export async function createAtribEmitServer(
           },
         ),
       })
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      if (!result.signed) {
+        return emitRefusalToolResult(result)
       }
+      return emitSuccessToolResult(result)
     },
   )
 
@@ -444,9 +453,8 @@ interface HandleEmitInput {
 }
 
 /**
- * Build, sign, submit, mirror. Returns the EmitOutput shape promised in the
- * scope doc. Per §5.8 degradation: never throws to the agent; surfaces all
- * partial-failure conditions in `warnings`.
+ * Build, sign, submit, mirror. Refused writes return `signed: false`;
+ * signed degradations stay `signed: true` and surface in `warnings`.
  */
 async function handleEmit({
   input,
@@ -462,22 +470,22 @@ async function handleEmit({
   const eventType = normalizeEventType(input.event_type)
 
   if (!isValidEventTypeUri(eventType)) {
-    return emptyOutput(input.context_id ?? randomContextId(), [
+    return refusalOutput(input.context_id ?? randomContextId(), [
       `event_type is not a valid absolute URI per §1.4.5: ${input.event_type}`,
     ])
   }
 
   if (!key) {
-    return emptyOutput(input.context_id ?? randomContextId(), [
+    return refusalOutput(input.context_id ?? randomContextId(), [
       'no signing key resolved (set ATRIB_PRIVATE_KEY, ATRIB_KEY_FILE, or store seed in macOS Keychain as service "atrib-creator")',
     ])
   }
 
   // chain_root without context_id is malformed: chain_root is meaningless
-  // outside the context it chains within. Surface a warning instead of
-  // synthesizing one of the two halves.
+  // outside the context it chains within. Refuse instead of synthesizing one
+  // of the two halves.
   if (input.chain_root && !input.context_id) {
-    return emptyOutput(input.context_id ?? randomContextId(), [
+    return refusalOutput(input.context_id ?? randomContextId(), [
       'chain_root requires context_id (chain_root has no meaning without a context to chain within)',
     ])
   }
@@ -490,7 +498,7 @@ async function handleEmit({
   if (input.provenance_token && input.chain_root && input.context_id) {
     const genesisRoot = genesisChainRoot(input.context_id)
     if (input.chain_root !== genesisRoot) {
-      return emptyOutput(input.context_id, [
+      return refusalOutput(input.context_id, [
         'provenance_token is genesis-record-only per §1.2.6; ' +
           'chain_root must equal genesisChainRoot(context_id) when provenance_token is supplied',
       ])
@@ -498,17 +506,17 @@ async function handleEmit({
   }
 
   // annotates require/forbid invariant per spec §1.2.7 / D058. Validators MUST
-  // reject violations; we surface as warnings-only per §5.8 so callers see why
+  // reject violations; we surface a signed:false refusal so callers see why
   // we refused to sign rather than getting back a malformed record. Use the
   // @atrib/mcp normative constant so the URI string lives in one place.
   if (eventType === EVENT_TYPE_ANNOTATION_URI && !input.annotates) {
-    return emptyOutput(input.context_id ?? randomContextId(), [
+    return refusalOutput(input.context_id ?? randomContextId(), [
       'annotation event_type requires annotates per §1.2.7 (D058); ' +
         'omitted records would fail validator admission',
     ])
   }
   if (input.annotates && eventType !== EVENT_TYPE_ANNOTATION_URI) {
-    return emptyOutput(input.context_id ?? randomContextId(), [
+    return refusalOutput(input.context_id ?? randomContextId(), [
       'annotates is FORBIDDEN on non-annotation event_types per §1.2.7 (D058); ' +
         `received event_type=${input.event_type}`,
     ])
@@ -516,16 +524,16 @@ async function handleEmit({
 
   // revises require/forbid invariant per spec §1.2.9 / D059. Same shape as
   // the annotates invariant above. Validators MUST reject violations; we
-  // surface as warnings-only per §5.8 so callers see why we refused to sign
+  // surface a signed:false refusal so callers see why we refused to sign
   // rather than getting back a malformed record.
   if (eventType === EVENT_TYPE_REVISION_URI && !input.revises) {
-    return emptyOutput(input.context_id ?? randomContextId(), [
+    return refusalOutput(input.context_id ?? randomContextId(), [
       'revision event_type requires revises per §1.2.9 (D059); ' +
         'omitted records would fail validator admission',
     ])
   }
   if (input.revises && eventType !== EVENT_TYPE_REVISION_URI) {
-    return emptyOutput(input.context_id ?? randomContextId(), [
+    return refusalOutput(input.context_id ?? randomContextId(), [
       'revises is FORBIDDEN on non-revision event_types per §1.2.9 (D059); ' +
         `received event_type=${input.event_type}`,
     ])
@@ -540,7 +548,7 @@ async function handleEmit({
   // input.context_id still wins per "explicit beats implicit."
   const callerContextId = input.context_id ?? resolveEnvContextId()
   if (!callerContextId && requiresExplicitContextId()) {
-    return emptyOutput(input.context_id ?? randomContextId(), [
+    return refusalOutput(input.context_id ?? randomContextId(), [
       'context_id is required by ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID; no record signed',
     ])
   }
@@ -616,16 +624,16 @@ async function handleEmit({
       resultHash: input.result_hash,
     })
   } catch (e) {
-    return emptyOutput(contextId, [`signing failed: ${e instanceof Error ? e.message : String(e)}`])
+    return refusalOutput(contextId, [`signing failed: ${e instanceof Error ? e.message : String(e)}`])
   }
 
-  const recordHash = record.signature ? hashRecord(record) : null
+  const recordHash = hashRecord(record)
   const unsignedRecordBody = unsignedRecordBodyFromSigned(record)
   let localSubstrateShadow: Promise<void> | undefined
   let localSubstrateCommitted = false
   let localSubstrateReceiptId: string | undefined
 
-  if (recordHash && localSubstrate) {
+  if (localSubstrate) {
     localSubstrateShadow = dispatchEmitLocalSubstrateShadow({
       localSubstrate,
       recordBody: unsignedRecordBody,
@@ -637,7 +645,7 @@ async function handleEmit({
     })
   }
 
-  if (recordHash && localSubstrateCommit) {
+  if (localSubstrateCommit) {
     const commit = await dispatchEmitLocalSubstrateCommit({
       localSubstrate: localSubstrateCommit,
       recordBody: unsignedRecordBody,
@@ -666,7 +674,7 @@ async function handleEmit({
   // consumers (recall, trace, summarize) can surface semantic context
   // alongside the cryptographic evidence. The sidecar lives at the
   // envelope level, the signed record bytes are unchanged.
-  await mirrorRecord(record, recordHash ? (getProofFor(queue, recordHash) ?? null) : null, {
+  await mirrorRecord(record, getProofFor(queue, recordHash) ?? null, {
     content: input.content,
     producer: producer ?? 'atrib-emit',
   })
@@ -674,7 +682,7 @@ async function handleEmit({
   // Try to read a proof if the queue submitted synchronously and the log
   // returned one within the same tick. Most submissions return null here
   // and the proof shows up on a later poll via getProof.
-  const proof = recordHash ? (getProofFor(queue, recordHash) ?? null) : null
+  const proof = getProofFor(queue, recordHash) ?? null
 
   if (!proof && localSubstrateCommitted) {
     warnings.push(
@@ -689,7 +697,8 @@ async function handleEmit({
   }
 
   return {
-    record_hash: recordHash ?? 'sha256:unknown',
+    signed: true,
+    record_hash: recordHash,
     log_index: proof?.log_index ?? null,
     inclusion_proof: proof?.inclusion_proof ?? null,
     context_id: contextId,
@@ -698,13 +707,46 @@ async function handleEmit({
   }
 }
 
-function emptyOutput(contextId: string, warnings: string[]): EmitOutput {
+function refusalOutput(contextId: string, refusals: string[]): EmitRefusalOutput {
   return {
-    record_hash: 'sha256:unknown',
-    log_index: null,
-    inclusion_proof: null,
+    signed: false,
     context_id: contextId,
-    warnings,
+    refusals,
+  }
+}
+
+function contextIdFromRawInput(rawInput: unknown): string {
+  if (rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)) {
+    const contextId = (rawInput as Record<string, unknown>)['context_id']
+    if (typeof contextId === 'string' && HEX_32_PATTERN.test(contextId)) {
+      return contextId
+    }
+  }
+  return randomContextId()
+}
+
+function zodRefusals(error: z.ZodError): string[] {
+  return error.issues.map((issue) => {
+    const path = issue.path.length ? `${issue.path.join('.')}: ` : ''
+    return `${path}${issue.message}`
+  })
+}
+
+function emitRefusalToolResult(result: EmitRefusalOutput): {
+  isError: true
+  content: Array<{ type: 'text'; text: string }>
+} {
+  return {
+    isError: true,
+    content: [{ type: 'text', text: result.refusals.join('\n') }],
+  }
+}
+
+function emitSuccessToolResult(result: EmitSignedOutput): {
+  content: Array<{ type: 'text'; text: string }>
+} {
+  return {
+    content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
   }
 }
 
@@ -1148,17 +1190,15 @@ const DEFAULT_FLUSH_DEADLINE_MS = 5000
  * watchers, batch jobs) and should NOT pay the cost of spawning the
  * atrib-emit binary and running an MCP stdio handshake just to sign one
  * record. It packages the recipe the D079 public-helpers block below
- * documents — resolve key, build a submission queue, call handleEmit —
+ * documents: resolve key, build a submission queue, call handleEmit,
  * and additionally flushes the queue before returning, because a hook
  * process exits immediately afterward and a still-pending submission
  * would be lost with it.
  *
  * Records are byte-identical to MCP-server-signed and wrapper-signed
  * records: this routes through the same handleEmit path createAtribEmitServer
- * uses. Per §5.8 it never throws for operational failures — a missing key
- * or a queued-but-unconfirmed submission surfaces in EmitOutput.warnings.
- * It DOES throw on a malformed input (EmitInput.parse), same as the MCP
- * tool handler; callers catch and degrade.
+ * uses. Refused writes return `signed: false`; signed-but-degraded
+ * submissions surface in EmitOutput.warnings.
  *
  * The flush is bounded by `flushDeadlineMs` (default 5s). If the log is
  * unreachable, the submission queue's internal retry will overrun the
@@ -1170,7 +1210,11 @@ export async function emitInProcess(
   rawInput: unknown,
   options: EmitInProcessOptions = {},
 ): Promise<EmitOutput> {
-  const input = EmitInput.parse(rawInput)
+  const parsed = EmitInput.safeParse(rawInput)
+  if (!parsed.success) {
+    return refusalOutput(contextIdFromRawInput(rawInput), zodRefusals(parsed.error))
+  }
+  const input = parsed.data
   const key = options.key ?? (await resolveKey())
   const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
   const flushDeadlineMs = options.flushDeadlineMs ?? DEFAULT_FLUSH_DEADLINE_MS
@@ -1199,6 +1243,9 @@ export async function emitInProcess(
       },
     ),
   })
+  if (!result.signed) {
+    return result
+  }
   // Drain before returning, bounded by flushDeadlineMs. The typical caller
   // is a detached hook process that exits right after this resolves; we
   // don't want the queue's 30s retry budget on an unreachable log to

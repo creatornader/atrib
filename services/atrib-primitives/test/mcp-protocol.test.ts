@@ -72,6 +72,10 @@ function processEnvWith(env: NodeJS.ProcessEnv): Record<string, string> {
   return merged
 }
 
+function testPrivateKey(): string {
+  return Buffer.from(new Uint8Array(32).fill(13)).toString('base64url')
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
 }
@@ -345,6 +349,62 @@ describe('atrib-primitives MCP runtime', () => {
       const payload = JSON.parse(result.content[0]!.text) as { total: number; returned: number }
       expect(payload.total).toBe(0)
       expect(payload.returned).toBe(0)
+    } finally {
+      await client.close()
+    }
+  })
+
+  it('surfaces write-primitive refusals as MCP tool errors through the combined server', async () => {
+    const refusalEnv = {
+      HOME: tmp,
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_MIRROR_FILE: recordFile,
+      ATRIB_PRIVATE_KEY: testPrivateKey(),
+      ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID: '1',
+      ATRIB_CONTEXT_ID: '',
+      CLAUDE_CODE_SESSION_ID: '',
+      CODEX_THREAD_ID: '',
+      ATRIB_ACTIVE_SESSION_PROFILE: '',
+      ATRIB_AGENT: '',
+    }
+    const validHash = `sha256:${'a'.repeat(64)}`
+    const client = await connectStdioClient(refusalEnv)
+    try {
+      const cases = [
+        {
+          name: 'emit',
+          arguments: {
+            event_type: 'https://atrib.dev/v1/types/observation',
+            content: { what: 'primitive refusal emit' },
+          },
+        },
+        {
+          name: 'atrib-annotate',
+          arguments: {
+            annotates: validHash,
+            importance: 'high',
+            summary: 'primitive refusal annotate',
+          },
+        },
+        {
+          name: 'atrib-revise',
+          arguments: {
+            revises: validHash,
+            prior_position: 'old position',
+            new_position: 'new position',
+            reason: 'primitive refusal revise',
+          },
+        },
+      ]
+
+      for (const testCase of cases) {
+        const result = await client.callTool(testCase)
+        expect(result.isError).toBe(true)
+        expect(result.content[0]?.type).toBe('text')
+        expect(result.content[0]?.text).toContain(
+          'context_id is required by ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID; no record signed',
+        )
+      }
     } finally {
       await client.close()
     }
