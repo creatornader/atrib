@@ -17,7 +17,8 @@
 // Exit 0 if all checks pass, 1 if any check fails.
 // Usage: node scripts/check-doc-sync.mjs [--json]
 
-import { readFileSync, readdirSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -42,7 +43,9 @@ function readWorkspaceGlobs() {
 }
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
-const JSON_MODE = process.argv.slice(2).includes('--json')
+const ARGS = process.argv.slice(2)
+const JSON_MODE = ARGS.includes('--json')
+const SELF_TEST_CONTROL_BYTES = ARGS.includes('--self-test-control-bytes')
 
 const NUMBER_WORDS = [
   'zero',
@@ -165,6 +168,50 @@ function listPublicBoundaryFiles() {
   }
 
   return walk('')
+}
+
+function isDisallowedControlByte(byte) {
+  return byte <= 0x1f && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d
+}
+
+function formatByte(byte) {
+  return `0x${byte.toString(16).padStart(2, '0')}`
+}
+
+function findFirstControlByte(filePath) {
+  const bytes = readFileSync(filePath)
+  for (let offset = 0; offset < bytes.length; offset += 1) {
+    const byte = bytes[offset]
+    if (isDisallowedControlByte(byte)) {
+      return { byte, offset }
+    }
+  }
+  return null
+}
+
+function selfTestControlBytes() {
+  const dir = mkdtempSync(join(tmpdir(), 'atrib-control-bytes-'))
+  const file = join(dir, 'nul-byte.txt')
+  try {
+    writeFileSync(file, Buffer.from([0x61, 0x00, 0x62]))
+    const hit = findFirstControlByte(file)
+    if (!hit || hit.byte !== 0x00 || hit.offset !== 1) {
+      throw new Error('detector did not flag the raw NUL byte at offset 1')
+    }
+    console.log('control-bytes self-test OK')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+if (SELF_TEST_CONTROL_BYTES) {
+  try {
+    selfTestControlBytes()
+    process.exit(0)
+  } catch (e) {
+    console.error(`control-bytes self-test failed: ${e.message}`)
+    process.exit(1)
+  }
 }
 
 // Returns one entry per regex match per line; preserves capture groups
@@ -665,6 +712,29 @@ function checkPublicBoundaryWording() {
   }
 }
 
+// ─── control bytes ─────────────────────────────────────────────────────────
+// Raw C0 control bytes can make text files look like binary data to tooling.
+// Allow TAB, LF, and CR. Flag other bytes from 0x00 through 0x1f.
+function checkControlBytes() {
+  const check = 'control-bytes'
+  const files = listPublicBoundaryFiles()
+  let count = 0
+  for (const file of files) {
+    const hit = findFirstControlByte(join(ROOT, file))
+    if (!hit) continue
+    count += 1
+    fail(
+      check,
+      `${file} contains disallowed control byte ${formatByte(hit.byte)} at byte offset ${hit.offset}`,
+      { file, byte: formatByte(hit.byte), offset: hit.offset },
+    )
+  }
+
+  if (count === 0) {
+    ok(check, `${files.length} tracked text file(s) clean`)
+  }
+}
+
 // ─── inline-link discipline ────────────────────────────────────────────────
 // Bare §X.Y and Dxxx references in markdown prose drift over time as readers
 // can't navigate them. The going-forward fix lives in
@@ -902,6 +972,7 @@ const checks = [
   checkPublishedPackageCount,
   checkConformanceCorpusConsistency,
   checkPublicBoundaryWording,
+  checkControlBytes,
   checkInlineLinks,
 ]
 

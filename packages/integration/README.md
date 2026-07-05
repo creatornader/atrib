@@ -28,6 +28,27 @@ has only one `tool_call` signing owner. OpenClaw, Hermes, and future harness
 proofs should use that vocabulary before they become package or upstream PR
 candidates.
 
+## Retrieval budgets and chain engagement
+
+Memory retrieval has two budget consumers: lexical seed selection and chain
+expansion. When a small budget is full of seed matches, chain expansion is inert
+unless the caller reserves part of the budget for expanded members. Set
+`expansionShare` to reserve that share before seed saturation can consume it.
+
+The default `expansionShare` is `0.25`. Values from `0.05` through `0.30` keep
+chain engagement available while leaving most of the budget for entry points.
+Values above `0.30` can choke entry-point selection because expansion reserves
+too much of the budget before enough seeds enter the result set.
+
+Use `retrieveMemoryDetailed` when you need to observe engagement. Its
+`stats.expansion_engaged` flag shows whether expansion ran, and
+`stats.chain_members_admitted` shows how many expanded members entered the final
+set.
+
+Callers that want to decide budgets themselves can split the flow into
+`selectMemory` and `expandMemory`: first choose entry points, then expand
+selected chains with an explicit expansion budget.
+
 ## Try the end-to-end demo
 
 The fastest way to see atrib working end-to-end in a single process:
