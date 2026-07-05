@@ -7610,6 +7610,20 @@ are the current coverage.
 
 **Alternatives considered.** (a) Substitute linked text only above a similarity threshold: still renders unsigned text as a signed claim, rejected. (b) Render both texts inline: conflates two records' content in one attributed line and spends budget; chain expansion already shows the linked record separately. (c) Fall back to linked text when the own `prior_position` is empty: reopens the fabrication channel exactly where the record is weakest, rejected. An empty own prior renders empty.
 
+## D138: Handoff verdicts are receiver-computed
+
+**Date:** 2026-07-04
+
+**Status:** Accepted
+
+**Extends:** [D105](#d105-verifier-side-pattern-3-handoff-claim-acceptance) and [D106](#d106-verify-is-promoted-to-cognitive-primitive-7).
+
+**Context.** The continuation-packet reference integration in `@atrib/integration` rendered a verification banner into packet text from a caller-supplied verdict. A consumer that trusts rendered prose trusts whoever rendered it: an adversary who controls packet text can print a PASSED banner over records whose signatures never verified. Any downstream decision made from that banner depends on the renderer being honest, which is exactly the assumption an attacker violates.
+
+**Decision.** A consumer of a handoff or continuation packet MUST derive its trust verdict from its own verification run over the packet's records ([§5.5.5](atrib-spec.md#555-handoff-evidence-packets) claims via `verifyHandoffClaims` / `verifyRecord`, or the `atrib-verify` primitive per [D106](#d106-verify-is-promoted-to-cognitive-primitive-7)). Verification claims embedded in packet content (banner lines, prose, body fields) are untrusted input and MUST NOT influence the verdict. `receivePacket` in `build-continuation-packet.ts` is the reference shape: it accepts no verdict parameter, recomputes acceptance itself, and renders the banner only from its own result. Renderers that accept a verdict argument remain legitimate for sender-side display and ablation harnesses; consumption is where the rule binds.
+
+**Alternatives considered.** (a) Sign the banner line itself: adds a signer for derived state and still requires the consumer to verify, so it collapses into the same rule. (b) Strip banner-shaped prose from bodies before display: blocklists over attacker-shaped text are unwinnable; the verdict's position and provenance carry the guarantee, not content filtering. (c) Keep trusting rendered banners: rejected, that is the vulnerability.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

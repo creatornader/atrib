@@ -149,6 +149,34 @@ export async function verifyPacket(packet: HandoffEvidencePacket): Promise<{ ok:
   return { ok: res.all_accepted && res.accepted.length > 0, accepted: res.accepted.length, rejected: res.rejected.length }
 }
 
+export interface ReceivedPacket {
+  verified: { ok: boolean; accepted: number; rejected: number }
+  text: string
+}
+
+/**
+ * D138 receiver rule: consumers compute their own verdict; packet-embedded
+ * verification claims are untrusted input.
+ */
+export async function receivePacket(packet: HandoffEvidencePacket, render: PacketRender = 'full'): Promise<ReceivedPacket> {
+  const entries = packet.records ?? []
+  if (entries.length === 0) {
+    return { verified: { ok: false, accepted: 0, rejected: 0 }, text: '(empty packet)' }
+  }
+
+  const records = entries.map((entry) => entry.record!)
+  const bodyMap = new Map<string, Fact>()
+  for (const entry of entries) {
+    if (entry.record && entry._local?.body !== undefined) {
+      bodyMap.set('sha256:' + recordHashHex(entry.record), entry._local.body as Fact)
+    }
+  }
+  const contextId = records[0].context_id
+  const chainTail = 'sha256:' + recordHashHex(records[records.length - 1])
+  const verified = await verifyPacket(packet)
+  return { verified, text: renderPacket(render, records, bodyMap, contextId, chainTail, verified) }
+}
+
 /** Render the packet as text a fresh session-2 agent reads, at a given ablation level. */
 export function renderPacket(
   render: PacketRender,
