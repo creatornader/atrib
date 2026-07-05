@@ -421,6 +421,21 @@ function revisionChainMembers(
   return members
 }
 
+function admissionPriorityRevisionMembers(seed: SignedMemory, members: SignedMemory[]): SignedMemory[] {
+  let cursor = seed
+  let tail: SignedMemory | undefined
+
+  while (true) {
+    const next = members.find((member) => member.revises === cursor.hash)
+    if (!next) break
+    tail = next
+    cursor = next
+  }
+
+  if (!tail) return members
+  return [tail, ...members.filter((member) => member.hash !== tail.hash)]
+}
+
 interface NormalizedRetrieveOptions {
   budget: number
   compact: boolean
@@ -604,7 +619,8 @@ function expandSeedMembers(
 
   for (const seed of seeds) {
     if (skipNonPositiveScores && (seed.score ?? 0) <= 0) continue
-    for (const member of revisionChainMembers(seed.record, index.byHash, index.revisedBy, opts.chainDepth)) {
+    const walkedMembers = revisionChainMembers(seed.record, index.byHash, index.revisedBy, opts.chainDepth)
+    for (const member of admissionPriorityRevisionMembers(seed.record, walkedMembers)) {
       considered++
       if (admitted.has(member.hash)) continue
       if (isEchoSubset(seed.record, member, opts.compact, opts.noteForm)) {

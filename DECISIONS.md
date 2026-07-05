@@ -7710,6 +7710,20 @@ are the current coverage.
 
 **Alternatives considered.** (a) Silent truncation (status quo): measured to discard certified order and depress deep-chain accuracy, rejected. (b) Compress admitted members instead, fitting more of the chain at lower fidelity per member: changes rendering of records that do fit and violates least-surprise for shallow chains, rejected. (c) Raise the expansion budget share: trades seed diversity for chain depth globally, when the failure is per-seed, rejected.
 
+## D145: The lineage tail wins budget admission
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D140](#d140-memory-retrieval-separates-selection-from-expansion), [D143](#d143-revision-lineage-renders-as-an-ordered-connected-chain), and [D144](#d144-dropped-chain-members-render-as-a-compact-ordered-path-line).
+
+**Context.** When lexical retrieval seeds on a mid-chain record, forward expansion toward the chain's terminal state competes for budget against backward history, and under pressure the terminal record can lose. Measured on a depth-stressed corpus, the terminal record was present in only 39 to 57 percent of deep-chain retrievals, every deep current-state miss was a terminal-absent case, and accuracy when the terminal record was rendered was 0.71 to 0.88. The record most consumers need most, the current state of the lineage, was the one budget dropped.
+
+**Decision.** Among a seed's lineage members, the forward-terminal record is offered to budget admission first; remaining members keep their existing order. Rendering, compaction, selection, and budget semantics are unchanged, and output is byte-identical whenever the lineage fits or the seed is the terminal record.
+
+**Alternatives considered.** (a) Render-side fix, promoting the terminal record's line position: measured to be unnecessary (accuracy is high whenever the record is present) and it cannot restore a record admission dropped, rejected. (b) Reserve a fixed byte quota for the terminal record: adds a second budget mechanism where an ordering rule suffices, rejected. (c) Always admit both terminal record and full path line unconditionally: can displace the seed's own content under extreme budgets, violating selection precedence, rejected.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

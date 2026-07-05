@@ -53,6 +53,25 @@ const COMPACT_CHAIN_ITEMS: MemoryItem[] = [
   { type: 'revision', prior: 'node009', new: 'node010 terminal current state', reason: 'reason10 terminal marker padding', topic: 'deep-chain', msg_start: 19, msg_end: 20 },
 ]
 
+const TAIL_PRIORITY_QUERY = 'midneedle'
+const TAIL_PRIORITY_OLD_REASON = Array(12)
+  .fill('older admission padding alpha beta gamma delta epsilon zeta eta theta iota kappa lambda')
+  .join(' ')
+const TAIL_PRIORITY_ITEMS: MemoryItem[] = [
+  { type: 'revision', prior: 'state000', new: 'state001', reason: TAIL_PRIORITY_OLD_REASON, topic: 'tail-priority', msg_start: 1, msg_end: 2 },
+  { type: 'revision', prior: 'state001', new: 'state002', reason: TAIL_PRIORITY_OLD_REASON, topic: 'tail-priority', msg_start: 3, msg_end: 4 },
+  { type: 'revision', prior: 'state002', new: 'state003', reason: TAIL_PRIORITY_OLD_REASON, topic: 'tail-priority', msg_start: 5, msg_end: 6 },
+  { type: 'revision', prior: 'state003', new: 'state004', reason: TAIL_PRIORITY_OLD_REASON, topic: 'tail-priority', msg_start: 7, msg_end: 8 },
+  { type: 'revision', prior: 'state004', new: 'state005', reason: TAIL_PRIORITY_OLD_REASON, topic: 'tail-priority', msg_start: 9, msg_end: 10 },
+  { type: 'revision', prior: 'state005', new: 'state006 midchain anchor', reason: 'midneedle admission trigger', topic: 'tail-priority', msg_start: 11, msg_end: 12 },
+  { type: 'revision', prior: 'state006 midchain anchor', new: 'state007', reason: 'r07', topic: 'tail-priority', msg_start: 13, msg_end: 14 },
+  { type: 'revision', prior: 'state007', new: 'state008', reason: 'r08', topic: 'tail-priority', msg_start: 15, msg_end: 16 },
+  { type: 'revision', prior: 'state008', new: 'state009', reason: 'r09', topic: 'tail-priority', msg_start: 17, msg_end: 18 },
+  { type: 'revision', prior: 'state009', new: 'state010', reason: 'r10', topic: 'tail-priority', msg_start: 19, msg_end: 20 },
+  { type: 'revision', prior: 'state010', new: 'state011', reason: 'r11', topic: 'tail-priority', msg_start: 21, msg_end: 22 },
+  { type: 'revision', prior: 'state011', new: 'tailtoken current state', reason: 'r12', topic: 'tail-priority', msg_start: 23, msg_end: 24 },
+]
+
 const EXPECTED_SATURATION_HEADROOM = `- SECOND saffron pilot recall field recorder beta [saturation]
 - TOPSEED saffron pilot recall field recorder priority alpha [saturation]
 - THIRD saffron pilot recall field notes gamma [saturation]
@@ -84,6 +103,20 @@ const EXPECTED_COMPACT_CHAIN_FULL = `- [chain: deep-chain, 10 steps]
   step 8/10: - [REVISED] was: "node007" -> now: "node008" BECAUSE: "reason08 extra admission padding" (deep-chain)
   step 9/10: - [REVISED] was: "node008" -> now: "node009" BECAUSE: "reason09 extra admission padding" (deep-chain)
   step 10/10: - [REVISED] was: "node009" -> now: "node010 terminal current state" BECAUSE: "reason10 terminal marker padding" (deep-chain)`
+
+const EXPECTED_TAIL_PRIORITY_FULL = `- [chain: tail-priority, 12 steps]
+  step 1/12: - [REVISED] was: "state000" -> now: "state001" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority)
+  step 2/12: - [REVISED] was: "state001" -> now: "state002" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority)
+  step 3/12: - [REVISED] was: "state002" -> now: "state003" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority)
+  step 4/12: - [REVISED] was: "state003" -> now: "state004" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority)
+  step 5/12: - [REVISED] was: "state004" -> now: "state005" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority)
+  step 6/12: - [REVISED] was: "state005" -> now: "state006 midchain anchor" BECAUSE: "midneedle admission trigger" (tail-priority)
+  step 7/12: - [REVISED] was: "state006 midchain anchor" -> now: "state007" BECAUSE: "r07" (tail-priority)
+  step 8/12: - [REVISED] was: "state007" -> now: "state008" BECAUSE: "r08" (tail-priority)
+  step 9/12: - [REVISED] was: "state008" -> now: "state009" BECAUSE: "r09" (tail-priority)
+  step 10/12: - [REVISED] was: "state009" -> now: "state010" BECAUSE: "r10" (tail-priority)
+  step 11/12: - [REVISED] was: "state010" -> now: "state011" BECAUSE: "r11" (tail-priority)
+  step 12/12: - [REVISED] was: "state011" -> now: "tailtoken current state" BECAUSE: "r12" (tail-priority)`
 
 describe('memory substrate', () => {
   it('signs verifiable records and links revisions to the superseded record', async () => {
@@ -320,6 +353,27 @@ describe('memory substrate', () => {
     const fullResult = retrieveMemoryDetailed(signed, COMPACT_CHAIN_QUERY, { budgetTokens: 1000, chainDepth: 12 })
     expect(fullResult.text).toBe(EXPECTED_COMPACT_CHAIN_FULL)
     expect(fullResult.text).not.toMatch(/earlier \([0-9]+ steps?\): /)
+    expect(fullResult.stats.chains_compacted).toBe(0)
+  })
+
+  it('admits the lineage tail before earlier members under budget pressure', async () => {
+    const signed = await signMemoryItems(TAIL_PRIORITY_ITEMS, 'ctx-tail-priority-chain')
+    const compactResult = retrieveMemoryDetailed(signed, TAIL_PRIORITY_QUERY, { budgetTokens: 180, chainDepth: 12, compact: false })
+    const lines = compactResult.text.split('\n')
+
+    expect(compactResult.text).toMatch(/step \d+\/\d+: .*tailtoken current state/)
+    const earlierLine = lines.find((line) => /earlier \([0-9]+ steps?\): /.test(line))
+    expect(earlierLine).toBeDefined()
+    expect(earlierLine).toContain('state001')
+    expect(earlierLine).toContain('state002')
+    expect(earlierLine).toContain('state003')
+    expect(compactResult.text).not.toMatch(/later \([0-9]+ steps?\): /)
+    expect(compactResult.stats.chains_compacted).toBe(1)
+
+    const fullResult = retrieveMemoryDetailed(signed, TAIL_PRIORITY_QUERY, { budgetTokens: 5000, chainDepth: 12, compact: false })
+    expect(fullResult.text).toBe(EXPECTED_TAIL_PRIORITY_FULL)
+    expect(fullResult.text).not.toMatch(/earlier \([0-9]+ steps?\): /)
+    expect(fullResult.text).not.toMatch(/later \([0-9]+ steps?\): /)
     expect(fullResult.stats.chains_compacted).toBe(0)
   })
 
