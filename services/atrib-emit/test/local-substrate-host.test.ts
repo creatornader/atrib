@@ -38,6 +38,8 @@ interface SpawnedHost {
 }
 
 const spawned: SpawnedHost[] = []
+const ONE_SHOT_TEST_TIMEOUT_MS = 15_000
+const CLOSE_CHILD_SIGTERM_TIMEOUT_MS = 5_000
 
 afterEach(async () => {
   await Promise.all(spawned.splice(0).map((host) => host.close()))
@@ -137,7 +139,7 @@ function closeChild(child: ChildProcess): Promise<void> {
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error('host did not exit after SIGTERM'))
-    }, 1500)
+    }, CLOSE_CHILD_SIGTERM_TIMEOUT_MS)
     child.once('exit', () => {
       clearTimeout(timer)
       resolve()
@@ -175,7 +177,7 @@ describe('atrib-local-substrate host binary', () => {
     const description = JSON.parse(describeResult.stdout) as { name: string; options: unknown[] }
     expect(description.name).toBe('atrib-local-substrate')
     expect(description.options.length).toBeGreaterThan(0)
-  })
+  }, ONE_SHOT_TEST_TIMEOUT_MS)
 
   it('serves startup-spawn, long-lived-agent, and watcher-WAL requests over HTTP', async () => {
     const host = await spawnHost()

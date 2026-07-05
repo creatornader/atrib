@@ -171,8 +171,13 @@ export async function receivePacket(packet: HandoffEvidencePacket, render: Packe
       bodyMap.set('sha256:' + recordHashHex(entry.record), entry._local.body as Fact)
     }
   }
-  const contextId = records[0].context_id
-  const chainTail = 'sha256:' + recordHashHex(records[records.length - 1])
+  const firstRecord = records[0]
+  const lastRecord = records[records.length - 1]
+  if (firstRecord === undefined || lastRecord === undefined) {
+    throw new Error('continuation packet records disappeared after non-empty guard')
+  }
+  const contextId = firstRecord.context_id
+  const chainTail = 'sha256:' + recordHashHex(lastRecord)
   const verified = await verifyPacket(packet)
   return { verified, text: renderPacket(render, records, bodyMap, contextId, chainTail, verified) }
 }
