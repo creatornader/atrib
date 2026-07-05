@@ -7417,6 +7417,29 @@ panel scoped to the `/v1/lookup` log response.
 - [x401 latest spec](https://x401.proof.com/spec/latest/), current public
   source for v0.2 header names.
 
+## D135: Delegated-builder atrib context threads via orchestrator-injected explicit args
+
+**Date:** 2026-07-04
+
+**Status:** Accepted
+
+**Extends:** [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default), [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers), [D067](#d067-multi-producer-chain-composition-precedence-contract), [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)
+
+**Context.** An orchestrator agent routes work to a second agent running in a *different harness* with its own long-lived atrib runtime (concrete example: Claude Code delegating a build to Codex via `codex-plugin-cc`). The goal is to keep the delegate's atrib records continuous with the orchestrator's session (joined to its `context_id`, or `informed_by`-linked to its record) instead of orphaned into a fresh random context. This boundary is categorically distinct from an in-process agent-to-subagent spawn ([D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)), where the child shares the parent's harness and env. Here the delegate runs a separate runtime the orchestrator does not share, so ambient env/discovery cannot carry the context; the discriminator for which mechanism applies is exactly "does the delegate share the orchestrator's atrib runtime."
+
+**Rejected: ambient env propagation.** Passing `ATRIB_CONTEXT_ID` / `ATRIB_PARENT_RECORD_HASH` to the builder does not reach the signing path. The builder's atrib runtime is Codex's shared, persistent `atrib-primitives` process, whose env is fixed at launch; per-delegation values never arrive. Codex additionally restricts subprocess env by default (`shell_environment_policy` inherits only "core").
+
+**Rejected: [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) file fallback.** Writing the orchestrator context to `~/.claude/state/active-session-id-<profile>` collides: that file is already claimed for the builder harness's OWN standalone sessions (`ATRIB_AGENT=codex`). One shared runtime cannot disambiguate "operating standalone" from "operating as a delegated builder for orchestrator session X," and concurrent delegations overwrite each other.
+
+**Decision.** The orchestrator threads context by INJECTING it into the delegated build's instructions: the session `context_id` and the orchestrator's frozen-spec `record_hash` (as an `informed_by` reference). The builder passes them explicitly to the write primitives. This is deterministic (harness-generated, not hand-typed), and it is the correct model: `ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID` (extending [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)) exists precisely because ambient discovery is unreliable across a shared runtime. Explicit passing is atrib's designed cross-boundary primitive; env/file discovery ([D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)) is a convenience for single-runtime-per-session cases, not a substitute here.
+
+**Model.** The builder joins the orchestrator `context_id` as a distinct producer ([D067](#d067-multi-producer-chain-composition-precedence-contract)) or signs its own context linked via `informed_by` ([D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)) to the spec record. Both are honest: `creator_key`/`signers` attribute who did the work (the builder's key), while `context_id`/`informed_by` capture that it was part of the orchestrator's session. This is the cross-harness sibling of [D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)'s in-process bundle: same goal (continuity), different mechanism (explicit injection, because the boundary is a shared external runtime, not an in-process spawn).
+
+**Consequences.**
+- The orchestrator implements this: it emits its plan record (capturing `context_id` + `record_hash`) and substitutes both into the delegated instructions before handing off. No atrib substrate change, no ambient env/file dependency, and no collision with the delegate harness's own standalone context.
+- Degradation ([§5.8](atrib-spec.md#58-degradation-contract)): if the builder omits the injected args its records fall back to a random context (orphaned) with no error; the orchestrator's own spec + verdict records still carry the session context.
+- The reference implementation lives in the host's orchestration layer, not in shipped atrib code; atrib's contribution is that the primitives already accept explicit `context_id` / `informed_by`.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
