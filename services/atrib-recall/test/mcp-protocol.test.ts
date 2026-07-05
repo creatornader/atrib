@@ -480,6 +480,179 @@ describe('MCP protocol surface', () => {
     }
   })
 
+  it('include_tool_call_args surfaces suppressed tool_call content on request', async () => {
+    const { computeRecordHash } = await import('../src/aggregations.js')
+    const query = 'forensic recall evidence hydrantproof'
+    const baseTimestamp = 4102444800000
+    const toolCall = await makeSignedEvent(baseTimestamp + 10, EVENT_TYPE_TOOL_CALL_URI)
+    const toolCallHash = computeRecordHash(toolCall)
+    const observations = await Promise.all(
+      [1, 2, 3].map((i) => makeSignedEvent(baseTimestamp + i, EVENT_TYPE_OBSERVATION_URI)),
+    )
+    writeFileSync(
+      recordFile,
+      [
+        envelope(toolCall, {
+          tool_name: 'mcp__atrib_primitives__atrib_emit',
+          args: {
+            what: 'forensic recall evidence hydrantproof lives only in captured args',
+            why_noted: 'prove raw tool call args can be searched on request',
+          },
+          result: { record_hash: `sha256:${'b'.repeat(64)}` },
+        }),
+        ...observations.map((record, i) =>
+          envelope(record, {
+            what: `forensic recall evidence observation ${i}`,
+            topics: ['recall-content'],
+          }),
+        ),
+      ].join('\n'),
+    )
+
+    const defaultClient = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await defaultClient.initialize()
+      const res = await defaultClient.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: { query, k: 3 },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const payload = JSON.parse(
+        (res.result as { content: { type: string; text: string }[] }).content[0]!.text,
+      ) as {
+        include_tool_call_args?: boolean
+        results: Array<{ record_hash: string; event_type: string }>
+      }
+      expect(payload.include_tool_call_args).toBeUndefined()
+      expect(payload.results).toHaveLength(3)
+      expect(payload.results.map((result) => result.record_hash)).not.toContain(toolCallHash)
+      expect(payload.results.every((result) => result.event_type === EVENT_TYPE_OBSERVATION_URI)).toBe(
+        true,
+      )
+    } finally {
+      defaultClient.close()
+    }
+
+    const liftedClient = new McpClient({ ATRIB_RECORD_FILE: recordFile })
+    try {
+      await liftedClient.initialize()
+      const res = await liftedClient.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: { query, k: 3, include_tool_call_args: true },
+        },
+        3,
+      )
+      expect(res.error).toBeUndefined()
+      const payload = JSON.parse(
+        (res.result as { content: { type: string; text: string }[] }).content[0]!.text,
+      ) as {
+        include_tool_call_args?: boolean
+        results: Array<{
+          record_hash: string
+          event_type: string
+          components: { recency: number; relevance: number }
+        }>
+      }
+      expect(payload.include_tool_call_args).toBe(true)
+      const toolCallResult = payload.results.find((result) => result.record_hash === toolCallHash)
+      expect(toolCallResult).toBeDefined()
+      expect(toolCallResult?.event_type).toBe(EVENT_TYPE_TOOL_CALL_URI)
+      expect(toolCallResult?.components.recency).toBeGreaterThan(0.9)
+      expect(toolCallResult?.components.relevance).toBeGreaterThan(0.9)
+    } finally {
+      liftedClient.close()
+    }
+
+    const indexFile = join(tmp, 'content-index.json')
+    const indexBuilder = new McpClient({
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_RECALL_CONTENT_INDEX_FILE: indexFile,
+    })
+    try {
+      await indexBuilder.initialize()
+      const res = await indexBuilder.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: { query, k: 3, evidence_mode: 'require_complete' },
+        },
+        4,
+      )
+      expect(res.error).toBeUndefined()
+      const payload = JSON.parse(
+        (res.result as { content: { type: string; text: string }[] }).content[0]!.text,
+      ) as { coverage: { index: { status: string } } }
+      expect(payload.coverage.index.status).toBe('rebuilt')
+    } finally {
+      indexBuilder.close()
+    }
+
+    const indexJson = JSON.parse(readFileSync(indexFile, 'utf8')) as {
+      entries: Array<{ record_hash: string; tool_call_score_factor: number }>
+    }
+    const indexedToolCall = indexJson.entries.find((entry) => entry.record_hash === toolCallHash)
+    expect(indexedToolCall).toMatchObject({ tool_call_score_factor: expect.any(Number) })
+    expect(indexedToolCall!.tool_call_score_factor).toBeLessThan(1)
+
+    const indexHitClient = new McpClient({
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_RECALL_CONTENT_INDEX_FILE: indexFile,
+    })
+    try {
+      await indexHitClient.initialize()
+      const defaultRes = await indexHitClient.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: { query, k: 3, evidence_mode: 'require_complete' },
+        },
+        5,
+      )
+      expect(defaultRes.error).toBeUndefined()
+      const defaultPayload = JSON.parse(
+        (defaultRes.result as { content: { type: string; text: string }[] }).content[0]!.text,
+      ) as {
+        coverage: { index: { status: string } }
+        results: Array<{ record_hash: string }>
+      }
+      expect(defaultPayload.coverage.index.status).toBe('hit')
+      expect(defaultPayload.results.map((result) => result.record_hash)).not.toContain(toolCallHash)
+
+      const liftedRes = await indexHitClient.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: {
+            query,
+            k: 3,
+            evidence_mode: 'require_complete',
+            include_tool_call_args: true,
+          },
+        },
+        6,
+      )
+      expect(liftedRes.error).toBeUndefined()
+      const liftedPayload = JSON.parse(
+        (liftedRes.result as { content: { type: string; text: string }[] }).content[0]!.text,
+      ) as {
+        include_tool_call_args?: boolean
+        coverage: { index: { status: string } }
+        results: Array<{ record_hash: string }>
+      }
+      expect(liftedPayload.include_tool_call_args).toBe(true)
+      expect(liftedPayload.coverage.index.status).toBe('hit')
+      expect(liftedPayload.results.map((result) => result.record_hash)).toContain(toolCallHash)
+    } finally {
+      indexHitClient.close()
+    }
+  })
+
   it('recall_by_content marks the default bounded search as incomplete when the corpus exceeds the default cap', async () => {
     writeFileSync(recordFile, (await makeContentSearchCorpus(6)).join('\n'))
     const client = new McpClient({

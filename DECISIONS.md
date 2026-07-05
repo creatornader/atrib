@@ -7668,6 +7668,20 @@ are the current coverage.
 
 **Alternatives considered.** (a) Keep the success shape and rely on consumers checking warnings: produced a real false-signed belief in practice, rejected. (b) Throw from `handleEmit` itself: breaks hook-class producers whose primary path must never fail on atrib's account, rejected. (c) A `signed` boolean on an otherwise success-shaped payload without a tool-layer error: agents skimming tool results still misread refusals, and MCP has a first-class error channel for exactly this, rejected as insufficient alone.
 
+## D142: Tool-call score suppression is liftable per query
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D085](#d085-recall-calibration-defaults-survey-grounded-rationale) and [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content). If those anchors differ in the file, use the correct [D085](#d085-recall-calibration-defaults-survey-grounded-rationale) / [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) anchors verbatim from DECISIONS.md.
+
+**Context.** Recall down-weights unannotated tool_call records so hook-signed operational noise does not drown conversational memory. The calibration is right as a default and wrong as an absolute: tool_call args and results are fully content-indexed, and in one forensic case this session the decisive text lived only inside an emit call's captured args, indexed yet effectively invisible because the suppression factor multiplies both recency and relevance. The operator ruled that content search over tool_call args must be available on request without polluting default ranking.
+
+**Decision.** `recall_by_content` accepts `include_tool_call_args`, a per-query flag that substitutes the operational suppression factor with one at scoring time, in both the live path and the durable content index path, with no index rebuild. The default remains suppressed. Response metadata echoes the flag so query mode is visible in transcripts. Naming note: the flag name follows the operator decision that requested it; mechanically it lifts score suppression, since indexing never excluded these records.
+
+**Alternatives considered.** (a) Index-time inclusion toggle: args were always indexed, so this misdiagnoses the mechanism, rejected. (b) Global config to disable suppression: reintroduces the noise problem the calibration solved, rejected. (c) Automatic lift when the query matches few non-tool_call records: implicit magic that makes ranking unpredictable, rejected in favor of an explicit per-query flag.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
