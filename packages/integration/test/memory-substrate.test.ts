@@ -132,4 +132,37 @@ describe('memory substrate', () => {
     const differentTopicSigned = await signMemoryItems(differentTopicItems, 'ctx-different-topic')
     expect(differentTopicSigned[1]!.revises).toBeUndefined()
   })
+
+  it('bounded transitive chain expansion surfaces the root reason within budget', async () => {
+    const chainItems: MemoryItem[] = [
+      { type: 'preference', statement: 'Reads print books before bed', reason: 'screens disrupt sleep', topic: 'reading', msg_start: 1, msg_end: 2 },
+      { type: 'revision', prior: 'Reads print books before bed', new: 'Listens to audiobooks before bed', reason: 'eye strain in the evening', topic: 'reading', msg_start: 5, msg_end: 6 },
+      { type: 'revision', prior: 'Listens to audiobooks before bed', new: 'Practices meditation before bed', reason: 'audiobooks kept mind racing', topic: 'reading', msg_start: 9, msg_end: 10 },
+      { type: 'fact', statement: 'Keeps a meditation practice notebook', topic: 'notes', msg_start: 12, msg_end: 13 },
+    ]
+    const signed = await signMemoryItems(chainItems, 'ctx-chain-walk')
+
+    expect(signed[1]!.revises).toBe(signed[0]!.hash)
+    expect(signed[2]!.revises).toBe(signed[1]!.hash)
+
+    const transitiveOut = retrieveMemory(signed, 'meditation mind racing', { budgetTokens: 400 })
+    expect(transitiveOut).toContain('audiobooks kept mind racing')
+    expect(transitiveOut).toContain('eye strain')
+    expect(transitiveOut).toContain('screens disrupt sleep')
+    expect(transitiveOut.split('\n')[0]).toContain('meditation')
+
+    const budgetOut = retrieveMemory(signed, 'meditation notebook', { budgetTokens: 50 })
+    expect(budgetOut).toContain('meditation practice notebook')
+    expect(budgetOut).toContain('audiobooks kept mind racing')
+    expect(budgetOut).not.toContain('screens disrupt sleep')
+
+    const echoItems: MemoryItem[] = [
+      { type: 'fact', statement: 'Collects vintage jazz vinyl records', topic: 'vinyl', msg_start: 1, msg_end: 2 },
+      { type: 'revision', prior: 'Collects vintage jazz vinyl records', new: 'Sells the vinyl collection now', reason: 'moving abroad soon', topic: 'vinyl', msg_start: 5, msg_end: 6 },
+    ]
+    const echoSigned = await signMemoryItems(echoItems, 'ctx-echo-skip')
+    const echoOut = retrieveMemory(echoSigned, 'sells collection moving abroad', { budgetTokens: 400 })
+    expect(echoOut.split('\n').length).toBe(1)
+    expect(echoOut).toContain('moving abroad soon')
+  })
 })

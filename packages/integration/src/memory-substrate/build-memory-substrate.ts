@@ -172,6 +172,8 @@ export interface RetrieveOptions {
   budgetTokens?: number
   /** include revision-chain expansion (the atrib-distinctive step). Default true. */
   expandChains?: boolean
+  /** maximum revision-chain hops walked in each direction from a hit during expansion; default 3. */
+  chainDepth?: number
   /** only records with msg_end < windowEnd are visible (question-time windowing) */
   windowEnd?: number
   /**
@@ -218,6 +220,43 @@ function renderLine(m: SignedMemory, compact = false, noteForm = false): string 
   return `- ${c.statement}${c.reason ? ` (reason: ${c.reason})` : ''}${c.topic ? ` [${c.topic}]` : ''}`
 }
 
+function revisionChainMembers(
+  seed: SignedMemory,
+  byHash: Map<string, SignedMemory>,
+  revisedBy: Map<string, SignedMemory[]>,
+  depth: number,
+): SignedMemory[] {
+  if (depth <= 0) return []
+  const members: SignedMemory[] = []
+  const seen = new Set<string>([seed.hash])
+
+  let backward: SignedMemory | undefined = seed
+  for (let hop = 0; hop < depth; hop++) {
+    const next = backward.revises ? byHash.get(backward.revises) : undefined
+    if (!next || seen.has(next.hash)) break
+    seen.add(next.hash)
+    members.push(next)
+    backward = next
+  }
+
+  let frontier = [seed]
+  for (let hop = 0; hop < depth; hop++) {
+    const nextFrontier: SignedMemory[] = []
+    for (const current of frontier) {
+      for (const next of revisedBy.get(current.hash) ?? []) {
+        if (seen.has(next.hash)) continue
+        seen.add(next.hash)
+        members.push(next)
+        nextFrontier.push(next)
+      }
+    }
+    if (!nextFrontier.length) break
+    frontier = nextFrontier
+  }
+
+  return members
+}
+
 /**
  * Retrieve memory for a query. BM25 ranks all visible records; for each hit the
  * full revision chain (superseded record + revising record) is pulled in, so a
@@ -226,32 +265,75 @@ function renderLine(m: SignedMemory, compact = false, noteForm = false): string 
 export function retrieveMemory(records: SignedMemory[], query: string, opts: RetrieveOptions = {}): string {
   const budget = (opts.budgetTokens ?? 2000) * 4 // chars
   const expand = opts.expandChains !== false
+  const chainDepth = Number.isFinite(opts.chainDepth) ? Math.max(0, Math.floor(opts.chainDepth!)) : 3
   const compact = opts.compact ?? true
   const visible = records.filter((m) => opts.windowEnd === undefined || m.msg_end < opts.windowEnd)
   if (!visible.length) return '(no memory)'
   const byHash = new Map(visible.map((m) => [m.hash, m]))
-  const revisedBy = new Map<string, SignedMemory>()
-  for (const m of visible) if (m.revises) revisedBy.set(m.revises, m)
+  const revisedBy = new Map<string, SignedMemory[]>()
+  for (const m of visible) {
+    if (!m.revises) continue
+    const next = revisedBy.get(m.revises) ?? []
+    next.push(m)
+    revisedBy.set(m.revises, next)
+  }
 
   const scores = bm25Rank(visible.map(contentText), query)
   const order = visible.map((_, i) => i).sort((a, b) => scores[b]! - scores[a]!)
 
-  const chosen: SignedMemory[] = []
-  const seen = new Set<string>()
-  const push = (m: SignedMemory | undefined) => { if (m && !seen.has(m.hash)) { seen.add(m.hash); chosen.push(m) } }
-  for (const i of order) {
-    if (scores[i]! <= 0 && chosen.length) break
-    const m = visible[i]!
-    push(m)
-    if (expand) {
-      if (m.revises) push(byHash.get(m.revises))
-      const rev = revisedBy.get(m.hash)
-      if (rev) { push(rev); if (rev.revises) push(byHash.get(rev.revises)) }
-    }
-    const rendered = chosen.map((c) => renderLine(c, compact, opts.noteForm)).join('\n')
-    if (rendered.length > budget) break
+  type Choice = { seed: SignedMemory; score: number; members: SignedMemory[] }
+  const choices: Choice[] = []
+  const admitted = new Set<string>()
+  const renderChoices = (): string =>
+    choices.flatMap((choice) => [choice.seed, ...choice.members]).map((m) => renderLine(m, compact, opts.noteForm)).join('\n')
+  const canAddSeed = (seed: SignedMemory): boolean => {
+    choices.push({ seed, score: 0, members: [] })
+    const fits = renderChoices().length <= budget
+    choices.pop()
+    return fits
   }
-  let lines = chosen.map((c) => renderLine(c, compact, opts.noteForm))
-  while (lines.join('\n').length > budget && lines.length > 1) lines = lines.slice(0, -1)
-  return lines.join('\n')
+  const addSeed = (seed: SignedMemory, score: number): void => {
+    admitted.add(seed.hash)
+    choices.push({ seed, score, members: [] })
+  }
+
+  for (const i of order) {
+    const score = scores[i]!
+    const seed = visible[i]!
+    if (score <= 0) {
+      if (!choices.length) addSeed(seed, score)
+      break
+    }
+    if (!admitted.has(seed.hash) && canAddSeed(seed)) addSeed(seed, score)
+  }
+
+  if (!choices.length && order.length) addSeed(visible[order[0]!]!, scores[order[0]!]!)
+
+  if (expand) {
+    for (const choice of choices) {
+      if (choice.score <= 0) continue
+      const seedTokens = new Set(contentTokens(renderLine(choice.seed, compact, opts.noteForm)))
+      for (const member of revisionChainMembers(choice.seed, byHash, revisedBy, chainDepth)) {
+        if (admitted.has(member.hash)) continue
+        const memberTokens = new Set(contentTokens(renderLine(member, compact, opts.noteForm)))
+        let isEchoSubset = true
+        for (const token of memberTokens) {
+          if (!seedTokens.has(token)) {
+            isEchoSubset = false
+            break
+          }
+        }
+        if (isEchoSubset) continue
+
+        choice.members.push(member)
+        if (renderChoices().length <= budget) {
+          admitted.add(member.hash)
+        } else {
+          choice.members.pop()
+        }
+      }
+    }
+  }
+
+  return renderChoices()
 }
