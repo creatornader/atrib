@@ -7470,6 +7470,192 @@ panel scoped to the `/v1/lookup` log response.
 - Python v0 recall covers history/session_chain over the local mirror; remaining shapes arrive with the stateless daemon transport rather than a reimplementation of the initialize-handshake session protocol.
 - When the [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned) runtime rebuilds on the stateless 2026-07-28 MCP transport, both SDKs swap transports without surface changes — the daemon client is isolated behind one module per SDK.
 
+## D137: Universal evidence envelope as the single protocol-level attachment model
+
+**Date:** 2026-07-06
+
+**Status:** Accepted (implemented same day; promoted from P042)
+
+**Source:** The 2026-07-06 clean-room redesign analysis ([`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 4). The clean-room exercise re-derived atrib's invariants and converged on one attachment ontology for external material. atrib already has the shape: [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks)'s generic tiered `evidence[]` blocks, extended by [D119](#d119-aauth-evidence-stays-verifier-side) (AAuth) and [D132](#d132-x401-proof-evidence-stays-verifier-side-authorization-evidence) (x401), with AP2 / VI mirrored in per [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block). What it lacks is a normative envelope: profiles are switch-cases on a `protocol` string inside `@atrib/verify`, profile semantics live in the spec body, and human approvals ([D118](#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain)), counterparty co-signature material ([D098](#d098-ap2-receipts-stay-external-evidence-for-cross-attestation)), and the planned delegation certificates (redesign step 3) have no declared attachment shape at all.
+
+**The decision in question:** should atrib declare one normative evidence-envelope schema — `{ envelope, profile (type URI), profile_version, tier, payload hash/reference, facts, result, verifier }` — as THE attachment model for all externally verifiable material, with N independently versioned profiles (OAuth/MCP, AAuth, x401, AP2/VI, human approval, counterparty attestation, delegation certificates) registered under a documented rule, and migrate profile detail out of the spec body into per-profile documents?
+
+**Considerations.**
+
+- No signed byte changes. Envelopes live in sidecars ([§5.9.3](atrib-spec.md#593-the-_local-sidecar-shape)), archive evidence projections ([§2.12](atrib-spec.md#212-record-body-archive-layer)), and verifier results ([§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks)) — never in the record, log entry, or checkpoint.
+- Evidence validity stays tiered and never flips `verifyRecord().valid`, preserving the [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) boundary between record authenticity and external authorization posture.
+- [D052](#d052-cross-attestation-requirement-for-transaction-records)'s ≥2-distinct-signers rule and the `transaction` event type stay in core: they are trust semantics, not protocol plumbing. The envelope carries evidence *about* attestation, never a substitute for `signers[]`.
+- This lands first in the redesign dependency order: the payments profile spin-out (step 7) and delegation certificates (step 3) both need the envelope to attach to. Accepting it freezes the legacy `protocol` string set at today's five values — every new evidence type after this ADR registers as an envelope profile, never as a new legacy protocol string, so the compatibility mapping cannot silently go stale.
+- Unknown profiles must be preserved and rendered opaque, never dropped — same posture as extension event types.
+
+**Outcome (as accepted):** accept. Declare the envelope normative in a new [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks)-adjacent spec subsection, register the existing four adapters plus human-approval and counterparty-attestation profiles, add `spec/conformance/evidence-envelope/`, freeze the legacy `protocol` string set, and keep the legacy `evidence[]` block shape as a mapped compatibility view for at least two minor versions of `@atrib/verify`.
+
+**Implementation (2026-07-06):** spec/conformance/evidence-envelope/ (26 cases, generator, 28-test reference suite), spec [§5.5.7](atrib-spec.md#557-universal-evidence-envelope). Adversarially verified by the tranche-1 verifier pass; open coverage gaps tracked in the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) punch list.
+
+**Cross-references.**
+
+- [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 4 (source) and steps 3 and 7 (dependents that must consume this schema).
+- [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks), current generic authorization evidence blocks.
+- [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks), [D110](#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop), [D111](#d111-host-owned-oauth-evidence-infrastructure), the OAuth/MCP evidence arc this promotes.
+- [D119](#d119-aauth-evidence-stays-verifier-side), [D132](#d132-x401-proof-evidence-stays-verifier-side-authorization-evidence), [D134](#d134-x401-producer-capture-and-propagation-stay-sanitized), sibling adapters that become profiles.
+- [D118](#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain), human approval as separate signed evidence.
+
+Full design document: [docs/adr-draft-p042-evidence-envelope.md](docs/adr-draft-p042-evidence-envelope.md).
+
+## D138: Anchor plurality as the default trust posture
+
+**Date:** 2026-07-06
+
+**Status:** Accepted (implemented same day; promoted from P043)
+
+**Source:** 2026-07-06 clean-room redesign analysis ([`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), item 1). The clean-room exercise re-derived atrib's invariants but diverged on the trust root: today the protocol's trust claim in practice terminates at one operated log (log.atrib.dev), even though [D050](#d050-cross-log-replication-for-equivocation-defense) / [§2.11](atrib-spec.md#211-cross-log-replication) already ship the multi-proof bundle shape and verifier threshold machinery. Meanwhile the `cross_log_*` verifier surface stayed unimplemented ([P005](#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface)) because it was blocked on "a second independent log node" — a blocker that dissolves once "log" generalizes to "anchor."
+
+**The decision in question:** should atrib define a normative *anchor interface* — any service that accepts a hash and returns an independently verifiable existence/inclusion proof — and make ≥2 independent anchors the SDK default posture?
+
+The candidate shape:
+
+- Conforming anchor types: atrib log-node (tlog, the existing [§2.11.3](atrib-spec.md#2113-proof-bundle-format-extension) tuple), Sigstore Rekor, RFC 3161 TSAs, OpenTimestamps.
+- The existing `log_proofs` array stays the wire shape; elements gain an optional `anchor_type` discriminator (absent = atrib-log, so every existing bundle parses unchanged).
+- SDK default config carries two anchors; explicitly configuring one requires `allow_single_anchor: true`, mirroring [D113](#d113-unvalidated-informed_by-refs-are-omitted-by-default)'s `allow_unresolved_informed_by` pattern.
+- Anchoring stays asynchronous and non-blocking per [§5.3.5](atrib-spec.md#535-log-submission); plurality is a configuration posture plus verifier tier, never a runtime gate.
+- Verifier annotation `anchor_plurality` tiers single-anchor bundles with `single_anchor: true` (signal, not invalidation, exactly like `cross_attestation_missing` from [D052](#d052-cross-attestation-requirement-for-transaction-records)); hard rejection remains only for [§2.11.4](atrib-spec.md#2114-verifier-side-threshold-and-equivocation-detection) threshold and equivocation conditions.
+
+**Considerations.**
+
+- No signed record byte, log entry byte, or canonical form changes. Proof bundles are post-signing artifacts.
+- log.atrib.dev is not demoted in product terms: it remains the best-behaved anchor (explorer, APIs, SSE per [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields), fast inclusion proofs) but becomes one member of the anchor set, so the trust claim no longer terminates at the operator.
+- Rekor/TSA/OTS anchoring is producer-side; no log-node change is required to start. Note the Rekor mapping is *not* a reuse of the record's own `signature`: `record_hash` covers the complete record including `signature` ([§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records)) while the signature verifies over the signature-less form ([§1.4.2](atrib-spec.md#142-signing-procedure)), and Pure Ed25519 cannot be verified from a digest — so Rekor anchoring uses a fresh anchoring signature over a reconstructible anchor-claim artifact (draft ADR, Mechanism).
+- Session checkpoints (redesign item 2) make one-anchor-call-per-interval affordable, but per-record anchoring works today; the two ADRs are independent.
+
+**Outcome (as accepted):** accept. Land the spec anchor-interface section and the `anchor_plurality` verifier annotation with a `spec/conformance/2.11/anchors/` corpus first; flip the SDK default anchor set in the same release the second default anchor (OTS or Rekor) is chosen.
+
+**Implementation (2026-07-06):** spec/conformance/2.11/anchors/ (real anchoring-claim signatures, 13-test suite), spec [§2.11.7](atrib-spec.md#2117-anchors-generalizing-the-replication-target)-[§2.11.13](atrib-spec.md#21113-conformance). Adversarially verified by the tranche-1 verifier pass; open coverage gaps tracked in the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) punch list.
+
+**Cross-references.**
+
+- [D050](#d050-cross-log-replication-for-equivocation-defense), cross-log replication, the machinery this generalizes.
+- [D113](#d113-unvalidated-informed_by-refs-are-omitted-by-default), the explicit-opt-in escape-hatch pattern.
+- [P005](#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface), the blocked `cross_log_*` verifier surface this supersedes.
+- [§2.11](atrib-spec.md#211-cross-log-replication), [§2.8](atrib-spec.md#28-proof-bundle-format), [§5.3.5](atrib-spec.md#535-log-submission), [§5.8](atrib-spec.md#58-degradation-contract), [§8.7](atrib-spec.md#87-adversarial-threat-model).
+
+Full design document: [docs/adr-draft-p043-anchor-plurality.md](docs/adr-draft-p043-anchor-plurality.md).
+
+## D139: `session_checkpoint` event type, the session stream formalized
+
+**Date:** 2026-07-06
+
+**Status:** Accepted (implemented same day; promoted from P044)
+
+**Source:** the 2026-07-06 clean-room redesign analysis, step 2 of [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md). The per-context mirror JSONL (physically) and the CHAIN_PRECEDES chain (logically) already form a session stream; nothing commits to it as a whole. Per-record log entries can never distinguish "committed 10 actions" from "committed 10 of 50."
+
+**The decision in question:** should atrib add a `session_checkpoint` event type, promoted through the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) gate, whose signed body commits to the RFC 6962 Merkle root over the ordered `record_hash` values of a `context_id` so far?
+
+Candidate shape:
+
+- A new OPTIONAL top-level `checkpoint` object: `session_root`, `tree_size`, `first_index`, optional `prior_checkpoint`, optional `retroactive: true`. Required on `session_checkpoint` records, rejected on every other event_type (the `annotates`/`revises` validation pattern per [§1.2.7](atrib-spec.md#127-annotates)/[§1.2.9](atrib-spec.md#129-revises)).
+- Tree construction reuses [§2.3.2](atrib-spec.md#232-leaf-hash-computation) verbatim: leaves are raw 32-byte record hashes in producer-declared session order; 32-byte leaf preimages are structurally disjoint from 90-byte log-entry preimages, so no new domain separation is needed.
+- Consecutive checkpoints must be append-only extensions, provable via RFC 6962 §2.1.4 consistency proofs (the same append-only check the [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) witness protocol already relies on); divergent roots over the same prefix are equivocation evidence against the `creator_key`.
+- Attested backfill over pre-checkpoint history carries `retroactive: true` (present-only-when-true, per the absence-not-null contract); verifiers tier freshness categorically per [§3.3](atrib-spec.md#33-verification-state).
+- No new graph edges: the root does not structurally reveal members, so per-leaf edges would violate [§3.2.4](atrib-spec.md#324-edge-derivation-rules) discipline. Checkpoints participate like observation nodes (chain spine yes, CONVERGES_ON no, [§4.6](atrib-spec.md#46-the-calculation-algorithm) skipped), so attribution distributions are byte-identical before and after adoption.
+- Byte `0x08` (`0x07` stays reserved for `handoff` per [D073](#d073-handoff-event_type-byte-placeholder-adr), a design-level reservation that remains unallocated); producers emit `https://atrib.dev/v1/types/session_checkpoint` under `0xFF` pre-promotion, byte-flip at promotion, signed bytes unchanged.
+
+**What it buys:** selective disclosure (prove event N belongs to a committed session without revealing events 1..N-1, complementing [§8.3](atrib-spec.md#83-salted-commitment-posture)); completeness claims relative to the creator's own committed stream; cheap anchoring, one root per interval, which is what makes redesign step 1's multi-anchor posture ([D050](#d050-cross-log-replication-for-equivocation-defense), [§2.11](atrib-spec.md#211-cross-log-replication)) affordable.
+
+**Considerations.**
+
+- Purely additive: no existing signed byte, log entry, or canonical form changes. Old verifiers see a valid record with an unrecognized URI and skip checkpoint semantics.
+- Leaf ordering is a signed producer claim, not a verifier-computed canonical order; verifiers cross-check it against CHAIN_PRECEDES and timestamps as categorical facts (signal, not block), consistent with [§8.7](atrib-spec.md#87-adversarial-threat-model): atrib certifies signing, not truth.
+- The ordered leaf list is Tier 2 material: local mirror sidecar per [§5.9](atrib-spec.md#59-local-mirror-conventions), optionally archived per [§2.12](atrib-spec.md#212-record-body-archive-layer). Never enumerate leaves in the signed record.
+- Emission is producer-side and silent-failure per [§5.8](atrib-spec.md#58-degradation-contract); a missed interval just widens the next one.
+
+**Outcome (as accepted):** accept the full normative design now, ship extension-first under `0xFF` from one dogfood producer, and flip to byte `0x08` via the [D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04) sync-trigger checklist once the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) adoption and demand indicators are met.
+
+**Implementation (2026-07-06):** spec/conformance/session-checkpoint/ (RFC 6962 session roots, 18-test suite), spec [§1.2.10](atrib-spec.md#1210-checkpoint). Adversarially verified by the tranche-1 verifier pass; open coverage gaps tracked in the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) punch list.
+
+**Cross-references.**
+
+- [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 2 source section; step 1 (anchor plurality) is the consumer of cheap roots.
+- [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary), promotion bar; [D073](#d073-handoff-event_type-byte-placeholder-adr), byte-reservation precedent.
+- [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) / [D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06), required-field validation pattern.
+- [D067](#d067-multi-producer-chain-composition-precedence-contract), multi-producer ordering reality that forces producer-declared leaf order.
+- [D099](#d099-explicit-emit-records-commit-local-content-through-default-args_hash), `args_hash` commitment to the local leaf list.
+
+Full design document: [docs/adr-draft-p044-session-checkpoint.md](docs/adr-draft-p044-session-checkpoint.md).
+
+## D140: Delegation certificates: principal keys certify ephemeral run keys
+
+**Date:** 2026-07-06
+
+**Status:** Accepted (implemented same day; promoted from P045)
+
+**Source:** The 2026-07-06 clean-room redesign analysis ([`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 3). The redesign diverged from atrib's flat-key identity model by making the trust root a *principal* that certifies short-lived *run* keys. Every divergence in that exercise was reachable by promoting something atrib already has; here the promotion target is the existing `creator_key` slot plus the [D051](#d051-capability-scoped-records-via-directory-published-envelopes) capability-envelope schema.
+
+**The decision in question:** should atrib add a delegation-certificate object — the principal key signs `{run_pubkey, scope, not_after, context_id?}` over JCS — so that run records are signed by an ephemeral run key occupying the existing `creator_key` slot in both the record and the 90-byte log entry, with no format change and no signed byte of any existing record altered?
+
+This is deliberately certification, not the per-conversation key *derivation* deferred by [D038](#d038-per-conversation-key-derivation): explicit, scoped, expiring, with no deterministic linkage from a parent secret.
+
+**Considerations.**
+
+- Depth 0 is the identity case: a record signed directly by a principal carries no certificate and verifies exactly as today, so every record ever signed is already valid under this model by definition.
+- The certificate travels in-band: an OPTIONAL `delegation_cert_hash` field on the genesis record (new records only; lex-slots between `creator_key` and `event_type`) commits to it, while the body rides the `_local` sidecar ([§5.9.3](atrib-spec.md#593-the-_local-sidecar-shape)), the archive evidence surface ([D111](#d111-host-owned-oauth-evidence-infrastructure)), or — as the verifier-facing carrier — the step-4 universal evidence envelope profile `delegation-certificate` (the identifier the envelope ADR reserves for this decision).
+- Under [D067](#d067-multi-producer-chain-composition-precedence-contract) multi-producer composition, a certified run key often joins a context whose genesis another producer signed; the genesis field then cannot apply, and out-of-band certificate supply with `cert_bound: null` is the expected posture, not a defect.
+- Revocation blast radius shrinks to one run: extend [§1.9](atrib-spec.md#19-key-rotation-and-revocation) so the principal may sign a `key_revocation` for a run key it certified; principals never rotate because a sandbox was compromised.
+- [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox)'s signer proxy demotes from structural requirement to optional hardening: a scoped, expiring run key inside the sandbox is worth exactly one run. The [§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution) MUST would be narrowed to principal keys — an explicit normative change that needs its own sign-off.
+- The certificate `scope` reuses the [D051](#d051-capability-scoped-records-via-directory-published-envelopes) envelope schema verbatim; verifier output stays signal-not-block per [§6.7.3](atrib-spec.md#673-out-of-envelope-is-a-signal-not-invalidation).
+- The directory ([§6](atrib-spec.md#6-key-directory)) maps principals only; run keys never enter it. Verifier consultation ([§6.3](atrib-spec.md#63-verifier-consultation-algorithm)) resolves the principal through the certificate walk, offline.
+- Graph and calculation layers are untouched: no new edge types, no delegation interpretation in [§3.2.4](atrib-spec.md#324-edge-derivation-rules); attribution-by-principal is verifier/policy-layer presentation.
+
+**Outcome (as accepted):** accept as the step-3 ADR of the redesign promotion sequence, after step 4 (universal evidence envelope) settles the certificate's evidence carrier as the `delegation-certificate` profile, with a new normative spec section, a `spec/conformance/` corpus in the same commit, and the [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args) orchestrator flow as the first dogfood issuer.
+
+**Implementation (2026-07-06):** spec/conformance/delegation-certificates/ (real certificates + verifier walk, 14-test suite), spec [§1.11](atrib-spec.md#111-delegation-certificates). Adversarially verified by the tranche-1 verifier pass; open coverage gaps tracked in the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) punch list.
+
+**Cross-references.**
+
+- [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 3, source proposal; step 4, the evidence envelope this profile attaches through.
+- [D038](#d038-per-conversation-key-derivation), the derivation design this deliberately is not.
+- [D051](#d051-capability-scoped-records-via-directory-published-envelopes), capability envelope schema reused as `scope`.
+- [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox), signer proxy demoted to optional hardening.
+- [§1.9](atrib-spec.md#19-key-rotation-and-revocation), revocation machinery extended for certified run keys.
+
+Full design document: [docs/adr-draft-p045-delegation-certificates.md](docs/adr-draft-p045-delegation-certificates.md).
+
+## D141: `dev.atrib/attribution` first-class MCP extension (SEP-2133)
+
+**Date:** 2026-07-06
+
+**Status:** Accepted (implemented same day; promoted from P049)
+
+**Source:** The MCP 2026-07-28 release (RC locked 2026-05-21) plus the 2026-07-06 ecosystem research. SEP-2133 makes extensions first-class: reverse-DNS identifiers, negotiation via an `extensions` map carried per-request in `_meta` under `io.modelcontextprotocol/clientCapabilities`, server advertisement through `server/discover`, independent versioning, and an Unofficial → Experimental → Official (Extensions Track SEP) ladder. atrib's MCP surface today is an unprefixed convention (`_meta.atrib`, `tracestate` per [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow) / [§1.5.4](atrib-spec.md#154-mcp-transport-params_meta)); the new namespace discipline expects vendor-prefixed `_meta` keys, and no extension, SEP, or WG occupies the signed-action-record slot yet. The identifier and framing are first-mover assets that expire around the final-spec news cycle.
+
+**The decision in question:** should atrib publish `dev.atrib/attribution` as an unofficial MCP extension before 2026-07-28, declaring three things and changing no signed byte: (1) server-side signing capability (advisory settings: event types signed, disclosure posture, expected creator key, log endpoints); (2) a reserved prefixed `_meta` block carrying exactly two fields in v0.1 — the existing 87-char propagation token and explicit `context_id` — with this ADR owning the single canonical inbound resolution definition (two ladders, token and context-identity, landing as normative [§1.5.4](atrib-spec.md#154-mcp-transport-params_meta) text that the daemon-consolidation and rename ADRs cite instead of restating), feeding the unchanged [D067](#d067-multi-producer-chain-composition-precedence-contract) chain-root ladder; (3) attestation receipts in `result._meta`, gated on the client declaring the extension on that request, reporting the already-signed record's hash/token with `log_submission` as a queue status so submission stays non-blocking per [§5.3.5](atrib-spec.md#535-log-submission).
+
+`@atrib/mcp` and `@atrib/agent` become the reference server/client implementations; `@atrib/mcp-wrap` becomes the shim that makes any non-adopting upstream server conform. The strategic shift: from "a wrapper you install" to "a capability a server declares." The legacy unprefixed convention keeps working unnegotiated and is the documented fallback — the extension is upside, not a dependency; [§5.8](atrib-spec.md#58-degradation-contract) applies to every extension behavior, and the design targets `_meta` loss (the documented SDK failure mode), not `_meta` theft.
+
+**Considerations.**
+
+- Zero signed-byte change: nothing new is signed, so no [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion is needed; negotiation state is transport metadata (at most sidecar telemetry).
+- `session_token` and `provenance_token` are deliberately excluded from the v0.1 block: each already has a normative carrier ([§1.5.5](atrib-spec.md#155-cross-trace-session-continuity) baggage; [§1.2.6](atrib-spec.md#126-provenance_token) genesis-only host config), and a second carrier without defined conflict semantics would be worse than none.
+- The identifier freezes on publication (breaking change = new id), which interacts with the pending attest/recall rename ([`docs/attest-recall-rename-impact.md`](docs/attest-recall-rename-impact.md)) — favors the rename-proof noun `attribution`.
+- Standards ladder: unofficial now (no permission needed), Interceptors WG (SEP-2624) engagement as the reference verifiable audit interceptor, experimental/official track only if traction warrants; official status is optional legitimacy, never a dependency.
+- Implementation gate: the extension is a pure `_meta` dialect that runs on the current TypeScript SDK today; only `services/atrib-primitives` adoption shares the daemon-consolidation draft's stateless-SDK gate (hard review date 2026-10-06) rather than defining its own.
+- Conformance corpus at `spec/conformance/1.5.4/mcp-extension/`: capability declaration, negotiation gating, token precedence, context-identity precedence, receipt integrity, degradation.
+- Services (`log-node`, `graph-node`, `directory-node`, `archive-node`) untouched.
+
+**Outcome (as accepted):** accept and publish v0.1 as an unofficial extension before 2026-07-28, implemented behind opt-in flags in `@atrib/mcp` / `@atrib/agent` / `@atrib/mcp-wrap`, with the extension-name/rename question resolved first.
+
+**Implementation (2026-07-06):** docs/extensions/dev.atrib-attribution/v0.1.md (publishable extension spec), spec/conformance/mcp-extension/ (26 cases), spec [§1.5.4.1](atrib-spec.md#1541-negotiated-extension-carriage-devatribattribution). Adversarially verified by the tranche-1 verifier pass; open coverage gaps tracked in the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) punch list.
+
+**Cross-references.**
+
+- [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow), tracestate carriage being standardized upward.
+- [D067](#d067-multi-producer-chain-composition-precedence-contract), chain-root ladder the new carrier feeds unchanged.
+- [D100](#d100-mcp-middleware-can-sign-without-log-submission), signing without submission — basis for non-blocking receipts.
+- [D133](#d133-action-gate-is-a-host-owned-controlproof-package), pre-action gating that can consume the capability declaration.
+- [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args), explicit context carriage as default posture.
+- [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), the MCP-stateless forcing-function section and the step-5 daemon draft this ADR's ladder text binds.
+
+Full design document: [docs/adr-draft-p049-mcp-extension.md](docs/adr-draft-p049-mcp-extension.md).
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -7956,147 +8142,6 @@ Candidate demo:
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
 
-## P042: Universal evidence envelope as the single protocol-level attachment model
-
-**Source:** The 2026-07-06 clean-room redesign analysis ([`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 4). The clean-room exercise re-derived atrib's invariants and converged on one attachment ontology for external material. atrib already has the shape: [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks)'s generic tiered `evidence[]` blocks, extended by [D119](#d119-aauth-evidence-stays-verifier-side) (AAuth) and [D132](#d132-x401-proof-evidence-stays-verifier-side-authorization-evidence) (x401), with AP2 / VI mirrored in per [D094](#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block). What it lacks is a normative envelope: profiles are switch-cases on a `protocol` string inside `@atrib/verify`, profile semantics live in the spec body, and human approvals ([D118](#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain)), counterparty co-signature material ([D098](#d098-ap2-receipts-stay-external-evidence-for-cross-attestation)), and the planned delegation certificates (redesign step 3) have no declared attachment shape at all.
-
-**The decision in question:** should atrib declare one normative evidence-envelope schema — `{ envelope, profile (type URI), profile_version, tier, payload hash/reference, facts, result, verifier }` — as THE attachment model for all externally verifiable material, with N independently versioned profiles (OAuth/MCP, AAuth, x401, AP2/VI, human approval, counterparty attestation, delegation certificates) registered under a documented rule, and migrate profile detail out of the spec body into per-profile documents?
-
-**Considerations.**
-
-- No signed byte changes. Envelopes live in sidecars ([§5.9.3](atrib-spec.md#593-the-_local-sidecar-shape)), archive evidence projections ([§2.12](atrib-spec.md#212-record-body-archive-layer)), and verifier results ([§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks)) — never in the record, log entry, or checkpoint.
-- Evidence validity stays tiered and never flips `verifyRecord().valid`, preserving the [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) boundary between record authenticity and external authorization posture.
-- [D052](#d052-cross-attestation-requirement-for-transaction-records)'s ≥2-distinct-signers rule and the `transaction` event type stay in core: they are trust semantics, not protocol plumbing. The envelope carries evidence *about* attestation, never a substitute for `signers[]`.
-- This lands first in the redesign dependency order: the payments profile spin-out (step 7) and delegation certificates (step 3) both need the envelope to attach to. Accepting it freezes the legacy `protocol` string set at today's five values — every new evidence type after this ADR registers as an envelope profile, never as a new legacy protocol string, so the compatibility mapping cannot silently go stale.
-- Unknown profiles must be preserved and rendered opaque, never dropped — same posture as extension event types.
-
-**Likely outcome (not committed):** accept. Declare the envelope normative in a new [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks)-adjacent spec subsection, register the existing four adapters plus human-approval and counterparty-attestation profiles, add `spec/conformance/evidence-envelope/`, freeze the legacy `protocol` string set, and keep the legacy `evidence[]` block shape as a mapped compatibility view for at least two minor versions of `@atrib/verify`.
-
-**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
-
-**Cross-references.**
-
-- [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 4 (source) and steps 3 and 7 (dependents that must consume this schema).
-- [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks), current generic authorization evidence blocks.
-- [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks), [D110](#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop), [D111](#d111-host-owned-oauth-evidence-infrastructure), the OAuth/MCP evidence arc this promotes.
-- [D119](#d119-aauth-evidence-stays-verifier-side), [D132](#d132-x401-proof-evidence-stays-verifier-side-authorization-evidence), [D134](#d134-x401-producer-capture-and-propagation-stay-sanitized), sibling adapters that become profiles.
-- [D118](#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain), human approval as separate signed evidence.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-Full draft: [docs/adr-draft-p042-evidence-envelope.md](docs/adr-draft-p042-evidence-envelope.md).
-
-## P043: Anchor plurality as the default trust posture
-
-**Source:** 2026-07-06 clean-room redesign analysis ([`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), item 1). The clean-room exercise re-derived atrib's invariants but diverged on the trust root: today the protocol's trust claim in practice terminates at one operated log (log.atrib.dev), even though [D050](#d050-cross-log-replication-for-equivocation-defense) / [§2.11](atrib-spec.md#211-cross-log-replication) already ship the multi-proof bundle shape and verifier threshold machinery. Meanwhile the `cross_log_*` verifier surface stayed unimplemented ([P005](#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface)) because it was blocked on "a second independent log node" — a blocker that dissolves once "log" generalizes to "anchor."
-
-**The decision in question:** should atrib define a normative *anchor interface* — any service that accepts a hash and returns an independently verifiable existence/inclusion proof — and make ≥2 independent anchors the SDK default posture?
-
-The candidate shape:
-
-- Conforming anchor types: atrib log-node (tlog, the existing [§2.11.3](atrib-spec.md#2113-proof-bundle-format-extension) tuple), Sigstore Rekor, RFC 3161 TSAs, OpenTimestamps.
-- The existing `log_proofs` array stays the wire shape; elements gain an optional `anchor_type` discriminator (absent = atrib-log, so every existing bundle parses unchanged).
-- SDK default config carries two anchors; explicitly configuring one requires `allow_single_anchor: true`, mirroring [D113](#d113-unvalidated-informed_by-refs-are-omitted-by-default)'s `allow_unresolved_informed_by` pattern.
-- Anchoring stays asynchronous and non-blocking per [§5.3.5](atrib-spec.md#535-log-submission); plurality is a configuration posture plus verifier tier, never a runtime gate.
-- Verifier annotation `anchor_plurality` tiers single-anchor bundles with `single_anchor: true` (signal, not invalidation, exactly like `cross_attestation_missing` from [D052](#d052-cross-attestation-requirement-for-transaction-records)); hard rejection remains only for [§2.11.4](atrib-spec.md#2114-verifier-side-threshold-and-equivocation-detection) threshold and equivocation conditions.
-
-**Considerations.**
-
-- No signed record byte, log entry byte, or canonical form changes. Proof bundles are post-signing artifacts.
-- log.atrib.dev is not demoted in product terms: it remains the best-behaved anchor (explorer, APIs, SSE per [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields), fast inclusion proofs) but becomes one member of the anchor set, so the trust claim no longer terminates at the operator.
-- Rekor/TSA/OTS anchoring is producer-side; no log-node change is required to start. Note the Rekor mapping is *not* a reuse of the record's own `signature`: `record_hash` covers the complete record including `signature` ([§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records)) while the signature verifies over the signature-less form ([§1.4.2](atrib-spec.md#142-signing-procedure)), and Pure Ed25519 cannot be verified from a digest — so Rekor anchoring uses a fresh anchoring signature over a reconstructible anchor-claim artifact (draft ADR, Mechanism).
-- Session checkpoints (redesign item 2) make one-anchor-call-per-interval affordable, but per-record anchoring works today; the two ADRs are independent.
-
-**Likely outcome (not committed):** accept. Land the spec anchor-interface section and the `anchor_plurality` verifier annotation with a `spec/conformance/2.11/anchors/` corpus first; flip the SDK default anchor set in the same release the second default anchor (OTS or Rekor) is chosen.
-
-**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
-
-**Cross-references.**
-
-- [D050](#d050-cross-log-replication-for-equivocation-defense), cross-log replication, the machinery this generalizes.
-- [D113](#d113-unvalidated-informed_by-refs-are-omitted-by-default), the explicit-opt-in escape-hatch pattern.
-- [P005](#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface), the blocked `cross_log_*` verifier surface this supersedes.
-- [§2.11](atrib-spec.md#211-cross-log-replication), [§2.8](atrib-spec.md#28-proof-bundle-format), [§5.3.5](atrib-spec.md#535-log-submission), [§5.8](atrib-spec.md#58-degradation-contract), [§8.7](atrib-spec.md#87-adversarial-threat-model).
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-Full draft: [docs/adr-draft-p043-anchor-plurality.md](docs/adr-draft-p043-anchor-plurality.md).
-
-## P044: `session_checkpoint` event type, the session stream formalized
-
-**Source:** the 2026-07-06 clean-room redesign analysis, step 2 of [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md). The per-context mirror JSONL (physically) and the CHAIN_PRECEDES chain (logically) already form a session stream; nothing commits to it as a whole. Per-record log entries can never distinguish "committed 10 actions" from "committed 10 of 50."
-
-**The decision in question:** should atrib add a `session_checkpoint` event type, promoted through the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) gate, whose signed body commits to the RFC 6962 Merkle root over the ordered `record_hash` values of a `context_id` so far?
-
-Candidate shape:
-
-- A new OPTIONAL top-level `checkpoint` object: `session_root`, `tree_size`, `first_index`, optional `prior_checkpoint`, optional `retroactive: true`. Required on `session_checkpoint` records, rejected on every other event_type (the `annotates`/`revises` validation pattern per [§1.2.7](atrib-spec.md#127-annotates)/[§1.2.9](atrib-spec.md#129-revises)).
-- Tree construction reuses [§2.3.2](atrib-spec.md#232-leaf-hash-computation) verbatim: leaves are raw 32-byte record hashes in producer-declared session order; 32-byte leaf preimages are structurally disjoint from 90-byte log-entry preimages, so no new domain separation is needed.
-- Consecutive checkpoints must be append-only extensions, provable via RFC 6962 §2.1.4 consistency proofs (the same append-only check the [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) witness protocol already relies on); divergent roots over the same prefix are equivocation evidence against the `creator_key`.
-- Attested backfill over pre-checkpoint history carries `retroactive: true` (present-only-when-true, per the absence-not-null contract); verifiers tier freshness categorically per [§3.3](atrib-spec.md#33-verification-state).
-- No new graph edges: the root does not structurally reveal members, so per-leaf edges would violate [§3.2.4](atrib-spec.md#324-edge-derivation-rules) discipline. Checkpoints participate like observation nodes (chain spine yes, CONVERGES_ON no, [§4.6](atrib-spec.md#46-the-calculation-algorithm) skipped), so attribution distributions are byte-identical before and after adoption.
-- Byte `0x08` (`0x07` stays reserved for `handoff` per [D073](#d073-handoff-event_type-byte-placeholder-adr), a design-level reservation that remains unallocated); producers emit `https://atrib.dev/v1/types/session_checkpoint` under `0xFF` pre-promotion, byte-flip at promotion, signed bytes unchanged.
-
-**What it buys:** selective disclosure (prove event N belongs to a committed session without revealing events 1..N-1, complementing [§8.3](atrib-spec.md#83-salted-commitment-posture)); completeness claims relative to the creator's own committed stream; cheap anchoring, one root per interval, which is what makes redesign step 1's multi-anchor posture ([D050](#d050-cross-log-replication-for-equivocation-defense), [§2.11](atrib-spec.md#211-cross-log-replication)) affordable.
-
-**Considerations.**
-
-- Purely additive: no existing signed byte, log entry, or canonical form changes. Old verifiers see a valid record with an unrecognized URI and skip checkpoint semantics.
-- Leaf ordering is a signed producer claim, not a verifier-computed canonical order; verifiers cross-check it against CHAIN_PRECEDES and timestamps as categorical facts (signal, not block), consistent with [§8.7](atrib-spec.md#87-adversarial-threat-model): atrib certifies signing, not truth.
-- The ordered leaf list is Tier 2 material: local mirror sidecar per [§5.9](atrib-spec.md#59-local-mirror-conventions), optionally archived per [§2.12](atrib-spec.md#212-record-body-archive-layer). Never enumerate leaves in the signed record.
-- Emission is producer-side and silent-failure per [§5.8](atrib-spec.md#58-degradation-contract); a missed interval just widens the next one.
-
-**Likely outcome (not committed):** accept the full normative design now, ship extension-first under `0xFF` from one dogfood producer, and flip to byte `0x08` via the [D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04) sync-trigger checklist once the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) adoption and demand indicators are met.
-
-**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
-
-**Cross-references.**
-
-- [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 2 source section; step 1 (anchor plurality) is the consumer of cheap roots.
-- [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary), promotion bar; [D073](#d073-handoff-event_type-byte-placeholder-adr), byte-reservation precedent.
-- [D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) / [D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06), required-field validation pattern.
-- [D067](#d067-multi-producer-chain-composition-precedence-contract), multi-producer ordering reality that forces producer-declared leaf order.
-- [D099](#d099-explicit-emit-records-commit-local-content-through-default-args_hash), `args_hash` commitment to the local leaf list.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-Full draft: [docs/adr-draft-p044-session-checkpoint.md](docs/adr-draft-p044-session-checkpoint.md).
-
-## P045: Delegation certificates: principal keys certify ephemeral run keys
-
-**Source:** The 2026-07-06 clean-room redesign analysis ([`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 3). The redesign diverged from atrib's flat-key identity model by making the trust root a *principal* that certifies short-lived *run* keys. Every divergence in that exercise was reachable by promoting something atrib already has; here the promotion target is the existing `creator_key` slot plus the [D051](#d051-capability-scoped-records-via-directory-published-envelopes) capability-envelope schema.
-
-**The decision in question:** should atrib add a delegation-certificate object — the principal key signs `{run_pubkey, scope, not_after, context_id?}` over JCS — so that run records are signed by an ephemeral run key occupying the existing `creator_key` slot in both the record and the 90-byte log entry, with no format change and no signed byte of any existing record altered?
-
-This is deliberately certification, not the per-conversation key *derivation* deferred by [D038](#d038-per-conversation-key-derivation): explicit, scoped, expiring, with no deterministic linkage from a parent secret.
-
-**Considerations.**
-
-- Depth 0 is the identity case: a record signed directly by a principal carries no certificate and verifies exactly as today, so every record ever signed is already valid under this model by definition.
-- The certificate travels in-band: an OPTIONAL `delegation_cert_hash` field on the genesis record (new records only; lex-slots between `creator_key` and `event_type`) commits to it, while the body rides the `_local` sidecar ([§5.9.3](atrib-spec.md#593-the-_local-sidecar-shape)), the archive evidence surface ([D111](#d111-host-owned-oauth-evidence-infrastructure)), or — as the verifier-facing carrier — the step-4 universal evidence envelope profile `delegation-certificate` (the identifier the envelope ADR reserves for this decision).
-- Under [D067](#d067-multi-producer-chain-composition-precedence-contract) multi-producer composition, a certified run key often joins a context whose genesis another producer signed; the genesis field then cannot apply, and out-of-band certificate supply with `cert_bound: null` is the expected posture, not a defect.
-- Revocation blast radius shrinks to one run: extend [§1.9](atrib-spec.md#19-key-rotation-and-revocation) so the principal may sign a `key_revocation` for a run key it certified; principals never rotate because a sandbox was compromised.
-- [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox)'s signer proxy demotes from structural requirement to optional hardening: a scoped, expiring run key inside the sandbox is worth exactly one run. The [§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution) MUST would be narrowed to principal keys — an explicit normative change that needs its own sign-off.
-- The certificate `scope` reuses the [D051](#d051-capability-scoped-records-via-directory-published-envelopes) envelope schema verbatim; verifier output stays signal-not-block per [§6.7.3](atrib-spec.md#673-out-of-envelope-is-a-signal-not-invalidation).
-- The directory ([§6](atrib-spec.md#6-key-directory)) maps principals only; run keys never enter it. Verifier consultation ([§6.3](atrib-spec.md#63-verifier-consultation-algorithm)) resolves the principal through the certificate walk, offline.
-- Graph and calculation layers are untouched: no new edge types, no delegation interpretation in [§3.2.4](atrib-spec.md#324-edge-derivation-rules); attribution-by-principal is verifier/policy-layer presentation.
-
-**Likely outcome (not committed):** accept as the step-3 ADR of the redesign promotion sequence, after step 4 (universal evidence envelope) settles the certificate's evidence carrier as the `delegation-certificate` profile, with a new normative spec section, a `spec/conformance/` corpus in the same commit, and the [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args) orchestrator flow as the first dogfood issuer.
-
-**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
-
-**Cross-references.**
-
-- [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 3, source proposal; step 4, the evidence envelope this profile attaches through.
-- [D038](#d038-per-conversation-key-derivation), the derivation design this deliberately is not.
-- [D051](#d051-capability-scoped-records-via-directory-published-envelopes), capability envelope schema reused as `scope`.
-- [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox), signer proxy demoted to optional hardening.
-- [§1.9](atrib-spec.md#19-key-rotation-and-revocation), revocation machinery extended for certified run keys.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-Full draft: [docs/adr-draft-p045-delegation-certificates.md](docs/adr-draft-p045-delegation-certificates.md).
-
 ## P046: atribd, a public stateless-native local daemon as the default primitive topology
 
 **Source:** The 2026-07-06 clean-room redesign analysis ([`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 5) plus the MCP 2026-07-28 stateless release (RC locked 2026-05-21). The private [`services/atrib-primitives/`](services/atrib-primitives/) runtime already proved the shape under [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned) and [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness)–[D130](#d130-primitive-runtime-health-uses-non-mutating-behavioral-probes): one host process, seven primitives mounted in-process, Streamable HTTP plus a stdio proxy. But its HTTP host is built on machinery the 2026-07-28 MCP spec removes: `mcp-session-id` parsing, per-session transports, the idle sweeper, the initialize-first rejection, and `ATRIB_PRIMITIVES_SESSION_IDLE_MS`.
@@ -8190,48 +8235,13 @@ Core keeps three things, and they are exactly the payments-accommodation surface
 
 Full draft: [docs/adr-draft-p048-payments-spinout.md](docs/adr-draft-p048-payments-spinout.md).
 
-## P049: `dev.atrib/attribution` first-class MCP extension (SEP-2133)
-
-**Source:** The MCP 2026-07-28 release (RC locked 2026-05-21) plus the 2026-07-06 ecosystem research. SEP-2133 makes extensions first-class: reverse-DNS identifiers, negotiation via an `extensions` map carried per-request in `_meta` under `io.modelcontextprotocol/clientCapabilities`, server advertisement through `server/discover`, independent versioning, and an Unofficial → Experimental → Official (Extensions Track SEP) ladder. atrib's MCP surface today is an unprefixed convention (`_meta.atrib`, `tracestate` per [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow) / [§1.5.4](atrib-spec.md#154-mcp-transport-params_meta)); the new namespace discipline expects vendor-prefixed `_meta` keys, and no extension, SEP, or WG occupies the signed-action-record slot yet. The identifier and framing are first-mover assets that expire around the final-spec news cycle.
-
-**The decision in question:** should atrib publish `dev.atrib/attribution` as an unofficial MCP extension before 2026-07-28, declaring three things and changing no signed byte: (1) server-side signing capability (advisory settings: event types signed, disclosure posture, expected creator key, log endpoints); (2) a reserved prefixed `_meta` block carrying exactly two fields in v0.1 — the existing 87-char propagation token and explicit `context_id` — with this ADR owning the single canonical inbound resolution definition (two ladders, token and context-identity, landing as normative [§1.5.4](atrib-spec.md#154-mcp-transport-params_meta) text that the daemon-consolidation and rename ADRs cite instead of restating), feeding the unchanged [D067](#d067-multi-producer-chain-composition-precedence-contract) chain-root ladder; (3) attestation receipts in `result._meta`, gated on the client declaring the extension on that request, reporting the already-signed record's hash/token with `log_submission` as a queue status so submission stays non-blocking per [§5.3.5](atrib-spec.md#535-log-submission).
-
-`@atrib/mcp` and `@atrib/agent` become the reference server/client implementations; `@atrib/mcp-wrap` becomes the shim that makes any non-adopting upstream server conform. The strategic shift: from "a wrapper you install" to "a capability a server declares." The legacy unprefixed convention keeps working unnegotiated and is the documented fallback — the extension is upside, not a dependency; [§5.8](atrib-spec.md#58-degradation-contract) applies to every extension behavior, and the design targets `_meta` loss (the documented SDK failure mode), not `_meta` theft.
-
-**Considerations.**
-
-- Zero signed-byte change: nothing new is signed, so no [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion is needed; negotiation state is transport metadata (at most sidecar telemetry).
-- `session_token` and `provenance_token` are deliberately excluded from the v0.1 block: each already has a normative carrier ([§1.5.5](atrib-spec.md#155-cross-trace-session-continuity) baggage; [§1.2.6](atrib-spec.md#126-provenance_token) genesis-only host config), and a second carrier without defined conflict semantics would be worse than none.
-- The identifier freezes on publication (breaking change = new id), which interacts with the pending attest/recall rename ([`docs/attest-recall-rename-impact.md`](docs/attest-recall-rename-impact.md)) — favors the rename-proof noun `attribution`.
-- Standards ladder: unofficial now (no permission needed), Interceptors WG (SEP-2624) engagement as the reference verifiable audit interceptor, experimental/official track only if traction warrants; official status is optional legitimacy, never a dependency.
-- Implementation gate: the extension is a pure `_meta` dialect that runs on the current TypeScript SDK today; only `services/atrib-primitives` adoption shares the daemon-consolidation draft's stateless-SDK gate (hard review date 2026-10-06) rather than defining its own.
-- Conformance corpus at `spec/conformance/1.5.4/mcp-extension/`: capability declaration, negotiation gating, token precedence, context-identity precedence, receipt integrity, degradation.
-- Services (`log-node`, `graph-node`, `directory-node`, `archive-node`) untouched.
-
-**Likely outcome (not committed):** accept and publish v0.1 as an unofficial extension before 2026-07-28, implemented behind opt-in flags in `@atrib/mcp` / `@atrib/agent` / `@atrib/mcp-wrap`, with the extension-name/rename question resolved first.
-
-**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
-
-**Cross-references.**
-
-- [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow), tracestate carriage being standardized upward.
-- [D067](#d067-multi-producer-chain-composition-precedence-contract), chain-root ladder the new carrier feeds unchanged.
-- [D100](#d100-mcp-middleware-can-sign-without-log-submission), signing without submission — basis for non-blocking receipts.
-- [D133](#d133-action-gate-is-a-host-owned-controlproof-package), pre-action gating that can consume the capability declaration.
-- [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args), explicit context carriage as default posture.
-- [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), the MCP-stateless forcing-function section and the step-5 daemon draft this ADR's ladder text binds.
-
-**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
-
-Full draft: [docs/adr-draft-p049-mcp-extension.md](docs/adr-draft-p049-mcp-extension.md).
-
 ## P050: Orchestration-topology baton-pass and fan-out records
 
 **Date queued:** 2026-07-06. **Origin:** the redesign-analysis session's discussion of multi-agent work shapes: relay (operator alternates between heterogeneous agents, e.g. Claude Code and Codex, with role changes per turn), fan-out/join (workflow fleets), and relays whose turns contain fan-outs. The graph already represents both topologies (relay = alternating producers on one chain per [D067](#d067-multi-producer-chain-composition-precedence-contract); fan-out = many chains converging through `informed_by` per [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)), but two events remain unrecorded: the routing decision (why the baton passed to a given agent, carrying which continuation material) and the join decision (which fan-out results were accepted or rejected, and why).
 
 Proposal: define both as **conventional `attest` content shapes, not new primitives** — a baton-pass record (target principal or harness, continuation-packet hash per [P036](#p036-cross-harness-continuation-packet-for-supportrca-investigations), reason) and a join record (accepted/rejected result record hashes, reasons), each linking the referenced work through `informed_by`. The [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface) boundary test appears to place both on the convention side (no new required args, no new graph effect beyond existing reference types); if implementation pressure later shows a distinct cognitive purpose, promotion follows the [D080](#d080-primitive-lifecycle-extensions-first-dedicated-mcps-upon-promotion) gate.
 
-**Likely outcome (not committed):** accept as a documented convention in the atrib skill and the P042 evidence-envelope profile registry once [P045](#p045-delegation-certificates-principal-keys-certify-ephemeral-run-keys) scoped run certificates exist, since the baton-pass record is most useful when the receiving agent's authority is itself verifiable.
+**Likely outcome (not committed):** accept as a documented convention in the atrib skill and the P042 evidence-envelope profile registry once [D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys) scoped run certificates exist, since the baton-pass record is most useful when the receiving agent's authority is itself verifiable.
 
 **Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
 

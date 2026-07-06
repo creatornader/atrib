@@ -127,11 +127,11 @@ above where they conflict:
 
 1. **Path correction:** the drafts are flat files `docs/adr-draft-p042-*.md`
    through `p049`, not a `docs/adr-drafts/` directory.
-2. **Evidence types ([P042](../DECISIONS.md#p042-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)):** model SDK evidence attachments on the envelope
+2. **Evidence types ([D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)):** model SDK evidence attachments on the envelope
    schema `{envelope, profile (type URI), profile_version, tier, payload
    hash/reference, facts, result, verifier}`. The legacy `protocol` string set
    freezes at today's five values; new evidence kinds are envelope profiles.
-3. **Anchor API ([P043](../DECISIONS.md#p043-anchor-plurality-as-the-default-trust-posture)):** `log_proofs` elements gain an optional
+3. **Anchor API ([D138](../DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture)):** `log_proofs` elements gain an optional
    `anchor_type` discriminator (absent = atrib-log; existing bundles parse
    unchanged). Design config as an anchor *set* with `allow_single_anchor:
    true` as the explicit escape hatch. Critical crypto note: Rekor/TSA
@@ -139,12 +139,12 @@ above where they conflict:
    anchor-claim artifact — it can NOT reuse the record's own signature
    (record_hash covers the signature; Pure Ed25519 cannot sign digests). Do
    not design the anchor interface assuming signature reuse.
-4. **Checkpoints ([P044](../DECISIONS.md#p044-session_checkpoint-event-type-the-session-stream-formalized)):** treat `session_checkpoint` as an extension-URI
+4. **Checkpoints ([D139](../DECISIONS.md#d139-session_checkpoint-event-type-the-session-stream-formalized)):** treat `session_checkpoint` as an extension-URI
    event type for now (`https://atrib.dev/v1/types/session_checkpoint` under
    0xFF; normative byte 0x08 comes later — 0x07 stays reserved for handoff).
    Checkpoint object: `{session_root, tree_size, first_index,
    prior_checkpoint?, retroactive?}`; leaf rule reuses [§2.3.2](../atrib-spec.md#232-leaf-hash-computation) verbatim.
-5. **Key API headroom ([P045](../DECISIONS.md#p045-delegation-certificates-principal-keys-certify-ephemeral-run-keys)):** do NOT implement delegation certificates yet,
+5. **Key API headroom ([D140](../DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys)):** do NOT implement delegation certificates yet,
    but do not paint the API into a corner: signer construction should accept
    an optional certificate parameter later (depth-0 = today's behavior), and
    canonicalization code must tolerate a future OPTIONAL `delegation_cert_hash`
@@ -159,7 +159,7 @@ above where they conflict:
 7. **Payments boundary ([P048](../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)):** payment detection must be an injectable
    detector set; a core-only SDK never classifies transactions and never
    blocks. Do not hard-wire the six protocol detectors into SDK core.
-8. **Extension receipts ([P049](../DECISIONS.md#p049-devatribattribution-first-class-mcp-extension-sep-2133)):** behind an opt-in flag, the SDK client should
+8. **Extension receipts ([D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133)):** behind an opt-in flag, the SDK client should
    parse `dev.atrib/attribution` attestation receipts from `result._meta`
    (record hash/token + `log_submission` queue status).
 9. **Coordination protocol:** the redesign session watches every push to

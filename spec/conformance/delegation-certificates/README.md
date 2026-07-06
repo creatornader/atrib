@@ -1,6 +1,6 @@
 # atrib spec [§1.11](../../../atrib-spec.md#111-delegation-certificates) conformance corpus
 
-Test fixtures for delegation certificates per spec [§1.11](../../../atrib-spec.md#111-delegation-certificates) (promoted from [P045](../../../DECISIONS.md#p045-delegation-certificates-principal-keys-certify-ephemeral-run-keys)): a *principal* Ed25519 key certifies an ephemeral *run* key with an explicit scope, expiry, and optional session binding. Run records occupy the existing `creator_key` slot unchanged; verification of every existing record is byte-for-byte unaffected (delegation depth 0).
+Test fixtures for delegation certificates per spec [§1.11](../../../atrib-spec.md#111-delegation-certificates) (promoted from [D140](../../../DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys)): a *principal* Ed25519 key certifies an ephemeral *run* key with an explicit scope, expiry, and optional session binding. Run records occupy the existing `creator_key` slot unchanged; verification of every existing record is byte-for-byte unaffected (delegation depth 0).
 
 The corpus is the shared contract between every implementation that issues, carries, or resolves delegation certificates. It is used by `@atrib/verify` and any third-party implementation that asserts the [§1.11](../../../atrib-spec.md#111-delegation-certificates) invariants.
 

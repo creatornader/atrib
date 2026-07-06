@@ -138,3 +138,17 @@ where this brief and the ADR drafts conflict, the drafts win.
   tense).
 - Questions or conflicts: route through the operator to the redesign
   session, which owns this brief and updates it as tranches land.
+
+## Status update (2026-07-06, later same day)
+
+P042-P045 and P049 are implemented and promoted to accepted ADRs
+[D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)
+through
+[D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133):
+facts 2, 3, 4, 8, and 9 above may now be written in PRESENT tense (the spec
+sections, conformance corpora, and the dev.atrib/attribution v0.1 extension
+document exist on this branch). The session-checkpoint event type remains
+extension-URI staged, so fact 3's language note still applies. Facts 1, 5,
+6, and 7 (P046-P048) remain roadmap tense; the atribd embargo stands. [D136](../DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested)
+(consolidated `@atrib/sdk` + Python `atrib` SDKs) also landed and is safe to
+reference in developer-facing copy.
