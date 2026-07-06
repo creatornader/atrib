@@ -274,33 +274,33 @@ multi-producer 1.2.3). See
 [`atrib-sdk-session-brief.md`](atrib-sdk-session-brief.md) for the handoff
 brief.
 
-## Tranche-1 verifier punch list (open coverage gaps, 2026-07-06)
+## Verifier punch list (remaining items after tranche 2, 2026-07-06)
 
-The adversarial verifier pass confirmed all five tranche-1 implementations
-against their reference tests and recomputed vectors, and found no landed
-correctness defect (two walk/vector defects were found and fixed in-pass). The
-following coverage gaps versus the ADR drafts' corpus plans remain open and
-are tracked here until closed:
+Tranche 2 landed the producer/verifier source surfaces for [D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)-[D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133) and
+closed several tranche-1 gaps (the eight `docs/evidence-profiles/` documents;
+inclusion/consistency proof coverage, delegation ambiguity/depth rules, and
+legacy-initialize extension gating — all pinned at unit-test level). Still
+open, all ordinary corpus/adapter work:
 
-- **evidence-envelope (P042):** hash-mismatch adversarial family; sanitization
-  family (inline-stripped public projection, leakage detection); the five
-  `docs/evidence-profiles/<name>.md` profile documents the [§5.5.7](../atrib-spec.md#557-universal-evidence-envelope) registration
-  rule requires; non-semver `profile_version` rejection vector.
-- **anchors (P043):** per-type negative vectors (Rekor bad embedded signature
-  / bad timestamp; RFC 3161 / OTS cryptographic adversarial cases); [§2.11.9](../atrib-spec.md#2119-log_proofs-element-discriminator)
-  rule (a)/(b) malformed-combination vectors; pin the unknown-anchor_type +
-  missing-fields precedence (malformed wins over unknown).
-- **session-checkpoint (P044):** inclusion-proof family (valid / wrong index /
-  wrong root / truncated path); [§3.2.4](../atrib-spec.md#324-edge-derivation-rules) graph-derivation addition (chain-spine
-  only, no CONVERGES_ON); consistency negatives (reordered leaves,
-  first_index / prior_checkpoint mismatch); foreign-context_id leaf fault.
-- **delegation-certificates (P045):** malformed-key certificate family;
-  ambiguity-rule and depth-limit vectors; `docs/evidence-profiles/`
-  delegation-certificate profile doc; [§6.3](../atrib-spec.md#63-verifier-consultation-algorithm) principal-resolution walk step;
-  Appendix A.10 mention.
-- **mcp-extension (P049):** legacy-initialize gating vector; a
-  `packages/mcp/test/` producer-side reference test to complement the
-  verify-side suite.
-
-Closing items from this list is ordinary corpus work: extend the generator,
-regenerate, extend the reference test, same commit.
+- **Corpus pins for unit-covered behaviors:** hash-mismatch + sanitization
+  families (evidence-envelope); per-anchor-type negative vectors and the
+  malformed-vs-unknown precedence corner (anchors); consistency negatives and
+  foreign-context_id leaf fault (session-checkpoint); malformed-key,
+  ambiguity `candidates[]`, and depth-limit vectors (delegation);
+  legacy-initialize gating vector (mcp-extension). Pattern per corpus:
+  extend the generator, regenerate, extend the reference test, same commit.
+- **Real anchor transports:** Rekor / RFC 3161 / OpenTimestamps HTTP adapters
+  behind the existing `AnchorTransport` interface (stubs today), plus the
+  OTS pending-upgrade loop ownership decision and the default-set flip
+  release.
+- **verifyRecord anchor wiring:** an `anchorTrust`/`proofBundle` option
+  surfacing `anchor_plurality` on results (envelope + delegation blocks
+  already wired), plus the [P005](../DECISIONS.md#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface) README reconciliation.
+- **Producer conveniences:** middleware `delegationCert` config +
+  `_local.delegation_cert` sidecar; an `atrib delegate` CLI subcommand;
+  proxy capability advert `creator_key` field; the agent-side receipt-logic
+  de-duplication onto the now-exported @atrib/mcp symbols.
+- **[§3.2.4](../atrib-spec.md#324-edge-derivation-rules) graph-derivation corpus addition** pinning session_checkpoint
+  nodes as chain-spine-only (no CONVERGES_ON, no calculation participation).
+- **[§6.3](../atrib-spec.md#63-verifier-consultation-algorithm) directory walk step** for principal resolution and the [§1.11.4](../atrib-spec.md#1114-verifier-walk)
+  step-4 `run_key_in_directory` fact.
