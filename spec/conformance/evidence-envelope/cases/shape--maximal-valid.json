@@ -1,0 +1,73 @@
+{
+  "name": "maximal-valid",
+  "spec_section": "5.5.7",
+  "family": "shape",
+  "description": "Every optional field populated: media_type, ref.uri (null), inline payload under ref.kind \"inline\", facts, a full constraint entry, and the verifier block. inline is permitted ONLY with ref.kind \"inline\" and is local-only (never public). Consumers MUST accept. payload.hash commits to JCS(inline).",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "tier": "verified",
+      "payload": {
+        "hash": "sha256:637038b86ddfdce9f71306a2cad8fa914d352a2a10ca0b2f0db7ce6f9125c6d5",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "inline",
+          "uri": null
+        },
+        "inline": {
+          "active": true,
+          "client_id": "client-1",
+          "iss": "https://as.example",
+          "scope": "tools:read",
+          "sub": "agent-7"
+        }
+      },
+      "facts": {
+        "issuer": "https://as.example",
+        "subject": "agent-7",
+        "scope": [
+          "tools:read"
+        ],
+        "attenuation_ok": true,
+        "delegation_ok": null
+      },
+      "result": {
+        "valid": true,
+        "constraints": [
+          {
+            "type": "scope",
+            "status": "passed",
+            "expected": [
+              "tools:read"
+            ],
+            "actual": [
+              "tools:read"
+            ]
+          }
+        ],
+        "errors": [],
+        "warnings": []
+      },
+      "verifier": {
+        "name": "@atrib/verify",
+        "version": "0.7.10",
+        "checked_at_ms": 1782864000000
+      }
+    },
+    "payload_material": {
+      "active": true,
+      "client_id": "client-1",
+      "iss": "https://as.example",
+      "scope": "tools:read",
+      "sub": "agent-7"
+    },
+    "payload_hash_rule": "jcs"
+  },
+  "expected": {
+    "accept": true,
+    "payload_hash": "sha256:637038b86ddfdce9f71306a2cad8fa914d352a2a10ca0b2f0db7ce6f9125c6d5",
+    "inline_matches_hash": true
+  }
+}

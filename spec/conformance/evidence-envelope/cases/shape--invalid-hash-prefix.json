@@ -1,0 +1,35 @@
+{
+  "name": "invalid-hash-prefix",
+  "spec_section": "5.5.7",
+  "family": "shape",
+  "description": "payload.hash MUST be \"sha256:\" + 64 lowercase hex chars. This case carries a genuine SHA-512 digest of the same material under a \"sha512:\" prefix; consumers MUST reject on the prefix/format rule.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha512:70360d3a870cf565d60be29d755c5bb1f27fa97e58176ff5d28ca9cfec69e74901ef1c60cba4dce74a297349d3a9f3c5e7d6667a7f7d5667977ccf28e4c43b8d",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "payload_material": {
+      "note": "minimal evidence envelope fixture payload"
+    }
+  },
+  "expected": {
+    "accept": false,
+    "reject_reasons": [
+      "payload_hash"
+    ]
+  }
+}

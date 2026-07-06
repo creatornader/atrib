@@ -1,0 +1,49 @@
+{
+  "name": "unknown-profile-preserved",
+  "spec_section": "5.5.7",
+  "family": "unknown-profile",
+  "description": "An envelope whose profile URI the consumer does not recognize. Consumers MUST preserve it untouched (the expected round_trip_jcs_sha256 pins the JCS bytes of the whole envelope; any mutation changes the hash), MUST render it opaquely (profile URI, tier, payload hash), and MUST NOT let it affect record validity.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://evidence.example.org/profiles/warranty-claim",
+      "profile_version": "2.3.1",
+      "tier": "shape",
+      "payload": {
+        "hash": "sha256:d926d0bbfbe8ca1bd4974e9995ab68cffec02e09f076765db6337fdb01aa73d1",
+        "media_type": "application/octet-stream",
+        "ref": {
+          "kind": "external",
+          "uri": "https://evidence.example.org/claims/42"
+        }
+      },
+      "facts": {
+        "claim_id": "WC-42",
+        "coverage_years": 3,
+        "registrar": "evidence.example.org"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      },
+      "verifier": {
+        "name": "warranty-checker",
+        "version": "2.0.0",
+        "checked_at_ms": 1782864005000
+      }
+    },
+    "payload_material_utf8": "warranty-claim-payload-bytes-v1",
+    "payload_hash_rule": "raw"
+  },
+  "expected": {
+    "accept": true,
+    "round_trip_jcs_sha256": "sha256:0f7527461e79ebb414a027a31e0c56321016159f010e3f83dc2e72534d44b509",
+    "opaque_render": {
+      "profile": "https://evidence.example.org/profiles/warranty-claim",
+      "tier": "shape",
+      "payload_hash": "sha256:d926d0bbfbe8ca1bd4974e9995ab68cffec02e09f076765db6337fdb01aa73d1"
+    }
+  }
+}

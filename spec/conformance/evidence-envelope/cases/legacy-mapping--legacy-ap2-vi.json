@@ -1,0 +1,95 @@
+{
+  "name": "legacy-ap2-vi",
+  "spec_section": "5.5.7",
+  "family": "legacy-mapping",
+  "description": "Deterministic mapping of a legacy §5.5.6 'ap2_vi' evidence block to envelope form. Two independent implementations of fromLegacyEvidenceBlock MUST produce this exact envelope: profile via the frozen five-row table, profile_version '1.0.0', tier 'attested', payload.hash = sha256(JCS(legacy block)) with ref.kind 'withheld', issuer/subject/scope/attenuation_ok/delegation_ok copied into facts, details committed as facts.details_hash = sha256(JCS(details)), valid/constraints/errors/warnings copied into result, and NO verifier block (the mapping is mechanical, not a re-verification).",
+  "input": {
+    "legacy_block": {
+      "protocol": "ap2_vi",
+      "valid": true,
+      "issuer": null,
+      "subject": null,
+      "scope": [],
+      "attenuation_ok": true,
+      "delegation_ok": true,
+      "constraints": [
+        {
+          "type": "vi.max_amount",
+          "status": "passed",
+          "expected": 500,
+          "actual": 120
+        },
+        {
+          "type": "vi.merchant_allowlist",
+          "status": "passed"
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "details": {
+        "valid": true,
+        "transactionAccepted": true,
+        "ap2": {
+          "receipt_kind": "checkout_receipt",
+          "receipt_hash": "sha256:0f75371cfd5ec98693ac935bb068746b69c4527ae61ffe518009cf9e82526681"
+        },
+        "vi": {
+          "mode": "sd-jwt",
+          "credentials": [
+            "intent-credential-1"
+          ],
+          "delegationOk": true,
+          "checkoutPaymentBindingOk": true,
+          "constraints": {
+            "status": "passed",
+            "checks": []
+          }
+        },
+        "errors": [],
+        "warnings": []
+      }
+    }
+  },
+  "expected": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/ap2-vi",
+      "profile_version": "1.0.0",
+      "tier": "attested",
+      "payload": {
+        "hash": "sha256:e0d9120cdc090a02805f868b88f573123b06293d3f47a88360786fe58d5c6244",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "facts": {
+        "issuer": null,
+        "subject": null,
+        "scope": [],
+        "attenuation_ok": true,
+        "delegation_ok": true,
+        "details_hash": "sha256:b2df9015758ab611bd0dcdde4e81a44d3332ea09f4c2c82954dc93373b0f3f8d"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [
+          {
+            "type": "vi.max_amount",
+            "status": "passed",
+            "expected": 500,
+            "actual": 120
+          },
+          {
+            "type": "vi.merchant_allowlist",
+            "status": "passed"
+          }
+        ],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "payload_hash": "sha256:e0d9120cdc090a02805f868b88f573123b06293d3f47a88360786fe58d5c6244",
+    "details_hash": "sha256:b2df9015758ab611bd0dcdde4e81a44d3332ea09f4c2c82954dc93373b0f3f8d"
+  }
+}

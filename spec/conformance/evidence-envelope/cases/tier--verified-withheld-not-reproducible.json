@@ -1,0 +1,40 @@
+{
+  "name": "verified-withheld-not-reproducible",
+  "spec_section": "5.5.7",
+  "family": "tier",
+  "description": "A tier \"verified\" envelope whose payload is withheld is still well-formed: the tier states what the named verifier did, not what the consumer can reproduce. Consumers MUST accept the shape and MUST report it as claimed-but-not-reproducible, mirroring the tiered record-verifiability ladder of the Record Body Archive Layer.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/x401",
+      "profile_version": "1.0.0",
+      "tier": "verified",
+      "payload": {
+        "hash": "sha256:ad7119c66873af610265ae70c5e2b6885422f383fadb3ac14ff44742a2b0617d",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "facts": {
+        "result_verified": true
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      },
+      "verifier": {
+        "name": "@atrib/verify",
+        "version": "0.7.10",
+        "checked_at_ms": 1782864000004
+      }
+    }
+  },
+  "expected": {
+    "accept": true,
+    "reproducible": false,
+    "report": "claimed-not-reproducible"
+  }
+}

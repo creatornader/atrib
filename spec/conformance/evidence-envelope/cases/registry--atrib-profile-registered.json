@@ -1,0 +1,43 @@
+{
+  "name": "atrib-profile-registered",
+  "spec_section": "5.5.7",
+  "family": "registry",
+  "description": "An atrib-maintained profile URI: https://atrib.dev/v1/evidence/<name> with <name> in the initial registry. Consumers recognize it as registered and MAY apply profile-specific rendering and sanitization.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:330e4f8e81f32f4e8a7e876f26a5ecbe0fdfeb48220cee10670738da32dba01d",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "atrib_profile_registry": [
+      "oauth2",
+      "mcp-oauth",
+      "aauth",
+      "x401",
+      "ap2-vi",
+      "human-approval",
+      "counterparty-attestation",
+      "delegation-certificate"
+    ]
+  },
+  "expected": {
+    "accept": true,
+    "uri_valid": true,
+    "atrib_maintained": true,
+    "registered": true,
+    "treat_as": "registered"
+  }
+}

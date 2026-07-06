@@ -1,0 +1,99 @@
+{
+  "name": "rekor-claim-binding-mismatch",
+  "spec_section": "2.11",
+  "description": "Adversarial: a rekor element whose claim artifact is a genuinely-signed anchor claim for a DIFFERENT record hash. The embedded signature verifies over its own artifact, but the artifact does not reconstruct from the bundle's record_hash, so the element is an invalid proof: not counted, not equivocation, and the record itself stays valid on the remaining anchor.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "chain_root": "sha256:d2f9fa9d99bb30b2b67fc6b0ea2694f345c0961596e0fd82561010b4f7570c2d",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1782864001000,
+      "signature": "gZpzxEt_HU3z3ayWrVnvBW8BcXzdHvD569YYhyzAiAi4yHfSelWegRdc-EEG84wQn8CPufGNq1LlrIjzB800DQ"
+    },
+    "bundle": {
+      "record_hash": "sha256:c09397f49d090eab97ab27fee627abbcbf6148fba1fd6a0f947558f692952934",
+      "log_proofs": [
+        {
+          "log_id": "log-a.conformance.atrib.test",
+          "log_index": 0,
+          "checkpoint": "log-a.conformance.atrib.test/v1\n3\nEgAJl9+zFghvMxoxbQlD+atiMO7u4erg13oGcySgICQ=\n\n— log-a.conformance.atrib.test/v1 kmTjQcVVBPyrdSaW0KHbme5cJbYbIP3ivJM6Vcnupyi38POqnbxBfdgrjC3EGJX0ZQiXWh0voFl8qWjXBsNA9ZOxwgU=\n",
+          "inclusion_proof": [
+            "P8mq66PW2NMzd9DwG30sGONwehi0EIZjrMp/YAWPmeY=",
+            "FSGXJV61xj1N7eil6bSyKm0qp3i45mdPD2HMjM2BKro="
+          ],
+          "entry_bytes_b64": "AcCTl/SdCQ6rl6sn/uYnq7y/YUj7of1qD5R1WPaSlSk0wFDFY3pE+oYp//PMzOIwDLNipj2Z2V/FQUUmb0MyRFqrq6urq6urq6urq6urq6urAAABnxr5t+gD"
+        },
+        {
+          "anchor_type": "sigstore-rekor",
+          "anchor_id": "rekor.conformance.atrib.test",
+          "proof": {
+            "entry_uuid": "df9b0c187e7b233babac41290266dc039cfa5fd842cb9e89291ae55723a0c0b2",
+            "log_index": 0,
+            "entry_body_b64": "eyJhcnRpZmFjdF9iNjQiOiJZWFJ5YVdJdFlXNWphRzl5TDNZeE9uTm9ZVEkxTmpwbE1UQmpZakpsTWpBd1ptUTJNMkZpTmpFME1tVmlZalF5TXpNM1kyWXhaamRqWTJRNE16ZGlZbU15Wm1abVlqWTRNR0UzTkRrMll6bGpaR1ZqTlROaSIsImtpbmQiOiJhdHJpYi1hbmNob3ItY2xhaW0vdjEiLCJwdWJsaWNfa2V5X2I2NHVybCI6IklCTExrTXBnNk9YWTJ2WnVJbkxTSXo0RWh0Vlg2TVpoUWUySklCZDlmcmMiLCJzaWduYXR1cmVfYjY0dXJsIjoiaEFXd3JUaV9uWk13T3BsNDhQT2tHdUt3ODFKalNfQ3dmY01zMEZKTzNqemxENm13dUtUb0VkUXNuWXJBT01WUV90S2FqRGg0T1BWTmJ5V2JXcXlVQVEifQ==",
+            "inclusion_proof": [
+              "7CouPiJ48qRVBx1gW23l/deSHNE75QGoLzT3v+iuqYo="
+            ],
+            "checkpoint": "rekor.conformance.atrib.test/v1\n2\nHvswnrYYStb4gdjLQcgzjCwcFw2NoMMWi1OStTvEKxM=\n\n— rekor.conformance.atrib.test/v1 KmgZt+90X0R+LuGKtmZpc4qeWOKK6dnShtDR0s1AoP4bZFL62gnMe8mZ/KG9IvdlyzQInR67JMHMCvnQcIh+E7s5NQw=\n",
+            "integrated_time_ms": 1782864060000,
+            "signed_entry_timestamp_b64": "CyF/s06IrW2sFEr0Wm9KBtRHIP8S1/k0UjdE0qIiciMNkFzC7Y/an4b/e5beTsMZHpiVkkkWMLgrxqR79SpOCQ=="
+          }
+        }
+      ]
+    },
+    "trust": {
+      "trust_material": {
+        "logs": {
+          "log-a.conformance.atrib.test": {
+            "origin": "log-a.conformance.atrib.test/v1",
+            "pubkey_b64": "rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne+B1R/KJODNB0="
+          },
+          "log-b.conformance.atrib.test": {
+            "origin": "log-b.conformance.atrib.test/v1",
+            "pubkey_b64": "LfBBJfABWvtHzoU674dyCU/5SYwUyxueEpc8KSfaD6Y="
+          },
+          "log-e.conformance.atrib.test": {
+            "origin": "log-e.conformance.atrib.test/v1",
+            "pubkey_b64": "p/bfr484uJuozmSbWU+R5NAf3Ff5yUk99DteUKmYc2c="
+          }
+        },
+        "rekor": {
+          "rekor.conformance.atrib.test": {
+            "origin": "rekor.conformance.atrib.test/v1",
+            "pubkey_b64": "K8KACzMW4Akgn/11fasZzPCuhLx66QZU4egXEtJw9lM="
+          }
+        }
+      },
+      "trusted_logs": [
+        "log-a.conformance.atrib.test"
+      ],
+      "threshold_m": 1,
+      "required_anchors": 2
+    },
+    "mismatched_artifact_utf8": "atrib-anchor/v1:sha256:e10cb2e200fd63ab6142ebb42337cf1f7ccd837bbc2fffb680a7496c9cdec53b"
+  },
+  "expected": {
+    "invalid_indices": [
+      1
+    ],
+    "invalid_reason": "anchor_claim_binding_mismatch",
+    "artifact_reconstructs_from_record_hash": false,
+    "embedded_signature_verifies_over_its_own_artifact": true,
+    "anchor_plurality": {
+      "proof_count": 2,
+      "verified_count": 1,
+      "pending_count": 0,
+      "malformed_count": 0,
+      "unknown_types": [],
+      "independent_count": 1,
+      "plurality_met": false,
+      "single_anchor": true,
+      "equivocation_detected": false,
+      "anchored_at_range_ms": null
+    },
+    "record_signature_ok": true,
+    "hard_reject": false
+  }
+}

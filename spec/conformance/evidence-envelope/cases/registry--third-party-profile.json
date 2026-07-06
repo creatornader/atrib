@@ -1,0 +1,43 @@
+{
+  "name": "third-party-profile",
+  "spec_section": "5.5.7",
+  "family": "registry",
+  "description": "A third-party profile: an absolute HTTPS URI on a domain the registrant controls, the same self-sovereign convention as extension event_type URIs. No atrib registration step exists or is required. Consumers MUST accept the envelope shape and treat the profile as unknown-but-preserved.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://evidence.example.org/profiles/warranty-claim",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:330e4f8e81f32f4e8a7e876f26a5ecbe0fdfeb48220cee10670738da32dba01d",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "atrib_profile_registry": [
+      "oauth2",
+      "mcp-oauth",
+      "aauth",
+      "x401",
+      "ap2-vi",
+      "human-approval",
+      "counterparty-attestation",
+      "delegation-certificate"
+    ]
+  },
+  "expected": {
+    "accept": true,
+    "uri_valid": true,
+    "atrib_maintained": false,
+    "registered": false,
+    "treat_as": "unknown-preserve"
+  }
+}

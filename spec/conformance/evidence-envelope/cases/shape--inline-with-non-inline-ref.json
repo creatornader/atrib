@@ -1,0 +1,35 @@
+{
+  "name": "inline-with-non-inline-ref",
+  "spec_section": "5.5.7",
+  "family": "shape",
+  "description": "payload.inline present while ref.kind is \"mirror\". inline is permitted ONLY when ref.kind === \"inline\"; any other combination is contradictory (the ref says the bytes live elsewhere) and MUST be rejected.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:330e4f8e81f32f4e8a7e876f26a5ecbe0fdfeb48220cee10670738da32dba01d",
+        "ref": {
+          "kind": "mirror"
+        },
+        "inline": {
+          "note": "minimal evidence envelope fixture payload"
+        }
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    }
+  },
+  "expected": {
+    "accept": false,
+    "reject_reasons": [
+      "inline_without_inline_kind"
+    ]
+  }
+}

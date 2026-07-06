@@ -2107,7 +2107,7 @@ The proof bundle ([§2.8](#28-proof-bundle-format)) MAY carry a list of `(log_id
 }
 ```
 
-A bundle with a single `log_proofs` entry is equivalent to the legacy single-log bundle format; the array form is the canonical form when multiple logs are involved.
+A bundle with a single `log_proofs` entry is equivalent to the legacy single-log bundle format; the array form is the canonical form when multiple logs are involved. Elements MAY carry an OPTIONAL `anchor_type` discriminator identifying non-atrib-log anchors; see [§2.11.9](#2119-log_proofs-element-discriminator).
 
 #### 2.11.4 Verifier-side threshold and equivocation detection
 
@@ -2131,6 +2131,164 @@ Each log publishes a stable `log_id` derived from its origin string per [§2.4](
 **Does NOT defend against:** collusion across all logs in the trusted set (consumer is responsible for picking logs operated by independent parties with different incentives); submission-time censorship by some logs (threshold M handles this gracefully); record-level retroactive removal across all logs (no defense if all logs comply).
 
 See [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) for the design rationale and the alternatives considered.
+
+#### 2.11.7 Anchors: generalizing the replication target
+
+_This section is normative; anchoring beyond a single log remains OPTIONAL at the protocol level._
+
+The thing a verifier needs from a second log ([§2.11.1](#2111-replication-is-optional)) is not another atrib log. It is any independently operated service that can prove a hash existed no later than a stated time. This section generalizes the replication target from "atrib-conformant log" to **anchor**.
+
+An **anchor** is a service that:
+
+- (a) accepts a 32-byte SHA-256 hash,
+- (b) later yields a proof that the hash existed no later than an attested time, and
+- (c) whose proof is verifiable offline by a pure function `(proof, record_hash, trust_material) → { valid, anchored_at_ms | null, pending }` — no network calls, no wall clock, no randomness, the same determinism discipline as [§4.6](#46-the-calculation-algorithm). Two verifier runs on an identical bundle and trust configuration MUST produce identical output.
+
+atrib log-nodes are the richest conforming anchor: they provide inclusion, in-log ordering, and the read surfaces of [§2.5](#25-tile-api-read-interface). Sigstore Rekor, RFC 3161 timestamping authorities, and OpenTimestamps conform with existence-by-time semantics only. That weaker guarantee is sufficient for the plurality property: a verifier holding one atrib-log proof plus one independent existence-by-time proof no longer terminates its trust claim at a single operator.
+
+**No signed byte changes.** Attribution records ([§1.3](#13-canonical-serialization)), the 90-byte log entry ([§2.3.1](#231-entry-serialization)), and checkpoints ([§2.4](#24-checkpoint-format)) are untouched by anchoring. Proof bundles are post-signing artifacts stored alongside records ([§2.8](#28-proof-bundle-format)). Anchoring is also permissionless and post-hoc: any party — producer, host, or third party — MAY anchor an existing `record_hash` to an additional anchor at any time and append the proof to the bundle, without access to the record's signing key ([§2.11.10](#21110-the-anchoring-signature-claim-artifact)).
+
+Anchor plurality is a producer-side configuration posture ([§2.11.12](#21112-producer-side-anchor-posture)) and a verifier-side tier ([§2.11.11](#21111-anchor-independence-and-the-anchor_plurality-annotation)). It is never a protocol mandate, never a gate on the primary tool call or response ([§5.8](#58-degradation-contract)), and never a synchronous wait before returning a response ([§5.3.5](#535-log-submission)). Single-anchor bundles — including every bundle issued before this section existed — remain valid without re-issuance, ever.
+
+#### 2.11.8 Anchor type registry
+
+An anchor type registration defines four things:
+
+| Field | Meaning |
+| --- | --- |
+| `anchor_type` | Stable string identifier (registry below) |
+| Anchored message | Exactly which bytes the proof commits to, derived deterministically from `record_hash` |
+| Proof payload schema | The fields inside the bundle element's `proof` object ([§2.11.9](#2119-log_proofs-element-discriminator)) |
+| Verification function | The pure function of [§2.11.7](#2117-anchors-generalizing-the-replication-target)(c) |
+
+Initial registry (v1):
+
+| `anchor_type` | Anchored message | Proof payload | Trust material | Time semantics |
+| --- | --- | --- | --- | --- |
+| `atrib-log` (default when absent) | 90-byte AtribLogEntry ([§2.3.1](#231-entry-serialization)) embedding `record_hash` | existing `checkpoint` + `inclusion_proof` per [§2.11.3](#2113-proof-bundle-format-extension), verified per [§2.7](#27-inclusion-proof-verification) | log public key ([§2.4.2](#242-log-signing-key-and-key-id)) | checkpoint time + in-log ordering |
+| `sigstore-rekor` | `rekord`-type entry over the anchor-claim artifact ([§2.11.10](#21110-the-anchoring-signature-claim-artifact)), carrying a fresh anchoring signature | `entry_uuid`, `log_index`, `entry_body_b64`, `inclusion_proof`, `checkpoint`, `integrated_time_ms`, `signed_entry_timestamp_b64` | Rekor instance public key | `integrated_time` |
+| `rfc3161-tsa` | `messageImprint.hashedMessage` = the raw 32 `record_hash` bytes, `hashAlgorithm` = SHA-256 | `timestamp_token_b64` (DER TimeStampToken), `hashed_message_hex`, `gen_time_ms` | TSA certificate chain / root | `genTime` |
+| `opentimestamps` | the raw 32 `record_hash` bytes as the OTS commitment input | `ots_b64` (serialized `.ots` proof), `commitment_hex`, `status: "complete" \| "pending"`, `attested_time_ms` when complete | Bitcoin block headers (via any header source the verifier trusts) | attested block time |
+
+Unknown `anchor_type` values MUST be surfaced by verifiers (in `unknown_types`, [§2.11.11](#21111-anchor-independence-and-the-anchor_plurality-annotation)) but MUST NOT count toward plurality and MUST NOT be treated as invalidating the bundle or the record — the same forward-compatibility rule as unknown event types ([§1.2.4](#124-event_type-values)).
+
+A `pending` proof (an OpenTimestamps attestation awaiting Bitcoin confirmation) is carried in the bundle and upgraded in place later. Proof bundle caching stays keyed by `record_hash` per [§5.3.5](#535-log-submission); that keying is what makes in-place upgrade safe.
+
+#### 2.11.9 log_proofs element discriminator
+
+The `log_proofs` array of [§2.11.3](#2113-proof-bundle-format-extension) is the wire shape for all anchors. Elements gain an OPTIONAL `anchor_type` discriminator:
+
+```jsonc
+{
+  "record_hash": "sha256:...",
+  "log_proofs": [
+    // legacy element, no discriminator ⇒ anchor_type "atrib-log"; parses exactly as today
+    {
+      "log_id": "log.atrib.dev", // [§2.4](#24-checkpoint-format) origin string
+      "checkpoint": "...", // C2SP-canonical signed note
+      "inclusion_proof": ["...", "..."], // RFC 6962 inclusion proof, base64 per [§2.6.2](#262-inclusion-proof-response)
+    },
+    // non-tlog anchor element
+    {
+      "anchor_type": "rfc3161-tsa",
+      "anchor_id": "freetsa.org", // stable anchor identity, the role log_id plays for logs
+      "proof": {
+        "timestamp_token_b64": "MIIC...",
+        "hashed_message_hex": "c09397f4...",
+        "gen_time_ms": 1782864031000,
+      },
+    },
+    {
+      "anchor_type": "opentimestamps",
+      "anchor_id": "opentimestamps-calendars",
+      "proof": { "ots_b64": "AE9w...", "commitment_hex": "c09397f4...", "status": "pending" },
+    },
+  ],
+}
+```
+
+Rules:
+
+- (a) `anchor_type` absent ⇒ the element is an `atrib-log` proof; the legacy `(log_id, checkpoint, inclusion_proof)` triple is REQUIRED and a `proof` object is forbidden. Every existing bundle parses unchanged, byte-for-byte.
+- (b) `anchor_type` present and ≠ `"atrib-log"` ⇒ `anchor_id` and `proof` are REQUIRED.
+- (c) The array key stays `log_proofs`. Renaming it would break every existing bundle parser for zero semantic gain; the name is a historical artifact and is documented as such.
+- (d) Elements are unordered.
+- (e) An element violating rule (a) or (b) is **malformed**: verifiers MUST exclude it from every count except `proof_count` / `malformed_count` and MUST NOT treat its presence as invalidating the bundle or the record.
+
+#### 2.11.10 The anchoring-signature claim artifact
+
+Anchor types whose upstream service requires a signed artifact (Sigstore Rekor's `rekord` type) MUST anchor a fresh **anchor-claim artifact**, never the record's own `signature`. The artifact is the UTF-8 bytes of:
+
+```
+"atrib-anchor/v1:" + record_hash
+```
+
+where `record_hash` is in its canonical `"sha256:" + 64-lowercase-hex` form ([§1.2.3](#123-chain_root-for-genesis-records)). The artifact is deterministically reconstructible from `record_hash` alone and reveals nothing beyond the commitment itself, preserving the [§8.3](#83-salted-commitment-posture) posture. The `atrib-anchor/v1:` prefix domain-separates the anchoring signature from any canonical record (JCS records begin with `{`; the prefix makes the separation explicit rather than structural).
+
+The anchoring party signs the artifact bytes with its own Ed25519 key — a **fresh anchoring signature**. The anchoring key MAY be the record's `creator_key` or any third party's key, since anchoring is permissionless ([§2.11.7](#2117-anchors-generalizing-the-replication-target)).
+
+**The record's own `signature` MUST NOT be reused as the anchoring signature.** The digest path (a Rekor `hashedrekord` entry with `data.hash` = `record_hash` and the record's signature) is cryptographically unimplementable, twice over:
+
+1. `record_hash` is computed over the JCS canonicalization of the COMPLETE record INCLUDING the `signature` field ([§1.2.3](#123-chain_root-for-genesis-records) normative clarification), while the signature verifies over the signature-less canonical form ([§1.4.2](#142-signing-procedure)). The two byte strings differ, so an upload-time check that the signature verifies over the artifact behind `data.hash` fails by construction.
+2. atrib signatures are Pure EdDSA (RFC 8032 §5.1.6, no prehashing), which cannot be verified from a digest alone regardless.
+
+Verification of a `sigstore-rekor` element: reconstruct the anchor-claim artifact from the bundle's `record_hash`; confirm the entry body's artifact content matches the reconstruction and carries the prefix; verify the embedded Ed25519 anchoring signature over the artifact bytes; verify the inclusion proof against the checkpoint and the signed entry timestamp against the Rekor instance key. An entry whose artifact does not reconstruct from the bundle's `record_hash` is an **invalid proof** — not counted, not equivocation — even when its embedded signature is genuinely valid over its own (mismatched) artifact.
+
+The conformance corpus ([§2.11.13](#21113-conformance)) pins both directions: a fully verifying anchor-claim vector and a vector demonstrating that the record's signature verifies over the signing input but NOT over the bytes behind `record_hash`.
+
+#### 2.11.11 Anchor independence and the anchor_plurality annotation
+
+Two verified anchors are **independent** iff they fall in different operator groups. The verifier's trust configuration maps `(anchor_type, anchor_id)` → operator group; the default grouping is one group per distinct `(anchor_type, anchor_id)` pair. Two atrib log-nodes run by the same operator MUST be declared as one group by that operator's consumers; atrib maintains no central registry (same posture as [§2.11.5](#2115-log-identity)). `independent_count` counts distinct groups among verified, non-pending proofs — mirroring [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)'s distinct-verified-keys counting rule.
+
+When a proof bundle is supplied, verifiers populate an `anchor_plurality` annotation:
+
+```jsonc
+"anchor_plurality": {
+  "proof_count": 3,               // elements in log_proofs
+  "verified_count": 2,            // proofs whose pure-function verification passed
+  "pending_count": 1,             // e.g. OTS status "pending"; not counted as verified
+  "malformed_count": 0,           // rule (a)/(b) violations per [§2.11.9](#2119-log_proofs-element-discriminator)
+  "unknown_types": [],            // surfaced, not counted, not invalidating
+  "independent_count": 2,         // distinct operator groups among verified
+  "plurality_met": true,          // independent_count >= requiredAnchors (verifier option, default 2)
+  "single_anchor": false,         // tier flag: independent_count == 1
+  "equivocation_detected": false,
+  "anchored_at_range_ms": [1782864001000, 1782864031000]  // min/max attested times among verified anchors; null when none carry a time
+}
+```
+
+**Anchor count 1 is a tier, not a failure.** A record whose bundle yields `independent_count: 1` verifies as valid with `single_anchor: true` and `plurality_met: false` — signal not block, exactly like `cross_attestation_missing` ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)) and `in_envelope: false` ([D051](DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes)). No bundle at all ⇒ `anchor_plurality: null`; unanchored records are already a legitimate state.
+
+Hard rejection remains reserved for the [§2.11.4](#2114-verifier-side-threshold-and-equivocation-detection) conditions, unchanged: consumer-configured threshold M not met (`cross_log_threshold_not_met`, M still defaults to 1) and equivocation detection (`cross_log_equivocation_detected`; censorship-shaped disagreement is flagged as `cross_log_censorship_suspected` with the silent log identified). Threshold and tiering are orthogonal: a bundle can satisfy `plurality_met: true` and still be rejected by a consumer's M, and vice versa. Equivocation checks apply per pair: two `atrib-log` proofs compare committed leaf bytes exactly as [§2.11.4](#2114-verifier-side-threshold-and-equivocation-detection) step 4 specifies; any anchor whose proof does not bind the bundle's `record_hash` (a TSA token whose `hashedMessage` differs, a Rekor entry whose artifact does not reconstruct) is simply an invalid proof, not counted and not equivocation. Time-window disagreement across anchors is informational (`anchored_at_range_ms`), never a rejection — anchors legitimately attest at different times.
+
+Fact/policy separation holds ([§3.6](#36-implementation-notes)): anchors and their verification live entirely in proof bundles and verifier annotations. Nothing enters the graph layer ([§3](#3-graph-query-interface)); no graph endpoint returns anchor-weighted or anchor-interpreted data. What a consumer does with `single_anchor: true` is consumer policy.
+
+#### 2.11.12 Producer-side anchor posture
+
+Producers accept an anchor configuration:
+
+```jsonc
+{
+  "anchors": [
+    { "anchor_type": "atrib-log", "url": "https://log.atrib.dev/v1" },
+    { "anchor_type": "opentimestamps", "calendars": ["https://a.pool.opentimestamps.org"] }
+  ],
+  "allow_single_anchor": false   // default
+}
+```
+
+Resolution precedence, exact:
+
+1. No anchor config at all ⇒ the SDK's built-in default set (two independent anchors) applies. Zero-config producers get plurality without opting in.
+2. Explicit config with ≥ 2 entries ⇒ used as given.
+3. Explicit config with 1 entry and `allow_single_anchor: true` ⇒ used as given, no warning — the deliberate-single-anchor analog of a deliberate dangling `informed_by` claim per [D113](DECISIONS.md#d113-unvalidated-informed_by-refs-are-omitted-by-default).
+4. Explicit config with fewer than 2 entries and no flag ⇒ an `atrib:`-prefixed warning naming the missing plurality, plus a sidecar degradation marker `_local.anchor_config = { configured: <n>, allow_single_anchor: false }` ([§5.9.3](#593-the-_local-sidecar-shape)). The operation continues. This path MUST NOT throw into the primary path and MUST NOT disable signing ([§5.8](#58-degradation-contract)).
+
+Submission fan-out is per-anchor fire-and-forget with independent retry queues. Anchoring MUST NOT be awaited before returning a response ([§5.3.5](#535-log-submission)). A fully failed anchor degrades the bundle to whatever proofs arrived; the record itself — signed, mirrored, returned to the caller — is unaffected. The `atrib-log` anchor keeps today's exact submission path ([§2.6.1](#261-submit-entry)); non-tlog adapters are additive clients. Anchor plurality can only ever add proofs; it can never block a tool call, a response, or a signature.
+
+#### 2.11.13 Conformance
+
+The anchor-interface conformance corpus lives at [`spec/conformance/2.11/anchors/`](spec/conformance/2.11/anchors/) (fixtures + manifest), generated deterministically by `packages/log-dev/scripts/generate-conformance-anchors.ts` with a reference implementation at `packages/verify/test/conformance-anchors.test.ts`. The thirteen cases pin: legacy absent-discriminator parsing, the [§2.11.9](#2119-log_proofs-element-discriminator) malformation rules, unknown-type forward compatibility, plurality tiering (including pending-proof exclusion and in-place upgrade), operator-group independence, the [§2.11.10](#21110-the-anchoring-signature-claim-artifact) anchor-claim artifact with real Ed25519 anchoring signatures and the digest-path impossibility vector, the unchanged [§2.11.4](#2114-verifier-side-threshold-and-equivocation-detection) hard conditions, and the [§2.11.12](#21112-producer-side-anchor-posture) resolution rules. All record signatures, anchoring-claim signatures, signed-note checkpoints, and RFC 6962 inclusion proofs in the corpus are real; the RFC 3161 and OpenTimestamps payload interiors are structural in the initial corpus revision (the commitment-binding fields are real record hashes), with full per-type cryptographic vectors as a planned extension. Implementations MUST reproduce the expected `anchor_plurality` annotation for every case and MUST produce identical output across repeated runs on identical input.
 
 ---
 
@@ -2406,7 +2564,7 @@ The strict separation also makes the system auditable over time. If a settlement
 
 **Edge derivation is deterministic and normative.** Given the same set of attribution records, two independent implementations MUST produce identical graphs. The derivation rules in [§3.2.4](#324-edge-derivation-rules) are the normative definition. Any deviation is a nonconformance.
 
-**Adversarial trust posture.** The fact/policy separation is one part of the substrate's trust posture. A complementary part covers what the protocol does and does not certify under adversarial conditions: signatures prove who said what, never whether what was said is true. [§8.7](#87-adversarial-threat-model) enumerates the adversarial threat model, the layered trust assessment stack atrib provides (signature, identity, capability, revocation, cross-attestation, tool-side attestation, external evidence, witnessing, cross-log replication, structural anomaly detection), and the asymmetric properties the substrate produces despite the fundamental limit. The graph's deterministic derivation is one input to that assessment, not a substitute for it.
+**Adversarial trust posture.** The fact/policy separation is one part of the substrate's trust posture. A complementary part covers what the protocol does and does not certify under adversarial conditions: signatures prove who said what, never whether what was said is true. [§8.7](#87-adversarial-threat-model) enumerates the adversarial threat model, the layered trust assessment stack atrib provides (signature, identity, capability, revocation, cross-attestation, tool-side attestation, external evidence, witnessing, anchor plurality, structural anomaly detection), and the asymmetric properties the substrate produces despite the fundamental limit. The graph's deterministic derivation is one input to that assessment, not a substitute for it.
 
 ---
 
@@ -4191,7 +4349,7 @@ The helper and primitive do not add a graph edge type or event type. A successfu
 
 #### 5.5.6 Generic Authorization Evidence Blocks
 
-`@atrib/verify` exposes a generic tiered evidence block shape for external authorization and delegation systems. These blocks are verifier-side signals. They do not alter record signature verification, graph derivation, settlement calculation, or `verifyRecord().valid`.
+`@atrib/verify` exposes a generic tiered evidence block shape for external authorization and delegation systems. These blocks are verifier-side signals. They do not alter record signature verification, graph derivation, settlement calculation, or `verifyRecord().valid`. This generic block shape is the legacy pre-envelope form: [§5.5.7](#557-universal-evidence-envelope) defines the universal evidence envelope that supersedes it for new evidence types and freezes this section's `protocol` string set at five values.
 
 The generic result shape is:
 
@@ -4262,6 +4420,87 @@ A non-normative Cloudflare Worker and Durable Object reference for the HTTP repl
 The offline conformance corpora for the OAuth, AAuth, and x401 adapters live at `spec/conformance/5.5.6/oauth/`, `spec/conformance/5.5.6/aauth/`, and `spec/conformance/5.5.6/x401/`. They cover verified claims, JWT access tokens, MCP resource binding, scope attenuation failures, caller-supplied introspection responses, DPoP proof checks, AAuth token types, AAuth resource binding, AAuth-Access authorization coverage, mission evidence, HTTP signature binding, current x401 headers, result artifacts, token responses, request-id binding, proof-result errors, unverified proof failures, legacy-header strict mode, payment-hint separation, external agent-origin facts, issuer-trust facts, and proof-payment binding facts.
 
 This section is intentionally at the verifier layer. Authorization systems decide what an agent is allowed to do. atrib records what the agent did, who signed the record, how it links to prior work, and which external evidence a verifier accepted. See [D109](DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks).
+
+#### 5.5.7 Universal Evidence Envelope
+
+The universal evidence envelope is the single protocol-level attachment model for all externally verifiable material: OAuth / MCP authorization results, AAuth tokens, x401 proofs, AP2 / Verifiable Intent receipts, human approvals, counterparty co-signature receipts, and every future evidence type. Each evidence type is a **profile** of the envelope, identified by an absolute HTTPS type URI and versioned independently of this specification. The generic blocks of [§5.5.6](#556-generic-authorization-evidence-blocks) are the legacy pre-envelope form; this section freezes their `protocol` string set and defines the deterministic mapping from that form into envelope form.
+
+Envelopes are verifier-layer objects and never touch signed bytes. They exist only in: (a) the local mirror sidecar ([§5.9.3](#593-the-_local-sidecar-shape)), (b) the archive evidence projection ([§2.12](#212-record-body-archive-layer)), (c) verifier results, and (d) host-owned packets (handoff claims per [D105](DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance), continuation packets, action-gate packets per [D133](DECISIONS.md#d133-action-gate-is-a-host-owned-controlproof-package), proof packets). Envelopes MUST NOT be carried in propagation tokens ([§1.5.2](#152-http-transport-tracestate)) and MUST NOT enter the 90-byte log entry ([§2.3.1](#231-entry-serialization)). Evidence MUST NOT alter record signature verification, graph derivation ([§3.2.4](#324-edge-derivation-rules)), the [§4.6](#46-the-calculation-algorithm) calculation, or `verifyRecord().valid`. A signed action is real even when its external evidence is missing, expired, over-scoped, or forged; consumers apply their own policy over tiers. See [D109](DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks).
+
+**Envelope schema (normative).** One schema, versioned by the integer `envelope` field:
+
+```json
+{
+  "envelope": 1,
+  "profile": "https://atrib.dev/v1/evidence/oauth2",
+  "profile_version": "1.0.0",
+  "tier": "verified",
+  "payload": {
+    "hash": "sha256:64-lowercase-hex-chars",
+    "media_type": "application/jwt",
+    "ref": { "kind": "mirror", "uri": null, "record_hash": null },
+    "inline": null
+  },
+  "facts": {
+    "issuer": "https://as.example",
+    "subject": "agent-7",
+    "scope": ["tools:read"],
+    "attenuation_ok": true,
+    "delegation_ok": null
+  },
+  "result": {
+    "valid": true,
+    "constraints": [
+      { "type": "scope", "status": "passed", "expected": ["tools:read"], "actual": ["tools:read"] }
+    ],
+    "errors": [],
+    "warnings": []
+  },
+  "verifier": { "name": "@atrib/verify", "version": "1.x.y", "checked_at_ms": 1780000000000 }
+}
+```
+
+Required fields: `envelope` (MUST be the integer `1`), `profile` (absolute HTTPS type URI), `profile_version` (non-empty semver of the profile document), `tier` (one of the four values below), `payload` with `hash` and `ref.kind`, and `result` with boolean `valid`, `constraints[]`, `errors[]`, and `warnings[]`. `facts` (a flat JSON object of profile-defined verifier facts), `verifier`, `payload.media_type`, `payload.inline`, `ref.uri`, and `ref.record_hash` are OPTIONAL. `result.constraints[]` reuses the [§5.5.6](#556-generic-authorization-evidence-blocks) constraint shape unchanged (`status: 'passed' | 'failed' | 'unresolved' | 'not_checked'`). Consumers MUST reject envelopes that violate these shape rules; rejecting an envelope never rejects the record it attaches to.
+
+**Payload hash rule.** `payload.hash` is `"sha256:" + hex(SHA-256(bytes))` where `bytes` is the exact raw payload bytes for non-JSON media types (a compact JWT's UTF-8 bytes, a receipt JWT, an SD-JWT), or the JCS canonical form (RFC 8785, [§1.3](#13-canonical-serialization)) for JSON payloads. The profile document declares which rule applies per media type. This is the hash-not-body posture of [§8.3](#83-salted-commitment-posture): public surfaces carry hashes and sanitized facts, never raw payloads.
+
+**`ref.kind` and the `ref.record_hash` rule.** `ref.kind` states where the payload bytes are retrievable and is a closed five-value enum: `'inline' | 'mirror' | 'archive' | 'external' | 'withheld'`. `payload.inline` (the raw payload, local-only, never public) is permitted ONLY when `ref.kind` is `"inline"`; any other combination MUST be rejected. `ref.record_hash` is a sibling field, NOT a `kind` value — implementations MUST reject `kind: "record"`. When set, `record_hash` declares that the payload is itself a signed atrib record: `payload.hash` commits to that record's canonical JCS bytes, while `kind` still states where those bytes are retrievable (typically `mirror`, `archive`, or `withheld`). `record_hash` MAY accompany any `kind` except `inline`, where it is redundant with the inline body. "The payload is a signed record" and "where the bytes live" are orthogonal facts; one axis per field.
+
+**Tier ladder.** `tier` states how the party named in `verifier` established the claim, ordered by independent reproducibility:
+
+| Tier | Name       | Meaning                                                                                                                                                                                                                                                             |
+| ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0    | `declared` | Payload hash and facts asserted by a producer or counterparty. Nothing checked.                                                                                                                                                                                     |
+| 1    | `shape`    | Payload parsed and structurally validated offline. No trust root exercised.                                                                                                                                                                                         |
+| 2    | `attested` | A caller-owned external path accepted the material (introspection per [D111](DECISIONS.md#d111-host-owned-oauth-evidence-infrastructure), credential-verifier `resultVerified` per [D132](DECISIONS.md#d132-x401-proof-evidence-stays-verifier-side-authorization-evidence)). Not independently reproducible from the envelope alone. |
+| 3    | `verified` | Cryptographically verified against declared trust roots (JWKS, pinned keys, pinned corpus per [D096](DECISIONS.md#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus)). Reproducible by anyone with the envelope, the payload, and the same trust roots.  |
+
+The enum is closed at these four values. Extending it requires revising the evidence-envelope decision record, never a consumer specification.
+
+**Tier rules (normative).** (1) A tier belongs to the envelope *instance*: it states what the `verifier` party did, not what is true. (2) A consumer MUST NOT relay another party's envelope with its own identity in `verifier` or with a raised tier; re-verification produces a new envelope instance. (3) A consumer re-running checks MAY produce a higher- or lower-tier instance than the one it received. (4) The identity key for deduplication is `(profile, payload.hash)`; multiple instances per key are permitted, and consumers order by tier descending, then `checked_at_ms` descending, then verifier name. (5) A `tier: "verified"` envelope whose payload cannot be retrieved (`ref.kind: "withheld"` or unresolvable) is still well-formed; consumers MUST report it as claimed-but-not-reproducible, mirroring the tiered record-verifiability ladder of [§2.12.7](#2127-tiered-verifiability).
+
+**Profile registration rule.** A profile is registered by publishing, together: (1) a type URI — atrib-maintained profiles use `https://atrib.dev/v1/evidence/<name>`; third parties use an absolute HTTPS URI on a domain they control, the same self-sovereign convention as extension event_type URIs and deliberately below the [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar, because no event_type byte and no signed field is involved; (2) a profile document (for atrib-maintained profiles: `docs/evidence-profiles/<name>.md`) defining accepted payload media types and the applicable hash rule, the `facts` vocabulary (each fact's name, JSON type, and provenance class: `verifier-derived`, `caller-attested`, or `producer-declared`), what each tier requires for the profile, the sanitization contract (which facts and hashes may appear in public projections — raw payloads never, by default, per [D110](DECISIONS.md#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop) / [D134](DECISIONS.md#d134-x401-producer-capture-and-propagation-stay-sanitized)), and its own semver rules (`profile_version` refers to this document); and (3) a conformance case family at `spec/conformance/evidence-envelope/<name>/` in the same commit (atrib-maintained profiles only; third parties SHOULD publish equivalents). Profile identity is the full URI: a foreign domain reusing an atrib profile name (e.g. `https://example.com/v1/evidence/oauth2`) is a valid third-party profile URI and MUST NOT be treated as the atrib profile of the same name.
+
+The initial atrib-maintained registry is: `oauth2`, `mcp-oauth`, `aauth`, `x401`, `ap2-vi` (mapped 1:1 from the legacy [§5.5.6](#556-generic-authorization-evidence-blocks) adapters), `human-approval` (per [D118](DECISIONS.md#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain): the payload is the human-signed approval record itself — `ref.record_hash` names it, `ref.kind` states where its body is retrievable, `payload.hash` commits to its canonical bytes; facts: approver key, approval scope, decision), `counterparty-attestation` (out-of-band co-signature receipts that are external evidence per [D098](DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) / [D107](DECISIONS.md#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes)), and `delegation-certificate` (URI reserved; semantics defined by a future decision record that MUST build on this envelope).
+
+**Unknown-profile handling (normative).** Consumers MUST preserve envelopes whose profile URI they do not recognize, MUST render them opaquely (profile URI, tier, payload hash), MUST NOT drop them, and MUST NOT let them affect record validity — the same posture as unknown extension event types ([§1.2.4](#124-event_type-values)). Filtering to known profiles is a rendering choice, never a storage or relay behavior.
+
+**Legacy `protocol` strings are frozen (normative).** The pre-envelope [§5.5.6](#556-generic-authorization-evidence-blocks) `protocol` string set is closed at exactly five values: `'oauth2'`, `'mcp_oauth'`, `'aauth'`, `'x401'`, `'ap2_vi'`. No new legacy protocol string may be introduced anywhere in the substrate — not in `@atrib/verify`, not in producers, not in future decision records. Every new evidence type registers as an envelope profile.
+
+**Legacy mapping (normative).** The mapping from a legacy [§5.5.6](#556-generic-authorization-evidence-blocks) block to envelope form (`fromLegacyEvidenceBlock`) MUST be deterministic; two implementations given the same block MUST produce identical envelopes:
+
+1. `protocol` maps to the profile URI through the fixed five-row table: `oauth2` → `https://atrib.dev/v1/evidence/oauth2`, `mcp_oauth` → `https://atrib.dev/v1/evidence/mcp-oauth`, `aauth` → `https://atrib.dev/v1/evidence/aauth`, `x401` → `https://atrib.dev/v1/evidence/x401`, `ap2_vi` → `https://atrib.dev/v1/evidence/ap2-vi`. Any other protocol string MUST be rejected; the mapping MUST NOT invent a profile URI. The table is complete and final at five rows; a sixth row is a conformance failure, not an extension point.
+2. The mapped envelope carries `envelope: 1`, `profile_version: "1.0.0"`, and `tier: "attested"`. A legacy block records what a caller-owned verifier path accepted; it carries no trust roots, so the mapping MUST NOT claim `"verified"`. Consumers re-verify to raise tier.
+3. `payload.hash` commits to the legacy block itself: `"sha256:" + hex(SHA-256(JCS(block)))`, with `media_type: "application/json"` and `ref.kind: "withheld"` (the legacy shape does not carry the raw external material).
+4. `issuer`, `subject`, `scope`, `attenuation_ok`, and `delegation_ok` copy into `facts` unchanged (nulls preserved). When `details` is present, `facts.details_hash` is `"sha256:" + hex(SHA-256(JCS(details)))`; the `details` value itself is never inlined into the envelope.
+5. `valid`, `constraints`, `errors`, and `warnings` copy into `result` unchanged.
+6. The mapped envelope carries no `verifier` block: the mapping is mechanical, not a re-verification (tier rule 2).
+
+**Deliberate commitment path.** This section adds no signed-record field. A producer that wants the *signed record* to commit to evidence uses existing mechanisms only: include `{ profile, payload_hash }` in the content hashed into `args_hash` (per the [D099](DECISIONS.md#d099-explicit-emit-records-commit-local-content-through-default-args_hash) default), or emit an extension record referencing the envelope and linked via `informed_by` ([§1.2.5](#125-informed_by)). A future optional signed `evidence_hash` field would slot lexicographically after `event_type` and before `informed_by` under [§1.3](#13-canonical-serialization); it is explicitly deferred.
+
+**Invariants.** Fact/policy separation ([§3.6](#36-implementation-notes)) is preserved: `result.valid` and `facts` are verification facts, not weights; graph services never store, derive from, or serve envelopes. The [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) cross-attestation rule stays in core: the `signers[]` array over canonical transaction bytes remains the only way to satisfy the ≥2-distinct-keys minimum, and a verifier that sees only a `counterparty-attestation` envelope still reports `cross_attestation_missing: true` ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)). Producer-side envelope writers follow the degradation contract ([§5.8](#58-degradation-contract)): catch-all, silent-failure, `atrib:`-prefixed logging; a failed envelope construction drops the envelope, never the record or the primary tool response. The envelope is the concrete shape of trust layer 7 ("external evidence") in the [§8.7](#87-adversarial-threat-model) stack: it does not certify truth, it records what a named verifier accepted.
+
+**Conformance.** The envelope conformance corpus lives at `spec/conformance/evidence-envelope/` with five case families: `shape/` (schema validity, closed enums, the `ref.record_hash` sibling rule), `registry/` (HTTPS type-URI rule, full-URI profile identity), `unknown-profile/` (preservation, opaque rendering), `legacy-mapping/` (the frozen five-row table with sixth-string rejection), and `tier/` (instance-scoped tier semantics, relay-swap rejection, claimed-but-not-reproducible reporting, and the never-flips-`valid` invariant). The generator is `packages/log-dev/scripts/generate-conformance-evidence-envelope.ts`; the reference consumer is `packages/verify/test/conformance-evidence-envelope.test.ts`. Profile-internal semantics remain authoritative in the existing corpora at `spec/conformance/5.5.6/{oauth,aauth,x401}/` and `spec/conformance/ap2-vi-crypto/`, which are referenced, not moved.
 
 ---
 
@@ -5093,7 +5332,7 @@ Truth assessment is layered above the signature primitive. atrib provides severa
 | 6     | Tool-side response signing ([§7.6](#76-outcome-verification-patterns) Pattern A)                            | Agent fabricating tool results                                                                                      | Collusion between agent and tool operator; tool operator compromised                           |
 | 7     | External evidence ([§7.6](#76-outcome-verification-patterns) Pattern B)                                     | Agent claiming outcomes that did not occur in the world                                                             | External system itself being compromised                                                       |
 | 8     | Witnessing ([§2.9](#29-witnessing-and-cosignatures))                                                        | Log operator equivocation at the checkpoint level; selective censorship of checkpoints                              | Compromise of individual signing keys; record-level censorship by the log operator             |
-| 9     | Cross-log replication ([§2.11](#211-cross-log-replication))                                                 | Single-log-operator censorship, equivocation, data loss; record-level discrepancies between logs                    | Collusion across all logs in the trusted set                                                   |
+| 9     | Anchor plurality       ([§2.11](#211-cross-log-replication))                                                 | Single-anchor-operator censorship, equivocation, data loss; record-level discrepancies between anchors                    | Collusion across all anchors in the trusted set                                                   |
 | 10    | Structural anomaly detection (consumer-side)                                                                | Implausible patterns: bursts, dangling references, contradictory claims, statistical oddities in hash distributions | Subtle attacks that evade pattern detection                                                    |
 
 No single layer is dispositive. A verifier's confidence assessment combines them; the substrate provides the structure, the assessment is consumer-side policy.
