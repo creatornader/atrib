@@ -1,0 +1,21 @@
+{
+  "name": "token--malformed-extension-falls-through",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "The extension block token is malformed (no separator / undecodable). Lenient parse: resolution falls through to _meta.atrib. Malformation is never an error (same posture as D018).",
+  "input": {
+    "request_meta": {
+      "dev.atrib/attribution": {
+        "token": "this-is-not-a-propagation-token"
+      },
+      "atrib": "dMWbtK0FApUUFmBFt8EKtTCNsBqsxqncsjZDB9WnxII.LfBBJfABWvtHzoU674dyCU_5SYwUyxueEpc8KSfaD6Y",
+      "tracestate": "atrib=YfCaVpDuFO5svX1lIfdRdaeyme4zZnUDn2kpPwwGmiE.p_bfr484uJuozmSbWU-R5NAf3Ff5yUk99DteUKmYc2c"
+    }
+  },
+  "expected": {
+    "resolved_source": "meta-atrib",
+    "resolved_record_hash_hex": "74c59bb4ad05029514166045b7c10ab5308db01aacc6a9dcb2364307d5a7c482",
+    "resolved_creator_key": "LfBBJfABWvtHzoU674dyCU_5SYwUyxueEpc8KSfaD6Y",
+    "error_raised": false
+  }
+}

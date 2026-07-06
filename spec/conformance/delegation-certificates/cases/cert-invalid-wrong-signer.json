@@ -1,0 +1,23 @@
+{
+  "name": "cert-invalid-wrong-signer",
+  "spec_section": "1.11",
+  "description": "A certificate whose signature bytes were produced by a key other than the declared principal_key. Verification under principal_key MUST fail; verifiers MUST reject the certificate as delegation evidence with error principal_signature_invalid.",
+  "input": {
+    "certificate": {
+      "cert_type": "atrib/delegation-cert/v1",
+      "not_after": 1767229200000,
+      "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "signature": "mniBE4qA22KC8UgTZSdqJoZsxgkcC72Dcsgi7UoukVHgNMVg0KlEcQfMXhnaonzBtX9TKGK9HyV2ef75cIisAQ"
+    },
+    "actual_signer_pubkey": "ypOsFwUYcHHWe4PH_w7-gQjo7EUwV113JoeTM9vavnw"
+  },
+  "expected": {
+    "cert_hash": "sha256:51cca3a21131b2b029e39e1a1c537efc1b752f6066ae0ab29f0c78bdc6840b9f",
+    "principal_signature_verifies": false,
+    "cert_valid": false,
+    "errors": [
+      "principal_signature_invalid"
+    ]
+  }
+}

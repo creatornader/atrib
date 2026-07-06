@@ -1,0 +1,33 @@
+{
+  "name": "capability--server-declaration-valid",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "A full server capability settings object per extension spec §4.1. `version` is the only REQUIRED field; every other field is OPTIONAL and advisory. Implementations MUST accept and treat the peer as having declared the extension.",
+  "input": {
+    "settings": {
+      "version": "0.1",
+      "signs": [
+        "tool_call"
+      ],
+      "receipts": [
+        "token",
+        "record"
+      ],
+      "disclosure": {
+        "args": "plain-sha256",
+        "result": "omit"
+      },
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "logs": [
+        "https://log.atrib.dev/v1"
+      ],
+      "directory": "https://directory.atrib.dev/v1"
+    }
+  },
+  "expected": {
+    "valid": true,
+    "declared": true,
+    "negotiated_version": "0.1",
+    "advisory_fields_are_untrusted": true
+  }
+}

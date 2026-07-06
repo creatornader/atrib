@@ -1,0 +1,76 @@
+{
+  "name": "walk-expired",
+  "spec_section": "1.11",
+  "description": "Out-of-window record: timestamp > not_after. in_window is false; every other delegation fact still evaluates and the record signature remains valid. Window facts are signals, never invalidation.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:c089e1b6009578c8ec6855c07fcb98a7e970351ce3d5aa27dc884dd2e21fb6ac",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "timestamp": 1767229260000,
+      "tool_name": "search",
+      "signature": "IXOiMof0zBkSuxdRDFfx01zdFB9R7l-uvWLFalNJGRY209DDlFfa29Pxhe13yEQIduEMaFelTT8EmIA7YdekDw",
+      "delegation_cert_hash": "sha256:b8580f0c9171ebc0ee9f3ae8fa0157e2606ea084b3e878282c818084fdccda6b"
+    },
+    "genesis_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:c089e1b6009578c8ec6855c07fcb98a7e970351ce3d5aa27dc884dd2e21fb6ac",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "timestamp": 1767229260000,
+      "tool_name": "search",
+      "signature": "IXOiMof0zBkSuxdRDFfx01zdFB9R7l-uvWLFalNJGRY209DDlFfa29Pxhe13yEQIduEMaFelTT8EmIA7YdekDw",
+      "delegation_cert_hash": "sha256:b8580f0c9171ebc0ee9f3ae8fa0157e2606ea084b3e878282c818084fdccda6b"
+    },
+    "certificates": [
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "max_amount": {
+            "currency": "USD",
+            "value": 100
+          },
+          "event_types": [
+            "https://atrib.dev/v1/types/tool_call",
+            "https://atrib.dev/v1/types/observation"
+          ]
+        },
+        "signature": "YTE2a6R7jP__TULb5t_7QqX4E9B5mOQh6AlUp9dxmAoFEv776X1oZZIszuh4NB_Q8TrtU_q1BX8-wVcwsIINCA"
+      }
+    ]
+  },
+  "expected": {
+    "record_signature_valid": true,
+    "record_hash": "sha256:cfa849a1c7469d68bfbcf77ab12f01db0013c7fd09046f560839eac8eef1f071",
+    "delegation": {
+      "depth": 1,
+      "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "cert_hash": "sha256:b8580f0c9171ebc0ee9f3ae8fa0157e2606ea084b3e878282c818084fdccda6b",
+      "cert_valid": true,
+      "in_window": false,
+      "context_bound": true,
+      "cert_bound": true,
+      "scope_check": {
+        "in_scope": true,
+        "attenuation_ok": null,
+        "mismatches": []
+      },
+      "revoked": false,
+      "errors": []
+    }
+  }
+}

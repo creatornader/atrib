@@ -1,0 +1,18 @@
+{
+  "name": "token--all-carriers-stripped",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "Every inbound carrier stripped (the documented real-world _meta-loss failure mode). The inbound-token rung resolves to nothing and chain-root resolution continues down the D067 / §1.2.3.1 ladder (autoChain tail > env > mirror inheritance > synthetic genesis). These vectors compose with spec/conformance/1.2.3/multi-producer/. The genesis chain_root for a fresh context is pinned here.",
+  "input": {
+    "request_meta": {
+      "traceparent": "00-33333333333333333333333333333333-00f067aa0ba902b7-01"
+    }
+  },
+  "expected": {
+    "resolved_source": null,
+    "inbound_token_resolved": false,
+    "chain_resolution_continues_per": "D067 / §1.2.3.1",
+    "synthetic_genesis_chain_root_for_traceparent_context": "sha256:deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+    "error_raised": false
+  }
+}

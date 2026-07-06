@@ -1,0 +1,75 @@
+{
+  "name": "multi-producer-cert-bound-null",
+  "spec_section": "1.11",
+  "description": "D067 multi-producer posture. A certified run key joins a context whose genesis a DIFFERENT producer key signed. The run key owns no record permitted to carry delegation_cert_hash, so the certificate is supplied out-of-band and cert_bound remains null permanently. Every other fact evaluates: cert_valid, in_window, context_bound (the certificate's context_id is the substitute session binding), scope, revocation.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:93eee546685d43f8a00e125362943316f42e8bf9ad8ce0b809431cfbefd39498",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1767225602000,
+      "tool_name": "search",
+      "signature": "B_QgTHozU6sY0QbQ5ah0qpzLGXTGgHWUb8qc4TIMg-n6-i6rJQiBArI4RyYqSsR46e_vyfM0OEqc2XFMgBAbAQ"
+    },
+    "genesis_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8",
+      "creator_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
+      "chain_root": "sha256:d2f9fa9d99bb30b2b67fc6b0ea2694f345c0961596e0fd82561010b4f7570c2d",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1767225601000,
+      "signature": "eJRvF98pgGg0y3ygfB2QTbONf3RL1Nk4TxbDung0gUYXmJv2JbwKVhV2sNYVH6aHuWf-wvglVWCdRxW2enKGCQ"
+    },
+    "certificates": [
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "abababababababababababababababab",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "max_amount": {
+            "currency": "USD",
+            "value": 100
+          },
+          "event_types": [
+            "https://atrib.dev/v1/types/tool_call",
+            "https://atrib.dev/v1/types/observation"
+          ]
+        },
+        "signature": "eIjf7WOOEUbapAyN9of5tZMTDYFuwki7Ck6OIiV2ZUpkNHdRlmcKaV2l88DiKA2Q-lD7QIpU0CDhhLqrECAjCQ"
+      }
+    ]
+  },
+  "expected": {
+    "record_signature_valid": true,
+    "record_hash": "sha256:caf369f81377aff8aa10702052f0714dbeb087297ad4cdfcf4bf9dab53faa064",
+    "genesis_creator_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
+    "genesis_signed_by_record_creator": false,
+    "delegation": {
+      "depth": 1,
+      "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "cert_hash": "sha256:1c856e7def74264a28d59246e34e0f95bc4098a8a055d34490aa68dd0678476d",
+      "cert_valid": true,
+      "in_window": true,
+      "context_bound": true,
+      "cert_bound": null,
+      "scope_check": {
+        "in_scope": true,
+        "attenuation_ok": null,
+        "mismatches": []
+      },
+      "revoked": false,
+      "errors": []
+    }
+  }
+}

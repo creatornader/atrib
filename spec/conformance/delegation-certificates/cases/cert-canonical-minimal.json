@@ -1,0 +1,23 @@
+{
+  "name": "cert-canonical-minimal",
+  "spec_section": "1.11",
+  "description": "A delegation certificate with every optional field absent. Optional fields MUST be omitted, not null: the canonical signing input contains no context_id, not_before, or scope key, producing a different signature and cert_hash than the full form. not_before defaults to 0 when absent.",
+  "input": {
+    "certificate": {
+      "cert_type": "atrib/delegation-cert/v1",
+      "not_after": 1767229200000,
+      "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "signature": "l1J-zfYqx9QUTVaVaI0U2ZX_rHf8e0sNQfk0f4O7BOpUVoy1stxHbm_caYX7AGzifyB7nlqnUQKA95Rb_ut1CA"
+    },
+    "principal_seed_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"cert_type\":\"atrib/delegation-cert/v1\",\"not_after\":1767229200000,\"principal_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\",\"run_pubkey\":\"gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q\"}",
+    "cert_hash": "sha256:6f817d442d6ee5d28398af96ee4af32ac7ab94be68afe08d081a9461598da0da",
+    "principal_signature_verifies": true,
+    "cert_valid": true,
+    "optional_fields_in_canonical_form": false,
+    "differs_from_full_form_cert_hash": "sha256:ac2b516249c7d29121805ac2a7b23c377b66dec4c7036e0d408106836088cceb"
+  }
+}

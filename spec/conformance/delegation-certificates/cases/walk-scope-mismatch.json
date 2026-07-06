@@ -1,0 +1,79 @@
+{
+  "name": "walk-scope-mismatch",
+  "spec_section": "1.11",
+  "description": "Out-of-scope record: tool_name 'send_payment' is not in the certificate's scope.tool_names. scope_check.in_scope is false with mismatch 'tool_names'. Per the §6.7.3 posture this is a SIGNAL, not invalidation: the record signature stays valid and depth-1 resolution still holds.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:38e75d1a2b264105f27e4aca2f7dd3d0bb6e6a81515abf1b3335f3485e811438",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3",
+      "timestamp": 1767225660000,
+      "tool_name": "send_payment",
+      "signature": "ZB-nc0e56Nb5vuidFUVE5uuXq-gUqcKED9krpo4MiOUJ-3R1DKfyQcbVOZeRH_6WUeeTJNSQXCZ36E94LuYEAw",
+      "delegation_cert_hash": "sha256:646dd7e3d60d50ac802295cfbc16f1dfdd7cdee4c691994d15afc4079a017354"
+    },
+    "genesis_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:38e75d1a2b264105f27e4aca2f7dd3d0bb6e6a81515abf1b3335f3485e811438",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3",
+      "timestamp": 1767225660000,
+      "tool_name": "send_payment",
+      "signature": "ZB-nc0e56Nb5vuidFUVE5uuXq-gUqcKED9krpo4MiOUJ-3R1DKfyQcbVOZeRH_6WUeeTJNSQXCZ36E94LuYEAw",
+      "delegation_cert_hash": "sha256:646dd7e3d60d50ac802295cfbc16f1dfdd7cdee4c691994d15afc4079a017354"
+    },
+    "certificates": [
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "max_amount": {
+            "currency": "USD",
+            "value": 100
+          },
+          "event_types": [
+            "https://atrib.dev/v1/types/tool_call",
+            "https://atrib.dev/v1/types/observation"
+          ]
+        },
+        "signature": "4rcnxXzlyZGr8XouHhB_QSd9s3CHOJatV9hJjcPsyo60yNQXAd3KmYdc_avbMrOLJe6l0aaqrpdOQWX5s4xGAg"
+      }
+    ]
+  },
+  "expected": {
+    "record_signature_valid": true,
+    "record_hash": "sha256:1bb4e933537e7ad1503994a3fef68898242bf4e823fa99d34a7ca33fa9d18d69",
+    "signal_not_block": true,
+    "delegation": {
+      "depth": 1,
+      "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "cert_hash": "sha256:646dd7e3d60d50ac802295cfbc16f1dfdd7cdee4c691994d15afc4079a017354",
+      "cert_valid": true,
+      "in_window": true,
+      "context_bound": true,
+      "cert_bound": true,
+      "scope_check": {
+        "in_scope": false,
+        "attenuation_ok": null,
+        "mismatches": [
+          "tool_names"
+        ]
+      },
+      "revoked": false,
+      "errors": []
+    }
+  }
+}

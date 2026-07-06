@@ -1,0 +1,24 @@
+{
+  "name": "token--extension-key-wins",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "All four inbound carriers are present and decode to four DIFFERENT real record hashes. Ladder 1: the extension key wins; the conflict with legacy carriers is a SHOULD-log warning, never an error.",
+  "input": {
+    "request_meta": {
+      "dev.atrib/attribution": {
+        "token": "_f-WiElOw7OVElPxHUq6yRwtTZcl5LFJFikli5KMCYs.rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne-B1R_KJODNB0",
+        "context_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "atrib": "dMWbtK0FApUUFmBFt8EKtTCNsBqsxqncsjZDB9WnxII.LfBBJfABWvtHzoU674dyCU_5SYwUyxueEpc8KSfaD6Y",
+      "tracestate": "atrib=YfCaVpDuFO5svX1lIfdRdaeyme4zZnUDn2kpPwwGmiE.p_bfr484uJuozmSbWU-R5NAf3Ff5yUk99DteUKmYc2c",
+      "X-Atrib-Chain": "3gpXAsplmpUinC4qou4IlZkePc3iOQs8eJ6dKDFBAV4.K8KACzMW4Akgn_11fasZzPCuhLx66QZU4egXEtJw9lM"
+    }
+  },
+  "expected": {
+    "resolved_source": "extension",
+    "resolved_record_hash_hex": "fdff9688494ec3b3951253f11d4abac91c2d4d9725e4b1491629258b928c098b",
+    "resolved_creator_key": "rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne-B1R_KJODNB0",
+    "conflict_warning": true,
+    "error_raised": false
+  }
+}

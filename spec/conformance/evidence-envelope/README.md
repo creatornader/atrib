@@ -46,11 +46,11 @@ re-pinned here; they remain authoritative in
 | `cases/registry--foreign-domain-collision.json` | `https://example.com/v1/evidence/oauth2` MUST NOT be treated as the atrib oauth2 profile. Profile identity is the full URI. |
 | `cases/unknown-profile--unknown-profile-preserved.json` | Unknown envelope round-trips byte-identical (JCS hash pinned) and renders opaquely. |
 | `cases/unknown-profile--unknown-profile-never-dropped.json` | A mixed known/unknown evidence list keeps both entries, in order. |
-| `cases/legacy-mapping/legacy-oauth2.json` | `protocol: "oauth2"` → `https://atrib.dev/v1/evidence/oauth2` envelope, exact bytes pinned. |
+| `cases/legacy-mapping--legacy-oauth2.json` | `protocol: "oauth2"` → `https://atrib.dev/v1/evidence/oauth2` envelope, exact bytes pinned. |
 | `cases/legacy-mapping--legacy-mcp-oauth.json` | `protocol: "mcp_oauth"` → `https://atrib.dev/v1/evidence/mcp-oauth`, including a failed-scope block whose `result.valid` stays `false`. |
 | `cases/legacy-mapping--legacy-aauth.json` | `protocol: "aauth"` → `https://atrib.dev/v1/evidence/aauth`, with AAuth-shaped details committed as `facts.details_hash`. |
-| `cases/legacy-mapping/legacy-x401.json` | `protocol: "x401"` → `https://atrib.dev/v1/evidence/x401`, with sanitized x401 detail hashes preserved through the mapping. |
-| `cases/legacy-mapping/legacy-ap2-vi.json` | `protocol: "ap2_vi"` → `https://atrib.dev/v1/evidence/ap2-vi`. |
+| `cases/legacy-mapping--legacy-x401.json` | `protocol: "x401"` → `https://atrib.dev/v1/evidence/x401`, with sanitized x401 detail hashes preserved through the mapping. |
+| `cases/legacy-mapping--legacy-ap2-vi.json` | `protocol: "ap2_vi"` → `https://atrib.dev/v1/evidence/ap2-vi`. |
 | `cases/legacy-mapping--legacy-unknown-protocol-rejected.json` | The executable legacy-string freeze: a hypothetical `atrib_delegation` protocol string MUST be rejected, never mapped to an invented profile URI. |
 | `cases/tier--tier-ladder-all-four.json` | One payload at all four tiers, shared `(profile, payload.hash)` identity key, tier-descending consumer ordering. |
 | `cases/tier--relay-identity-swap-rejected.json` | Relaying another party's envelope with a swapped `verifier` identity MUST be flagged; re-verification produces a new instance. |

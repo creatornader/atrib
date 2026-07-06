@@ -1,0 +1,31 @@
+{
+  "name": "context--unknown-fields-ignored",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "The v0.1 block carries EXACTLY two defined fields. Unknown extra fields — including session_token and provenance_token sent by a future or nonconforming peer — MUST be ignored and MUST NOT set any field of any signed record. Both defined fields still resolve normally.",
+  "input": {
+    "request_meta": {
+      "dev.atrib/attribution": {
+        "token": "_f-WiElOw7OVElPxHUq6yRwtTZcl5LFJFikli5KMCYs.rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne-B1R_KJODNB0",
+        "context_id": "22222222222222222222222222222222",
+        "session_token": "sess-token-from-nonconforming-peer",
+        "provenance_token": "AAAAAAAAAAAAAAAAAAAAAA",
+        "future_field": 42
+      }
+    }
+  },
+  "expected": {
+    "resolved_context_id": "22222222222222222222222222222222",
+    "resolved_source": "extension",
+    "resolved_record_hash_hex": "fdff9688494ec3b3951253f11d4abac91c2d4d9725e4b1491629258b928c098b",
+    "ignored_fields": [
+      "future_field",
+      "provenance_token",
+      "session_token"
+    ],
+    "record_field_effects": [
+      "context_id"
+    ],
+    "error_raised": false
+  }
+}

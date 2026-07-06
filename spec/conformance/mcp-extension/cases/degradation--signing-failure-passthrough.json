@@ -1,0 +1,35 @@
+{
+  "name": "degradation--signing-failure-passthrough",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "Forced signing failure (§5.8): the tool result MUST be returned byte-identical to passthrough — no extension block, no legacy keys added by the failed attempt, no thrown error. The passthrough result is pinned by its JCS sha256.",
+  "input": {
+    "request_meta": {
+      "io.modelcontextprotocol/clientCapabilities": {
+        "extensions": {
+          "dev.atrib/attribution": {
+            "version": "0.1",
+            "accept": [
+              "token",
+              "record"
+            ]
+          }
+        }
+      }
+    },
+    "tool_result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "primary tool result"
+        }
+      ]
+    },
+    "forced_failure": "signing"
+  },
+  "expected": {
+    "result_jcs_sha256_hex": "b36d15d357a0c58234fc1fd42ae60c9c460c02004e9d429062e99d0e715ec45d",
+    "extension_block_present": false,
+    "error_raised": false
+  }
+}

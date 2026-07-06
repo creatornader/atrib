@@ -1,0 +1,46 @@
+{
+  "name": "tree-1-leaf",
+  "spec_section": "1.2.10",
+  "description": "RFC 6962 root over a single record-hash leaf: session_root = sha256(0x00 || leaf_bytes) where leaf_bytes are the raw 32 bytes hex-decoded from the covered record hash (§2.3.2 leaf rule, 32-byte preimage). tree_size 1 is the minimum valid checkpoint.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:49f39cbaa08e3af82fd0393acaf62929d9cd3397fa1f21e62bb1d87377511f90",
+      "checkpoint": {
+        "first_index": 0,
+        "session_root": "sha256:ef50622c827dd37017853285d5ff9ef4863313f70313c3e0d22762857d3a94e6",
+        "tree_size": 1
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "timestamp": 1782864005000,
+      "args_hash": "sha256:a3598ad7894e47332b5cc50fa13f96eb8f56f641de2b7606e2ba12f0c829418e",
+      "signature": "Xs9V5YvR2usJYwJ2hFZUCODSi2-ICGYn_2kP4rzbZ7V_Gn2WYobrFse3L8Ano6cgjcS5cKHZL4rKmlJIL24-CQ"
+    },
+    "leaves": [
+      "sha256:49f39cbaa08e3af82fd0393acaf62929d9cd3397fa1f21e62bb1d87377511f90"
+    ],
+    "leaf_records": [
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:905ae50928311b527e9dc88efe1d411afe2840ed9a88f322eaa7cb4b0ba24a96",
+        "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+        "chain_root": "sha256:83422a41180c2a61fe5f90f5e0b6c346c76ebd28cf4d07515d93e4c1f0c49e1c",
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "timestamp": 1782864001000,
+        "signature": "LexZMzNhN4EpcEFi_OaTpVvYb4xIOK4I-eLg6uh3vyra4l6sFnikui9KfqJ-MIYZE3Ux51LPYtQemnnqsg50BA"
+      }
+    ],
+    "signer_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+  },
+  "expected": {
+    "session_root_hex": "ef50622c827dd37017853285d5ff9ef4863313f70313c3e0d22762857d3a94e6",
+    "leaf_hash_equals_root": true,
+    "record_hash_hex": "4573691ba6b0ff1d57381e107f5aad060cae2e41095e099726bd8308d059beae",
+    "validator_should_accept": true,
+    "verifier_signature_ok": true
+  }
+}

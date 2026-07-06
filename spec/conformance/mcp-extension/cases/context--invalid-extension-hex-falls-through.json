@@ -1,0 +1,19 @@
+{
+  "name": "context--invalid-extension-hex-falls-through",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "The extension block context_id is not exactly 32 lowercase hex characters. It MUST be ignored (falls through to the traceparent trace-id), never an error.",
+  "input": {
+    "request_meta": {
+      "dev.atrib/attribution": {
+        "context_id": "NOT-32-LOWERCASE-HEX"
+      },
+      "traceparent": "00-33333333333333333333333333333333-00f067aa0ba902b7-01"
+    }
+  },
+  "expected": {
+    "resolved_context_id": "33333333333333333333333333333333",
+    "resolved_source": "traceparent",
+    "error_raised": false
+  }
+}

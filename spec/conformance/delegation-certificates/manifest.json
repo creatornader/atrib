@@ -1,0 +1,73 @@
+{
+  "spec_section": "1.11",
+  "spec_title": "Delegation certificates (principal keys certify ephemeral run keys)",
+  "decision_link": "P045",
+  "generated_at": 1767225600000,
+  "generator": "packages/log-dev/scripts/generate-conformance-delegation-certificates.ts",
+  "cases": [
+    {
+      "file": "cases/cert-canonical-full.json",
+      "name": "cert-canonical-full"
+    },
+    {
+      "file": "cases/cert-canonical-minimal.json",
+      "name": "cert-canonical-minimal"
+    },
+    {
+      "file": "cases/cert-invalid-self.json",
+      "name": "cert-invalid-self"
+    },
+    {
+      "file": "cases/cert-invalid-wrong-signer.json",
+      "name": "cert-invalid-wrong-signer"
+    },
+    {
+      "file": "cases/walk-valid.json",
+      "name": "walk-valid"
+    },
+    {
+      "file": "cases/walk-expired.json",
+      "name": "walk-expired"
+    },
+    {
+      "file": "cases/walk-scope-mismatch.json",
+      "name": "walk-scope-mismatch"
+    },
+    {
+      "file": "cases/walk-wrong-principal-signature.json",
+      "name": "walk-wrong-principal-signature"
+    },
+    {
+      "file": "cases/walk-run-key-mismatch.json",
+      "name": "walk-run-key-mismatch"
+    },
+    {
+      "file": "cases/depth0-identity.json",
+      "name": "depth0-identity"
+    },
+    {
+      "file": "cases/genesis-field-canonical-form.json",
+      "name": "genesis-field-canonical-form"
+    },
+    {
+      "file": "cases/revocation-run-key.json",
+      "name": "revocation-run-key"
+    },
+    {
+      "file": "cases/revocation-cert-not-covering.json",
+      "name": "revocation-cert-not-covering"
+    },
+    {
+      "file": "cases/multi-producer-cert-bound-null.json",
+      "name": "multi-producer-cert-bound-null"
+    }
+  ],
+  "keys": {
+    "principal_pubkey": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+    "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+    "run2_pubkey": "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E",
+    "other_producer_pubkey": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
+    "rogue_pubkey": "ypOsFwUYcHHWe4PH_w7-gQjo7EUwV113JoeTM9vavnw"
+  },
+  "note": "Six case families: certificate canonical form + signing (4), verifier walk (5), depth-0 byte-identity against spec/conformance/1.4/signing-vectors.json (1), delegation_cert_hash genesis lex-slotting (1), run-key revocation extending spec/conformance/1.9/ (2), D067 multi-producer cert_bound: null posture (1). The principal seed (0x01 fill) deliberately matches the §1.4 corpus signer, so the depth-0 case is literally a principal signing directly."
+}

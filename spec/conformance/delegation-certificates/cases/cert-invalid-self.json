@@ -1,0 +1,22 @@
+{
+  "name": "cert-invalid-self",
+  "spec_section": "1.11",
+  "description": "A self-certificate: run_pubkey equals principal_key, correctly signed by the principal. The signature verifies, but verifiers MUST reject the certificate as delegation evidence with error self_certificate. Records signed by the key remain valid at depth 0.",
+  "input": {
+    "certificate": {
+      "cert_type": "atrib/delegation-cert/v1",
+      "not_after": 1767229200000,
+      "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "run_pubkey": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "signature": "pEajrNVJYuUKyvr4J67EQsTegr22PwAIUwcFBTguJtau5peWvJtly2GbbmeiV5x1evsdPBCYIgY-dbcost2FDw"
+    }
+  },
+  "expected": {
+    "cert_hash": "sha256:eb68016394dc31348a54d2d7d1e999cf374ba0cfb2623d0db1fef5a93c0f0841",
+    "principal_signature_verifies": true,
+    "cert_valid": false,
+    "errors": [
+      "self_certificate"
+    ]
+  }
+}

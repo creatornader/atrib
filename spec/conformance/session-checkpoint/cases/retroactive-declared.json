@@ -1,0 +1,38 @@
+{
+  "name": "retroactive-declared",
+  "spec_section": "1.2.10",
+  "description": "An attested-backfill checkpoint: signed 3 days after the covered leaves with retroactive: true. Validators accept; verifiers assign the categorical freshness fact declared-retroactive. The checkpoint proves the history existed and was tree-committed as of the checkpoint, not as of the original session; the covered records’ own log entries remain the per-record contemporaneous anchors.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:61481c37229948200a652656c85df160b838f2f74d9ebcdccffbeaf755755d0a",
+      "checkpoint": {
+        "first_index": 0,
+        "retroactive": true,
+        "session_root": "sha256:42493f8b047eadd2afd412eabaa1baf3c687ad96c3a9d8c59510a5fb5827e6bf",
+        "tree_size": 2
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1",
+      "timestamp": 1783123200000,
+      "args_hash": "sha256:518c48da4d6ee72a279cb210b423375a410d4314ce0fb6b469330ce3d72b489b",
+      "signature": "1FHR95qxDM-Ja1zcaOaZ2TXk5CaSPpxGAZUAaflBidr7w6vnMwgHTvbKjNxa8Pf7lU5PDeKWNZ1eGPbXY9KoCg"
+    },
+    "leaves": [
+      "sha256:e198ac9e0a4c4e95ea5fb4761e6c2055e7ae75931ee540932be54412b67c48ee",
+      "sha256:61481c37229948200a652656c85df160b838f2f74d9ebcdccffbeaf755755d0a"
+    ],
+    "max_covered_leaf_timestamp": 1782864002000,
+    "verifier_staleness_bound_ms": 86400000,
+    "signer_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+  },
+  "expected": {
+    "record_hash_hex": "2c0ea6e5174ff7935d7c9a11dfe5bbdfb15045a4f7c8dd671cdb80fea2883761",
+    "retroactive_present": true,
+    "validator_should_accept": true,
+    "verifier_signature_ok": true,
+    "verifier_freshness_fact": "declared-retroactive"
+  }
+}

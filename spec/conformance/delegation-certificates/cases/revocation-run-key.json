@@ -1,0 +1,117 @@
+{
+  "name": "revocation-run-key",
+  "spec_section": "1.11",
+  "description": "Principal-signed run-key revocation per §1.9.2 signing rule 3. The key_revocation record is signed by the principal key of the delegation certificate covering revoked_key and carries delegation_cert_hash referencing that certificate. Verifiers MUST resolve the certificate before accepting the principal as an authorized revoker. JCS-canonical form slots delegation_cert_hash between creator_key and event_type. Run-key records at log_index >= the revocation flip to revoked_after_revocation per §1.9.3; earlier records keep their state.",
+  "input": {
+    "log_entries": [
+      {
+        "log_index": 0,
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0",
+          "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+          "chain_root": "sha256:7e9416efb9c79e142e35538da8bb887d95d49ff4cf0867cdb91b44962ff7bfe3",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7",
+          "timestamp": 1767225601000,
+          "tool_name": "search",
+          "signature": "sUbZ3poO574wxv71sldtz7ftqXH28sy3wmvrHb3MFfHWlWeeMgYyzBTfcaQs5Ihe0CSwTDr1Mz-HMMOfStsoCQ",
+          "delegation_cert_hash": "sha256:4bfae0ee244db6a149e9dd84c45738d192c04f0cf4a54b7911e967c036258358"
+        },
+        "comment": "pre-revocation genesis-with-cert by run key"
+      },
+      {
+        "log_index": 1,
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1",
+          "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+          "chain_root": "sha256:7e9416efb9c79e142e35538da8bb887d95d49ff4cf0867cdb91b44962ff7bfe3",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7",
+          "timestamp": 1767225602000,
+          "tool_name": "search",
+          "signature": "0C0H0UdLqAaEtV5x5BTsxT6t4BPMO8eOn5ODs-oxgOjOJLDVPR0_7N7ToX7Q3GSgrVAWIq5KHW8TeDajmrsLDA"
+        },
+        "comment": "pre-revocation tool_call by run key"
+      },
+      {
+        "log_index": 2,
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2",
+          "creator_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+          "chain_root": "sha256:7e9416efb9c79e142e35538da8bb887d95d49ff4cf0867cdb91b44962ff7bfe3",
+          "delegation_cert_hash": "sha256:4bfae0ee244db6a149e9dd84c45738d192c04f0cf4a54b7911e967c036258358",
+          "event_type": "https://atrib.dev/v1/types/key_revocation",
+          "context_id": "b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7",
+          "timestamp": 1767225603000,
+          "revoked_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+          "revocation_reason": "compromise",
+          "signature": "SCibUIYiDK24XE7WaNwELKPaN2KAuk3hF_9nM9PydygjRuOs4MGD3QbnQDlZ9uNib1xTJkGjMwNf8aBfam_iBg"
+        },
+        "comment": "key_revocation signed by principal (rule 3)"
+      },
+      {
+        "log_index": 3,
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3",
+          "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+          "chain_root": "sha256:7e9416efb9c79e142e35538da8bb887d95d49ff4cf0867cdb91b44962ff7bfe3",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7",
+          "timestamp": 1767225604000,
+          "tool_name": "search",
+          "signature": "yKW3sjK79TgwBAzfKckGs36dTREJFwDaRm68gaMHUi9CHV_nyIMDn5Ne6wu32VClUQ5FhBhL9D__Qnz6OxCiBw"
+        },
+        "comment": "post-revocation tool_call by run key"
+      }
+    ],
+    "certificates": [
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "max_amount": {
+            "currency": "USD",
+            "value": 100
+          },
+          "event_types": [
+            "https://atrib.dev/v1/types/tool_call",
+            "https://atrib.dev/v1/types/observation"
+          ]
+        },
+        "signature": "WO4uQdcfYBsiSpJpPOjaN04_6w-bCj_pe6JtuUD1maSn4OFZUbpa2S0s9AI8bE_Iq7GrgPle3qQcHXMvCvwyCw"
+      }
+    ]
+  },
+  "expected": {
+    "revocation_canonical_signing_input_utf8": "{\"chain_root\":\"sha256:7e9416efb9c79e142e35538da8bb887d95d49ff4cf0867cdb91b44962ff7bfe3\",\"content_id\":\"sha256:f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2\",\"context_id\":\"b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7\",\"creator_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\",\"delegation_cert_hash\":\"sha256:4bfae0ee244db6a149e9dd84c45738d192c04f0cf4a54b7911e967c036258358\",\"event_type\":\"https://atrib.dev/v1/types/key_revocation\",\"revocation_reason\":\"compromise\",\"revoked_key\":\"gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225603000}",
+    "revocation_signature_valid": true,
+    "revoker_authorized": true,
+    "revoker_rule": "principal_via_delegation_certificate",
+    "field_slots_after": "creator_key",
+    "field_slots_before": "event_type",
+    "record_hashes": {
+      "0": "sha256:90662c3f484366f0c5143a9d50766a604292586df6ef7103d9f4a78b22f063e2",
+      "1": "sha256:9118d69939979612d110537bc650bb35fc678b7215d176840462ec7c194ef8fd",
+      "2": "sha256:1ff122b49b0de2f90d771d6716da282d9bc3c403673ddea049a59f6866b44978",
+      "3": "sha256:82f09f11723648d33efe3911f48f682bd8f3b58fa48d7eb61d1b3dbeb42391d7"
+    },
+    "verification_states": {
+      "0": "signature_valid",
+      "1": "signature_valid",
+      "2": "signature_valid",
+      "3": "revoked_after_revocation"
+    }
+  }
+}

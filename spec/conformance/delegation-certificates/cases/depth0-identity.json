@@ -1,0 +1,40 @@
+{
+  "name": "depth0-identity",
+  "spec_section": "1.11",
+  "description": "Depth-0 identity regression pin. A principal-signed record with no delegation certificate verifies EXACTLY as today: the embedded record, canonical signing input, signature, and record hash are copied verbatim from spec/conformance/1.4/signing-vectors.json (first vector) and MUST remain byte-identical to that corpus. Every record ever signed is already valid under the delegation model, by definition.",
+  "input": {
+    "source": "spec/conformance/1.4/signing-vectors.json",
+    "source_vector_name": "canonical signing, signature, and verification (atrib normative tool_call)",
+    "source_vector_index": 0,
+    "record": {
+      "spec_version": "atrib/1.0",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "timestamp": 1700000000000,
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "creator_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "content_id": "sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e",
+      "signature": "ZMjtGaUFxp3N4ZA2Vw05NBg8KiymOdNRL3uRB_QJ-zMK7MVOBBqtOA1xLo-DMmeLZfjWjfBFwrHtQemoxXXMBg"
+    },
+    "certificates": []
+  },
+  "expected": {
+    "canonical_signing_input": "{\"chain_root\":\"sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547\",\"content_id\":\"sha256:0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e\",\"context_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"creator_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\",\"event_type\":\"https://atrib.dev/v1/types/tool_call\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1700000000000}",
+    "signature_base64url": "ZMjtGaUFxp3N4ZA2Vw05NBg8KiymOdNRL3uRB_QJ-zMK7MVOBBqtOA1xLo-DMmeLZfjWjfBFwrHtQemoxXXMBg",
+    "record_hash_hex": "ea6fb413c524ab5767520516ffb8ae38a74391f7892177e0236f5f2de523b9c1",
+    "record_signature_valid": true,
+    "byte_identical_to_1_4_vector": true,
+    "delegation": {
+      "depth": 0,
+      "principal_key": null,
+      "cert_hash": null,
+      "cert_valid": null,
+      "in_window": null,
+      "context_bound": null,
+      "cert_bound": null,
+      "scope_check": null,
+      "revoked": null,
+      "errors": []
+    }
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "name": "revocation-cert-not-covering",
+  "spec_section": "1.11",
+  "description": "A key_revocation signed by a principal whose referenced certificate does NOT cover revoked_key (cert.run_pubkey differs). The revoker is not authorized; per §1.9.2 the revocation is invalid and MUST be rejected by verifiers. Records signed by revoked_key keep their verification state.",
+  "input": {
+    "log_entries": [
+      {
+        "log_index": 0,
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5",
+          "creator_key": "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E",
+          "chain_root": "sha256:059d80c68c1a31b5de64836494454ba2ba3d5bb00bdde435dccd9f4f3420b20c",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8",
+          "timestamp": 1767225601000,
+          "tool_name": "search",
+          "signature": "KApji7fgjgVYKQ8qcTfLHB1wctiG3vsBlIs5R_cCrhPH-CvIr-W6Li40cxcRejysCpNpKEsEm-tq8JOeZg_ZCQ"
+        },
+        "comment": "tool_call by run2 key"
+      },
+      {
+        "log_index": 1,
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6",
+          "creator_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+          "chain_root": "sha256:059d80c68c1a31b5de64836494454ba2ba3d5bb00bdde435dccd9f4f3420b20c",
+          "delegation_cert_hash": "sha256:4bfae0ee244db6a149e9dd84c45738d192c04f0cf4a54b7911e967c036258358",
+          "event_type": "https://atrib.dev/v1/types/key_revocation",
+          "context_id": "b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8",
+          "timestamp": 1767225602000,
+          "revoked_key": "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E",
+          "revocation_reason": "compromise",
+          "signature": "Up3-OakKvfL_aUtvlW7O5N5ZY9PhuIdM5A9wM_OaGgTUDC1cjdQIncwSV4HL_hZCUY9Vr4UylAOdFcLd6CU2DA"
+        },
+        "comment": "invalid key_revocation: referenced cert covers a different run key"
+      },
+      {
+        "log_index": 2,
+        "record": {
+          "spec_version": "atrib/1.0",
+          "content_id": "sha256:f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7",
+          "creator_key": "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E",
+          "chain_root": "sha256:059d80c68c1a31b5de64836494454ba2ba3d5bb00bdde435dccd9f4f3420b20c",
+          "event_type": "https://atrib.dev/v1/types/tool_call",
+          "context_id": "b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8",
+          "timestamp": 1767225603000,
+          "tool_name": "search",
+          "signature": "ne2GmKlzyJwT-fbDoRb4HP8x6fxYY-4l89qX5PDoJb2zCYeZZXPl50TC5X9hV2tXFw4YA_KWuSgSjciwefD9AQ"
+        },
+        "comment": "later tool_call by run2 key (unaffected)"
+      }
+    ],
+    "certificates": [
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "max_amount": {
+            "currency": "USD",
+            "value": 100
+          },
+          "event_types": [
+            "https://atrib.dev/v1/types/tool_call",
+            "https://atrib.dev/v1/types/observation"
+          ]
+        },
+        "signature": "WO4uQdcfYBsiSpJpPOjaN04_6w-bCj_pe6JtuUD1maSn4OFZUbpa2S0s9AI8bE_Iq7GrgPle3qQcHXMvCvwyCw"
+      }
+    ]
+  },
+  "expected": {
+    "revocation_signature_valid": true,
+    "revoker_authorized": false,
+    "rejection_reason": "certificate_does_not_cover_revoked_key",
+    "verification_states": {
+      "0": "signature_valid",
+      "1": "signature_valid",
+      "2": "signature_valid"
+    }
+  }
+}

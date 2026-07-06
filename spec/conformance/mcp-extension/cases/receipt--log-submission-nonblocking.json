@@ -1,0 +1,31 @@
+{
+  "name": "receipt--log-submission-nonblocking",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "log_submission is a queue status, never an awaited proof (§5.3.5, critical invariant 4). A receipt with status \"queued\" is valid BEFORE any submission settles; no inclusion proof is required to accept the receipt. The closed status enum is pinned.",
+  "input": {
+    "result_block": {
+      "token": "AMhFl4AB1uf5uH9PGo1uiCNYr6W5kbJV917TQjJ30hI.wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "receipt": {
+        "record_hash": "sha256:00c845978001d6e7f9b87f4f1a8d6e882358afa5b991b255f75ed3423277d212",
+        "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+        "context_id": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+        "event_type": "tool_call",
+        "chain_root": "sha256:5517305996955e932bd34ade377dfb9594778118b93eca5dcf7330de0827a793",
+        "log_submission": "queued"
+      }
+    }
+  },
+  "expected": {
+    "receipt_valid": true,
+    "log_submission": "queued",
+    "allowed_statuses": [
+      "queued",
+      "submitted",
+      "disabled",
+      "failed"
+    ],
+    "proof_bundle_required": false,
+    "awaiting_submission_forbidden": true
+  }
+}

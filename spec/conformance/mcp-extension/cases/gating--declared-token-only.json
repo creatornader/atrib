@@ -1,0 +1,51 @@
+{
+  "name": "gating--declared-token-only",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "The client declared the extension with accept [\"token\"]. The receipt block MUST be present and the full record body MUST be omitted (extension spec §6.4).",
+  "input": {
+    "request_meta": {
+      "io.modelcontextprotocol/clientCapabilities": {
+        "extensions": {
+          "dev.atrib/attribution": {
+            "version": "0.1",
+            "accept": [
+              "token"
+            ]
+          }
+        }
+      }
+    },
+    "signed_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1",
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "chain_root": "sha256:5517305996955e932bd34ade377dfb9594778118b93eca5dcf7330de0827a793",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "timestamp": 1783296005000,
+      "args_hash": "sha256:1113b8a0da4baab6fb8e5fb4d5c06e8c6f3e2dae41127bf5fac5fd98c619dd71",
+      "signature": "b74-riokZAWDmIe2vjkRQXJDmeKTD8gvoZ7OyzUgPx4YTH-dLaPLoJQQ6LLOqsF2m66Pi64346vd-lSn15JlAw"
+    }
+  },
+  "expected": {
+    "extension_block_present": true,
+    "record_body_present": false,
+    "result_meta": {
+      "atrib": "AMhFl4AB1uf5uH9PGo1uiCNYr6W5kbJV917TQjJ30hI.wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "tracestate": "atrib=AMhFl4AB1uf5uH9PGo1uiCNYr6W5kbJV917TQjJ30hI.wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "X-Atrib-Chain": "AMhFl4AB1uf5uH9PGo1uiCNYr6W5kbJV917TQjJ30hI.wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "dev.atrib/attribution": {
+        "token": "AMhFl4AB1uf5uH9PGo1uiCNYr6W5kbJV917TQjJ30hI.wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+        "receipt": {
+          "record_hash": "sha256:00c845978001d6e7f9b87f4f1a8d6e882358afa5b991b255f75ed3423277d212",
+          "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+          "context_id": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+          "event_type": "tool_call",
+          "chain_root": "sha256:5517305996955e932bd34ade377dfb9594778118b93eca5dcf7330de0827a793",
+          "log_submission": "queued"
+        }
+      }
+    }
+  }
+}

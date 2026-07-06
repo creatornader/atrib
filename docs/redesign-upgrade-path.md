@@ -273,3 +273,34 @@ layer ported against the existing conformance corpora (1.2.6, 1.4, 3.2.4,
 multi-producer 1.2.3). See
 [`atrib-sdk-session-brief.md`](atrib-sdk-session-brief.md) for the handoff
 brief.
+
+## Tranche-1 verifier punch list (open coverage gaps, 2026-07-06)
+
+The adversarial verifier pass confirmed all five tranche-1 implementations
+against their reference tests and recomputed vectors, and found no landed
+correctness defect (two walk/vector defects were found and fixed in-pass). The
+following coverage gaps versus the ADR drafts' corpus plans remain open and
+are tracked here until closed:
+
+- **evidence-envelope (P042):** hash-mismatch adversarial family; sanitization
+  family (inline-stripped public projection, leakage detection); the five
+  `docs/evidence-profiles/<name>.md` profile documents the §5.5.7 registration
+  rule requires; non-semver `profile_version` rejection vector.
+- **anchors (P043):** per-type negative vectors (Rekor bad embedded signature
+  / bad timestamp; RFC 3161 / OTS cryptographic adversarial cases); §2.11.9
+  rule (a)/(b) malformed-combination vectors; pin the unknown-anchor_type +
+  missing-fields precedence (malformed wins over unknown).
+- **session-checkpoint (P044):** inclusion-proof family (valid / wrong index /
+  wrong root / truncated path); §3.2.4 graph-derivation addition (chain-spine
+  only, no CONVERGES_ON); consistency negatives (reordered leaves,
+  first_index / prior_checkpoint mismatch); foreign-context_id leaf fault.
+- **delegation-certificates (P045):** malformed-key certificate family;
+  ambiguity-rule and depth-limit vectors; `docs/evidence-profiles/`
+  delegation-certificate profile doc; §6.3 principal-resolution walk step;
+  Appendix A.10 mention.
+- **mcp-extension (P049):** legacy-initialize gating vector; a
+  `packages/mcp/test/` producer-side reference test to complement the
+  verify-side suite.
+
+Closing items from this list is ordinary corpus work: extend the generator,
+regenerate, extend the reference test, same commit.

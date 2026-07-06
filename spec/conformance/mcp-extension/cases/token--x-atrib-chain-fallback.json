@@ -1,0 +1,15 @@
+{
+  "name": "token--x-atrib-chain-fallback",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "Only the X-Atrib-Chain fallback carrier is present. It resolves last (rung 4).",
+  "input": {
+    "request_meta": {
+      "X-Atrib-Chain": "3gpXAsplmpUinC4qou4IlZkePc3iOQs8eJ6dKDFBAV4.K8KACzMW4Akgn_11fasZzPCuhLx66QZU4egXEtJw9lM"
+    }
+  },
+  "expected": {
+    "resolved_source": "x-atrib-chain",
+    "resolved_record_hash_hex": "de0a5702ca659a95229c2e2aa2ee0895991e3dcde2390b3c789e9d283141015e"
+  }
+}
