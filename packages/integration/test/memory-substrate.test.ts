@@ -72,51 +72,51 @@ const TAIL_PRIORITY_ITEMS: MemoryItem[] = [
   { type: 'revision', prior: 'state011', new: 'tailtoken current state', reason: 'r12', topic: 'tail-priority', msg_start: 23, msg_end: 24 },
 ]
 
-const EXPECTED_SATURATION_HEADROOM = `- SECOND saffron pilot recall field recorder beta [saturation]
-- TOPSEED saffron pilot recall field recorder priority alpha [saturation]
-- THIRD saffron pilot recall field notes gamma [saturation]
-- [REVISED] was: "Catalogs nebula cadet repair notes" -> now: "Uses field recorder for saffron pilot recall" BECAUSE: "hands needed to stay free during repairs" (saturation)
-- FOURTH saffron pilot recall checklist delta [saturation]
-- SEVENTH pilot recall eta [saturation]`
+const EXPECTED_SATURATION_HEADROOM = `- SECOND saffron pilot recall field recorder beta [saturation] (as of msg 8)
+- TOPSEED saffron pilot recall field recorder priority alpha [saturation] (as of msg 6)
+- THIRD saffron pilot recall field notes gamma [saturation] (as of msg 10)
+- [REVISED] was: "Catalogs nebula cadet repair notes" -> now: "Uses field recorder for saffron pilot recall" BECAUSE: "hands needed to stay free during repairs" (saturation) (as of msg 4)
+- FOURTH saffron pilot recall checklist delta [saturation] (as of msg 12)
+- SEVENTH pilot recall eta [saturation] (as of msg 18)`
 
-const EXPECTED_CHAINLESS_HEADROOM = `- TOPCHAINLESS cobalt orchard recall field recorder alpha [chainless]
-- SECONDCHAINLESS cobalt orchard recall field recorder beta [chainless]
-- THIRDCHAINLESS cobalt orchard recall field notes gamma [chainless]
-- FOURTHCHAINLESS cobalt orchard recall checklist delta [chainless]
-- SIXTHCHAINLESS cobalt recall zeta [chainless]`
+const EXPECTED_CHAINLESS_HEADROOM = `- TOPCHAINLESS cobalt orchard recall field recorder alpha [chainless] (as of msg 2)
+- SECONDCHAINLESS cobalt orchard recall field recorder beta [chainless] (as of msg 4)
+- THIRDCHAINLESS cobalt orchard recall field notes gamma [chainless] (as of msg 6)
+- FOURTHCHAINLESS cobalt orchard recall checklist delta [chainless] (as of msg 8)
+- SIXTHCHAINLESS cobalt recall zeta [chainless] (as of msg 12)`
 
-const EXPECTED_SATURATION_COMPOSED = `- SECOND saffron pilot recall field recorder beta [saturation]
-- TOPSEED saffron pilot recall field recorder priority alpha [saturation]
-- THIRD saffron pilot recall field notes gamma [saturation]
+const EXPECTED_SATURATION_COMPOSED = `- SECOND saffron pilot recall field recorder beta [saturation] (as of msg 8)
+- TOPSEED saffron pilot recall field recorder priority alpha [saturation] (as of msg 6)
+- THIRD saffron pilot recall field notes gamma [saturation] (as of msg 10)
 - [chain: saturation, 2 steps]
-  step 1/2: - Catalogs nebula cadet repair notes (reason: amberwhy98 marker explains the old repair choice) [saturation]
-  step 2/2: - [REVISED] was: "Catalogs nebula cadet repair notes" -> now: "Uses field recorder for saffron pilot recall" BECAUSE: "hands needed to stay free during repairs" (saturation)`
+  step 1/2: - Catalogs nebula cadet repair notes (reason: amberwhy98 marker explains the old repair choice) [saturation] (as of msg 2)
+  step 2/2: - [REVISED] was: "Catalogs nebula cadet repair notes" -> now: "Uses field recorder for saffron pilot recall" BECAUSE: "hands needed to stay free during repairs" (saturation) (as of msg 4)`
 
 const EXPECTED_COMPACT_CHAIN_FULL = `- [chain: deep-chain, 10 steps]
-  step 1/10: - [REVISED] was: "node000" -> now: "node001" BECAUSE: "reason01 extra admission padding" (deep-chain)
-  step 2/10: - [REVISED] was: "node001" -> now: "node002" BECAUSE: "reason02 extra admission padding" (deep-chain)
-  step 3/10: - [REVISED] was: "node002" -> now: "node003" BECAUSE: "reason03 extra admission padding" (deep-chain)
-  step 4/10: - [REVISED] was: "node003" -> now: "node004" BECAUSE: "reason04 extra admission padding" (deep-chain)
-  step 5/10: - [REVISED] was: "node004" -> now: "node005" BECAUSE: "reason05 extra admission padding" (deep-chain)
-  step 6/10: - [REVISED] was: "node005" -> now: "node006" BECAUSE: "reason06 extra admission padding" (deep-chain)
-  step 7/10: - [REVISED] was: "node006" -> now: "node007" BECAUSE: "reason07 extra admission padding" (deep-chain)
-  step 8/10: - [REVISED] was: "node007" -> now: "node008" BECAUSE: "reason08 extra admission padding" (deep-chain)
-  step 9/10: - [REVISED] was: "node008" -> now: "node009" BECAUSE: "reason09 extra admission padding" (deep-chain)
-  step 10/10: - [REVISED] was: "node009" -> now: "node010 terminal current state" BECAUSE: "reason10 terminal marker padding" (deep-chain)`
+  step 1/10: - [REVISED] was: "node000" -> now: "node001" BECAUSE: "reason01 extra admission padding" (deep-chain) (as of msg 2)
+  step 2/10: - [REVISED] was: "node001" -> now: "node002" BECAUSE: "reason02 extra admission padding" (deep-chain) (as of msg 4)
+  step 3/10: - [REVISED] was: "node002" -> now: "node003" BECAUSE: "reason03 extra admission padding" (deep-chain) (as of msg 6)
+  step 4/10: - [REVISED] was: "node003" -> now: "node004" BECAUSE: "reason04 extra admission padding" (deep-chain) (as of msg 8)
+  step 5/10: - [REVISED] was: "node004" -> now: "node005" BECAUSE: "reason05 extra admission padding" (deep-chain) (as of msg 10)
+  step 6/10: - [REVISED] was: "node005" -> now: "node006" BECAUSE: "reason06 extra admission padding" (deep-chain) (as of msg 12)
+  step 7/10: - [REVISED] was: "node006" -> now: "node007" BECAUSE: "reason07 extra admission padding" (deep-chain) (as of msg 14)
+  step 8/10: - [REVISED] was: "node007" -> now: "node008" BECAUSE: "reason08 extra admission padding" (deep-chain) (as of msg 16)
+  step 9/10: - [REVISED] was: "node008" -> now: "node009" BECAUSE: "reason09 extra admission padding" (deep-chain) (as of msg 18)
+  step 10/10: - [REVISED] was: "node009" -> now: "node010 terminal current state" BECAUSE: "reason10 terminal marker padding" (deep-chain) (as of msg 20)`
 
 const EXPECTED_TAIL_PRIORITY_FULL = `- [chain: tail-priority, 12 steps]
-  step 1/12: - [REVISED] was: "state000" -> now: "state001" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority)
-  step 2/12: - [REVISED] was: "state001" -> now: "state002" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority)
-  step 3/12: - [REVISED] was: "state002" -> now: "state003" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority)
-  step 4/12: - [REVISED] was: "state003" -> now: "state004" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority)
-  step 5/12: - [REVISED] was: "state004" -> now: "state005" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority)
-  step 6/12: - [REVISED] was: "state005" -> now: "state006 midchain anchor" BECAUSE: "midneedle admission trigger" (tail-priority)
-  step 7/12: - [REVISED] was: "state006 midchain anchor" -> now: "state007" BECAUSE: "r07" (tail-priority)
-  step 8/12: - [REVISED] was: "state007" -> now: "state008" BECAUSE: "r08" (tail-priority)
-  step 9/12: - [REVISED] was: "state008" -> now: "state009" BECAUSE: "r09" (tail-priority)
-  step 10/12: - [REVISED] was: "state009" -> now: "state010" BECAUSE: "r10" (tail-priority)
-  step 11/12: - [REVISED] was: "state010" -> now: "state011" BECAUSE: "r11" (tail-priority)
-  step 12/12: - [REVISED] was: "state011" -> now: "tailtoken current state" BECAUSE: "r12" (tail-priority)`
+  step 1/12: - [REVISED] was: "state000" -> now: "state001" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority) (as of msg 2)
+  step 2/12: - [REVISED] was: "state001" -> now: "state002" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority) (as of msg 4)
+  step 3/12: - [REVISED] was: "state002" -> now: "state003" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority) (as of msg 6)
+  step 4/12: - [REVISED] was: "state003" -> now: "state004" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority) (as of msg 8)
+  step 5/12: - [REVISED] was: "state004" -> now: "state005" BECAUSE: "${TAIL_PRIORITY_OLD_REASON}" (tail-priority) (as of msg 10)
+  step 6/12: - [REVISED] was: "state005" -> now: "state006 midchain anchor" BECAUSE: "midneedle admission trigger" (tail-priority) (as of msg 12)
+  step 7/12: - [REVISED] was: "state006 midchain anchor" -> now: "state007" BECAUSE: "r07" (tail-priority) (as of msg 14)
+  step 8/12: - [REVISED] was: "state007" -> now: "state008" BECAUSE: "r08" (tail-priority) (as of msg 16)
+  step 9/12: - [REVISED] was: "state008" -> now: "state009" BECAUSE: "r09" (tail-priority) (as of msg 18)
+  step 10/12: - [REVISED] was: "state009" -> now: "state010" BECAUSE: "r10" (tail-priority) (as of msg 20)
+  step 11/12: - [REVISED] was: "state010" -> now: "state011" BECAUSE: "r11" (tail-priority) (as of msg 22)
+  step 12/12: - [REVISED] was: "state011" -> now: "tailtoken current state" BECAUSE: "r12" (tail-priority) (as of msg 24)`
 
 describe('memory substrate', () => {
   it('signs verifiable records and links revisions to the superseded record', async () => {
@@ -155,6 +155,40 @@ describe('memory substrate', () => {
     expect(before).toContain('podcasting')
     const after = retrieveMemory(signed, 'podcasting', { budgetTokens: 400, windowEnd: 100 })
     expect(after).toContain('BECAUSE')
+  })
+
+  it('renders temporal provenance on memory lines', async () => {
+    const contradictionItems: MemoryItem[] = [
+      { type: 'fact', statement: 'Notebook page count is 220', topic: 'draft', msg_start: 1, msg_end: 2 },
+      { type: 'fact', statement: 'Notebook page count is 200', topic: 'draft', msg_start: 9, msg_end: 10 },
+      { type: 'fact', statement: 'Notebook shelf marker has no temporal metadata', topic: 'draft' },
+    ]
+    const contradictionSigned = await signMemoryItems(contradictionItems, 'ctx-temporal-provenance')
+    const contradictionOut = retrieveMemory(contradictionSigned, 'notebook page count', { budgetTokens: 400, expandChains: false })
+    const contradictionLines = contradictionOut.split('\n')
+    const olderLine = contradictionLines.find((line) => line.includes('220'))
+    const newerLine = contradictionLines.find((line) => line.includes('200'))
+
+    expect(olderLine).toMatch(/ \(as of msg 2\)$/)
+    expect(newerLine).toMatch(/ \(as of msg 10\)$/)
+    const suffixPositions = [olderLine, newerLine].map((line) => Number(line?.match(/msg ([0-9]+)\)$/)?.[1] ?? 0))
+    expect(suffixPositions).toEqual([2, 10])
+
+    const noTemporalOut = retrieveMemory([contradictionSigned[2]!], 'shelf marker', { budgetTokens: 400, expandChains: false })
+    expect(noTemporalOut).toContain('Notebook shelf marker')
+    expect(noTemporalOut).not.toMatch(/ \(as of [^)]+\)$/)
+
+    const chainItems: MemoryItem[] = [
+      { type: 'preference', statement: 'Keeps yellow paper binder before repairs', reason: 'binder has diagrams', topic: 'manuals', msg_start: 3, msg_end: 4 },
+      { type: 'revision', prior: 'Keeps yellow paper binder before repairs', new: 'Uses searchable digital manuals', reason: 'finding sections is faster', topic: 'manuals', msg_start: 11, msg_end: 12 },
+    ]
+    const chainSigned = await signMemoryItems(chainItems, 'ctx-temporal-chain')
+    const chainOut = retrieveMemory(chainSigned, 'searchable digital manuals', { budgetTokens: 60 })
+    const stepLines = chainOut.split('\n').filter((line) => line.startsWith('  step '))
+
+    expect(stepLines).toHaveLength(2)
+    expect(stepLines[0]).toMatch(/ \(as of msg 4\)$/)
+    expect(stepLines[1]).toMatch(/ \(as of msg 12\)$/)
   })
 
   it("renders the revision's own signed prior_position even when the REVISES link is wrong", async () => {

@@ -244,8 +244,29 @@ const clip = (s: unknown, n: number): string => {
   return t.length <= n ? t : t.slice(0, n) + '…'
 }
 
+function formatContentDate(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed || undefined
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return new Date(value).toISOString()
+  }
+  return undefined
+}
+
+function temporalProvenanceSuffix(m: SignedMemory): string {
+  const contentDate = formatContentDate(m.content.date)
+  if (contentDate) return ` (as of ${contentDate})`
+  return Number.isFinite(m.msg_end) && m.msg_end > 0 ? ` (as of msg ${m.msg_end})` : ''
+}
+
+function appendTemporalProvenance(line: string, m: SignedMemory): string {
+  return line + temporalProvenanceSuffix(m)
+}
+
 /** Render one record as a memory line; own signed content renders, while `revises` drives expansion and chain composition. */
-function renderLine(m: SignedMemory, compact = false, noteForm = false): string {
+function renderLineCore(m: SignedMemory, compact = false, noteForm = false): string {
   const c = m.content
   const isRevision = m.record.event_type === EVENT_TYPE_REVISION_URI || c.prior_position !== undefined
   if (noteForm) {
@@ -264,6 +285,10 @@ function renderLine(m: SignedMemory, compact = false, noteForm = false): string 
   }
   if (compact) return `- ${clip(c.statement, 110)}${c.reason ? ` (reason: ${clip(c.reason, 90)})` : ''}${c.topic ? ` [${c.topic}]` : ''}`
   return `- ${c.statement}${c.reason ? ` (reason: ${c.reason})` : ''}${c.topic ? ` [${c.topic}]` : ''}`
+}
+
+function renderLine(m: SignedMemory, compact = false, noteForm = false): string {
+  return appendTemporalProvenance(renderLineCore(m, compact, noteForm), m)
 }
 
 function chainTopic(records: SignedMemory[]): string {
@@ -525,7 +550,7 @@ function forceAddSeed<T extends MutableSelectedSeed | Choice>(
 ): void {
   admitted.add(seed.hash)
   target.push(makeEntry(seed, score))
-  admission.admitLine(renderLine(seed, compact, noteForm))
+  admission.admitLine(renderLineCore(seed, compact, noteForm))
 }
 
 function tryAddSeed<T extends MutableSelectedSeed | Choice>(
@@ -539,7 +564,7 @@ function tryAddSeed<T extends MutableSelectedSeed | Choice>(
   noteForm: boolean,
   makeEntry: (seed: SignedMemory, score: number) => T,
 ): boolean {
-  const line = renderLine(seed, compact, noteForm)
+  const line = renderLineCore(seed, compact, noteForm)
   if (admission.lineLengthAfterAppend(line) > targetBudget) return false
   admitted.add(seed.hash)
   target.push(makeEntry(seed, score))
@@ -580,8 +605,8 @@ function admitRankedSeeds<T extends MutableSelectedSeed | Choice>(
 }
 
 function isEchoSubset(seed: SignedMemory, member: SignedMemory, compact: boolean, noteForm: boolean): boolean {
-  const seedTokens = new Set(contentTokens(renderLine(seed, compact, noteForm)))
-  const memberTokens = new Set(contentTokens(renderLine(member, compact, noteForm)))
+  const seedTokens = new Set(contentTokens(renderLineCore(seed, compact, noteForm)))
+  const memberTokens = new Set(contentTokens(renderLineCore(member, compact, noteForm)))
   for (const token of memberTokens) {
     if (!seedTokens.has(token)) return false
   }
@@ -628,7 +653,7 @@ function expandSeedMembers(
         continue
       }
 
-      const line = renderLine(member, opts.compact, opts.noteForm)
+      const line = renderLineCore(member, opts.compact, opts.noteForm)
       if (admission.lineLengthAfterAppend(line) > opts.budget) {
         seed.onDrop?.(member)
         dropped.push({ record: member, from: seed.record.hash })

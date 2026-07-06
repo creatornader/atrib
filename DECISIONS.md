@@ -7724,6 +7724,20 @@ are the current coverage.
 
 **Alternatives considered.** (a) Render-side fix, promoting the terminal record's line position: measured to be unnecessary (accuracy is high whenever the record is present) and it cannot restore a record admission dropped, rejected. (b) Reserve a fixed byte quota for the terminal record: adds a second budget mechanism where an ordering rule suffices, rejected. (c) Always admit both terminal record and full path line unconditionally: can displace the seed's own content under extreme budgets, violating selection precedence, rejected.
 
+## D146: Rendered memory lines carry temporal provenance
+
+**Date:** 2026-07-06
+
+**Status:** Accepted
+
+**Extends:** [D143](#d143-revision-lineage-renders-as-an-ordered-connected-chain) and [D145](#d145-the-lineage-tail-wins-budget-admission).
+
+**Context.** When two records assert contradictory states of the same fact and no revision link connects them, the composed memory presented both as unordered peers. Measured on an external benchmark, the consuming model abstained on exactly these questions while chronologically-ordered raw text answered them, because time order alone arbitrates recency. Every signed record already carries temporal metadata; the renderer discarded it.
+
+**Decision.** Rendered memory lines append a compact temporal-provenance suffix derived from each record's own metadata, in every line form except the capped path line. Records without temporal metadata render without a suffix. Ordering, selection, linking, and budgets are unchanged: the suffix presents signed provenance, it does not synthesize relationships the graph has not certified.
+
+**Alternatives considered.** (a) Synthesize recency ordering for unlinked same-topic contradictions: invents relationships the graph does not certify, violating the fact-layer posture, rejected. (b) Strengthen the matcher so such contradictions always link: complementary and possibly worthwhile, but it cannot cover states that genuinely are not revisions, and it changes graph facts rather than presentation, deferred pending measurement of what provenance alone recovers. (c) Leave arbitration to the consumer: measured to produce abstention, rejected.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
