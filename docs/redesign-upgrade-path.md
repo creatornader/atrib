@@ -284,19 +284,19 @@ are tracked here until closed:
 
 - **evidence-envelope (P042):** hash-mismatch adversarial family; sanitization
   family (inline-stripped public projection, leakage detection); the five
-  `docs/evidence-profiles/<name>.md` profile documents the §5.5.7 registration
+  `docs/evidence-profiles/<name>.md` profile documents the [§5.5.7](../atrib-spec.md#557-universal-evidence-envelope) registration
   rule requires; non-semver `profile_version` rejection vector.
 - **anchors (P043):** per-type negative vectors (Rekor bad embedded signature
-  / bad timestamp; RFC 3161 / OTS cryptographic adversarial cases); §2.11.9
+  / bad timestamp; RFC 3161 / OTS cryptographic adversarial cases); [§2.11.9](../atrib-spec.md#2119-log_proofs-element-discriminator)
   rule (a)/(b) malformed-combination vectors; pin the unknown-anchor_type +
   missing-fields precedence (malformed wins over unknown).
 - **session-checkpoint (P044):** inclusion-proof family (valid / wrong index /
-  wrong root / truncated path); §3.2.4 graph-derivation addition (chain-spine
+  wrong root / truncated path); [§3.2.4](../atrib-spec.md#324-edge-derivation-rules) graph-derivation addition (chain-spine
   only, no CONVERGES_ON); consistency negatives (reordered leaves,
   first_index / prior_checkpoint mismatch); foreign-context_id leaf fault.
 - **delegation-certificates (P045):** malformed-key certificate family;
   ambiguity-rule and depth-limit vectors; `docs/evidence-profiles/`
-  delegation-certificate profile doc; §6.3 principal-resolution walk step;
+  delegation-certificate profile doc; [§6.3](../atrib-spec.md#63-verifier-consultation-algorithm) principal-resolution walk step;
   Appendix A.10 mention.
 - **mcp-extension (P049):** legacy-initialize gating vector; a
   `packages/mcp/test/` producer-side reference test to complement the
