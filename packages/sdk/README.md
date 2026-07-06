@@ -99,6 +99,349 @@ URI, four-tier ladder `declared → shape → attested → verified`, payload
 commitment, verifier facts). Types only in v0: the legacy `protocol`
 string set is frozen; every new evidence kind is an envelope profile.
 
+## API reference
+
+Everything below is exported from the package root (`import { … } from
+'@atrib/sdk'`). The surface splits into the SDK layer (the two verbs, the
+config, the daemon transport, the hash helpers, the evidence and receipt
+types) and the record layer re-exported verbatim from `@atrib/mcp` and
+`@atrib/emit`.
+
+### `createAtribClient(config?)` → `AtribClient`
+
+Builds a client from an [`AtribClientConfig`](#atribclientconfig)
+(default `{}`). Construction is cheap and never throws on operational
+problems: the daemon connection is lazy (first call), the in-process
+signing key resolves lazily on the first attest that needs it, and anchor
+normalization collects warnings instead of erroring.
+
+```ts
+interface AtribClient {
+  attest(input: AttestInput): Promise<AttestResult>
+  recall<T = unknown>(query: RecallQuery): Promise<RecallOutcome<T>>
+  close(): Promise<void>
+}
+```
+
+**Throw vs degrade.** Both verbs follow the
+[§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)
+degradation contract: operational failures (daemon unreachable, tool
+error, missing key, missing optional peer, log unreachable) never throw —
+they degrade into `warnings` on the result, with `via: 'none'` when
+nothing could serve the call. The only throw paths are contradictory or
+malformed **inputs** (programmer error): a `ref.kind` that contradicts an
+explicit `event_type`, an unknown `ref.kind`, an unknown recall `shape`,
+or an input shape that fails `emitInProcess`'s schema validation.
+
+**`attest(input)` semantics.** Maps `AttestInput` to the shared
+`EmitInput` argument shape via `buildEmitArgs` (exported; throws
+`TypeError` on contradictory input — the write verb's only throw path),
+then tries paths in order:
+
+1. **Daemon** (`daemon.mode` `'prefer'` or `'require'`): calls the `emit`
+   tool on the primitives runtime. The daemon owns the signing key. A
+   structurally-garbage daemon result (no `record_hash` string) counts as
+   a daemon failure, not a silent all-null success.
+2. **In-process** (`'prefer'` after a daemon failure, or `'off'`): resolves
+   the caller-owned key (see `key` in
+   [`AtribClientConfig`](#atribclientconfig)) and calls `emitInProcess`
+   from `@atrib/emit` with the configured `producer` and the first anchor
+   as `logEndpoint`. No key → pass-through result (`via: 'none'`,
+   `record_hash: null`) with a warning, per
+   [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)
+   rule 5.
+
+Under `daemon.mode: 'require'`, a daemon failure returns the degraded
+`via: 'none'` result directly — it never falls back and never throws.
+
+**`recall(query)` semantics.** Resolves the shape (`query.shape`, default
+`'history'`), maps it to the physical tool name via `SHAPE_TO_TOOL`
+(exported), strips the SDK-only `shape` discriminator and `undefined`
+values, and injects the client's default `context_id` for the
+`session_chain` and `orphans` shapes when the query omits it. Then:
+daemon first; on failure, the in-process fallback for the two shapes
+whose engines are exported as libraries today (`history`, `verify`);
+every other shape degrades to `via: 'none'` with a warning naming the
+runtime tool to use instead. See the
+[shape table](#recallquery-shapes) for the full routing.
+
+**`close()`** closes the daemon transport if one was opened. Best-effort;
+never throws. Safe to call when `daemon.mode` was `'off'`.
+
+### `AttestInput` / `AttestRef`
+
+One write shape collapsing emit / annotate / revise. `ref` is the
+discriminator:
+
+```ts
+interface AttestRef {
+  kind: 'annotates' | 'revises'
+  record_hash: string // sha256:<64-hex>
+}
+```
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `content` | `Record<string, unknown>` | yes | The content being attested. Committed via default `args_hash` = `sha256(JCS(content))` per [D099](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d099-explicit-emit-records-commit-local-content-through-default-args_hash); full content stays in the local mirror sidecar. |
+| `event_type` | `string` | no | Short name (`'observation'`, `'annotation'`, …) or absolute URI. Default `'observation'`, or derived from `ref.kind` (`'annotates'` → annotation, `'revises'` → revision). An explicit value that contradicts `ref.kind` throws `TypeError`. |
+| `ref` | `AttestRef` | no | Collapsed annotate/revise reference; sets the record's `annotates` or `revises` field. |
+| `informed_by` | `string[]` | no | `sha256:<64-hex>` refs of records this one was informed by ([§1.2.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#125-informed_by)). |
+| `allow_unresolved_informed_by` | `boolean` | no | Keep deliberately dangling `informed_by` refs ([D113](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d113-unvalidated-informed_by-refs-are-omitted-by-default) opt-in). |
+| `context_id` | `string` | no | Explicit context (32 lowercase hex). Default: the client's `contextId`, else `resolveEnvContextId()` ([D078](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)). |
+| `chain_root` | `string` | no | Explicit chain_root override (requires a context_id). Default: [`resolveChainRoot`](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#1231-multi-producer-chain-composition) precedence in the emit pipeline. |
+| `provenance_token` | `string` | no | [§1.2.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#126-provenance_token) cross-session anchor (genesis-only, 22-char base64url). |
+| `tool_name` | `string` | no | [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) tool-name disclosure. |
+| `args_hash` | `string` | no | Explicit [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) args commitment (overrides the [D099](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d099-explicit-emit-records-commit-local-content-through-default-args_hash) default). |
+| `result_hash` | `string` | no | Explicit [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) result commitment. |
+
+### `AttestResult`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `record_hash` | `string \| null` | `sha256:<64-hex>` of the signed record, or `null` when nothing was signed (degraded). |
+| `context_id` | `string \| null` | Context the record landed in. |
+| `log_index` | `number \| null` | Public-log index when submission already confirmed; `null` while in flight or disabled. |
+| `inclusion_proof` | `ProofBundle['inclusion_proof'] \| null` | RFC 6962 inclusion proof when already available (cached by record hash per [§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission)). |
+| `receipt_id` | `string?` | Present when the emit pipeline issued a receipt id. |
+| `via` | `'daemon' \| 'in-process' \| 'none'` | Which path produced the record. `'none'` = degraded; see `warnings`. |
+| `warnings` | `string[]` | `atrib:`-prefixed operational warnings (anchor skips, fallbacks, pass-through, flush deadline). |
+| `attribution_receipt` | `AttributionReceiptBlock?` | `dev.atrib/attribution` receipt from the daemon result's `_meta`; only when `attributionReceipts: true` and the daemon emitted one. Advisory. |
+
+### `RecallQuery` shapes
+
+`RecallQuery` is the union of ten query interfaces discriminated by
+`shape` (omitted `shape` means `'history'`). `SHAPE_TO_TOOL` maps each
+shape to its physical tool name on the primitives runtime; the fallback
+column says what serves the shape when no daemon is reachable.
+
+| Shape | Daemon tool | In-process fallback | Args (beyond `shape`) |
+| --- | --- | --- | --- |
+| `history` (`HistoryQuery`) | `recall_my_attribution_history` | `recall()` from `@atrib/recall` (optional peer) | `context_id?`, `context_scope?` (`'all' \| 'env'`), `creator_key?`, `event_type?`, `content_id?`, `tool_name?`, `args_hash?`, `min_importance?` (`'critical' \| 'high' \| 'medium' \| 'low' \| 'noise'`), `topic_tags?`, `include_revised?`, `min_signers?`, `rank_by?` (`'timestamp' \| 'relevance' \| 'causal_distance'`), `rank_anchor?`, `toc?`, `limit?`, `offset?`, `compact?`, `include_unverified?` |
+| `walk` (`WalkQuery`) | `recall_walk` | none (degrades) | `from_record_hash` (required), `edge_types?` (`'CHAIN_PRECEDES' \| 'INFORMED_BY' \| 'ANNOTATES' \| 'REVISES'`), `depth?` |
+| `annotations` (`AnnotationsQuery`) | `recall_annotations` | none (degrades) | `record_hash` (required) |
+| `revisions` (`RevisionsQuery`) | `recall_revisions` | none (degrades) | `record_hash` (required) |
+| `by_content` (`ByContentQuery`) | `recall_by_content` | none (degrades) | `query` (required), `k?`, `max_records?`, `evidence_mode?` (`'bounded' \| 'require_complete'`) |
+| `session_chain` (`SessionChainQuery`) | `recall_session_chain` | none (degrades) | `context_id?` (defaulted from the client), `limit?`, `include_content?` |
+| `orphans` (`OrphansQuery`) | `recall_orphans` | none (degrades) | `context_id?` (defaulted from the client), `event_type?`, `creator_key?`, `limit?` |
+| `by_signer` (`BySignerQuery`) | `recall_by_signer` | none (degrades) | `min_records?` |
+| `trace` / `trace_forward` (`TraceQuery`) | `trace` / `trace_forward` | none (degrades) | `record_hash` (required), `context_id?`, `depth?`, `max_nodes?`, `compact?`, `include_content?` |
+| `verify` (`VerifyQuery`) | `atrib-verify` | `handleAtribVerify()` from `@atrib/verify-mcp` (optional peer) | `packet?`, `records?`, `claims?`, `required_record_hashes?`, `trusted_creator_keys?`, `allowed_context_ids?`, `require_body?`, `require_body_commitment?`, `require_log_inclusion?`, `log_public_key_b64?`, `now_ms?`, `max_age_ms?` |
+
+`verify` is Pattern 3 handoff-claim verification
+([D105](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance)/[D106](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7)).
+"None (degrades)" shapes return `via: 'none'`, `data: null`, and a
+warning naming the runtime tool — honestly, rather than via a divergent
+reimplementation. When a peer-backed fallback engine itself throws, that
+too is caught and degraded.
+
+### `RecallOutcome<T>`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `shape` | `RecallShape` | Echo of the resolved shape. |
+| `via` | `'daemon' \| 'in-process' \| 'none'` | Which path served the read. `'none'` = degraded; see `warnings`. |
+| `data` | `T \| null` | The tool/engine result (parsed JSON when the daemon returned the single-JSON-text-block convention), or `null` when degraded. |
+| `warnings` | `string[]` | `atrib:`-prefixed operational warnings. |
+| `attribution_receipt` | `AttributionReceiptBlock?` | As on `AttestResult`; opt-in, advisory. |
+
+### `AtribClientConfig`
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `daemon` | `DaemonConfig` | see below | Daemon endpoint/mode/timeouts. |
+| `anchors` | `AnchorSpec[]` | `[$ATRIB_LOG_ENDPOINT ?? https://log.atrib.dev/v1/entries]` (applied by the emit pipeline when no anchor resolves) | Submission targets. Only the first atrib-log anchor is submitted to today; extras warn. |
+| `allowSingleAnchor` | `boolean` | — | Currently informational: today's default posture IS single-anchor. Becomes the explicit escape hatch when the ≥2-anchor default posture ([P043](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p043-anchor-plurality-as-the-default-trust-posture)) lands. |
+| `attributionReceipts` | `boolean` | `false` | Opt-in parsing of `dev.atrib/attribution` receipts from daemon `_meta` (P049 draft). |
+| `key` | `ResolvedKey \| null` | `resolveKey()` ladder from `@atrib/emit` (`ATRIB_PRIVATE_KEY` env → `ATRIB_KEY_FILE` → macOS Keychain → 1Password) | Pre-resolved in-process signing key. `null` disables in-process signing (pass-through per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) rule 5). Note: *any* explicitly-set `key` property opts out of the `resolveKey()` ladder. |
+| `contextId` | `string` | `resolveEnvContextId()` at call time | Per-client default context (32 lowercase hex). Context identity stays an explicit per-request value (stateless-MCP-native posture). |
+| `producer` | `string` | `'atrib-sdk'` (`DEFAULT_PRODUCER`) | `_local.producer` mirror-sidecar label ([§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions)); in-process path only. |
+
+### `DaemonConfig` / `DaemonMode`
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `endpoint` | `string` | `$ATRIB_PRIMITIVES_HTTP_ENDPOINT`, then `http://127.0.0.1:8796/mcp` (`DEFAULT_DAEMON_ENDPOINT`) | MCP Streamable HTTP endpoint of the local primitives runtime. |
+| `mode` | `'prefer' \| 'require' \| 'off'` | `'prefer'` | `'prefer'`: try daemon, fall back in-process. `'require'`: daemon only; failure degrades to a warning result (never a throw). `'off'`: in-process only (no `DaemonClient` is constructed). |
+| `connectTimeoutMs` | `number` | `1500` | Daemon connect timeout. |
+| `callTimeoutMs` | `number` | `10000` | Per-`tools/call` timeout. |
+| `retryCooldownMs` | `number` | `30000` | Cooldown before re-probing an unreachable daemon; within the window, calls skip straight to the fallback. |
+
+`resolveDaemonEndpoint(config?)` applies exactly that endpoint
+precedence and is exported for hosts that want to probe the runtime
+themselves.
+
+### `AnchorSpec` / `resolveAnchorSet(anchors)` → `ResolvedAnchorSet`
+
+An anchor is either a bare string (an atrib-log
+[§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry)
+endpoint) or `{ endpoint: string, anchor_type?: string }` — the
+[P043](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p043-anchor-plurality-as-the-default-trust-posture)
+headroom, where absent/`'atrib-log'` means an atrib log and any other
+`anchor_type` (e.g. `'rekor'`, `'rfc3161-tsa'`) is skipped with a
+warning until anchor plurality lands.
+
+`resolveAnchorSet` normalizes the set to today's single-atrib-log
+posture and never throws: malformed entries (non-string/non-object,
+missing `endpoint`, invalid URL) warn-and-skip; more than one surviving
+atrib-log endpoint warns that only the first is submitted to. Returns
+`{ primaryLogEndpoint: string | undefined, warnings: string[] }`.
+
+### `DaemonClient` / `DaemonCallOutcome`
+
+The MCP Streamable HTTP transport to the primitives runtime, exported
+for hosts that want raw tool access with the same degradation posture.
+
+```ts
+new DaemonClient(config?: DaemonConfig, options?: { attributionReceipts?: boolean })
+
+type DaemonCallOutcome =
+  | { ok: true; value: unknown; attribution?: AttributionReceiptBlock }
+  | { ok: false; reason: string }
+```
+
+- `callTool(name, args)` → `Promise<DaemonCallOutcome>`. Never throws.
+  Tool results carrying a single JSON text block (the atrib primitive
+  convention) are parsed; non-JSON text is returned as the string; other
+  result shapes are returned raw. A result with `isError: true` is a
+  failure outcome.
+- Connection is lazy and cached; a failed call closes the transport and
+  starts the `retryCooldownMs` window, during which `callTool` returns
+  `{ ok: false }` immediately without re-probing.
+- `close()` — best-effort transport close; never throws.
+- The client is semantically stateless: `context_id` and chain tokens
+  travel as explicit tool arguments on every call; the MCP protocol
+  session (initialize handshake + `Mcp-Session-Id`) is a transport
+  detail managed by the official `@modelcontextprotocol/sdk` client.
+
+### Hash helpers
+
+Compositions of `@atrib/mcp` primitives — no new hashing implementation.
+
+| Export | Returns | Meaning |
+| --- | --- | --- |
+| `recordHashHex(record)` | bare 64-char lowercase hex | SHA-256 over the JCS-canonical COMPLETE signed record, including `signature` ([§1.2.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#123-chain_root-for-genesis-records)). |
+| `recordHashRef(record)` | `sha256:<64-hex>` | The reference form used by `chain_root`, `informed_by`, `annotates`, `revises`. |
+| `deriveProvenanceToken(upstream)` | 22-char base64url | [§1.2.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#126-provenance_token) token for a downstream genesis record: base64url (no padding) of the first 16 bytes of the upstream record hash. |
+
+### Evidence envelope family (P042 draft)
+
+Types only in v0 — the SDK does not yet produce or verify envelopes.
+Envelopes live outside signed bytes (mirror sidecar, archive evidence
+projection, verifier results, host-owned packets). See
+[P042](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p042-universal-evidence-envelope-as-the-single-protocol-level-attachment-model).
+
+| Export | Kind | Meaning |
+| --- | --- | --- |
+| `EvidenceTier` | type | `'declared' \| 'shape' \| 'attested' \| 'verified'` — what the verifier party actually did. |
+| `EvidencePayloadRefKind` | type | `'inline' \| 'mirror' \| 'archive' \| 'external' \| 'withheld'`. |
+| `EvidencePayloadRef` | type | `{ kind, uri?, record_hash? }` — `uri` for archive/external locations; `record_hash` when the payload is itself a signed atrib record. |
+| `EvidencePayload` | type | `{ hash, media_type?, ref?, inline? }` — `hash` is a `"sha256:" + hex` commitment to the raw evidence material; `inline` only when `ref.kind === 'inline'`, never public. |
+| `EvidenceConstraint` | type | `{ name, status: 'passed' \| 'failed' \| 'unresolved' \| 'not_checked', detail? }`. |
+| `EvidenceEnvelope` | type | `{ envelope: 1, profile, profile_version, tier, payload, facts?, result?, verifier? }` — one envelope schema, N profiles identified by absolute HTTPS type URI. |
+| `evidenceEnvelopeKey(envelope)` | function | Dedup identity: `` `${profile} ${payload.hash}` ``. Multiple instances per key are permitted; consumers order by tier desc, then `checked_at_ms` desc, then verifier name. |
+| `evidenceTierRank(tier)` | function | Numeric rank, `0` (declared) … `3` (verified). |
+
+### Attribution receipt family (P049 draft)
+
+Receipts are advisory extension data: trust derives only from verifying
+signed records and inclusion proofs, never from the receipt. See
+[P049](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p049-devatribattribution-first-class-mcp-extension-sep-2133).
+
+| Export | Kind | Meaning |
+| --- | --- | --- |
+| `ATTRIBUTION_EXTENSION_KEY` | const | `'dev.atrib/attribution'` — the `_meta` key. |
+| `AttributionLogSubmissionStatus` | type | `'queued' \| 'submitted' \| 'disabled' \| 'failed'`; unknown future values pass through as strings. A queue status, never an awaited proof ([§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission)). |
+| `AttributionReceipt` | type | `{ record_hash?, creator_key?, context_id?, event_type?, chain_root?, log_submission? }` — all optional strings. |
+| `AttributionReceiptBlock` | type | `{ token?, receipt?, record? }` — the [§1.5.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#152-http-transport-tracestate) propagation token, the receipt, and optionally the full signed record for immediate Tier-3 re-verification. |
+| `parseAttributionReceiptBlock(meta)` | function | Lenient extraction from a tool result's `_meta`: anything malformed yields `null`, never a throw; wrong-typed fields are dropped; an all-dropped receipt counts as absent. |
+
+### Record-layer re-exports
+
+The complete [§1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#1-attribution-record-format)
+record layer, re-exported verbatim from `@atrib/mcp` (grouped as in
+`src/index.ts`):
+
+**Types + event vocabulary.**
+
+- `EVENT_TYPE_TOOL_CALL_URI`, `EVENT_TYPE_TRANSACTION_URI`, `EVENT_TYPE_OBSERVATION_URI`, `EVENT_TYPE_DIRECTORY_ANCHOR_URI`, `EVENT_TYPE_ANNOTATION_URI`, `EVENT_TYPE_REVISION_URI` — the six normative event-type URIs.
+- `EVENT_TYPE_SHORT_NAMES` — the six short aliases accepted by agent-facing tools.
+- `EVENT_TYPE_SHORT_TO_URI` — short alias → canonical URI map.
+- `isNormativeEventTypeUri(uri)` — membership in the normative set (informational).
+- `isValidEventTypeUri(value)` — [§1.4.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#145-event_type-uri-validation) syntactic URI validation (extension URIs pass).
+- `normalizeEventType(value)` — short alias / known typo path → canonical URI; unknown values pass through.
+
+**Canonicalization ([§1.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#13-canonical-serialization)).**
+
+- `canonicalRecord(record)` — JCS bytes of the complete signed record (the record-hash preimage).
+- `canonicalSigningInput(record)` — JCS bytes with `signature` removed (the signing input).
+- `canonicalCrossAttestationInput(record)` — [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) bytes with `signers: []` and no top-level `signature`.
+
+**Signing + verification ([§1.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#14-signing-and-verification)).**
+
+- `getPublicKey(privateKey)` — raw 32-byte Ed25519 public key for a 32-byte seed.
+- `signRecord(record, privateKey)` — [§1.4.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#142-signing-procedure) signing; returns the record with `signature` set.
+- `signTransactionRecord(record, privateKey, counterpartySigners?)` — signs the cross-attestation bytes; creator's signer entry first.
+- `signTransactionAttestation(record, privateKey)` — one counterparty `SignerEntry` over an existing transaction record's bytes.
+- `verifyRecord(record)` — [§1.4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#143-verification-procedure) verification, all steps.
+
+**Hashing + encoding.**
+
+- `sha256(bytes)` — SHA-256 digest.
+- `base64urlEncode` / `base64urlDecode` — base64url, no padding.
+- `hexEncode` / `hexDecode` — lowercase hex.
+
+**Chain composition ([§1.2.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#123-chain_root-for-genesis-records) / [§1.2.3.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#1231-multi-producer-chain-composition)).**
+
+- `genesisChainRoot(contextId)` — `"sha256:" + hex(SHA-256(UTF-8(context_id)))`.
+- `chainRoot(parentRecord)` — chain_root for a non-genesis record.
+- `resolveChainRoot(opts)` — the [D067](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract) precedence contract (token > autoChain tail > env var > mirror tail > synthetic genesis). Never reimplement chain selection.
+
+**Propagation ([§1.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#15-context-propagation)).**
+
+- `encodeToken(record)` / `decodeToken(token)` — the [§1.5.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#152-http-transport-tracestate) propagation token (`base64url(record_hash) + "." + base64url(creator_key)`; lenient decode returns `null`).
+- `extractTraceId(traceparent)` — trace-id from a W3C `traceparent` header.
+- `mergeTracestate(atribEntry, existing)` / `parseTracestateAtrib(tracestate)` — atrib member handling in W3C `tracestate`.
+- `mergeBaggageAtribSession(sessionToken, existing)` / `parseBaggageAtribSession(baggage)` — session token in W3C `baggage`.
+- `readInboundContext(params)` / `writeOutboundContext(...)` — MCP `params._meta` context reading/writing ([§1.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#154-mcp-transport-params_meta)).
+
+**Content identity ([§1.2.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#122-content_id-derivation)).**
+
+- `computeContentId(serverUrl, toolName)` — `"sha256:" + hex(SHA-256(normalized + ":" + tool))`.
+- `normalizeServerUrl(url)` — WHATWG-semantics URL normalization feeding `content_id`.
+
+**Log entry serialization ([§2.3.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#231-entry-serialization)).**
+
+- `serializeEntry(input)` — the 90-byte fixed log entry.
+- `eventTypeUriToByte(uri)` — event_type byte mapping (extensions → `0xFF`).
+
+**Submission-side validation ([§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) client parity).**
+
+- `validateSubmission(record)` — client-side mirror of the log's submission validation; returns `ValidationResult`.
+
+**Mirror conventions ([§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions)).**
+
+- `readMirrorTail(...)` — newest record on a mirror file.
+- `inheritChainContext(...)` — mirror-based chain inheritance for new producers.
+- `recordHashExistsInMirror(...)` — presence check by record hash.
+
+**Context identity ([D078](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)).**
+
+- `resolveEnvContextId(env?)` — `ATRIB_CONTEXT_ID`, then the harness discovery registry (Claude Code, Codex, file fallbacks).
+
+**Submission queue ([§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission)).**
+
+- `createSubmissionQueue(...)` — the non-blocking, bounded-retry log submitter with per-record-hash proof caching.
+
+**Type re-exports.** `AtribRecord`, `UnsignedAtribRecord`, `SignerEntry`,
+`ChainContext`, `DecodedToken`, `EntryInput`, `ProofBundle`,
+`SubmissionQueue`, `ValidationResult`.
+
+**Key handling ([§5.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#56-key-management)), re-exported from `@atrib/emit`.**
+
+- `resolveKey()` — the async key ladder: `ATRIB_PRIVATE_KEY` env → `ATRIB_KEY_FILE` → macOS Keychain → 1Password; `null` (pass-through) when nothing resolves.
+- `emitInProcess(input, options?)` — the in-process write engine the SDK's fallback path uses; exported for hosts that want it directly.
+- Types `EmitOutput`, `ResolvedKey`.
+
 ## Conformance
 
 `test/` runs the shared corpora — `spec/conformance/1.4/` (signing +
