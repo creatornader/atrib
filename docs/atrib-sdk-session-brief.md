@@ -167,21 +167,21 @@ above where they conflict:
    the operator. Do not rebase away pushed history mid-review, and never
    push to `claude/atrib-redesign-analysis-4g0r9v`.
 
-## Coordination contract for the e2e activation phase (2026-07-06, post-D137-D141)
+## Coordination contract for the e2e activation phase (2026-07-06, post-[D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)-[D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133))
 
-D137-D141 are accepted and implemented at the spec + conformance layer on
+[D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)-[D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133) are accepted and implemented at the spec + conformance layer on
 `claude/atrib-redesign-analysis-4g0r9v` (which has merged this branch's work
-through `be7e84b`, including D136, the CI wiring, docs, and LICENSE). The
+through `be7e84b`, including [D136](../DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested), the CI wiring, docs, and LICENSE). The
 remaining end-to-end work splits by layer to avoid concurrent edits:
 
 **Redesign session owns (tranche 2, in flight): the protocol packages.**
 Producer/verifier source surfaces in `@atrib/verify`, `@atrib/mcp`,
 `@atrib/emit`, `@atrib/agent`, `@atrib/mcp-wrap`: envelope
-validation/legacy-mapping + `docs/evidence-profiles/*` (D137), anchor-set
-fan-out submission + `anchor_plurality` verifier annotation (D138),
-session-checkpoint emission + verification helpers (D139), delegation
-certificate issuance + the verifier walk promoted to source (D140), and the
-`dev.atrib/attribution` producer/client/shim implementation (D141). Until the
+validation/legacy-mapping + `docs/evidence-profiles/*` ([D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)), anchor-set
+fan-out submission + `anchor_plurality` verifier annotation ([D138](../DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture)),
+session-checkpoint emission + verification helpers ([D139](../DECISIONS.md#d139-session_checkpoint-event-type-the-session-stream-formalized)), delegation
+certificate issuance + the verifier walk promoted to source ([D140](../DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys)), and the
+`dev.atrib/attribution` producer/client/shim implementation ([D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133)). Until the
 tranche-2 commit lands, the SDK session MUST NOT edit
 `packages/{verify,mcp,emit,agent,mcp-wrap}`.
 
