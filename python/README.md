@@ -100,5 +100,11 @@ pytest python/tests
 mypy  # configured in pyproject.toml
 ```
 
+CI runs the same suites plus the cross-implementation determinism judge on
+Python 3.10 and 3.12 via `.github/workflows/python-sdk.yml`, path-scoped to
+the byte-identity surface (`python/`, `packages/sdk/`, `packages/mcp/`,
+`services/atrib-emit/`, `spec/conformance/`). The judge step fails loudly
+if it would silently skip.
+
 The conformance corpora are consumed unmodified from `spec/conformance/`;
 a port failure is a spec-bug discovery, not something to route around.
