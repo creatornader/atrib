@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Evidence envelope types (P042 draft, docs/adr-draft-p042-evidence-envelope.md).
+"""Evidence envelope types (accepted as D137; normative schema at spec §5.5.7).
 
 Python mirror of the universal evidence-envelope schema: one envelope, N
 profiles identified by type URI, four-value tier ladder. The legacy
@@ -21,10 +21,11 @@ _TIER_ORDER = {name: rank for rank, name in enumerate(EVIDENCE_TIERS)}
 
 class EvidencePayloadRef(TypedDict):
     kind: str  # 'inline' | 'mirror' | 'archive' | 'external' | 'withheld'
-    uri: NotRequired[str]
+    # Wire form uses explicit null for absent (§5.5.7 example); accept both.
+    uri: NotRequired[str | None]
     # Set when the payload is itself a signed atrib record; payload hash
     # then commits to that record's canonical JCS bytes.
-    record_hash: NotRequired[str]
+    record_hash: NotRequired[str | None]
 
 
 class EvidencePayload(TypedDict):
@@ -36,9 +37,10 @@ class EvidencePayload(TypedDict):
 
 
 class EvidenceConstraint(TypedDict):
-    name: str
+    type: str  # profile-defined discriminator (accepted §5.5.7 shape)
     status: str  # 'passed' | 'failed' | 'unresolved' | 'not_checked'
-    detail: NotRequired[str]
+    expected: NotRequired[object]
+    actual: NotRequired[object]
 
 
 class EvidenceResult(TypedDict, total=False):
@@ -50,6 +52,7 @@ class EvidenceResult(TypedDict, total=False):
 
 class EvidenceVerifier(TypedDict, total=False):
     name: str
+    version: str
     checked_at_ms: int
 
 

@@ -34,6 +34,7 @@ Repository = "https://github.com/creatornader/atrib"
 dev = [
   "pytest>=8.0",
   "mypy>=1.10",
+  "pdoc>=15.0",
 ]
 
 [tool.hatch.build.targets.wheel]

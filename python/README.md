@@ -424,6 +424,14 @@ pytest python/tests
 mypy  # configured in pyproject.toml
 ```
 
+Generated API documentation (from the inline docstrings) uses
+[pdoc](https://pdoc.dev), included in the `[dev]` extras:
+
+```bash
+python -m pdoc atrib -o docs-build/   # static HTML
+python -m pdoc atrib                  # live server
+```
+
 CI runs the same suites plus the cross-implementation determinism judge on
 Python 3.10 and 3.12 via `.github/workflows/python-sdk.yml`, path-scoped to
 the byte-identity surface (`python/`, `packages/sdk/`, `packages/mcp/`,

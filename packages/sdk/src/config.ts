@@ -97,6 +97,19 @@ export const DEFAULT_CALL_TIMEOUT_MS = 10_000
 export const DEFAULT_RETRY_COOLDOWN_MS = 30_000
 export const DEFAULT_PRODUCER = 'atrib-sdk'
 
+/**
+ * Accepted D138 anchor_type registry (spec §2.11.9). Only 'atrib-log'
+ * (the default when absent) is submitted to today; the others activate
+ * with the multi-anchor fan-out in the protocol packages.
+ */
+export const ANCHOR_TYPES = [
+  'atrib-log',
+  'sigstore-rekor',
+  'rfc3161-tsa',
+  'opentimestamps',
+] as const
+export type AnchorType = (typeof ANCHOR_TYPES)[number]
+
 export function resolveDaemonEndpoint(config?: DaemonConfig): string {
   return (
     config?.endpoint ??

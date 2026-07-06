@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Evidence envelope types (P042 draft, docs/adr-draft-p042-evidence-envelope.md).
+ * Evidence envelope types (accepted as D137; normative schema at spec §5.5.7).
  *
  * The SDK models evidence attachments on the universal envelope schema so
  * downstream shapes align before the ADR lands: one envelope, N profiles
@@ -25,14 +25,15 @@ export type EvidencePayloadRefKind =
 
 export interface EvidencePayloadRef {
   kind: EvidencePayloadRefKind
-  /** For 'archive' / 'external' payload locations. */
-  uri?: string
+  /** For 'archive' / 'external' payload locations. Wire form uses explicit
+   * null for absent (§5.5.7 example); both are accepted. */
+  uri?: string | null
   /**
    * Set when the payload is itself a signed atrib record (may accompany
    * any kind except 'inline'); payload.hash then commits to that record's
    * canonical JCS bytes.
    */
-  record_hash?: string
+  record_hash?: string | null
 }
 
 export interface EvidencePayload {
@@ -46,9 +47,11 @@ export interface EvidencePayload {
 }
 
 export interface EvidenceConstraint {
-  name: string
+  /** Profile-defined constraint discriminator (accepted §5.5.7 shape). */
+  type: string
   status: 'passed' | 'failed' | 'unresolved' | 'not_checked'
-  detail?: string
+  expected?: unknown
+  actual?: unknown
 }
 
 export interface EvidenceEnvelope {
@@ -71,6 +74,7 @@ export interface EvidenceEnvelope {
   }
   verifier?: {
     name?: string
+    version?: string
     checked_at_ms?: number
   }
 }

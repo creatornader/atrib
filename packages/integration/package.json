@@ -90,6 +90,7 @@
     "@atrib/mcp": "workspace:*",
     "@atrib/mcp-wrap": "workspace:*",
     "@atrib/runtime-log": "workspace:*",
+    "@atrib/sdk": "workspace:*",
     "@atrib/verify": "workspace:*",
     "canonicalize": "^3.0.0"
   },
