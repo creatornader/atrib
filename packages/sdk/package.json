@@ -1,0 +1,64 @@
+{
+  "name": "@atrib/sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "description": "Consolidated atrib client SDK. attest() and recall() verbs over the atrib substrate: daemon-first via the local primitives runtime, in-process signing fallback, anchor-set submission, and the full record layer re-exported from @atrib/mcp.",
+  "author": "atrib <hello@atrib.dev>",
+  "license": "Apache-2.0",
+  "homepage": "https://atrib.dev",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "attribution",
+    "attest",
+    "recall",
+    "ed25519",
+    "merkle"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@atrib/emit": "workspace:*",
+    "@atrib/mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "peerDependencies": {
+    "@atrib/recall": "workspace:*",
+    "@atrib/verify-mcp": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@atrib/recall": {
+      "optional": true
+    },
+    "@atrib/verify-mcp": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@atrib/recall": "workspace:*",
+    "@atrib/verify-mcp": "workspace:*",
+    "@types/node": "^25.9.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creatornader/atrib.git",
+    "directory": "packages/sdk"
+  }
+}

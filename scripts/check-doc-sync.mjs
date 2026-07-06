@@ -66,6 +66,21 @@ const NUMBER_WORDS = [
   'eighteen',
   'nineteen',
   'twenty',
+  'twenty-one',
+  'twenty-two',
+  'twenty-three',
+  'twenty-four',
+  'twenty-five',
+  'twenty-six',
+  'twenty-seven',
+  'twenty-eight',
+  'twenty-nine',
+  'thirty',
+  'thirty-one',
+  'thirty-two',
+  'thirty-three',
+  'thirty-four',
+  'thirty-five',
 ]
 
 const findings = []
@@ -443,7 +458,7 @@ function checkWorkspacePackages() {
   // CLAUDE.md's framing groups bullets explicitly: count those bullets and
   // verify the number-word claim matches.
   const monorepoMatch = claude.match(
-    /monorepo with \*\*([a-z]+) workspace packages\*\*:\s*\n([\s\S]*?)\n\n/,
+    /monorepo with \*\*([a-z-]+) workspace packages\*\*:\s*\n([\s\S]*?)\n\n/,
   )
   if (monorepoMatch) {
     const claimedWord = monorepoMatch[1].toLowerCase()
