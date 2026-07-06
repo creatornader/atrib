@@ -7738,6 +7738,20 @@ are the current coverage.
 
 **Alternatives considered.** (a) Synthesize recency ordering for unlinked same-topic contradictions: invents relationships the graph does not certify, violating the fact-layer posture, rejected. (b) Strengthen the matcher so such contradictions always link: complementary and possibly worthwhile, but it cannot cover states that genuinely are not revisions, and it changes graph facts rather than presentation, deferred pending measurement of what provenance alone recovers. (c) Leave arbitration to the consumer: measured to produce abstention, rejected.
 
+## D147: Cross-topic revision linking under a stricter content bar
+
+**Date:** 2026-07-06
+
+**Status:** Rejected
+
+**Extends:** [D143](#d143-revision-lineage-renders-as-an-ordered-connected-chain) and [D146](#d146-rendered-memory-lines-carry-temporal-provenance).
+
+**Context.** Revision linking required topic equality plus a 0.5 content-overlap bar. Measured on external content whose extractor mints fine-grained unique topic labels, known-update chain formation ran near 30 percent: most true update pairs cleared the overlap bar and failed only the topic gate. The matcher was silently coupled to extractors with disciplined topic reuse, and unformed chains are the substrate's measured cost: contradictory states render as unlinked peers and consumers abstain.
+
+**Rejection.** Two measured matcher iterations bracketed the overlap-threshold design and both failed. The first path, overlap at or above 0.65 plus a shared distinctive entity, lost no existing links but added 154 cross-topic links on a base of 45 in the LongMemEval 18-corpus relink audit. Reviewed samples were mostly paraphrase restatements and topically adjacent noise. The second path, overlap at or above 0.7 plus shared entity plus a differing value slot, also lost no existing links but added zero links. It filtered out the true update pairs too, including the pages-read and Starbucks cases the judge checked. The mechanism is now clear: true cross-topic revision pairs are often low-overlap because they span sessions and verbosity levels, so overlap-threshold predicates cannot separate restatements from revisions. Frame-slot extraction is the plausible next design: extract entity, metric frame, and value triples first, then compare changed values inside a shared frame. Defer that design until measured results demand it. [D146](#d146-rendered-memory-lines-carry-temporal-provenance) temporal provenance remains the shipped mitigation and converted both measured misses.
+
+**Alternatives considered.** (a) Relax the topic gate to fuzzy topic similarity: topic strings are extractor vocabulary, not content evidence, and fuzzy-matching them imports extractor idiosyncrasy into graph facts, rejected. (b) Drop the topic gate and raise the overlap bar alone: measured to admit stopword-inflated false pairs, rejected. (c) Extractor-side topic normalization: helps one harness, leaves the substrate coupled, complementary but insufficient, noted for harness work.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
