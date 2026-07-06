@@ -15,13 +15,17 @@ Never conflate the two.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Any, cast
 
 import rfc8785
 
 
 def jcs(value: object) -> bytes:
     """JCS-serialize any JSON-compatible value to UTF-8 bytes."""
-    out = rfc8785.dumps(value)
+    # Type-only cast: rfc8785.dumps is annotated with a recursive JSON
+    # union (its private _Value alias); this API deliberately accepts any
+    # JSON-compatible object and lets rfc8785 raise on non-JSON input.
+    out = rfc8785.dumps(cast(Any, value))
     if isinstance(out, str):  # rfc8785 < 0.1 compatibility
         return out.encode("utf-8")
     return out
