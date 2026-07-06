@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: Apache-2.0
+"""JCS canonicalization (RFC 8785) for atrib records (§1.3).
+
+Uses the ``rfc8785`` package (the reference Python JCS implementation) so
+number serialization matches ECMAScript exactly — a record canonicalized
+here is byte-identical to one canonicalized by the ``canonicalize`` npm
+package in ``@atrib/mcp``.
+
+The signing input is the JCS serialization of the record with the
+``signature`` field removed (§1.4.2). The record hash preimage is the JCS
+serialization of the COMPLETE record including ``signature`` (§1.2.3).
+Never conflate the two.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+
+import rfc8785
+
+
+def jcs(value: object) -> bytes:
+    """JCS-serialize any JSON-compatible value to UTF-8 bytes."""
+    out = rfc8785.dumps(value)
+    if isinstance(out, str):  # rfc8785 < 0.1 compatibility
+        return out.encode("utf-8")
+    return out
+
+
+def canonical_signing_input(record: Mapping[str, object]) -> bytes:
+    """§1.4.2: JCS of the record with ``signature`` removed entirely."""
+    unsigned = {key: value for key, value in record.items() if key != "signature"}
+    return jcs(unsigned)
+
+
+def canonical_record(record: Mapping[str, object]) -> bytes:
+    """Canonical form of a signed record, including ``signature`` (for hashing)."""
+    return jcs(dict(record))
+
+
+def canonical_cross_attestation_input(record: Mapping[str, object]) -> bytes:
+    """§1.7.6 (D052): JCS of the record with ``signers`` set to ``[]`` and the
+    top-level ``signature`` omitted. All transaction signers sign these bytes."""
+    rest = {
+        key: value for key, value in record.items() if key not in ("signature", "signers")
+    }
+    rest["signers"] = []
+    return jcs(rest)
