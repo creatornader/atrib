@@ -14,6 +14,14 @@ from .canon import (
     canonical_signing_input,
     jcs,
 )
+from .attribution import (
+    ATTRIBUTION_EXTENSION_KEY,
+    ATTRIBUTION_LOG_SUBMISSION_STATUSES,
+    AttributionReceiptBlock,
+    AttributionReceiptConsistency,
+    check_attribution_receipt_consistency,
+    parse_attribution_receipt_block,
+)
 from .chain import chain_root, genesis_chain_root, resolve_chain_root
 from .client import AnchorSpec, AtribClient, AttestRef, AttestResult, RecallOutcome
 from .evidence import (
@@ -82,7 +90,13 @@ from .validation import ValidationResult, validate_submission
 __version__ = "0.1.0"
 
 __all__ = [
+    "ATTRIBUTION_EXTENSION_KEY",
+    "ATTRIBUTION_LOG_SUBMISSION_STATUSES",
     "AnchorSpec",
+    "AttributionReceiptBlock",
+    "AttributionReceiptConsistency",
+    "check_attribution_receipt_consistency",
+    "parse_attribution_receipt_block",
     "AtribClient",
     "AtribRecord",
     "AttestRef",

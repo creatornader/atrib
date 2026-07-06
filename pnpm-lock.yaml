@@ -205,6 +205,9 @@ importers:
       '@atrib/runtime-log':
         specifier: workspace:*
         version: link:../runtime-log
+      '@atrib/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       '@atrib/verify':
         specifier: workspace:*
         version: link:../verify

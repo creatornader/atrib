@@ -38,9 +38,11 @@ export {
 export {
   DEFAULT_DAEMON_ENDPOINT,
   DEFAULT_PRODUCER,
+  ANCHOR_TYPES,
   resolveAnchorSet,
   resolveDaemonEndpoint,
   type AnchorSpec,
+  type AnchorType,
   type AtribClientConfig,
   type DaemonConfig,
   type DaemonMode,
@@ -61,10 +63,12 @@ export {
 } from './evidence.js'
 export {
   ATTRIBUTION_EXTENSION_KEY,
+  checkAttributionReceiptConsistency,
   parseAttributionReceiptBlock,
   type AttributionLogSubmissionStatus,
   type AttributionReceipt,
   type AttributionReceiptBlock,
+  type AttributionReceiptConsistency,
 } from './attribution.js'
 
 // ── SDK hash helpers (compositions of @atrib/mcp primitives) ────────────

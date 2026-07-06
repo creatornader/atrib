@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * `dev.atrib/attribution` extension receipts (P049 draft,
- * docs/adr-draft-p049-mcp-extension.md).
+ * `dev.atrib/attribution` extension receipts (accepted as D141; extension
+ * spec at docs/extensions/dev.atrib-attribution/v0.1.md, conformance at
+ * spec/conformance/mcp-extension/).
  *
  * Behind an opt-in flag, the daemon client parses attestation receipts
  * from tool results' `_meta["dev.atrib/attribution"]`: the propagation
@@ -15,7 +16,8 @@
  * signed records and inclusion proofs, never from the receipt itself.
  */
 
-import type { AtribRecord } from '@atrib/mcp'
+import { encodeToken, normalizeEventType, type AtribRecord } from '@atrib/mcp'
+import { recordHashRef } from './hashes.js'
 
 export const ATTRIBUTION_EXTENSION_KEY = 'dev.atrib/attribution'
 
@@ -87,3 +89,81 @@ export function parseAttributionReceiptBlock(meta: unknown): AttributionReceiptB
     ? out
     : null
 }
+
+/** Outcome of checking a receipt against its attached signed record. */
+export interface AttributionReceiptConsistency {
+  /** True iff every receipt claim matches the attached record. */
+  receipt_valid: boolean
+  /** Receipt fields whose claims contradict the attached record. */
+  mismatched_fields: string[]
+  /** recordHashRef of the attached record (when a record is available). */
+  attached_record_hash?: string
+  /** The receipt's claimed record_hash (when present). */
+  claimed_record_hash?: string
+}
+
+/**
+ * Check a receipt block's claims against the signed record they name
+ * (the attached `block.record`, or a caller-retrieved record). Receipts
+ * are advisory: a mismatch NEVER invalidates the tool result — it means
+ * the receipt must not be trusted or cited (conformance:
+ * spec/conformance/mcp-extension/cases/receipt--*.json).
+ *
+ * Compared claims: `receipt.record_hash` vs the record's canonical hash,
+ * `token` vs encodeToken(record), and `creator_key` / `context_id` /
+ * `chain_root` / `event_type` (short name or URI, normalized) vs the
+ * record's fields. Absent receipt fields are not mismatches.
+ */
+export function checkAttributionReceiptConsistency(
+  block: AttributionReceiptBlock,
+  record?: AtribRecord,
+): AttributionReceiptConsistency {
+  const attached = record ?? block.record
+  const receipt = block.receipt
+  const claimed = receipt?.record_hash
+  if (!attached) {
+    return {
+      receipt_valid: false,
+      mismatched_fields: ['record'],
+      ...(claimed !== undefined ? { claimed_record_hash: claimed } : {}),
+    }
+  }
+  const mismatched: string[] = []
+  let attachedHash: string | undefined
+  let token: string | undefined
+  try {
+    attachedHash = recordHashRef(attached)
+    token = encodeToken(attached)
+  } catch {
+    // A record that cannot be canonicalized/hashed cannot back a receipt.
+    return {
+      receipt_valid: false,
+      mismatched_fields: ['record'],
+      ...(claimed !== undefined ? { claimed_record_hash: claimed } : {}),
+    }
+  }
+  if (claimed !== undefined && claimed !== attachedHash) mismatched.push('record_hash')
+  if (block.token !== undefined && block.token !== token) mismatched.push('token')
+  if (receipt?.creator_key !== undefined && receipt.creator_key !== attached.creator_key) {
+    mismatched.push('creator_key')
+  }
+  if (receipt?.context_id !== undefined && receipt.context_id !== attached.context_id) {
+    mismatched.push('context_id')
+  }
+  if (receipt?.chain_root !== undefined && receipt.chain_root !== attached.chain_root) {
+    mismatched.push('chain_root')
+  }
+  if (
+    receipt?.event_type !== undefined &&
+    normalizeEventType(receipt.event_type) !== normalizeEventType(attached.event_type)
+  ) {
+    mismatched.push('event_type')
+  }
+  return {
+    receipt_valid: mismatched.length === 0,
+    mismatched_fields: mismatched,
+    attached_record_hash: attachedHash,
+    ...(claimed !== undefined ? { claimed_record_hash: claimed } : {}),
+  }
+}
+
