@@ -148,6 +148,18 @@ export const WrapConfigSchema = z.object({
   autoDetectInformedByFromArgs: z.boolean().default(false),
 
   /**
+   * Opt-in `dev.atrib/attribution` MCP extension (D141 / spec §1.5.4.1).
+   * When true, the wrapper presents the extension on behalf of the
+   * non-adopting upstream: the proxy advertises the capability in its
+   * initialize result and emits gated attestation receipts into
+   * `result._meta` for clients that declare the extension on a request.
+   * Default false: zero behavior change for existing wrap configs. The
+   * legacy result keys are written unconditionally either way, and every
+   * extension behavior degrades silently per §5.8.
+   */
+  extensionAttribution: z.boolean().default(false),
+
+  /**
    * Per-tool overrides keyed by tool name. Tools not listed get default
    * behavior (signed as tool_call records, no receipt injection).
    */
