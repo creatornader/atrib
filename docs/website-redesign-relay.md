@@ -118,7 +118,7 @@ where this brief and the ADR drafts conflict, the drafts win.
   set is additive except the payments relocation.
 - The explorer (apps/dashboard) contract is unchanged today; anchor and
   checkpoint views arrive with their ADRs, not before.
-- Live demos on the site remain governed by the [D117](../DECISIONS.md#d117-demo-and-proof-record-treatment-is-classified-by-execution-surface) demo-record surface
+- Live demos on the site remain governed by the [D117](../DECISIONS.md#d117-demo-records-are-classified-by-execution-surface) demo-record surface
   classifications.
 
 ## Timeline facts for any dated copy
