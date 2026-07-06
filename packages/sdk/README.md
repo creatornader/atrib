@@ -1,7 +1,7 @@
 # @atrib/sdk
 
 Consolidated atrib client SDK: two verbs over the substrate — **`attest()`**
-(write) and **`recall()`** (read) — plus the complete §1 record layer
+(write) and **`recall()`** (read) — plus the complete [§1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#1-attribution-record-format) record layer
 re-exported from `@atrib/mcp` so application code needs exactly one import.
 
 This package is a consolidation, not a greenfield: it adds **no new
@@ -12,7 +12,7 @@ cryptographic primitive is the existing `@atrib/mcp` one.
 
 ## Topology: daemon-first
 
-Per D120 and the redesign upgrade path, the local primitives runtime is the
+Per [D120](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned) and the redesign upgrade path, the local primitives runtime is the
 default peer. The SDK talks MCP Streamable HTTP to it
 (`$ATRIB_PRIMITIVES_HTTP_ENDPOINT`, default `http://127.0.0.1:8796/mcp`)
 and falls back to in-process engines when no daemon is reachable:
@@ -56,7 +56,7 @@ await client.close()
 `summarize` is deliberately **not** a recall shape: synthesis belongs to
 the calling harness/model; the SDK returns verified raw material.
 
-## Degradation contract (§5.8)
+## Degradation contract ([§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract))
 
 Operational failures never throw and never block: daemon unreachable →
 fallback; no signing key → pass-through result with a warning; log
@@ -67,7 +67,7 @@ inputs (programmer error), e.g. `ref.kind: 'revises'` with
 
 ## Anchors
 
-`anchors` config takes a **set** of §2.6.1 submission endpoints. Until
+`anchors` config takes a **set** of [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) submission endpoints. Until
 upgrade-path step 1 (anchor plurality) lands, only `anchors[0]` is
 submitted to (default `https://log.atrib.dev/v1/entries`); extra anchors
 produce a warning, not an error. The config shape is forward-compatible

@@ -4,7 +4,7 @@ Python client SDK for [atrib](https://atrib.dev) — verifiable agent
 actions. Every action becomes signed context for the next.
 
 This is the first non-TypeScript implementation of the atrib record layer
-(spec §1) and SDK contract (spec §5). The guarantee that matters:
+(spec [§1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#1-attribution-record-format)) and SDK contract (spec [§5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#5-sdk-specification)). The guarantee that matters:
 **byte-identity**. Identical inputs produce identical JCS canonical forms
 (RFC 8785), Ed25519 signatures over the same bytes, identical record
 hashes, propagation tokens, and chain roots as the TypeScript
@@ -54,17 +54,17 @@ from atrib import (
 
 ## Contracts honored
 
-- **§5.8 degradation**: operational failures never raise and never block —
+- **[§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation**: operational failures never raise and never block —
   missing key means pass-through, network failures are silent with bounded
   retry (3 attempts / 30s window), all warnings carry the `atrib:` prefix.
   The only raise paths are contradictory inputs.
-- **§1.2.3.1 chain composition**: `resolve_chain_root` is a bit-for-bit
-  port of the D067 reference (`packages/mcp/src/chain-root.ts`), tested
+- **[§1.2.3.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#1231-multi-producer-chain-composition) chain composition**: `resolve_chain_root` is a bit-for-bit
+  port of the [D067](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract) reference (`packages/mcp/src/chain-root.ts`), tested
   against `spec/conformance/1.2.3/multi-producer/`.
-- **§5.9 mirror conventions**: JSONL envelopes under `~/.atrib/records/`,
+- **[§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions) mirror conventions**: JSONL envelopes under `~/.atrib/records/`,
   all three line shapes tolerated on read, `_local` sidecar never enters
   signed bytes or the public log.
-- **§2.6.1 submission**: bare signed record POST, priority header,
+- **[§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) submission**: bare signed record POST, priority header,
   idempotent-safe retry, proof bundles cached by record hash.
 
 ## Scope (v0)
