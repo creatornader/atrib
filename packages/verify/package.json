@@ -36,8 +36,8 @@
     "@atrib/mcp": "workspace:*",
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
-    "@sd-jwt/core": "0.19.0",
-    "@sd-jwt/sd-jwt-vc": "0.19.0",
+    "@sd-jwt/core": "0.20.0",
+    "@sd-jwt/sd-jwt-vc": "0.20.0",
     "canonicalize": "^3.0.0",
     "jose": "6.2.3"
   },
@@ -45,7 +45,7 @@
     "@types/node": "^25.9.3",
     "fast-check": "^4.8.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   },
   "repository": {
     "type": "git",
