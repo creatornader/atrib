@@ -52,6 +52,9 @@ atrib/
   METRICS.md                   # Tiered metrics framework + lifecycle states + quarterly evolution review for the dogfood experiment
   docs/publishing-new-npm-package.md # Runsheet for creating and publishing a new public npm package.
   docs/proof-x401-open-threads.md # Current Proof x401 repo, issue, PR, and upstream-draft map for atrib integration work.
+  docs/redesign-upgrade-path.md # Proposed (pre-ADR) ordered promotion plan from the 2026-07 clean-room redesign analysis: universal evidence envelope, anchor plurality, session checkpoints, delegation certificates, daemon consolidation, attest/recall verb rename, payments profile spin-out. No signed byte changes.
+  docs/atrib-sdk-session-brief.md # Handoff brief for a future dedicated session building the Python and consolidated JS/TS client SDKs against the redesign target surface (conformance corpora as fixtures, byte-identical records, degradation contract).
+  docs/attest-recall-rename-impact.md # Blast-radius catalog for the tentative attest/recall verb rename: npm packages, MCP tool names, persisted producer labels, signed-bytes analysis, operator machine state, and doc/skill surfaces.
   scripts/
     prove-local-substrate-process-health.mjs # D120 process-health proof. Builds on the fixture corpus by starting/probing a real local-substrate host, exercising startup-spawn, long-lived-agent, and watcher-WAL requests over HTTP, and checking stale-child/orphan/fallback gates before default dogfood config changes.
     measure-local-substrate-default-trial.mjs # D120 post-restart measurement. Reuses the live topology collector and fails closed unless process footprint, shared HTTP surfaces, context routing, coordinator health, watcher receipt join-back, watcher activity, long-lived routes, and long-lived producer activity are all ready. Optional named-profile flags let dogfood trials require specific startup-spawn and long-lived agents instead of aggregate counts only.
