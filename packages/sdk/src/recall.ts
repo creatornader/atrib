@@ -141,6 +141,12 @@ export interface RecallOutcome<T = unknown> {
   via: 'daemon' | 'in-process' | 'none'
   data: T | null
   warnings: string[]
+  /**
+   * `dev.atrib/attribution` receipt from the daemon result's `_meta`,
+   * present only when `attributionReceipts` is enabled and the daemon
+   * emitted one (P049 draft). Advisory; verify before trusting.
+   */
+  attribution_receipt?: import('./attribution.js').AttributionReceiptBlock
 }
 
 /** Physical tool name on the primitives runtime for each shape. */

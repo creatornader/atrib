@@ -5,16 +5,20 @@
  *
  * Daemon-first per D120/the SDK brief: writes and reads prefer the local
  * primitives runtime over MCP Streamable HTTP (one host-owned process,
- * one key owner, one mirror), falling back to the in-process engines from
- * @atrib/emit / @atrib/recall / @atrib/verify-mcp. Operational failures
- * never throw (§5.8); they degrade into `warnings` on the result. The only
- * throw paths are contradictory inputs (programmer error).
+ * one key owner, one mirror), falling back to in-process engines.
+ * `@atrib/emit` is a hard dependency (the write fallback must always
+ * work); `@atrib/recall` and `@atrib/verify-mcp` are OPTIONAL peer
+ * dependencies loaded lazily, mirroring the P047 pattern — when absent,
+ * the corresponding recall shapes degrade to a typed unavailable outcome
+ * per §5.8 rather than failing to import.
+ *
+ * Operational failures never throw (§5.8); they degrade into `warnings`
+ * on the result. The only throw paths are contradictory inputs
+ * (programmer error).
  */
 
 import { emitInProcess, resolveKey, type ResolvedKey } from '@atrib/emit'
 import { resolveEnvContextId } from '@atrib/mcp'
-import { recall as recallHistoryInProcess } from '@atrib/recall'
-import { handleAtribVerify, type AtribVerifyInput } from '@atrib/verify-mcp'
 import {
   attestResultFromEmitOutput,
   buildEmitArgs,
@@ -22,7 +26,7 @@ import {
   type AttestResult,
   type EmitOutputLike,
 } from './attest.js'
-import { DEFAULT_PRODUCER, type AtribClientConfig } from './config.js'
+import { DEFAULT_PRODUCER, resolveAnchorSet, type AtribClientConfig } from './config.js'
 import { DaemonClient } from './daemon.js'
 import {
   SHAPE_TO_TOOL,
@@ -41,18 +45,46 @@ export interface AtribClient {
   close(): Promise<void>
 }
 
+// Lazy loaders for the OPTIONAL peer fallback engines. Module shapes are
+// declared structurally so the emitted .d.ts never references the peer
+// packages — consumers without them installed still typecheck.
+interface RecallModule {
+  recall: (args: Record<string, unknown>) => Promise<unknown>
+}
+interface VerifyModule {
+  handleAtribVerify: (input: Record<string, unknown>) => Promise<unknown>
+}
+
+let recallModulePromise: Promise<RecallModule | null> | null = null
+function loadRecallModule(): Promise<RecallModule | null> {
+  recallModulePromise ??= import('@atrib/recall').then(
+    (mod) => mod as unknown as RecallModule,
+    () => null,
+  )
+  return recallModulePromise
+}
+
+let verifyModulePromise: Promise<VerifyModule | null> | null = null
+function loadVerifyModule(): Promise<VerifyModule | null> {
+  verifyModulePromise ??= import('@atrib/verify-mcp').then(
+    (mod) => mod as unknown as VerifyModule,
+    () => null,
+  )
+  return verifyModulePromise
+}
+
 export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
   const daemonMode = config.daemon?.mode ?? 'prefer'
-  const daemon = daemonMode === 'off' ? null : new DaemonClient(config.daemon)
+  const daemon =
+    daemonMode === 'off'
+      ? null
+      : new DaemonClient(config.daemon, {
+          attributionReceipts: config.attributionReceipts === true,
+        })
   const producer = config.producer ?? DEFAULT_PRODUCER
-  const anchors = config.anchors ?? []
-  const anchorWarnings: string[] = []
-  if (anchors.length > 1) {
-    anchorWarnings.push(
-      'atrib: multi-anchor fan-out is not implemented yet (upgrade-path step 1); submitting to the first anchor only',
-    )
-  }
-  const logEndpoint = anchors[0]
+  const anchorSet = resolveAnchorSet(config.anchors)
+  const anchorWarnings = anchorSet.warnings
+  const logEndpoint = anchorSet.primaryLogEndpoint
 
   // Lazily resolve the in-process signing key once. `config.key === null`
   // is an explicit pass-through request; undefined defers to resolveKey().
@@ -79,7 +111,14 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
     if (daemon) {
       const outcome = await daemon.callTool('emit', args)
       if (outcome.ok && typeof outcome.value === 'object' && outcome.value !== null) {
-        return attestResultFromEmitOutput(outcome.value as EmitOutputLike, 'daemon', warnings)
+        const result = attestResultFromEmitOutput(
+          outcome.value as EmitOutputLike,
+          'daemon',
+          warnings,
+        )
+        return outcome.attribution !== undefined
+          ? { ...result, attribution_receipt: outcome.attribution }
+          : result
       }
       const reason = outcome.ok
         ? 'daemon returned a non-object emit result'
@@ -133,10 +172,10 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
       throw new TypeError(`atrib: unknown recall shape: ${String(shape)}`)
     }
     const args = toToolArgs(query)
-    if (shape === 'history' || shape === 'session_chain' || shape === 'orphans') {
+    if (shape === 'session_chain' || shape === 'orphans') {
       if (args['context_id'] === undefined) {
         const contextId = defaultContextId()
-        if (contextId !== undefined && shape !== 'history') args['context_id'] = contextId
+        if (contextId !== undefined) args['context_id'] = contextId
       }
     }
     const warnings: string[] = []
@@ -144,7 +183,15 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
     if (daemon) {
       const outcome = await daemon.callTool(tool, args)
       if (outcome.ok) {
-        return { shape, via: 'daemon', data: outcome.value as T, warnings }
+        const result: RecallOutcome<T> = {
+          shape,
+          via: 'daemon',
+          data: outcome.value as T,
+          warnings,
+        }
+        return outcome.attribution !== undefined
+          ? { ...result, attribution_receipt: outcome.attribution }
+          : result
       }
       warnings.push(`atrib: daemon recall (${tool}) failed: ${outcome.reason}`)
       if (daemonMode === 'require') {
@@ -154,13 +201,25 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
 
     try {
       if (shape === 'history') {
-        const data = await recallHistoryInProcess(
-          args as Parameters<typeof recallHistoryInProcess>[0],
-        )
+        const mod = await loadRecallModule()
+        if (mod === null) {
+          warnings.push(
+            "atrib: in-process history fallback unavailable — install the optional peer '@atrib/recall'",
+          )
+          return { shape, via: 'none', data: null, warnings }
+        }
+        const data = await mod.recall(args)
         return { shape, via: 'in-process', data: data as T, warnings }
       }
       if (shape === 'verify') {
-        const data = await handleAtribVerify(args as unknown as AtribVerifyInput)
+        const mod = await loadVerifyModule()
+        if (mod === null) {
+          warnings.push(
+            "atrib: in-process verify fallback unavailable — install the optional peer '@atrib/verify-mcp'",
+          )
+          return { shape, via: 'none', data: null, warnings }
+        }
+        const data = await mod.handleAtribVerify(args)
         return { shape, via: 'in-process', data: data as T, warnings }
       }
     } catch (error) {

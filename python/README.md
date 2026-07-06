@@ -70,7 +70,11 @@ from atrib import (
 ## Scope (v0)
 
 The write verb (`attest`) signs in-process; `recall` covers the
-history/session_chain shapes over the local mirror. Daemon-first transport
+history/session_chain shapes over the local mirror. The anchor set
+accepts bare endpoints or `{"endpoint": ..., "anchor_type": ...}` entries
+(P043 headroom — non-atrib anchor types are skipped with a warning until
+anchor plurality lands), and `atrib.evidence` carries the P042 universal
+evidence-envelope types. Daemon-first transport
 (Streamable HTTP to the local primitives runtime) lands with the
 post-2026-07-28 stateless MCP transport rather than reimplementing the
 current initialize-handshake session protocol. Summarize is not an SDK

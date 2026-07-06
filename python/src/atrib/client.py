@@ -49,6 +49,47 @@ _REF_EVENT_TYPE = {
 
 DEFAULT_PRODUCER = "atrib-sdk-py"
 
+# P043 headroom: one anchor in the anchor set. A bare string is an
+# atrib-log §2.6.1 endpoint; the mapping form carries the forthcoming
+# `anchor_type` discriminator (absent or 'atrib-log' = atrib log; other
+# types are skipped with a warning until upgrade-path step 1 lands).
+AnchorSpec = str | Mapping[str, object]
+
+
+def _resolve_anchor_set(
+    anchors: list[AnchorSpec] | None,
+) -> tuple[str | None, list[str]]:
+    """Normalize the anchor set to today's single-atrib-log posture.
+    Returns (primary_log_endpoint, warnings); never raises."""
+    warnings: list[str] = []
+    if not anchors:
+        return None, warnings
+    atrib_log_endpoints: list[str] = []
+    for spec in anchors:
+        if isinstance(spec, str):
+            endpoint, anchor_type = spec, None
+        else:
+            raw_endpoint = spec.get("endpoint")
+            if not isinstance(raw_endpoint, str):
+                warnings.append("atrib: anchor entry without a string endpoint; skipping")
+                continue
+            endpoint = raw_endpoint
+            raw_type = spec.get("anchor_type")
+            anchor_type = raw_type if isinstance(raw_type, str) else None
+        if anchor_type is not None and anchor_type != "atrib-log":
+            warnings.append(
+                f"atrib: anchor_type '{anchor_type}' ({endpoint}) is not supported yet "
+                "(upgrade-path step 1); skipping this anchor"
+            )
+            continue
+        atrib_log_endpoints.append(endpoint)
+    if len(atrib_log_endpoints) > 1:
+        warnings.append(
+            "atrib: multi-anchor fan-out is not implemented yet "
+            "(upgrade-path step 1); submitting to the first anchor only"
+        )
+    return (atrib_log_endpoints[0] if atrib_log_endpoints else None), warnings
+
 
 @dataclass(frozen=True)
 class AttestRef:
@@ -95,7 +136,7 @@ class AtribClient:
         *,
         key: ResolvedKey | None | object = ...,
         context_id: str | None = None,
-        anchors: list[str] | None = None,
+        anchors: list[AnchorSpec] | None = None,
         producer: str = DEFAULT_PRODUCER,
         mirror_write_path: Path | str | None = None,
         mirror_read_path: Path | str | None = None,
@@ -107,18 +148,8 @@ class AtribClient:
         self._key_resolved = False
         self._context_id = context_id
         self._producer = producer
-        self._anchors = anchors if anchors is not None else []
-        self._anchor_warnings: list[str] = []
-        if len(self._anchors) > 1:
-            self._anchor_warnings.append(
-                "atrib: multi-anchor fan-out is not implemented yet "
-                "(upgrade-path step 1); submitting to the first anchor only"
-            )
-        endpoint = (
-            self._anchors[0]
-            if self._anchors
-            else self._env.get("ATRIB_LOG_ENDPOINT")
-        )
+        primary_endpoint, self._anchor_warnings = _resolve_anchor_set(anchors)
+        endpoint = primary_endpoint or self._env.get("ATRIB_LOG_ENDPOINT")
         self._queue = SubmissionQueue(endpoint)
         self._mirror_write = (
             Path(mirror_write_path)

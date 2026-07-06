@@ -35,11 +35,23 @@
   "dependencies": {
     "@atrib/emit": "workspace:*",
     "@atrib/mcp": "workspace:*",
-    "@atrib/recall": "workspace:*",
-    "@atrib/verify-mcp": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0"
   },
+  "peerDependencies": {
+    "@atrib/recall": "workspace:*",
+    "@atrib/verify-mcp": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@atrib/recall": {
+      "optional": true
+    },
+    "@atrib/verify-mcp": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@atrib/recall": "workspace:*",
+    "@atrib/verify-mcp": "workspace:*",
     "@types/node": "^25.9.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"

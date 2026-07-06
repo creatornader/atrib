@@ -16,6 +16,7 @@
  */
 
 import type { ProofBundle } from '@atrib/mcp'
+import type { AttributionReceiptBlock } from './attribution.js'
 
 /** Reference discriminator collapsing the annotate/revise write kinds. */
 export interface AttestRef {
@@ -66,6 +67,12 @@ export interface AttestResult {
   /** Which path produced the record. 'none' = degraded, see warnings. */
   via: 'daemon' | 'in-process' | 'none'
   warnings: string[]
+  /**
+   * `dev.atrib/attribution` receipt from the daemon result's `_meta`,
+   * present only when `attributionReceipts` is enabled and the daemon
+   * emitted one (P049 draft). Advisory; verify before trusting.
+   */
+  attribution_receipt?: AttributionReceiptBlock
 }
 
 const REF_EVENT_TYPE: Record<AttestRef['kind'], string> = {

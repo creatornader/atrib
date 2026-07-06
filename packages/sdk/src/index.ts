@@ -38,12 +38,34 @@ export {
 export {
   DEFAULT_DAEMON_ENDPOINT,
   DEFAULT_PRODUCER,
+  resolveAnchorSet,
   resolveDaemonEndpoint,
+  type AnchorSpec,
   type AtribClientConfig,
   type DaemonConfig,
   type DaemonMode,
+  type ResolvedAnchorSet,
 } from './config.js'
 export { DaemonClient, type DaemonCallOutcome } from './daemon.js'
+
+// ── Evidence envelope (P042 draft) + attribution receipts (P049 draft) ───
+export {
+  evidenceEnvelopeKey,
+  evidenceTierRank,
+  type EvidenceConstraint,
+  type EvidenceEnvelope,
+  type EvidencePayload,
+  type EvidencePayloadRef,
+  type EvidencePayloadRefKind,
+  type EvidenceTier,
+} from './evidence.js'
+export {
+  ATTRIBUTION_EXTENSION_KEY,
+  parseAttributionReceiptBlock,
+  type AttributionLogSubmissionStatus,
+  type AttributionReceipt,
+  type AttributionReceiptBlock,
+} from './attribution.js'
 
 // ── SDK hash helpers (compositions of @atrib/mcp primitives) ────────────
 export { deriveProvenanceToken, recordHashHex, recordHashRef } from './hashes.js'

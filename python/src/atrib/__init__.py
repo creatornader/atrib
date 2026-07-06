@@ -15,7 +15,18 @@ from .canon import (
     jcs,
 )
 from .chain import chain_root, genesis_chain_root, resolve_chain_root
-from .client import AtribClient, AttestRef, AttestResult, RecallOutcome
+from .client import AnchorSpec, AtribClient, AttestRef, AttestResult, RecallOutcome
+from .evidence import (
+    EVIDENCE_TIERS,
+    EvidenceConstraint,
+    EvidenceEnvelope,
+    EvidencePayload,
+    EvidencePayloadRef,
+    EvidenceResult,
+    EvidenceVerifier,
+    evidence_envelope_key,
+    evidence_tier_rank,
+)
 from .content_id import compute_content_id, normalize_server_url
 from .encoding import base64url_decode, base64url_encode, hex_decode, hex_encode
 from .hashes import (
@@ -71,12 +82,22 @@ from .validation import ValidationResult, validate_submission
 __version__ = "0.1.0"
 
 __all__ = [
+    "AnchorSpec",
     "AtribClient",
     "AtribRecord",
     "AttestRef",
     "AttestResult",
     "DecodedToken",
     "DEFAULT_LOG_ENDPOINT",
+    "EVIDENCE_TIERS",
+    "EvidenceConstraint",
+    "EvidenceEnvelope",
+    "EvidencePayload",
+    "EvidencePayloadRef",
+    "EvidenceResult",
+    "EvidenceVerifier",
+    "evidence_envelope_key",
+    "evidence_tier_rank",
     "EVENT_TYPE_ANNOTATION_URI",
     "EVENT_TYPE_DIRECTORY_ANCHOR_URI",
     "EVENT_TYPE_OBSERVATION_URI",

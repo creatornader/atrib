@@ -19,6 +19,10 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import {
+  parseAttributionReceiptBlock,
+  type AttributionReceiptBlock,
+} from './attribution.js'
+import {
   DEFAULT_CALL_TIMEOUT_MS,
   DEFAULT_CONNECT_TIMEOUT_MS,
   DEFAULT_RETRY_COOLDOWN_MS,
@@ -27,7 +31,7 @@ import {
 } from './config.js'
 
 export type DaemonCallOutcome =
-  | { ok: true; value: unknown }
+  | { ok: true; value: unknown; attribution?: AttributionReceiptBlock }
   | { ok: false; reason: string }
 
 const SDK_CLIENT_INFO = { name: 'atrib-sdk', version: '0.1.0' }
@@ -51,15 +55,17 @@ export class DaemonClient {
   private readonly connectTimeoutMs: number
   private readonly callTimeoutMs: number
   private readonly retryCooldownMs: number
+  private readonly parseReceipts: boolean
   private client: Client | null = null
   private connecting: Promise<Client | null> | null = null
   private lastFailureAt = 0
 
-  constructor(config?: DaemonConfig) {
+  constructor(config?: DaemonConfig, options?: { attributionReceipts?: boolean }) {
     this.endpoint = resolveDaemonEndpoint(config)
     this.connectTimeoutMs = config?.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
     this.callTimeoutMs = config?.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS
     this.retryCooldownMs = config?.retryCooldownMs ?? DEFAULT_RETRY_COOLDOWN_MS
+    this.parseReceipts = options?.attributionReceipts === true
   }
 
   /**
@@ -85,13 +91,18 @@ export class DaemonClient {
       if (isError) {
         return { ok: false, reason: `daemon tool ${name} errored: ${text ?? 'unknown error'}` }
       }
+      const attribution = this.parseReceipts
+        ? parseAttributionReceiptBlock((result as { _meta?: unknown })._meta)
+        : null
+      const withAttribution = (value: unknown): DaemonCallOutcome =>
+        attribution !== null ? { ok: true, value, attribution } : { ok: true, value }
       if (text === undefined) {
-        return { ok: true, value: result }
+        return withAttribution(result)
       }
       try {
-        return { ok: true, value: JSON.parse(text) }
+        return withAttribution(JSON.parse(text))
       } catch {
-        return { ok: true, value: text }
+        return withAttribution(text)
       }
     } catch (error) {
       // A failed call may mean the transport session died; drop the client

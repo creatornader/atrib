@@ -20,9 +20,15 @@ and falls back to in-process engines when no daemon is reachable:
 | Verb | Daemon path | In-process fallback |
 | --- | --- | --- |
 | `attest()` | `emit` tool (daemon-owned key) | `emitInProcess()` from `@atrib/emit` (caller-owned key) |
-| `recall({shape: 'history'})` | `recall_my_attribution_history` | `recall()` from `@atrib/recall` |
-| `recall({shape: 'verify'})` | `atrib-verify` | `handleAtribVerify()` from `@atrib/verify-mcp` |
+| `recall({shape: 'history'})` | `recall_my_attribution_history` | `recall()` from `@atrib/recall` (optional peer) |
+| `recall({shape: 'verify'})` | `atrib-verify` | `handleAtribVerify()` from `@atrib/verify-mcp` (optional peer) |
 | other recall shapes | matching runtime tool | degraded warning outcome (v0) |
+
+`@atrib/recall` and `@atrib/verify-mcp` are **optional peer dependencies**
+loaded lazily (the P047 pattern): without them installed, those two
+in-process fallbacks degrade to a typed unavailable outcome with a
+warning instead of an import failure. `@atrib/emit` stays a hard
+dependency so the write path always works.
 
 The SDK is **semantically stateless** (stateless-MCP-native posture):
 `context_id` and chain tokens are explicit per-request values; nothing
@@ -67,11 +73,31 @@ inputs (programmer error), e.g. `ref.kind: 'revises'` with
 
 ## Anchors
 
-`anchors` config takes a **set** of [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) submission endpoints. Until
-upgrade-path step 1 (anchor plurality) lands, only `anchors[0]` is
-submitted to (default `https://log.atrib.dev/v1/entries`); extra anchors
-produce a warning, not an error. The config shape is forward-compatible
-with the ≥2-anchor default posture.
+`anchors` config takes a **set** of [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) submission endpoints —
+bare strings or `{ endpoint, anchor_type? }` objects (the P043 headroom:
+absent/`'atrib-log'` today; `rekor`/`rfc3161-tsa` anchors are skipped
+with a warning until upgrade-path step 1 lands). Only the first atrib-log
+anchor is submitted to (default `https://log.atrib.dev/v1/entries`);
+extras warn, never error. `allowSingleAnchor` is the explicit escape
+hatch once the ≥2-anchor default posture activates.
+
+## Extension receipts (opt-in)
+
+With `attributionReceipts: true`, the daemon client parses
+`dev.atrib/attribution` attestation receipts from tool results' `_meta`
+(P049 draft): the propagation token, a receipt naming the record the
+server already signed (`log_submission` is a queue status, never an
+awaited proof), and optionally the full signed record for immediate
+Tier-3 re-verification. Receipts surface as `attribution_receipt` on
+attest/recall results; they are advisory — trust derives from verifying
+signed records, never from the receipt.
+
+## Evidence envelopes
+
+`EvidenceEnvelope` types model the P042 universal envelope (profile type
+URI, four-tier ladder `declared → shape → attested → verified`, payload
+commitment, verifier facts). Types only in v0: the legacy `protocol`
+string set is frozen; every new evidence kind is an envelope profile.
 
 ## Conformance
 
