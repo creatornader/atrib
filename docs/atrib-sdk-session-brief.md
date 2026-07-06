@@ -95,3 +95,26 @@ Two client libraries exposing the atrib substrate to application code:
 3. Run the existing corpora against a skeleton signer first (red → green).
 4. Land TS consolidation before Python (Python then tests against the
    consolidated reference, not against three scattered implementations).
+
+## Session spawn prompt (paste as the first message of the SDK session)
+
+> ultracode — You are starting the dedicated atrib SDK session planned by the
+> redesign-analysis session on 2026-07-06. Mission: build the consolidated
+> JS/TS client SDK and the first Python SDK.
+> 1. `git fetch origin claude/atrib-redesign-analysis-4g0r9v && git checkout
+>    claude/atrib-redesign-analysis-4g0r9v && git pull`, then work on a new
+>    branch `claude/atrib-sdk-bootstrap` (never push to the redesign branch).
+> 2. Read in order: `docs/atrib-sdk-session-brief.md` (your charter),
+>    `docs/redesign-upgrade-path.md`, `docs/attest-recall-rename-impact.md`,
+>    the CLAUDE.md invariants, and atrib-spec.md [§1](../atrib-spec.md#1-attribution-record-format) + [§5](../atrib-spec.md#5-sdk-specification).
+> 3. Check `docs/adr-draft-p04x-*.md` and DECISIONS.md pending entries
+>    P042-P049 — they refine this brief and take precedence over it.
+> Then execute the bootstrap checklist: conformance corpora (1.2.6, 1.4,
+> 1.2.3/multi-producer, 2.6.1) red-to-green against a skeleton signer first;
+> TS consolidation before Python; Python ports `resolveChainRoot` bit-for-bit
+> and produces byte-identical records. Respect the "What the SDK session
+> should NOT do" list; publish nothing. Orchestrate with workflows where
+> warranted (parallel corpus porters with adversarial byte-equality
+> verifiers; TS/Python implementers with a cross-implementation determinism
+> judge). Commit and push to `claude/atrib-sdk-bootstrap` per phase.
+

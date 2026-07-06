@@ -1,7 +1,8 @@
 # Redesign upgrade path: clean-room findings → ordered, compatible spec changes
 
-Status: proposed working plan (pre-ADR). Each item below is a candidate ADR;
-none is accepted yet. Source: the 2026-07-06 clean-room redesign analysis
+Status: proposed working plan. Each item below is now a drafted candidate ADR
+— pending decisions [P042](../DECISIONS.md#p042-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)-[P049](../DECISIONS.md#p049-devatribattribution-first-class-mcp-extension-sep-2133)
+with full drafts in `docs/adr-draft-p04x-*.md`; none is accepted yet. Source: the 2026-07-06 clean-room redesign analysis
 session. The governing constraint for every item: **no signed byte of any
 existing record, log entry, or checkpoint changes.** Every step is additive
 except step 7 (a subtraction of scope, not of bytes).
