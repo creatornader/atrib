@@ -57,6 +57,16 @@ Two client libraries exposing the atrib substrate to application code:
   harness/model. The SDK returns verified raw material.
 - **Evidence attachments** use the [D109](../DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) tiered envelope; payment/authz
   specifics are profiles, not SDK core.
+- **Build stateless-MCP-native (spec final 2026-07-28).** Target the
+  post-stateless `@modelcontextprotocol/sdk` (no `initialize` handshake, no
+  `Mcp-Session-Id`; per-request `_meta` carries version/identity/capabilities
+  and W3C trace context). Never model MCP protocol sessions in the SDK:
+  `context_id` and chain tokens are explicit per-request values (tool args or
+  `_meta` per [§1.5.4](../atrib-spec.md#154-mcp-transport-params_meta)), and
+  anything resumable (recall pagination, pending approvals) is an explicit
+  opaque handle the caller passes back, mirroring the spec's
+  `requestState` / explicit-handle pattern. See the MCP-stateless section of
+  [`redesign-upgrade-path.md`](redesign-upgrade-path.md).
 
 ## Naming / packaging suggestions (to validate in-session)
 

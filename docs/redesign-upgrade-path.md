@@ -184,6 +184,76 @@ calculation remains a pure function over the graph, so nothing about the
 spin-out forecloses settlement later — that reversibility is the proof the
 original layering was right.
 
+## Forcing function: MCP goes stateless (spec final 2026-07-28)
+
+The MCP 2026-07-28 release (RC locked 2026-05-21) makes the protocol
+stateless: the `initialize`/`initialized` handshake and `Mcp-Session-Id`
+header are removed; protocol version, client info, and capabilities travel in
+`_meta` on every request; W3C Trace Context (`traceparent`, `tracestate`,
+`baggage`) is standardized inside `_meta` (SEP-414); Streamable HTTP requires
+`Mcp-Method`/`Mcp-Name` routing headers that servers must validate against
+the body (SEP-2243); list/read responses carry `ttlMs`/`cacheScope` caching
+metadata (SEP-2549); server-to-client interaction becomes a multi-round-trip
+`InputRequiredResult` pattern with an echoed opaque `requestState` so any
+instance can serve the retry (SEP-2260/2322); application state moves to
+explicit handles passed as tool arguments; extensions become first-class with
+reverse-DNS identifiers (SEP-2133); and sampling, roots, and MCP logging
+enter 12-month deprecation (SEP-2577). Sources: the official
+[2026-07-28 release-candidate post](https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/).
+
+What this does to the plan — it strengthens every step and reorders none:
+
+- **Step 5 (`atribd`) becomes stateless-native, and partially forced.** The
+  current primitives HTTP host is built on the removed machinery
+  (`mcp-session-id` parsing, per-session transports, idle sweeper,
+  "initialize first" rejection in `services/atrib-primitives/src/index.ts`).
+  When the Tier-1 TypeScript SDK ships the new transport, that host gets
+  rebuilt around per-request `_meta` + `Mcp-Method`/`Mcp-Name` validation,
+  and `ATRIB_PRIMITIVES_SESSION_IDLE_MS` retires. The daemon design should
+  assume any request can land on any instance — which it already almost does,
+  since primitives take explicit arguments.
+- **Context identity: explicit carriage moves to the top of the ladder.**
+  Protocol sessions are gone, so nothing session-scoped can carry
+  `context_id` implicitly on HTTP. The resolution order becomes: explicit
+  per-request value (tool argument, or `_meta` carriage per
+  [§1.5.4](../atrib-spec.md#154-mcp-transport-params_meta)) > harness env registry
+  ([D078](../DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers))
+  > file fallback — with the ambient tail relevant only to stdio
+  startup-spawn topologies. This is the direction
+  [D135](../DECISIONS.md#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args)
+  already chose (orchestrator-injected explicit context over ambient
+  env/file); the spec change makes it the default posture, not the special
+  case.
+- **[D018](../DECISIONS.md#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow)
+  is vindicated and upgraded.** atrib's propagation token was designed to fit
+  W3C `tracestate`, and `packages/mcp/src/context.ts` already resolves
+  `_meta.atrib` > `_meta.tracestate`. SEP-414 makes that exact channel
+  spec-blessed on every MCP request — chain threading across servers stops
+  being an atrib convention and rides a standardized field.
+- **Step 6 rename gains a surface and a constraint.** Tool names now travel
+  as `Mcp-Name` HTTP headers (gateway/routing visibility — see the impact
+  catalog), and `tools/list` responses are client-cacheable via `ttlMs`, so
+  the alias window must outlast the longest cache TTL and should advertise a
+  short `ttlMs` during migration.
+- **"Summarize relocates to the harness" is now also the spec's opinion.**
+  MCP sampling — the only mechanism by which a server borrows the client's
+  model — is deprecated in favor of direct provider integration. A substrate
+  primitive that owns an LLM call is swimming against the protocol's current;
+  the read surface returns verified material, the caller synthesizes.
+- **Steps 1–4 pick up a free pattern.** The `InputRequiredResult` /
+  `requestState` echo and the endorsed explicit-handle style are exactly the
+  shape of atrib's signed continuation artifacts: an opaque state blob the
+  next request must present is a natural thing to hash into
+  [D133](../DECISIONS.md#d133-action-gate-is-a-host-owned-controlproof-package)-style
+  decision/outcome records, and recall pagination/snapshots should be
+  explicit handles, never sessions.
+- **New option: ship atrib as an MCP extension.** SEP-2133's first-class
+  extensions (reverse-DNS ids, capability-map negotiation, independent
+  versioning) are a better home for atrib's propagation + attestation
+  surface than ad-hoc `_meta` conventions — a `dev.atrib.*` extension is the
+  standards-track version of what `@atrib/mcp` middleware already does, and
+  belongs on the candidate-ADR list alongside step 4.
+
 ## Dependency order
 
 1 and 3 are independent starters. 2 depends on nothing but makes 1 cheap.

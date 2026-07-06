@@ -252,6 +252,29 @@ renames; both are self-healing by updating prose in the same commit. Extend
 the script with a primitive-name check if the alias window needs mechanical
 enforcement.
 
+## New surface from the MCP stateless spec (final 2026-07-28)
+
+The MCP 2026-07-28 release adds two rename-relevant mechanisms (see the
+[upgrade path](redesign-upgrade-path.md) for the full spec-change analysis):
+
+- **`Mcp-Name` routing headers (SEP-2243):** on Streamable HTTP, the tool
+  name travels as an HTTP header that servers must validate against the
+  JSON-RPC body — so tool names become visible to gateways, load balancers,
+  and any header-based routing/allowlist rules operators have configured.
+  That is a sixth de-facto impact class: **network middleboxes**. The alias
+  window must keep both old and new names passing any such rules, and
+  `@atrib/mcp-wrap` (which rewrites calls in flight) must preserve
+  header/body consistency or stateless servers will reject the request.
+- **`tools/list` caching via `ttlMs`/`cacheScope` (SEP-2549):** clients may
+  cache the tool list, so a rename propagates on cache expiry, not on
+  deploy. During the alias window the servers should advertise a short
+  `ttlMs`, and old names must stay mounted for at least the longest TTL ever
+  advertised — retiring a name while a cached list still offers it produces
+  hard failures on stateless retries.
+
+Both mechanisms reinforce the alias-window sequencing below rather than
+changing it.
+
 ## Recommended migration sequencing
 
 1. **Alias window first, rename second.** Mount `attest` (and the collapsed
