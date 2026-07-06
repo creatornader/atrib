@@ -118,3 +118,52 @@ Two client libraries exposing the atrib substrate to application code:
 > verifiers; TS/Python implementers with a cross-implementation determinism
 > judge). Commit and push to `claude/atrib-sdk-bootstrap` per phase.
 
+## Post-spawn addenda from the redesign session (2026-07-06, after P042-P050 landed)
+
+Message to the SDK session — read this on your next pull of the upstream
+branch. The P042-P050 candidate set landed at commit `2fe8b29` AFTER your
+spawn prompt was written. Corrections and refinements that supersede the text
+above where they conflict:
+
+1. **Path correction:** the drafts are flat files `docs/adr-draft-p042-*.md`
+   through `p049`, not a `docs/adr-drafts/` directory.
+2. **Evidence types ([P042](../DECISIONS.md#p042-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)):** model SDK evidence attachments on the envelope
+   schema `{envelope, profile (type URI), profile_version, tier, payload
+   hash/reference, facts, result, verifier}`. The legacy `protocol` string set
+   freezes at today's five values; new evidence kinds are envelope profiles.
+3. **Anchor API ([P043](../DECISIONS.md#p043-anchor-plurality-as-the-default-trust-posture)):** `log_proofs` elements gain an optional
+   `anchor_type` discriminator (absent = atrib-log; existing bundles parse
+   unchanged). Design config as an anchor *set* with `allow_single_anchor:
+   true` as the explicit escape hatch. Critical crypto note: Rekor/TSA
+   anchoring uses a fresh anchoring signature over a reconstructible
+   anchor-claim artifact — it can NOT reuse the record's own signature
+   (record_hash covers the signature; Pure Ed25519 cannot sign digests). Do
+   not design the anchor interface assuming signature reuse.
+4. **Checkpoints ([P044](../DECISIONS.md#p044-session_checkpoint-event-type-the-session-stream-formalized)):** treat `session_checkpoint` as an extension-URI
+   event type for now (`https://atrib.dev/v1/types/session_checkpoint` under
+   0xFF; normative byte 0x08 comes later — 0x07 stays reserved for handoff).
+   Checkpoint object: `{session_root, tree_size, first_index,
+   prior_checkpoint?, retroactive?}`; leaf rule reuses §2.3.2 verbatim.
+5. **Key API headroom ([P045](../DECISIONS.md#p045-delegation-certificates-principal-keys-certify-ephemeral-run-keys)):** do NOT implement delegation certificates yet,
+   but do not paint the API into a corner: signer construction should accept
+   an optional certificate parameter later (depth-0 = today's behavior), and
+   canonicalization code must tolerate a future OPTIONAL `delegation_cert_hash`
+   genesis field (lex-slots between `creator_key` and `event_type`) as
+   omitted-not-null.
+6. **Rename mechanics ([P047](../DECISIONS.md#p047-attestrecall-verb-rename-and-primitive-surface-collapse)):** `content_id` derives from the frozen synthetic
+   constant `mcp://atrib-emit` plus the event-type URI leaf — never derive
+   content_id from the new verb names. `@atrib/recall` keeps its npm name;
+   its `verification` parameter loads `@atrib/verify` as an optional peer
+   dependency (lazy, typed unavailable-result when absent per §5.8) — mirror
+   that pattern.
+7. **Payments boundary ([P048](../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)):** payment detection must be an injectable
+   detector set; a core-only SDK never classifies transactions and never
+   blocks. Do not hard-wire the six protocol detectors into SDK core.
+8. **Extension receipts ([P049](../DECISIONS.md#p049-devatribattribution-first-class-mcp-extension-sep-2133)):** behind an opt-in flag, the SDK client should
+   parse `dev.atrib/attribution` attestation receipts from `result._meta`
+   (record hash/token + `log_submission` queue status).
+9. **Coordination protocol:** the redesign session watches every push to
+   `claude/atrib-sdk-bootstrap` and reviews each one; feedback arrives via
+   the operator. Do not rebase away pushed history mid-review, and never
+   push to `claude/atrib-redesign-analysis-4g0r9v`.
+
