@@ -1,0 +1,88 @@
+name: Python SDK conformance and cross-impl determinism
+
+# The `atrib` Python distribution (python/) is not a pnpm workspace member,
+# so ci.yml's `pnpm -r test` never reaches it. This workflow runs the
+# Python conformance suites, mypy strict, and the cross-implementation
+# determinism judge (python/tests/cross_impl/), which drives the built
+# @atrib/sdk through packages/sdk/scripts/cross-impl-vectors.mjs and
+# byte-compares records/hashes/tokens across the two implementations
+# (D136). Path-scoped to the byte-identity surface.
+
+on:
+  push:
+    paths:
+      - 'python/**'
+      - 'packages/sdk/**'
+      - 'packages/mcp/**'
+      - 'services/atrib-emit/**'
+      - 'spec/conformance/**'
+      - '.github/workflows/python-sdk.yml'
+  pull_request:
+    paths:
+      - 'python/**'
+      - 'packages/sdk/**'
+      - 'packages/mcp/**'
+      - 'services/atrib-emit/**'
+      - 'spec/conformance/**'
+      - '.github/workflows/python-sdk.yml'
+
+# Default to read-only GITHUB_TOKEN; jobs that need more (release.yml does)
+# specify their own permissions block.
+permissions:
+  contents: read
+
+# Opt into Node.js 24 for transitive JS actions (see ci.yml for rationale).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Floor from python/pyproject.toml requires-python plus a current
+        # release; byte-identity must hold on both.
+        python-version: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ github.token }}
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      # The cross-impl judge needs the TS SDK built; a filtered install
+      # keeps this workflow from paying for the whole workspace.
+      - run: pnpm install --frozen-lockfile --filter @atrib/sdk...
+
+      - run: pnpm --filter @atrib/sdk... build
+
+      - run: python -m pip install -e "python/[dev]"
+
+      - name: Python suites (conformance, behavior, parity, cross-impl)
+        run: python -m pytest python/tests -q
+
+      - name: mypy strict
+        run: python -m mypy
+        working-directory: python
+
+      - name: Cross-impl determinism judge must actually run (not skip)
+        # The judge skips gracefully when node or packages/sdk/dist is
+        # missing; in CI both exist, so any skip means the harness is
+        # silently disabled — fail loudly instead.
+        run: |
+          python -m pytest python/tests/cross_impl -q -rs 2>&1 | tee /tmp/cross-impl.out
+          if grep -qiE '\bskipped\b' /tmp/cross-impl.out; then
+            echo '::error::cross-impl determinism tests were skipped in CI'
+            exit 1
+          fi
