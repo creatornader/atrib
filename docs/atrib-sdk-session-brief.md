@@ -143,7 +143,7 @@ above where they conflict:
    event type for now (`https://atrib.dev/v1/types/session_checkpoint` under
    0xFF; normative byte 0x08 comes later — 0x07 stays reserved for handoff).
    Checkpoint object: `{session_root, tree_size, first_index,
-   prior_checkpoint?, retroactive?}`; leaf rule reuses §2.3.2 verbatim.
+   prior_checkpoint?, retroactive?}`; leaf rule reuses [§2.3.2](../atrib-spec.md#232-leaf-hash-computation) verbatim.
 5. **Key API headroom ([P045](../DECISIONS.md#p045-delegation-certificates-principal-keys-certify-ephemeral-run-keys)):** do NOT implement delegation certificates yet,
    but do not paint the API into a corner: signer construction should accept
    an optional certificate parameter later (depth-0 = today's behavior), and
@@ -154,7 +154,7 @@ above where they conflict:
    constant `mcp://atrib-emit` plus the event-type URI leaf — never derive
    content_id from the new verb names. `@atrib/recall` keeps its npm name;
    its `verification` parameter loads `@atrib/verify` as an optional peer
-   dependency (lazy, typed unavailable-result when absent per §5.8) — mirror
+   dependency (lazy, typed unavailable-result when absent per [§5.8](../atrib-spec.md#58-degradation-contract)) — mirror
    that pattern.
 7. **Payments boundary ([P048](../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)):** payment detection must be an injectable
    detector set; a core-only SDK never classifies transactions and never
