@@ -3558,7 +3558,9 @@ Three packages are defined in this specification. All are TypeScript/JavaScript 
 | @atrib/agent  | Agent developers                | Wraps an agent to automatically read and forward attribution context on every tool call, run policy negotiation at session start, create session policy records, and detect transaction events. |
 | @atrib/verify | Merchants                       | Verifies settlement recommendations and runs post-hoc attribution calculations for sessions where no agent SDK was present.                                                                     |
 
-All three packages are open source under the Apache 2.0 license. The npm package names are reserved. The reference implementations are maintained at `github.com/atrib-io`. Third-party implementations are permitted and encouraged, provided they satisfy the conformance requirements in this section.
+All three packages are open source under the Apache 2.0 license. The npm package names are reserved.
+
+Beyond the three spec-defined middleware packages, the reference distribution also ships consolidated client SDKs (informative): `@atrib/sdk` for TypeScript and the `atrib` distribution for Python expose `attest()` (write) and `recall()` (read) verbs over the same record layer, adding no new signing implementation. The Python distribution is the first non-TypeScript implementation of the [§1](#1-attribution-record-format) and [§5](#5-sdk-specification) contracts; both are held byte-identical through the shared conformance corpora. They are clients over this specification, not additional conformance surfaces. The reference implementations are maintained at `github.com/atrib-io`. Third-party implementations are permitted and encouraged, provided they satisfy the conformance requirements in this section.
 
 ---
 
