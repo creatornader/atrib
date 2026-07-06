@@ -80,6 +80,18 @@ post-2026-07-28 stateless MCP transport rather than reimplementing the
 current initialize-handshake session protocol. Summarize is not an SDK
 verb — synthesis belongs to the calling harness.
 
+## Known cross-implementation boundary (I-JSON)
+
+Content outside I-JSON (RFC 7493) — integers beyond 2^53-1 or strings with
+lone UTF-16 surrogates — cannot round-trip between JS and Python: the JS
+runtime canonicalizes such content (lossily for big integers, because JS
+numbers are already doubles) while this SDK's RFC 8785 implementation
+rejects it with a `ValueError`. Rejection is deliberate: silently
+reproducing JS precision loss would corrupt caller data, and a commitment
+only one implementation can reproduce is worse than an error. Keep attest
+`content` within I-JSON. The rejection contract is pinned in
+`tests/test_port_parity.py`.
+
 ## Tests
 
 ```bash

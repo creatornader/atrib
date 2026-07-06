@@ -33,6 +33,17 @@ def _reject(error: str) -> ValidationResult:
     return ValidationResult(ok=False, status=400, error=error)
 
 
+def _is_integral_number(value: object) -> bool:
+    """Port of JS Number.isInteger over parsed-JSON values: ints and
+    integral floats qualify; bools (Python ints) do not — JS `typeof true`
+    is not 'number'."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return isinstance(value, float) and value.is_integer()
+
+
 def validate_submission(
     record: object, *, now_ms: int | None = None
 ) -> ValidationResult:
@@ -49,9 +60,14 @@ def validate_submission(
     if not is_valid_event_type_uri(record.get("event_type")):
         return _reject("event_type must be a syntactically-valid absolute URI")
 
-    # Step 4: timestamp integer, not >10min in the future.
+    # Step 4: timestamp integer, not >10min in the future. Integral floats
+    # pass: JSON "1.0e12" parses to the same JS number as "1000000000000",
+    # and the TS reference (Number.isInteger) accepts it — Python must not
+    # be stricter on identical wire bytes.
     timestamp = record.get("timestamp")
-    if not isinstance(timestamp, int) or isinstance(timestamp, bool) or timestamp < 0:
+    if not _is_integral_number(timestamp) or not isinstance(timestamp, (int, float)):
+        return _reject("timestamp must be a non-negative integer")
+    if timestamp < 0:
         return _reject("timestamp must be a non-negative integer")
     now = int(time.time() * 1000) if now_ms is None else now_ms
     if timestamp - now > _MAX_FUTURE_SKEW_MS:

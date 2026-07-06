@@ -65,16 +65,22 @@ export function parseAttributionReceiptBlock(meta: unknown): AttributionReceiptB
   const out: AttributionReceiptBlock = {}
   if (typeof block['token'] === 'string') out.token = block['token']
   const rawReceipt = block['receipt']
-  if (typeof rawReceipt === 'object' && rawReceipt !== null) {
+  if (typeof rawReceipt === 'object' && rawReceipt !== null && !Array.isArray(rawReceipt)) {
     const receipt: AttributionReceipt = {}
+    let kept = 0
     for (const field of RECEIPT_STRING_FIELDS) {
       const value = (rawReceipt as Record<string, unknown>)[field]
-      if (typeof value === 'string') receipt[field] = value
+      if (typeof value === 'string') {
+        receipt[field] = value
+        kept += 1
+      }
     }
-    out.receipt = receipt
+    // A receipt where every field was wrong-typed conveys nothing; treat
+    // it as absent rather than surfacing an empty object.
+    if (kept > 0) out.receipt = receipt
   }
   const rawRecord = block['record']
-  if (typeof rawRecord === 'object' && rawRecord !== null) {
+  if (typeof rawRecord === 'object' && rawRecord !== null && !Array.isArray(rawRecord)) {
     out.record = rawRecord as AtribRecord
   }
   return out.token !== undefined || out.receipt !== undefined || out.record !== undefined

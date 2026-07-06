@@ -19,6 +19,7 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .chain import resolve_chain_root
 from .hashes import record_hash_ref
@@ -66,20 +67,34 @@ def _resolve_anchor_set(
         return None, warnings
     atrib_log_endpoints: list[str] = []
     for spec in anchors:
+        # Hostile/malformed entries warn-and-skip, never raise (§5.8); the
+        # skip rules mirror the TS resolveAnchorSet exactly.
+        anchor_type_present = False
+        anchor_type: object = None
         if isinstance(spec, str):
-            endpoint, anchor_type = spec, None
+            endpoint: object = spec
+        elif isinstance(spec, Mapping):
+            endpoint = spec.get("endpoint")
+            anchor_type_present = "anchor_type" in spec
+            anchor_type = spec.get("anchor_type")
         else:
-            raw_endpoint = spec.get("endpoint")
-            if not isinstance(raw_endpoint, str):
-                warnings.append("atrib: anchor entry without a string endpoint; skipping")
-                continue
-            endpoint = raw_endpoint
-            raw_type = spec.get("anchor_type")
-            anchor_type = raw_type if isinstance(raw_type, str) else None
-        if anchor_type is not None and anchor_type != "atrib-log":
+            warnings.append(
+                f"atrib: anchor entry {spec!r} is not a string or mapping; skipping"
+            )
+            continue
+        if not isinstance(endpoint, str):
+            warnings.append("atrib: anchor entry without a string endpoint; skipping")
+            continue
+        if anchor_type_present and anchor_type != "atrib-log":
             warnings.append(
                 f"atrib: anchor_type '{anchor_type}' ({endpoint}) is not supported yet "
                 "(upgrade-path step 1); skipping this anchor"
+            )
+            continue
+        split = urlsplit(endpoint)
+        if not split.scheme or not split.netloc:
+            warnings.append(
+                f"atrib: anchor endpoint '{endpoint}' is not a valid URL; skipping"
             )
             continue
         atrib_log_endpoints.append(endpoint)

@@ -21,11 +21,27 @@ import rfc8785
 
 
 def jcs(value: object) -> bytes:
-    """JCS-serialize any JSON-compatible value to UTF-8 bytes."""
+    """JCS-serialize any JSON-compatible value to UTF-8 bytes.
+
+    Non-I-JSON inputs (integers outside the 2^53-1 float domain, lone
+    UTF-16 surrogates) raise ValueError subclasses. This is a deliberate,
+    documented cross-implementation boundary: the JS runtime canonicalizes
+    such inputs (lossily for big integers) because JS numbers are already
+    doubles and JS strings tolerate lone surrogates, while RFC 8785 §3.2.2.3
+    + I-JSON put them out of interoperable range. Rejecting keeps Python
+    from producing content commitments no other implementation can
+    reproduce. Key-position surrogates are normalized to the same error
+    class as value-position ones (rfc8785 otherwise leaks the codec error).
+    """
     # Type-only cast: rfc8785.dumps is annotated with a recursive JSON
     # union (its private _Value alias); this API deliberately accepts any
     # JSON-compatible object and lets rfc8785 raise on non-JSON input.
-    out = rfc8785.dumps(cast(Any, value))
+    try:
+        out = rfc8785.dumps(cast(Any, value))
+    except UnicodeEncodeError as exc:
+        raise rfc8785.CanonicalizationError(
+            "input contains non-UTF-8 codepoints"
+        ) from exc
     if isinstance(out, str):  # rfc8785 < 0.1 compatibility
         return out.encode("utf-8")
     return out

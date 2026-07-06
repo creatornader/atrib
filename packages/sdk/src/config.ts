@@ -122,12 +122,33 @@ export function resolveAnchorSet(anchors: AnchorSpec[] | undefined): ResolvedAnc
   }
   const atribLogEndpoints: string[] = []
   for (const spec of anchors) {
-    const endpoint = typeof spec === 'string' ? spec : spec.endpoint
-    const anchorType = typeof spec === 'string' ? undefined : spec.anchor_type
+    // Hostile/malformed entries warn-and-skip, never throw (§5.8): the
+    // documented anchor posture is "warning, not an error".
+    let endpoint: unknown
+    let anchorType: unknown
+    if (typeof spec === 'string') {
+      endpoint = spec
+    } else if (typeof spec === 'object' && spec !== null) {
+      endpoint = (spec as { endpoint?: unknown }).endpoint
+      anchorType = (spec as { anchor_type?: unknown }).anchor_type
+    } else {
+      warnings.push(`atrib: anchor entry ${String(spec)} is not a string or object; skipping`)
+      continue
+    }
+    if (typeof endpoint !== 'string') {
+      warnings.push('atrib: anchor entry without a string endpoint; skipping')
+      continue
+    }
     if (anchorType !== undefined && anchorType !== 'atrib-log') {
       warnings.push(
-        `atrib: anchor_type '${anchorType}' (${endpoint}) is not supported yet (upgrade-path step 1); skipping this anchor`,
+        `atrib: anchor_type '${String(anchorType)}' (${endpoint}) is not supported yet (upgrade-path step 1); skipping this anchor`,
       )
+      continue
+    }
+    try {
+      new URL(endpoint)
+    } catch {
+      warnings.push(`atrib: anchor endpoint '${endpoint}' is not a valid URL; skipping`)
       continue
     }
     atribLogEndpoints.push(endpoint)

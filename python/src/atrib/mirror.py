@@ -105,13 +105,19 @@ def parse_mirror_line(line: str) -> MirrorLine | None:
 
 
 def read_mirror(path: Path | str) -> list[MirrorLine]:
-    """Read every well-formed line. Missing file → empty list (§5.8)."""
+    """Read every well-formed line. Missing file → empty list; a line with
+    invalid UTF-8 (or any other malformation) is SKIPPED, not fatal — one
+    bad byte must never take out the whole mirror (§5.8, §5.9.5)."""
     try:
-        text = Path(path).read_text(encoding="utf-8")
+        data = Path(path).read_bytes()
     except OSError:
         return []
     lines: list[MirrorLine] = []
-    for raw in text.splitlines():
+    for raw_bytes in data.split(b"\n"):
+        try:
+            raw = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
         if not raw.strip():
             continue
         parsed = parse_mirror_line(raw)

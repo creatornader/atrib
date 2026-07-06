@@ -160,8 +160,14 @@ def verify_record(record: Mapping[str, object], *, now_ms: int | None = None) ->
             return False
 
         # Step 7: timestamp is a non-negative integer, not >5min future.
+        # Integral floats pass, matching the TS reference's Number.isInteger
+        # over parsed JSON (see validation._is_integral_number).
         timestamp = record.get("timestamp")
-        if not isinstance(timestamp, int) or isinstance(timestamp, bool) or timestamp < 0:
+        if isinstance(timestamp, bool) or not isinstance(timestamp, (int, float)):
+            return False
+        if isinstance(timestamp, float) and not timestamp.is_integer():
+            return False
+        if timestamp < 0:
             return False
         now = int(time.time() * 1000) if now_ms is None else now_ms
         if timestamp > now + _FIVE_MINUTES_MS:

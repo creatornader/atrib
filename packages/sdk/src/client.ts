@@ -110,18 +110,22 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
 
     if (daemon) {
       const outcome = await daemon.callTool('emit', args)
-      if (outcome.ok && typeof outcome.value === 'object' && outcome.value !== null) {
-        const result = attestResultFromEmitOutput(
-          outcome.value as EmitOutputLike,
-          'daemon',
-          warnings,
-        )
-        return outcome.attribution !== undefined
-          ? { ...result, attribution_receipt: outcome.attribution }
+      const attribution = outcome.ok ? outcome.attribution : undefined
+      const emitOutput =
+        outcome.ok && typeof outcome.value === 'object' && outcome.value !== null
+          ? (outcome.value as EmitOutputLike)
+          : null
+      // A structurally-garbage daemon result (no record_hash string) is a
+      // daemon FAILURE, not a silent all-null success — fall through so
+      // the in-process path can still sign.
+      if (emitOutput !== null && typeof emitOutput.record_hash === 'string') {
+        const result = attestResultFromEmitOutput(emitOutput, 'daemon', warnings)
+        return attribution !== undefined
+          ? { ...result, attribution_receipt: attribution }
           : result
       }
       const reason = outcome.ok
-        ? 'daemon returned a non-object emit result'
+        ? 'daemon returned an emit result without a record_hash'
         : outcome.reason
       warnings.push(`atrib: daemon attest failed: ${reason}`)
       if (daemonMode === 'require') {

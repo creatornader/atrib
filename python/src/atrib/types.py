@@ -98,12 +98,18 @@ def normalize_event_type(value: str) -> str:
     return EVENT_TYPE_ALIAS_TO_URI.get(value, value)
 
 
+def _utf16_length(value: str) -> int:
+    """JS string .length counts UTF-16 code units; astral chars count 2."""
+    return sum(2 if ord(ch) > 0xFFFF else 1 for ch in value)
+
+
 def is_valid_event_type_uri(value: object) -> bool:
     """§1.4.5 syntactic validation — port of @atrib/mcp isValidEventTypeUri.
-    Does NOT check normative-set membership; extension URIs pass."""
+    Does NOT check normative-set membership; extension URIs pass. The
+    length limit counts UTF-16 code units exactly like the JS reference."""
     if not isinstance(value, str):
         return False
-    if len(value) == 0 or len(value) > 256:
+    if len(value) == 0 or _utf16_length(value) > 256:
         return False
     if "#" in value:
         return False

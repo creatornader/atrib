@@ -134,24 +134,28 @@ export class DaemonClient {
       return null
     }
     this.connecting = (async () => {
-      // The SDK's concrete transport declares `sessionId: string | undefined`
-      // while the Transport interface under exactOptionalPropertyTypes wants
-      // an optional property; the runtime shapes are identical.
-      const transport = new StreamableHTTPClientTransport(
-        new URL(this.endpoint),
-      ) as unknown as Transport
-      const client = new Client(SDK_CLIENT_INFO)
+      let client: Client | null = null
       try {
+        // URL parsing stays INSIDE the try: a garbage endpoint is an
+        // operational failure that must degrade (§5.8), never throw.
+        const url = new URL(this.endpoint)
+        // The SDK's concrete transport declares `sessionId: string | undefined`
+        // while the Transport interface under exactOptionalPropertyTypes wants
+        // an optional property; the runtime shapes are identical.
+        const transport = new StreamableHTTPClientTransport(url) as unknown as Transport
+        client = new Client(SDK_CLIENT_INFO)
         await withTimeout(client.connect(transport), this.connectTimeoutMs, 'daemon connect')
         this.client = client
         this.lastFailureAt = 0
         return client
       } catch (error) {
         this.lastFailureAt = Date.now()
-        try {
-          await client.close()
-        } catch {
-          // Ignore close failures on a connection that never established.
+        if (client) {
+          try {
+            await client.close()
+          } catch {
+            // Ignore close failures on a connection that never established.
+          }
         }
         const reason = error instanceof Error ? error.message : String(error)
         console.warn(`atrib: daemon connect failed (${this.endpoint}): ${reason}`)
