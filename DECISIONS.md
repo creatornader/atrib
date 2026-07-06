@@ -7942,6 +7942,8 @@ Candidate demo:
 
 **Likely outcome (not committed):** accept. Declare the envelope normative in a new [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks)-adjacent spec subsection, register the existing four adapters plus human-approval and counterparty-attestation profiles, add `spec/conformance/evidence-envelope/`, freeze the legacy `protocol` string set, and keep the legacy `evidence[]` block shape as a mapped compatibility view for at least two minor versions of `@atrib/verify`.
 
+**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
+
 **Cross-references.**
 
 - [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 4 (source) and steps 3 and 7 (dependents that must consume this schema).
@@ -7976,6 +7978,8 @@ The candidate shape:
 - Session checkpoints (redesign item 2) make one-anchor-call-per-interval affordable, but per-record anchoring works today; the two ADRs are independent.
 
 **Likely outcome (not committed):** accept. Land the spec anchor-interface section and the `anchor_plurality` verifier annotation with a `spec/conformance/2.11/anchors/` corpus first; flip the SDK default anchor set in the same release the second default anchor (OTS or Rekor) is chosen.
+
+**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
 
 **Cross-references.**
 
@@ -8014,6 +8018,8 @@ Candidate shape:
 
 **Likely outcome (not committed):** accept the full normative design now, ship extension-first under `0xFF` from one dogfood producer, and flip to byte `0x08` via the [D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04) sync-trigger checklist once the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) adoption and demand indicators are met.
 
+**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
+
 **Cross-references.**
 
 - [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 2 source section; step 1 (anchor plurality) is the consumer of cheap roots.
@@ -8047,6 +8053,8 @@ This is deliberately certification, not the per-conversation key *derivation* de
 
 **Likely outcome (not committed):** accept as the step-3 ADR of the redesign promotion sequence, after step 4 (universal evidence envelope) settles the certificate's evidence carrier as the `delegation-certificate` profile, with a new normative spec section, a `spec/conformance/` corpus in the same commit, and the [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args) orchestrator flow as the first dogfood issuer.
 
+**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
+
 **Cross-references.**
 
 - [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 3, source proposal; step 4, the evidence envelope this profile attaches through.
@@ -8070,6 +8078,8 @@ The daemon would own the key (or a [D102](#d102-sandboxed-signer-proxy-keeps-key
 **Timing gate:** adopt only if the Tier-1 MCP TypeScript SDK ships stateless-transport support within ten weeks of the 2026-07-28 spec final (by 2026-10-06). This is the single shared gate for both this decision and the companion `dev.atrib` MCP-extension candidate, whose reference implementation rides the same transport rebuild. If the SDK slips, either ship on the session SDK behind an isolated transport adapter or hold; that fallback is an open operator choice.
 
 **Likely outcome (not committed):** accept, sequenced after the universal evidence envelope per the upgrade-path landing order, with the verb rename ([`docs/attest-recall-rename-impact.md`](docs/attest-recall-rename-impact.md)) landing with-or-after so the daemon's alias mount is the rename's migration vehicle.
+
+**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
 
 **Cross-references.**
 
@@ -8098,6 +8108,8 @@ Full draft: [docs/adr-draft-p046-atribd-daemon.md](docs/adr-draft-p046-atribd-da
 - Retirement of legacy names from default tool lists is gated on instrumentation, not calendars: a full zero-dispatch cycle measured through the [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) jsonl pillars.
 
 **Likely outcome (not committed):** accept, sequenced with or after daemon consolidation (redesign step 5, the natural alias mounting point). Order: alias window first; behavioral surfaces (SKILL.md allowed-tools, hook prompts, client configs, health-gate unions) flip inside the window; new/shim npm publishes then targeted deprecations; legacy names retire from default mounts only after the instrumentation gate clears.
+
+**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
 
 **Cross-references.**
 
@@ -8134,6 +8146,8 @@ Core keeps three things, and they are exactly the payments-accommodation surface
 
 **Likely outcome (not committed):** accept, sequenced after the evidence-envelope ADR. Ship as document relocation plus subpath package exports first (`@atrib/agent/payments`, `@atrib/verify/payments`) with root re-exports for one deprecation cycle; a standalone `@atrib/payments` package is a later, separately gated step.
 
+**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
+
 **Cross-references.**
 
 - [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 7 (this item) and step 4 (envelope dependency).
@@ -8166,6 +8180,8 @@ Full draft: [docs/adr-draft-p048-payments-spinout.md](docs/adr-draft-p048-paymen
 
 **Likely outcome (not committed):** accept and publish v0.1 as an unofficial extension before 2026-07-28, implemented behind opt-in flags in `@atrib/mcp` / `@atrib/agent` / `@atrib/mcp-wrap`, with the extension-name/rename question resolved first.
 
+**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
+
 **Cross-references.**
 
 - [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow), tracestate carriage being standardized upward.
@@ -8186,6 +8202,8 @@ Full draft: [docs/adr-draft-p049-mcp-extension.md](docs/adr-draft-p049-mcp-exten
 Proposal: define both as **conventional `attest` content shapes, not new primitives** — a baton-pass record (target principal or harness, continuation-packet hash per [P036](#p036-cross-harness-continuation-packet-for-supportrca-investigations), reason) and a join record (accepted/rejected result record hashes, reasons), each linking the referenced work through `informed_by`. The [D079](#d079-the-six-core-cognitive-primitives-atribs-agent-facing-surface) boundary test appears to place both on the convention side (no new required args, no new graph effect beyond existing reference types); if implementation pressure later shows a distinct cognitive purpose, promotion follows the [D080](#d080-primitive-lifecycle-extensions-first-dedicated-mcps-upon-promotion) gate.
 
 **Likely outcome (not committed):** accept as a documented convention in the atrib skill and the P042 evidence-envelope profile registry once [P045](#p045-delegation-certificates-principal-keys-certify-ephemeral-run-keys) scoped run certificates exist, since the baton-pass record is most useful when the receiving agent's authority is itself verifiable.
+
+**Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
 
 Related:
 
