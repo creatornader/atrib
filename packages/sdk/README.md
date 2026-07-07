@@ -71,7 +71,7 @@ submission is non-blocking with bounded retry (via the existing
 inputs (programmer error), e.g. `ref.kind: 'revises'` with
 `event_type: 'annotation'`.
 
-## Anchors ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-generalizes-cross-log-replication), [§2.11.7-§2.11.13](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2117-anchor-plurality))
+## Anchors ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture), [§2.11.7-§2.11.13](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2117-anchors-generalizing-the-replication-target))
 
 `anchors` config takes a **set** of anchor descriptors — bare strings
 (atrib-log [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry)
@@ -82,7 +82,7 @@ registry (`atrib-log`, `sigstore-rekor`, `rfc3161-tsa`,
 anchor through `@atrib/mcp`'s `createAnchorFanout` (fire-and-forget per
 [§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission));
 no anchor config at all resolves to `BUILT_IN_DEFAULT_ANCHOR_SET` (two
-independent anchors, [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-anchor-configuration)
+independent anchors, [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture)
 rule 1). A sub-plurality set (< 2 anchors) warns and writes the
 `_local.anchor_config` sidecar degradation marker unless
 `allowSingleAnchor: true` states it is deliberate. The resolved posture
@@ -94,7 +94,7 @@ never blocks the write.
 
 With `attributionReceipts: true`, the daemon client parses
 `dev.atrib/attribution` attestation receipts from tool results' `_meta`
-([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-mcp-extension-v01),
+([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133),
 extension v0.1): the propagation token, a receipt naming the record the
 server already signed (`log_submission` is a queue status, never an
 awaited proof), and optionally the full signed record for immediate
@@ -104,7 +104,7 @@ surfaces as `attribution_receipt: { block, verification }` on
 attest/recall results. Receipts are advisory — trust derives from
 verifying signed records, never from the receipt.
 
-## Evidence envelopes ([D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope), [§5.5.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#557-universal-evidence-envelope))
+## Evidence envelopes ([D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model), [§5.5.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#557-universal-evidence-envelope))
 
 The universal envelope (profile type URI, four-tier ladder `declared →
 shape → attested → verified`, payload commitment, verifier facts) is the
@@ -168,7 +168,7 @@ then tries paths in order:
    atrib-log anchor as `logEndpoint`, then reads the freshly signed
    record back from the mirror tail and fans it out to every configured
    anchor via `createAnchorFanout`
-   ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-generalizes-cross-log-replication);
+   ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture);
    fire-and-forget per [§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission)
    — the primary log receiving the record twice is idempotent-safe per
    [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry)
@@ -233,7 +233,7 @@ interface AttestRef {
 | `receipt_id` | `string?` | Present when the emit pipeline issued a receipt id. |
 | `via` | `'daemon' \| 'in-process' \| 'none'` | Which path produced the record. `'none'` = degraded; see `warnings`. |
 | `warnings` | `string[]` | `atrib:`-prefixed operational warnings (anchor skips, fallbacks, pass-through, flush deadline). |
-| `anchor_posture` | `AttestAnchorPosture?` | `{ effective_anchor_count, used_default_set, warned }` — the resolved [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-anchor-configuration) posture; present on in-process attests that reached the anchor fan-out. |
+| `anchor_posture` | `AttestAnchorPosture?` | `{ effective_anchor_count, used_default_set, warned }` — the resolved [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) posture; present on in-process attests that reached the anchor fan-out. |
 | `attribution_receipt` | `VerifiedAttributionReceipt?` | `{ block, verification }` — the parsed `dev.atrib/attribution` receipt plus its `verifyAttributionReceipt` outcome; only when `attributionReceipts: true` and the daemon emitted one. Advisory. |
 
 ### `RecallQuery` shapes
@@ -278,9 +278,9 @@ too is caught and degraded.
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `daemon` | `DaemonConfig` | see below | Daemon endpoint/mode/timeouts. |
-| `anchors` | `AnchorSpec[]` | `BUILT_IN_DEFAULT_ANCHOR_SET` (two anchors; the atrib-log member honors `$ATRIB_LOG_ENDPOINT`) | [D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-generalizes-cross-log-replication) anchor set; in-process attests fan out to every member. Hostile entries and unregistered `anchor_type` values warn-and-skip. |
-| `allowSingleAnchor` | `boolean` | `false` | [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-anchor-configuration) rule 3: states a < 2-anchor set is deliberate, silencing the sub-plurality warning and the sidecar degradation marker. |
-| `attributionReceipts` | `boolean` | `false` | Opt-in parsing + verification of `dev.atrib/attribution` receipts from daemon `_meta` ([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-mcp-extension-v01)). |
+| `anchors` | `AnchorSpec[]` | `BUILT_IN_DEFAULT_ANCHOR_SET` (two anchors; the atrib-log member honors `$ATRIB_LOG_ENDPOINT`) | [D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture) anchor set; in-process attests fan out to every member. Hostile entries and unregistered `anchor_type` values warn-and-skip. |
+| `allowSingleAnchor` | `boolean` | `false` | [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) rule 3: states a < 2-anchor set is deliberate, silencing the sub-plurality warning and the sidecar degradation marker. |
+| `attributionReceipts` | `boolean` | `false` | Opt-in parsing + verification of `dev.atrib/attribution` receipts from daemon `_meta` ([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133)). |
 | `key` | `ResolvedKey \| null` | `resolveKey()` ladder from `@atrib/emit` (`ATRIB_PRIVATE_KEY` env → `ATRIB_KEY_FILE` → macOS Keychain → 1Password) | Pre-resolved in-process signing key. `null` disables in-process signing (pass-through per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) rule 5). Note: *any* explicitly-set `key` property opts out of the `resolveKey()` ladder. |
 | `contextId` | `string` | `resolveEnvContextId()` at call time | Per-client default context (32 lowercase hex). Context identity stays an explicit per-request value (stateless-MCP-native posture). |
 | `producer` | `string` | `'atrib-sdk'` (`DEFAULT_PRODUCER`) | `_local.producer` mirror-sidecar label ([§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions)); in-process path only. |
@@ -309,7 +309,7 @@ endpoint, shorthand for `{ url }`) or an `AnchorDescriptor`
 non-atrib-log types like `'opentimestamps'` need no URL).
 
 `resolveAnchorSet` normalizes the caller's specs into the canonical
-[§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-anchor-configuration)
+[§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture)
 `AnchorSetConfig` that `createAnchorFanout` / `resolveAnchorPosture`
 consume, and never throws: hostile entries (non-string/non-object,
 missing/invalid endpoint where one is required) and `anchor_type` values
@@ -359,7 +359,7 @@ Compositions of `@atrib/mcp` primitives — no new hashing implementation.
 | `recordHashRef(record)` | `sha256:<64-hex>` | The reference form used by `chain_root`, `informed_by`, `annotates`, `revises`. |
 | `deriveProvenanceToken(upstream)` | 22-char base64url | [§1.2.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#126-provenance_token) token for a downstream genesis record: base64url (no padding) of the first 16 bytes of the upstream record hash. |
 
-### Evidence envelope family ([D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope), [§5.5.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#557-universal-evidence-envelope))
+### Evidence envelope family ([D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model), [§5.5.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#557-universal-evidence-envelope))
 
 Structural types/helpers are SDK-local; envelope **production and
 validation** delegate to the optional peer `@atrib/verify` (lazy import;
@@ -381,7 +381,7 @@ projection, verifier results, host-owned packets).
 | `buildEvidenceEnvelope(input)` | async function | Producer-side builder: computes `payload.hash` from `payload.material` (JCS rule) or `hash_rule: 'raw'` (UTF-8 rule), fills the default `result`, and validates via the peer. Returns `{ envelope, validation, warnings }` with `envelope: null` on rejection or missing peer; throws `TypeError` only on contradictory input (hash AND material, `hash_rule` without material, neither). |
 | `validateEvidenceEnvelope(envelope)` | async function | Runs the peer's normative [§5.5.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#557-universal-evidence-envelope) shape validation. Returns `{ validation, warnings }`; `validation: null` when the peer is missing. |
 
-### Attribution receipt family ([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-mcp-extension-v01), `dev.atrib/attribution` v0.1)
+### Attribution receipt family ([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133), `dev.atrib/attribution` v0.1)
 
 Receipts are advisory extension data: trust derives only from verifying
 signed records and inclusion proofs, never from the receipt. See the
@@ -480,11 +480,11 @@ record layer, re-exported verbatim from `@atrib/mcp` (grouped as in
 `ChainContext`, `DecodedToken`, `EntryInput`, `ProofBundle`,
 `SubmissionQueue`, `ValidationResult`.
 
-**Anchor plurality ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-generalizes-cross-log-replication), [§2.11.7-§2.11.13](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2117-anchor-plurality)), re-exported from `@atrib/mcp`.**
+**Anchor plurality ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture), [§2.11.7-§2.11.13](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2117-anchors-generalizing-the-replication-target)), re-exported from `@atrib/mcp`.**
 
 - `ANCHOR_TYPES` — the [§2.11.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2118-anchor-type-registry) v1 registry (`atrib-log`, `sigstore-rekor`, `rfc3161-tsa`, `opentimestamps`).
-- `BUILT_IN_DEFAULT_ANCHOR_SET` — the two-anchor zero-config default ([§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-anchor-configuration) rule 1).
-- `resolveAnchorPosture(config)` / `resolveEffectiveAnchors(config)` — the pure [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-anchor-configuration) posture/effective-set resolution.
+- `BUILT_IN_DEFAULT_ANCHOR_SET` — the two-anchor zero-config default ([§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) rule 1).
+- `resolveAnchorPosture(config)` / `resolveEffectiveAnchors(config)` — the pure [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) posture/effective-set resolution.
 - `createAnchorFanout(options)` / `submitToAnchors(...)` — the per-anchor transport fan-out the client uses on in-process attests; exported for hosts that anchor records themselves.
 - Types `AnchorType`, `AnchorDescriptor`, `AnchorSetConfig`, `AnchorPostureResolution`, `AnchorConfigSidecarMarker`, `AnchorFanout`, `AnchorFanoutTicket`, `AnchorSubmissionOutcome`, `AnchorSubmissionStatus`.
 
@@ -499,8 +499,8 @@ record layer, re-exported verbatim from `@atrib/mcp` (grouped as in
 `test/` runs the shared corpora — `spec/conformance/1.4/` (signing +
 adversarial), `1.2.6/` (provenance_token), `1.2.3/multi-producer/`
 (chain-root precedence), `2.6.1/` (submission validation, client-side),
-`evidence-envelope/` ([D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope) shape/build/validate), and the
-`mcp-extension/` receipt cases ([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-mcp-extension-v01) `verifyAttributionReceipt` +
+`evidence-envelope/` ([D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model) shape/build/validate), and the
+`mcp-extension/` receipt cases ([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133) `verifyAttributionReceipt` +
 consistency semantics) — against this package's exported surface. The
 corpora are fixtures, not inspiration: any failure is a spec-bug
 discovery, not something to route around.

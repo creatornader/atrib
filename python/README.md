@@ -80,8 +80,8 @@ Constructor parameters (all keyword-only):
 | --- | --- | --- |
 | `key` | unset → lazy `resolve_key(env)` ladder | Pre-resolved `ResolvedKey`. Passing the parameter at all (including `None`) skips the ladder; `None` disables signing (pass-through per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) rule 5). |
 | `context_id` | `None` → env discovery | Per-client default context. Env discovery is the [D078](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) subset: `ATRIB_CONTEXT_ID`, then `CLAUDE_CODE_SESSION_ID` / `CODEX_THREAD_ID` (UUID stripped of hyphens + lowercased to 32-hex). |
-| `anchors` | `None` → `BUILT_IN_DEFAULT_ANCHOR_SET` (two anchors; the atrib-log member honors `$ATRIB_LOG_ENDPOINT`) | [D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-generalizes-cross-log-replication) anchor set (`AnchorSpec = str \| Mapping` — bare [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) endpoint shorthand for `{"url": ...}`, or an `AnchorDescriptor` mapping; `url` wins over `endpoint`). Skip rules mirror the TS `resolveAnchorSet` exactly: hostile shapes and `anchor_type` values outside the [§2.11.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2118-anchor-type-registry) registry warn-and-skip (never raise) and are excluded from the plurality posture. Attests fan out to **every** usable atrib-log anchor through one non-blocking [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) queue per endpoint; registered non-atrib-log types (`sigstore-rekor`, `rfc3161-tsa`, `opentimestamps`) count toward plurality but their legs are skipped with a warning — no Python transport yet (the TS reference stubs them too). |
-| `allow_single_anchor` | `False` | [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-anchor-configuration) rule 3: states a < 2-anchor set is deliberate, silencing the sub-plurality warning and the `_local.anchor_config` sidecar degradation marker. |
+| `anchors` | `None` → `BUILT_IN_DEFAULT_ANCHOR_SET` (two anchors; the atrib-log member honors `$ATRIB_LOG_ENDPOINT`) | [D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture) anchor set (`AnchorSpec = str \| Mapping` — bare [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) endpoint shorthand for `{"url": ...}`, or an `AnchorDescriptor` mapping; `url` wins over `endpoint`). Skip rules mirror the TS `resolveAnchorSet` exactly: hostile shapes and `anchor_type` values outside the [§2.11.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2118-anchor-type-registry) registry warn-and-skip (never raise) and are excluded from the plurality posture. Attests fan out to **every** usable atrib-log anchor through one non-blocking [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) queue per endpoint; registered non-atrib-log types (`sigstore-rekor`, `rfc3161-tsa`, `opentimestamps`) count toward plurality but their legs are skipped with a warning — no Python transport yet (the TS reference stubs them too). |
+| `allow_single_anchor` | `False` | [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) rule 3: states a < 2-anchor set is deliberate, silencing the sub-plurality warning and the `_local.anchor_config` sidecar degradation marker. |
 | `producer` | `"atrib-sdk-py"` | `_local.producer` mirror-sidecar label ([§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions)). |
 | `mirror_write_path` | `default_mirror_write_path(env)` | Where new records are appended. |
 | `mirror_read_path` | `default_mirror_read_path(env)` | Shared chain-inheritance read source. |
@@ -142,7 +142,7 @@ through the default `args_hash` per
 `AttestResult` (frozen dataclass): `record_hash` (`sha256:<64-hex>` or
 `None`), `context_id`, `via` (`'in-process' | 'none'`), `warnings`
 (`atrib:`-prefixed strings), and `anchor_posture` — the resolved
-[§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-anchor-configuration)
+[§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture)
 posture dict `{"effective_anchor_count", "used_default_set", "warned"}`
 (present even in pass-through mode). When a sub-plurality set lacks
 `allow_single_anchor`, the mirror sidecar additionally carries the
@@ -366,7 +366,7 @@ queue per effective atrib-log anchor). Never raises.
   [§2.3.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#231-entry-serialization)
   byte mapping; extensions map to `0xFF`.
 
-### Anchor plurality ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-generalizes-cross-log-replication), [§2.11.7-§2.11.13](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2117-anchor-plurality))
+### Anchor plurality ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture), [§2.11.7-§2.11.13](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2117-anchors-generalizing-the-replication-target))
 
 `atrib.anchors` is the Python port of the producer-side anchor surface in
 `packages/mcp/src/anchors.ts`. Anchoring never touches signed bytes and
@@ -376,24 +376,24 @@ fan-out (see the constructor table above).
 - `ANCHOR_TYPES` — the [§2.11.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2118-anchor-type-registry)
   v1 registry: `("atrib-log", "sigstore-rekor", "rfc3161-tsa", "opentimestamps")`.
 - `BUILT_IN_DEFAULT_ANCHOR_SET` — the two-anchor zero-config default
-  ([§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-anchor-configuration) rule 1),
+  ([§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) rule 1),
   value-identical to the TS constant.
 - `AnchorDescriptor` / `AnchorSetConfig` — `TypedDict` config shapes
   (`url` wins over `endpoint`; absent `anchor_type` means `atrib-log`).
 - `resolve_anchor_posture(config) -> AnchorPostureResolution` — the pure
-  [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-anchor-configuration) precedence rules (default set / ≥ 2 as given /
+  [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) precedence rules (default set / ≥ 2 as given /
   `allow_single_anchor` opt-in / warn + sidecar marker). Field names match
   the conformance corpus (`spec/conformance/2.11/anchors/`). Never raises.
 - `resolve_effective_anchors(config) -> list[AnchorDescriptor]` — the
   effective set a producer submits to.
 - `anchor_claim_artifact(record_hash) -> bytes` — the
-  [§2.11.10](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21110-anchoring-claim-artifact)
+  [§2.11.10](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21110-the-anchoring-signature-claim-artifact)
   claim bytes `UTF-8("atrib-anchor/v1:" + record_hash)`, byte-identical to
   the TS `anchorClaimArtifact`; raises `ValueError` on a malformed hash
   (pure builder for programmer input).
 - `ANCHOR_CLAIM_PREFIX` — `"atrib-anchor/v1:"`.
 
-### Attribution receipts ([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-mcp-extension-v01), `dev.atrib/attribution` v0.1)
+### Attribution receipts ([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133), `dev.atrib/attribution` v0.1)
 
 Consumer-side receipt handling for the MCP extension (see
 `docs/extensions/dev.atrib-attribution/`). Receipts are advisory — trust
@@ -419,7 +419,7 @@ derives from verifying signed records, never from the receipt.
   block against the signed record it names; no record at all →
   `receipt_valid=False, mismatched_fields=["record"]` (conservative).
 
-### Evidence envelopes ([D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope), [§5.5.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#557-universal-evidence-envelope))
+### Evidence envelopes ([D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model), [§5.5.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#557-universal-evidence-envelope))
 
 `atrib.evidence` implements the universal envelope — the single
 attachment model for external evidence (the legacy `protocol` string set
@@ -451,7 +451,7 @@ is frozen). Envelopes live outside signed bytes. Conformance:
   reusing an atrib profile name is a valid third-party profile, never the
   atrib profile.
 - `map_legacy_evidence_block(block) -> EvidenceEnvelope` (spec-named alias
-  `from_legacy_evidence_block`) — the deterministic legacy [§5.5.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#556-authorization-evidence) mapping
+  `from_legacy_evidence_block`) — the deterministic legacy [§5.5.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#556-generic-authorization-evidence-blocks) mapping
   through the frozen five-row table (`FROZEN_LEGACY_PROTOCOLS`,
   `LEGACY_PROTOCOL_TO_PROFILE`); unknown protocols raise `ValueError`
   (the one normative MUST-reject).
@@ -490,15 +490,15 @@ is frozen). Envelopes live outside signed bytes. Conformance:
 
 The write verb (`attest`) signs in-process; `recall` covers the
 history/session_chain shapes over the local mirror. Anchor plurality
-([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-generalizes-cross-log-replication))
+([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture))
 fans out to every usable atrib-log anchor; registered non-atrib-log
 anchor types count toward the posture but have no Python transport yet
 (their legs are skipped with a warning — the TS reference stubs them
 too). `atrib.evidence` implements the
-[D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope)
+[D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)
 envelope surface (validation, builder, legacy mapping, tier semantics)
 and `atrib.attribution` the
-[D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-mcp-extension-v01)
+[D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133)
 receipt checks. Daemon-first transport
 (Streamable HTTP to the local primitives runtime) lands with the
 post-2026-07-28 stateless MCP transport rather than reimplementing the
