@@ -352,19 +352,29 @@ tokens on the top tier in one day; see [P051](DECISIONS.md#p051-orchestration-in
    inherit a premium session model. Prefer the pinned agent types in `.claude/agents/` (`mechanical-builder`: sonnet/low; `mechanical-sweeper`: haiku/low) via `agentType`/`subagent_type` — they enforce the tier by definition, independent of the orchestrator remembering per-spawn overrides. Judgment agents (adversarial judges,
    design drafters, cross-consistency reviewers) may inherit or upshift, and
    are the ONLY agents that may.
-2. **Every fleet gets a budget.** Workflows guard loops and fan-outs on the
+2. **Cross-harness offload is a first-class routing tier, above subagents.**
+   Subagent fleets cannot cross the harness boundary, so offload to the
+   operator's designated external harness (currently Codex / GPT-5.5, a
+   separate budget pool) happens at task-decomposition level via the baton
+   pattern: a self-contained charter committed in-repo (executable acceptance
+   gates: corpora, tests, doc-sync), a dedicated branch, and review-on-push
+   by a Claude session — the [P050](DECISIONS.md#p050-orchestration-topology-baton-pass-and-fan-out-records)/[P036](DECISIONS.md#p036-cross-harness-continuation-packet-for-supportrca-investigations)
+   relay. Before spawning ANY fleet for mechanical, self-contained work,
+   first ask whether it should be a Codex work-package instead; when the
+   acceptance gates are executable, prefer the offload.
+3. **Every fleet gets a budget.** Workflows guard loops and fan-outs on the
    harness budget mechanism when one is provided; when none is provided and
    the fleet would plausibly exceed ~500k tokens, state the estimate to the
    operator in the launch message.
-3. **Prefer the relay to the fan-out when a warm context exists.** A single
+4. **Prefer the relay to the fan-out when a warm context exists.** A single
    session that already holds the corpus is cheaper than N cold agents each
    re-reading it; fan out only for genuinely parallel, verification-heavy, or
    scale-bound work. Batch shared context into the prompt rather than having
    each agent rediscover it.
-4. **Account for spend.** Report per-fleet token totals and tier choices in
+5. **Account for spend.** Report per-fleet token totals and tier choices in
    the integration summary so the operator never needs transcript archaeology
    to answer "where did the budget go." (P051 makes this a signed sidecar
-   fact once implemented.)
+   fact once implemented, including harness identity for cross-harness legs.)
 
 ### Code style
 
