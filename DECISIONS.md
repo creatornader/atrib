@@ -8243,6 +8243,8 @@ Proposal: define both as **conventional `attest` content shapes, not new primiti
 
 **Likely outcome (not committed):** accept as a documented convention in the atrib skill and the P042 evidence-envelope profile registry once [D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys) scoped run certificates exist, since the baton-pass record is most useful when the receiving agent's authority is itself verifiable.
 
+**Status (2026-07-06, later):** unblocked — [D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys) landed with spec section, corpus, and issuance/walk source surfaces. The convention write-up (atrib skill section + envelope profile entry) is the next small piece; see [P051](#p051-orchestration-infrastructure-dogfood-wiring-with-cost-and-routing-accounting) for the infrastructure half.
+
 **Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
 
 Related:
@@ -8250,3 +8252,21 @@ Related:
 - [P036](#p036-cross-harness-continuation-packet-for-supportrca-investigations), the continuation packet the baton-pass record carries.
 - [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args), orchestrator-injected explicit context.
 - [D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle), same-session subagent env bundles.
+
+## P051: Orchestration-infrastructure dogfood wiring with cost and routing accounting
+
+**Date queued:** 2026-07-06. **Origin:** two converging observations from the redesign-analysis session. First, the deeper half of the operator's orchestration-topology observation was never captured: [P050](#p050-orchestration-topology-baton-pass-and-fan-out-records) defines the baton-pass/join record *shapes*, but nothing commits to wiring them into the orchestration layers themselves — harness workflow/agent-loop runs emitting atrib records, spawned agents receiving orchestrator-injected context automatically (generalizing [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args)), and the [P036](#p036-cross-harness-continuation-packet-for-supportrca-investigations) continuation packet becoming the machine-readable baton instead of hand-written markdown briefs. Second, the same session produced a concrete economic forcing function: one working day of multi-agent orchestration consumed ~6.2M subagent tokens on the most expensive model tier at maximum effort, and the operator could not answer "where did the budget go, and why was this task class on this tier" without transcript archaeology — despite the harness exposing per-agent model/effort routing knobs and per-workflow budget accounting that the orchestrating agent simply did not exercise. Routing capability existed; routing *policy* and *accounting* did not.
+
+Proposal: a dogfood integration layer where (a) fan-out and join events are signed per the P050 conventions, carrying per-agent model, effort tier, and token spend as local sidecar content — so "which agent, on which model, spent what, returned what, and was it accepted" becomes a recall query rather than archaeology; (b) spawned agents receive orchestrator-injected `context_id` + parent `informed_by` automatically; (c) [D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys) scope objects gain an OPTIONAL cost-policy vocabulary (model tier ceiling, token budget) so a run certificate can scope not just what a worker may do but what it may spend — verifier-side signal-not-block, consistent with [§6.7.3](atrib-spec.md#673-out-of-envelope-is-a-signal-not-invalidation). No protocol change beyond the [D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys) scope vocabulary extension; everything else is conventions plus host-side wiring per [§7](atrib-spec.md#7-harness-integration-patterns).
+
+**Likely outcome (not committed):** accept after P050's convention write-up lands; implement first against this repo's own multi-session workflow (the redesign/SDK/website relay) as the dogfood, since it is the pattern's richest live instance.
+
+**Cross-references.**
+
+- [P050](#p050-orchestration-topology-baton-pass-and-fan-out-records), the record shapes this wires in.
+- [P036](#p036-cross-harness-continuation-packet-for-supportrca-investigations), the packet that becomes the baton.
+- [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args), orchestrator-injected context, generalized here.
+- [D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys), the scope object the cost-policy vocabulary extends.
+- [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), the instrumentation-pillar pattern the accounting sidecars follow.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
