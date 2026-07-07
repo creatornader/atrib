@@ -349,7 +349,7 @@ tokens on the top tier in one day; see [P051](DECISIONS.md#p051-orchestration-in
    generation/regeneration, linkification, doc placement, test refactors,
    catalog sweeps, format migrations) run the cheapest capable tier at low
    effort — set `model`/`effort` explicitly on every spawn; never let them
-   inherit a premium session model. Judgment agents (adversarial judges,
+   inherit a premium session model. Prefer the pinned agent types in `.claude/agents/` (`mechanical-builder`: sonnet/low; `mechanical-sweeper`: haiku/low) via `agentType`/`subagent_type` — they enforce the tier by definition, independent of the orchestrator remembering per-spawn overrides. Judgment agents (adversarial judges,
    design drafters, cross-consistency reviewers) may inherit or upshift, and
    are the ONLY agents that may.
 2. **Every fleet gets a budget.** Workflows guard loops and fan-outs on the
