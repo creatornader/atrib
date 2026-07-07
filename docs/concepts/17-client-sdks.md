@@ -38,7 +38,7 @@ The guarantee that makes a second implementation worth having: identical inputs 
 
 Two mechanisms enforce it:
 
-1. **The shared conformance corpora** (`spec/conformance/1.4/` signing + adversarial, `1.2.6/` provenance_token, `1.2.3/multi-producer/` chain-root precedence, `2.6.1/` submission validation) run unmodified against both SDKs. The corpora are fixtures, not inspiration: a failure is a spec-bug discovery, not something to route around.
+1. **The shared conformance corpora** (`spec/conformance/1.4/` signing + adversarial, `1.2.6/` provenance_token, `1.2.3/multi-producer/` chain-root precedence, `2.6.1/` submission validation, `evidence-envelope/` [D137](../../DECISIONS.md#d137-universal-evidence-envelope) envelopes, the `mcp-extension/` receipt cases, and the `2.11/anchors/` posture table) run unmodified against both SDKs. The corpora are fixtures, not inspiration: a failure is a spec-bug discovery, not something to route around.
 2. **The cross-implementation determinism judge** (`python/tests/cross_impl/` + `packages/sdk/scripts/cross-impl-vectors.mjs`) pushes seeded generated inputs — unicode sorting edges, float serialization, optional-field combinations — through both stacks and diffs the canonical bytes, signatures, hashes, and tokens.
 
 The ports preserve JS semantics deliberately, down to regex anchoring (`\Z` vs `$`), `typeof`-vs-`bool` timestamp guards, and WHATWG default-port dropping in URL normalization. Where the two runtimes genuinely cannot agree — content outside I-JSON, like integers past 2^53−1 — the Python side rejects rather than silently reproducing JS precision loss, and that boundary is pinned in a test.
@@ -46,6 +46,14 @@ The ports preserve JS semantics deliberately, down to regex anchoring (`\Z` vs `
 ## The degradation contract
 
 Both SDKs inherit [§5.8](../../atrib-spec.md#58-degradation-contract) whole: **operational failures never throw; contradictory input is the only throw path.** Daemon unreachable → fallback. No signing key → pass-through result with a warning. Log unreachable → non-blocking bounded retry, record kept locally. Missing optional peer → typed unavailable outcome. Every warning carries the `atrib:` prefix. The one thing that does raise is programmer error: a `ref.kind` that contradicts an explicit `event_type`, an unknown recall shape, a malformed `context_id`. Silence about broken inputs would corrupt records; silence about broken infrastructure is the contract.
+
+## Anchors, receipts, envelopes
+
+Three accepted-ADR surfaces ride along with the verbs, all outside signed bytes:
+
+- **Anchor plurality** ([D138](../../DECISIONS.md#d138-anchor-plurality-generalizes-cross-log-replication), [§2.11.7-§2.11.13](../../atrib-spec.md#2117-anchor-plurality)): attests fan out to every configured anchor (zero-config gets the built-in two-anchor default set), the resolved [§2.11.12](../../atrib-spec.md#21112-producer-anchor-configuration) posture surfaces on the result, and a deliberate sub-plurality set is stated with `allowSingleAnchor` / `allow_single_anchor`. Fire-and-forget per [§5.3.5](../../atrib-spec.md#535-log-submission); anchoring never blocks a write.
+- **Attribution receipts** ([D141](../../DECISIONS.md#d141-devatribattribution-mcp-extension-v01)): with receipts opted in, the TypeScript daemon client parses the `dev.atrib/attribution` block from tool-result `_meta` and runs the extension-spec [§6.2](../extensions/dev.atrib-attribution/v0.1.md#62-receipt-block) integrity check; both SDKs expose the parse/verify/consistency helpers. Receipts are advisory — trust derives from verifying signed records.
+- **Evidence envelopes** ([D137](../../DECISIONS.md#d137-universal-evidence-envelope), [§5.5.7](../../atrib-spec.md#557-universal-evidence-envelope)): both SDKs validate and build envelopes (payload commitment via the JCS or raw hash rule) and map frozen legacy [§5.5.6](../../atrib-spec.md#556-authorization-evidence) evidence blocks deterministically; the TypeScript builder delegates to the optional peer `@atrib/verify` and degrades when it is absent.
 
 ## What is deliberately not in the SDK
 

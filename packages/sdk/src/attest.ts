@@ -16,7 +16,19 @@
  */
 
 import type { ProofBundle } from '@atrib/mcp'
-import type { AttributionReceiptBlock } from './attribution.js'
+import type { VerifiedAttributionReceipt } from './attribution.js'
+
+/**
+ * The client's resolved D138 anchor posture (§2.11.12), surfaced on
+ * in-process attest results. `warned` is true exactly when the config is
+ * sub-plurality without `allowSingleAnchor` (rule 4) — the case where the
+ * fan-out also produced the §5.9.3 sidecar degradation marker.
+ */
+export interface AttestAnchorPosture {
+  effective_anchor_count: number
+  used_default_set: boolean
+  warned: boolean
+}
 
 /** Reference discriminator collapsing the annotate/revise write kinds. */
 export interface AttestRef {
@@ -70,9 +82,17 @@ export interface AttestResult {
   /**
    * `dev.atrib/attribution` receipt from the daemon result's `_meta`,
    * present only when `attributionReceipts` is enabled and the daemon
-   * emitted one (P049 draft). Advisory; verify before trusting.
+   * emitted one (D141): the parsed block plus its
+   * `verifyAttributionReceipt` outcome. Advisory; trust derives from
+   * verifying signed records.
    */
-  attribution_receipt?: AttributionReceiptBlock
+  attribution_receipt?: VerifiedAttributionReceipt
+  /**
+   * D138 anchor posture of the client's fan-out (§2.11.12), present on
+   * in-process results after anchor fan-out was consulted. The daemon
+   * path never carries it: the daemon owns its own anchors.
+   */
+  anchor_posture?: AttestAnchorPosture
 }
 
 const REF_EVENT_TYPE: Record<AttestRef['kind'], string> = {

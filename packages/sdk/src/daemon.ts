@@ -18,9 +18,11 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { verifyAttributionReceipt, type AttributionReceiptVerification } from '@atrib/mcp'
 import {
+  ATTRIBUTION_EXTENSION_KEY,
   parseAttributionReceiptBlock,
-  type AttributionReceiptBlock,
+  type VerifiedAttributionReceipt,
 } from './attribution.js'
 import {
   DEFAULT_CALL_TIMEOUT_MS,
@@ -31,8 +33,31 @@ import {
 } from './config.js'
 
 export type DaemonCallOutcome =
-  | { ok: true; value: unknown; attribution?: AttributionReceiptBlock }
+  | { ok: true; value: unknown; attribution?: VerifiedAttributionReceipt }
   | { ok: false; reason: string }
+
+/**
+ * Parse + verify the `dev.atrib/attribution` block on a tool result's
+ * `_meta`. The lenient parser extracts the block; `verifyAttributionReceipt`
+ * runs over the RAW block (extension spec §6.2). §5.8-safe: any exception
+ * degrades to a `malformed` verification, never a throw.
+ */
+function extractAttribution(meta: unknown): VerifiedAttributionReceipt | null {
+  const block = parseAttributionReceiptBlock(meta)
+  if (block === null) return null
+  let verification: AttributionReceiptVerification
+  try {
+    const raw =
+      typeof meta === 'object' && meta !== null
+        ? (meta as Record<string, unknown>)[ATTRIBUTION_EXTENSION_KEY]
+        : undefined
+    verification = verifyAttributionReceipt(raw)
+  } catch (error) {
+    console.warn(`atrib: attribution receipt verification failed: ${String(error)}`)
+    verification = { valid: false, mismatched: ['malformed'] }
+  }
+  return { block, verification }
+}
 
 const SDK_CLIENT_INFO = { name: 'atrib-sdk', version: '0.1.0' }
 
@@ -92,7 +117,7 @@ export class DaemonClient {
         return { ok: false, reason: `daemon tool ${name} errored: ${text ?? 'unknown error'}` }
       }
       const attribution = this.parseReceipts
-        ? parseAttributionReceiptBlock((result as { _meta?: unknown })._meta)
+        ? extractAttribution((result as { _meta?: unknown })._meta)
         : null
       const withAttribution = (value: unknown): DaemonCallOutcome =>
         attribution !== null ? { ok: true, value, attribution } : { ok: true, value }

@@ -185,22 +185,29 @@ def test_client_tolerates_binary_mirror(tmp_path) -> None:
     assert result.via == "none"
 
 
-def test_resolve_anchor_set_hostile_entries_never_raise() -> None:
-    from atrib.client import _resolve_anchor_set
+def test_resolve_anchor_plan_hostile_entries_never_raise() -> None:
+    from atrib.client import _resolve_anchor_plan
 
-    endpoint, warnings = _resolve_anchor_set(
-        [None, 42, {"endpoint": 5}, "not a url", {"endpoint": "http://x/v1/entries", "anchor_type": []}, "http://ok/v1/entries"]  # type: ignore[list-item]
+    plan = _resolve_anchor_plan(
+        [None, 42, {"endpoint": 5}, "not a url", {"endpoint": "http://x/v1/entries", "anchor_type": []}, "http://ok/v1/entries"],  # type: ignore[list-item]
+        True,
+        {},
     )
-    assert endpoint == "http://ok/v1/entries"
-    assert len(warnings) == 5
+    assert plan.endpoints == ["http://ok/v1/entries"]
+    # TS parity: every skipped entry is excluded from the effective set.
+    assert plan.posture["effective_anchor_count"] == 1
+    assert len(plan.warnings) == 5
 
 
 def test_anchor_type_none_present_skips_like_ts_null() -> None:
-    from atrib.client import _resolve_anchor_set
+    from atrib.client import _resolve_anchor_plan
 
-    # JSON null → TS warn-and-skip; Python None-present must match.
-    endpoint, warnings = _resolve_anchor_set(
-        [{"endpoint": "http://x/v1/entries", "anchor_type": None}]
+    # JSON null → TS `!== undefined` warn-and-skip; Python None-present
+    # must match (only an ABSENT anchor_type defaults to atrib-log).
+    plan = _resolve_anchor_plan(
+        [{"endpoint": "http://x/v1/entries", "anchor_type": None}], True, {}
     )
-    assert endpoint is None
-    assert len(warnings) == 1
+    assert plan.endpoints == []
+    assert plan.posture["effective_anchor_count"] == 0
+    assert len(plan.warnings) == 1
+    assert "registry" in plan.warnings[0]

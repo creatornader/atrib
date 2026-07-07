@@ -144,9 +144,11 @@ export interface RecallOutcome<T = unknown> {
   /**
    * `dev.atrib/attribution` receipt from the daemon result's `_meta`,
    * present only when `attributionReceipts` is enabled and the daemon
-   * emitted one (P049 draft). Advisory; verify before trusting.
+   * emitted one (D141): the parsed block plus its
+   * `verifyAttributionReceipt` outcome. Advisory; trust derives from
+   * verifying signed records.
    */
-  attribution_receipt?: import('./attribution.js').AttributionReceiptBlock
+  attribution_receipt?: import('./attribution.js').VerifiedAttributionReceipt
 }
 
 /** Physical tool name on the primitives runtime for each shape. */

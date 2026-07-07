@@ -39,10 +39,14 @@
   },
   "peerDependencies": {
     "@atrib/recall": "workspace:*",
+    "@atrib/verify": "workspace:*",
     "@atrib/verify-mcp": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@atrib/recall": {
+      "optional": true
+    },
+    "@atrib/verify": {
       "optional": true
     },
     "@atrib/verify-mcp": {
@@ -51,6 +55,7 @@
   },
   "devDependencies": {
     "@atrib/recall": "workspace:*",
+    "@atrib/verify": "workspace:*",
     "@atrib/verify-mcp": "workspace:*",
     "@types/node": "^25.9.3",
     "typescript": "^6.0.3",

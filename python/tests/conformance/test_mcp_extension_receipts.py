@@ -15,6 +15,7 @@ from atrib.attribution import (
     ATTRIBUTION_EXTENSION_KEY,
     check_attribution_receipt_consistency,
     parse_attribution_receipt_block,
+    verify_attribution_receipt,
 )
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "mcp-extension" / "cases"
@@ -31,6 +32,36 @@ def _block_and_record(case: dict[str, object]):
     assert block is not None
     record = cast(AtribRecord | None, case_input.get("record"))
     return block, record
+
+
+def test_verify_attribution_receipt_matches_corpus_receipt_valid() -> None:
+    # The corpus' receipt_valid is the extension-spec §6.2 validity —
+    # structural well-formedness plus internal consistency, including the
+    # record-less log-submission case. That is exactly what
+    # verify_attribution_receipt checks over the raw result block (the
+    # port of @atrib/mcp's verifyAttributionReceipt).
+    for name in (
+        "receipt--consistent.json",
+        "receipt--hash-mismatch-flagged.json",
+        "receipt--log-submission-nonblocking.json",
+    ):
+        case = _load(name)
+        expected = cast(dict[str, object], case["expected"])
+        result_block = cast(dict[str, object], case["input"])["result_block"]
+        verification = verify_attribution_receipt(result_block)
+        assert verification.valid is expected["receipt_valid"], name
+        if expected["receipt_valid"]:
+            assert verification.mismatched == [], name
+        else:
+            for fld in cast(list[str], expected.get("mismatched_fields", [])):
+                assert fld in verification.mismatched, name
+
+
+def test_verify_attribution_receipt_hostile_input_is_malformed() -> None:
+    for hostile in (None, 42, [], {}, {"token": 7}, {"token": "a.b"}):
+        verification = verify_attribution_receipt(hostile)
+        assert verification.valid is False
+        assert verification.mismatched == ["malformed"]
 
 
 def test_receipt_consistent() -> None:

@@ -18,14 +18,21 @@
  */
 
 import { emitInProcess, resolveKey, type ResolvedKey } from '@atrib/emit'
-import { resolveEnvContextId } from '@atrib/mcp'
+import {
+  createAnchorFanout,
+  readMirrorTail,
+  resolveEnvContextId,
+  type AnchorFanout,
+} from '@atrib/mcp'
 import {
   attestResultFromEmitOutput,
   buildEmitArgs,
+  type AttestAnchorPosture,
   type AttestInput,
   type AttestResult,
   type EmitOutputLike,
 } from './attest.js'
+import { recordHashRef } from './hashes.js'
 import { DEFAULT_PRODUCER, resolveAnchorSet, type AtribClientConfig } from './config.js'
 import { DaemonClient } from './daemon.js'
 import {
@@ -41,6 +48,11 @@ export interface AtribClient {
   attest(input: AttestInput): Promise<AttestResult>
   /** Single read verb. Never throws on operational failure (§5.8). */
   recall<T = unknown>(query: RecallQuery): Promise<RecallOutcome<T>>
+  /**
+   * Await all in-flight anchor fan-out legs (D138). For tests and shutdown
+   * hooks only — the attest path itself never awaits anchoring (§5.3.5).
+   */
+  flushAnchors(): Promise<void>
   /** Close the daemon transport (if one was opened). */
   close(): Promise<void>
 }
@@ -82,9 +94,18 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
           attributionReceipts: config.attributionReceipts === true,
         })
   const producer = config.producer ?? DEFAULT_PRODUCER
-  const anchorSet = resolveAnchorSet(config.anchors)
+  const anchorSet = resolveAnchorSet(config.anchors, config.allowSingleAnchor)
   const anchorWarnings = anchorSet.warnings
   const logEndpoint = anchorSet.primaryLogEndpoint
+
+  // One D138 anchor fan-out per client, built lazily on the first
+  // in-process attest. The daemon attest path never consults it: the
+  // daemon owns its own anchors.
+  let fanout: AnchorFanout | null = null
+  const getFanout = (): AnchorFanout => {
+    fanout ??= createAnchorFanout({ config: anchorSet.config })
+    return fanout
+  }
 
   // Lazily resolve the in-process signing key once. `config.key === null`
   // is an explicit pass-through request; undefined defers to resolveKey().
@@ -161,11 +182,57 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
         producer,
         ...(logEndpoint !== undefined ? { logEndpoint } : {}),
       })
-      return attestResultFromEmitOutput(output as EmitOutputLike, 'in-process', warnings)
+      const result = attestResultFromEmitOutput(output as EmitOutputLike, 'in-process', warnings)
+      await fanOutToAnchors(result)
+      return result
     } catch (error) {
       // emitInProcess throws only on input-shape validation; surface it as
       // the caller's programmer error.
       throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  /**
+   * D138 anchor fan-out for the in-process path. Reads the freshly signed
+   * record back from the local mirror (§5.9) and hands it to every
+   * configured anchor. Fire-and-forget per §5.3.5: the fan-out ticket's
+   * outcomes are NEVER awaited here — only submission handoff is. The
+   * primary atrib-log anchor may receive the record twice (once via
+   * emitInProcess's own §2.6.1 queue, once via the fan-out); duplicate
+   * submission is idempotent-safe per §2.6.1 step 6 (the log returns the
+   * existing proof bundle for an already-committed record_hash).
+   * §5.8-safe: every failure degrades into a warning on the result.
+   */
+  async function fanOutToAnchors(result: AttestResult): Promise<void> {
+    if (result.record_hash === null) return
+    try {
+      const fan = getFanout()
+      const posture: AttestAnchorPosture = {
+        effective_anchor_count: fan.posture.effective_anchor_count,
+        used_default_set: fan.posture.used_default_set,
+        warned: fan.posture.warn,
+      }
+      result.anchor_posture = posture
+
+      // The freshly-written mirror tail is the expected match: emitInProcess
+      // mirrors the signed record before returning.
+      const mirrorPath = process.env['ATRIB_MIRROR_FILE']
+      const record =
+        mirrorPath !== undefined && mirrorPath !== ''
+          ? await readMirrorTail({
+              path: mirrorPath,
+              ...(result.context_id !== null ? { contextId: result.context_id } : {}),
+            })
+          : null
+      if (record === null || recordHashRef(record) !== result.record_hash) {
+        result.warnings.push(
+          'atrib: anchor fan-out skipped — signed record not found at the mirror tail (ATRIB_MIRROR_FILE)',
+        )
+        return
+      }
+      fan.submitToAnchors(record)
+    } catch (error) {
+      result.warnings.push(`atrib: anchor fan-out failed: ${String(error)}`)
     }
   }
 
@@ -240,6 +307,9 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
   return {
     attest,
     recall,
+    flushAnchors: async () => {
+      if (fanout) await fanout.flush()
+    },
     close: async () => {
       if (daemon) await daemon.close()
     },

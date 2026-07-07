@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import {
   checkAttributionReceiptConsistency,
   parseAttributionReceiptBlock,
+  verifyAttributionReceipt,
   ATTRIBUTION_EXTENSION_KEY,
   type AtribRecord,
 } from '../src/index.js'
@@ -53,6 +54,29 @@ function blockFrom(testCase: ReceiptCase) {
 }
 
 describe('conformance: mcp-extension receipt cases (D141)', () => {
+  it('verifyAttributionReceipt matches each case expected.receipt_valid (shape/status-level validity)', () => {
+    // The corpus' receipt_valid is the extension-spec §6.2 validity —
+    // structural well-formedness plus internal consistency, including the
+    // record-less log-submission case. That is exactly what @atrib/mcp's
+    // verifyAttributionReceipt checks over the raw result block.
+    for (const file of [
+      'receipt--consistent.json',
+      'receipt--hash-mismatch-flagged.json',
+      'receipt--log-submission-nonblocking.json',
+    ]) {
+      const testCase = loadCase(file)
+      const verification = verifyAttributionReceipt(testCase.input.result_block)
+      expect(verification.valid, file).toBe(testCase.expected.receipt_valid)
+      if (!testCase.expected.receipt_valid) {
+        for (const field of testCase.expected.mismatched_fields ?? []) {
+          expect(verification.mismatched, file).toContain(field)
+        }
+      } else {
+        expect(verification.mismatched, file).toEqual([])
+      }
+    }
+  })
+
   it('receipt--consistent: all claims match the attached signed record', () => {
     const testCase = loadCase('receipt--consistent.json')
     const block = blockFrom(testCase)

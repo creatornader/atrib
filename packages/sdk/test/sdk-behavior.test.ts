@@ -221,6 +221,7 @@ describe('attest() in-process fallback (daemon off)', () => {
     const result = await client.attest({
       content: { what: 'sdk behavior test emit', topics: ['test'] },
     })
+    await client.flushAnchors()
     await client.close()
 
     expect(result.via).toBe('in-process')
@@ -229,6 +230,13 @@ describe('attest() in-process fallback (daemon off)', () => {
     // The mock anchor confirmed within the flush deadline, so the proof is
     // patched onto the result.
     expect(result.log_index).toBe(0)
+
+    // D138 posture: one explicit anchor, no allowSingleAnchor ⇒ warned.
+    expect(result.anchor_posture).toEqual({
+      effective_anchor_count: 1,
+      used_default_set: false,
+      warned: true,
+    })
 
     // The anchor received the bare signed record (§5.9: never the envelope).
     expect(logPosts.length).toBeGreaterThan(0)
@@ -251,6 +259,104 @@ describe('attest() in-process fallback (daemon off)', () => {
     expect(envelope.record.context_id).toBe(CONTEXT_A)
     expect(recordHashRef(envelope.record)).toBe(result.record_hash)
     expect(await verifyRecord(envelope.record)).toBe(true)
+  })
+
+  it('fans the signed record out to every configured atrib-log anchor (D138)', async () => {
+    // Second §2.6.1-shaped mock anchor.
+    const posts2: Array<Record<string, unknown>> = []
+    const server2 = createServer((req, res) => {
+      let body = ''
+      req.on('data', (chunk: Buffer) => {
+        body += chunk.toString('utf8')
+      })
+      req.on('end', () => {
+        if (req.method === 'POST') {
+          try {
+            posts2.push(JSON.parse(body) as Record<string, unknown>)
+          } catch {
+            // Surfaced by assertions.
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(
+            JSON.stringify({ log_index: 5, checkpoint: 'c', inclusion_proof: [], leaf_hash: 'l' }),
+          )
+          return
+        }
+        res.writeHead(404)
+        res.end()
+      })
+    })
+    await new Promise<void>((resolve) => server2.listen(0, '127.0.0.1', resolve))
+    const endpoint2 = `http://127.0.0.1:${(server2.address() as AddressInfo).port}/v1/entries`
+
+    const seed = new Uint8Array(32).fill(9)
+    const client = createAtribClient({
+      daemon: { mode: 'off' },
+      key: { privateKey: seed, source: 'env' },
+      anchors: [logEndpoint, endpoint2],
+      contextId: CONTEXT_A,
+    })
+    try {
+      const result = await client.attest({ content: { what: 'anchor fan-out test' } })
+      expect(result.via).toBe('in-process')
+      // Two anchors ⇒ plurality met, no warning, no default set.
+      expect(result.anchor_posture).toEqual({
+        effective_anchor_count: 2,
+        used_default_set: false,
+        warned: false,
+      })
+      expect(result.warnings.some((w) => w.includes('anchor fan-out skipped'))).toBe(false)
+
+      // flushAnchors drains the fan-out legs; the atrib-log transport's own
+      // queue confirms asynchronously, so poll briefly for the second
+      // anchor's POST.
+      await client.flushAnchors()
+      const deadline = Date.now() + 3000
+      while (posts2.length === 0 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+      expect(posts2.length).toBeGreaterThan(0)
+      const submitted = posts2[posts2.length - 1] as unknown as AtribRecord
+      // The second anchor received the same BARE signed record.
+      expect(Object.prototype.hasOwnProperty.call(submitted, '_local')).toBe(false)
+      expect(recordHashRef(submitted)).toBe(result.record_hash)
+    } finally {
+      await client.close()
+      server2.closeAllConnections()
+      await new Promise<void>((resolve) => server2.close(() => resolve()))
+    }
+  }, 15_000)
+
+  it('skips fan-out with a warning when the signed record cannot be read back from the mirror', async () => {
+    // Point ATRIB_MIRROR_FILE at a DIRECTORY: emitInProcess's mirror write
+    // degrades silently (§5.8) and readMirrorTail finds no record, so the
+    // fan-out is skipped with a warning while the attest still succeeds.
+    const saved = process.env['ATRIB_MIRror_FILE'.toUpperCase() as 'ATRIB_MIRROR_FILE']
+    process.env['ATRIB_MIRROR_FILE'] = mirrorDir
+    try {
+      const seed = new Uint8Array(32).fill(11)
+      const client = createAtribClient({
+        daemon: { mode: 'off' },
+        key: { privateKey: seed, source: 'env' },
+        anchors: [logEndpoint],
+        allowSingleAnchor: true,
+        contextId: CONTEXT_B,
+      })
+      const result = await client.attest({ content: { what: 'mirror-miss fan-out test' } })
+      await client.close()
+      expect(result.via).toBe('in-process')
+      expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(result.warnings.some((w) => w.includes('anchor fan-out skipped'))).toBe(true)
+      // Posture is still surfaced: allowSingleAnchor makes it unwarned.
+      expect(result.anchor_posture).toEqual({
+        effective_anchor_count: 1,
+        used_default_set: false,
+        warned: false,
+      })
+    } finally {
+      if (saved === undefined) delete process.env['ATRIB_MIRROR_FILE']
+      else process.env['ATRIB_MIRROR_FILE'] = saved
+    }
   })
 })
 

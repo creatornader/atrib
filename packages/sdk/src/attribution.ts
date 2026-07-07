@@ -16,16 +16,23 @@
  * signed records and inclusion proofs, never from the receipt itself.
  */
 
-import { encodeToken, normalizeEventType, type AtribRecord } from '@atrib/mcp'
+import {
+  ATTRIBUTION_EXTENSION_ID,
+  encodeToken,
+  normalizeEventType,
+  type AtribRecord,
+  type AttributionLogSubmissionStatus,
+  type AttributionReceiptVerification,
+} from '@atrib/mcp'
 import { recordHashRef } from './hashes.js'
 
-export const ATTRIBUTION_EXTENSION_KEY = 'dev.atrib/attribution'
+/**
+ * Alias of `@atrib/mcp`'s `ATTRIBUTION_EXTENSION_ID` — one identifier, one
+ * source of truth (the SEP-2133 extension id is frozen).
+ */
+export const ATTRIBUTION_EXTENSION_KEY: typeof ATTRIBUTION_EXTENSION_ID = ATTRIBUTION_EXTENSION_ID
 
-export type AttributionLogSubmissionStatus =
-  | 'queued'
-  | 'submitted'
-  | 'disabled'
-  | 'failed'
+export type { AttributionLogSubmissionStatus }
 
 export interface AttributionReceipt {
   record_hash?: string
@@ -43,6 +50,19 @@ export interface AttributionReceiptBlock {
   receipt?: AttributionReceipt
   /** Full signed record; present only when the client accepted 'record'. */
   record?: AtribRecord
+}
+
+/**
+ * The receipt surface the daemon client attaches to attest/recall results:
+ * the leniently parsed block plus the outcome of running `@atrib/mcp`'s
+ * `verifyAttributionReceipt` over the RAW `_meta` block (structural +
+ * internal-consistency check per extension spec §6.2). Verification is
+ * advisory like the receipt itself: an invalid receipt is discarded from
+ * trust, never from the tool result.
+ */
+export interface VerifiedAttributionReceipt {
+  block: AttributionReceiptBlock
+  verification: AttributionReceiptVerification
 }
 
 const RECEIPT_STRING_FIELDS = [

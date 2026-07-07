@@ -3,22 +3,27 @@
 /**
  * Post-spawn addenda surfaces of the consolidated SDK:
  *
- * - `dev.atrib/attribution` receipt parsing (P049 draft): lenient extraction
+ * - `dev.atrib/attribution` receipt parsing (D141): lenient extraction
  *   from a tool result's `_meta`; anything malformed yields null, wrong-typed
  *   fields are dropped, never a throw.
- * - Anchor-set resolution (P043 headroom): today's single-atrib-log posture
- *   with warn-never-error handling of unsupported anchor types and fan-out.
- * - Evidence envelope helpers (P042 draft): dedup key `(profile, payload.hash)`
+ * - Anchor-set resolution (D138): normalization into the §2.11.12
+ *   `AnchorSetConfig` with warn-never-error handling of hostile entries,
+ *   plus the posture the fan-out resolves over it.
+ * - Evidence envelope helpers (D137): dedup key `(profile, payload.hash)`
  *   and the four-value tier ladder.
  */
 
 import { describe, it, expect } from 'vitest'
 import {
+  ATTRIBUTION_EXTENSION_ID,
   ATTRIBUTION_EXTENSION_KEY,
+  BUILT_IN_DEFAULT_ANCHOR_SET,
   evidenceEnvelopeKey,
   evidenceTierRank,
   parseAttributionReceiptBlock,
+  resolveAnchorPosture,
   resolveAnchorSet,
+  type AnchorSpec,
   type AtribRecord,
   type EvidenceEnvelope,
 } from '../src/index.js'
@@ -48,8 +53,10 @@ function metaWith(block: unknown): Record<string, unknown> {
 }
 
 describe('parseAttributionReceiptBlock (P049 receipts)', () => {
-  it('exposes the extension key constant', () => {
+  it('exposes the extension key constant, aliasing @atrib/mcp ATTRIBUTION_EXTENSION_ID', () => {
     expect(ATTRIBUTION_EXTENSION_KEY).toBe('dev.atrib/attribution')
+    // One identifier, one source of truth: the SDK key IS the mcp id.
+    expect(ATTRIBUTION_EXTENSION_KEY).toBe(ATTRIBUTION_EXTENSION_ID)
   })
 
   it('parses a valid full block: token + receipt + record', () => {
@@ -141,67 +148,108 @@ describe('parseAttributionReceiptBlock (P049 receipts)', () => {
   })
 })
 
-describe('resolveAnchorSet (P043 anchor headroom)', () => {
+describe('resolveAnchorSet (D138 anchor plurality)', () => {
   const LOG_A = 'https://log.atrib.dev/v1/entries'
   const LOG_B = 'https://log-b.example.dev/v1/entries'
   const REKOR = 'https://rekor.example.dev'
 
-  it('resolves undefined to no endpoint and no warnings', () => {
-    expect(resolveAnchorSet(undefined)).toEqual({
+  it('resolves undefined to an empty config (built-in default set applies downstream)', () => {
+    const resolved = resolveAnchorSet(undefined)
+    expect(resolved).toEqual({
+      config: {},
       primaryLogEndpoint: undefined,
       warnings: [],
     })
-  })
-
-  it('resolves an empty set to no endpoint and no warnings', () => {
-    expect(resolveAnchorSet([])).toEqual({
-      primaryLogEndpoint: undefined,
-      warnings: [],
+    // No anchor config at all ⇒ §2.11.12 rule 1: default two-anchor set.
+    expect(resolveAnchorPosture(resolved.config)).toEqual({
+      effective_anchor_count: BUILT_IN_DEFAULT_ANCHOR_SET.length,
+      used_default_set: true,
+      warn: false,
+      sidecar_anchor_config: null,
     })
   })
 
-  it('accepts a single bare-string anchor as an atrib-log endpoint', () => {
-    expect(resolveAnchorSet([LOG_A])).toEqual({
-      primaryLogEndpoint: LOG_A,
-      warnings: [],
-    })
+  it('resolves an explicit empty set to a zero-anchor config that the posture warns on', () => {
+    const resolved = resolveAnchorSet([])
+    expect(resolved.config).toEqual({ anchors: [] })
+    expect(resolved.primaryLogEndpoint).toBeUndefined()
+    expect(resolved.warnings).toEqual([])
+    const posture = resolveAnchorPosture(resolved.config)
+    expect(posture.used_default_set).toBe(false)
+    expect(posture.warn).toBe(true)
   })
 
-  it('accepts the object form without anchor_type', () => {
-    expect(resolveAnchorSet([{ endpoint: LOG_A }])).toEqual({
-      primaryLogEndpoint: LOG_A,
-      warnings: [],
-    })
+  it('normalizes a bare-string anchor to a url descriptor (atrib-log)', () => {
+    const resolved = resolveAnchorSet([LOG_A])
+    expect(resolved.config.anchors).toEqual([{ url: LOG_A }])
+    expect(resolved.primaryLogEndpoint).toBe(LOG_A)
+    expect(resolved.warnings).toEqual([])
   })
 
-  it("accepts an explicit anchor_type of 'atrib-log'", () => {
-    expect(resolveAnchorSet([{ endpoint: LOG_A, anchor_type: 'atrib-log' }])).toEqual({
-      primaryLogEndpoint: LOG_A,
-      warnings: [],
-    })
+  it('accepts the descriptor object form without anchor_type', () => {
+    const resolved = resolveAnchorSet([{ endpoint: LOG_A }])
+    expect(resolved.config.anchors).toEqual([{ endpoint: LOG_A }])
+    expect(resolved.primaryLogEndpoint).toBe(LOG_A)
+    expect(resolved.warnings).toEqual([])
   })
 
-  it('skips unsupported anchor types with a warning naming the type', () => {
-    const resolved = resolveAnchorSet([{ endpoint: REKOR, anchor_type: 'rekor' }])
+  it("accepts an explicit anchor_type of 'atrib-log', with url winning over endpoint", () => {
+    const resolved = resolveAnchorSet([
+      { url: LOG_A, endpoint: LOG_B, anchor_type: 'atrib-log' },
+    ])
+    expect(resolved.primaryLogEndpoint).toBe(LOG_A)
+    expect(resolved.warnings).toEqual([])
+  })
+
+  it('accepts registered non-atrib-log anchor types without requiring a url', () => {
+    const resolved = resolveAnchorSet([
+      LOG_A,
+      { anchor_type: 'opentimestamps', calendars: ['https://a.pool.opentimestamps.org'] },
+    ])
+    expect(resolved.config.anchors).toHaveLength(2)
+    expect(resolved.primaryLogEndpoint).toBe(LOG_A)
+    expect(resolved.warnings).toEqual([])
+  })
+
+  it('skips unregistered anchor types with a warning naming the type', () => {
+    const resolved = resolveAnchorSet([
+      { endpoint: REKOR, anchor_type: 'rekor' } as unknown as AnchorSpec,
+    ])
+    expect(resolved.config.anchors).toEqual([])
     expect(resolved.primaryLogEndpoint).toBeUndefined()
     expect(resolved.warnings).toHaveLength(1)
     expect(resolved.warnings[0]).toContain("'rekor'")
     expect(resolved.warnings[0]).toContain(REKOR)
   })
 
-  it('picks the first of two atrib-log anchors and warns about fan-out', () => {
+  it('keeps every atrib-log anchor in the config (fan-out) with the first as primary', () => {
     const resolved = resolveAnchorSet([LOG_A, { endpoint: LOG_B }])
+    expect(resolved.config.anchors).toEqual([{ url: LOG_A }, { endpoint: LOG_B }])
     expect(resolved.primaryLogEndpoint).toBe(LOG_A)
-    expect(resolved.warnings).toHaveLength(1)
-    expect(resolved.warnings[0]).toContain('multi-anchor fan-out')
+    // Multi-anchor fan-out is live (D138); no warning for extra anchors.
+    expect(resolved.warnings).toEqual([])
+    expect(resolveAnchorPosture(resolved.config).warn).toBe(false)
   })
 
   it('chooses the atrib-log endpoint when it follows a skipped anchor', () => {
-    const resolved = resolveAnchorSet([{ endpoint: REKOR, anchor_type: 'rekor' }, LOG_A])
+    const resolved = resolveAnchorSet([
+      { endpoint: REKOR, anchor_type: 'rekor' } as unknown as AnchorSpec,
+      LOG_A,
+    ])
     expect(resolved.primaryLogEndpoint).toBe(LOG_A)
-    // One skip warning; no fan-out warning for a single usable anchor.
     expect(resolved.warnings).toHaveLength(1)
     expect(resolved.warnings[0]).toContain("'rekor'")
+  })
+
+  it('maps allowSingleAnchor to AnchorSetConfig.allow_single_anchor (§2.11.12 rule 3)', () => {
+    const resolved = resolveAnchorSet([LOG_A], true)
+    expect(resolved.config).toEqual({
+      anchors: [{ url: LOG_A }],
+      allow_single_anchor: true,
+    })
+    expect(resolveAnchorPosture(resolved.config).warn).toBe(false)
+    // Without the flag, the same single-anchor config warns (rule 4).
+    expect(resolveAnchorPosture(resolveAnchorSet([LOG_A]).config).warn).toBe(true)
   })
 })
 

@@ -19,8 +19,18 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 from urllib.parse import urlsplit
 
+from .anchors import (
+    ANCHOR_TYPES,
+    AnchorDescriptor,
+    AnchorSetConfig,
+    anchor_descriptor_endpoint,
+    anchor_descriptor_type,
+    resolve_anchor_posture,
+    resolve_effective_anchors,
+)
 from .chain import resolve_chain_root
 from .hashes import record_hash_ref
 from .keys import ResolvedKey, resolve_key
@@ -50,60 +60,149 @@ _REF_EVENT_TYPE = {
 
 DEFAULT_PRODUCER = "atrib-sdk-py"
 
-# P043 headroom: one anchor in the anchor set. A bare string is an
-# atrib-log §2.6.1 endpoint; the mapping form carries the forthcoming
-# `anchor_type` discriminator (absent or 'atrib-log' = atrib log; other
-# types are skipped with a warning until upgrade-path step 1 lands).
+# One anchor in the anchor set (D138, §2.11.12). A bare string is an
+# atrib-log §2.6.1 endpoint (shorthand for {"url": s}); the mapping form is
+# an AnchorDescriptor (`url` wins over `endpoint`; `anchor_type` absent or
+# None means 'atrib-log'; non-atrib-log types have no Python transport yet
+# and are skipped with a warning naming the type).
 AnchorSpec = str | Mapping[str, object]
 
 
-def _resolve_anchor_set(
-    anchors: list[AnchorSpec] | None,
-) -> tuple[str | None, list[str]]:
-    """Normalize the anchor set to today's single-atrib-log posture.
-    Returns (primary_log_endpoint, warnings); never raises."""
-    warnings: list[str] = []
-    if not anchors:
-        return None, warnings
-    atrib_log_endpoints: list[str] = []
-    for spec in anchors:
-        # Hostile/malformed entries warn-and-skip, never raise (§5.8); the
-        # skip rules mirror the TS resolveAnchorSet exactly.
-        anchor_type_present = False
-        anchor_type: object = None
-        if isinstance(spec, str):
-            endpoint: object = spec
-        elif isinstance(spec, Mapping):
-            endpoint = spec.get("endpoint")
-            anchor_type_present = "anchor_type" in spec
-            anchor_type = spec.get("anchor_type")
-        else:
-            warnings.append(
-                f"atrib: anchor entry {spec!r} is not a string or mapping; skipping"
-            )
-            continue
-        if not isinstance(endpoint, str):
-            warnings.append("atrib: anchor entry without a string endpoint; skipping")
-            continue
-        if anchor_type_present and anchor_type != "atrib-log":
-            warnings.append(
-                f"atrib: anchor_type '{anchor_type}' ({endpoint}) is not supported yet "
-                "(upgrade-path step 1); skipping this anchor"
-            )
-            continue
+@dataclass(frozen=True)
+class _AnchorPlan:
+    """Resolved anchor posture + the atrib-log endpoints to fan out to."""
+
+    posture: dict[str, object]  # {effective_anchor_count, used_default_set, warned}
+    sidecar_marker: Mapping[str, object] | None  # §2.11.12 rule 4, or None
+    endpoints: list[str]
+    warnings: list[str]
+
+
+def _parse_anchor_endpoint(endpoint: str) -> bool:
+    """True iff the endpoint parses as an absolute URL (scheme + host)."""
+    try:
         split = urlsplit(endpoint)
-        if not split.scheme or not split.netloc:
+    except ValueError:
+        return False
+    return bool(split.scheme) and bool(split.netloc)
+
+
+def _resolve_anchor_plan(
+    anchors: list[AnchorSpec] | None,
+    allow_single_anchor: bool,
+    env: Mapping[str, str],
+) -> _AnchorPlan:
+    """Resolve the §2.11.12 anchor posture and the atrib-log fan-out set.
+
+    Mirrors the TS reference (`resolveAnchorSet` in the SDK config layer +
+    `resolveAnchorPosture` in packages/mcp/src/anchors.ts): hostile shapes,
+    unregistered ``anchor_type`` values, and entries without a usable
+    endpoint warn-and-skip (never raise, §5.8) and are EXCLUDED from the
+    effective set — so they do not count toward the configured posture.
+    Registered non-atrib-log anchor types stay in the set (they count) but
+    their submission legs are skipped with a warning naming the type: their
+    transports are TS-side stubs today and have no Python port yet. When no
+    anchors were configured the built-in default set applies and its
+    atrib-log member's endpoint defers to $ATRIB_LOG_ENDPOINT when set.
+    """
+    warnings: list[str] = []
+    config: AnchorSetConfig = {}
+    if anchors is not None:
+        descriptors: list[AnchorDescriptor] = []
+        for spec in anchors:
+            if isinstance(spec, str):
+                descriptor: dict[str, object] = {"url": spec}
+            elif isinstance(spec, Mapping):
+                descriptor = dict(spec)
+            else:
+                warnings.append(
+                    f"atrib: anchor entry {spec!r} is not a string or mapping; skipping"
+                )
+                continue
+            # TS parity: `anchorType !== undefined` — a PRESENT anchor_type
+            # (including JSON null / Python None) must be a registered
+            # string; only an absent field defaults to atrib-log.
+            if "anchor_type" in descriptor:
+                anchor_type = descriptor["anchor_type"]
+                if not isinstance(anchor_type, str) or anchor_type not in ANCHOR_TYPES:
+                    named = descriptor.get("url")
+                    if named is None:
+                        named = descriptor.get("endpoint")
+                    suffix = f" ({named})" if isinstance(named, str) else ""
+                    warnings.append(
+                        f"atrib: anchor_type '{anchor_type}'{suffix} is not in the "
+                        f"§2.11.8 registry ({', '.join(ANCHOR_TYPES)}); skipping this anchor"
+                    )
+                    continue
+                effective_type: str = anchor_type
+            else:
+                effective_type = "atrib-log"
+            endpoint = anchor_descriptor_endpoint(descriptor)
+            if effective_type == "atrib-log" or endpoint is not None:
+                if not isinstance(endpoint, str):
+                    warnings.append(
+                        "atrib: anchor entry without a string url/endpoint; skipping"
+                    )
+                    continue
+                if not _parse_anchor_endpoint(endpoint):
+                    warnings.append(
+                        f"atrib: anchor endpoint '{endpoint}' is not a valid URL; skipping"
+                    )
+                    continue
+            descriptors.append(cast(AnchorDescriptor, descriptor))
+        config["anchors"] = descriptors
+    if allow_single_anchor:
+        config["allow_single_anchor"] = True
+
+    posture = resolve_anchor_posture(config)
+    if posture.warn:
+        warnings.append(
+            f"atrib: anchor config names {posture.effective_anchor_count} anchor(s) "
+            "without allow_single_anchor; anchor plurality (>=2 independent anchors, "
+            "spec §2.11.12) is not met. The operation continues and signing is "
+            "unaffected (§5.8)."
+        )
+
+    endpoints: list[str] = []
+    for entry in cast("list[object]", resolve_effective_anchors(config)):
+        if not isinstance(entry, Mapping):
+            warnings.append(
+                f"atrib: anchor entry {entry!r} is not a string or mapping; skipping"
+            )
+            continue
+        effective = cast("Mapping[str, object]", entry)
+        leg_type = anchor_descriptor_type(effective)
+        if leg_type != "atrib-log":
+            warnings.append(
+                f"atrib: no {leg_type!r} transport shipped in the Python SDK yet; "
+                "anchor leg skipped"
+            )
+            continue
+        endpoint = anchor_descriptor_endpoint(effective)
+        if posture.used_default_set:
+            # Default-set nuance: zero-config producers keep honoring
+            # $ATRIB_LOG_ENDPOINT for the atrib-log member.
+            endpoint = env.get("ATRIB_LOG_ENDPOINT") or endpoint
+        if not isinstance(endpoint, str):
+            warnings.append("atrib: anchor entry without a string url/endpoint; skipping")
+            continue
+        if not _parse_anchor_endpoint(endpoint):
             warnings.append(
                 f"atrib: anchor endpoint '{endpoint}' is not a valid URL; skipping"
             )
             continue
-        atrib_log_endpoints.append(endpoint)
-    if len(atrib_log_endpoints) > 1:
-        warnings.append(
-            "atrib: multi-anchor fan-out is not implemented yet "
-            "(upgrade-path step 1); submitting to the first anchor only"
-        )
-    return (atrib_log_endpoints[0] if atrib_log_endpoints else None), warnings
+        endpoints.append(endpoint)
+
+    return _AnchorPlan(
+        posture={
+            "effective_anchor_count": posture.effective_anchor_count,
+            "used_default_set": posture.used_default_set,
+            "warned": posture.warn,
+        },
+        sidecar_marker=posture.sidecar_anchor_config,
+        endpoints=endpoints,
+        warnings=warnings,
+    )
 
 
 @dataclass(frozen=True)
@@ -118,6 +217,9 @@ class AttestResult:
     context_id: str | None
     via: str  # 'in-process' | 'none'
     warnings: list[str] = field(default_factory=list)
+    # §2.11.12 posture of the client's anchor set (D138):
+    # {"effective_anchor_count": int, "used_default_set": bool, "warned": bool}
+    anchor_posture: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -152,6 +254,7 @@ class AtribClient:
         key: ResolvedKey | None | object = ...,
         context_id: str | None = None,
         anchors: list[AnchorSpec] | None = None,
+        allow_single_anchor: bool = False,
         producer: str = DEFAULT_PRODUCER,
         mirror_write_path: Path | str | None = None,
         mirror_read_path: Path | str | None = None,
@@ -163,9 +266,13 @@ class AtribClient:
         self._key_resolved = False
         self._context_id = context_id
         self._producer = producer
-        primary_endpoint, self._anchor_warnings = _resolve_anchor_set(anchors)
-        endpoint = primary_endpoint or self._env.get("ATRIB_LOG_ENDPOINT")
-        self._queue = SubmissionQueue(endpoint)
+        anchor_plan = _resolve_anchor_plan(anchors, allow_single_anchor, self._env)
+        self._anchor_posture = anchor_plan.posture
+        self._anchor_sidecar_marker = anchor_plan.sidecar_marker
+        self._anchor_warnings = anchor_plan.warnings
+        # D138 fan-out: one non-blocking §2.6.1 queue per effective
+        # atrib-log anchor endpoint (§5.3.5 — never awaited on attest).
+        self._queues = [SubmissionQueue(endpoint) for endpoint in anchor_plan.endpoints]
         self._mirror_write = (
             Path(mirror_write_path)
             if mirror_write_path is not None
@@ -219,7 +326,13 @@ class AtribClient:
                 "atrib: no signing key available; operating in pass-through mode "
                 "(§5.8), no record emitted"
             )
-            return AttestResult(record_hash=None, context_id=None, via="none", warnings=warnings)
+            return AttestResult(
+                record_hash=None,
+                context_id=None,
+                via="none",
+                warnings=warnings,
+                anchor_posture=dict(self._anchor_posture),
+            )
 
         effective_context = context_id or self._default_context_id()
         if effective_context is None:
@@ -266,7 +379,13 @@ class AtribClient:
             raise
         except Exception as exc:  # noqa: BLE001 — degradation contract
             warnings.append(f"atrib: signing failed: {exc}")
-            return AttestResult(record_hash=None, context_id=None, via="none", warnings=warnings)
+            return AttestResult(
+                record_hash=None,
+                context_id=None,
+                via="none",
+                warnings=warnings,
+                anchor_posture=dict(self._anchor_posture),
+            )
 
         self._mirror_and_submit(record, content, warnings)
         return AttestResult(
@@ -274,6 +393,7 @@ class AtribClient:
             context_id=effective_context,
             via="in-process",
             warnings=warnings,
+            anchor_posture=dict(self._anchor_posture),
         )
 
     # ── recall ───────────────────────────────────────────────────────────
@@ -355,8 +475,10 @@ class AtribClient:
         return RecallOutcome(shape=shape, via="in-process", data=data, warnings=warnings)
 
     def flush(self, deadline_s: float = 30.0) -> None:
-        """Bounded wait for pending log submissions (never raises)."""
-        self._queue.flush(deadline_s)
+        """Bounded wait for pending log submissions on every anchor leg
+        (never raises)."""
+        for queue in self._queues:
+            queue.flush(deadline_s)
 
     # ── internals ────────────────────────────────────────────────────────
 
@@ -404,24 +526,31 @@ class AtribClient:
     ) -> None:
         from .mirror import append_mirror_line
 
+        sidecar: dict[str, object] = {
+            "producer": self._producer,
+            "content": dict(content),
+        }
+        if self._anchor_sidecar_marker is not None:
+            # §2.11.12 rule 4 / §5.9.3 degradation marker:
+            # _local.anchor_config = {configured: <n>, allow_single_anchor: false}
+            sidecar["anchor_config"] = dict(self._anchor_sidecar_marker)
         try:
-            append_mirror_line(
-                self._mirror_write,
-                record,
-                sidecar={"producer": self._producer, "content": dict(content)},
-            )
+            append_mirror_line(self._mirror_write, record, sidecar=sidecar)
         except Exception as exc:  # noqa: BLE001 — degradation contract
             warnings.append(f"atrib: mirror write failed: {exc}")
-        try:
-            self._queue.submit(record)
-        except Exception as exc:  # noqa: BLE001 — degradation contract
-            warnings.append(f"atrib: log submission enqueue failed: {exc}")
+        # D138 fan-out: per-anchor fire-and-forget with independent retry
+        # queues; one leg's failure never affects another leg or the caller.
+        for queue in self._queues:
+            try:
+                queue.submit(record)
+            except Exception as exc:  # noqa: BLE001 — degradation contract
+                warnings.append(f"atrib: log submission enqueue failed: {exc}")
 
     def __enter__(self) -> "AtribClient":
         return self
 
     def __exit__(self, *exc_info: object) -> None:
         try:
-            self._queue.flush(deadline_s=5.0)
+            self.flush(deadline_s=5.0)
         except Exception:  # noqa: BLE001 — degradation contract
             print("atrib: flush on close failed", file=sys.stderr)

@@ -15,6 +15,7 @@
 export { createAtribClient, type AtribClient } from './client.js'
 export {
   buildEmitArgs,
+  type AttestAnchorPosture,
   type AttestInput,
   type AttestRef,
   type AttestResult,
@@ -38,11 +39,9 @@ export {
 export {
   DEFAULT_DAEMON_ENDPOINT,
   DEFAULT_PRODUCER,
-  ANCHOR_TYPES,
   resolveAnchorSet,
   resolveDaemonEndpoint,
   type AnchorSpec,
-  type AnchorType,
   type AtribClientConfig,
   type DaemonConfig,
   type DaemonMode,
@@ -50,7 +49,28 @@ export {
 } from './config.js'
 export { DaemonClient, type DaemonCallOutcome } from './daemon.js'
 
-// ── Evidence envelope (P042 draft) + attribution receipts (P049 draft) ───
+// ── Anchor plurality (D138, §2.11.7-§2.11.13), from @atrib/mcp ───────────
+export {
+  ANCHOR_TYPES,
+  BUILT_IN_DEFAULT_ANCHOR_SET,
+  createAnchorFanout,
+  resolveAnchorPosture,
+  resolveEffectiveAnchors,
+  submitToAnchors,
+} from '@atrib/mcp'
+export type {
+  AnchorConfigSidecarMarker,
+  AnchorDescriptor,
+  AnchorFanout,
+  AnchorFanoutTicket,
+  AnchorPostureResolution,
+  AnchorSetConfig,
+  AnchorSubmissionOutcome,
+  AnchorSubmissionStatus,
+  AnchorType,
+} from '@atrib/mcp'
+
+// ── Evidence envelopes (D137, §5.5.7) ────────────────────────────────────
 export {
   evidenceEnvelopeKey,
   evidenceTierRank,
@@ -62,6 +82,16 @@ export {
   type EvidenceTier,
 } from './evidence.js'
 export {
+  buildEvidenceEnvelope,
+  validateEvidenceEnvelope,
+  type BuildEvidenceEnvelopeInput,
+  type BuildEvidenceEnvelopePayloadInput,
+  type BuildEvidenceEnvelopeResult,
+  type ValidateEvidenceEnvelopeResult,
+} from './evidence-envelope.js'
+
+// ── Attribution receipts (D141, dev.atrib/attribution v0.1) ──────────────
+export {
   ATTRIBUTION_EXTENSION_KEY,
   checkAttributionReceiptConsistency,
   parseAttributionReceiptBlock,
@@ -69,7 +99,14 @@ export {
   type AttributionReceipt,
   type AttributionReceiptBlock,
   type AttributionReceiptConsistency,
+  type VerifiedAttributionReceipt,
 } from './attribution.js'
+export {
+  ATTRIBUTION_EXTENSION_ID,
+  ATTRIBUTION_LOG_SUBMISSION_STATUSES,
+  verifyAttributionReceipt,
+} from '@atrib/mcp'
+export type { AttributionReceiptVerification } from '@atrib/mcp'
 
 // ── SDK hash helpers (compositions of @atrib/mcp primitives) ────────────
 export { deriveProvenanceToken, recordHashHex, recordHashRef } from './hashes.js'

@@ -5,12 +5,15 @@
  *
  * Topology per the SDK session brief: the local primitives runtime (the
  * daemon) is the default peer; in-process signing via `@atrib/emit` is the
- * fallback. Anchors are an interface, not a log-node coupling: the config
- * takes an anchor SET, but until upgrade-path step 1 (anchor plurality)
- * lands, submission targets the first anchor with the existing
- * single-log proof shape.
+ * fallback. Anchors are the D138 anchor-plurality surface from `@atrib/mcp`
+ * (spec §2.11.7-§2.11.13): the config takes an anchor SET which is
+ * normalized into an `AnchorSetConfig` and fanned out through
+ * `createAnchorFanout` on the in-process attest path. When no anchors are
+ * configured, the `BUILT_IN_DEFAULT_ANCHOR_SET` (two independent anchors)
+ * applies.
  */
 
+import { ANCHOR_TYPES, type AnchorDescriptor, type AnchorSetConfig, type AnchorType } from '@atrib/mcp'
 import type { ResolvedKey } from '@atrib/emit'
 
 export type DaemonMode = 'prefer' | 'require' | 'off'
@@ -36,42 +39,35 @@ export interface DaemonConfig {
 }
 
 /**
- * One anchor in the anchor set (P043 headroom). A bare string is an
- * atrib-log §2.6.1 endpoint. The object form carries the forthcoming
- * `anchor_type` discriminator from the P043 draft: absent or 'atrib-log'
- * means an atrib log; other types (e.g. 'rekor', 'rfc3161-tsa') are not
- * yet supported and degrade with a warning. Non-atrib anchoring will use
- * a fresh anchoring signature over a reconstructible anchor-claim
- * artifact — never the record's own signature.
+ * One anchor in the anchor set (D138, spec §2.11.12). A bare string is an
+ * atrib-log §2.6.1 endpoint (normalized to `{ url }`). The object form is
+ * `AnchorDescriptor` from `@atrib/mcp`: `anchor_type` absent means
+ * `'atrib-log'`; `url` wins over `endpoint` when both are set; the
+ * registered types are `ANCHOR_TYPES` (§2.11.8 v1 registry).
  */
-export type AnchorSpec =
-  | string
-  | {
-      endpoint: string
-      anchor_type?: string
-    }
+export type AnchorSpec = string | AnchorDescriptor
 
 export interface AtribClientConfig {
   daemon?: DaemonConfig
   /**
-   * Anchor set: submission targets. Default:
-   * [$ATRIB_LOG_ENDPOINT ?? https://log.atrib.dev/v1/entries].
-   * Only the first atrib-log anchor is submitted to today (single-anchor
-   * posture until upgrade-path step 1 lands); extra anchors produce a
-   * warning, not an error.
+   * Anchor set (D138, §2.11.12). When omitted, the two-anchor
+   * `BUILT_IN_DEFAULT_ANCHOR_SET` from `@atrib/mcp` applies and the emit
+   * pipeline keeps its own env/default atrib-log endpoint. Hostile or
+   * malformed entries warn-and-skip, never error (§5.8).
    */
   anchors?: AnchorSpec[]
   /**
-   * Explicit opt-in to single-anchor operation once the ≥2-anchor default
-   * posture lands (upgrade-path step 1) — the escape hatch mirroring
-   * `allow_unresolved_informed_by` (D113). Currently informational: the
-   * default posture today IS single-anchor.
+   * Opt-in acknowledgment that a sub-plurality (< 2) anchor set is
+   * deliberate (§2.11.12 rule 3) — the anchor analog of
+   * `allow_unresolved_informed_by` (D113). Maps to
+   * `AnchorSetConfig.allow_single_anchor`.
    */
   allowSingleAnchor?: boolean
   /**
    * Opt-in parsing of `dev.atrib/attribution` attestation receipts from
-   * daemon tool results' `_meta` (P049 draft). Default false. Receipts
-   * are advisory; trust still derives from verifying signed records.
+   * daemon tool results' `_meta` (D141). Default false. Receipts are
+   * advisory; trust still derives from verifying signed records. Parsed
+   * blocks are additionally run through `verifyAttributionReceipt`.
    */
   attributionReceipts?: boolean
   /**
@@ -97,18 +93,7 @@ export const DEFAULT_CALL_TIMEOUT_MS = 10_000
 export const DEFAULT_RETRY_COOLDOWN_MS = 30_000
 export const DEFAULT_PRODUCER = 'atrib-sdk'
 
-/**
- * Accepted D138 anchor_type registry (spec §2.11.9). Only 'atrib-log'
- * (the default when absent) is submitted to today; the others activate
- * with the multi-anchor fan-out in the protocol packages.
- */
-export const ANCHOR_TYPES = [
-  'atrib-log',
-  'sigstore-rekor',
-  'rfc3161-tsa',
-  'opentimestamps',
-] as const
-export type AnchorType = (typeof ANCHOR_TYPES)[number]
+const ANCHOR_TYPE_SET: ReadonlySet<string> = new Set(ANCHOR_TYPES)
 
 export function resolveDaemonEndpoint(config?: DaemonConfig): string {
   return (
@@ -119,57 +104,86 @@ export function resolveDaemonEndpoint(config?: DaemonConfig): string {
 }
 
 export interface ResolvedAnchorSet {
-  /** First atrib-log endpoint, the single submission target today. */
+  /**
+   * Canonical §2.11.12 anchor-set config for `createAnchorFanout`. `{}`
+   * (no `anchors` key) when the caller configured nothing, so the
+   * built-in default set applies downstream.
+   */
+  config: AnchorSetConfig
+  /**
+   * First effective `'atrib-log'` descriptor's `url ?? endpoint`, passed
+   * to the emit pipeline as its §2.6.1 log endpoint. Undefined when the
+   * config is empty (the built-in default set applies and emitInProcess
+   * keeps its own env/default endpoint).
+   */
   primaryLogEndpoint: string | undefined
   warnings: string[]
 }
 
 /**
- * Normalize the anchor set to today's single-atrib-log posture, warning
- * (never erroring) about the parts upgrade-path step 1 will activate.
+ * Normalize the caller's anchor set into a D138 `AnchorSetConfig`
+ * (§2.11.12). Hostile/malformed entries — null, non-object/non-string,
+ * missing string `url`/`endpoint`, unparseable URL, unregistered
+ * `anchor_type` — warn-and-skip, never throw (§5.8). Plurality posture
+ * (warn on < 2 anchors without `allow_single_anchor`) is resolved by the
+ * fan-out via `resolveAnchorPosture`, not here.
  */
-export function resolveAnchorSet(anchors: AnchorSpec[] | undefined): ResolvedAnchorSet {
+export function resolveAnchorSet(
+  anchors: AnchorSpec[] | undefined,
+  allowSingleAnchor?: boolean,
+): ResolvedAnchorSet {
   const warnings: string[] = []
-  if (!anchors || anchors.length === 0) {
-    return { primaryLogEndpoint: undefined, warnings }
+  if (anchors === undefined) {
+    // No anchor config at all: the BUILT_IN_DEFAULT_ANCHOR_SET applies
+    // (§2.11.12 rule 1) and the emit pipeline keeps its own env/default
+    // atrib-log endpoint.
+    return { config: {}, primaryLogEndpoint: undefined, warnings }
   }
-  const atribLogEndpoints: string[] = []
+  const descriptors: AnchorDescriptor[] = []
+  let primaryLogEndpoint: string | undefined
   for (const spec of anchors) {
-    // Hostile/malformed entries warn-and-skip, never throw (§5.8): the
-    // documented anchor posture is "warning, not an error".
-    let endpoint: unknown
-    let anchorType: unknown
+    // Hostile/malformed entries warn-and-skip, never throw (§5.8).
+    let descriptor: AnchorDescriptor
     if (typeof spec === 'string') {
-      endpoint = spec
-    } else if (typeof spec === 'object' && spec !== null) {
-      endpoint = (spec as { endpoint?: unknown }).endpoint
-      anchorType = (spec as { anchor_type?: unknown }).anchor_type
+      descriptor = { url: spec }
+    } else if (typeof spec === 'object' && spec !== null && !Array.isArray(spec)) {
+      descriptor = spec
     } else {
       warnings.push(`atrib: anchor entry ${String(spec)} is not a string or object; skipping`)
       continue
     }
-    if (typeof endpoint !== 'string') {
-      warnings.push('atrib: anchor entry without a string endpoint; skipping')
-      continue
-    }
-    if (anchorType !== undefined && anchorType !== 'atrib-log') {
+    const anchorType = (descriptor as { anchor_type?: unknown }).anchor_type
+    if (anchorType !== undefined && (typeof anchorType !== 'string' || !ANCHOR_TYPE_SET.has(anchorType))) {
+      const named = (descriptor.url ?? descriptor.endpoint) as unknown
       warnings.push(
-        `atrib: anchor_type '${String(anchorType)}' (${endpoint}) is not supported yet (upgrade-path step 1); skipping this anchor`,
+        `atrib: anchor_type '${String(anchorType)}'${typeof named === 'string' ? ` (${named})` : ''} is not in the §2.11.8 registry (${ANCHOR_TYPES.join(', ')}); skipping this anchor`,
       )
       continue
     }
-    try {
-      new URL(endpoint)
-    } catch {
-      warnings.push(`atrib: anchor endpoint '${endpoint}' is not a valid URL; skipping`)
-      continue
+    const effectiveType: AnchorType = (anchorType as AnchorType | undefined) ?? 'atrib-log'
+    // `url` wins over `endpoint` when both are set (the §2.11.12 sample
+    // config spells the field `url`; both spellings are accepted).
+    const endpoint = (descriptor as { url?: unknown }).url ?? (descriptor as { endpoint?: unknown }).endpoint
+    if (effectiveType === 'atrib-log' || endpoint !== undefined) {
+      if (typeof endpoint !== 'string') {
+        warnings.push('atrib: anchor entry without a string url/endpoint; skipping')
+        continue
+      }
+      try {
+        new URL(endpoint)
+      } catch {
+        warnings.push(`atrib: anchor endpoint '${endpoint}' is not a valid URL; skipping`)
+        continue
+      }
+      if (effectiveType === 'atrib-log' && primaryLogEndpoint === undefined) {
+        primaryLogEndpoint = endpoint
+      }
     }
-    atribLogEndpoints.push(endpoint)
+    descriptors.push(descriptor)
   }
-  if (atribLogEndpoints.length > 1) {
-    warnings.push(
-      'atrib: multi-anchor fan-out is not implemented yet (upgrade-path step 1); submitting to the first anchor only',
-    )
+  const config: AnchorSetConfig = {
+    anchors: descriptors,
+    ...(allowSingleAnchor === true ? { allow_single_anchor: true } : {}),
   }
-  return { primaryLogEndpoint: atribLogEndpoints[0], warnings }
+  return { config, primaryLogEndpoint, warnings }
 }

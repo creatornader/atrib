@@ -42,18 +42,20 @@ describe('daemon endpoint degradation', () => {
 describe('anchor-set degradation', () => {
   it('null and non-object entries warn-and-skip instead of throwing', () => {
     const resolved = resolveAnchorSet([null, 42, undefined] as unknown as AnchorSpec[])
+    expect(resolved.config.anchors).toEqual([])
     expect(resolved.primaryLogEndpoint).toBeUndefined()
     expect(resolved.warnings).toHaveLength(3)
   })
 
-  it('non-string and unparseable endpoints warn-and-skip', () => {
+  it('non-string and unparseable url/endpoint values warn-and-skip', () => {
     const resolved = resolveAnchorSet([
       { endpoint: 5 } as unknown as AnchorSpec,
       'not a url',
       'https://log.example/v1/entries',
     ])
+    expect(resolved.config.anchors).toEqual([{ url: 'https://log.example/v1/entries' }])
     expect(resolved.primaryLogEndpoint).toBe('https://log.example/v1/entries')
-    expect(resolved.warnings.some((w) => w.includes('string endpoint'))).toBe(true)
+    expect(resolved.warnings.some((w) => w.includes('string url/endpoint'))).toBe(true)
     expect(resolved.warnings.some((w) => w.includes('not a valid URL'))).toBe(true)
   })
 
@@ -65,6 +67,15 @@ describe('anchor-set degradation', () => {
     })
     const result = await client.attest({ content: {} })
     expect(result.via).toBe('none')
+    // Pass-through mode signs nothing, so the anchor fan-out is never
+    // consulted and no posture is surfaced.
+    expect(result.anchor_posture).toBeUndefined()
+    await client.close()
+  })
+
+  it('flushAnchors resolves even when no fan-out was ever built', async () => {
+    const client = createAtribClient({ daemon: { mode: 'off' }, key: null })
+    await expect(client.flushAnchors()).resolves.toBeUndefined()
     await client.close()
   })
 })
