@@ -338,6 +338,34 @@ Future protocol adapters (ACP, UCP, AP2, MPP) follow the same template.
 
 Every normative MUST in the spec must have a corresponding test. The spec's test vectors ([§1.4.4](atrib-spec.md#144-test-vector-validation) Wycheproof) are mandatory. The calculation algorithm ([§4.6](atrib-spec.md#46-the-calculation-algorithm)) must have determinism tests: two runs on identical input must produce identical output.
 
+### Orchestration cost policy (binding for any agent working in this repo)
+
+Multi-agent orchestration (workflows, subagent fleets) must compose with model
+routing; "token cost is not a constraint" directives change scope, never tier
+policy. Rules, learned from the 2026-07-06 redesign session (~6.2M subagent
+tokens on the top tier in one day; see [P051](DECISIONS.md#p051-orchestration-infrastructure-dogfood-wiring-with-cost-and-routing-accounting)):
+
+1. **Tier by task class, not by inheritance.** Mechanical agents (corpus
+   generation/regeneration, linkification, doc placement, test refactors,
+   catalog sweeps, format migrations) run the cheapest capable tier at low
+   effort — set `model`/`effort` explicitly on every spawn; never let them
+   inherit a premium session model. Judgment agents (adversarial judges,
+   design drafters, cross-consistency reviewers) may inherit or upshift, and
+   are the ONLY agents that may.
+2. **Every fleet gets a budget.** Workflows guard loops and fan-outs on the
+   harness budget mechanism when one is provided; when none is provided and
+   the fleet would plausibly exceed ~500k tokens, state the estimate to the
+   operator in the launch message.
+3. **Prefer the relay to the fan-out when a warm context exists.** A single
+   session that already holds the corpus is cheaper than N cold agents each
+   re-reading it; fan out only for genuinely parallel, verification-heavy, or
+   scale-bound work. Batch shared context into the prompt rather than having
+   each agent rediscover it.
+4. **Account for spend.** Report per-fleet token totals and tier choices in
+   the integration summary so the operator never needs transcript archaeology
+   to answer "where did the budget go." (P051 makes this a signed sidecar
+   fact once implemented.)
+
 ### Code style
 
 - TypeScript strict mode.
