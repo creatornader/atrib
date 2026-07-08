@@ -26,7 +26,7 @@
     "@noble/hashes": "^2.2.0"
   },
   "devDependencies": {
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.1.1",
     "canonicalize": "^3.0.0",
     "fast-check": "^4.8.0",
     "tsx": "^4.22.4",
