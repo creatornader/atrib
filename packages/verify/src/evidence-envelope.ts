@@ -59,10 +59,12 @@ export const ATRIB_PROFILE_BASE = 'https://atrib.dev/v1/evidence/'
 // ─── atrib-maintained profile registry (spec §5.5.7) ───────────────────
 
 /**
- * The initial atrib-maintained registry. Profile identity is the FULL URI;
- * a bare name here is only the trailing path component under
- * {@link ATRIB_PROFILE_BASE}. Third parties register their own absolute
- * HTTPS URIs on domains they control and never appear in this list.
+ * The atrib-maintained registry: the eight-name initial set plus
+ * post-initial registrations (continuation-packet, per D142). Profile
+ * identity is the FULL URI; a bare name here is only the trailing path
+ * component under {@link ATRIB_PROFILE_BASE}. Third parties register their
+ * own absolute HTTPS URIs on domains they control and never appear in
+ * this list.
  */
 export const ATRIB_PROFILE_REGISTRY = [
   'oauth2',
@@ -73,6 +75,7 @@ export const ATRIB_PROFILE_REGISTRY = [
   'human-approval',
   'counterparty-attestation',
   'delegation-certificate',
+  'continuation-packet',
 ] as const
 export type AtribProfileName = (typeof ATRIB_PROFILE_REGISTRY)[number]
 

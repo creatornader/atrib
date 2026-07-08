@@ -452,3 +452,67 @@ describe('spec §5.5.7 conformance: tier/', () => {
     expect(checkEnvelopeShape(mapped as EnvelopeLike)).toEqual([])
   })
 })
+
+describe('spec §5.5.7 conformance: continuation-packet/', () => {
+  it('baton-envelope-valid: ninth registered profile; raw-bytes hash over the packet; baton record signature verifies', async () => {
+    const c = loadCase('continuation-packet', 'baton-envelope-valid')
+    const envelope = c.input.envelope as EnvelopeLike
+    expect(checkEnvelopeShape(envelope)).toEqual([])
+
+    const cls = classifyProfile(
+      envelope.profile as string,
+      c.input.atrib_profile_registry as string[],
+    )
+    expect(cls.registered).toBe(c.expected.registered)
+    expect(cls.atrib_maintained).toBe(c.expected.atrib_maintained)
+
+    // Raw-bytes hash rule for text/markdown packets.
+    expect(rawSha256(c.input.packet_material_utf8 as string)).toBe(
+      (envelope.payload as { hash: string }).hash,
+    )
+
+    const baton = c.input.referenced_baton_record as AtribRecord
+    expect(await verifyRecordSignature(baton)).toBe(c.expected.referenced_baton_record_signature_ok)
+    expect('sha256:' + hexEncode(sha256(canonicalRecord(baton)))).toBe(c.expected.baton_record_hash)
+    expect((envelope.facts as Record<string, string>).baton_record_hash).toBe(
+      c.expected.baton_record_hash,
+    )
+  })
+
+  it('packet-hash-mismatch: shape-valid envelope whose hash does not match the packet bytes fails profile verification', () => {
+    const c = loadCase('continuation-packet', 'packet-hash-mismatch')
+    const envelope = c.input.envelope as EnvelopeLike
+    // The envelope itself is shape-valid; the mismatch is profile-level.
+    expect(checkEnvelopeShape(envelope)).toEqual([])
+    expect(rawSha256(c.input.packet_material_utf8 as string)).not.toBe(
+      (envelope.payload as { hash: string }).hash,
+    )
+    expect(c.expected.accept).toBe(false)
+    expect(c.expected.reject_reasons).toEqual(['payload_hash_mismatch'])
+  })
+
+  it('withheld-packet-declared: public projection carries hash and role-term facts, never the packet body', () => {
+    const c = loadCase('continuation-packet', 'withheld-packet-declared')
+    const envelope = c.input.envelope as EnvelopeLike
+    expect(checkEnvelopeShape(envelope)).toEqual([])
+    expect((envelope.payload as { ref: { kind: string } }).ref.kind).toBe('withheld')
+    expect(envelope.payload!.inline).toBeUndefined()
+    // Exactly the profile's sanitization-contract facts, nothing else.
+    expect(Object.keys(envelope.facts as Record<string, unknown>).sort()).toEqual(
+      c.expected.public_facts,
+    )
+  })
+
+  it('signed-baton-record: the baton-pass observation as payload via the record_hash sibling rule', async () => {
+    const c = loadCase('continuation-packet', 'signed-baton-record')
+    const envelope = c.input.envelope as EnvelopeLike
+    expect(checkEnvelopeShape(envelope)).toEqual([])
+
+    const record = c.input.referenced_record as AtribRecord
+    const recomputed = 'sha256:' + hexEncode(sha256(canonicalRecord(record)))
+    expect(recomputed).toBe(c.expected.record_hash)
+    expect((envelope.payload as { hash: string }).hash).toBe(recomputed)
+    expect((envelope.payload as { ref: { record_hash: string } }).ref.record_hash).toBe(recomputed)
+    expect(await verifyRecordSignature(record)).toBe(c.expected.referenced_record_signature_ok)
+  })
+})

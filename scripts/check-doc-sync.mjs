@@ -18,6 +18,7 @@
 // Usage: node scripts/check-doc-sync.mjs [--json]
 
 import { readFileSync, readdirSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -680,6 +681,63 @@ function checkPublicBoundaryWording() {
   }
 }
 
+// ─── private wordlist (operator-local) ─────────────────────────────────────
+// Public files describe operator infrastructure in role terms only. The
+// enforcing pattern list is operator-private and lives outside the repo:
+// ATRIB_DOC_SYNC_PRIVATE_WORDLIST points at it, with a fallback at
+// ~/.config/atrib/doc-sync-private-wordlist.txt. Each non-blank, non-#
+// line is a case-insensitive regular expression. When no wordlist is
+// present (CI, fresh clones), the check reports ok and skips.
+function checkPrivateWordlist() {
+  const check = 'private-wordlist'
+  const candidate =
+    process.env.ATRIB_DOC_SYNC_PRIVATE_WORDLIST ||
+    join(homedir(), '.config', 'atrib', 'doc-sync-private-wordlist.txt')
+  let raw
+  try {
+    raw = readFileSync(candidate, 'utf8')
+  } catch (_) {
+    ok(check, 'no private wordlist configured; skipped')
+    return
+  }
+  const rules = []
+  let badPatterns = 0
+  for (const line of lines(raw)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    try {
+      rules.push(new RegExp(trimmed, 'i'))
+    } catch (e) {
+      badPatterns += 1
+      fail(check, `invalid pattern in private wordlist: ${e.message}`)
+    }
+  }
+  if (rules.length === 0) {
+    if (badPatterns === 0) ok(check, 'private wordlist empty; skipped')
+    return
+  }
+  const files = listPublicBoundaryFiles()
+  let count = 0
+  for (const file of files) {
+    const rawLines = lines(read(file))
+    for (let i = 0; i < rawLines.length; i += 1) {
+      for (let r = 0; r < rules.length; r += 1) {
+        if (!rules[r].test(rawLines[i])) continue
+        count += 1
+        fail(check, `${file}:${i + 1} matches private wordlist pattern #${r + 1}`, {
+          file,
+          line: i + 1,
+          pattern: r + 1,
+          snippet: rawLines[i].trim().slice(0, 200),
+        })
+      }
+    }
+  }
+  if (count === 0 && badPatterns === 0) {
+    ok(check, `${files.length} text file(s) clear the private wordlist (${rules.length} pattern(s))`)
+  }
+}
+
 // ─── inline-link discipline ────────────────────────────────────────────────
 // Bare §X.Y and Dxxx references in markdown prose drift over time as readers
 // can't navigate them. The going-forward fix lives in
@@ -917,6 +975,7 @@ const checks = [
   checkPublishedPackageCount,
   checkConformanceCorpusConsistency,
   checkPublicBoundaryWording,
+  checkPrivateWordlist,
   checkInlineLinks,
 ]
 

@@ -1,0 +1,40 @@
+{
+  "name": "packet-hash-mismatch",
+  "spec_section": "5.5.7",
+  "family": "continuation-packet",
+  "description": "A shape-valid envelope whose payload.hash does not match the packet bytes. Consumers MUST treat the mismatch as profile-verification failure on the re-verified instance (result.valid: false) while the envelope stays shape-valid and no record validity changes.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/continuation-packet",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:89db11b484db54570bdf2faf49d2b32ebe0cf93d471e2e687980305595088187",
+        "media_type": "text/markdown",
+        "ref": {
+          "kind": "mirror"
+        }
+      },
+      "facts": {
+        "target_harness_role": "successor-session",
+        "reason": "analysis session retiring; local successor continues the work",
+        "baton_record_hash": "sha256:1c7b4a4a39a2c978eb023108c3e4a995f627cf47f3c1b7ec24125f9005856370"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "packet_material_utf8": "# Continuation packet: fixture\n\nSession arc, corrections ledger, and remaining work with routing\ntiers. Deterministic fixture body for the continuation-packet\nprofile; real packets carry operator context and stay private."
+  },
+  "expected": {
+    "accept": false,
+    "payload_hash_matches_packet": false,
+    "reject_reasons": [
+      "payload_hash_mismatch"
+    ]
+  }
+}

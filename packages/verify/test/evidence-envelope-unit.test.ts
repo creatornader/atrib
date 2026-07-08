@@ -76,8 +76,8 @@ describe('evidence-envelope: exported constants', () => {
     expect(Object.keys(LEGACY_PROTOCOL_TO_PROFILE)).toEqual([...FROZEN_LEGACY_PROTOCOLS])
   })
 
-  it('registry has eight entries and every URI is atrib-maintained and https', () => {
-    expect(ATRIB_PROFILE_REGISTRY).toHaveLength(8)
+  it('registry has nine entries and every URI is atrib-maintained and https', () => {
+    expect(ATRIB_PROFILE_REGISTRY).toHaveLength(9)
     for (const name of ATRIB_PROFILE_REGISTRY) {
       const uri = atribProfileUri(name)
       expect(uri).toBe(ATRIB_PROFILE_URIS[name])

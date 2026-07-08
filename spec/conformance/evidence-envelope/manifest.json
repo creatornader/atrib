@@ -25,7 +25,8 @@
     "ap2-vi",
     "human-approval",
     "counterparty-attestation",
-    "delegation-certificate"
+    "delegation-certificate",
+    "continuation-packet"
   ],
   "frozen_legacy_protocols": [
     "oauth2",
@@ -46,7 +47,8 @@
     "registry",
     "unknown-profile",
     "legacy-mapping",
-    "tier"
+    "tier",
+    "continuation-packet"
   ],
   "cases": [
     {
@@ -178,10 +180,30 @@
       "file": "cases/tier--evidence-never-flips-valid.json",
       "name": "evidence-never-flips-valid",
       "family": "tier"
+    },
+    {
+      "file": "cases/continuation-packet--baton-envelope-valid.json",
+      "name": "baton-envelope-valid",
+      "family": "continuation-packet"
+    },
+    {
+      "file": "cases/continuation-packet--packet-hash-mismatch.json",
+      "name": "packet-hash-mismatch",
+      "family": "continuation-packet"
+    },
+    {
+      "file": "cases/continuation-packet--withheld-packet-declared.json",
+      "name": "withheld-packet-declared",
+      "family": "continuation-packet"
+    },
+    {
+      "file": "cases/continuation-packet--signed-baton-record.json",
+      "name": "signed-baton-record",
+      "family": "continuation-packet"
     }
   ],
   "keys": {
     "alice_pubkey": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo"
   },
-  "note": "The five families collectively pin the §5.5.7 contract: schema validity with the closed tier and ref.kind enums (shape/), the HTTPS type-URI registration rule with full-URI profile identity (registry/), unknown-profile preservation (unknown-profile/), the frozen five-row legacy mapping with sixth-string rejection (legacy-mapping/), and instance-scoped tier semantics where evidence never flips verifyRecord().valid (tier/)."
+  "note": "The six families collectively pin the §5.5.7 contract: schema validity with the closed tier and ref.kind enums (shape/), the HTTPS type-URI registration rule with full-URI profile identity (registry/), unknown-profile preservation (unknown-profile/), the frozen five-row legacy mapping with sixth-string rejection (legacy-mapping/), instance-scoped tier semantics where evidence never flips verifyRecord().valid (tier/), and the D142 continuation-packet profile registration (continuation-packet/)."
 }

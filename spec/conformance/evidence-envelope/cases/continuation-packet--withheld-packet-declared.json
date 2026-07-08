@@ -1,0 +1,41 @@
+{
+  "name": "withheld-packet-declared",
+  "spec_section": "5.5.7",
+  "family": "continuation-packet",
+  "description": "The public-projection posture: continuation packet bodies are private by default (they routinely carry operator-internal context), so public surfaces carry ref.kind \"withheld\" with the hash and the sanitized role-term facts only. MUST accept; the body is not retrievable from the envelope.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/continuation-packet",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:69f6757d0a84e0c224275ed52b98766c372d769466dd86bd44532c16626a3f16",
+        "media_type": "text/markdown",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "facts": {
+        "target_harness_role": "successor-session",
+        "reason": "analysis session retiring; local successor continues the work",
+        "baton_record_hash": "sha256:1c7b4a4a39a2c978eb023108c3e4a995f627cf47f3c1b7ec24125f9005856370"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    }
+  },
+  "expected": {
+    "accept": true,
+    "body_retrievable": false,
+    "public_facts": [
+      "baton_record_hash",
+      "reason",
+      "target_harness_role"
+    ]
+  }
+}

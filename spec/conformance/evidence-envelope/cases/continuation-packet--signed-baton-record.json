@@ -1,0 +1,49 @@
+{
+  "name": "signed-baton-record",
+  "spec_section": "5.5.7",
+  "family": "continuation-packet",
+  "description": "The carried material is itself the signed baton-pass observation: ref.record_hash names it per the §5.5.7 sibling rule, payload.hash commits to its canonical JCS bytes, and ref.kind (\"mirror\") states where the bytes are retrievable. The record is a real Ed25519-signed observation; its signature verifies independently.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/continuation-packet",
+      "profile_version": "1.0.0",
+      "tier": "attested",
+      "payload": {
+        "hash": "sha256:1c7b4a4a39a2c978eb023108c3e4a995f627cf47f3c1b7ec24125f9005856370",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "mirror",
+          "record_hash": "sha256:1c7b4a4a39a2c978eb023108c3e4a995f627cf47f3c1b7ec24125f9005856370"
+        }
+      },
+      "facts": {
+        "target_harness_role": "successor-session",
+        "reason": "analysis session retiring; local successor continues the work"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "referenced_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:64eb966ac2b34c63ea27c9a1fb13be239e53ba595c2405bcfcccf58702e0a409",
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "chain_root": "sha256:dfb417454d7432715ecfaa33d89abdaba4457c3b2cbd85a4a20620d0cd806da6",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "timestamp": 1782864002000,
+      "signature": "SrMztweh_fnWlKxopeTyfGTW9evaqUIJafbYAI5awryBR-LHVKpVnHdl23jfDbaUY8072SHEBI42dxgq2OepAg"
+    },
+    "signer_seed_hex": "5151515151515151515151515151515151515151515151515151515151515151"
+  },
+  "expected": {
+    "accept": true,
+    "record_hash": "sha256:1c7b4a4a39a2c978eb023108c3e4a995f627cf47f3c1b7ec24125f9005856370",
+    "payload_hash_matches_record": true,
+    "referenced_record_signature_ok": true
+  }
+}

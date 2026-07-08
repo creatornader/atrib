@@ -30,7 +30,8 @@
       "ap2-vi",
       "human-approval",
       "counterparty-attestation",
-      "delegation-certificate"
+      "delegation-certificate",
+      "continuation-packet"
     ]
   },
   "expected": {

@@ -1,0 +1,62 @@
+{
+  "name": "baton-envelope-valid",
+  "spec_section": "5.5.7",
+  "family": "continuation-packet",
+  "description": "A typical baton handoff: the payload is the continuation packet (text/markdown, raw-bytes hash rule), facts carry role-term routing (target_harness_role, reason) plus the signed baton-pass observation hash, tier is \"declared\" (asserted at handoff, nothing checked yet). The profile is the ninth atrib-maintained registry entry per D142. MUST accept.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/continuation-packet",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:69f6757d0a84e0c224275ed52b98766c372d769466dd86bd44532c16626a3f16",
+        "media_type": "text/markdown",
+        "ref": {
+          "kind": "mirror"
+        }
+      },
+      "facts": {
+        "target_harness_role": "successor-session",
+        "reason": "analysis session retiring; local successor continues the work",
+        "baton_record_hash": "sha256:1c7b4a4a39a2c978eb023108c3e4a995f627cf47f3c1b7ec24125f9005856370"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "packet_material_utf8": "# Continuation packet: fixture\n\nSession arc, corrections ledger, and remaining work with routing\ntiers. Deterministic fixture body for the continuation-packet\nprofile; real packets carry operator context and stay private.",
+    "referenced_baton_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:64eb966ac2b34c63ea27c9a1fb13be239e53ba595c2405bcfcccf58702e0a409",
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "chain_root": "sha256:dfb417454d7432715ecfaa33d89abdaba4457c3b2cbd85a4a20620d0cd806da6",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "timestamp": 1782864002000,
+      "signature": "SrMztweh_fnWlKxopeTyfGTW9evaqUIJafbYAI5awryBR-LHVKpVnHdl23jfDbaUY8072SHEBI42dxgq2OepAg"
+    },
+    "atrib_profile_registry": [
+      "oauth2",
+      "mcp-oauth",
+      "aauth",
+      "x401",
+      "ap2-vi",
+      "human-approval",
+      "counterparty-attestation",
+      "delegation-certificate",
+      "continuation-packet"
+    ]
+  },
+  "expected": {
+    "accept": true,
+    "registered": true,
+    "atrib_maintained": true,
+    "payload_hash_matches_packet": true,
+    "referenced_baton_record_signature_ok": true,
+    "baton_record_hash": "sha256:1c7b4a4a39a2c978eb023108c3e4a995f627cf47f3c1b7ec24125f9005856370"
+  }
+}
