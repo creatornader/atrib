@@ -59,6 +59,13 @@ paths = [
   '''packages/.*/README\.md$''',
 ]
 
+[[allowlists]]
+description = "Historical evidence fixture drafts with fake token-shaped values"
+paths = [
+  '''packages/log-dev/scripts/generate-conformance-evidence-envelope\.ts$''',
+  '''docs/adr-draft-p049-mcp-extension\.md$''',
+]
+
 # ── Stop-word allowlist for protocol field names ─────────────────────────
 # Even outside the allowed paths, these field-name prefixes are atrib
 # protocol vocabulary, not credentials. When followed by a base64url
