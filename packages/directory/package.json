@@ -1,6 +1,6 @@
 {
   "name": "@atrib/directory",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Identity-claim directory SDK for atrib's verifiable action layer. Publishes and verifies signer claims with cryptographic proofs.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
