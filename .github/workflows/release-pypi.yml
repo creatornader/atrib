@@ -1,0 +1,124 @@
+name: Release PyPI
+
+# Publishes the `atrib` Python distribution (python/) to PyPI. Manual
+# dispatch only: Changesets does not manage Python versions. Bump
+# `project.version` and `atrib.__version__` together in the release
+# commit, then dispatch this workflow from main. See
+# docs/publishing-new-pypi-package.md for the full runsheet.
+#
+# Trusted publishing (OIDC, no long-lived tokens). Configure on PyPI:
+#   Repository:  creatornader/atrib
+#   Workflow:    release-pypi.yml
+#   Environment: pypi
+# First publish uses a PyPI "pending publisher" with the same values;
+# the `pypi` environment is created on first run.
+#
+# Mirrors release.yml's posture: build once, publish the exact artifacts
+# that were tested. Gates mirror python-sdk.yml (pytest, mypy strict, the
+# cross-impl determinism judge must actually run, doc-sync) plus a
+# pyproject/atrib.__version__ consistency check.
+
+on:
+  workflow_dispatch:
+
+# Default to read-only at the workflow level; the publish job grants only
+# the OIDC token write it needs.
+permissions:
+  contents: read
+
+# Opt into Node.js 24 for transitive JS actions (see ci.yml for rationale).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test-and-build:
+    name: Gate and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ github.token }}
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      # The cross-impl judge drives the built TS SDK; a filtered install
+      # keeps this workflow from paying for the whole workspace.
+      - run: pnpm install --frozen-lockfile --filter @atrib/sdk...
+
+      - run: pnpm --filter @atrib/sdk... build
+
+      - run: python -m pip install -e "python/[dev]" build twine
+
+      - name: Version consistency (pyproject == atrib.__version__)
+        run: |
+          python - << 'EOF'
+          import tomllib
+          import atrib
+          with open('python/pyproject.toml', 'rb') as f:
+              declared = tomllib.load(f)['project']['version']
+          if declared != atrib.__version__:
+              raise SystemExit(
+                  f'pyproject version {declared} != atrib.__version__ {atrib.__version__}'
+              )
+          print(f'version {declared} consistent')
+          EOF
+
+      - name: Python suites (conformance, behavior, parity, cross-impl)
+        run: python -m pytest python/tests -q
+
+      - name: mypy strict
+        run: python -m mypy
+        working-directory: python
+
+      - name: Cross-impl determinism judge must actually run (not skip)
+        run: |
+          python -m pytest python/tests/cross_impl -q -rs 2>&1 | tee /tmp/cross-impl.out
+          if grep -qiE '\bskipped\b' /tmp/cross-impl.out; then
+            echo '::error::cross-impl determinism tests were skipped in release gating'
+            exit 1
+          fi
+
+      - name: doc-sync
+        run: node scripts/check-doc-sync.mjs
+
+      - name: Build distributions
+        run: python -m build python/
+
+      - name: Twine check
+        run: python -m twine check python/dist/*
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: atrib-dist
+          path: python/dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: atrib-dist
+          path: dist/
+
+      - name: Publish to PyPI (trusted publishing)
+        uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d # v1.14.0
+        with:
+          packages-dir: dist/
