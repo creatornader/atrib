@@ -72,6 +72,15 @@ Service naming convention (matches what `@atrib/mcp` and `@atrib/agent` look up)
 - `atrib-creator-<agent>`: agent-scoped (e.g. `atrib-creator-claude-code`)
 - `atrib-creator`: generic fallback
 
+## Key handling
+
+The private seed is a secret and stays on your machine. `publish-claim` and
+`revoke` send only the signed claim or revocation record and the public key to
+the directory and log; the seed itself is never transmitted. Prefer
+`--keychain` (or the SDK `--key-file` path) so the seed is never written to a
+shell history or an `.env` file. Bare `keygen` prints the seed to stdout for
+piping; treat that output as a credential and do not commit or log it.
+
 ## Install
 
 ```bash

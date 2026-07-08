@@ -17,6 +17,7 @@ Verify a local build with `pnpm --filter @atrib/mcp test`.
 ```typescript
 import { atrib } from '@atrib/mcp'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { z } from 'zod' // ships with @modelcontextprotocol/sdk
 
 const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
   creatorKey: process.env.ATRIB_PRIVATE_KEY!, // Ed25519 seed, base64url, 32 bytes

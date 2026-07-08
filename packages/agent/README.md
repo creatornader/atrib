@@ -204,7 +204,11 @@ const interceptor = atrib({
 })
 ```
 
-That's the interceptor. Now plug it into whichever framework you use:
+That's the interceptor. Now plug it into whichever framework you use.
+`@atrib/agent` types against each host framework structurally and does not
+depend on any of them, so install the framework package you use
+(`@modelcontextprotocol/sdk`, `@ai-sdk/mcp`, `agents`, `@langchain/mcp-adapters`,
+or `@anthropic-ai/claude-agent-sdk`) alongside `@atrib/agent`.
 
 ### Raw `@modelcontextprotocol/sdk`
 
@@ -225,6 +229,7 @@ const client = wrapMcpClient(raw, interceptor, {
 ```ts
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { atrib as wrapServer } from '@atrib/mcp'  // note: server-side package
+import { z } from 'zod' // ships with the Claude Agent SDK
 
 const sdkServer = createSdkMcpServer({
   name: 'my-tools',

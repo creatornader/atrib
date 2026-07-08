@@ -25,7 +25,7 @@ pnpm add @atrib/action-gate
 import { runGatedAction } from '@atrib/action-gate'
 
 const result = await runGatedAction({
-  privateKey,
+  privateKey, // base64url Ed25519 32-byte seed, from ATRIB_PRIVATE_KEY, @atrib/cli, or the OS keychain
   contextId: '5f9a8a2b68f94a5cb7f9361b2c8d4e10',
   action: {
     run_id: 'browser-run-42',

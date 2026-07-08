@@ -33,16 +33,24 @@ upstream by writing a config; no per-server code.
 
 ## Install + run
 
-The wrapper is a workspace package; build then point an MCP host at the
-binary:
+Install the package, then point an MCP host at the `atrib-wrap` binary it
+ships:
 
 ```bash
-pnpm --filter @atrib/mcp-wrap build
-node ~/repos/atrib/packages/mcp-wrap/dist/main.js path/to/wrap-config.json
+pnpm add @atrib/mcp-wrap
+npx atrib-wrap path/to/wrap-config.json
 ```
 
-Or set `ATRIB_WRAP_CONFIG` in the host's MCP server entry. With no argument
-and no env var, the wrapper reads `~/.atrib/wrap-config.json`.
+In an MCP host config, set the server `command` to `atrib-wrap` (or
+`npx -y @atrib/mcp-wrap`) with the config path as the argument, or set
+`ATRIB_WRAP_CONFIG` in the host's MCP server entry. With no argument and no env
+var, the wrapper reads `~/.atrib/wrap-config.json`. From a monorepo checkout,
+`node packages/mcp-wrap/dist/main.js path/to/wrap-config.json` runs the built
+binary directly.
+
+Signing runs through `@atrib/mcp`, so it inherits the [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)
+degradation contract: a per-call signing or log-submission failure is caught
+and never changes the upstream tool's response.
 
 ## Filesystem smoke
 

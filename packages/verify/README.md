@@ -23,6 +23,8 @@ const verifier = new AtribVerifier({
   logEndpoint: 'https://log.atrib.dev/v1',
 })
 
+// recommendationDoc is a §4.7 settlement RecommendationDocument produced by a
+// calculator or merchant (signed distribution over record hashes).
 const result = await verifier.verify(recommendationDoc)
 // {
 //   valid: true,
