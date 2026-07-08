@@ -483,7 +483,7 @@ This is what makes verification possible: the merchant's local recalculation is 
 
 Per the absolute invariant (also enforced in `@atrib/mcp` and `@atrib/agent`), atrib failures never break the host:
 
-- Missing or invalid `merchantKey` → constructor logs `atrib: ...` warning, `merchantPrivateKey = null`, no throw.
+- Missing or invalid `merchantKey` → constructor logs an `atrib: ...` warning, sets `merchantPrivateKey = null`, and does not throw.
 - `verify()` errors during signature resolution, graph fetch, or calculation are caught and surfaced as `warnings: string[]` with `valid = false`.
 - `calculate({ signWith: 'merchant' })` with a missing key returns an unsigned document plus a warning, rather than throwing.
 

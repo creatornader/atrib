@@ -14,7 +14,7 @@ extension's client or server side, in any language, with no atrib package
 required: `@atrib/mcp` (server side), `@atrib/agent` (client side),
 `@atrib/mcp-wrap` (the shim for non-adopting upstreams), and any third-party
 server that declares the capability directly. No signed byte of any record
-changes anywhere in this corpus — the extension gates only discovery and
+changes anywhere in this corpus. The extension gates only discovery and
 carriage. Chain-root semantics below the inbound-token rung remain pinned by
 [`spec/conformance/1.2.3/multi-producer/`](../1.2.3/multi-producer/), which
 these vectors compose with.
