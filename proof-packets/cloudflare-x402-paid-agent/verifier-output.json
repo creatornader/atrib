@@ -1,0 +1,90 @@
+{
+  "ok": true,
+  "strategy": "cloudflare-x402-paid-agent-action-gate-proof-v1",
+  "scope": {
+    "cloudflare_runtime": "workers-agents",
+    "x402_mode": "fixture-over-current-worker-primitives",
+    "gateway_beta_access": false,
+    "gateway_ingest_slot": "future-lifecycle-export"
+  },
+  "contract": {
+    "package": "@atrib/action-gate",
+    "event_types": {
+      "decision": "https://atrib.dev/v1/extensions/action-gate/decision",
+      "outcome": "https://atrib.dev/v1/extensions/action-gate/outcome"
+    }
+  },
+  "paid_action": {
+    "run_id": "cloudflare-x402-paid-agent-demo",
+    "action_id": "call-paid-mcp-dataset",
+    "agent_id": "cloudflare-agent-fixture",
+    "surface": "cloudflare-agents",
+    "tool_name": "mcp.paid-dataset.lookup",
+    "risk": [
+      "payment",
+      "paid_mcp_tool",
+      "external_read"
+    ],
+    "price": "0.01",
+    "network": "base-sepolia",
+    "asset": "USDC",
+    "route_id": "route-paid-mcp-dataset",
+    "rule_id": "rule-price-cap-usdc-cent"
+  },
+  "signed_records": {
+    "decision_record_hash": "sha256:4db4adfd348984eeba4ff53239a0b36e52ec9e8834624be5e75700fec47c375d",
+    "outcome_record_hash": "sha256:4e455132f503b6addf94086073d6b1f688b380b8c7c8e9b63609e009f4edc00f",
+    "decision_state": "allowed",
+    "outcome_status": "executed",
+    "outcome_informed_by_decision": true,
+    "verification_valid": true
+  },
+  "payment_lifecycle": {
+    "schema": "atrib.cloudflare-x402-paid-request-lifecycle.v1",
+    "source": "cloudflare_x402_worker_fixture",
+    "stage": "origin_response",
+    "request_id": "cf-x402-req-public-fixture-001",
+    "payment_attempt_id": "pay-attempt-public-fixture-001",
+    "route_id": "route-paid-mcp-dataset",
+    "rule_id": "rule-price-cap-usdc-cent",
+    "method": "POST",
+    "url_hash": "sha256:cb91b280dfdca321249ab57ee3057ef6f4b830c728a9f34a541f222927045499",
+    "price": "0.01",
+    "network": "base-sepolia",
+    "asset": "USDC",
+    "payer_hash": "sha256:ec934a0fa078ee8694385f9d476012472c6e0985db1d0e317ce32dd5889dc47b",
+    "payee_hash": "sha256:968f025f1375a9bfe17aa3802a59aeba68e9f894d5b67a1ad6ca1f6fac37a1f1",
+    "challenge_hash": "sha256:55b0826eaa3bb4c334fee6abaeabf73578433fb971c1751fa3efc5dba241f8c1",
+    "payment_response_hash": "sha256:db891968feabd5a2ff1f345f9190cb7e831debcaebf17d67cd174ca71b8d7808",
+    "settlement_reference_hash": "sha256:27818af933e482098578e8c0411d7e4a4353584eebcc8dcdcc6e63837248283f",
+    "origin_response_hash": "sha256:b7a31d531149338eda3063bb49ad34548916491103d2eb63313de1f412233d6e",
+    "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00",
+    "atrib_context_id": "83cf8d4891a3cda4a2c64ffa74dceb09",
+    "agent_session_id": "cloudflare-agent-session-public-fixture",
+    "decision_record_hash": "sha256:4db4adfd348984eeba4ff53239a0b36e52ec9e8834624be5e75700fec47c375d",
+    "outcome_record_hash": "sha256:4e455132f503b6addf94086073d6b1f688b380b8c7c8e9b63609e009f4edc00f",
+    "verify_status": "verified",
+    "settle_status": "settled"
+  },
+  "proof": {
+    "paid_action_allowed_by_policy": true,
+    "action_executed": true,
+    "outcome_cites_decision": true,
+    "lifecycle_bound_to_decision": true,
+    "lifecycle_bound_to_outcome": true,
+    "lifecycle_uses_hash_only_payment_artifacts": true,
+    "verification_valid": true
+  },
+  "privacy": {
+    "public_records_hash_only": true,
+    "raw_payment_headers_omitted": true,
+    "raw_wallet_material_omitted": true,
+    "raw_origin_payload_omitted": true,
+    "gateway_logs_omitted": true
+  },
+  "caveats": [
+    "This proof uses local x402 lifecycle fixtures over current Cloudflare Workers and Agents integration shapes.",
+    "It does not call Cloudflare Monetization Gateway beta APIs.",
+    "Gateway lifecycle ids and signed exports should replace the fixture source when beta access exposes them."
+  ]
+}

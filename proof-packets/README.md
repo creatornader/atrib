@@ -7,6 +7,7 @@ platform prospects.
 | --------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Browserbase Stagehand](browserbase-stagehand/)     | `packages/integration/examples/browserbase-stagehand/`        | Live hosted Browserbase MCP path, WebMCP target app demo, Browserbase replay inspection, and public log inclusion. Fixture mode stays available for local tests.                      |
 | [Firecrawl web ingestion](firecrawl-web-ingestion/) | `packages/integration/examples/firecrawl-web-ingestion/`      | Live Firecrawl MCP path, fixed-input ingestion demo, and downstream policy decision artifact. Fixture mode stays available for local tests.                                           |
+| [Cloudflare x402 paid agent](cloudflare-x402-paid-agent/) | `packages/integration/examples/cloudflare-agents/paid-x402-action-gate/` | Local Cloudflare Agents shaped paid MCP proof: Action Gate policy decision, outcome, and hash-only x402 lifecycle facts. Gateway beta access is not required. |
 | [OpenETR transfer](openetr-transfer/)               | `packages/integration/examples/openetr-transfer/`             | Source-backed OpenETR public-relay recognition path with public log inclusion, signed control records, title-authority evidence, legal/MLETR evidence, and an MLETR source checklist. |
 | [x401 open credential](x401-open-credential-e2e/)   | `packages/integration/scripts/open-x401-credential-packet.ts` | Current-spec x401 challenge, retry, result, local JWT VC / signed VP verifier, and signed atrib action chain. Sanitized offline-local packet, no Proof platform account required.     |
 
@@ -42,6 +43,12 @@ Firecrawl has a deployed live demo at
 design: no arbitrary URL, query, crawl depth, or crawl limit. Its packet
 includes `policy-decision.json`, which binds the signed ingestion records to a
 signed review gate for sensitive downstream actions.
+
+Cloudflare x402 paid agent uses a local proof shape. It signs the pre-payment
+policy decision and post-call outcome through `@atrib/action-gate`, then binds a
+hash-only paid request lifecycle to those record hashes. The packet models the
+current Cloudflare Workers and Agents x402 path and leaves an explicit slot for
+future Monetization Gateway lifecycle exports.
 
 x401 uses a different proof shape. The committed packet is an offline-local
 protocol artifact, not a live public-log run. It uses the released

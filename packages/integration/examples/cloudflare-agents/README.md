@@ -279,6 +279,31 @@ Run it with:
 pnpm --filter @atrib/cloudflare-approval-trace proof:worker
 ```
 
+### Paid x402 action gate
+
+The local proof at [`paid-x402-action-gate/`](paid-x402-action-gate/) models a
+paid MCP or API request behind Cloudflare Workers and Agents. It uses
+`@atrib/action-gate` to sign the policy decision before the paid call and the
+outcome after execution, then binds a hash-only x402 lifecycle to those record
+hashes.
+
+The lifecycle carries the parts Gateway should eventually expose as first-class
+request facts: request id, payment attempt id, route id, rule id, price,
+network, asset, challenge hash, payment-response hash, settlement reference
+hash, origin response hash, `traceparent`, and atrib context id. Raw payment
+headers, wallet material, origin payloads, and Gateway logs stay out of the
+public packet.
+
+Run it with:
+
+```text
+pnpm --filter @atrib/integration cloudflare-x402-paid-agent-proof
+```
+
+The committed proof packet is
+[`proof-packets/cloudflare-x402-paid-agent/`](../../../../proof-packets/cloudflare-x402-paid-agent/).
+It is fixture-only and does not call Cloudflare Monetization Gateway beta APIs.
+
 ### OAuth evidence infrastructure reference
 
 The reference at [`oauth-evidence-infra/`](oauth-evidence-infra/) is a Cloudflare

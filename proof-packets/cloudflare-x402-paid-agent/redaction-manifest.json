@@ -1,0 +1,41 @@
+{
+  "schema": "atrib.redaction-manifest.v1",
+  "packet": "cloudflare-x402-paid-agent",
+  "public_fields": [
+    "policy ids",
+    "route and rule ids",
+    "price",
+    "network",
+    "asset",
+    "record hashes",
+    "payment lifecycle hashes",
+    "traceparent",
+    "atrib context id"
+  ],
+  "redacted_fields": [
+    {
+      "field": "raw x402 challenge",
+      "public_replacement": "challenge_hash"
+    },
+    {
+      "field": "PAYMENT-RESPONSE header",
+      "public_replacement": "payment_response_hash"
+    },
+    {
+      "field": "wallet addresses",
+      "public_replacement": "payer_hash, payee_hash"
+    },
+    {
+      "field": "origin response body",
+      "public_replacement": "origin_response_hash"
+    },
+    {
+      "field": "Gateway logs",
+      "public_replacement": "omitted until Gateway export exists"
+    }
+  ],
+  "notes": [
+    "This packet is fixture-only and beta-independent.",
+    "No Cloudflare account secret, wallet secret, raw payment header, or origin payload is present."
+  ]
+}
