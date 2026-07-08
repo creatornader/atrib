@@ -102,6 +102,7 @@ atrib/
           live-worker-proof/   # Real Cloudflare Worker + Durable Object proof for server-side MCP signing and prior-action recall.
           live-client-proof/   # Real Cloudflare Agent.addMcpServer proof for client-side wrapping and fallback transaction signing.
           approval-trace/      # Interactive Cloudflare Agents HITL example: trigger -> CodemodeRuntime approval -> human decision -> signed audit trace.
+          paid-x402-action-gate/ # Local Cloudflare x402 paid-agent proof with Action Gate policy and hash-only lifecycle facts.
           oauth-evidence-infra/ # Cloudflare Worker + Durable Object reference for DPoP replay cache and OAuth introspection evidence.
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
@@ -131,7 +132,7 @@ atrib/
         graphiti/              # Graphiti MCP-shaped add/search/get episodes boundary proof through @atrib/mcp-wrap, plus optional real Graphiti core + Ollama proof.
         signer-proxy/          # D102 sandboxed-execution signer proxy example. Sandbox requests signatures, host signer keeps the key outside the sandbox.
   python/                       # atrib Python SDK (PyPI distribution `atrib`, unpublished; name verified available 2026-07-06). First non-TypeScript implementation of §1/§5: JCS via rfc8785, Ed25519 via cryptography, bit-for-bit resolve_chain_root port, §5.9 mirror conventions, §2.6.1 client-side validation, AtribClient attest/recall verbs under the §5.8 degradation contract. Byte-identity with the TS implementation is enforced by the shared conformance corpora and python/tests/cross_impl/ (D136). Not a pnpm workspace member; publishing follows docs/publishing-new-pypi-package.md.
-  proof-packets/                # External-facing proof artifacts and draft-only contact copy generated from integration examples. Browserbase Stagehand, Firecrawl web ingestion, OpenETR transfer, and x401 open credential proofs keep public evidence narrow and private upstream payloads hash-only.
+  proof-packets/                # External-facing proof artifacts and draft-only contact copy generated from integration examples. Browserbase Stagehand, Firecrawl web ingestion, Cloudflare x402 paid agent, OpenETR transfer, and x401 open credential proofs keep public evidence narrow and private upstream payloads hash-only.
   policies/                     # Attribution policy templates and guide (6 templates + README)
   skills/
     atrib/SKILL.md             # The atrib practice doc, agent-facing guidance for using atrib from the inside out (memory, reasoning, and continuity across sessions). Source of truth; symlinked into ~/.agents/skills/atrib/SKILL.md and ~/.claude/skills/atrib/SKILL.md so supported local agent hosts discover the same copy.

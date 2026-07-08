@@ -48,6 +48,13 @@
       "commands": []
     },
     {
+      "id": "cloudflare-x402-paid-agent",
+      "path": "examples/cloudflare-agents/paid-x402-action-gate",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["cloudflare-x402-paid-agent-proof"]
+    },
+    {
       "id": "vercel-ai-sdk",
       "path": "examples/vercel-ai-sdk",
       "record_class": "offline-local",
