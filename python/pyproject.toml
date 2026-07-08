@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "atrib"
-version = "0.1.0"
+version = "0.1.1"
 description = "atrib client SDK: verifiable agent actions. attest/recall verbs, Ed25519-signed chain-linked records, byte-identical to the TypeScript implementation."
 readme = "README.md"
 license = "Apache-2.0"

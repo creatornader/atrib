@@ -121,7 +121,7 @@ from .types import (
 )
 from .validation import ValidationResult, validate_submission
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "ANCHOR_CLAIM_PREFIX",
