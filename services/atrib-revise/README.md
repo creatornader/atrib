@@ -33,6 +33,8 @@ mcp__atrib-revise__atrib-revise({
 }
 ```
 
+The `revises` target is the `record_hash` of the prior position being superseded, for example one returned by a previous `atrib-emit` call or an `@atrib/recall` result.
+
 ## Writes
 
 Signs a `revision` record per spec [§1.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#124-event_type-values) (event_type `0x06`, promoted via [D059](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d059-promote-revision-to-atrib-normative-event_type-byte-0x06)) and persists it through the same pipeline `@atrib/emit` uses: same key resolution, same chain composition, same JSONL mirror at `ATRIB_MIRROR_FILE`. A verifier cannot distinguish revision records signed via this tool from revision records signed via `@atrib/emit`'s polymorphic surface; the wire format is identical.
@@ -52,6 +54,17 @@ The graph layer derives a REVISES edge from the new record to the `revises` targ
 ## Wire-up
 
 Add to your MCP host config (e.g. `~/.claude.json` `mcpServers`):
+
+```json
+{
+  "atrib-revise": {
+    "command": "npx",
+    "args": ["-y", "@atrib/revise"]
+  }
+}
+```
+
+For a monorepo checkout or local development, point at the built binary directly:
 
 ```json
 {
@@ -80,7 +93,7 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/revise start`.
 
 ## Status
 
-Initial scaffold (v0.2.0). Cognitive primitive #3 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/annotate` covers the importance-and-meaning primitive (annotation event_type).
+Published and maintained. Cognitive primitive #3 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/annotate` covers the importance-and-meaning primitive (annotation event_type).
 
 ## License
 

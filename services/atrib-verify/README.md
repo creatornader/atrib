@@ -31,6 +31,32 @@ mcp__atrib-verify__atrib-verify({
 })
 ```
 
+A worked call. Agent B received agent A's records (as a local-mirror envelope
+or a continuation packet) and wants to cite them in its own follow-up work.
+Verify them first, then link only the accepted hashes through `informed_by`:
+
+```ts
+mcp__atrib-verify__atrib-verify({
+  packet: {
+    required_record_hashes: ['sha256:<64-hex-of-A-record>'],
+    records: [
+      {
+        record: {
+          /* a full signed AtribRecord produced by agent A */
+        },
+        proof: {
+          /* optional inclusion proof from the public log */
+        },
+      },
+    ],
+    trusted_creator_keys: ['<agent-A-base64url-creator-key>'],
+  },
+  require_log_inclusion: true,
+})
+// The response's accepted hashes are the ones that passed every check.
+// Cite only those in the follow-up record's informed_by.
+```
+
 ## Evidence
 
 `packet`, `records`, and `claims` accept the same evidence shapes as `@atrib/verify`:

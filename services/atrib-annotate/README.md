@@ -32,6 +32,8 @@ mcp__atrib-annotate__atrib-annotate({
 }
 ```
 
+The `annotates` target is the `record_hash` of a prior record, for example one returned by a previous `atrib-emit` call or an `@atrib/recall` result.
+
 ## Writes
 
 Signs an `annotation` record per spec [§1.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#124-event_type-values) (event_type `0x05`, promoted via [D058](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05)) and persists it through the same pipeline `@atrib/emit` uses: same key resolution, same chain composition, same JSONL mirror at `ATRIB_MIRROR_FILE`. A verifier cannot distinguish annotation records signed via this tool from annotation records signed via `@atrib/emit`'s polymorphic surface; the wire format is identical.
@@ -50,6 +52,17 @@ The graph layer derives an ANNOTATES edge from the new record to the `annotates`
 ## Wire-up
 
 Add to your MCP host config (e.g. `~/.claude.json` `mcpServers`):
+
+```json
+{
+  "atrib-annotate": {
+    "command": "npx",
+    "args": ["-y", "@atrib/annotate"]
+  }
+}
+```
+
+For a monorepo checkout or local development, point at the built binary directly:
 
 ```json
 {
@@ -78,7 +91,7 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/annotate start`.
 
 ## Status
 
-Initial scaffold (v0.2.0). Cognitive primitive #2 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/revise` covers the contradiction-handling primitive (revision event_type).
+Published and maintained. Cognitive primitive #2 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/revise` covers the contradiction-handling primitive (revision event_type).
 
 ## License
 

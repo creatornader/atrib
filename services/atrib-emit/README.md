@@ -220,7 +220,7 @@ Broad default dogfood configs should wait for the process-health rollout gate in
 
 The package ships three binaries:
 
-- **`atrib-emit`**: the MCP server. Long-lived in an agent's MCP host (Claude Code, Claude Desktop). Surfaces the six [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) cognitive primitives to the agent at tool-discovery time. Use this for interactive in-session signing.
+- **`atrib-emit`**: the MCP server. Long-lived in an agent's MCP host (Claude Code, Claude Desktop). Surfaces the seven [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) cognitive primitives to the agent at tool-discovery time. Use this for interactive in-session signing.
 - **`atrib-emit-cli`**: a thin command-line wrapper around `emitInProcess` per [D082](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape). Reads one JSON envelope on stdin, signs the record in-process, writes the `EmitOutput` JSON to stdout. Use this for hook-class producers (Claude Code PostToolUse + lifecycle hooks, watchers, batch jobs) that spawn a short-lived signer rather than holding an MCP server warm.
 - **`atrib-local-substrate`**: a host-owned loopback HTTP coordinator process for opt-in P042 trials. Use this under a supervisor when several harnesses should target one local substrate boundary.
 
@@ -242,11 +242,26 @@ atrib-emit-cli doctor                  # exits 0 if key + log + mirror all ok, n
 atrib-emit-cli --describe              # stable JSON description for agent / tooling discovery
 ```
 
+Signing requires a resolvable key; without one the record is a warnings-only stub. See Key resolution below.
+
 Exit code on `emit` is always 0 per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); failures surface as warnings inside the result JSON or as a stderr diagnostic line. `doctor` exits non-zero on failure because it is an operator-facing diagnostic, not a hook-safe command.
 
 ## Installation in an MCP host
 
 For Claude Code or Claude Desktop, add to the MCP config:
+
+```jsonc
+{
+  "mcpServers": {
+    "atrib-emit": {
+      "command": "npx",
+      "args": ["-y", "@atrib/emit"],
+    },
+  },
+}
+```
+
+For a monorepo checkout or local development, point at the built binary directly:
 
 ```jsonc
 {
@@ -304,7 +319,7 @@ Both line shapes are accepted at read time: bare `AtribRecord` (the wrapper's co
 ## What v1 does NOT do
 
 - **No semantic validation of `content`.** Caller passes any shape; the verifier eventually derives edges based on the spec for normative event types. v2 could add per-event-type schemas.
-- **No annotation-specific tool.** v1 has one `emit` tool that handles all event types. v2 will add `atrib-annotate` with annotation-specific affordances (importance picker, automatic `annotates` linkage to most recent action).
+- Annotation and revision ship as separate primitives, `@atrib/annotate` and `@atrib/revise`.
 - **No batch mode.** One emit per call. v2 if a high-volume producer needs it.
 
 ## Test strategy

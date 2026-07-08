@@ -81,6 +81,17 @@ Add to your MCP host config (e.g. `~/.claude.json` `mcpServers`):
 ```json
 {
   "atrib-trace": {
+    "command": "npx",
+    "args": ["-y", "@atrib/trace"]
+  }
+}
+```
+
+For a monorepo checkout or local development, point at the built binary directly:
+
+```json
+{
+  "atrib-trace": {
     "command": "node",
     "args": ["/path/to/atrib-trace/dist/main.js"]
   }
@@ -91,7 +102,7 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/trace start`.
 
 ## Status
 
-Initial scaffold (v0.1.0). 8 tests covering: empty-mirror, single-record, one-hop walk, multi-hop chain, depth truncation, diamond fan-in, dangling references, max_nodes cap. Full workspace tests green.
+Published and maintained. 8 tests covering: empty-mirror, single-record, one-hop walk, multi-hop chain, depth truncation, diamond fan-in, dangling references, max_nodes cap. Full workspace tests green.
 
 The companion consumer-side primitive `atrib-summarize` (synthesizes narrative across N records) is the next ship.
 
