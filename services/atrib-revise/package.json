@@ -1,6 +1,6 @@
 {
   "name": "@atrib/revise",
-  "version": "0.2.37",
+  "version": "0.2.38",
   "description": "MCP server for Atrib's verifiable action layer. Lets agents supersede a prior signed position with a stated reason.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [

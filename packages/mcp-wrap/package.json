@@ -1,6 +1,6 @@
 {
   "name": "@atrib/mcp-wrap",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "Config-driven MCP wrapper for Atrib's verifiable action layer. Gates, signs, logs, and mirrors tool calls from any upstream MCP server.",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

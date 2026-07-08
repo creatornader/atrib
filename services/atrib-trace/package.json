@@ -1,6 +1,6 @@
 {
   "name": "@atrib/trace",
-  "version": "0.5.17",
+  "version": "0.5.18",
   "description": "MCP server for Atrib's verifiable action layer. Walks informed_by chains to show the signed relationship path.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [

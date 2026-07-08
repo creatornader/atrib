@@ -1,5 +1,18 @@
 # @atrib/agent
 
+## 0.3.0
+
+### Minor Changes
+
+- 3c8e63d: Add client-side `dev.atrib/attribution` extension support per [D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133): declare the extension on outbound requests and parse attestation receipts from `result._meta`, behind an opt-in flag with unchanged behavior when unset.
+
+### Patch Changes
+
+- Updated dependencies [3c8e63d]
+- Updated dependencies [3c8e63d]
+  - @atrib/mcp@0.19.0
+  - @atrib/verify@0.8.0
+
 ## 0.2.23
 
 ### Patch Changes
