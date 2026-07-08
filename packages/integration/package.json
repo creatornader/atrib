@@ -51,6 +51,7 @@
     "microsoft-agent-framework-workflow-smoke": "tsx examples/microsoft-agent-framework/microsoft-agent-framework-smoke.ts",
     "action-control-gate-smoke": "tsx examples/action-control-gate/action-control-gate-smoke.ts",
     "cloudflare-x402-paid-agent-proof": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/action-gate build && tsx examples/cloudflare-agents/paid-x402-action-gate/paid-x402-action-gate-smoke.ts",
+    "cloudflare-x402-path-b-reference": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/action-gate build && pnpm --filter @atrib/agent build && tsx examples/cloudflare-agents/x402-path-b-reference/x402-path-b-reference-smoke.ts",
     "browser-workflow-receipt-smoke": "tsx examples/browser-workflow/browser-workflow-receipt-smoke.ts",
     "browser-use-workflow-receipt-smoke": "tsx examples/browser-workflow/browser-use-workflow-receipt-smoke.ts",
     "stagehand-workflow-receipt-smoke": "tsx examples/browser-workflow/stagehand-workflow-receipt-smoke.ts",
