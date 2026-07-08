@@ -231,7 +231,7 @@ Returns a `SubmissionQueue`-aware wrapper exposing:
 
 ### Local substrate coordinator contract
 
-Per [P042](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p042-local-substrate-coordinator-for-long-lived-and-multi-harness-dogfood), `@atrib/mcp` exports the shared request and health-report contract for optional host-owned local coordinators:
+Per [D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-local-substrate-coordinator-for-long-lived-and-multi-harness-dogfood), `@atrib/mcp` exports the shared request and health-report contract for optional host-owned local coordinators:
 
 ```typescript
 import {

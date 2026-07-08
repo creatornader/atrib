@@ -1,6 +1,6 @@
 ---
 name: atrib
-version: 0.3.6
+version: 0.4.0
 description: |
   Use atrib as the verifiable substrate for memory, reasoning, and getting
   sharper over time, not as instrumentation that observes you from the
@@ -371,6 +371,55 @@ The input can be a continuation packet, [D062](../../DECISIONS.md#d062-local-mir
 
 The rule is simple: if you are going to build on another agent's claim, verify first, then link only accepted hashes.
 
+## Orchestration topology: baton-pass and join records ([D142](../../DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions))
+
+When work moves between agents, two routing events deserve signed records that the graph does not otherwise capture: the decision to hand work to another agent (**baton-pass**) and the decision to accept or reject fan-out results (**join**). Both are conventional `atrib-emit` observation content shapes, not new primitives and not new event types (the [D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) boundary test: no new required args, no new graph effect).
+
+**Baton-pass** — sign at handoff, from the sender's key:
+
+```typescript
+await mcp__atrib_emit__emit({
+  event_type: 'https://atrib.dev/v1/types/observation',
+  content: {
+    what: 'Handing <work> to <receiver role> for <phase>.',
+    baton: {
+      target_harness_role: 'relay-executor', // role terms, never internal product names
+      target_principal: '<base64url key>',   // optional, when known
+      packet_hash: 'sha256:<64-hex>',        // hash of the continuation packet
+      reason: 'mechanical self-contained package with executable acceptance gates',
+    },
+    topics: ['baton-pass'],
+  },
+  informed_by: [/* the records whose work the packet hands over */],
+})
+```
+
+The continuation packet itself attaches as the `continuation-packet` evidence-envelope profile ([docs/evidence-profiles/continuation-packet.md](../../docs/evidence-profiles/continuation-packet.md)): the hash and role-term routing facts may be public; the packet body stays private by default. The successor's first signed act is a **receipt**: an observation whose `informed_by` names the baton record and whose content restates the packet hash it received.
+
+**Join** — sign when integrating fan-out results:
+
+```typescript
+await mcp__atrib_emit__emit({
+  event_type: 'https://atrib.dev/v1/types/observation',
+  content: {
+    what: 'Joined <N> fan-out results for <task>: <M> accepted, <K> rejected.',
+    join: {
+      accepted: ['sha256:…', 'sha256:…'],
+      rejected: [{ record_hash: 'sha256:…', reason: 'failed adversarial verify' }],
+    },
+    topics: ['join'],
+  },
+  informed_by: [/* exactly the accepted record hashes */],
+})
+```
+
+Discipline for both shapes:
+
+- **Verify before you join.** Results from other signers pass through `atrib-verify` first (previous section); only accepted hashes enter `join.accepted` and `informed_by`. Rejected results are routing facts in content, never influence claims in `informed_by`.
+- **Role terms in `baton` facts.** `target_harness_role` uses role vocabulary (`successor-session`, `relay-executor`, `loop-layer`); local tool names belong in the packet body, not in signed content or envelope facts.
+- **Authority, when it matters.** For cross-harness or sandboxed receivers, pair the baton with a [§1.11](../../atrib-spec.md#111-delegation-certificates) delegation certificate; the profile's `verified` tier binds `target_principal` to the certificate walk.
+- Per-agent model/effort/token-spend accounting on these records is [P051](../../DECISIONS.md#p051-orchestration-infrastructure-dogfood-wiring-with-cost-and-routing-accounting)'s scope, pending, not yet convention.
+
 ## Multi-producer composition (the density picture)
 
 You are one signer in a multi-producer system. The graph density that makes recall useful comes from many surfaces composing:
@@ -502,4 +551,4 @@ These are honest gaps in the verification stack and producer-side cognitive surf
 - **Warning-only**: [§6.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#63-verifier-consultation-algorithm) verifier-consultation steps 1, 3, 4, 5, 7 surface explicit `IMPLEMENTATION-GAP` warnings rather than silently passing. These cover anchor freshness, witness coverage, directory checkpoint signature, append-only consistency, and AKD lookup proof validation.
 - **Not yet implemented**: cross-log replication / equivocation detection ([D050](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) / [§2.11](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#211-cross-log-replication)), HKDF sub-agent identity derivation, periodic directory anchoring, emergency-key compromise path, and archive retrieval inside `atrib-verify`. The `log.atrib.dev` SSE / JSON Feed subscription surface is implemented per [D103](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields); an embedded spec viewer at `atrib.dev` is queued at [P024](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p024-embedded-spec-viewer-at-atribdev-auto-updated-from-spec-source).
 
-The skill is the practice; the substrate is the mechanism. Both evolve. When this skill version (v0.3.6) feels stale, rewrite it again.
+The skill is the practice; the substrate is the mechanism. Both evolve. When this skill version (v0.4.0) feels stale, rewrite it again.

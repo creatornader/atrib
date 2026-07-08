@@ -52,3 +52,21 @@ export type {
   LangchainMultiServerMcpClientLike,
   AttributeLangchainMcpOptions,
 } from './adapters/langchain-mcp.js'
+
+// dev.atrib/attribution MCP extension v0.1, client side (D141 / spec
+// §1.5.4.1). Declare the extension per-request and parse gated receipts
+// from result._meta; both §5.8-safe, both opt-in.
+export {
+  ATTRIBUTION_ACCEPT_VALUES,
+  ATTRIBUTION_EXTENSION_ID,
+  ATTRIBUTION_EXTENSION_VERSION,
+  MCP_CLIENT_CAPABILITIES_META_KEY,
+  declareAttributionExtension,
+  parseAttributionReceipt,
+} from './extension-attribution.js'
+export type {
+  AttributionAcceptValue,
+  AttributionReceipt,
+  AttributionResultBlock,
+  DeclareAttributionExtensionOptions,
+} from './extension-attribution.js'

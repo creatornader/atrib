@@ -18,12 +18,15 @@ import {
 } from './refs.js'
 import { resolveChainRoot } from './chain-root.js'
 import { readInboundContext, writeOutboundContext, parseBaggageAtribSession } from './context.js'
+import { applyAttributionReceipt } from './extension-attribution.js'
 import { signRecord, getPublicKey } from './signing.js'
 import { hexEncode, sha256 } from './hash.js'
 import { canonicalRecord } from './canon.js'
 import canonicalize from 'canonicalize'
 import { encodeToken } from './token.js'
 import { createSubmissionQueue } from './submission.js'
+import { createAnchorFanout } from './anchors.js'
+import type { AnchorSetConfig } from './anchors.js'
 import { zeroize } from './zeroize.js'
 import { EVENT_TYPE_TOOL_CALL_URI, EVENT_TYPE_TRANSACTION_URI } from './types.js'
 import { buildMcpOAuthEvidenceFromExtra } from './oauth-evidence.js'
@@ -202,6 +205,13 @@ export interface AtribOptions {
    * Defaults to 'enabled'.
    */
   logSubmission?: 'enabled' | 'disabled'
+  /**
+   * Opt-in anchor plurality (D138, §2.11.12). When set, every record handed
+   * to the log submission queue also fans out to the configured anchor set,
+   * fire-and-forget (§5.3.5) and silent-failure (§5.8). Absent = current
+   * single-log behavior, unchanged.
+   */
+  anchors?: AnchorSetConfig
   /**
    * Opt-in record body archive submission. When set, the middleware submits
    * the signed record body plus selected verifier evidence to the archive
@@ -415,6 +425,24 @@ export interface AtribOptions {
    * queue. Rejection, timeout, or hash mismatch falls back to the local queue.
    */
   localSubstrateCommit?: LocalSubstrateCommitOptions
+  /**
+   * Opt-in `dev.atrib/attribution` MCP extension receipts (D141 / spec
+   * §1.5.4.1; extension spec docs/extensions/dev.atrib-attribution/v0.1.md).
+   *
+   * When true, successful tool calls whose client declared the extension on
+   * THAT request (per-request `io.modelcontextprotocol/clientCapabilities`
+   * in `_meta`, or a legacy `initialize`-time declaration supplied by the
+   * host) additionally receive the gated `dev.atrib/attribution` block in
+   * `result._meta`: the propagation token plus an attestation receipt naming
+   * the already-signed record, with `log_submission` reported as a queue
+   * status (`'disabled'` under `logSubmission: 'disabled'`, else `'queued'`)
+   * — never an awaited proof (§5.3.5).
+   *
+   * Default false: zero behavior change. The legacy unprefixed result keys
+   * (`atrib`, `tracestate`, `X-Atrib-Chain`) are written unconditionally
+   * either way, and receipt emission failures degrade silently per §5.8.
+   */
+  extensionAttribution?: boolean
 }
 
 /** Extended McpServer with atrib-specific methods. */
@@ -480,7 +508,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     )
   }
   const transactionTools = new Set(options.transactionTools ?? [])
-  const queue: SubmissionQueue =
+  const baseQueue: SubmissionQueue =
     options.logSubmission === 'disabled'
       ? createNoopSubmissionQueue()
       : createSubmissionQueue(options.logEndpoint, {
@@ -489,6 +517,24 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
             ? { archiveSubmission: options.archiveSubmission }
             : {}),
         })
+  // D138 anchor plurality: opt-in fan-out wrapper over the queue boundary.
+  // Identical queue object when `anchors` is unset; fan-out legs are
+  // fire-and-forget per §5.3.5 and silent-failure per §5.8.
+  const anchorFanout =
+    options.anchors !== undefined ? createAnchorFanout({ config: options.anchors }) : undefined
+  const queue: SubmissionQueue = anchorFanout
+    ? {
+        submit(record, priority, sidecar) {
+          baseQueue.submit(record, priority, sidecar)
+          anchorFanout.submitToAnchors(record, priority)
+        },
+        getProof: (hash) => baseQueue.getProof(hash),
+        flush: async () => {
+          await baseQueue.flush()
+          await anchorFanout.flush()
+        },
+      }
+    : baseQueue
 
   // autoChain bookkeeping (process-lifetime, opt-in via options.autoChain).
   // Stable context_id for sessions where the caller never sets traceparent;
@@ -1236,6 +1282,18 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         )
         if (sidecarEvidence.length > 0) sidecar.authorizationEvidence = sidecarEvidence
         commitRecord(built, resultObj, sidecar)
+
+        // D141 / §1.5.4.1: opt-in dev.atrib/attribution receipt, gated on the
+        // client having declared the extension on THIS request. Runs after
+        // commitRecord so the legacy outbound keys are already in place;
+        // applyAttributionReceipt is §5.8-safe (never throws, never mutates
+        // the result on failure) and reports log_submission as a queue
+        // status — submission itself stays non-blocking per §5.3.5.
+        if (options.extensionAttribution === true) {
+          applyAttributionReceipt(resultObj, params._meta, built.signed, {
+            logSubmission: options.logSubmission === 'disabled' ? 'disabled' : 'queued',
+          })
+        }
 
         return result
       } catch (err) {

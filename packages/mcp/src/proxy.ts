@@ -49,6 +49,10 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { atrib, type AtribOptions, type AtribServer } from './middleware.js'
+import {
+  ATTRIBUTION_EXTENSION_ID,
+  ATTRIBUTION_EXTENSION_VERSION,
+} from './extension-attribution.js'
 
 /** Upstream MCP server transport options. */
 export type UpstreamTransport =
@@ -161,7 +165,30 @@ export async function createAtribProxy(options: AtribProxyOptions): Promise<Atri
   // setRequestHandler lets us pass JSON Schema through unchanged.
   const localServer = new McpServer(
     { name: options.name, version: options.version ?? '0.0.0' },
-    { capabilities: { tools: {} } },
+    {
+      capabilities: {
+        tools: {},
+        // D141 / extension spec §4.1: when the shim opts in, advertise
+        // dev.atrib/attribution in the initialize result so pre-extension
+        // upstreams present the extension through the proxy. Advisory only:
+        // trust derives from verifying signed records and inclusion proofs,
+        // never from this capability map.
+        ...(options.atrib.extensionAttribution === true
+          ? {
+              extensions: {
+                [ATTRIBUTION_EXTENSION_ID]: {
+                  version: ATTRIBUTION_EXTENSION_VERSION,
+                  signs: options.atrib.transactionTools?.length
+                    ? ['tool_call', 'transaction']
+                    : ['tool_call'],
+                  receipts: ['token', 'record'],
+                  ...(options.atrib.logEndpoint ? { logs: [options.atrib.logEndpoint] } : {}),
+                },
+              },
+            }
+          : {}),
+      },
+    },
   )
 
   // ── 4. Apply atrib() middleware BEFORE registering handlers ──────────

@@ -289,6 +289,10 @@ export async function wrap(
       ...(autoChainSeed.length > 0 ? { autoChainSeed } : {}),
       ...(transactionTools.length > 0 ? { transactionTools } : {}),
       autoDetectInformedByFromArgs: config.autoDetectInformedByFromArgs,
+      // D141 shim: when the wrap config opts in, the proxy advertises the
+      // dev.atrib/attribution capability and the middleware emits gated
+      // receipts, so a non-adopting upstream presents the extension.
+      ...(config.extensionAttribution ? { extensionAttribution: true } : {}),
       ...(informedBy ? { informedBy } : {}),
       recordReferenceResolver,
       ...(config.disclosure ? { disclosure: config.disclosure } : {}),
