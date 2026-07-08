@@ -21,6 +21,9 @@
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "mcp",
     "model-context-protocol",
