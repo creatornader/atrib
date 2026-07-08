@@ -87,13 +87,15 @@ exist yet ("pending publisher"), which is the preferred path:
 
 ## Later releases (CI, trusted publishing)
 
-Later releases go through a GitHub Actions workflow using
-`pypa/gh-action-pypi-publish` with OIDC (no long-lived tokens), gated on the
-same preflight (pytest + mypy + cross-impl harness + doc-sync). The workflow
-does not exist yet; create it alongside the first publish and mirror
+Later releases go through
+[`.github/workflows/release-pypi.yml`](../.github/workflows/release-pypi.yml)
+(manual dispatch from main), which uses `pypa/gh-action-pypi-publish` with
+OIDC (no long-lived tokens), gates on the same preflight (pytest + mypy +
+cross-impl harness + doc-sync + a version-consistency check), and mirrors
 `release.yml`'s posture (build once, publish the exact artifacts that were
-tested). Changesets does not manage Python versions — bump
-`project.version` and `atrib.__version__` together in the release commit.
+tested; the publish job binds to the `pypi` environment). Changesets does
+not manage Python versions — bump `project.version` and `atrib.__version__`
+together in the release commit, then dispatch the workflow.
 
 ## Naming
 
