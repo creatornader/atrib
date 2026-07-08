@@ -1,0 +1,132 @@
+{
+  "name": "tier-ladder-all-four",
+  "spec_section": "5.5.7",
+  "family": "tier",
+  "description": "One payload (a compact-JWT-shaped string, hashed over raw UTF-8 bytes per the application/jwt rule) carried at all four tiers by different verifier parties. All four instances share the identity key (profile, payload.hash); multiple instances per key are permitted; consumers order by tier descending, then checked_at_ms descending, then verifier name.",
+  "input": {
+    "envelopes": [
+      {
+        "envelope": 1,
+        "profile": "https://atrib.dev/v1/evidence/oauth2",
+        "profile_version": "1.0.0",
+        "payload": {
+          "hash": "sha256:98d45081f8667ab997c70eb72113a99d157d9e201bb988115d04512371c96776",
+          "media_type": "application/jwt",
+          "ref": {
+            "kind": "mirror"
+          }
+        },
+        "facts": {
+          "issuer": "https://as.example",
+          "subject": "agent-7"
+        },
+        "result": {
+          "valid": true,
+          "constraints": [],
+          "errors": [],
+          "warnings": []
+        },
+        "tier": "declared"
+      },
+      {
+        "envelope": 1,
+        "profile": "https://atrib.dev/v1/evidence/oauth2",
+        "profile_version": "1.0.0",
+        "payload": {
+          "hash": "sha256:98d45081f8667ab997c70eb72113a99d157d9e201bb988115d04512371c96776",
+          "media_type": "application/jwt",
+          "ref": {
+            "kind": "mirror"
+          }
+        },
+        "facts": {
+          "issuer": "https://as.example",
+          "subject": "agent-7"
+        },
+        "result": {
+          "valid": true,
+          "constraints": [],
+          "errors": [],
+          "warnings": []
+        },
+        "tier": "shape",
+        "verifier": {
+          "name": "offline-shape-checker",
+          "checked_at_ms": 1782864000001
+        }
+      },
+      {
+        "envelope": 1,
+        "profile": "https://atrib.dev/v1/evidence/oauth2",
+        "profile_version": "1.0.0",
+        "payload": {
+          "hash": "sha256:98d45081f8667ab997c70eb72113a99d157d9e201bb988115d04512371c96776",
+          "media_type": "application/jwt",
+          "ref": {
+            "kind": "mirror"
+          }
+        },
+        "facts": {
+          "issuer": "https://as.example",
+          "subject": "agent-7"
+        },
+        "result": {
+          "valid": true,
+          "constraints": [],
+          "errors": [],
+          "warnings": []
+        },
+        "tier": "attested",
+        "verifier": {
+          "name": "introspection-gateway",
+          "checked_at_ms": 1782864000002
+        }
+      },
+      {
+        "envelope": 1,
+        "profile": "https://atrib.dev/v1/evidence/oauth2",
+        "profile_version": "1.0.0",
+        "payload": {
+          "hash": "sha256:98d45081f8667ab997c70eb72113a99d157d9e201bb988115d04512371c96776",
+          "media_type": "application/jwt",
+          "ref": {
+            "kind": "mirror"
+          }
+        },
+        "facts": {
+          "issuer": "https://as.example",
+          "subject": "agent-7"
+        },
+        "result": {
+          "valid": true,
+          "constraints": [],
+          "errors": [],
+          "warnings": []
+        },
+        "tier": "verified",
+        "verifier": {
+          "name": "@atrib/verify",
+          "version": "0.7.10",
+          "checked_at_ms": 1782864000003
+        }
+      }
+    ],
+    "payload_material_utf8": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2FzLmV4YW1wbGUiLCJzdWIiOiJhZ2VudC03In0.Zml4dHVyZS1zaWduYXR1cmUtbm90LXZlcmlmaWFibGU",
+    "payload_hash_rule": "raw"
+  },
+  "expected": {
+    "accept_all": true,
+    "payload_hash": "sha256:98d45081f8667ab997c70eb72113a99d157d9e201bb988115d04512371c96776",
+    "identity_key": {
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "payload_hash": "sha256:98d45081f8667ab997c70eb72113a99d157d9e201bb988115d04512371c96776"
+    },
+    "shared_identity_key": true,
+    "tier_order_descending": [
+      "verified",
+      "attested",
+      "shape",
+      "declared"
+    ]
+  }
+}

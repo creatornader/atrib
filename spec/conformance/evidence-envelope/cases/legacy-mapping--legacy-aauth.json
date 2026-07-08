@@ -1,0 +1,127 @@
+{
+  "name": "legacy-aauth",
+  "spec_section": "5.5.7",
+  "family": "legacy-mapping",
+  "description": "Deterministic mapping of a legacy §5.5.6 'aauth' evidence block to envelope form. Two independent implementations of fromLegacyEvidenceBlock MUST produce this exact envelope: profile via the frozen five-row table, profile_version '1.0.0', tier 'attested', payload.hash = sha256(JCS(legacy block)) with ref.kind 'withheld', issuer/subject/scope/attenuation_ok/delegation_ok copied into facts, details committed as facts.details_hash = sha256(JCS(details)), valid/constraints/errors/warnings copied into result, and NO verifier block (the mapping is mechanical, not a re-verification).",
+  "input": {
+    "legacy_block": {
+      "protocol": "aauth",
+      "valid": true,
+      "issuer": "https://as.aauth.example",
+      "subject": "agent-7",
+      "scope": [
+        "calendar:read"
+      ],
+      "attenuation_ok": true,
+      "delegation_ok": true,
+      "constraints": [
+        {
+          "type": "scope",
+          "status": "passed",
+          "expected": [
+            "calendar:read"
+          ],
+          "actual": [
+            "calendar:read"
+          ]
+        },
+        {
+          "type": "aauth.typ",
+          "status": "passed",
+          "expected": "aa-agent+jwt",
+          "actual": "aa-agent+jwt"
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "details": {
+        "token": {
+          "jwt_present": true,
+          "verified": true,
+          "claims_verified": true,
+          "alg": "ES256",
+          "kid": "aauth-k1",
+          "typ": "aa-agent+jwt",
+          "token_kind": "agent_token",
+          "jti": "aauth-jti-1",
+          "cnf_jkt": null,
+          "agent": "agent-7",
+          "parent_agent": null,
+          "act_chain": []
+        },
+        "http_signature": {
+          "present": false,
+          "verified": null,
+          "scheme": null,
+          "covered_components": [],
+          "signing_key_jkt": null
+        },
+        "access_mode": "delegated",
+        "audience": [
+          "https://resource.example"
+        ],
+        "resource": [
+          "https://resource.example"
+        ],
+        "mission": null,
+        "r3": {
+          "present": false,
+          "uri": null,
+          "s256": null,
+          "granted": [],
+          "document_hash_verified": null
+        }
+      }
+    }
+  },
+  "expected": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/aauth",
+      "profile_version": "1.0.0",
+      "tier": "attested",
+      "payload": {
+        "hash": "sha256:51aa794c95051ac3efa647332e89d5934ca0c89cc39e9cdfc341307e82cf893e",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "facts": {
+        "issuer": "https://as.aauth.example",
+        "subject": "agent-7",
+        "scope": [
+          "calendar:read"
+        ],
+        "attenuation_ok": true,
+        "delegation_ok": true,
+        "details_hash": "sha256:eb20b7e023e2c64d181ec7b7563d0ab251a50c135623029f44b0d0bb9dfc76d3"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [
+          {
+            "type": "scope",
+            "status": "passed",
+            "expected": [
+              "calendar:read"
+            ],
+            "actual": [
+              "calendar:read"
+            ]
+          },
+          {
+            "type": "aauth.typ",
+            "status": "passed",
+            "expected": "aa-agent+jwt",
+            "actual": "aa-agent+jwt"
+          }
+        ],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "payload_hash": "sha256:51aa794c95051ac3efa647332e89d5934ca0c89cc39e9cdfc341307e82cf893e",
+    "details_hash": "sha256:eb20b7e023e2c64d181ec7b7563d0ab251a50c135623029f44b0d0bb9dfc76d3"
+  }
+}

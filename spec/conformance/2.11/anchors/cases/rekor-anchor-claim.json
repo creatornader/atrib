@@ -1,0 +1,106 @@
+{
+  "name": "rekor-anchor-claim",
+  "spec_section": "2.11",
+  "description": "The anchoring-signature claim artifact: a sigstore-rekor element whose entry body carries a FRESH Ed25519 signature over the reconstructible claim bytes \"atrib-anchor/v1:\" + record_hash. The anchoring key differs from creator_key. Inclusion proof, checkpoint signature, and signed entry timestamp all verify. Plurality met with the atrib-log proof.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "chain_root": "sha256:d2f9fa9d99bb30b2b67fc6b0ea2694f345c0961596e0fd82561010b4f7570c2d",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1782864001000,
+      "signature": "gZpzxEt_HU3z3ayWrVnvBW8BcXzdHvD569YYhyzAiAi4yHfSelWegRdc-EEG84wQn8CPufGNq1LlrIjzB800DQ"
+    },
+    "bundle": {
+      "record_hash": "sha256:c09397f49d090eab97ab27fee627abbcbf6148fba1fd6a0f947558f692952934",
+      "log_proofs": [
+        {
+          "log_id": "log-a.conformance.atrib.test",
+          "log_index": 0,
+          "checkpoint": "log-a.conformance.atrib.test/v1\n3\nEgAJl9+zFghvMxoxbQlD+atiMO7u4erg13oGcySgICQ=\n\n— log-a.conformance.atrib.test/v1 kmTjQcVVBPyrdSaW0KHbme5cJbYbIP3ivJM6Vcnupyi38POqnbxBfdgrjC3EGJX0ZQiXWh0voFl8qWjXBsNA9ZOxwgU=\n",
+          "inclusion_proof": [
+            "P8mq66PW2NMzd9DwG30sGONwehi0EIZjrMp/YAWPmeY=",
+            "FSGXJV61xj1N7eil6bSyKm0qp3i45mdPD2HMjM2BKro="
+          ],
+          "entry_bytes_b64": "AcCTl/SdCQ6rl6sn/uYnq7y/YUj7of1qD5R1WPaSlSk0wFDFY3pE+oYp//PMzOIwDLNipj2Z2V/FQUUmb0MyRFqrq6urq6urq6urq6urq6urAAABnxr5t+gD"
+        },
+        {
+          "anchor_type": "sigstore-rekor",
+          "anchor_id": "rekor.conformance.atrib.test",
+          "proof": {
+            "entry_uuid": "bdbcbdba38411d47a0222f86a832065e2c9ebc94843b0771bd85b9992249b1b6",
+            "log_index": 0,
+            "entry_body_b64": "eyJhcnRpZmFjdF9iNjQiOiJZWFJ5YVdJdFlXNWphRzl5TDNZeE9uTm9ZVEkxTmpwak1Ea3pPVGRtTkRsa01Ea3daV0ZpT1RkaFlqSTNabVZsTmpJM1lXSmlZMkptTmpFME9HWmlZVEZtWkRaaE1HWTVORGMxTlRobU5qa3lPVFV5T1RNMCIsImtpbmQiOiJhdHJpYi1hbmNob3ItY2xhaW0vdjEiLCJwdWJsaWNfa2V5X2I2NHVybCI6IklCTExrTXBnNk9YWTJ2WnVJbkxTSXo0RWh0Vlg2TVpoUWUySklCZDlmcmMiLCJzaWduYXR1cmVfYjY0dXJsIjoiTGNsREZQaVNQbk5uWDdMWUNJaGpQRTJOaER3RkNWY2h2V0ltbFRxX1ZPZkxGTW9mLUhuNkYtOVZpZGpmS0V0VFEyMlBTZDR1YURzc3FnTjlNVEhmQ3cifQ==",
+            "inclusion_proof": [
+              "7CouPiJ48qRVBx1gW23l/deSHNE75QGoLzT3v+iuqYo="
+            ],
+            "checkpoint": "rekor.conformance.atrib.test/v1\n2\nLNX5QVvcxCkzxTVfiaLEbLqYPGgnB/6a1Kkvn9d+jKg=\n\n— rekor.conformance.atrib.test/v1 KmgZt8EzvOsdfSklfTS5K7y/05o+a5XnGM0UOb5KLTEdSCML+h64OgydFmfDZZSnVJKwtfmsCsXIBzGzeY69/YIq+w8=\n",
+            "integrated_time_ms": 1782864060000,
+            "signed_entry_timestamp_b64": "sYmsL1HmQg65Z8186V95BCDr2KmBtOdKG34+IktfE4nMu/ZjXwXaxsuotWydg6GpX+BPZpiIIU8i6JNDRud9Dw=="
+          }
+        }
+      ]
+    },
+    "trust": {
+      "trust_material": {
+        "logs": {
+          "log-a.conformance.atrib.test": {
+            "origin": "log-a.conformance.atrib.test/v1",
+            "pubkey_b64": "rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne+B1R/KJODNB0="
+          },
+          "log-b.conformance.atrib.test": {
+            "origin": "log-b.conformance.atrib.test/v1",
+            "pubkey_b64": "LfBBJfABWvtHzoU674dyCU/5SYwUyxueEpc8KSfaD6Y="
+          },
+          "log-e.conformance.atrib.test": {
+            "origin": "log-e.conformance.atrib.test/v1",
+            "pubkey_b64": "p/bfr484uJuozmSbWU+R5NAf3Ff5yUk99DteUKmYc2c="
+          }
+        },
+        "rekor": {
+          "rekor.conformance.atrib.test": {
+            "origin": "rekor.conformance.atrib.test/v1",
+            "pubkey_b64": "K8KACzMW4Akgn/11fasZzPCuhLx66QZU4egXEtJw9lM="
+          }
+        }
+      },
+      "trusted_logs": [
+        "log-a.conformance.atrib.test"
+      ],
+      "threshold_m": 1,
+      "required_anchors": 2
+    },
+    "anchoring_seed_hex": "5252525252525252525252525252525252525252525252525252525252525252"
+  },
+  "expected": {
+    "anchor_claim_artifact_utf8": "atrib-anchor/v1:sha256:c09397f49d090eab97ab27fee627abbcbf6148fba1fd6a0f947558f692952934",
+    "anchor_claim_prefix": "atrib-anchor/v1:",
+    "artifact_reconstructs_from_record_hash": true,
+    "anchoring_signature_verifies": true,
+    "anchoring_key_b64url": "IBLLkMpg6OXY2vZuInLSIz4EhtVX6MZhQe2JIBd9frc",
+    "anchoring_key_differs_from_creator_key": true,
+    "set_signing_input_utf8": "{\"entry_body_b64\":\"eyJhcnRpZmFjdF9iNjQiOiJZWFJ5YVdJdFlXNWphRzl5TDNZeE9uTm9ZVEkxTmpwak1Ea3pPVGRtTkRsa01Ea3daV0ZpT1RkaFlqSTNabVZsTmpJM1lXSmlZMkptTmpFME9HWmlZVEZtWkRaaE1HWTVORGMxTlRobU5qa3lPVFV5T1RNMCIsImtpbmQiOiJhdHJpYi1hbmNob3ItY2xhaW0vdjEiLCJwdWJsaWNfa2V5X2I2NHVybCI6IklCTExrTXBnNk9YWTJ2WnVJbkxTSXo0RWh0Vlg2TVpoUWUySklCZDlmcmMiLCJzaWduYXR1cmVfYjY0dXJsIjoiTGNsREZQaVNQbk5uWDdMWUNJaGpQRTJOaER3RkNWY2h2V0ltbFRxX1ZPZkxGTW9mLUhuNkYtOVZpZGpmS0V0VFEyMlBTZDR1YURzc3FnTjlNVEhmQ3cifQ==\",\"integrated_time_ms\":1782864060000,\"log_index\":0}",
+    "rekor_inclusion_proof_verifies": true,
+    "rekor_checkpoint_signature_verifies": true,
+    "signed_entry_timestamp_verifies": true,
+    "anchor_plurality": {
+      "proof_count": 2,
+      "verified_count": 2,
+      "pending_count": 0,
+      "malformed_count": 0,
+      "unknown_types": [],
+      "independent_count": 2,
+      "plurality_met": true,
+      "single_anchor": false,
+      "equivocation_detected": false,
+      "anchored_at_range_ms": [
+        1782864060000,
+        1782864060000
+      ]
+    },
+    "record_signature_ok": true,
+    "hard_reject": false
+  }
+}

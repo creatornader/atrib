@@ -1,0 +1,65 @@
+{
+  "name": "schema-first-checkpoint",
+  "spec_section": "1.2.10",
+  "description": "A valid first session checkpoint: first_index 0, prior_checkpoint omitted (not null), retroactive absent, tree_size 2 with a real RFC 6962 root over the ordered record-hash leaves. Verifies (a) the JCS field-order invariant (checkpoint sorts between chain_root and content_id), (b) the signature round-trips with the field present, (c) validators and verifiers MUST accept, (d) the freshness fact is contemporaneous (checkpoint timestamp within the verifier bound of the max covered leaf timestamp).",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:1d846b48b1b0f1436da798c2c1779e77d52c40fe231bc1771129cec29976cb9f",
+      "checkpoint": {
+        "first_index": 0,
+        "session_root": "sha256:559c71219a9e2bf272b8c6054a6fb0e216b892a9d48def93a7db5c5df6d89c79",
+        "tree_size": 2
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1782864010000,
+      "args_hash": "sha256:83d30e776f86335341ac9a6dd25ea1e1a599af32816b356db169ecb2c2ae09d5",
+      "signature": "EosLRjgsk4QZNcuIMnL6TevbUKyUwS-FSnr545ff44OYYbVwc8_HNkhr8Ffnr6gwEvVcJ0OlaUN51SFwQrz2BA"
+    },
+    "leaves": [
+      "sha256:0594b777f7855ff1d6fbcb6acc595ef4438c1f041d5d944eb9db93b805d95112",
+      "sha256:1d846b48b1b0f1436da798c2c1779e77d52c40fe231bc1771129cec29976cb9f"
+    ],
+    "leaf_records": [
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:6965addfa3388a65c5602f92daf87ade678d6688ddf01cf535b0531da70ffcfa",
+        "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+        "chain_root": "sha256:d2f9fa9d99bb30b2b67fc6b0ea2694f345c0961596e0fd82561010b4f7570c2d",
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "abababababababababababababababab",
+        "timestamp": 1782864001000,
+        "signature": "ZofOLSyeox05Up60lramoQmXuj-jt7CYkPEcA_rDpLgw8yQyj2AxbxgxSjoOYz6HNMgJOaaaHSaPWHQiN6HRBA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:6d2b9420dd94bb811161f98f68cbcc78b918c4a75b51a0009f9965370f0823ef",
+        "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+        "chain_root": "sha256:0594b777f7855ff1d6fbcb6acc595ef4438c1f041d5d944eb9db93b805d95112",
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "abababababababababababababababab",
+        "timestamp": 1782864002000,
+        "signature": "XUWh9NR_a55qGrRPKHqJOad_vdO1SkR9_aBvhbgLD5QhIZYV85Ow1hz-csEUIFyngvo-huvSgKyQPZgyImO-Dw"
+      }
+    ],
+    "max_covered_leaf_timestamp": 1782864002000,
+    "signer_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+    "content_id_input": "atrib:session_checkpoint"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"args_hash\":\"sha256:83d30e776f86335341ac9a6dd25ea1e1a599af32816b356db169ecb2c2ae09d5\",\"chain_root\":\"sha256:1d846b48b1b0f1436da798c2c1779e77d52c40fe231bc1771129cec29976cb9f\",\"checkpoint\":{\"first_index\":0,\"session_root\":\"sha256:559c71219a9e2bf272b8c6054a6fb0e216b892a9d48def93a7db5c5df6d89c79\",\"tree_size\":2},\"content_id\":\"sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b\",\"context_id\":\"abababababababababababababababab\",\"creator_key\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"event_type\":\"https://atrib.dev/v1/types/session_checkpoint\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1782864010000}",
+    "record_hash_hex": "100fb76914744a6eaaee131873c5ddd8b78af2add3c5b0270d879b0a74f48aea",
+    "session_root": "sha256:559c71219a9e2bf272b8c6054a6fb0e216b892a9d48def93a7db5c5df6d89c79",
+    "jcs_order": [
+      "chain_root",
+      "checkpoint",
+      "content_id"
+    ],
+    "validator_should_accept": true,
+    "verifier_signature_ok": true,
+    "verifier_freshness_fact": "contemporaneous"
+  }
+}

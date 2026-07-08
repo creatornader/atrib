@@ -1,0 +1,50 @@
+{
+  "name": "record-hash-sibling",
+  "spec_section": "5.5.7",
+  "family": "shape",
+  "description": "The correct spelling of a record payload: ref.record_hash names a signed atrib record while ref.kind (\"mirror\") states where its bytes are retrievable. payload.hash commits to the record's canonical JCS bytes and MUST equal sha256(JCS(record)). The referenced record is a real Ed25519-signed human-approval observation; its signature verifies independently.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/human-approval",
+      "profile_version": "1.0.0",
+      "tier": "attested",
+      "payload": {
+        "hash": "sha256:4051415746c4d9666f28a948f64bc1f4340b9b872f75b3347568b76acbc7a83d",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "mirror",
+          "record_hash": "sha256:4051415746c4d9666f28a948f64bc1f4340b9b872f75b3347568b76acbc7a83d"
+        }
+      },
+      "facts": {
+        "approver_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+        "approval_scope": "deploy-production",
+        "decision": "allow"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "referenced_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:24d024d2ebcea341547e94a93f598a390bbf16f6dba8e15d674682cd6155bc11",
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "chain_root": "sha256:dfb417454d7432715ecfaa33d89abdaba4457c3b2cbd85a4a20620d0cd806da6",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "timestamp": 1782864001000,
+      "signature": "DPxOSVqZddOMPP42JeP6YtLjTeeOaWp4QkFYhzHNOmR0N6m3lGyafkEhL7BiJOcsHOwQWl9Ibef9X1HyUKD9AA"
+    },
+    "signer_seed_hex": "5151515151515151515151515151515151515151515151515151515151515151"
+  },
+  "expected": {
+    "accept": true,
+    "record_hash": "sha256:4051415746c4d9666f28a948f64bc1f4340b9b872f75b3347568b76acbc7a83d",
+    "payload_hash_matches_record": true,
+    "referenced_record_signature_ok": true
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "schema-missing-checkpoint-rejected",
+  "spec_section": "1.2.10",
+  "description": "A record with event_type session_checkpoint but no checkpoint object. Per §1.2.10 the field is REQUIRED on this event_type (the §1.2.7 / §1.2.9 pattern). Signature is valid; both validators (§2.6.1) and verifiers MUST reject at the policy layer.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:30fd61da2ca3dd4292027d88a743bae08bd0a6519ae7f877a56d46ab33fc23d4",
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1",
+      "timestamp": 1782864050000,
+      "args_hash": "sha256:83d30e776f86335341ac9a6dd25ea1e1a599af32816b356db169ecb2c2ae09d5",
+      "signature": "D15B5mLXh6erFBQDbRXjcsUqQWCOomVkf8spunFOS9gPk-5M4vIHjD79eIjbifmNfRhv80j74Y1xD8O_-NLGCg"
+    },
+    "signer_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+  },
+  "expected": {
+    "record_hash_hex": "294f052e6d7bb128d8ffac9919288677bd49d43a8d779e4e09ac9a8cbba34d21",
+    "validator_should_accept": false,
+    "verifier_signature_ok": true,
+    "rejection_reason": "checkpoint missing on session_checkpoint record"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "schema-prior-absent-at-positive-first-index-rejected",
+  "spec_section": "1.2.10",
+  "description": "A checkpoint with first_index > 0 and no prior_checkpoint. Per §1.2.10, prior_checkpoint MUST be present iff first_index > 0: a non-first interval must reference the checkpoint that committed the prefix. Signature is valid; rejection is at the policy layer.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:dc9715e88aa9c204e255ac40bbaadcda22471d5dcacd06c163e2ed722fd4d706",
+      "checkpoint": {
+        "first_index": 2,
+        "session_root": "sha256:e7eea58194aa467d27fcd627cf87181f898aa9ad8fba4bb6a8755618b8bd0a57",
+        "tree_size": 5
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
+      "timestamp": 1782864054000,
+      "args_hash": "sha256:1606e02f9257826a0e8a12b01ab4efbb8826e4a1a34600d7a2e436fca03d2f6a",
+      "signature": "s3KONnHfF19mws_eGDotunf0OEVb39DFLMvVzkVFJ0lKgglgilVXjnp26QctaORaWTx1FNygsIteyyyTDM6fBQ"
+    },
+    "signer_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+  },
+  "expected": {
+    "record_hash_hex": "82e1d83f8d883f03d08cb675f1762fba132c17f2e97ee9cfc4c4f08475be7252",
+    "validator_should_accept": false,
+    "verifier_signature_ok": true,
+    "rejection_reason": "prior_checkpoint absent with first_index > 0"
+  }
+}

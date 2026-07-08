@@ -1,0 +1,64 @@
+{
+  "name": "consistency-equivocation-pair",
+  "spec_section": "1.2.10",
+  "description": "Two signed checkpoints from the same creator_key claiming the same prior_checkpoint with the same tree_size but divergent session_root values (leaf index 4 differs). Both signatures are genuine. Per §1.2.10 this pair constitutes equivocation evidence against the key, the session-scale analogue of log equivocation in §2.11, reported as a categorical verifier fact.",
+  "input": {
+    "first_variant": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:0d12ff963483ddb41626549efddae406552ac9544f3a0602ab17d387eb4e7ee2",
+      "checkpoint": {
+        "first_index": 2,
+        "prior_checkpoint": "sha256:100fb76914744a6eaaee131873c5ddd8b78af2add3c5b0270d879b0a74f48aea",
+        "session_root": "sha256:e7eea58194aa467d27fcd627cf87181f898aa9ad8fba4bb6a8755618b8bd0a57",
+        "tree_size": 5
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1782864030000,
+      "args_hash": "sha256:1606e02f9257826a0e8a12b01ab4efbb8826e4a1a34600d7a2e436fca03d2f6a",
+      "signature": "8gUC5zcTI-VoxWqcLrFfOujZhcWTAx7XmPM9K85DnIM5Pjjxsmas_xaVv5AaGfxtoHXyjYYBBC3jAV3MMDRoBg"
+    },
+    "second_variant": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:cb1ee061da7f4eb41677ef08f03b9b302b1fe16440e7237d115890a8373a6bd6",
+      "checkpoint": {
+        "first_index": 2,
+        "prior_checkpoint": "sha256:100fb76914744a6eaaee131873c5ddd8b78af2add3c5b0270d879b0a74f48aea",
+        "session_root": "sha256:6e93e56f851c2b0bd2183a79f328c981f33bff29d5fa3abaf2c0d3048a9a5c91",
+        "tree_size": 5
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1782864030000,
+      "args_hash": "sha256:60c1e1cfe33cd1ddaab22a1e2be261d9c84460d097ab0cf3e2cd696ac4941b76",
+      "signature": "1KVDjE-6CyBzrht3QRjS9Py35lTnQDX9x2M4cCV5LaCo8_0rxXGVLPl7r_x1Aqn9uhMXnouSNfyd1O-i7_EPAQ"
+    },
+    "first_variant_leaves": [
+      "sha256:0594b777f7855ff1d6fbcb6acc595ef4438c1f041d5d944eb9db93b805d95112",
+      "sha256:1d846b48b1b0f1436da798c2c1779e77d52c40fe231bc1771129cec29976cb9f",
+      "sha256:100fb76914744a6eaaee131873c5ddd8b78af2add3c5b0270d879b0a74f48aea",
+      "sha256:1fa1cab4bc9cfcf983b4f0bc0ab0b7c793213023b5f9b0adef0abac0d7146cde",
+      "sha256:0d12ff963483ddb41626549efddae406552ac9544f3a0602ab17d387eb4e7ee2"
+    ],
+    "second_variant_leaves": [
+      "sha256:0594b777f7855ff1d6fbcb6acc595ef4438c1f041d5d944eb9db93b805d95112",
+      "sha256:1d846b48b1b0f1436da798c2c1779e77d52c40fe231bc1771129cec29976cb9f",
+      "sha256:100fb76914744a6eaaee131873c5ddd8b78af2add3c5b0270d879b0a74f48aea",
+      "sha256:1fa1cab4bc9cfcf983b4f0bc0ab0b7c793213023b5f9b0adef0abac0d7146cde",
+      "sha256:cb1ee061da7f4eb41677ef08f03b9b302b1fe16440e7237d115890a8373a6bd6"
+    ],
+    "shared_prior_checkpoint": "sha256:100fb76914744a6eaaee131873c5ddd8b78af2add3c5b0270d879b0a74f48aea",
+    "signer_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+  },
+  "expected": {
+    "both_signatures_verify": true,
+    "same_creator_key": true,
+    "same_prior_checkpoint": true,
+    "roots_diverge": true,
+    "equivocation": true
+  }
+}

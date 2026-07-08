@@ -1,0 +1,49 @@
+{
+  "name": "cert-canonical-full",
+  "spec_section": "1.11",
+  "description": "A delegation certificate with every optional field present (context_id, not_before, scope). Pins the JCS canonical form (cert_type < context_id < not_after < not_before < principal_key < run_pubkey < scope < signature), the Ed25519 principal signature over the signing input, and the cert_hash over the signed bytes. Verifiers MUST accept this certificate as delegation evidence.",
+  "input": {
+    "certificate": {
+      "cert_type": "atrib/delegation-cert/v1",
+      "context_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "not_after": 1767229200000,
+      "not_before": 1767225600000,
+      "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "scope": {
+        "tool_names": [
+          "search",
+          "read_email"
+        ],
+        "max_amount": {
+          "currency": "USD",
+          "value": 100
+        },
+        "event_types": [
+          "https://atrib.dev/v1/types/tool_call",
+          "https://atrib.dev/v1/types/observation"
+        ]
+      },
+      "signature": "iMouU-GLdyyISG2S6fRZEEYE5brlP1x6ycuidxY4dIhneSCEKMD_irR3hrHMDg9QfK_2LNct6xPuqm0yQj2pDA"
+    },
+    "principal_seed_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+    "run_seed_hex": "0202020202020202020202020202020202020202020202020202020202020202"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"cert_type\":\"atrib/delegation-cert/v1\",\"context_id\":\"a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1\",\"not_after\":1767229200000,\"not_before\":1767225600000,\"principal_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\",\"run_pubkey\":\"gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q\",\"scope\":{\"event_types\":[\"https://atrib.dev/v1/types/tool_call\",\"https://atrib.dev/v1/types/observation\"],\"max_amount\":{\"currency\":\"USD\",\"value\":100},\"tool_names\":[\"search\",\"read_email\"]}}",
+    "canonical_signed_form_utf8": "{\"cert_type\":\"atrib/delegation-cert/v1\",\"context_id\":\"a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1\",\"not_after\":1767229200000,\"not_before\":1767225600000,\"principal_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\",\"run_pubkey\":\"gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q\",\"scope\":{\"event_types\":[\"https://atrib.dev/v1/types/tool_call\",\"https://atrib.dev/v1/types/observation\"],\"max_amount\":{\"currency\":\"USD\",\"value\":100},\"tool_names\":[\"search\",\"read_email\"]},\"signature\":\"iMouU-GLdyyISG2S6fRZEEYE5brlP1x6ycuidxY4dIhneSCEKMD_irR3hrHMDg9QfK_2LNct6xPuqm0yQj2pDA\"}",
+    "cert_hash": "sha256:ac2b516249c7d29121805ac2a7b23c377b66dec4c7036e0d408106836088cceb",
+    "principal_signature_verifies": true,
+    "cert_valid": true,
+    "jcs_field_order": [
+      "cert_type",
+      "context_id",
+      "not_after",
+      "not_before",
+      "principal_key",
+      "run_pubkey",
+      "scope",
+      "signature"
+    ]
+  }
+}

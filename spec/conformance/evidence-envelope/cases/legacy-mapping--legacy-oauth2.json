@@ -1,0 +1,95 @@
+{
+  "name": "legacy-oauth2",
+  "spec_section": "5.5.7",
+  "family": "legacy-mapping",
+  "description": "Deterministic mapping of a legacy §5.5.6 'oauth2' evidence block to envelope form. Two independent implementations of fromLegacyEvidenceBlock MUST produce this exact envelope: profile via the frozen five-row table, profile_version '1.0.0', tier 'attested', payload.hash = sha256(JCS(legacy block)) with ref.kind 'withheld', issuer/subject/scope/attenuation_ok/delegation_ok copied into facts, details committed as facts.details_hash = sha256(JCS(details)), valid/constraints/errors/warnings copied into result, and NO verifier block (the mapping is mechanical, not a re-verification).",
+  "input": {
+    "legacy_block": {
+      "protocol": "oauth2",
+      "valid": true,
+      "issuer": "https://as.example",
+      "subject": "agent-7",
+      "scope": [
+        "tools:read"
+      ],
+      "attenuation_ok": true,
+      "delegation_ok": null,
+      "constraints": [
+        {
+          "type": "scope",
+          "status": "passed",
+          "expected": [
+            "tools:read"
+          ],
+          "actual": [
+            "tools:read"
+          ]
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "details": {
+        "token": {
+          "jwt_present": true,
+          "introspection_present": false,
+          "verified": true,
+          "alg": "EdDSA",
+          "kid": "k1",
+          "claims_verified": true
+        },
+        "dpop": null,
+        "audience": [
+          "https://mcp.example.com/mcp"
+        ],
+        "resource": [
+          "https://mcp.example.com/mcp"
+        ],
+        "client_id": "client-1"
+      }
+    }
+  },
+  "expected": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "tier": "attested",
+      "payload": {
+        "hash": "sha256:d4261626c9ac74aace84660846bbfabb6cda66c9e4f1db54c1fb54dd766551f2",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "facts": {
+        "issuer": "https://as.example",
+        "subject": "agent-7",
+        "scope": [
+          "tools:read"
+        ],
+        "attenuation_ok": true,
+        "delegation_ok": null,
+        "details_hash": "sha256:cdfd246be9da58a477e68828a3b3fa6da5de2327cf09a1bb77b562ccb45a0603"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [
+          {
+            "type": "scope",
+            "status": "passed",
+            "expected": [
+              "tools:read"
+            ],
+            "actual": [
+              "tools:read"
+            ]
+          }
+        ],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "payload_hash": "sha256:d4261626c9ac74aace84660846bbfabb6cda66c9e4f1db54c1fb54dd766551f2",
+    "details_hash": "sha256:cdfd246be9da58a477e68828a3b3fa6da5de2327cf09a1bb77b562ccb45a0603"
+  }
+}

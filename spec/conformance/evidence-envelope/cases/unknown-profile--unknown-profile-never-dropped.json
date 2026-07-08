@@ -1,0 +1,66 @@
+{
+  "name": "unknown-profile-never-dropped",
+  "spec_section": "5.5.7",
+  "family": "unknown-profile",
+  "description": "An evidence list mixing a known atrib profile with an unknown third-party profile. Consumers MUST NOT drop the unknown entry and MUST NOT reorder the list: filtering to known profiles is a rendering choice, never a storage or relay behavior.",
+  "input": {
+    "evidence_list": [
+      {
+        "envelope": 1,
+        "profile": "https://atrib.dev/v1/evidence/oauth2",
+        "profile_version": "1.0.0",
+        "tier": "declared",
+        "payload": {
+          "hash": "sha256:330e4f8e81f32f4e8a7e876f26a5ecbe0fdfeb48220cee10670738da32dba01d",
+          "ref": {
+            "kind": "withheld"
+          }
+        },
+        "result": {
+          "valid": true,
+          "constraints": [],
+          "errors": [],
+          "warnings": []
+        }
+      },
+      {
+        "envelope": 1,
+        "profile": "https://evidence.example.org/profiles/warranty-claim",
+        "profile_version": "2.3.1",
+        "tier": "shape",
+        "payload": {
+          "hash": "sha256:d926d0bbfbe8ca1bd4974e9995ab68cffec02e09f076765db6337fdb01aa73d1",
+          "media_type": "application/octet-stream",
+          "ref": {
+            "kind": "external",
+            "uri": "https://evidence.example.org/claims/42"
+          }
+        },
+        "facts": {
+          "claim_id": "WC-42",
+          "coverage_years": 3,
+          "registrar": "evidence.example.org"
+        },
+        "result": {
+          "valid": true,
+          "constraints": [],
+          "errors": [],
+          "warnings": []
+        },
+        "verifier": {
+          "name": "warranty-checker",
+          "version": "2.0.0",
+          "checked_at_ms": 1782864005000
+        }
+      }
+    ]
+  },
+  "expected": {
+    "preserved_count": 2,
+    "profiles_in_order": [
+      "https://atrib.dev/v1/evidence/oauth2",
+      "https://evidence.example.org/profiles/warranty-claim"
+    ],
+    "drop_forbidden": true
+  }
+}

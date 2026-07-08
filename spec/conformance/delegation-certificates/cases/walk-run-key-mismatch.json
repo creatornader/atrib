@@ -1,0 +1,73 @@
+{
+  "name": "walk-run-key-mismatch",
+  "spec_section": "1.11",
+  "description": "The record's creator_key differs from the certified run_pubkey. The certificate MUST NOT be selected for this record; the walk returns depth 0. Because the genesis carries a delegation_cert_hash that resolved to no certificate covering the signing key, delegation_unresolved is true (signal, not invalidation).",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:74b3e0c27fe08223db85312f96faa9c461b9a33431be88c6595fa01cd5fd80c0",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "aPjHZoh3Cd0tF0JBFHmxSoud8Gd1oTfNN8m7e35SYjrM3gfKH5jR7YzNrv9c6trz1nv0JZdusmqkC3uNHartAQ",
+      "delegation_cert_hash": "sha256:5d37c32e001c50321f7086f708d603150dc7137d5c3e5ea7701ff0df6157e7ec"
+    },
+    "genesis_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:74b3e0c27fe08223db85312f96faa9c461b9a33431be88c6595fa01cd5fd80c0",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "aPjHZoh3Cd0tF0JBFHmxSoud8Gd1oTfNN8m7e35SYjrM3gfKH5jR7YzNrv9c6trz1nv0JZdusmqkC3uNHartAQ",
+      "delegation_cert_hash": "sha256:5d37c32e001c50321f7086f708d603150dc7137d5c3e5ea7701ff0df6157e7ec"
+    },
+    "certificates": [
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "run_pubkey": "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "max_amount": {
+            "currency": "USD",
+            "value": 100
+          },
+          "event_types": [
+            "https://atrib.dev/v1/types/tool_call",
+            "https://atrib.dev/v1/types/observation"
+          ]
+        },
+        "signature": "6gWiPsoxQDIQPfAnSmxebmZTnjVyPW28dNI4aC9-UlpntVaKKK6GmCrTN9DgXf7Fh5CD-YmjVArMnw3qJ-XMDw"
+      }
+    ]
+  },
+  "expected": {
+    "record_signature_valid": true,
+    "record_hash": "sha256:68e2a161fe607b682ac4a7dfa24df3b8deb17d61c798ff704ee072e81b41b6f7",
+    "delegation": {
+      "depth": 0,
+      "principal_key": null,
+      "cert_hash": null,
+      "cert_valid": null,
+      "in_window": null,
+      "context_bound": null,
+      "cert_bound": null,
+      "scope_check": null,
+      "revoked": null,
+      "errors": [],
+      "delegation_unresolved": true
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "token--tracestate-over-x-atrib-chain",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "No extension block, no _meta.atrib. The tracestate atrib= entry beats the X-Atrib-Chain fallback (§1.5.3: implementations MUST prefer tracestate when both are present).",
+  "input": {
+    "request_meta": {
+      "tracestate": "vendorx=keep,atrib=YfCaVpDuFO5svX1lIfdRdaeyme4zZnUDn2kpPwwGmiE.p_bfr484uJuozmSbWU-R5NAf3Ff5yUk99DteUKmYc2c",
+      "X-Atrib-Chain": "3gpXAsplmpUinC4qou4IlZkePc3iOQs8eJ6dKDFBAV4.K8KACzMW4Akgn_11fasZzPCuhLx66QZU4egXEtJw9lM"
+    }
+  },
+  "expected": {
+    "resolved_source": "tracestate",
+    "resolved_record_hash_hex": "61f09a5690ee14ee6cbd7d6521f75175a7b299ee336675039f69293f0c069a21"
+  }
+}

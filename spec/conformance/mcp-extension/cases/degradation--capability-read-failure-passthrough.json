@@ -1,0 +1,22 @@
+{
+  "name": "degradation--capability-read-failure-passthrough",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "Forced capability-read failure (§5.8): reading/parsing the client declaration throws. The peer is treated as undeclared and the tool result is returned byte-identical to passthrough with no error.",
+  "input": {
+    "tool_result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "primary tool result"
+        }
+      ]
+    },
+    "forced_failure": "capability-read"
+  },
+  "expected": {
+    "result_jcs_sha256_hex": "b36d15d357a0c58234fc1fd42ae60c9c460c02004e9d429062e99d0e715ec45d",
+    "extension_block_present": false,
+    "error_raised": false
+  }
+}

@@ -195,6 +195,7 @@ Contents
   - [1.5.3 HTTP fallback: X-atrib-Chain](#153-http-fallback-x-atrib-chain)
     - [1.5.3.1 Context ID Header: X-atrib-Context](#1531-context-id-header-x-atrib-context)
   - [1.5.4 MCP transport: params.\_meta](#154-mcp-transport-params_meta)
+    - [1.5.4.1 Negotiated Extension Carriage: dev.atrib/attribution](#1541-negotiated-extension-carriage-devatribattribution)
   - [1.5.5 Cross-trace session continuity](#155-cross-trace-session-continuity)
 - [1.6 Unsigned Hops and Gap Nodes](#16-unsigned-hops-and-gap-nodes)
 - [1.7 Transaction Event Hooks](#17-transaction-event-hooks)
@@ -260,6 +261,7 @@ An attribution record is a JSON object. Two shapes exist depending on `event_typ
   "result_hash":           "sha256:",        // OPTIONAL (see §8.3); commitment to the canonical result bytes
   "result_salt":           "",               // OPTIONAL (see §8.3); reveals salt for salted-sha256 result_hash
   "session_token":         "",               // OPTIONAL (see §1.5.5); omitted when not in a cross-trace session
+  "checkpoint":            { },              // OPTIONAL (see §1.2.10); REQUIRED on session_checkpoint records, FORBIDDEN elsewhere
   "signature":             ""
 }
 ```
@@ -292,13 +294,14 @@ An attribution record is a JSON object. Two shapes exist depending on `event_typ
 | --------------------- | ------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | spec_version          | string  | MUST                                              | Always the literal string `"atrib/1.0"` for records conforming to this specification. Implementations MUST reject records with unknown spec_version values rather than attempting to process them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | content_id            | string  | MUST                                              | A prefixed hex-encoded SHA-256 digest identifying the specific creator and tool that produced this record. See [§1.2.2](#122-content_id-derivation) for derivation. Format: `"sha256:"` followed by 64 lowercase hex characters.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| creator_key           | string  | MUST                                              | The creator's Ed25519 public key, encoded as base64url (RFC 4648 §5, no padding). 43 characters. This is the stable identity of the creator across all their records. It is not an ephemeral session key.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| creator_key           | string  | MUST                                              | The creator's Ed25519 public key, encoded as base64url (RFC 4648 §5, no padding). 43 characters. This is the stable identity of the creator across all their records — either a principal key (delegation depth 0) or a run key certified by a principal per [§1.11](#111-delegation-certificates), in which case the durable identity is the principal resolved through the [§1.11.4](#1114-verifier-walk) walk.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | chain_root            | string  | MUST                                              | A prefixed hex-encoded SHA-256 digest anchoring this record in the chain. For non-genesis records: the hash of the parent attribution record's canonical serialization (see [§1.3](#13-canonical-serialization)). For genesis records: the hash of the context_id string. See [§1.2.3](#123-chain_root-for-genesis-records).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | event_type            | string  | MUST                                              | An absolute URI identifying the type of event this record documents. atrib's normative URI set is defined in [§1.2.4](#124-event_type-values); consumers MAY mint extension URIs in their own namespaces. URI form is validated per [§1.4.5](#145-event_type-uri-validation). atrib does not require URI recognition for verification; an unrecognized but syntactically-valid extension URI does not block signature verification.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | context_id            | string  | MUST                                              | The W3C Trace Context trace-id of the OTel trace containing this event. 32 lowercase hex characters. This is the join key that connects attribution records to each other and to transaction events. See [§1.5.1](#151-context_id-the-session-anchor).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | timestamp             | integer | MUST                                              | Unix time in milliseconds as a JSON integer. MUST NOT be a string, float, or ISO 8601 date. MUST NOT be in the future. Implementations SHOULD reject records with timestamps more than 5 minutes in the future relative to local clock. The value MAY be coarsened (rounded to second/minute/hour/day boundaries) per the [§8.4](#84-coarsened-timing-posture) timing posture; when coarsened, the granularity MUST be declared explicitly via the `timestamp_granularity` field.                                                                                                                                                                                                                                                                                                                                                                                                   |
 | informed_by           | array   | MAY                                               | Array of `"sha256:" + hex(record_hash)` strings identifying records the agent claims informed this action. Hashes MUST be sorted lexicographically by the hex string (deterministic ordering). Empty or absent when the record makes no provenance claim. The graph layer derives INFORMED_BY edges from this field ([§3.2.3](#323-edge-types)). atrib does not validate truthfulness of the claim. See [§1.2.5](#125-informed_by) and [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type).                                                                                                                                                                                                                                                                                                                                                           |
 | provenance_token      | string  | MAY                                               | Base64url-encoded 16-byte opaque token for cross-session causal anchoring. Distinct from session_token: provenance_token says "this session descends from that anchor" (causal); session_token says "this is the same logical session" (continuation). Carried ONLY by the genesis record of a session that claims an upstream anchor; non-genesis records MUST NOT carry it. Derived as the first 16 bytes of the upstream record's hash; upstream records carry no special field to be anchorable. The graph layer derives PROVENANCE_OF edges from this field ([§3.2.3](#323-edge-types)). See [§1.2.6](#126-provenance_token) and [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring).                                                                                                                                                          |
+| delegation_cert_hash  | string  | MAY | `"sha256:" + 64 lowercase hex` commitment to a delegation certificate per [§1.11.3](#1113-the-delegation_cert_hash-field). Permitted ONLY on session genesis records (committing the signer's run key to its certificate) and on `key_revocation` records ([§1.11.5](#1115-run-key-revocation)). JCS-canonical form sorts the field between `creator_key` (`c-r`) and `event_type` (`e`). See [D140](DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys). |
 | session_token         | string  | MAY                                               | Base64url-encoded 16-byte opaque token identifying the logical session across OTel trace boundaries. Present only when the record was emitted in a cross-trace session. When present, the graph query layer uses this field to construct CROSS_SESSION edges between records with different context_ids that share the same session_token. See [§1.5.5](#155-cross-trace-session-continuity). The session_token field is included in the canonical serialization and covered by the signature.                                                                                                                                                                                                                                                                                                                                                                                      |
 | signature             | string  | MUST for non-transaction records                  | Ed25519 signature over the canonical serialization of the record with the signature field omitted, encoded as base64url (RFC 4648 §5, no padding). 86 characters. See [§1.4](#14-signing-and-verification) for the full signing procedure. Transaction records (`event_type = transaction`) carry the `signers` array per [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) instead of (or in addition to) this top-level field.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | signers               | array   | MUST for transaction records, MUST NOT for others | Array of `{ creator_key, signature }` objects, one per cross-attestation party. Required on transaction records ([§1.7.6](#176-cross-attestation-requirement-for-transaction-records)); MUST NOT appear on tool_call, observation, or extension records. Minimum 2 distinct verified signer keys (typically agent + counterparty). Duplicate entries from one key do not satisfy the minimum. All signers cover the same canonical bytes: the JCS serialization of the record with `signers: []` and `signature` omitted.                                                                                                                                                                                                                                                                                                                                                           |
@@ -308,6 +311,7 @@ An attribution record is a JSON object. Two shapes exist depending on `event_typ
 | args_salt             | string  | MAY                                               | Base64url-encoded random salt (≥16 bytes) revealing the salt used to compute a `salted-sha256` `args_hash` per [§8.3](#83-salted-commitment-posture). Presence indicates the salted-commitment posture for args; absence indicates the default plain-sha256 scheme (or the [§8.3](#83-salted-commitment-posture) hmac-sha256 variant which is signaled out-of-band and not structurally detectable).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | result_hash           | string  | MAY                                               | Commitment to the canonical result bytes per the [§8.3](#83-salted-commitment-posture) salted-commitment posture. Same shape and semantics as `args_hash` but for the tool's response. JCS-canonical form sorts the field between `provenance_token` (`p`) and `result_salt` (`r-e-s-u-l-t-_-s`) since `r-e-s-u-l-t-_-h` lies between them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | result_salt           | string  | MAY                                               | Base64url-encoded random salt (≥16 bytes) revealing the salt used to compute a `salted-sha256` `result_hash` per [§8.3](#83-salted-commitment-posture). Same posture-detection semantics as `args_salt`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| checkpoint | object | MAY | Session checkpoint commitment per [§1.2.10](#1210-checkpoint). REQUIRED when event_type is the session_checkpoint URI; FORBIDDEN on any other event_type. Carries session_root / tree_size / first_index / prior_checkpoint / retroactive. JCS-canonical form sorts the field between chain_root ("c-h-a") and content_id ("c-o"). |
 
 #### 1.2.2 content_id Derivation
 
@@ -384,7 +388,7 @@ The precedence ordering reflects fidelity to the upstream signal: inbound tokens
 | `https://atrib.dev/v1/types/annotation`       | `0x05` | A commentary record pointing at any prior record via the `annotates` field ([§1.2.7](#127-annotates)). The recall-fidelity primitive: an agent reading back its own signed records uses annotations to weight, summarize, and topic-tag earlier records that future-self should not lose to flat scanning. Distinct from `observation`: annotation is a forward-pointing claim _about_ an earlier record; observation is a first-class signed event. Validators MUST require `annotates` on annotation records and MUST reject `annotates` on any other event_type. The graph layer derives ANNOTATES edges per [§3.2.4](#324-edge-derivation-rules) step 8. Promoted from extension namespace by [D058](DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05).          |
 | `https://atrib.dev/v1/types/revision`         | `0x06` | A claim that supersedes a prior record via the `revises` field ([§1.2.9](#129-revises)). The contradiction-handling primitive: when the agent now holds a position incompatible with a prior claim, the revision is the way to surface the change as a first-class graph node rather than a silent edit (records are immutable). Distinct from `annotation`: annotation comments while leaving the prior position intact, revision asserts the prior is no longer held. Validators MUST require `revises` on revision records and MUST reject `revises` on any other event_type. The graph layer derives REVISES edges per [§3.2.4](#324-edge-derivation-rules) step 9. Promoted from extension namespace by [D059](DECISIONS.md#d059-promote-revision-to-atrib-normative-event_type-byte-0x06). |
 
-**Extension URIs:** Any absolute URI in a non-`atrib.dev` namespace is a valid extension URI. The 1-byte log entry slot ([§2.3.1](#231-entry-serialization)) maps such URIs to the byte `0xFF` (extension type); verifiers wanting to filter by the URI itself read the URI from the record. Extension URIs SHOULD identify a stable owner (a domain the consumer controls or a `urn:` namespace they registered); atrib does not enforce ownership.
+**Extension URIs:** Any absolute URI in a non-`atrib.dev` namespace is a valid extension URI. The 1-byte log entry slot ([§2.3.1](#231-entry-serialization)) maps such URIs to the byte `0xFF` (extension type); verifiers wanting to filter by the URI itself read the URI from the record. Extension URIs SHOULD identify a stable owner (a domain the consumer controls or a `urn:` namespace they registered); atrib does not enforce ownership. atrib itself stages promotions this way: https://atrib.dev/v1/types/session_checkpoint ([§1.2.10](#1210-checkpoint)) is produced under 0xFF ahead of its [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) byte allocation (0x08), per the [D073](DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr) pattern.
 
 ##### 1.2.4.1 Canonical examples
 
@@ -605,6 +609,176 @@ The `provenance_token` field carries an opaque token used for cross-session caus
 
 A consumer wanting full-precision multi-anchor cross-session references uses `informed_by` (which can include record_hashes from any session). provenance_token is the ergonomic shorthand for declaring a single ancestral anchor that can be passed across session boundaries via short tokens.
 
+#### 1.2.10 checkpoint
+
+The `checkpoint` field carries a session checkpoint: a Merkle commitment to the ordered record-hash stream of the record's `context_id` so far. The field is OPTIONAL on the record format but REQUIRED when `event_type = https://atrib.dev/v1/types/session_checkpoint` and FORBIDDEN on any other event_type. Validators ([§1.1.2](#112-roles-validator-vs-verifier), log-side admission) AND verifiers ([§1.1.2](#112-roles-validator-vs-verifier), consumer-side audit) MUST reject records that violate this constraint — the same presence discipline as `annotates` ([§1.2.7](#127-annotates)) and `revises` ([§1.2.9](#129-revises)).
+
+A session checkpoint is an ordinary signed atrib record. It is signed like any record ([§1.4](#14-signing-and-verification)), chained like any record ([§1.2.3.1](#1231-multi-producer-chain-composition) precedence via `resolveChainRoot`, never reimplemented), submitted like any record ([§2.6.1](#261-submit-entry)), and non-blocking like any record ([§5.3.5](#535-log-submission), [§5.8](#58-degradation-contract)). What it adds is a completeness and selective-disclosure claim the per-record log entries ([§2.3.1](#231-entry-serialization)) cannot make: an inclusion proof of leaf `i` against `session_root` proves a record's position within the committed session stream while revealing only the record hash, its index, and ~log2(n) sibling hashes — never sibling record bodies — and the checkpoint as a whole asserts "this is the entire committed stream as of leaf `tree_size - 1`." Position becomes provable while args/result stay salted commitments per [§8.3](#83-salted-commitment-posture).
+
+**Disambiguation.** Session checkpoints are unrelated to the log's checkpoints ([§2.4](#24-checkpoint-format)). A log checkpoint is the log operator's signed statement about the public log tree; a session checkpoint is a producer's signed record committing to its own session stream. They share the RFC 6962 tree algebra and nothing else.
+
+**Event type and staged promotion.** The event_type URI is `https://atrib.dev/v1/types/session_checkpoint`. Pre-promotion, producers emit the URI and log operators encode the entry under the `0xFF` extension byte per [§2.3.1](#231-entry-serialization) — the staged pattern [D073](DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr) established. At promotion per the [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) bar, the byte `0x08` is allocated (skipping `0x07`, which remains [D073](DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr)'s design-level reservation for `handoff`). Because the event_type in the signed bytes is the URI, records emitted before and after promotion are byte-identical; only the 90-byte log entry's type byte changes for new submissions. The [conformance corpus](spec/conformance/session-checkpoint/) pins this duality (`byte-uri-duality`).
+
+**Example** (a complete signed instance from the [conformance corpus](spec/conformance/session-checkpoint/); the second checkpoint of a five-record stream):
+
+```json
+{
+  "spec_version": "atrib/1.0",
+  "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+  "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+  "chain_root": "sha256:0d12ff963483ddb41626549efddae406552ac9544f3a0602ab17d387eb4e7ee2",
+  "checkpoint": {
+    "first_index": 2,
+    "prior_checkpoint": "sha256:100fb76914744a6eaaee131873c5ddd8b78af2add3c5b0270d879b0a74f48aea",
+    "session_root": "sha256:e7eea58194aa467d27fcd627cf87181f898aa9ad8fba4bb6a8755618b8bd0a57",
+    "tree_size": 5
+  },
+  "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+  "context_id": "abababababababababababababababab",
+  "timestamp": 1782864030000,
+  "args_hash": "sha256:1606e02f9257826a0e8a12b01ab4efbb8826e4a1a34600d7a2e436fca03d2f6a",
+  "signature": "8gUC5zcTI-VoxWqcLrFfOujZhcWTAx7XmPM9K85DnIM5Pjjxsmas_xaVv5AaGfxtoHXyjYYBBC3jAV3MMDRoBg"
+}
+```
+
+**Field semantics within `checkpoint`** (all REQUIRED unless marked):
+
+| Field              | Type              | Rule                                                                                                                                                                                                                                                                                     |
+| ------------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session_root`     | string            | `"sha256:"` + 64 lowercase hex. The RFC 6962 Merkle Tree Hash over leaves `0..tree_size-1` per [§1.2.10.1](#12101-session-tree-construction).                                                                                                                                             |
+| `tree_size`        | integer           | ≥ 1. Number of leaves committed. The last covered leaf index is `tree_size - 1` (implicit; not a separate field). Empty checkpoints are prohibited; producers SHOULD skip an interval that added no new leaves.                                                                            |
+| `first_index`      | integer           | `0 ≤ first_index < tree_size`. Index of the first leaf newly covered by this interval. MUST equal the prior checkpoint's `tree_size` when `prior_checkpoint` is present, and `0` when absent.                                                                                              |
+| `prior_checkpoint` | string, OPTIONAL  | `"sha256:"` + 64 lowercase hex record hash ([§1.2.3](#123-chain_root-for-genesis-records) definition) of the immediately preceding `session_checkpoint` record on the same `context_id`. MUST be present iff `first_index > 0`. Omitted — not null — on a session's first checkpoint.      |
+| `retroactive`      | boolean, OPTIONAL | When present, MUST be `true`; `retroactive: false` MUST NOT be emitted (absence-not-null; presence changes the JCS canonical form and therefore the signature). Semantics per [§1.2.10.3](#12103-retroactive-checkpoints-and-freshness).                                                   |
+
+**Validator rules** ([§2.6.1](#261-submit-entry) conformance targets). Validators MUST reject: a `session_checkpoint` record missing `checkpoint`; `checkpoint` on any other event_type; `tree_size < 1`; `first_index ≥ tree_size` (or negative / non-integer); `prior_checkpoint` present with `first_index == 0`; `prior_checkpoint` absent with `first_index > 0`; `retroactive: false`. As with `annotates` and `revises`, the signature on a violating record may itself be valid; rejection is at the policy layer.
+
+**content_id derivation.** `content_id` follows [§1.2.2](#122-content_id-derivation) with tool_name `"session_checkpoint"`. Producers with a service origin use their normalized origin as server_url, mirroring `directory_anchor`'s `"<origin>:directory_anchor"` input ([D056](DECISIONS.md#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04)). Origin-less cognitive producers SHOULD use the pseudo-origin `atrib`, giving the input `"atrib:session_checkpoint"`; the conformance corpus pins this constant.
+
+**Local content commitment.** Per [D099](DECISIONS.md#d099-explicit-emit-records-commit-local-content-through-default-args_hash), producers SHOULD set `args_hash = sha256(JCS({"leaves": [ ...ordered "sha256:<hex>" strings... ]}))`, committing the flat leaf list alongside the tree root while keeping the list itself in `_local.content.leaves` in the local mirror ([§5.9](#59-local-mirror-conventions)). The list never sits on the public submission path (unbounded record size, no selective disclosure), yet any party handed the list can replay both the `args_hash` commitment and the `session_root`.
+
+##### 1.2.10.1 Session tree construction
+
+- **Leaf value.** The raw 32-byte record hash of each covered record — hex-decoded from `"sha256:" + hex(SHA-256(JCS(complete signed record including signature)))`, exactly the record-hash definition in [§1.2.3](#123-chain_root-for-genesis-records)'s normative clarification. Leaves are the _bytes_, not the prefixed hex string; a tree computed over the UTF-8 display strings MUST NOT match (the corpus carries a trap vector).
+- **Hash function and domain separation.** RFC 6962 §2.1 exactly as [§2.3.2](#232-leaf-hash-computation): `leaf_hash = SHA-256(0x00 || leaf_bytes)`, `node_hash = SHA-256(0x01 || left || right)`. No new personalization string. Cross-tree confusion with the public log is structurally impossible: log leaves have fixed 90-byte preimages ([§2.3.1](#231-entry-serialization)); session leaves have fixed 32-byte preimages. Keeping the algorithm verbatim means the [§2.7](#27-inclusion-proof-verification) inclusion-proof procedure, the RFC 6962 §2.1.4 consistency-proof check the [§2.9](#29-witnessing-and-cosignatures) witness protocol already relies on, and existing Merkle libraries are reused unchanged.
+- **Leaf ordering.** Producer-declared session order, and it is a _signed claim_. Conforming producers MUST append leaves in the order they observed the records: signing order for records they signed, mirror append order for records read back from the [§5.9](#59-local-mirror-conventions) mirror. Verifiers do NOT recompute a canonical order; multi-producer sessions ([§1.2.3.1](#1231-multi-producer-chain-composition), [D067](DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract)) have no trustworthy global time order (coarsened timestamps per [§8.4](#84-coarsened-timing-posture), clock skew).
+- **Ordering-consistency checks** (verifier-side, categorical, signal not block, per [§3.3](#33-verification-state)). When the verifier can resolve the leaf records it MUST check: (a) if CHAIN_PRECEDES A → B and both are leaves, `index(A) < index(B)`; (b) leaf timestamps are non-decreasing beyond declared `timestamp_granularity`; (c) every resolved leaf's `context_id` equals the checkpoint's `context_id` — violation of (c) is a hard structural fault, not a soft flag; (d) every prior `session_checkpoint` record on the context appears as a leaf.
+- **Self-exclusion.** A checkpoint MUST NOT include itself as a leaf (its hash depends on `session_root`). It becomes a leaf in the next checkpoint's tree — checkpoints are part of the stream they formalize.
+- **Empty checkpoints prohibited.** `tree_size ≥ 1`. The RFC 6962 empty-tree root (`SHA-256("")`) MUST never appear as a `session_root`.
+
+##### 1.2.10.2 Consistency and equivocation
+
+For consecutive checkpoints K_i → K_{i+1} on one `context_id`: `K_{i+1}.checkpoint.prior_checkpoint` MUST be the record hash of K_i; `K_{i+1}.checkpoint.first_index` MUST equal `K_i.checkpoint.tree_size`; and the leaf sequence `0..K_i.tree_size-1` MUST be identical — append-only extension, provable by an RFC 6962 §2.1.4 consistency proof from `(K_i.session_root, K_i.tree_size)` to `(K_{i+1}.session_root, K_{i+1}.tree_size)`, the same append-only check the log's witness protocol applies between successive log checkpoints ([§2.9](#29-witnessing-and-cosignatures)).
+
+Two signed checkpoints from the same `creator_key` claiming the same `prior_checkpoint` (or overlapping ranges) with inconsistent roots constitute equivocation evidence against that key — the session-scale analogue of log equivocation in [§2.11](#211-cross-log-replication) — reported as a categorical verifier fact.
+
+**Honest scope** ([§8.7](#87-adversarial-threat-model)). The completeness claim is provable _relative to the creator's own committed stream_: a creator that maintains a never-checkpointed side chain is not detected by this mechanism. What changes is that any two committed views of the same session are now cryptographically comparable, so selective re-narration becomes attributable equivocation instead of deniable omission. One session root per interval is also the natural unit for anchor plurality per [§2.11](#211-cross-log-replication) / [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense): multi-anchoring one root per interval is cheap where per-record multi-anchoring is not.
+
+##### 1.2.10.3 Retroactive checkpoints and freshness
+
+A checkpoint signed now over an old chain proves the history existed and was tree-committed as of the checkpoint's log-inclusion time, not as of the original session. The covered records' own log entries remain the per-record contemporaneous anchors.
+
+- **Producer rule.** `retroactive: true` MUST be set when any leaf in the newly covered interval `[first_index, tree_size-1]` was not observed live by the checkpointing producer (backfilled from a mirror, archive, or third-party history). The flag is present-only-when-true: `retroactive: false` MUST NOT be emitted, and absence — not `null`, not `false` — is the canonical non-retroactive form (the invariant-5 discipline of [§1.3](#13-canonical-serialization); presence changes the signature).
+- **Verifier rule.** Verifiers assign one categorical freshness fact per checkpoint: `contemporaneous`, `declared-retroactive`, or `stale-undeclared` (checkpoint timestamp exceeds the max covered leaf timestamp by more than a verifier-configured bound; RECOMMENDED default 24 hours). This mirrors the `in_envelope: false` signal-not-block posture of [D051](DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) / [§6.7](#67-capability-declarations): a stale-undeclared checkpoint remains valid and admissible; the fact travels with the verification result.
+
+##### 1.2.10.4 Graph participation
+
+**No new edge types; the nine-edge set of [§3.2.4](#324-edge-derivation-rules) is unchanged.** The Merkle root does not structurally reveal its member hashes; deriving per-leaf edges would require external leaf-list material, which violates the observable-structure rule ([§3.1](#31-design-principles-and-rationale)). The one field that IS observable structure, `checkpoint.prior_checkpoint`, deliberately stays verifier-side: checkpoint ordering is already coherent through `chain_root`, and producers wanting a declared graph relationship MAY additionally list the prior checkpoint hash in `informed_by`, reusing existing INFORMED_BY machinery (dangling-safe per [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), omission-by-default per [D113](DECISIONS.md#d113-unvalidated-informed_by-refs-are-omitted-by-default)).
+
+Node participation ([§3.2.1](#321-node-types)) is identical to `observation`: CHAIN_PRECEDES / SESSION_PRECEDES / SESSION_PARALLEL yes; CONVERGES_ON no; CROSS_SESSION no; INFORMED_BY and PROVENANCE_OF source/target yes; [§4.6](#46-the-calculation-algorithm) attribution **skipped**. This is load-bearing: a session's attribution distribution MUST be bit-identical whether or not its producer adopted checkpointing ([§4.1](#41-purpose-and-position-in-the-protocol) no-thumb rule), so checkpoint records never enter contributing-node sets. Graph endpoints continue to return no weighted or interpreted data ([§3.6](#36-implementation-notes)); ordering-consistency, equivocation, and freshness results are verifier facts, not graph payloads.
+
+##### 1.2.10.5 Conformance
+
+Conformance fixtures live at [`spec/conformance/session-checkpoint/`](spec/conformance/session-checkpoint/): seventeen cases across five families — checkpoint object schema and presence rules, real RFC 6962 roots over ordered record-hash leaves (1 / 2 / 5 leaves, empty invalid, raw-32-byte-leaf trap), append-only consistency with a §2.1.4 proof plus an equivocating divergent-root pair, the present-only-when-true `retroactive` flag with categorical freshness facts, and the `0xFF`/`0x08` log-entry duality over byte-identical signed bytes. The generator is `packages/log-dev/scripts/generate-conformance-session-checkpoint.ts`; the reference test is `packages/verify/test/conformance-session-checkpoint.test.ts`. Implementations in any language MAY build their own tree and validation code but MUST pass the corpus.
+
+**JCS canonical form.** `checkpoint` sorts after `chain_root` (`c-h-a` < `c-h-e`) and before `content_id` (`c-h` < `c-o`). It is a new OPTIONAL field, so it is absent from every existing record: no existing canonical form, signature, record hash, chain_root, or propagation token changes. Within the object, JCS orders the members `first_index` < `prior_checkpoint` < `retroactive` < `session_root` < `tree_size`.
+
+---
+
+1.2.10 checkpoint
+
+The `checkpoint` field carries a session checkpoint: a Merkle commitment to the ordered record-hash stream of the record's `context_id` so far. The field is OPTIONAL on the record format but REQUIRED when `event_type = https://atrib.dev/v1/types/session_checkpoint` and FORBIDDEN on any other event_type. Validators ([§1.1.2](#112-roles-validator-vs-verifier), log-side admission) AND verifiers ([§1.1.2](#112-roles-validator-vs-verifier), consumer-side audit) MUST reject records that violate this constraint — the same presence discipline as `annotates` ([§1.2.7](#127-annotates)) and `revises` ([§1.2.9](#129-revises)).
+
+A session checkpoint is an ordinary signed atrib record. It is signed like any record ([§1.4](#14-signing-and-verification)), chained like any record ([§1.2.3.1](#1231-multi-producer-chain-composition) precedence via `resolveChainRoot`, never reimplemented), submitted like any record ([§2.6.1](#261-submit-entry)), and non-blocking like any record ([§5.3.5](#535-log-submission), [§5.8](#58-degradation-contract)). What it adds is a completeness and selective-disclosure claim the per-record log entries ([§2.3.1](#231-entry-serialization)) cannot make: an inclusion proof of leaf `i` against `session_root` proves a record's position within the committed session stream while revealing only the record hash, its index, and ~log2(n) sibling hashes — never sibling record bodies — and the checkpoint as a whole asserts "this is the entire committed stream as of leaf `tree_size - 1`." Position becomes provable while args/result stay salted commitments per [§8.3](#83-salted-commitment-posture).
+
+**Disambiguation.** Session checkpoints are unrelated to the log's checkpoints ([§2.4](#24-checkpoint-format)). A log checkpoint is the log operator's signed statement about the public log tree; a session checkpoint is a producer's signed record committing to its own session stream. They share the RFC 6962 tree algebra and nothing else.
+
+**Event type and staged promotion.** The event_type URI is `https://atrib.dev/v1/types/session_checkpoint`. Pre-promotion, producers emit the URI and log operators encode the entry under the `0xFF` extension byte per [§2.3.1](#231-entry-serialization) — the staged pattern [D073](DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr) established. At promotion per the [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) bar, the byte `0x08` is allocated (skipping `0x07`, which remains [D073](DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr)'s design-level reservation for `handoff`). Because the event_type in the signed bytes is the URI, records emitted before and after promotion are byte-identical; only the 90-byte log entry's type byte changes for new submissions. The [conformance corpus](spec/conformance/session-checkpoint/) pins this duality (`byte-uri-duality`).
+
+**Example** (a complete signed instance from the [conformance corpus](spec/conformance/session-checkpoint/); the second checkpoint of a five-record stream):
+
+```json
+{
+  "spec_version": "atrib/1.0",
+  "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+  "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+  "chain_root": "sha256:0d12ff963483ddb41626549efddae406552ac9544f3a0602ab17d387eb4e7ee2",
+  "checkpoint": {
+    "first_index": 2,
+    "prior_checkpoint": "sha256:100fb76914744a6eaaee131873c5ddd8b78af2add3c5b0270d879b0a74f48aea",
+    "session_root": "sha256:e7eea58194aa467d27fcd627cf87181f898aa9ad8fba4bb6a8755618b8bd0a57",
+    "tree_size": 5
+  },
+  "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+  "context_id": "abababababababababababababababab",
+  "timestamp": 1782864030000,
+  "args_hash": "sha256:1606e02f9257826a0e8a12b01ab4efbb8826e4a1a34600d7a2e436fca03d2f6a",
+  "signature": "8gUC5zcTI-VoxWqcLrFfOujZhcWTAx7XmPM9K85DnIM5Pjjxsmas_xaVv5AaGfxtoHXyjYYBBC3jAV3MMDRoBg"
+}
+```
+
+**Field semantics within `checkpoint`** (all REQUIRED unless marked):
+
+| Field              | Type              | Rule                                                                                                                                                                                                                                                                                     |
+| ------------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session_root`     | string            | `"sha256:"` + 64 lowercase hex. The RFC 6962 Merkle Tree Hash over leaves `0..tree_size-1` per [§1.2.10.1](#12101-session-tree-construction).                                                                                                                                             |
+| `tree_size`        | integer           | ≥ 1. Number of leaves committed. The last covered leaf index is `tree_size - 1` (implicit; not a separate field). Empty checkpoints are prohibited; producers SHOULD skip an interval that added no new leaves.                                                                            |
+| `first_index`      | integer           | `0 ≤ first_index < tree_size`. Index of the first leaf newly covered by this interval. MUST equal the prior checkpoint's `tree_size` when `prior_checkpoint` is present, and `0` when absent.                                                                                              |
+| `prior_checkpoint` | string, OPTIONAL  | `"sha256:"` + 64 lowercase hex record hash ([§1.2.3](#123-chain_root-for-genesis-records) definition) of the immediately preceding `session_checkpoint` record on the same `context_id`. MUST be present iff `first_index > 0`. Omitted — not null — on a session's first checkpoint.      |
+| `retroactive`      | boolean, OPTIONAL | When present, MUST be `true`; `retroactive: false` MUST NOT be emitted (absence-not-null; presence changes the JCS canonical form and therefore the signature). Semantics per [§1.2.10.3](#12103-retroactive-checkpoints-and-freshness).                                                   |
+
+**Validator rules** ([§2.6.1](#261-submit-entry) conformance targets). Validators MUST reject: a `session_checkpoint` record missing `checkpoint`; `checkpoint` on any other event_type; `tree_size < 1`; `first_index ≥ tree_size` (or negative / non-integer); `prior_checkpoint` present with `first_index == 0`; `prior_checkpoint` absent with `first_index > 0`; `retroactive: false`. As with `annotates` and `revises`, the signature on a violating record may itself be valid; rejection is at the policy layer.
+
+**content_id derivation.** `content_id` follows [§1.2.2](#122-content_id-derivation) with tool_name `"session_checkpoint"`. Producers with a service origin use their normalized origin as server_url, mirroring `directory_anchor`'s `"<origin>:directory_anchor"` input ([D056](DECISIONS.md#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04)). Origin-less cognitive producers SHOULD use the pseudo-origin `atrib`, giving the input `"atrib:session_checkpoint"`; the conformance corpus pins this constant.
+
+**Local content commitment.** Per [D099](DECISIONS.md#d099-explicit-emit-records-commit-local-content-through-default-args_hash), producers SHOULD set `args_hash = sha256(JCS({"leaves": [ ...ordered "sha256:<hex>" strings... ]}))`, committing the flat leaf list alongside the tree root while keeping the list itself in `_local.content.leaves` in the local mirror ([§5.9](#59-local-mirror-conventions)). The list never sits on the public submission path (unbounded record size, no selective disclosure), yet any party handed the list can replay both the `args_hash` commitment and the `session_root`.
+
+##### 1.2.10.1 Session tree construction
+
+- **Leaf value.** The raw 32-byte record hash of each covered record — hex-decoded from `"sha256:" + hex(SHA-256(JCS(complete signed record including signature)))`, exactly the record-hash definition in [§1.2.3](#123-chain_root-for-genesis-records)'s normative clarification. Leaves are the _bytes_, not the prefixed hex string; a tree computed over the UTF-8 display strings MUST NOT match (the corpus carries a trap vector).
+- **Hash function and domain separation.** RFC 6962 §2.1 exactly as [§2.3.2](#232-leaf-hash-computation): `leaf_hash = SHA-256(0x00 || leaf_bytes)`, `node_hash = SHA-256(0x01 || left || right)`. No new personalization string. Cross-tree confusion with the public log is structurally impossible: log leaves have fixed 90-byte preimages ([§2.3.1](#231-entry-serialization)); session leaves have fixed 32-byte preimages. Keeping the algorithm verbatim means the [§2.7](#27-inclusion-proof-verification) inclusion-proof procedure, the RFC 6962 §2.1.4 consistency-proof check the [§2.9](#29-witnessing-and-cosignatures) witness protocol already relies on, and existing Merkle libraries are reused unchanged.
+- **Leaf ordering.** Producer-declared session order, and it is a _signed claim_. Conforming producers MUST append leaves in the order they observed the records: signing order for records they signed, mirror append order for records read back from the [§5.9](#59-local-mirror-conventions) mirror. Verifiers do NOT recompute a canonical order; multi-producer sessions ([§1.2.3.1](#1231-multi-producer-chain-composition), [D067](DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract)) have no trustworthy global time order (coarsened timestamps per [§8.4](#84-coarsened-timing-posture), clock skew).
+- **Ordering-consistency checks** (verifier-side, categorical, signal not block, per [§3.3](#33-verification-state)). When the verifier can resolve the leaf records it MUST check: (a) if CHAIN_PRECEDES A → B and both are leaves, `index(A) < index(B)`; (b) leaf timestamps are non-decreasing beyond declared `timestamp_granularity`; (c) every resolved leaf's `context_id` equals the checkpoint's `context_id` — violation of (c) is a hard structural fault, not a soft flag; (d) every prior `session_checkpoint` record on the context appears as a leaf.
+- **Self-exclusion.** A checkpoint MUST NOT include itself as a leaf (its hash depends on `session_root`). It becomes a leaf in the next checkpoint's tree — checkpoints are part of the stream they formalize.
+- **Empty checkpoints prohibited.** `tree_size ≥ 1`. The RFC 6962 empty-tree root (`SHA-256("")`) MUST never appear as a `session_root`.
+
+##### 1.2.10.2 Consistency and equivocation
+
+For consecutive checkpoints K_i → K_{i+1} on one `context_id`: `K_{i+1}.checkpoint.prior_checkpoint` MUST be the record hash of K_i; `K_{i+1}.checkpoint.first_index` MUST equal `K_i.checkpoint.tree_size`; and the leaf sequence `0..K_i.tree_size-1` MUST be identical — append-only extension, provable by an RFC 6962 §2.1.4 consistency proof from `(K_i.session_root, K_i.tree_size)` to `(K_{i+1}.session_root, K_{i+1}.tree_size)`, the same append-only check the log's witness protocol applies between successive log checkpoints ([§2.9](#29-witnessing-and-cosignatures)).
+
+Two signed checkpoints from the same `creator_key` claiming the same `prior_checkpoint` (or overlapping ranges) with inconsistent roots constitute equivocation evidence against that key — the session-scale analogue of log equivocation in [§2.11](#211-cross-log-replication) — reported as a categorical verifier fact.
+
+**Honest scope** ([§8.7](#87-adversarial-threat-model)). The completeness claim is provable _relative to the creator's own committed stream_: a creator that maintains a never-checkpointed side chain is not detected by this mechanism. What changes is that any two committed views of the same session are now cryptographically comparable, so selective re-narration becomes attributable equivocation instead of deniable omission. One session root per interval is also the natural unit for anchor plurality per [§2.11](#211-cross-log-replication) / [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense): multi-anchoring one root per interval is cheap where per-record multi-anchoring is not.
+
+##### 1.2.10.3 Retroactive checkpoints and freshness
+
+A checkpoint signed now over an old chain proves the history existed and was tree-committed as of the checkpoint's log-inclusion time, not as of the original session. The covered records' own log entries remain the per-record contemporaneous anchors.
+
+- **Producer rule.** `retroactive: true` MUST be set when any leaf in the newly covered interval `[first_index, tree_size-1]` was not observed live by the checkpointing producer (backfilled from a mirror, archive, or third-party history). The flag is present-only-when-true: `retroactive: false` MUST NOT be emitted, and absence — not `null`, not `false` — is the canonical non-retroactive form (the invariant-5 discipline of [§1.3](#13-canonical-serialization); presence changes the signature).
+- **Verifier rule.** Verifiers assign one categorical freshness fact per checkpoint: `contemporaneous`, `declared-retroactive`, or `stale-undeclared` (checkpoint timestamp exceeds the max covered leaf timestamp by more than a verifier-configured bound; RECOMMENDED default 24 hours). This mirrors the `in_envelope: false` signal-not-block posture of [D051](DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) / [§6.7](#67-capability-declarations): a stale-undeclared checkpoint remains valid and admissible; the fact travels with the verification result.
+
+##### 1.2.10.4 Graph participation
+
+**No new edge types; the nine-edge set of [§3.2.4](#324-edge-derivation-rules) is unchanged.** The Merkle root does not structurally reveal its member hashes; deriving per-leaf edges would require external leaf-list material, which violates the observable-structure rule ([§3.1](#31-design-principles-and-rationale)). The one field that IS observable structure, `checkpoint.prior_checkpoint`, deliberately stays verifier-side: checkpoint ordering is already coherent through `chain_root`, and producers wanting a declared graph relationship MAY additionally list the prior checkpoint hash in `informed_by`, reusing existing INFORMED_BY machinery (dangling-safe per [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), omission-by-default per [D113](DECISIONS.md#d113-unvalidated-informed_by-refs-are-omitted-by-default)).
+
+Node participation ([§3.2.1](#321-node-types)) is identical to `observation`: CHAIN_PRECEDES / SESSION_PRECEDES / SESSION_PARALLEL yes; CONVERGES_ON no; CROSS_SESSION no; INFORMED_BY and PROVENANCE_OF source/target yes; [§4.6](#46-the-calculation-algorithm) attribution **skipped**. This is load-bearing: a session's attribution distribution MUST be bit-identical whether or not its producer adopted checkpointing ([§4.1](#41-purpose-and-position-in-the-protocol) no-thumb rule), so checkpoint records never enter contributing-node sets. Graph endpoints continue to return no weighted or interpreted data ([§3.6](#36-implementation-notes)); ordering-consistency, equivocation, and freshness results are verifier facts, not graph payloads.
+
+##### 1.2.10.5 Conformance
+
+Conformance fixtures live at [`spec/conformance/session-checkpoint/`](spec/conformance/session-checkpoint/): seventeen cases across five families — checkpoint object schema and presence rules, real RFC 6962 roots over ordered record-hash leaves (1 / 2 / 5 leaves, empty invalid, raw-32-byte-leaf trap), append-only consistency with a §2.1.4 proof plus an equivocating divergent-root pair, the present-only-when-true `retroactive` flag with categorical freshness facts, and the `0xFF`/`0x08` log-entry duality over byte-identical signed bytes. The generator is `packages/log-dev/scripts/generate-conformance-session-checkpoint.ts`; the reference test is `packages/verify/test/conformance-session-checkpoint.test.ts`. Implementations in any language MAY build their own tree and validation code but MUST pass the corpus.
+
+**JCS canonical form.** `checkpoint` sorts after `chain_root` (`c-h-a` < `c-h-e`) and before `content_id` (`c-h` < `c-o`). It is a new OPTIONAL field, so it is absent from every existing record: no existing canonical form, signature, record hash, chain_root, or propagation token changes. Within the object, JCS orders the members `first_index` < `prior_checkpoint` < `retroactive` < `session_root` < `tree_size`.
+
 ---
 
 ### 1.3 Canonical Serialization
@@ -794,7 +968,7 @@ The host signer SHOULD run host policy before signing. Policy can deny records b
 
 The host signer MAY also submit the signed record to the log and return the resulting proof bundle. At minimum, it MUST return the signed record or `record_hash` to the sandbox so the sandbox can propagate context per [§1.5](#15-context-propagation).
 
-This requirement applies only when a producer composes atrib with sandboxed execution. Existing non-sandboxed producers MAY continue to hold the key in process, subject to their own host threat model. Key isolation does not certify that the sandboxed agent's request was truthful; it prevents sandbox code from directly minting records under the agent's key without crossing the host signer boundary.
+This requirement applies unconditionally to principal keys; certified run-key seeds MAY be provisioned into a sandbox per the narrowed rule in [§1.11.9](#1119-key-isolation-interaction). It otherwise applies only when a producer composes atrib with sandboxed execution. Existing non-sandboxed producers MAY continue to hold the key in process, subject to their own host threat model. Key isolation does not certify that the sandboxed agent's request was truthful; it prevents sandbox code from directly minting records under the agent's key without crossing the host signer boundary.
 
 ---
 
@@ -888,9 +1062,55 @@ Implementations MUST inject both standard OTel context and the atrib token into 
 }
 ```
 
-This propagation format follows the MCP context propagation proposal (github.com/modelcontextprotocol/modelcontextprotocol/pull/414). Implementations SHOULD monitor this PR for any changes that become normative in the MCP specification and update accordingly.
+This propagation format is now standardized by the MCP specification (SEP-414 documents the W3C Trace Context keys `traceparent`, `tracestate`, and `baggage` inside `_meta`). For the negotiated, vendor-prefixed extension carriage and the canonical inbound resolution ladders, see [§1.5.4.1](#1541-negotiated-extension-carriage-devatribattribution).
 
 For MCP over stdio transport, `params._meta` is the only propagation channel. There are no HTTP headers. Implementations MUST NOT attempt to inject attribution context into any other field of the MCP message.
+
+##### 1.5.4.1 Negotiated Extension Carriage: dev.atrib/attribution
+
+The unprefixed `params._meta` convention above remains fully supported and is the normative fallback. Implementations MAY additionally negotiate the same carriage as a first-class MCP extension with identifier `dev.atrib/attribution` (an SEP-2133 unofficial extension under the self-sovereign `dev.atrib` vendor prefix). The complete extension specification — capability settings schemas for both sides, negotiation gating, receipt shape, degradation behavior, and versioning policy — is [`docs/extensions/dev.atrib-attribution/v0.1.md`](docs/extensions/dev.atrib-attribution/v0.1.md). The extension changes no signed byte of any record: it gates only discovery and carriage.
+
+The extension reserves the `_meta` key `dev.atrib/attribution` on requests and results. The v0.1 request block carries exactly two fields; receivers MUST ignore unknown fields, and unknown fields MUST NOT set any field of any signed record:
+
+```
+"_meta": {
+  "dev.atrib/attribution": {
+    "token":      "<§1.5.2 propagation token, ≤87 chars>",
+    "context_id": "<32 lowercase hex>"
+  }
+}
+```
+
+`token` is the unchanged [§1.5.2](#152-http-transport-tracestate) propagation token. `context_id` is the raw session anchor of [§1.5.1](#151-context_id-the-session-anchor), carried explicitly — the MCP-transport analog of the [§1.5.3.1](#1531-context-id-header-x-atrib-context) `X-atrib-Context` header, per the explicit-carriage posture of [D135](DECISIONS.md#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args). `session_token` continues to travel only in `baggage` per [§1.5.5](#155-cross-trace-session-continuity), and `provenance_token` remains genesis-record-only configuration per [§1.2.6](#126-provenance_token); neither is carried in the v0.1 block.
+
+**Canonical inbound resolution.** This section is the single normative definition of MCP inbound-carrier resolution. Other sections, decisions, and derived documents MUST cite this section rather than restate rung lists. Two distinct values are resolved, so there are two ladders.
+
+*Ladder 1 — propagation token.* Implementations MUST resolve the inbound propagation token in this order, taking the first carrier that yields a well-formed token:
+
+```
+_meta["dev.atrib/attribution"].token   (extension)
+  > _meta.atrib                        (unprefixed convention)
+  > _meta.tracestate atrib= entry      (§1.5.2 / D018)
+  > _meta["X-Atrib-Chain"]             (§1.5.3 fallback)
+```
+
+When the extension key and a legacy carrier decode to different tokens, the extension key wins and the producer SHOULD log an `atrib:`-prefixed warning; a malformed extension token falls through to the next carrier (lenient parse, the [D018](DECISIONS.md#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow) posture). Malformation is never an error. This ladder refines only the "inbound propagation token" rung of the [§1.2.3.1](#1231-multi-producer-chain-composition) chain-root contract; the rest of that ladder ([D067](DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract)) is untouched, and `resolveChainRoot` remains the single chain-selection implementation.
+
+*Ladder 2 — context identity.* Implementations MUST resolve `context_id` in this order:
+
+```
+explicit context_id tool argument
+  > _meta["dev.atrib/attribution"].context_id
+  > _meta.traceparent trace-id
+  > D078/D083 harness env-file registry
+  > undefined (producer synthesizes per §1.5.1)
+```
+
+An explicit tool argument always wins: the extension block is transport metadata, an argument is application intent; on mismatch the producer MUST use the argument and SHOULD log an `atrib:`-prefixed warning. An extension-block `context_id` that is not exactly 32 lowercase hex characters MUST be ignored (falls through), never an error. When the extension block and `traceparent` disagree, the extension block wins with a warning; the trace-id rung remains for callers carrying no extension block. The [D078](DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) env-and-file resolution applies only when no per-request carrier resolved; its internal ordering stays defined by those decisions.
+
+**Receipts.** A server MUST emit the `dev.atrib/attribution` result block only when the requesting client declared the extension on that request (or, on legacy protocol versions, at `initialize`). The receipt names a record the server has already signed locally; its `log_submission` field is a queue status (`queued | submitted | disabled | failed`), never an awaited proof — log submission stays non-blocking per [§5.3.5](#535-log-submission). Signing itself is NOT gated on the client's declaration (per [D100](DECISIONS.md#d100-mcp-middleware-can-sign-without-log-submission), signing does not even require log submission), and the legacy unprefixed result keys continue to be written unconditionally. The optional full `record` body in a receipt is safe by construction: records carry commitments, not payloads, per [§8.3](#83-salted-commitment-posture). Every extension behavior — capability read, ladder resolution, receipt emission — is subject to the [§5.8](#58-degradation-contract) degradation contract: on any failure the tool result is returned byte-identical to passthrough, without the extension block and without error.
+
+Conformance vectors for the settings schemas, gating rule, both ladders, receipt integrity, and degradation are pinned at [`spec/conformance/mcp-extension/`](spec/conformance/mcp-extension/); they compose with the [§1.2.3.1](#1231-multi-producer-chain-composition) corpus at `spec/conformance/1.2.3/multi-producer/`.
 
 #### 1.5.5 Cross-Trace Session Continuity
 
@@ -1330,7 +1550,7 @@ A revocation is an attribution record with `event_type: 'key_revocation'` and th
 | `successor_key`       | string | When `revocation_reason='rotation'`                                        | Base64url-encoded 32-byte Ed25519 public key of the rotation target.                                               |
 | `emergency_signed_by` | string | When `revocation_reason='compromise'` AND signature is by an emergency key | Base64url-encoded 32-byte public key of the emergency key (registered in the directory at the time of compromise). |
 
-Canonical serialization (JCS, [§1.3](#13-canonical-serialization)) places `emergency_signed_by` after `creator_key` and before `revoked_key` in lexicographic order. `revoked_key`, `revocation_reason`, and `successor_key` follow alphabetically.
+Canonical serialization (JCS, [§1.3](#13-canonical-serialization)) places `emergency_signed_by` after `creator_key` and before `revoked_key` in lexicographic order; when the OPTIONAL `delegation_cert_hash` field ([§1.11.5](#1115-run-key-revocation)) is present, the order is `creator_key` < `delegation_cert_hash` < `emergency_signed_by` < `revoked_key`. `revoked_key`, `revocation_reason`, and `successor_key` follow alphabetically.
 
 #### 1.9.2 Signing Rules
 
@@ -1339,6 +1559,8 @@ A `key_revocation` record MUST be signed by one of:
 1. **The key being retired.** The `creator_key` field equals `revoked_key`. This is the standard path for `rotation` and `retirement`. The signing proves the legitimate owner authorized the retirement.
 
 2. **A pre-registered emergency key.** Permitted ONLY when `revocation_reason='compromise'`. The `creator_key` field is the emergency key's public key; `emergency_signed_by` MUST equal `creator_key`. The emergency key MUST have been registered in the directory ([§6](#6-key-directory)) under the same identity claim as `revoked_key` BEFORE the revocation timestamp. This is the only path that survives the case where the legitimate owner has lost access to `revoked_key`.
+
+3. **The principal key of a delegation certificate covering `revoked_key`.** Permitted per [§1.11.5](#1115-run-key-revocation); the record MUST carry `delegation_cert_hash` referencing the certificate, which verifiers MUST resolve before accepting the revoker.
 
 A revocation signed by any other key is invalid and MUST be rejected by verifiers as `'unsigned'`.
 
@@ -1370,6 +1592,144 @@ Implementations MUST pass all vectors in `spec/conformance/1.9/`:
 Forward secrecy of past records: an attacker who compromised `revoked_key` on day 100 can produce records that look legitimate under that key for the entire pre-revocation window. The verifier sees `'revoked_after_revocation'` only post-revocation. A "compromise window" annotation that retroactively flags pre-revocation records is V2 work.
 
 Operator/log-key rotation: see [§2](#2-merkle-log-protocol) for the log signing key. Rotating the log key invalidates all prior inclusion proofs' signatures and is a separate ADR (deferred to V2).
+
+### 1.10 Per-Conversation Key Derivation (Reserved)
+
+_Reserved for the deferred [D038](DECISIONS.md#d038-per-conversation-key-derivation) HKDF per-conversation key derivation text. No normative content ships in this section; see the V2 deferral list. Derivation and certification ([§1.11](#111-delegation-certificates)) address different problems (cross-session unlinkability vs. scoped ephemeral authority) and are compatible: a derived key could later be certified._
+
+---
+
+### 1.11 Delegation Certificates
+
+_This section is normative; issuing a certificate is OPTIONAL. Per [D140](DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys)._
+
+A **delegation certificate** is a standalone JCS-canonical object in which a *principal* Ed25519 key certifies an ephemeral *run* key with an explicit scope, expiry, and optional session binding. Records signed by the run key occupy the existing `creator_key` slot in both the record ([§1.2.1](#121-field-definitions)) and the 90-byte log entry ([§2.3.1](#231-entry-serialization)) — no format change anywhere. The certificate is verifiable offline from the certificate alone; there is no deterministic linkage from a parent secret and no PKI ([§1.4.1](#141-key-format) posture).
+
+A record signed directly by a principal is **delegation depth 0**: no certificate exists or is needed, and verification is byte-for-byte the [§1.4.3](#143-verification-procedure) procedure. Every record ever signed is therefore already valid under this model, by definition. A record signed by a certified run key is **delegation depth 1**. Delegation never alters signature validity, graph derivation ([§3.2.4](#324-edge-derivation-rules)), or the [§4.6](#46-the-calculation-algorithm) calculation; it is attribution resolution and trust signal, exactly like [D051](DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) capability checks.
+
+#### 1.11.1 Certificate Format
+
+A delegation certificate is a JSON object, canonicalized with JCS (RFC 8785, same rules as records per [§1.3](#13-canonical-serialization)):
+
+```jsonc
+{
+  "cert_type":     "atrib/delegation-cert/v1",           // MUST; literal version discriminator
+  "context_id":    "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",   // OPTIONAL; 32 lowercase hex; binds the cert to one session
+  "not_after":     1767229200000,                        // MUST; Unix ms; records after this are out-of-window
+  "not_before":    1767225600000,                        // OPTIONAL; Unix ms; default 0 when absent
+  "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w", // MUST; base64url 32-byte Ed25519 principal public key
+  "run_pubkey":    "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q", // MUST; base64url 32-byte Ed25519 run public key
+  "scope":         { "tool_names": ["search", "read_email"], "max_amount": { "currency": "USD", "value": 100 } }, // OPTIONAL; §6.7.1 capability envelope schema, verbatim
+  "signature":     "iMouU-GLdyyISG2S6fRZEEYE5brlP1x6ycuidxY4dIhneSCEKMD_irR3hrHMDg9QfK_2LNct6xPuqm0yQj2pDA" // MUST; Ed25519 by principal_key
+}
+```
+
+JCS lexicographic field order is exactly as listed: `cert_type` < `context_id` < `not_after` < `not_before` < `principal_key` < `run_pubkey` < `scope` < `signature`. Optional fields MUST be omitted, not null, when absent — presence/absence changes the canonical form and therefore the signature, mirroring the `session_token` rule ([§1.3](#13-canonical-serialization)). The `scope` object reuses the [§6.7.1](#671-identity-claim-extension) capability envelope schema **verbatim** (`tool_names`, `max_amount`, `counterparties`, `event_types`, `expires_at`); one schema, two carriers — directory-published (per-key, identity-claim cadence) and certificate-carried (per-run, issuance cadence). When `scope.expires_at` is present, the effective expiry is `min(not_after, scope.expires_at)`.
+
+#### 1.11.2 Signing, Certificate Hash, and Depth
+
+**Signature rule (mirrors [§1.4.2](#142-signing-procedure)):**
+
+```
+signature = base64url(Ed25519-sign(principal_seed, UTF-8(JCS(cert with signature field omitted))))
+```
+
+**Certificate hash (stable identifier):**
+
+```
+cert_hash = "sha256:" + hex(SHA-256(UTF-8(JCS(full signed cert))))
+```
+
+The hash is over the *signed* bytes, analogous to `record_hash` ([§1.2.3](#123-chain_root-for-genesis-records)). It is the key used by the [§1.11.3](#1113-the-delegation_cert_hash-field) record field, run-key revocation ([§1.11.5](#1115-run-key-revocation)), sidecars, and archive evidence keys.
+
+A certificate is **valid as delegation evidence** iff: both keys are well-formed per [§1.4.1](#141-key-format); `run_pubkey !== principal_key` (a self-certificate MUST be rejected with error `self_certificate` even when its signature verifies); and the signature verifies under `principal_key` (otherwise error `principal_signature_invalid`). An invalid certificate never invalidates any record; the record falls back to plain attribution to its signing key (depth 0).
+
+**Depth limit.** This version permits depth ≤ 1. `principal_key` MUST NOT itself be a run key under another certificate known to the verifier; a chained certificate is rejected *as delegation evidence* (`delegation_depth_exceeded`) and the record falls back to depth 0. Chains are future work behind their own decision record.
+
+#### 1.11.3 The delegation_cert_hash Field
+
+`delegation_cert_hash` (string, `"sha256:" + 64 lowercase hex`) is a new OPTIONAL field permitted in exactly two positions:
+
+1. **Session genesis records** (same genesis-only discipline as `provenance_token`, [§1.2.6](#126-provenance_token)). It commits the genesis signer's session start to the certificate covering **its own run key**. Non-genesis records MUST NOT carry it in this role; validators ([§2.6.1](#261-submit-entry)) and verifiers ([§5.5](#55-atribverify-merchant-verification-library)) treat a non-genesis occurrence the way they treat a non-genesis `provenance_token`.
+2. **`key_revocation` records** ([§1.11.5](#1115-run-key-revocation)), referencing the certificate that proves the principal–run relationship.
+
+In both positions the JCS-canonical form slots the field between `creator_key` (`c-r`) and `event_type` (`e`), consistent with [§1.3](#13-canonical-serialization). Presence/absence changes the canonical bytes: two otherwise-identical records with and without the field carry distinct signatures and distinct record hashes. Existing records never carried the field, so no existing signature is affected; new records that omit it are byte-identical to pre-delegation output.
+
+**Binding scope, single-producer sessions:** for subsequent records signed by the same run key in the same context, the verifier associates them with the genesis commitment through `creator_key` + `context_id` equality and CHAIN_PRECEDES linkage back to the genesis record; `cert_bound` is then evaluable for the whole run.
+
+#### 1.11.4 Verifier Walk
+
+Given record `R` and available certificate set `C`, the walk is offline and deterministic:
+
+1. Verify `R.signature` under `R.creator_key` per [§1.4.3](#143-verification-procedure). **Unchanged; delegation never alters signature validity.**
+2. Select certificates `c ∈ C` with `c.run_pubkey === R.creator_key`. No covering certificate → **depth 0**: attribute to `R.creator_key` as today. If `R`'s context genesis (signed by `R.creator_key`) carries `delegation_cert_hash` but no valid covering certificate resolved, surface `delegation_unresolved: true` — signal, not invalidation, the [D113](DECISIONS.md#d113-unvalidated-informed_by-refs-are-omitted-by-default) posture. A covering certificate that is invalid per [§1.11.2](#1112-signing-certificate-hash-and-depth) is rejected as evidence: the walk reports its `cert_hash`, `cert_valid: false`, and the rejection error, and falls back to depth 0.
+3. For a valid matching `c`, evaluate: `(c.not_before ?? 0) <= R.timestamp <= c.not_after` → `in_window`; `c.context_id` absent → `context_bound: null`, else `c.context_id === R.context_id` → `context_bound`; when the context genesis was signed by `R.creator_key` AND carries `delegation_cert_hash`, `genesis.delegation_cert_hash === cert_hash(c)` → `cert_bound`, otherwise `cert_bound: null` (the standing state for run keys that joined a multi-producer context, [§1.11.6](#1116-multi-producer-contexts)).
+4. Consult the directory ([§6.3](#63-verifier-consultation-algorithm)) for `c.principal_key`, not the run key. Run keys never enter the directory; the expected lookup result for a run key is a non-membership proof, and a directory claim found *for the run key itself* is surfaced as the structural anomaly `run_key_in_directory: true`.
+5. Scope check per [§6.7.2](#672-verifier-semantics) semantics against `c.scope`: `in_scope` with a `mismatches[]` list naming the failed constraints (`tool_names`, `event_types`, `max_amount`, `counterparties`). When the principal's directory envelope is available, `attenuation_ok` reports whether `c.scope` is a subset of it (a certificate granting what the principal's own envelope excludes sets `attenuation_ok: false`); when no directory envelope is supplied, `attenuation_ok` is `null`. All scope outputs are signals, never invalidation, per [§6.7.3](#673-out-of-envelope-is-a-signal-not-invalidation).
+6. Revocation: scan for [§1.9](#19-key-rotation-and-revocation) `key_revocation` records retiring either the run key ([§1.11.5](#1115-run-key-revocation)) or the principal. A revoked principal cascades: its certificates are invalid as delegation evidence for records at `log_index >= R` per [§1.9.3](#193-verifier-semantics) semantics.
+
+The verifier output is an optional `delegation` block:
+
+```jsonc
+"delegation": {
+  "depth": 1,                       // 0 | 1
+  "principal_key": "...",           // string | null (null at depth 0)
+  "cert_hash": "sha256:...",        // string | null
+  "cert_valid": true,               // boolean | null
+  "in_window": true,                // boolean | null
+  "context_bound": true,            // boolean | null; null when the cert has no context_id
+  "cert_bound": true,               // boolean | null; null when no genesis delegation_cert_hash applies to this run key
+  "scope_check": { "in_scope": true, "attenuation_ok": null, "mismatches": [] }, // object | null; null when the cert has no scope
+  "revoked": false,                 // boolean | null
+  "errors": []                      // e.g. "self_certificate", "principal_signature_invalid", "delegation_depth_exceeded"
+}
+```
+
+At depth 0 every certificate-derived field is `null` and `errors` is empty (unless a covering-but-invalid certificate was rejected, per step 2). No field in this block affects record validity.
+
+**Ambiguity rule.** If two valid certificates from *different* principals cover the same run key in overlapping windows, the verifier MUST surface both and set `delegation_ambiguous: true` rather than choosing. Choosing would be interpretation; surfacing is fact.
+
+**Transaction interaction ([§1.7.6](#176-cross-attestation-requirement-for-transaction-records)).** The ≥2-distinct-verified-keys rule counts raw keys and is unchanged ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)). A new signal, `signers_share_principal: true`, fires when two signer keys resolve to the same principal through certificates; whether policy requires distinct principals is consumer policy, not protocol.
+
+#### 1.11.5 Run-Key Revocation
+
+Run-key retirement reuses [§1.9](#19-key-rotation-and-revocation) rather than minting a parallel mechanism. This section adds **signing rule 3** to [§1.9.2](#192-signing-rules):
+
+3. **The principal key of a delegation certificate covering `revoked_key`.** A `key_revocation` record retiring a run key MAY be signed by the principal: `creator_key` is the principal's public key, and the record MUST carry `delegation_cert_hash` ([§1.11.3](#1113-the-delegation_cert_hash-field)) referencing the certificate that proves the principal–run relationship. Verifiers MUST resolve that certificate — it must be valid per [§1.11.2](#1112-signing-certificate-hash-and-depth), its `run_pubkey` must equal `revoked_key`, and its `principal_key` must equal the record's `creator_key` — before accepting the principal as an authorized revoker. A revocation failing any of these checks is invalid and MUST be rejected per the existing [§1.9.2](#192-signing-rules) rule ("rejected by verifiers as `'unsigned'`"); records signed by `revoked_key` then keep their verification state.
+
+The [§1.9.1](#191-revocation-record-format) canonical-order note extends accordingly: when the field is present the order is `creator_key` < `delegation_cert_hash` < `emergency_signed_by` < `revoked_key`. [§1.9.3](#193-verifier-semantics) applies unchanged to the revoked run key: records at `log_index >= R` flag `revoked_after_revocation`; earlier records keep their state. `revocation_reason` is `'compromise'` for a burned sandbox, `'retirement'` for clean early wind-down; `not_after` expiry remains the primary bound and revocation is the early-kill path. No directory tombstone exists for run keys because run keys are not in the directory; the log is the sole source of revocation truth, as [§1.9.3](#193-verifier-semantics) already states.
+
+#### 1.11.6 Multi-Producer Contexts
+
+Under [§1.2.3.1](#1231-multi-producer-chain-composition) / [D067](DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract) chain composition, a certified run key routinely joins a context whose genesis record was signed by a *different* producer key. That run key then owns no record permitted to carry `delegation_cert_hash`. For such records the certificate is supplied out-of-band through the [§1.11.8](#1118-carriage) carriers and `cert_bound` remains `null` permanently, while `cert_valid`, `in_window`, `context_bound`, scope checks, and revocation checks are all unaffected. `delegation_cert_hash` is a strengthening bind available exactly to the producer that signs a context's genesis record; it is never a prerequisite for delegation resolution. Producers whose run key joins an existing chain SHOULD set the certificate's `context_id` (giving `context_bound: true`) as the substitute session binding.
+
+#### 1.11.7 Directory Posture
+
+The directory ([§6](#6-key-directory)) maps **principals only**. Run keys MUST NOT be published as identity claims: the directory is bounded by operators, not runs; AKD insertion cost and audit surface do not scale with run cadence; and run-key absence proofs are the expected lookup result. [§6.7.4](#674-envelope-rotation) is unchanged for principals; run scopes never rotate — issue a new certificate instead.
+
+#### 1.11.8 Carriage
+
+Three carriers; any subset is sufficient for a verifier that obtains the certificate somehow, and verifiers additionally accept caller-supplied certificates out-of-band:
+
+1. **Local sidecar:** producers write the full certificate to `_local.delegation_cert` in the mirror envelope ([§5.9.3](#593-the-_local-sidecar-shape)). Signed bytes unchanged; sidecar-only, like `_local.producer`.
+2. **Archive evidence:** producers configured for archive submission attach the certificate as an evidence object keyed by `cert_hash` through the [§2.12](#212-record-body-archive-layer) evidence API ([D111](DECISIONS.md#d111-host-owned-oauth-evidence-infrastructure)). Certificates contain only public keys, a scope, and timestamps — no salted-commitment exposure concern.
+3. **Evidence envelope profile:** the verifier-facing carrier is the **`delegation-certificate`** profile of the [§5.5.7](#557-universal-evidence-envelope) universal evidence envelope (`https://atrib.dev/v1/evidence/delegation-certificate`, the URI that section reserves for this decision). The profile payload is the certificate object (JCS hash rule; `ref.record_hash` never applies — a certificate is not a record) or its `cert_hash` as a payload reference; the profile's verifier facts are the [§1.11.4](#1114-verifier-walk) walk outputs. No legacy [§5.5.6](#556-generic-authorization-evidence-blocks) protocol string exists or may be introduced for delegation; the legacy string set is frozen.
+
+#### 1.11.9 Key Isolation Interaction
+
+[§1.4.6](#146-signing-key-isolation-for-sandboxed-execution) is narrowed as follows: **principal keys MUST NOT be reachable from sandboxed execution, unconditionally. Run-key seeds MAY be provisioned into a sandbox when covered by a delegation certificate whose `not_after`, `scope`, and (RECOMMENDED) `context_id` binding the host accepts for that run.** The in-sandbox key is then worth one scoped, expiring, individually revocable run rather than the operator's durable identity. The signer proxy ([§9.7](#97-pattern-sandboxed-execution-signer-proxy)) remains RECOMMENDED hardening — it uniquely provides a pre-signing host policy gate and prevents mid-window misuse — but is no longer the only conforming topology. This is a deliberate relaxation of the [D102](DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox) MUST, recorded as a v2 note on that decision.
+
+#### 1.11.10 Producer Requirements
+
+Producers that opt in stamp `delegation_cert_hash` on the genesis record *only when they sign the context genesis* (per [§1.11.6](#1116-multi-producer-contexts), a producer joining an existing chain writes no genesis and stamps nothing), write `_local.delegation_cert`, and include the certificate in archive submission when the archive path is configured. **Degradation ([§5.8](#58-degradation-contract)):** every failure — unreadable certificate, malformed JSON, expired certificate at startup, principal-signature mismatch — is caught, logged with the `atrib:` prefix, and signing proceeds *without* the genesis field. Records remain valid; the verifier simply sees an uncertified run key (`delegation_unresolved` at worst). Delegation failures never block the primary tool call.
+
+#### 1.11.11 Conformance
+
+Implementations MUST pass all vectors in [`spec/conformance/delegation-certificates/`](spec/conformance/delegation-certificates/). The corpus covers six case families: certificate canonical form and signing (full/minimal optional-field forms, self-certificate, wrong-signer), the [§1.11.4](#1114-verifier-walk) verifier walk (valid, expired, scope mismatch as signal, wrong principal signature, run-key mismatch with `delegation_unresolved`), depth-0 byte-identity against [`spec/conformance/1.4/signing-vectors.json`](spec/conformance/1.4/signing-vectors.json), `delegation_cert_hash` lex-slotting with distinct signatures for presence vs. absence, run-key revocation extending [`spec/conformance/1.9/`](spec/conformance/1.9/) (authorized rule-3 revocation and the not-covering rejection), and the [D067](DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract) `cert_bound: null` posture. The generator is `packages/log-dev/scripts/generate-conformance-delegation-certificates.ts`; the reference implementation is `packages/verify/test/conformance-delegation-certificates.test.ts`. Two implementations given the same record and certificate set MUST produce identical `delegation` blocks.
+
+#### 1.11.12 What This DOES NOT Cover
+
+Delegation depth > 1 (chains are rejected with `delegation_depth_exceeded`; future decision record). Principal-level aggregation in the [§4.6](#46-the-calculation-algorithm) calculation (unchanged; a future policy wanting it must take the certificate set as an *explicit input*, preserving the pure-function invariant, behind its own decision record). Graph changes of any kind (no new edge types; nodes remain keyed by `creator_key`; aggregation-by-principal is verifier output and product presentation). Truthfulness: a certificate certifies that a principal authorized a run key, not that the run key's records are honest — the [§8.7](#87-adversarial-threat-model) limit applies in full.
 
 ---
 
@@ -2107,7 +2467,7 @@ The proof bundle ([§2.8](#28-proof-bundle-format)) MAY carry a list of `(log_id
 }
 ```
 
-A bundle with a single `log_proofs` entry is equivalent to the legacy single-log bundle format; the array form is the canonical form when multiple logs are involved.
+A bundle with a single `log_proofs` entry is equivalent to the legacy single-log bundle format; the array form is the canonical form when multiple logs are involved. Elements MAY carry an OPTIONAL `anchor_type` discriminator identifying non-atrib-log anchors; see [§2.11.9](#2119-log_proofs-element-discriminator).
 
 #### 2.11.4 Verifier-side threshold and equivocation detection
 
@@ -2131,6 +2491,164 @@ Each log publishes a stable `log_id` derived from its origin string per [§2.4](
 **Does NOT defend against:** collusion across all logs in the trusted set (consumer is responsible for picking logs operated by independent parties with different incentives); submission-time censorship by some logs (threshold M handles this gracefully); record-level retroactive removal across all logs (no defense if all logs comply).
 
 See [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) for the design rationale and the alternatives considered.
+
+#### 2.11.7 Anchors: generalizing the replication target
+
+_This section is normative; anchoring beyond a single log remains OPTIONAL at the protocol level._
+
+The thing a verifier needs from a second log ([§2.11.1](#2111-replication-is-optional)) is not another atrib log. It is any independently operated service that can prove a hash existed no later than a stated time. This section generalizes the replication target from "atrib-conformant log" to **anchor**.
+
+An **anchor** is a service that:
+
+- (a) accepts a 32-byte SHA-256 hash,
+- (b) later yields a proof that the hash existed no later than an attested time, and
+- (c) whose proof is verifiable offline by a pure function `(proof, record_hash, trust_material) → { valid, anchored_at_ms | null, pending }` — no network calls, no wall clock, no randomness, the same determinism discipline as [§4.6](#46-the-calculation-algorithm). Two verifier runs on an identical bundle and trust configuration MUST produce identical output.
+
+atrib log-nodes are the richest conforming anchor: they provide inclusion, in-log ordering, and the read surfaces of [§2.5](#25-tile-api-read-interface). Sigstore Rekor, RFC 3161 timestamping authorities, and OpenTimestamps conform with existence-by-time semantics only. That weaker guarantee is sufficient for the plurality property: a verifier holding one atrib-log proof plus one independent existence-by-time proof no longer terminates its trust claim at a single operator.
+
+**No signed byte changes.** Attribution records ([§1.3](#13-canonical-serialization)), the 90-byte log entry ([§2.3.1](#231-entry-serialization)), and checkpoints ([§2.4](#24-checkpoint-format)) are untouched by anchoring. Proof bundles are post-signing artifacts stored alongside records ([§2.8](#28-proof-bundle-format)). Anchoring is also permissionless and post-hoc: any party — producer, host, or third party — MAY anchor an existing `record_hash` to an additional anchor at any time and append the proof to the bundle, without access to the record's signing key ([§2.11.10](#21110-the-anchoring-signature-claim-artifact)).
+
+Anchor plurality is a producer-side configuration posture ([§2.11.12](#21112-producer-side-anchor-posture)) and a verifier-side tier ([§2.11.11](#21111-anchor-independence-and-the-anchor_plurality-annotation)). It is never a protocol mandate, never a gate on the primary tool call or response ([§5.8](#58-degradation-contract)), and never a synchronous wait before returning a response ([§5.3.5](#535-log-submission)). Single-anchor bundles — including every bundle issued before this section existed — remain valid without re-issuance, ever.
+
+#### 2.11.8 Anchor type registry
+
+An anchor type registration defines four things:
+
+| Field | Meaning |
+| --- | --- |
+| `anchor_type` | Stable string identifier (registry below) |
+| Anchored message | Exactly which bytes the proof commits to, derived deterministically from `record_hash` |
+| Proof payload schema | The fields inside the bundle element's `proof` object ([§2.11.9](#2119-log_proofs-element-discriminator)) |
+| Verification function | The pure function of [§2.11.7](#2117-anchors-generalizing-the-replication-target)(c) |
+
+Initial registry (v1):
+
+| `anchor_type` | Anchored message | Proof payload | Trust material | Time semantics |
+| --- | --- | --- | --- | --- |
+| `atrib-log` (default when absent) | 90-byte AtribLogEntry ([§2.3.1](#231-entry-serialization)) embedding `record_hash` | existing `checkpoint` + `inclusion_proof` per [§2.11.3](#2113-proof-bundle-format-extension), verified per [§2.7](#27-inclusion-proof-verification) | log public key ([§2.4.2](#242-log-signing-key-and-key-id)) | checkpoint time + in-log ordering |
+| `sigstore-rekor` | `rekord`-type entry over the anchor-claim artifact ([§2.11.10](#21110-the-anchoring-signature-claim-artifact)), carrying a fresh anchoring signature | `entry_uuid`, `log_index`, `entry_body_b64`, `inclusion_proof`, `checkpoint`, `integrated_time_ms`, `signed_entry_timestamp_b64` | Rekor instance public key | `integrated_time` |
+| `rfc3161-tsa` | `messageImprint.hashedMessage` = the raw 32 `record_hash` bytes, `hashAlgorithm` = SHA-256 | `timestamp_token_b64` (DER TimeStampToken), `hashed_message_hex`, `gen_time_ms` | TSA certificate chain / root | `genTime` |
+| `opentimestamps` | the raw 32 `record_hash` bytes as the OTS commitment input | `ots_b64` (serialized `.ots` proof), `commitment_hex`, `status: "complete" \| "pending"`, `attested_time_ms` when complete | Bitcoin block headers (via any header source the verifier trusts) | attested block time |
+
+Unknown `anchor_type` values MUST be surfaced by verifiers (in `unknown_types`, [§2.11.11](#21111-anchor-independence-and-the-anchor_plurality-annotation)) but MUST NOT count toward plurality and MUST NOT be treated as invalidating the bundle or the record — the same forward-compatibility rule as unknown event types ([§1.2.4](#124-event_type-values)).
+
+A `pending` proof (an OpenTimestamps attestation awaiting Bitcoin confirmation) is carried in the bundle and upgraded in place later. Proof bundle caching stays keyed by `record_hash` per [§5.3.5](#535-log-submission); that keying is what makes in-place upgrade safe.
+
+#### 2.11.9 log_proofs element discriminator
+
+The `log_proofs` array of [§2.11.3](#2113-proof-bundle-format-extension) is the wire shape for all anchors. Elements gain an OPTIONAL `anchor_type` discriminator:
+
+```jsonc
+{
+  "record_hash": "sha256:...",
+  "log_proofs": [
+    // legacy element, no discriminator ⇒ anchor_type "atrib-log"; parses exactly as today
+    {
+      "log_id": "log.atrib.dev", // [§2.4](#24-checkpoint-format) origin string
+      "checkpoint": "...", // C2SP-canonical signed note
+      "inclusion_proof": ["...", "..."], // RFC 6962 inclusion proof, base64 per [§2.6.2](#262-inclusion-proof-response)
+    },
+    // non-tlog anchor element
+    {
+      "anchor_type": "rfc3161-tsa",
+      "anchor_id": "freetsa.org", // stable anchor identity, the role log_id plays for logs
+      "proof": {
+        "timestamp_token_b64": "MIIC...",
+        "hashed_message_hex": "c09397f4...",
+        "gen_time_ms": 1782864031000,
+      },
+    },
+    {
+      "anchor_type": "opentimestamps",
+      "anchor_id": "opentimestamps-calendars",
+      "proof": { "ots_b64": "AE9w...", "commitment_hex": "c09397f4...", "status": "pending" },
+    },
+  ],
+}
+```
+
+Rules:
+
+- (a) `anchor_type` absent ⇒ the element is an `atrib-log` proof; the legacy `(log_id, checkpoint, inclusion_proof)` triple is REQUIRED and a `proof` object is forbidden. Every existing bundle parses unchanged, byte-for-byte.
+- (b) `anchor_type` present and ≠ `"atrib-log"` ⇒ `anchor_id` and `proof` are REQUIRED.
+- (c) The array key stays `log_proofs`. Renaming it would break every existing bundle parser for zero semantic gain; the name is a historical artifact and is documented as such.
+- (d) Elements are unordered.
+- (e) An element violating rule (a) or (b) is **malformed**: verifiers MUST exclude it from every count except `proof_count` / `malformed_count` and MUST NOT treat its presence as invalidating the bundle or the record.
+
+#### 2.11.10 The anchoring-signature claim artifact
+
+Anchor types whose upstream service requires a signed artifact (Sigstore Rekor's `rekord` type) MUST anchor a fresh **anchor-claim artifact**, never the record's own `signature`. The artifact is the UTF-8 bytes of:
+
+```
+"atrib-anchor/v1:" + record_hash
+```
+
+where `record_hash` is in its canonical `"sha256:" + 64-lowercase-hex` form ([§1.2.3](#123-chain_root-for-genesis-records)). The artifact is deterministically reconstructible from `record_hash` alone and reveals nothing beyond the commitment itself, preserving the [§8.3](#83-salted-commitment-posture) posture. The `atrib-anchor/v1:` prefix domain-separates the anchoring signature from any canonical record (JCS records begin with `{`; the prefix makes the separation explicit rather than structural).
+
+The anchoring party signs the artifact bytes with its own Ed25519 key — a **fresh anchoring signature**. The anchoring key MAY be the record's `creator_key` or any third party's key, since anchoring is permissionless ([§2.11.7](#2117-anchors-generalizing-the-replication-target)).
+
+**The record's own `signature` MUST NOT be reused as the anchoring signature.** The digest path (a Rekor `hashedrekord` entry with `data.hash` = `record_hash` and the record's signature) is cryptographically unimplementable, twice over:
+
+1. `record_hash` is computed over the JCS canonicalization of the COMPLETE record INCLUDING the `signature` field ([§1.2.3](#123-chain_root-for-genesis-records) normative clarification), while the signature verifies over the signature-less canonical form ([§1.4.2](#142-signing-procedure)). The two byte strings differ, so an upload-time check that the signature verifies over the artifact behind `data.hash` fails by construction.
+2. atrib signatures are Pure EdDSA (RFC 8032 §5.1.6, no prehashing), which cannot be verified from a digest alone regardless.
+
+Verification of a `sigstore-rekor` element: reconstruct the anchor-claim artifact from the bundle's `record_hash`; confirm the entry body's artifact content matches the reconstruction and carries the prefix; verify the embedded Ed25519 anchoring signature over the artifact bytes; verify the inclusion proof against the checkpoint and the signed entry timestamp against the Rekor instance key. An entry whose artifact does not reconstruct from the bundle's `record_hash` is an **invalid proof** — not counted, not equivocation — even when its embedded signature is genuinely valid over its own (mismatched) artifact.
+
+The conformance corpus ([§2.11.13](#21113-conformance)) pins both directions: a fully verifying anchor-claim vector and a vector demonstrating that the record's signature verifies over the signing input but NOT over the bytes behind `record_hash`.
+
+#### 2.11.11 Anchor independence and the anchor_plurality annotation
+
+Two verified anchors are **independent** iff they fall in different operator groups. The verifier's trust configuration maps `(anchor_type, anchor_id)` → operator group; the default grouping is one group per distinct `(anchor_type, anchor_id)` pair. Two atrib log-nodes run by the same operator MUST be declared as one group by that operator's consumers; atrib maintains no central registry (same posture as [§2.11.5](#2115-log-identity)). `independent_count` counts distinct groups among verified, non-pending proofs — mirroring [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)'s distinct-verified-keys counting rule.
+
+When a proof bundle is supplied, verifiers populate an `anchor_plurality` annotation:
+
+```jsonc
+"anchor_plurality": {
+  "proof_count": 3,               // elements in log_proofs
+  "verified_count": 2,            // proofs whose pure-function verification passed
+  "pending_count": 1,             // e.g. OTS status "pending"; not counted as verified
+  "malformed_count": 0,           // rule (a)/(b) violations per [§2.11.9](#2119-log_proofs-element-discriminator)
+  "unknown_types": [],            // surfaced, not counted, not invalidating
+  "independent_count": 2,         // distinct operator groups among verified
+  "plurality_met": true,          // independent_count >= requiredAnchors (verifier option, default 2)
+  "single_anchor": false,         // tier flag: independent_count == 1
+  "equivocation_detected": false,
+  "anchored_at_range_ms": [1782864001000, 1782864031000]  // min/max attested times among verified anchors; null when none carry a time
+}
+```
+
+**Anchor count 1 is a tier, not a failure.** A record whose bundle yields `independent_count: 1` verifies as valid with `single_anchor: true` and `plurality_met: false` — signal not block, exactly like `cross_attestation_missing` ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)) and `in_envelope: false` ([D051](DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes)). No bundle at all ⇒ `anchor_plurality: null`; unanchored records are already a legitimate state.
+
+Hard rejection remains reserved for the [§2.11.4](#2114-verifier-side-threshold-and-equivocation-detection) conditions, unchanged: consumer-configured threshold M not met (`cross_log_threshold_not_met`, M still defaults to 1) and equivocation detection (`cross_log_equivocation_detected`; censorship-shaped disagreement is flagged as `cross_log_censorship_suspected` with the silent log identified). Threshold and tiering are orthogonal: a bundle can satisfy `plurality_met: true` and still be rejected by a consumer's M, and vice versa. Equivocation checks apply per pair: two `atrib-log` proofs compare committed leaf bytes exactly as [§2.11.4](#2114-verifier-side-threshold-and-equivocation-detection) step 4 specifies; any anchor whose proof does not bind the bundle's `record_hash` (a TSA token whose `hashedMessage` differs, a Rekor entry whose artifact does not reconstruct) is simply an invalid proof, not counted and not equivocation. Time-window disagreement across anchors is informational (`anchored_at_range_ms`), never a rejection — anchors legitimately attest at different times.
+
+Fact/policy separation holds ([§3.6](#36-implementation-notes)): anchors and their verification live entirely in proof bundles and verifier annotations. Nothing enters the graph layer ([§3](#3-graph-query-interface)); no graph endpoint returns anchor-weighted or anchor-interpreted data. What a consumer does with `single_anchor: true` is consumer policy.
+
+#### 2.11.12 Producer-side anchor posture
+
+Producers accept an anchor configuration:
+
+```jsonc
+{
+  "anchors": [
+    { "anchor_type": "atrib-log", "url": "https://log.atrib.dev/v1" },
+    { "anchor_type": "opentimestamps", "calendars": ["https://a.pool.opentimestamps.org"] }
+  ],
+  "allow_single_anchor": false   // default
+}
+```
+
+Resolution precedence, exact:
+
+1. No anchor config at all ⇒ the SDK's built-in default set (two independent anchors) applies. Zero-config producers get plurality without opting in.
+2. Explicit config with ≥ 2 entries ⇒ used as given.
+3. Explicit config with 1 entry and `allow_single_anchor: true` ⇒ used as given, no warning — the deliberate-single-anchor analog of a deliberate dangling `informed_by` claim per [D113](DECISIONS.md#d113-unvalidated-informed_by-refs-are-omitted-by-default).
+4. Explicit config with fewer than 2 entries and no flag ⇒ an `atrib:`-prefixed warning naming the missing plurality, plus a sidecar degradation marker `_local.anchor_config = { configured: <n>, allow_single_anchor: false }` ([§5.9.3](#593-the-_local-sidecar-shape)). The operation continues. This path MUST NOT throw into the primary path and MUST NOT disable signing ([§5.8](#58-degradation-contract)).
+
+Submission fan-out is per-anchor fire-and-forget with independent retry queues. Anchoring MUST NOT be awaited before returning a response ([§5.3.5](#535-log-submission)). A fully failed anchor degrades the bundle to whatever proofs arrived; the record itself — signed, mirrored, returned to the caller — is unaffected. The `atrib-log` anchor keeps today's exact submission path ([§2.6.1](#261-submit-entry)); non-tlog adapters are additive clients. Anchor plurality can only ever add proofs; it can never block a tool call, a response, or a signature.
+
+#### 2.11.13 Conformance
+
+The anchor-interface conformance corpus lives at [`spec/conformance/2.11/anchors/`](spec/conformance/2.11/anchors/) (fixtures + manifest), generated deterministically by `packages/log-dev/scripts/generate-conformance-anchors.ts` with a reference implementation at `packages/verify/test/conformance-anchors.test.ts`. The thirteen cases pin: legacy absent-discriminator parsing, the [§2.11.9](#2119-log_proofs-element-discriminator) malformation rules, unknown-type forward compatibility, plurality tiering (including pending-proof exclusion and in-place upgrade), operator-group independence, the [§2.11.10](#21110-the-anchoring-signature-claim-artifact) anchor-claim artifact with real Ed25519 anchoring signatures and the digest-path impossibility vector, the unchanged [§2.11.4](#2114-verifier-side-threshold-and-equivocation-detection) hard conditions, and the [§2.11.12](#21112-producer-side-anchor-posture) resolution rules. All record signatures, anchoring-claim signatures, signed-note checkpoints, and RFC 6962 inclusion proofs in the corpus are real; the RFC 3161 and OpenTimestamps payload interiors are structural in the initial corpus revision (the commitment-binding fields are real record hashes), with full per-type cryptographic vectors as a planned extension. Implementations MUST reproduce the expected `anchor_plurality` annotation for every case and MUST produce identical output across repeated runs on identical input.
 
 ---
 
@@ -2406,7 +2924,7 @@ The strict separation also makes the system auditable over time. If a settlement
 
 **Edge derivation is deterministic and normative.** Given the same set of attribution records, two independent implementations MUST produce identical graphs. The derivation rules in [§3.2.4](#324-edge-derivation-rules) are the normative definition. Any deviation is a nonconformance.
 
-**Adversarial trust posture.** The fact/policy separation is one part of the substrate's trust posture. A complementary part covers what the protocol does and does not certify under adversarial conditions: signatures prove who said what, never whether what was said is true. [§8.7](#87-adversarial-threat-model) enumerates the adversarial threat model, the layered trust assessment stack atrib provides (signature, identity, capability, revocation, cross-attestation, tool-side attestation, external evidence, witnessing, cross-log replication, structural anomaly detection), and the asymmetric properties the substrate produces despite the fundamental limit. The graph's deterministic derivation is one input to that assessment, not a substitute for it.
+**Adversarial trust posture.** The fact/policy separation is one part of the substrate's trust posture. A complementary part covers what the protocol does and does not certify under adversarial conditions: signatures prove who said what, never whether what was said is true. [§8.7](#87-adversarial-threat-model) enumerates the adversarial threat model, the layered trust assessment stack atrib provides (signature, identity, capability, revocation, cross-attestation, tool-side attestation, external evidence, witnessing, anchor plurality, structural anomaly detection), and the asymmetric properties the substrate produces despite the fundamental limit. The graph's deterministic derivation is one input to that assessment, not a substitute for it.
 
 ---
 
@@ -3558,7 +4076,9 @@ Three packages are defined in this specification. All are TypeScript/JavaScript 
 | @atrib/agent  | Agent developers                | Wraps an agent to automatically read and forward attribution context on every tool call, run policy negotiation at session start, create session policy records, and detect transaction events. |
 | @atrib/verify | Merchants                       | Verifies settlement recommendations and runs post-hoc attribution calculations for sessions where no agent SDK was present.                                                                     |
 
-All three packages are open source under the Apache 2.0 license. The npm package names are reserved. The reference implementations are maintained at `github.com/atrib-io`. Third-party implementations are permitted and encouraged, provided they satisfy the conformance requirements in this section.
+All three packages are open source under the Apache 2.0 license. The npm package names are reserved.
+
+Beyond the three spec-defined middleware packages, the reference distribution also ships consolidated client SDKs (informative): `@atrib/sdk` for TypeScript and the `atrib` distribution for Python expose `attest()` (write) and `recall()` (read) verbs over the same record layer, adding no new signing implementation. The Python distribution is the first non-TypeScript implementation of the [§1](#1-attribution-record-format) and [§5](#5-sdk-specification) contracts; both are held byte-identical through the shared conformance corpora. They are clients over this specification, not additional conformance surfaces. The reference implementations are maintained at `github.com/atrib-io`. Third-party implementations are permitted and encouraged, provided they satisfy the conformance requirements in this section.
 
 ---
 
@@ -4191,7 +4711,7 @@ The helper and primitive do not add a graph edge type or event type. A successfu
 
 #### 5.5.6 Generic Authorization Evidence Blocks
 
-`@atrib/verify` exposes a generic tiered evidence block shape for external authorization and delegation systems. These blocks are verifier-side signals. They do not alter record signature verification, graph derivation, settlement calculation, or `verifyRecord().valid`.
+`@atrib/verify` exposes a generic tiered evidence block shape for external authorization and delegation systems. These blocks are verifier-side signals. They do not alter record signature verification, graph derivation, settlement calculation, or `verifyRecord().valid`. This generic block shape is the legacy pre-envelope form: [§5.5.7](#557-universal-evidence-envelope) defines the universal evidence envelope that supersedes it for new evidence types and freezes this section's `protocol` string set at five values.
 
 The generic result shape is:
 
@@ -4262,6 +4782,87 @@ A non-normative Cloudflare Worker and Durable Object reference for the HTTP repl
 The offline conformance corpora for the OAuth, AAuth, and x401 adapters live at `spec/conformance/5.5.6/oauth/`, `spec/conformance/5.5.6/aauth/`, and `spec/conformance/5.5.6/x401/`. They cover verified claims, JWT access tokens, MCP resource binding, scope attenuation failures, caller-supplied introspection responses, DPoP proof checks, AAuth token types, AAuth resource binding, AAuth-Access authorization coverage, mission evidence, HTTP signature binding, current x401 headers, result artifacts, token responses, request-id binding, proof-result errors, unverified proof failures, legacy-header strict mode, payment-hint separation, external agent-origin facts, issuer-trust facts, and proof-payment binding facts.
 
 This section is intentionally at the verifier layer. Authorization systems decide what an agent is allowed to do. atrib records what the agent did, who signed the record, how it links to prior work, and which external evidence a verifier accepted. See [D109](DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks).
+
+#### 5.5.7 Universal Evidence Envelope
+
+The universal evidence envelope is the single protocol-level attachment model for all externally verifiable material: OAuth / MCP authorization results, AAuth tokens, x401 proofs, AP2 / Verifiable Intent receipts, human approvals, counterparty co-signature receipts, and every future evidence type. Each evidence type is a **profile** of the envelope, identified by an absolute HTTPS type URI and versioned independently of this specification. The generic blocks of [§5.5.6](#556-generic-authorization-evidence-blocks) are the legacy pre-envelope form; this section freezes their `protocol` string set and defines the deterministic mapping from that form into envelope form.
+
+Envelopes are verifier-layer objects and never touch signed bytes. They exist only in: (a) the local mirror sidecar ([§5.9.3](#593-the-_local-sidecar-shape)), (b) the archive evidence projection ([§2.12](#212-record-body-archive-layer)), (c) verifier results, and (d) host-owned packets (handoff claims per [D105](DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance), continuation packets, action-gate packets per [D133](DECISIONS.md#d133-action-gate-is-a-host-owned-controlproof-package), proof packets). Envelopes MUST NOT be carried in propagation tokens ([§1.5.2](#152-http-transport-tracestate)) and MUST NOT enter the 90-byte log entry ([§2.3.1](#231-entry-serialization)). Evidence MUST NOT alter record signature verification, graph derivation ([§3.2.4](#324-edge-derivation-rules)), the [§4.6](#46-the-calculation-algorithm) calculation, or `verifyRecord().valid`. A signed action is real even when its external evidence is missing, expired, over-scoped, or forged; consumers apply their own policy over tiers. See [D109](DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks).
+
+**Envelope schema (normative).** One schema, versioned by the integer `envelope` field:
+
+```json
+{
+  "envelope": 1,
+  "profile": "https://atrib.dev/v1/evidence/oauth2",
+  "profile_version": "1.0.0",
+  "tier": "verified",
+  "payload": {
+    "hash": "sha256:64-lowercase-hex-chars",
+    "media_type": "application/jwt",
+    "ref": { "kind": "mirror", "uri": null, "record_hash": null },
+    "inline": null
+  },
+  "facts": {
+    "issuer": "https://as.example",
+    "subject": "agent-7",
+    "scope": ["tools:read"],
+    "attenuation_ok": true,
+    "delegation_ok": null
+  },
+  "result": {
+    "valid": true,
+    "constraints": [
+      { "type": "scope", "status": "passed", "expected": ["tools:read"], "actual": ["tools:read"] }
+    ],
+    "errors": [],
+    "warnings": []
+  },
+  "verifier": { "name": "@atrib/verify", "version": "1.x.y", "checked_at_ms": 1780000000000 }
+}
+```
+
+Required fields: `envelope` (MUST be the integer `1`), `profile` (absolute HTTPS type URI), `profile_version` (non-empty semver of the profile document), `tier` (one of the four values below), `payload` with `hash` and `ref.kind`, and `result` with boolean `valid`, `constraints[]`, `errors[]`, and `warnings[]`. `facts` (a flat JSON object of profile-defined verifier facts), `verifier`, `payload.media_type`, `payload.inline`, `ref.uri`, and `ref.record_hash` are OPTIONAL. `result.constraints[]` reuses the [§5.5.6](#556-generic-authorization-evidence-blocks) constraint shape unchanged (`status: 'passed' | 'failed' | 'unresolved' | 'not_checked'`). Consumers MUST reject envelopes that violate these shape rules; rejecting an envelope never rejects the record it attaches to.
+
+**Payload hash rule.** `payload.hash` is `"sha256:" + hex(SHA-256(bytes))` where `bytes` is the exact raw payload bytes for non-JSON media types (a compact JWT's UTF-8 bytes, a receipt JWT, an SD-JWT), or the JCS canonical form (RFC 8785, [§1.3](#13-canonical-serialization)) for JSON payloads. The profile document declares which rule applies per media type. This is the hash-not-body posture of [§8.3](#83-salted-commitment-posture): public surfaces carry hashes and sanitized facts, never raw payloads.
+
+**`ref.kind` and the `ref.record_hash` rule.** `ref.kind` states where the payload bytes are retrievable and is a closed five-value enum: `'inline' | 'mirror' | 'archive' | 'external' | 'withheld'`. `payload.inline` (the raw payload, local-only, never public) is permitted ONLY when `ref.kind` is `"inline"`; any other combination MUST be rejected. `ref.record_hash` is a sibling field, NOT a `kind` value — implementations MUST reject `kind: "record"`. When set, `record_hash` declares that the payload is itself a signed atrib record: `payload.hash` commits to that record's canonical JCS bytes, while `kind` still states where those bytes are retrievable (typically `mirror`, `archive`, or `withheld`). `record_hash` MAY accompany any `kind` except `inline`, where it is redundant with the inline body. "The payload is a signed record" and "where the bytes live" are orthogonal facts; one axis per field.
+
+**Tier ladder.** `tier` states how the party named in `verifier` established the claim, ordered by independent reproducibility:
+
+| Tier | Name       | Meaning                                                                                                                                                                                                                                                             |
+| ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0    | `declared` | Payload hash and facts asserted by a producer or counterparty. Nothing checked.                                                                                                                                                                                     |
+| 1    | `shape`    | Payload parsed and structurally validated offline. No trust root exercised.                                                                                                                                                                                         |
+| 2    | `attested` | A caller-owned external path accepted the material (introspection per [D111](DECISIONS.md#d111-host-owned-oauth-evidence-infrastructure), credential-verifier `resultVerified` per [D132](DECISIONS.md#d132-x401-proof-evidence-stays-verifier-side-authorization-evidence)). Not independently reproducible from the envelope alone. |
+| 3    | `verified` | Cryptographically verified against declared trust roots (JWKS, pinned keys, pinned corpus per [D096](DECISIONS.md#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus)). Reproducible by anyone with the envelope, the payload, and the same trust roots.  |
+
+The enum is closed at these four values. Extending it requires revising the evidence-envelope decision record, never a consumer specification.
+
+**Tier rules (normative).** (1) A tier belongs to the envelope *instance*: it states what the `verifier` party did, not what is true. (2) A consumer MUST NOT relay another party's envelope with its own identity in `verifier` or with a raised tier; re-verification produces a new envelope instance. (3) A consumer re-running checks MAY produce a higher- or lower-tier instance than the one it received. (4) The identity key for deduplication is `(profile, payload.hash)`; multiple instances per key are permitted, and consumers order by tier descending, then `checked_at_ms` descending, then verifier name. (5) A `tier: "verified"` envelope whose payload cannot be retrieved (`ref.kind: "withheld"` or unresolvable) is still well-formed; consumers MUST report it as claimed-but-not-reproducible, mirroring the tiered record-verifiability ladder of [§2.12.7](#2127-tiered-verifiability).
+
+**Profile registration rule.** A profile is registered by publishing, together: (1) a type URI — atrib-maintained profiles use `https://atrib.dev/v1/evidence/<name>`; third parties use an absolute HTTPS URI on a domain they control, the same self-sovereign convention as extension event_type URIs and deliberately below the [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar, because no event_type byte and no signed field is involved; (2) a profile document (for atrib-maintained profiles: `docs/evidence-profiles/<name>.md`) defining accepted payload media types and the applicable hash rule, the `facts` vocabulary (each fact's name, JSON type, and provenance class: `verifier-derived`, `caller-attested`, or `producer-declared`), what each tier requires for the profile, the sanitization contract (which facts and hashes may appear in public projections — raw payloads never, by default, per [D110](DECISIONS.md#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop) / [D134](DECISIONS.md#d134-x401-producer-capture-and-propagation-stay-sanitized)), and its own semver rules (`profile_version` refers to this document); and (3) a conformance case family at `spec/conformance/evidence-envelope/<name>/` in the same commit (atrib-maintained profiles only; third parties SHOULD publish equivalents). Profile identity is the full URI: a foreign domain reusing an atrib profile name (e.g. `https://example.com/v1/evidence/oauth2`) is a valid third-party profile URI and MUST NOT be treated as the atrib profile of the same name.
+
+The initial atrib-maintained registry is: `oauth2`, `mcp-oauth`, `aauth`, `x401`, `ap2-vi` (mapped 1:1 from the legacy [§5.5.6](#556-generic-authorization-evidence-blocks) adapters), `human-approval` (per [D118](DECISIONS.md#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain): the payload is the human-signed approval record itself — `ref.record_hash` names it, `ref.kind` states where its body is retrievable, `payload.hash` commits to its canonical bytes; facts: approver key, approval scope, decision), `counterparty-attestation` (out-of-band co-signature receipts that are external evidence per [D098](DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) / [D107](DECISIONS.md#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes)), and `delegation-certificate` (the certificate carrier defined by [§1.11.8](#1118-carriage): the payload is the certificate object under the JCS hash rule or its `cert_hash` reference; facts are the [§1.11.4](#1114-verifier-walk) walk outputs). Registered after the initial set, under the same rule: `continuation-packet` (per [D142](DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions): the payload is the continuation packet a baton-pass record hands to a successor agent — raw-bytes hash rule for document media types, the `ref.record_hash` sibling spelling when the carried material is itself a signed baton-pass observation; facts are role-term routing facts, with packet bodies private by default).
+
+**Unknown-profile handling (normative).** Consumers MUST preserve envelopes whose profile URI they do not recognize, MUST render them opaquely (profile URI, tier, payload hash), MUST NOT drop them, and MUST NOT let them affect record validity — the same posture as unknown extension event types ([§1.2.4](#124-event_type-values)). Filtering to known profiles is a rendering choice, never a storage or relay behavior.
+
+**Legacy `protocol` strings are frozen (normative).** The pre-envelope [§5.5.6](#556-generic-authorization-evidence-blocks) `protocol` string set is closed at exactly five values: `'oauth2'`, `'mcp_oauth'`, `'aauth'`, `'x401'`, `'ap2_vi'`. No new legacy protocol string may be introduced anywhere in the substrate — not in `@atrib/verify`, not in producers, not in future decision records. Every new evidence type registers as an envelope profile.
+
+**Legacy mapping (normative).** The mapping from a legacy [§5.5.6](#556-generic-authorization-evidence-blocks) block to envelope form (`fromLegacyEvidenceBlock`) MUST be deterministic; two implementations given the same block MUST produce identical envelopes:
+
+1. `protocol` maps to the profile URI through the fixed five-row table: `oauth2` → `https://atrib.dev/v1/evidence/oauth2`, `mcp_oauth` → `https://atrib.dev/v1/evidence/mcp-oauth`, `aauth` → `https://atrib.dev/v1/evidence/aauth`, `x401` → `https://atrib.dev/v1/evidence/x401`, `ap2_vi` → `https://atrib.dev/v1/evidence/ap2-vi`. Any other protocol string MUST be rejected; the mapping MUST NOT invent a profile URI. The table is complete and final at five rows; a sixth row is a conformance failure, not an extension point.
+2. The mapped envelope carries `envelope: 1`, `profile_version: "1.0.0"`, and `tier: "attested"`. A legacy block records what a caller-owned verifier path accepted; it carries no trust roots, so the mapping MUST NOT claim `"verified"`. Consumers re-verify to raise tier.
+3. `payload.hash` commits to the legacy block itself: `"sha256:" + hex(SHA-256(JCS(block)))`, with `media_type: "application/json"` and `ref.kind: "withheld"` (the legacy shape does not carry the raw external material).
+4. `issuer`, `subject`, `scope`, `attenuation_ok`, and `delegation_ok` copy into `facts` unchanged (nulls preserved). When `details` is present, `facts.details_hash` is `"sha256:" + hex(SHA-256(JCS(details)))`; the `details` value itself is never inlined into the envelope.
+5. `valid`, `constraints`, `errors`, and `warnings` copy into `result` unchanged.
+6. The mapped envelope carries no `verifier` block: the mapping is mechanical, not a re-verification (tier rule 2).
+
+**Deliberate commitment path.** This section adds no signed-record field. A producer that wants the *signed record* to commit to evidence uses existing mechanisms only: include `{ profile, payload_hash }` in the content hashed into `args_hash` (per the [D099](DECISIONS.md#d099-explicit-emit-records-commit-local-content-through-default-args_hash) default), or emit an extension record referencing the envelope and linked via `informed_by` ([§1.2.5](#125-informed_by)). A future optional signed `evidence_hash` field would slot lexicographically after `event_type` and before `informed_by` under [§1.3](#13-canonical-serialization); it is explicitly deferred.
+
+**Invariants.** Fact/policy separation ([§3.6](#36-implementation-notes)) is preserved: `result.valid` and `facts` are verification facts, not weights; graph services never store, derive from, or serve envelopes. The [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) cross-attestation rule stays in core: the `signers[]` array over canonical transaction bytes remains the only way to satisfy the ≥2-distinct-keys minimum, and a verifier that sees only a `counterparty-attestation` envelope still reports `cross_attestation_missing: true` ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)). Producer-side envelope writers follow the degradation contract ([§5.8](#58-degradation-contract)): catch-all, silent-failure, `atrib:`-prefixed logging; a failed envelope construction drops the envelope, never the record or the primary tool response. The envelope is the concrete shape of trust layer 7 ("external evidence") in the [§8.7](#87-adversarial-threat-model) stack: it does not certify truth, it records what a named verifier accepted.
+
+**Conformance.** The envelope conformance corpus lives at `spec/conformance/evidence-envelope/` with six case families: `shape/` (schema validity, closed enums, the `ref.record_hash` sibling rule), `registry/` (HTTPS type-URI rule, full-URI profile identity), `unknown-profile/` (preservation, opaque rendering), `legacy-mapping/` (the frozen five-row table with sixth-string rejection), `tier/` (instance-scoped tier semantics, relay-swap rejection, claimed-but-not-reproducible reporting, and the never-flips-`valid` invariant), and `continuation-packet/` (the [D142](DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions) post-initial profile registration). The generator is `packages/log-dev/scripts/generate-conformance-evidence-envelope.ts`; the reference consumer is `packages/verify/test/conformance-evidence-envelope.test.ts`. Profile-internal semantics remain authoritative in the existing corpora at `spec/conformance/5.5.6/{oauth,aauth,x401}/` and `spec/conformance/ap2-vi-crypto/`, which are referenced, not moved.
 
 ---
 
@@ -5093,7 +5694,7 @@ Truth assessment is layered above the signature primitive. atrib provides severa
 | 6     | Tool-side response signing ([§7.6](#76-outcome-verification-patterns) Pattern A)                            | Agent fabricating tool results                                                                                      | Collusion between agent and tool operator; tool operator compromised                           |
 | 7     | External evidence ([§7.6](#76-outcome-verification-patterns) Pattern B)                                     | Agent claiming outcomes that did not occur in the world                                                             | External system itself being compromised                                                       |
 | 8     | Witnessing ([§2.9](#29-witnessing-and-cosignatures))                                                        | Log operator equivocation at the checkpoint level; selective censorship of checkpoints                              | Compromise of individual signing keys; record-level censorship by the log operator             |
-| 9     | Cross-log replication ([§2.11](#211-cross-log-replication))                                                 | Single-log-operator censorship, equivocation, data loss; record-level discrepancies between logs                    | Collusion across all logs in the trusted set                                                   |
+| 9     | Anchor plurality       ([§2.11](#211-cross-log-replication))                                                 | Single-anchor-operator censorship, equivocation, data loss; record-level discrepancies between anchors                    | Collusion across all anchors in the trusted set                                                   |
 | 10    | Structural anomaly detection (consumer-side)                                                                | Implausible patterns: bursts, dangling references, contradictory claims, statistical oddities in hash distributions | Subtle attacks that evade pattern detection                                                    |
 
 No single layer is dispositive. A verifier's confidence assessment combines them; the substrate provides the structure, the assessment is consumer-side policy.

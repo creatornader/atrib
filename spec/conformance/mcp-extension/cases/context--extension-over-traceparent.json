@@ -1,0 +1,20 @@
+{
+  "name": "context--extension-over-traceparent",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "No explicit argument. The extension block context_id beats the traceparent trace-id; the disagreement is a warning. The trace-id rung remains for callers with no extension block.",
+  "input": {
+    "request_meta": {
+      "dev.atrib/attribution": {
+        "context_id": "22222222222222222222222222222222"
+      },
+      "traceparent": "00-33333333333333333333333333333333-00f067aa0ba902b7-01"
+    }
+  },
+  "expected": {
+    "resolved_context_id": "22222222222222222222222222222222",
+    "resolved_source": "extension",
+    "mismatch_warning": true,
+    "error_raised": false
+  }
+}

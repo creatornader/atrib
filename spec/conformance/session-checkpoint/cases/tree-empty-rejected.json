@@ -1,0 +1,31 @@
+{
+  "name": "tree-empty-rejected",
+  "spec_section": "1.2.10",
+  "description": "A checkpoint with tree_size 0 and the RFC 6962 empty-tree root (sha256 of the empty string). Per §1.2.10, tree_size MUST be >= 1: empty checkpoints are prohibited; producers skip intervals that added no leaves. Signature is valid; rejection is at the policy layer.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:cfcf514c5b736ff3e58752a89d3975114c4c8e33313b533b3adaf0ed33828ee6",
+      "checkpoint": {
+        "first_index": 0,
+        "session_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "tree_size": 0
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6",
+      "timestamp": 1782864055000,
+      "args_hash": "sha256:bd207255c5dfc3d7edd9ed3b378cc7f7958d17a980833e65627b239231a7cca0",
+      "signature": "jDkTz-JDtlzH3oa0kJur_9Hel4Dt4fz2VGXHRjFOeqX8AjIcDLw_sxQODP94CIdWcbsqo9Zhgt8HccSh9D2cDA"
+    },
+    "signer_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+  },
+  "expected": {
+    "rfc6962_empty_tree_root_hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "record_hash_hex": "903fcb6a8281c6806cbaf7126d836338764fd884420e8e44928eb26cf2a9f0b2",
+    "validator_should_accept": false,
+    "verifier_signature_ok": true,
+    "rejection_reason": "tree_size < 1"
+  }
+}

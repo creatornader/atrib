@@ -458,7 +458,7 @@ The choices that define the protocol. Each is in [DECISIONS.md](DECISIONS.md) wi
 
 Authorization evidence follows the same boundary. atrib verifies supplied OAuth, AAuth, x401, AP2 / VI, or future capability-chain evidence as tiered verifier signals, but it does not issue grants or enforce runtime access. The strategic boundary is spelled out in [Delegation and capabilities](docs/concepts/12-delegation-and-capabilities.md).
 
-**Adversarial threat model (Section 8.7).** atrib certifies what was signed, not whether the signed claim is true. A 10-layer trust assessment stack (signature, identity attestation, capability declaration, key revocation, transaction cross-attestation, tool-side response signing, external evidence, witnessing, cross-log replication, structural anomaly detection) lets verifiers build confidence in any individual record. No single layer is dispositive. The substrate provides structure for assessment, not guaranteed truth.
+**Adversarial threat model (Section 8.7).** atrib certifies what was signed, not whether the signed claim is true. A 10-layer trust assessment stack (signature, identity attestation, capability declaration, key revocation, transaction cross-attestation, tool-side response signing, external evidence, witnessing, anchor plurality, structural anomaly detection) lets verifiers build confidence in any individual record. No single layer is dispositive. The substrate provides structure for assessment, not guaranteed truth.
 
 **`workspace:*` for shared packages ([D014](DECISIONS.md#d014-cross-package-integration-tests-live-in-a-private-workspace-package-and-re-derive-primitives)).** Cross-package integration tests re-derive primitives independently rather than importing shared code. This validates that JCS + SHA-256 produce identical output across independent code paths, which is the core reproducibility property the protocol depends on.
 
@@ -535,6 +535,11 @@ Versioned URL paths (`/v1/checkpoint`, `/v6/lookup/<key>`) are immutable: once a
   └── Builds and verifies log_window_manifest objects for host-owned run
       windows. It does not sign records or store raw runtime logs.
 
+@atrib/sdk            Consolidated client SDK (first-publish pending)
+  └── attest() / recall() verbs, daemon-first over the local primitives
+      runtime with in-process fallback; re-exports the §1 record layer.
+      Byte-identical Python sibling lives at python/ (PyPI `atrib`).
+
 @atrib/log-dev        In-memory dev log stub (private, never deploy)
   └── Implements §2.6 submission API for local testing
 
@@ -601,7 +606,7 @@ services/archive-node  Record Body Archive Layer (§2.12), deployed at https://a
       contract.
 ```
 
-The seventeen designed-public packages are in source: ten SDK and integration packages (`mcp`, `agent`, `action-gate`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`, `runtime-log`) and seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`). `@atrib/action-gate` is published on npm with Trusted Publisher configured for later releases. `runtime-log` version 0.2.0 was first-published manually, with Trusted Publisher configured for later releases. The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The private `@atrib/primitives-runtime` binary composes them into one local stdio server for harness configs that need fewer child processes; no separate deployment is needed.
+The eighteen designed-public packages are in source: eleven SDK and integration packages (`mcp`, `agent`, `action-gate`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`, `runtime-log`, `sdk`) and seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`). `@atrib/action-gate` is published on npm with Trusted Publisher configured for later releases. `runtime-log` version 0.2.0 was first-published manually, with Trusted Publisher configured for later releases. The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The private `@atrib/primitives-runtime` binary composes them into one local stdio server for harness configs that need fewer child processes; no separate deployment is needed. The `atrib` Python distribution (`python/`, outside the pnpm workspace) is the first non-TypeScript implementation of the [§1](atrib-spec.md#1-attribution-record-format) record layer, held byte-identical to the TypeScript one by the shared conformance corpora and a cross-implementation determinism harness ([D136](DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested)).
 
 Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hashes` for SHA-256, `canonicalize` for JCS. Framework dependencies are structural-typed, never hard-imported.
 

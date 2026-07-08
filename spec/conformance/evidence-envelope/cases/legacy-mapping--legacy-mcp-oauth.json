@@ -1,0 +1,101 @@
+{
+  "name": "legacy-mcp-oauth",
+  "spec_section": "5.5.7",
+  "family": "legacy-mapping",
+  "description": "Deterministic mapping of a legacy §5.5.6 'mcp_oauth' evidence block to envelope form. Two independent implementations of fromLegacyEvidenceBlock MUST produce this exact envelope: profile via the frozen five-row table, profile_version '1.0.0', tier 'attested', payload.hash = sha256(JCS(legacy block)) with ref.kind 'withheld', issuer/subject/scope/attenuation_ok/delegation_ok copied into facts, details committed as facts.details_hash = sha256(JCS(details)), valid/constraints/errors/warnings copied into result, and NO verifier block (the mapping is mechanical, not a re-verification).",
+  "input": {
+    "legacy_block": {
+      "protocol": "mcp_oauth",
+      "valid": false,
+      "issuer": "https://auth.example.com",
+      "subject": "user-123",
+      "scope": [
+        "files:read"
+      ],
+      "attenuation_ok": false,
+      "delegation_ok": null,
+      "constraints": [
+        {
+          "type": "scope",
+          "status": "failed",
+          "expected": [
+            "files:write"
+          ],
+          "actual": [
+            "files:read"
+          ],
+          "reason": "missing required scope: files:write"
+        }
+      ],
+      "errors": [
+        "oauth_evidence constraint failed: scope"
+      ],
+      "warnings": [],
+      "details": {
+        "token": {
+          "jwt_present": false,
+          "introspection_present": true,
+          "verified": null,
+          "alg": null,
+          "kid": null,
+          "claims_verified": true
+        },
+        "dpop": null,
+        "audience": [
+          "https://mcp.example.com/mcp"
+        ],
+        "resource": [
+          "https://mcp.example.com/mcp"
+        ],
+        "client_id": "client-2"
+      }
+    }
+  },
+  "expected": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/mcp-oauth",
+      "profile_version": "1.0.0",
+      "tier": "attested",
+      "payload": {
+        "hash": "sha256:86a5c1ec3a77ad66461c51c7965a6e79632f8b8403ccfdeb14e95bf2c1b181cb",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "facts": {
+        "issuer": "https://auth.example.com",
+        "subject": "user-123",
+        "scope": [
+          "files:read"
+        ],
+        "attenuation_ok": false,
+        "delegation_ok": null,
+        "details_hash": "sha256:6135c41b4164182232fcec41f8af3a93357ea593c34371c743c2d70ba5a949ee"
+      },
+      "result": {
+        "valid": false,
+        "constraints": [
+          {
+            "type": "scope",
+            "status": "failed",
+            "expected": [
+              "files:write"
+            ],
+            "actual": [
+              "files:read"
+            ],
+            "reason": "missing required scope: files:write"
+          }
+        ],
+        "errors": [
+          "oauth_evidence constraint failed: scope"
+        ],
+        "warnings": []
+      }
+    },
+    "payload_hash": "sha256:86a5c1ec3a77ad66461c51c7965a6e79632f8b8403ccfdeb14e95bf2c1b181cb",
+    "details_hash": "sha256:6135c41b4164182232fcec41f8af3a93357ea593c34371c743c2d70ba5a949ee"
+  }
+}

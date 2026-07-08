@@ -1,0 +1,22 @@
+{
+  "name": "context--explicit-argument-wins",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "An explicit context_id tool argument beats the extension block (application intent beats transport metadata; D135 posture). On mismatch the argument is used and a warning SHOULD be logged.",
+  "input": {
+    "explicit_context_id_argument": "11111111111111111111111111111111",
+    "request_meta": {
+      "dev.atrib/attribution": {
+        "token": "_f-WiElOw7OVElPxHUq6yRwtTZcl5LFJFikli5KMCYs.rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne-B1R_KJODNB0",
+        "context_id": "22222222222222222222222222222222"
+      },
+      "traceparent": "00-33333333333333333333333333333333-00f067aa0ba902b7-01"
+    }
+  },
+  "expected": {
+    "resolved_context_id": "11111111111111111111111111111111",
+    "resolved_source": "argument",
+    "mismatch_warning": true,
+    "error_raised": false
+  }
+}

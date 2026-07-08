@@ -45,21 +45,6 @@ Per [§1.7](../../atrib-spec.md#17-transaction-event-hooks), the trigger is a co
 
 Why this particular event: it's the moment the commerce loop closes. Before completion, the agent has taken tool_calls (look up product, compare prices, etc.). The transaction record ties those prior actions to the spend they justified, with a cryptographic chain back through `informed_by` / `provenance_token` edges.
 
-## Cloudflare x402 and paid agent access
-
-Cloudflare x402 support and Monetization Gateway fit this model as a runtime
-and payment-access layer, not as a new atrib rail. Today, Workers and Agents can
-model the paid path with a 402 challenge, paid retry, `PAYMENT-RESPONSE`,
-settlement reference, and origin response. The public
-[`cloudflare-x402-paid-agent`](../../proof-packets/cloudflare-x402-paid-agent/)
-packet signs the host policy decision and outcome with `@atrib/action-gate`,
-then binds hash-only x402 lifecycle facts to those record hashes.
-
-When Gateway exposes lifecycle ids, logs, webhooks, or signed exports, those
-facts should become the producer source for the same lifecycle shape. atrib's
-role remains the proof layer around the paid action: policy before the spend,
-outcome after the call, and independently verifiable records that carry forward.
-
 ## The Linker: `context_id`
 
 Per [§1.7](../../atrib-spec.md#17-transaction-event-hooks): _"the `context_id` of the agent session must be embedded in the transaction metadata when the checkout is initiated, so that the transaction event webhook can be matched back to the attribution chain."_
