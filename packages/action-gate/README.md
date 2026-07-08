@@ -108,3 +108,7 @@ npx -y pnpm@9.15.4 --filter @atrib/action-gate test
 npx -y pnpm@9.15.4 --filter @atrib/action-gate build
 npx -y pnpm@9.15.4 --filter @atrib/integration action-control-gate-smoke
 ```
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

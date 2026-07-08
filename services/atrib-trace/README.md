@@ -17,7 +17,7 @@ Verify a local build with `pnpm --filter @atrib/trace test`.
 Two bidirectional walk tools share the same input + response shape; only the walk direction differs:
 
 ```
-mcp__atrib-trace__trace({          // BACKWARD — what informed this?
+mcp__atrib-trace__trace({          // BACKWARD: what informed this?
   record_hash: "sha256:<64-hex>",  // start
   depth?: number,                   // hop cap (0=start only, default 3, max 10)
   max_nodes?: number,               // safety cap (default 200, max 500)
@@ -25,7 +25,7 @@ mcp__atrib-trace__trace({          // BACKWARD — what informed this?
   include_content?: boolean         // include D062 local_content (default false)
 })
 
-mcp__atrib-trace__trace_forward({  // FORWARD — what was informed by this?
+mcp__atrib-trace__trace_forward({  // FORWARD: what was informed by this?
   record_hash, depth?, max_nodes?, compact?, include_content? // same schema
 })
 
@@ -53,7 +53,7 @@ mcp__atrib-trace__trace_forward({  // FORWARD — what was informed by this?
 
 - `trace` walks `informed_by` BACKWARD (toward declared ancestors). Answers "what did the signer claim informed this record?"
 - `trace_forward` walks `informed_by` FORWARD (records that cited this one). Answers "I made decision X, what did I do because of it?" The dual of `trace`. Same input schema, same response shape.
-- For forward walks, `next_informed_by` carries the CHILDREN visited at the next hop (records citing this one) rather than this record's own informed_by — field name kept for shape-compat with `trace`.
+- For forward walks, `next_informed_by` carries the CHILDREN visited at the next hop (records citing this one) rather than this record's own informed_by. The field name is kept for shape-compat with `trace`.
 
 ## Reads
 
@@ -94,3 +94,7 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/trace start`.
 Initial scaffold (v0.1.0). 8 tests covering: empty-mirror, single-record, one-hop walk, multi-hop chain, depth truncation, diamond fan-in, dangling references, max_nodes cap. Full workspace tests green.
 
 The companion consumer-side primitive `atrib-summarize` (synthesizes narrative across N records) is the next ship.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

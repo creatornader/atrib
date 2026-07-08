@@ -187,3 +187,7 @@ an atrib record can later commit to.
 Raw event bodies can stay in the runtime store, a local mirror, a continuation
 packet, a private evidence bundle, or the Record Body Archive Layer. The public
 Merkle log only needs the signed commitment to the manifest.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

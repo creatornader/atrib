@@ -98,3 +98,7 @@ write secret values into shared MCP config.
 Initial scaffold (v0.1.0). 6 unit tests covering record selection (by hash, by context, unioned, missing-skip) + degradation paths (no inputs, no API key). Integration test against a real LLM is gated behind `ATRIB_SUMMARIZE_API_KEY` and not run in CI.
 
 The companion `atrib-trace` is the structural primitive; together they close the consumer side of the cognitive loop.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

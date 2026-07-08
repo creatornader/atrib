@@ -523,3 +523,7 @@ discovery, not something to route around.
 
 v0.1.0, unpublished (first-publish pending; see
 `docs/publishing-new-npm-package.md` and the Changesets ignore list).
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).
