@@ -13,10 +13,13 @@
   "files": [
     "dist"
   ],
-  "description": "Consolidated atrib client SDK. attest() and recall() verbs over the atrib substrate: daemon-first via the local primitives runtime, in-process signing fallback, anchor-set submission, and the full record layer re-exported from @atrib/mcp.",
+  "description": "Consolidated client SDK for Atrib's verifiable action layer. Provides attest() and recall() verbs over a daemon-first runtime with in-process signing fallback, anchor-set submission, and the full record layer re-exported from @atrib/mcp.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "mcp",
     "model-context-protocol",
