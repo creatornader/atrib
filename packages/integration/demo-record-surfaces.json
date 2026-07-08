@@ -27,6 +27,13 @@
       "commands": []
     },
     {
+      "id": "client-sdk",
+      "path": "examples/client-sdk",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": []
+    },
+    {
       "id": "cloudflare-live-proofs",
       "path": "examples/cloudflare-agents",
       "record_class": "public-proof",
@@ -39,13 +46,6 @@
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
       "commands": []
-    },
-    {
-      "id": "cloudflare-x402-paid-agent",
-      "path": "examples/cloudflare-agents/paid-x402-action-gate",
-      "record_class": "offline-local",
-      "endpoint_posture": "local-only",
-      "commands": ["cloudflare-x402-paid-agent-proof"]
     },
     {
       "id": "vercel-ai-sdk",
