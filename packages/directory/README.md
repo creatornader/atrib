@@ -5,44 +5,55 @@
 Implements spec [§6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#6-key-directory) (Public-Key Directory) as a thin TypeScript SDK over an AKD WASM bridge. Per [D034](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers): ships the WASM bridge inline. No platform-specific binaries, no native build steps.
 
 ```typescript
-import { signClaim, lookup } from '@atrib/directory'
+import { AtribDirectory, signClaim, verifyLookupProof } from '@atrib/directory'
 
-// Producer side: publish your identity claim
-const claim = {
+// The directory is an in-process AKD instance. The operator key is optional;
+// a random one is generated when omitted. directory-node wraps this SDK, and
+// you can also embed it directly.
+const dir = await AtribDirectory.create()
+
+// Producer side: sign an identity claim, then publish it.
+const unsigned = {
   spec_version: 'atrib/1.0',
   claim_subject: {
     display_name: 'My Agent',
     organization: 'My Org',
     url: 'https://my-tool.example.com',
   },
-  // ... per spec §6.1 IdentityClaim shape
+  // ... the rest of the spec §6.1 IdentityClaim shape
 }
-const signed = await signClaim(claim, privateKey)
-await fetch('https://directory.atrib.dev/v6/claims', {
-  method: 'POST',
-  body: JSON.stringify(signed),
-})
+const signed = await signClaim(unsigned, privateKey) // privateKey: 32-byte Ed25519 seed (Uint8Array)
+const { epoch } = await dir.publishSigned(signed)
 
-// Verifier side: look up a claim by creator_key
-const result = await lookup({
-  endpoint: 'https://directory.atrib.dev/v6',
-  creator_key: 'haoZK4D1AXmy_r05GJP4CZGOv0zh0iK1l7ls1FA8oZI',
-})
-if (result.found) {
-  console.log('claim:', result.claim)
-  console.log('proof:', result.lookup_proof) // AKD non-membership/membership proof
-  console.log('anchor:', result.anchor)      // pointer to the directory_anchor tlog record
+// Verifier side: look up a claim by creator_key.
+const result = await dir.lookup('haoZK4D1AXmy_r05GJP4CZGOv0zh0iK1l7ls1FA8oZI')
+if (result.claim) {
+  console.log('claim:', result.claim)     // the IdentityClaim, or null for verified non-membership
+  console.log('version:', result.version) // 1 on first publish, increments on rotation
+  console.log('proof:', result.proof)     // AKD lookup proof (Uint8Array)
 }
 ```
 
 ## What the SDK does
 
-Per spec [§6.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#62-directory-operations) (operations) and [§6.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#63-verifier-consultation-algorithm) (verifier consultation):
+Per spec [§6.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#62-directory-operations) (operations) and [§6.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#63-verifier-consultation-algorithm) (verifier consultation), the package exports the `AtribDirectory` class and a set of stateless helpers.
 
-- **`signClaim(claim, privateKey)`**: JCS-canonicalize an IdentityClaim and Ed25519-sign it. The claim_subject describes the producer; signature is over the canonical bytes.
-- **`lookup({ endpoint, creator_key })`**: POST to the directory's `/lookup` endpoint, returns `LookupResult` with the claim (if found), an AKD lookup proof, and a reference to the `directory_anchor` tlog record per [§6.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log).
-- **`history({ endpoint, creator_key })`**: Returns the full append-only history of claims for a creator_key (rotations, revocations).
-- **`proveAbsence({ endpoint, creator_key })`**: AKD non-membership proof. Used by verifiers when they need to prove a key was NOT registered at a given epoch.
+`AtribDirectory`, an AKD directory instance:
+
+- **`AtribDirectory.create(operatorPrivateKey?)`**: build a directory. A random operator key is generated when none is passed.
+- **`publishSigned(claim)`** and **`publishAndSign(unsigned)`**: publish a claim, returning the `{ epoch }` it landed in. `publishAndSign` signs with the operator key first.
+- **`lookup(creatorKey)`**: returns a `LookupResult` `{ claim, version, proof }`. `claim` is `null` for a verified non-membership result.
+- **`history(creatorKey)`**: returns a `HistoryResult` `{ versions, proof }` covering rotations and revocations.
+- **`auditProof(fromEpoch, toEpoch)`**: returns the append-only consistency proof between two epochs.
+
+Stateless helpers that need no directory instance:
+
+- **`signClaim(unsigned, privateKey)`**: JCS-canonicalize an IdentityClaim and Ed25519-sign it. `privateKey` is a 32-byte Ed25519 seed (`Uint8Array`).
+- **`verifyClaimSignature(claim)`**: check a claim's signature against its `creator_key`.
+- **`verifyLookupProof(input)`** and **`verifyAuditProof(input)`**: re-validate an AKD lookup or audit proof against the anchored checkpoint root per [§6.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log).
+- **`directoryVrfPublicKey()`**: the directory's VRF public key, used in proof verification.
+
+To publish to the hosted directory at `directory.atrib.dev`, use the `@atrib/cli publish-claim` command; this SDK is the AKD engine behind that directory and its verifier-side proof checks.
 
 ## Capability envelopes ([§6.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#67-capability-declarations))
 

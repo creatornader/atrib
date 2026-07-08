@@ -25,7 +25,7 @@ import { createAtribMemoryTool } from '@atrib/memory-tool'
 const fsMemory = await BetaLocalFilesystemMemoryTool.init('./memory')
 const memory = betaMemoryTool(
   await createAtribMemoryTool(fsMemory, {
-    privateKey: process.env.ATRIB_PRIVATE_KEY,
+    privateKey: process.env.ATRIB_PRIVATE_KEY, // base64url Ed25519 32-byte seed
     contextId: '4bf92f3577b34da6a3ce929d0e0e4736',
   }),
 )
@@ -61,7 +61,7 @@ or archive policy.
 
 ```ts
 const records = []
-const memory = await createAtribMemoryTool(handlers, {
+const memory = await createAtribMemoryTool(fsMemory, { // fsMemory from the quick-start above
   privateKey,
   logSubmission: 'disabled',
   onRecord: (record) => records.push(record),
