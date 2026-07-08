@@ -7140,11 +7140,11 @@ records stay hash-only by default. Local sidecars keep the action envelope,
 policy decision, result material, and proof details needed by a host-owned
 packet.
 
-The host owns policy, identity, auth, approval UI, and final execution. Atrib
+The host owns policy, identity, auth, approval UI, and final execution. atrib
 proves the decision and outcome. The package gives hosts a reusable control
 surface that Browserbase, Stagehand, browser-use, Playwright, Computer Use,
 support tools, payment workflows, and deployment tooling can call without
-placing browser automation inside Atrib.
+placing browser automation inside atrib.
 
 **Alternatives considered.**
 

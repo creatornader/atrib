@@ -1,6 +1,6 @@
 # @atrib/openinference
 
-OpenTelemetry SpanProcessor for Atrib's verifiable action layer. It consumes [OpenInference](https://github.com/Arize-ai/openinference)-shaped spans and emits signed atrib records.
+OpenTelemetry SpanProcessor for atrib's verifiable action layer. It consumes [OpenInference](https://github.com/Arize-ai/openinference)-shaped spans and emits signed atrib records.
 
 This is **Pattern #4** of atrib's seven runtime integration patterns ([atrib-spec §9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#9-runtime-integration-patterns)). One adapter transitively reaches every framework with OpenInference instrumentation: OpenAI Agents SDK, Claude Agent SDK, LangChain (and LangGraph), Vercel AI, CrewAI, LlamaIndex, DSPy, MCP, Microsoft Agent Framework, Bedrock AgentCore, smolagents, Pydantic AI, Agno, and 20+ more.
 

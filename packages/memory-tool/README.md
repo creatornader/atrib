@@ -1,6 +1,6 @@
 # @atrib/memory-tool
 
-Memory Tool wrapper for Atrib's verifiable action layer.
+Memory Tool wrapper for atrib's verifiable action layer.
 
 Anthropic's Memory Tool is client-side: the application chooses where memory
 files live and implements handlers for `view`, `create`, `str_replace`,

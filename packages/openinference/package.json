@@ -13,7 +13,7 @@
   "files": [
     "dist"
   ],
-  "description": "OpenTelemetry SpanProcessor for Atrib's verifiable action layer. Emits signed records from OpenInference-shaped spans.",
+  "description": "OpenTelemetry SpanProcessor for atrib's verifiable action layer. Emits signed records from OpenInference-shaped spans.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

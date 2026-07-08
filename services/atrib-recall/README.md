@@ -1,6 +1,6 @@
 # `@atrib/recall`
 
-MCP server for Atrib's verifiable action layer. Lets agents query their own provable past from the local signed-record mirror with per-record signature verification.
+MCP server for atrib's verifiable action layer. Lets agents query their own provable past from the local signed-record mirror with per-record signature verification.
 
 The consumer-side counterpart to `@atrib/emit`: emit produces signed records, recall reads them back and exposes them to the agent through eight MCP tools. Each returned record carries a `signature_verified` boolean so a poorly-written agent treats tampered records as such.
 

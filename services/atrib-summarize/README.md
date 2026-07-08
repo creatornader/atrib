@@ -1,6 +1,6 @@
 # @atrib/summarize
 
-MCP server exposing the `summarize` tool for Atrib's verifiable action layer. It synthesizes a narrative across N records using an OpenAI-compatible LLM.
+MCP server exposing the `summarize` tool for atrib's verifiable action layer. It synthesizes a narrative across N records using an OpenAI-compatible LLM.
 
 Closes the consumer-side cognitive-loop primitive companion to `atrib-trace`: trace returns the declared-relationship path; summarize returns the synthesized meaning across the selected records. Both read the same local mirror including the optional `_local` sidecar.
 

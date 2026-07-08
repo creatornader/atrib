@@ -105,7 +105,7 @@ describe('extension identifier + settings validation', () => {
     expect(validateExtensionIdentifier('atrib/attribution')).toBe(false) // no dot in prefix
     expect(validateExtensionIdentifier('dev.atrib')).toBe(false) // no name part
     expect(validateExtensionIdentifier('dev.atrib/attribution/extra')).toBe(false)
-    expect(validateExtensionIdentifier('dev.Atrib/attribution')).toBe(false) // uppercase label
+    expect(validateExtensionIdentifier('dev.atrib/attribution')).toBe(false) // uppercase label
   })
 
   it('requires version; treats missing/empty/non-string version as undeclared, never an error', () => {

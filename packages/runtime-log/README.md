@@ -1,7 +1,7 @@
 # @atrib/runtime-log
 
 `@atrib/runtime-log` builds and verifies proof manifests for host-owned agent
-runtime logs in Atrib's verifiable action layer.
+runtime logs in atrib's verifiable action layer.
 
 A runtime log is the execution record a host uses to reconstruct, resume, fork,
 compact, replay, or audit a run. atrib does not need the raw log body by

@@ -16,7 +16,7 @@
   "files": [
     "dist"
   ],
-  "description": "Runtime-log proof helpers for Atrib's verifiable action layer. Builds and verifies manifests for host-owned agent run windows.",
+  "description": "Runtime-log proof helpers for atrib's verifiable action layer. Builds and verifies manifests for host-owned agent run windows.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

@@ -193,7 +193,7 @@
   `@noble/hashes` 1 → 2 (where applicable), `canonicalize` 2 → 3, and
   `@opentelemetry/sdk-trace-base` 1 → 2 (peer dep on `@atrib/openinference`).
 
-  Atrib's own public APIs are unchanged, and signing-output, hash-output, and
+  atrib's own public APIs are unchanged, and signing-output, hash-output, and
   JCS-canonicalization-output remain byte-identical — verified by the signing
   corpus (spec [§1.4](../atrib-spec.md#14-signing-and-verification)) and the Wycheproof Ed25519 test vectors.
 

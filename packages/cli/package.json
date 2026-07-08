@@ -9,7 +9,7 @@
   "files": [
     "dist"
   ],
-  "description": "Operator CLI for Atrib's verifiable action layer. Manages signing keys, identity claims, and revocations.",
+  "description": "Operator CLI for atrib's verifiable action layer. Manages signing keys, identity claims, and revocations.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",

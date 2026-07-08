@@ -177,14 +177,14 @@ async function main(): Promise<void> {
     const addResult = await client.callTool({
       name: 'add_memory',
       arguments: {
-        name: 'Atrib proof note',
+        name: 'atrib proof note',
         episode_body: 'Alice prefers quiet sci-fi movies and wants verifiable memory updates.',
         group_id: 'atrib-demo',
         source: 'text',
         source_description: 'local Graphiti MCP fixture',
       },
     })
-    if (!toolText(addResult).includes("Episode 'Atrib proof note' queued")) {
+    if (!toolText(addResult).includes("Episode 'atrib proof note' queued")) {
       throw new Error(`unexpected add_memory result: ${JSON.stringify(addResult)}`)
     }
 
@@ -204,7 +204,7 @@ async function main(): Promise<void> {
       name: 'get_episodes',
       arguments: { group_ids: ['atrib-demo'], max_episodes: 3 },
     })
-    if (!toolText(episodesResult).includes('Atrib proof note')) {
+    if (!toolText(episodesResult).includes('atrib proof note')) {
       throw new Error(`unexpected get_episodes result: ${JSON.stringify(episodesResult)}`)
     }
 

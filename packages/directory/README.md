@@ -1,6 +1,6 @@
 # `@atrib/directory`
 
-**AKD-backed identity-claim directory SDK for Atrib's verifiable action layer. Lets producers publish signed identity claims and capability envelopes; lets verifiers look up and verify those claims with cryptographic proofs.**
+**AKD-backed identity-claim directory SDK for atrib's verifiable action layer. Lets producers publish signed identity claims and capability envelopes; lets verifiers look up and verify those claims with cryptographic proofs.**
 
 Implements spec [§6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#6-key-directory) (Public-Key Directory) as a thin TypeScript SDK over an AKD WASM bridge. Per [D034](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers): ships the WASM bridge inline. No platform-specific binaries, no native build steps.
 

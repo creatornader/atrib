@@ -1,6 +1,6 @@
 # @atrib/archive-node
 
-Reference Record Body Archive Layer for Atrib's verifiable action layer, per [§2.12](../../atrib-spec.md#212-record-body-archive-layer).
+Reference Record Body Archive Layer for atrib's verifiable action layer, per [§2.12](../../atrib-spec.md#212-record-body-archive-layer).
 
 The archive is separate from `log-node`. The log stores fixed commitment entries. The archive stores full signed record bodies and optional verifier evidence for producers that opt into public body retrieval.
 

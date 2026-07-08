@@ -1,6 +1,6 @@
 # `@atrib/verify`
 
-**Independent verification for Atrib's verifiable action layer. Checks signed records, evidence blocks, handoff packets, and settlement documents. Re-runs the spec [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm locally and checks the result against what a recommendation document claims. No trust in any intermediary required.**
+**Independent verification for atrib's verifiable action layer. Checks signed records, evidence blocks, handoff packets, and settlement documents. Re-runs the spec [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm locally and checks the result against what a recommendation document claims. No trust in any intermediary required.**
 
 This is the **verifier half** of the atrib protocol, used by merchants closing transactions, auditors checking agent activity, teams accepting handoffs, policy systems reviewing high-impact actions, regulators querying historical state, and any party that needs to validate atrib data independently. The agent and tool servers produce signed attribution records. The Merkle log stores them. This package answers the questions any verifier has to answer: _given the graph and the policy, is this distribution actually correct? Was this record actually signed by the key it claims? Did this action actually happen at the time it claims?_
 

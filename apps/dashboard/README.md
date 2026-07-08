@@ -1,6 +1,6 @@
 # atrib explorer (option 1)
 
-Public read-only inspection surface over [`log.atrib.dev`](https://log.atrib.dev/v1), [`graph.atrib.dev`](https://graph.atrib.dev/v1), [`directory.atrib.dev`](https://directory.atrib.dev/v6), and the optional archive evidence API at `archive.atrib.dev`. It is the inspection side of Atrib's verifiable action layer: users can see what was signed, what carried forward, and what proves the record. Composes data from those services into seven views: overview, identity (by `creator_key`), session (by `context_id`), action (by `record_hash`), live replay, trace (provenance ancestry by `record_hash`), anchoring.
+Public read-only inspection surface over [`log.atrib.dev`](https://log.atrib.dev/v1), [`graph.atrib.dev`](https://graph.atrib.dev/v1), [`directory.atrib.dev`](https://directory.atrib.dev/v6), and the optional archive evidence API at `archive.atrib.dev`. It is the inspection side of atrib's verifiable action layer: users can see what was signed, what carried forward, and what proves the record. Composes data from those services into seven views: overview, identity (by `creator_key`), session (by `context_id`), action (by `record_hash`), live replay, trace (provenance ancestry by `record_hash`), anchoring.
 
 This is **option 1 of a three-stage build** per [D054](../../DECISIONS.md#d054-unified-public-explorer-vs-per-service-admin-uis): single HTML file, no build step, no framework, vanilla JavaScript with `fetch` against the public APIs.
 

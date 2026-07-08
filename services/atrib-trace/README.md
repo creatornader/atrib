@@ -1,6 +1,6 @@
 # @atrib/trace
 
-MCP server exposing the `trace` tool for Atrib's verifiable action layer. It walks a record's `informed_by` chain backward to surface the signed relationship path that led to it.
+MCP server exposing the `trace` tool for atrib's verifiable action layer. It walks a record's `informed_by` chain backward to surface the signed relationship path that led to it.
 
 Closes the consumer-side cognitive-loop primitive: recall returns raw records; trace returns the declared-relationship trace, so an agent asking "why did I do X?" can see "X was claimed to be informed by Y, which was claimed to be informed by Z" without manually walking `informed_by` hash-by-hash.
 

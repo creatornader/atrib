@@ -1,6 +1,6 @@
 # `@atrib/agent`
 
-**Client-side middleware for Atrib's verifiable action layer. Outbound MCP tool calls carry atrib/W3C context, consume upstream signed records, record local gap nodes, and emit signed fallback transaction records when commerce closes. Works with major MCP framework surfaces. Sits above every major agent payment protocol so commerce-closing evidence can join the same trace.**
+**Client-side middleware for atrib's verifiable action layer. Outbound MCP tool calls carry atrib/W3C context, consume upstream signed records, record local gap nodes, and emit signed fallback transaction records when commerce closes. Works with major MCP framework surfaces. Sits above every major agent payment protocol so commerce-closing evidence can join the same trace.**
 
 `@atrib/agent` is the client-side half of the [atrib protocol](https://github.com/creatornader/atrib/blob/main/atrib-spec.md). It keeps outbound MCP calls in the atrib session lifecycle: context goes out, upstream atrib tokens come back in, unsigned hops become local gap nodes, and transaction-shaped responses can produce signed agent-side fallback records. That makes agent work easier to coordinate across calls, handoffs, and later verification. Ordinary `tool_call` records are signed at the tool boundary by `@atrib/mcp`, `@atrib/mcp-wrap`, or an instrumented upstream server.
 

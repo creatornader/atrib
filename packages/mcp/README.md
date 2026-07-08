@@ -1,6 +1,6 @@
 # `@atrib/mcp`
 
-**MCP server middleware for Atrib's verifiable action layer. One line of code wraps your existing MCP server and emits a signed, chain-linked record of every successful tool call. The tool's actions become independently verifiable; the agent gains a provable history; downstream teams can prove what happened when work crosses sessions, agents, or commerce. Automatic, asynchronous, zero impact on the tool's primary response.**
+**MCP server middleware for atrib's verifiable action layer. One line of code wraps your existing MCP server and emits a signed, chain-linked record of every successful tool call. The tool's actions become independently verifiable; the agent gains a provable history; downstream teams can prove what happened when work crosses sessions, agents, or commerce. Automatic, asynchronous, zero impact on the tool's primary response.**
 
 This is the **server-side half** of the atrib protocol: the package tool creators install. If you're building an agent that _calls_ MCP tools, you want [`@atrib/agent`](https://github.com/creatornader/atrib/blob/main/packages/agent/README.md) instead.
 

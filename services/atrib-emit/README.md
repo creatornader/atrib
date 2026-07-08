@@ -1,6 +1,6 @@
 # `@atrib/emit`
 
-MCP server exposing the explicit `emit` tool, the producer-side cognitive primitive for Atrib's verifiable action layer. It lets an agent sign observations, annotations, and revisions under its own atrib identity, beyond what `@atrib/mcp` auto-signs.
+MCP server exposing the explicit `emit` tool, the producer-side cognitive primitive for atrib's verifiable action layer. It lets an agent sign observations, annotations, and revisions under its own atrib identity, beyond what `@atrib/mcp` auto-signs.
 
 ## Install
 

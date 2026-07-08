@@ -1,6 +1,6 @@
 # @atrib/annotate
 
-MCP server exposing the `atrib-annotate` tool for Atrib's verifiable action layer. Marks a past signed record with importance, a one-line summary, and topics, so future recall can surface what mattered without re-scanning every record flat.
+MCP server exposing the `atrib-annotate` tool for atrib's verifiable action layer. Marks a past signed record with importance, a one-line summary, and topics, so future recall can surface what mattered without re-scanning every record flat.
 
 Closes the producer-side recall-fidelity gap: an agent reading back its own past loses enormous nuance compared to the agent that signed it. An annotation lets the agent at signing time say "future-self: this one is critical, and here's why in one line", and the graph carries that judgment forward.
 
