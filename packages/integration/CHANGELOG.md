@@ -1,5 +1,16 @@
 # @atrib/integration
 
+## 0.0.40
+
+### Patch Changes
+
+- Updated dependencies [6f6ca5f]
+  - @atrib/verify@0.8.2
+  - @atrib/agent@0.3.2
+  - @atrib/sdk@0.1.2
+  - @atrib/archive-node@0.1.36
+  - @atrib/graph-node@0.1.36
+
 ## 0.0.39
 
 ### Patch Changes

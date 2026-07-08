@@ -1,5 +1,11 @@
 # @atrib/verify
 
+## 0.8.2
+
+### Patch Changes
+
+- 6f6ca5f: Docs: rewrite the degradation-section tailing-negation fragment ("no throw") into a full clause as part of the repo-wide writing-rules pass. No code or API changes.
+
 ## 0.8.1
 
 ### Patch Changes
