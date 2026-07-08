@@ -10,6 +10,20 @@ terminates in `@atrib/emit`'s `handleEmit` pipeline (records are
 byte-identical to wrapper-signed and primitive-signed records), and every
 cryptographic primitive is the existing `@atrib/mcp` one.
 
+## Install
+
+```bash
+pnpm add @atrib/sdk
+```
+
+Version 0.1.0 is first-published manually. Later releases use npm Trusted
+Publisher through `release.yml`. `@atrib/recall`, `@atrib/verify`, and
+`@atrib/verify-mcp` are optional peers — install them alongside for the
+in-process recall and verify fallbacks; without them those paths degrade to
+a typed unavailable outcome per the degradation contract below.
+
+Verify a local build with `pnpm --filter @atrib/sdk test`.
+
 ## Topology: daemon-first
 
 Per [D120](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned) and the redesign upgrade path, the local primitives runtime is the
