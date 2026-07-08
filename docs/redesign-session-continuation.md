@@ -70,6 +70,13 @@ pending entries in DECISIONS.md, the coordination contract at the end of
 - Cloud sessions cannot load plugins or reach local infra; that is why this
   packet exists. The successor session is LOCAL: codex-plugin-cc and
   agent-loop are actually invocable — use them per the policy.
+- The successor also has the LOCAL substrate this sandbox lacked: the
+  primitives runtime, signing keys, and mirrors. Run with the dogfood loop
+  ON — your actions should produce signed records (the cloud predecessor's
+  never did; none of this session-line's work exists as atrib records, an
+  irony the successor should end). A fitting first signed act: an
+  `atrib-emit` observation recording this packet's commit hash as the
+  baton received — the [P050](../DECISIONS.md#p050-orchestration-topology-baton-pass-and-fan-out-records) baton-pass convention, performed for real.
 - doc-sync (`node scripts/check-doc-sync.mjs`) gates every commit here:
   inline-link all bare §/Dxxx/Pxxx refs, corpus manifests must match flat
   `cases/*.json`, and public-boundary wording rules apply. Its failures
