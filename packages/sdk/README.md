@@ -1,8 +1,8 @@
 # @atrib/sdk
 
-Consolidated atrib client SDK: two verbs over the substrate — **`attest()`**
-(write) and **`recall()`** (read) — plus the complete [§1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#1-attribution-record-format) record layer
-re-exported from `@atrib/mcp` so application code needs exactly one import.
+Consolidated atrib client SDK. Two verbs over the substrate: **`attest()`**
+(write) and **`recall()`** (read), plus the complete [§1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#1-attribution-record-format) record layer
+re-exported from `@atrib/mcp`, so application code needs exactly one import.
 
 This package is a consolidation, not a greenfield: it adds **no new
 canonicalization, hashing, or signing implementation**. Every write
@@ -18,8 +18,8 @@ pnpm add @atrib/sdk
 
 Version 0.1.0 is first-published manually. Later releases use npm Trusted
 Publisher through `release.yml`. `@atrib/recall`, `@atrib/verify`, and
-`@atrib/verify-mcp` are optional peers — install them alongside for the
-in-process recall and verify fallbacks; without them those paths degrade to
+`@atrib/verify-mcp` are optional peers. Install them alongside for the
+in-process recall and verify fallbacks. Without them, those paths degrade to
 a typed unavailable outcome per the degradation contract below.
 
 Verify a local build with `pnpm --filter @atrib/sdk test`.
@@ -78,29 +78,30 @@ the calling harness/model; the SDK returns verified raw material.
 
 ## Degradation contract ([§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract))
 
-Operational failures never throw and never block: daemon unreachable →
-fallback; no signing key → pass-through result with a warning; log
-submission is non-blocking with bounded retry (via the existing
-`@atrib/mcp` submission queue). The only throw paths are contradictory
-inputs (programmer error), e.g. `ref.kind: 'revises'` with
+Operational failures never throw and never block. If the daemon is
+unreachable, the SDK falls back to in-process engines. If there is no
+signing key, it returns a pass-through result with a warning. Log
+submission is non-blocking with bounded retry, through the existing
+`@atrib/mcp` submission queue. The only throw paths are contradictory
+inputs (programmer error), such as `ref.kind: 'revises'` with
 `event_type: 'annotation'`.
 
 ## Anchors ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture), [§2.11.7-§2.11.13](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2117-anchors-generalizing-the-replication-target))
 
-`anchors` config takes a **set** of anchor descriptors — bare strings
+`anchors` config takes a **set** of anchor descriptors: bare strings
 (atrib-log [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry)
 endpoints) or `{ url | endpoint, anchor_type?, ... }` objects covering
 the [§2.11.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2118-anchor-type-registry)
 registry (`atrib-log`, `sigstore-rekor`, `rfc3161-tsa`,
 `opentimestamps`). In-process attests fan out to **every** configured
 anchor through `@atrib/mcp`'s `createAnchorFanout` (fire-and-forget per
-[§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission));
-no anchor config at all resolves to `BUILT_IN_DEFAULT_ANCHOR_SET` (two
+[§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission)).
+No anchor config at all resolves to `BUILT_IN_DEFAULT_ANCHOR_SET` (two
 independent anchors, [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture)
-rule 1). A sub-plurality set (< 2 anchors) warns and writes the
+rule 1). A sub-plurality set (fewer than two anchors) warns and writes the
 `_local.anchor_config` sidecar degradation marker unless
 `allowSingleAnchor: true` states it is deliberate. The resolved posture
-surfaces as `anchor_posture` on `AttestResult`; `flushAnchors()` gives a
+surfaces as `anchor_posture` on `AttestResult`, and `flushAnchors()` gives a
 bounded wait on pending legs. Anchoring never touches signed bytes and
 never blocks the write.
 
@@ -115,7 +116,7 @@ awaited proof), and optionally the full signed record for immediate
 Tier-3 re-verification. Each parsed block is run through `@atrib/mcp`'s
 `verifyAttributionReceipt` (extension spec [§6.2](https://github.com/creatornader/atrib/blob/main/docs/extensions/dev.atrib-attribution/v0.1.md#62-receipt-block) integrity check) and
 surfaces as `attribution_receipt: { block, verification }` on
-attest/recall results. Receipts are advisory — trust derives from
+attest/recall results. Receipts are advisory. Trust derives from
 verifying signed records, never from the receipt.
 
 ## Evidence envelopes ([D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model), [§5.5.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#557-universal-evidence-envelope))
@@ -126,7 +127,7 @@ single attachment model for external evidence; the legacy `protocol`
 string set is frozen. The SDK ships the structural types/helpers plus
 production and validation: `buildEvidenceEnvelope` computes the payload
 commitment (JCS or raw hash rule) and `validateEvidenceEnvelope` applies
-the normative shape rules — both delegate to the optional peer
+the normative shape rules. Both delegate to the optional peer
 `@atrib/verify` and degrade with a warning when it is not installed.
 Envelopes live outside signed bytes (mirror sidecar, archive evidence
 projection, verifier results, host-owned packets).
@@ -159,8 +160,8 @@ interface AtribClient {
 **Throw vs degrade.** Both verbs follow the
 [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)
 degradation contract: operational failures (daemon unreachable, tool
-error, missing key, missing optional peer, log unreachable) never throw —
-they degrade into `warnings` on the result, with `via: 'none'` when
+error, missing key, missing optional peer, log unreachable) never throw.
+They degrade into `warnings` on the result, with `via: 'none'` when
 nothing could serve the call. The only throw paths are contradictory or
 malformed **inputs** (programmer error): a `ref.kind` that contradicts an
 explicit `event_type`, an unknown `ref.kind`, an unknown recall `shape`,
@@ -168,7 +169,7 @@ or an input shape that fails `emitInProcess`'s schema validation.
 
 **`attest(input)` semantics.** Maps `AttestInput` to the shared
 `EmitInput` argument shape via `buildEmitArgs` (exported; throws
-`TypeError` on contradictory input — the write verb's only throw path),
+`TypeError` on contradictory input, the write verb's only throw path),
 then tries paths in order:
 
 1. **Daemon** (`daemon.mode` `'prefer'` or `'require'`): calls the `emit`
@@ -183,18 +184,18 @@ then tries paths in order:
    record back from the mirror tail and fans it out to every configured
    anchor via `createAnchorFanout`
    ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture);
-   fire-and-forget per [§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission)
-   — the primary log receiving the record twice is idempotent-safe per
+   fire-and-forget per [§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission);
+   the primary log receiving the record twice is idempotent-safe per
    [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry)
-   step 6), stamping the resolved `anchor_posture` on the result. No key
-   → pass-through result (`via: 'none'`, `record_hash: null`) with a
+   step 6), stamping the resolved `anchor_posture` on the result. Without a
+   key, the SDK returns a pass-through result (`via: 'none'`, `record_hash: null`) with a
    warning, per
    [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)
    rule 5. The daemon path never consults the client's fan-out: the
    daemon owns its own anchors.
 
 Under `daemon.mode: 'require'`, a daemon failure returns the degraded
-`via: 'none'` result directly — it never falls back and never throws.
+`via: 'none'` result directly. It never falls back and never throws.
 
 **`recall(query)` semantics.** Resolves the shape (`query.shape`, default
 `'history'`), maps it to the physical tool name via `SHAPE_TO_TOOL`
@@ -247,8 +248,8 @@ interface AttestRef {
 | `receipt_id` | `string?` | Present when the emit pipeline issued a receipt id. |
 | `via` | `'daemon' \| 'in-process' \| 'none'` | Which path produced the record. `'none'` = degraded; see `warnings`. |
 | `warnings` | `string[]` | `atrib:`-prefixed operational warnings (anchor skips, fallbacks, pass-through, flush deadline). |
-| `anchor_posture` | `AttestAnchorPosture?` | `{ effective_anchor_count, used_default_set, warned }` — the resolved [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) posture; present on in-process attests that reached the anchor fan-out. |
-| `attribution_receipt` | `VerifiedAttributionReceipt?` | `{ block, verification }` — the parsed `dev.atrib/attribution` receipt plus its `verifyAttributionReceipt` outcome; only when `attributionReceipts: true` and the daemon emitted one. Advisory. |
+| `anchor_posture` | `AttestAnchorPosture?` | `{ effective_anchor_count, used_default_set, warned }`: the resolved [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) posture; present on in-process attests that reached the anchor fan-out. |
+| `attribution_receipt` | `VerifiedAttributionReceipt?` | `{ block, verification }`: the parsed `dev.atrib/attribution` receipt plus its `verifyAttributionReceipt` outcome; only when `attributionReceipts: true` and the daemon emitted one. Advisory. |
 
 ### `RecallQuery` shapes
 
@@ -273,7 +274,7 @@ column says what serves the shape when no daemon is reachable.
 `verify` is Pattern 3 handoff-claim verification
 ([D105](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance)/[D106](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7)).
 "None (degrades)" shapes return `via: 'none'`, `data: null`, and a
-warning naming the runtime tool — honestly, rather than via a divergent
+warning naming the runtime tool to use instead, rather than a divergent
 reimplementation. When a peer-backed fallback engine itself throws, that
 too is caught and degraded.
 
@@ -318,7 +319,7 @@ themselves.
 An anchor is either a bare string (an atrib-log
 [§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry)
 endpoint, shorthand for `{ url }`) or an `AnchorDescriptor`
-(`{ anchor_type?, anchor_id?, url?, endpoint?, ... }` — `url` wins over
+(`{ anchor_type?, anchor_id?, url?, endpoint?, ... }`: `url` wins over
 `endpoint`; an absent `anchor_type` means `'atrib-log'`; registered
 non-atrib-log types like `'opentimestamps'` need no URL).
 
@@ -328,7 +329,7 @@ non-atrib-log types like `'opentimestamps'` need no URL).
 consume, and never throws: hostile entries (non-string/non-object,
 missing/invalid endpoint where one is required) and `anchor_type` values
 outside the [§2.11.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2118-anchor-type-registry)
-registry warn-and-skip — skipped entries are **excluded** from the
+registry warn-and-skip. Skipped entries are **excluded** from the
 config, so they never count toward the plurality posture. `undefined`
 input returns an empty config (the built-in default set applies
 downstream). Returns `{ config: AnchorSetConfig, primaryLogEndpoint:
@@ -357,7 +358,7 @@ type DaemonCallOutcome =
 - Connection is lazy and cached; a failed call closes the transport and
   starts the `retryCooldownMs` window, during which `callTool` returns
   `{ ok: false }` immediately without re-probing.
-- `close()` — best-effort transport close; never throws.
+- `close()`: best-effort transport close; never throws.
 - The client is semantically stateless: `context_id` and chain tokens
   travel as explicit tool arguments on every call; the MCP protocol
   session (initialize handshake + `Mcp-Session-Id`) is a transport
@@ -365,7 +366,7 @@ type DaemonCallOutcome =
 
 ### Hash helpers
 
-Compositions of `@atrib/mcp` primitives — no new hashing implementation.
+Compositions of `@atrib/mcp` primitives, with no hashing implementation of their own.
 
 | Export | Returns | Meaning |
 | --- | --- | --- |
@@ -378,18 +379,18 @@ Compositions of `@atrib/mcp` primitives — no new hashing implementation.
 Structural types/helpers are SDK-local; envelope **production and
 validation** delegate to the optional peer `@atrib/verify` (lazy import;
 missing peer degrades to a `null` envelope with a warning naming the
-peer — [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)).
+peer, per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)).
 Envelopes live outside signed bytes (mirror sidecar, archive evidence
 projection, verifier results, host-owned packets).
 
 | Export | Kind | Meaning |
 | --- | --- | --- |
-| `EvidenceTier` | type | `'declared' \| 'shape' \| 'attested' \| 'verified'` — what the verifier party actually did. |
+| `EvidenceTier` | type | `'declared' \| 'shape' \| 'attested' \| 'verified'`: what the verifier party actually did. |
 | `EvidencePayloadRefKind` | type | `'inline' \| 'mirror' \| 'archive' \| 'external' \| 'withheld'`. |
-| `EvidencePayloadRef` | type | `{ kind, uri?, record_hash? }` (`uri` / `record_hash` are string-or-null) — `uri` for archive/external locations; `record_hash` when the payload is itself a signed atrib record. |
-| `EvidencePayload` | type | `{ hash, media_type?, ref?, inline? }` — `hash` is a `"sha256:" + hex` commitment to the raw evidence material; `inline` only when `ref.kind === 'inline'`, never public. The type is lenient; normative validation requires `ref`. |
+| `EvidencePayloadRef` | type | `{ kind, uri?, record_hash? }` (`uri` and `record_hash` are string-or-null). `uri` for archive/external locations; `record_hash` when the payload is itself a signed atrib record. |
+| `EvidencePayload` | type | `{ hash, media_type?, ref?, inline? }`: `hash` is a `"sha256:" + hex` commitment to the raw evidence material; `inline` only when `ref.kind === 'inline'`, never public. The type is lenient; normative validation requires `ref`. |
 | `EvidenceConstraint` | type | `{ type, status: 'passed' \| 'failed' \| 'unresolved' \| 'not_checked', expected?, actual? }`. |
-| `EvidenceEnvelope` | type | `{ envelope: 1, profile, profile_version, tier, payload, facts?, result?, verifier? }` — one envelope schema, N profiles identified by absolute HTTPS type URI. Normative validation requires `result`. |
+| `EvidenceEnvelope` | type | `{ envelope: 1, profile, profile_version, tier, payload, facts?, result?, verifier? }`: one envelope schema, N profiles identified by absolute HTTPS type URI. Normative validation requires `result`. |
 | `evidenceEnvelopeKey(envelope)` | function | Dedup identity: `` `${profile} ${payload.hash}` ``. Multiple instances per key are permitted; consumers order by tier desc, then `checked_at_ms` desc, then verifier name. |
 | `evidenceTierRank(tier)` | function | Numeric rank, `0` (declared) … `3` (verified); unknown tiers rank `-1`. |
 | `buildEvidenceEnvelope(input)` | async function | Producer-side builder: computes `payload.hash` from `payload.material` (JCS rule) or `hash_rule: 'raw'` (UTF-8 rule), fills the default `result`, and validates via the peer. Returns `{ envelope, validation, warnings }` with `envelope: null` on rejection or missing peer; throws `TypeError` only on contradictory input (hash AND material, `hash_rule` without material, neither). |
@@ -403,14 +404,14 @@ extension document under `docs/extensions/dev.atrib-attribution/`.
 
 | Export | Kind | Meaning |
 | --- | --- | --- |
-| `ATTRIBUTION_EXTENSION_KEY` | const | `'dev.atrib/attribution'` — the `_meta` key. Aliases `@atrib/mcp`'s `ATTRIBUTION_EXTENSION_ID` (also re-exported). |
+| `ATTRIBUTION_EXTENSION_KEY` | const | `'dev.atrib/attribution'`: the `_meta` key. Aliases `@atrib/mcp`'s `ATTRIBUTION_EXTENSION_ID` (also re-exported). |
 | `ATTRIBUTION_LOG_SUBMISSION_STATUSES` | const | The four known statuses, re-exported from `@atrib/mcp`. |
 | `AttributionLogSubmissionStatus` | type | `'queued' \| 'submitted' \| 'disabled' \| 'failed'`; unknown future values pass through as strings. A queue status, never an awaited proof ([§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission)). |
-| `AttributionReceipt` | type | `{ record_hash?, creator_key?, context_id?, event_type?, chain_root?, log_submission? }` — all optional strings. |
-| `AttributionReceiptBlock` | type | `{ token?, receipt?, record? }` — the [§1.5.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#152-http-transport-tracestate) propagation token, the receipt, and optionally the full signed record for immediate Tier-3 re-verification. |
-| `VerifiedAttributionReceipt` | type | `{ block, verification }` — what the daemon client attaches to attest/recall results: the parsed block plus the [§6.2](https://github.com/creatornader/atrib/blob/main/docs/extensions/dev.atrib-attribution/v0.1.md#62-receipt-block) integrity outcome. |
+| `AttributionReceipt` | type | `{ record_hash?, creator_key?, context_id?, event_type?, chain_root?, log_submission? }`: all optional strings. |
+| `AttributionReceiptBlock` | type | `{ token?, receipt?, record? }`: the [§1.5.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#152-http-transport-tracestate) propagation token, the receipt, and optionally the full signed record for immediate Tier-3 re-verification. |
+| `VerifiedAttributionReceipt` | type | `{ block, verification }`: what the daemon client attaches to attest/recall results: the parsed block plus the [§6.2](https://github.com/creatornader/atrib/blob/main/docs/extensions/dev.atrib-attribution/v0.1.md#62-receipt-block) integrity outcome. |
 | `parseAttributionReceiptBlock(meta)` | function | Lenient extraction from a tool result's `_meta`: anything malformed yields `null`, never a throw; wrong-typed fields are dropped; an all-dropped receipt counts as absent. |
-| `verifyAttributionReceipt(block)` | function | Re-exported from `@atrib/mcp`: the extension-spec [§6.2](https://github.com/creatornader/atrib/blob/main/docs/extensions/dev.atrib-attribution/v0.1.md#62-receipt-block) consumer check over the RAW result block — structural well-formedness plus token ↔ receipt ↔ (optional) record internal consistency. Returns `AttributionReceiptVerification` `{ valid, mismatched }` (`['malformed']` for non-blocks). Internal consistency only; not a proof. |
+| `verifyAttributionReceipt(block)` | function | Re-exported from `@atrib/mcp`: the extension-spec [§6.2](https://github.com/creatornader/atrib/blob/main/docs/extensions/dev.atrib-attribution/v0.1.md#62-receipt-block) consumer check over the RAW result block: structural well-formedness plus internal consistency across token, receipt, and the optional record. Returns `AttributionReceiptVerification` `{ valid, mismatched }` (`['malformed']` for non-blocks). Internal consistency only; not a proof. |
 | `checkAttributionReceiptConsistency(block, record?)` | function | Record-side consistency: checks a parsed block's claims against the signed record they name (attached or caller-retrieved). No record at all → `{ receipt_valid: false, mismatched_fields: ['record'] }` (conservative, nothing to check against). |
 
 ### Record-layer re-exports
@@ -421,74 +422,74 @@ record layer, re-exported verbatim from `@atrib/mcp` (grouped as in
 
 **Types + event vocabulary.**
 
-- `EVENT_TYPE_TOOL_CALL_URI`, `EVENT_TYPE_TRANSACTION_URI`, `EVENT_TYPE_OBSERVATION_URI`, `EVENT_TYPE_DIRECTORY_ANCHOR_URI`, `EVENT_TYPE_ANNOTATION_URI`, `EVENT_TYPE_REVISION_URI` — the six normative event-type URIs.
-- `EVENT_TYPE_SHORT_NAMES` — the six short aliases accepted by agent-facing tools.
-- `EVENT_TYPE_SHORT_TO_URI` — short alias → canonical URI map.
-- `isNormativeEventTypeUri(uri)` — membership in the normative set (informational).
-- `isValidEventTypeUri(value)` — [§1.4.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#145-event_type-uri-validation) syntactic URI validation (extension URIs pass).
-- `normalizeEventType(value)` — short alias / known typo path → canonical URI; unknown values pass through.
+- `EVENT_TYPE_TOOL_CALL_URI`, `EVENT_TYPE_TRANSACTION_URI`, `EVENT_TYPE_OBSERVATION_URI`, `EVENT_TYPE_DIRECTORY_ANCHOR_URI`, `EVENT_TYPE_ANNOTATION_URI`, `EVENT_TYPE_REVISION_URI`: the six normative event-type URIs.
+- `EVENT_TYPE_SHORT_NAMES`: the six short aliases accepted by agent-facing tools.
+- `EVENT_TYPE_SHORT_TO_URI`: short alias → canonical URI map.
+- `isNormativeEventTypeUri(uri)`: membership in the normative set (informational).
+- `isValidEventTypeUri(value)`: [§1.4.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#145-event_type-uri-validation) syntactic URI validation (extension URIs pass).
+- `normalizeEventType(value)`: short alias / known typo path → canonical URI; unknown values pass through.
 
 **Canonicalization ([§1.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#13-canonical-serialization)).**
 
-- `canonicalRecord(record)` — JCS bytes of the complete signed record (the record-hash preimage).
-- `canonicalSigningInput(record)` — JCS bytes with `signature` removed (the signing input).
-- `canonicalCrossAttestationInput(record)` — [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) bytes with `signers: []` and no top-level `signature`.
+- `canonicalRecord(record)`: JCS bytes of the complete signed record (the record-hash preimage).
+- `canonicalSigningInput(record)`: JCS bytes with `signature` removed (the signing input).
+- `canonicalCrossAttestationInput(record)`: [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) bytes with `signers: []` and no top-level `signature`.
 
 **Signing + verification ([§1.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#14-signing-and-verification)).**
 
-- `getPublicKey(privateKey)` — raw 32-byte Ed25519 public key for a 32-byte seed.
-- `signRecord(record, privateKey)` — [§1.4.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#142-signing-procedure) signing; returns the record with `signature` set.
-- `signTransactionRecord(record, privateKey, counterpartySigners?)` — signs the cross-attestation bytes; creator's signer entry first.
-- `signTransactionAttestation(record, privateKey)` — one counterparty `SignerEntry` over an existing transaction record's bytes.
-- `verifyRecord(record)` — [§1.4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#143-verification-procedure) verification, all steps.
+- `getPublicKey(privateKey)`: raw 32-byte Ed25519 public key for a 32-byte seed.
+- `signRecord(record, privateKey)`: [§1.4.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#142-signing-procedure) signing; returns the record with `signature` set.
+- `signTransactionRecord(record, privateKey, counterpartySigners?)`: signs the cross-attestation bytes; creator's signer entry first.
+- `signTransactionAttestation(record, privateKey)`: one counterparty `SignerEntry` over an existing transaction record's bytes.
+- `verifyRecord(record)`: [§1.4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#143-verification-procedure) verification, all steps.
 
 **Hashing + encoding.**
 
-- `sha256(bytes)` — SHA-256 digest.
-- `base64urlEncode` / `base64urlDecode` — base64url, no padding.
-- `hexEncode` / `hexDecode` — lowercase hex.
+- `sha256(bytes)`: SHA-256 digest.
+- `base64urlEncode` / `base64urlDecode`: base64url, no padding.
+- `hexEncode` / `hexDecode`: lowercase hex.
 
 **Chain composition ([§1.2.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#123-chain_root-for-genesis-records) / [§1.2.3.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#1231-multi-producer-chain-composition)).**
 
-- `genesisChainRoot(contextId)` — `"sha256:" + hex(SHA-256(UTF-8(context_id)))`.
-- `chainRoot(parentRecord)` — chain_root for a non-genesis record.
-- `resolveChainRoot(opts)` — the [D067](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract) precedence contract (token > autoChain tail > env var > mirror tail > synthetic genesis). Never reimplement chain selection.
+- `genesisChainRoot(contextId)`: `"sha256:" + hex(SHA-256(UTF-8(context_id)))`.
+- `chainRoot(parentRecord)`: chain_root for a non-genesis record.
+- `resolveChainRoot(opts)`: the [D067](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract) precedence contract (token > autoChain tail > env var > mirror tail > synthetic genesis). Never reimplement chain selection.
 
 **Propagation ([§1.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#15-context-propagation)).**
 
-- `encodeToken(record)` / `decodeToken(token)` — the [§1.5.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#152-http-transport-tracestate) propagation token (`base64url(record_hash) + "." + base64url(creator_key)`; lenient decode returns `null`).
-- `extractTraceId(traceparent)` — trace-id from a W3C `traceparent` header.
-- `mergeTracestate(atribEntry, existing)` / `parseTracestateAtrib(tracestate)` — atrib member handling in W3C `tracestate`.
-- `mergeBaggageAtribSession(sessionToken, existing)` / `parseBaggageAtribSession(baggage)` — session token in W3C `baggage`.
-- `readInboundContext(params)` / `writeOutboundContext(...)` — MCP `params._meta` context reading/writing ([§1.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#154-mcp-transport-params_meta)).
+- `encodeToken(record)` / `decodeToken(token)`: the [§1.5.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#152-http-transport-tracestate) propagation token (`base64url(record_hash) + "." + base64url(creator_key)`; lenient decode returns `null`).
+- `extractTraceId(traceparent)`: trace-id from a W3C `traceparent` header.
+- `mergeTracestate(atribEntry, existing)` / `parseTracestateAtrib(tracestate)`: atrib member handling in W3C `tracestate`.
+- `mergeBaggageAtribSession(sessionToken, existing)` / `parseBaggageAtribSession(baggage)`: session token in W3C `baggage`.
+- `readInboundContext(params)` / `writeOutboundContext(...)`: MCP `params._meta` context reading/writing ([§1.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#154-mcp-transport-params_meta)).
 
 **Content identity ([§1.2.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#122-content_id-derivation)).**
 
-- `computeContentId(serverUrl, toolName)` — `"sha256:" + hex(SHA-256(normalized + ":" + tool))`.
-- `normalizeServerUrl(url)` — WHATWG-semantics URL normalization feeding `content_id`.
+- `computeContentId(serverUrl, toolName)`: `"sha256:" + hex(SHA-256(normalized + ":" + tool))`.
+- `normalizeServerUrl(url)`: WHATWG-semantics URL normalization feeding `content_id`.
 
 **Log entry serialization ([§2.3.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#231-entry-serialization)).**
 
-- `serializeEntry(input)` — the 90-byte fixed log entry.
-- `eventTypeUriToByte(uri)` — event_type byte mapping (extensions → `0xFF`).
+- `serializeEntry(input)`: the 90-byte fixed log entry.
+- `eventTypeUriToByte(uri)`: event_type byte mapping (extensions → `0xFF`).
 
 **Submission-side validation ([§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) client parity).**
 
-- `validateSubmission(record)` — client-side mirror of the log's submission validation; returns `ValidationResult`.
+- `validateSubmission(record)`: client-side mirror of the log's submission validation; returns `ValidationResult`.
 
 **Mirror conventions ([§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions)).**
 
-- `readMirrorTail(...)` — newest record on a mirror file.
-- `inheritChainContext(...)` — mirror-based chain inheritance for new producers.
-- `recordHashExistsInMirror(...)` — presence check by record hash.
+- `readMirrorTail(...)`: newest record on a mirror file.
+- `inheritChainContext(...)`: mirror-based chain inheritance for new producers.
+- `recordHashExistsInMirror(...)`: presence check by record hash.
 
 **Context identity ([D078](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)).**
 
-- `resolveEnvContextId(env?)` — `ATRIB_CONTEXT_ID`, then the harness discovery registry (Claude Code, Codex, file fallbacks).
+- `resolveEnvContextId(env?)`: `ATRIB_CONTEXT_ID`, then the harness discovery registry (Claude Code, Codex, file fallbacks).
 
 **Submission queue ([§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission)).**
 
-- `createSubmissionQueue(...)` — the non-blocking, bounded-retry log submitter with per-record-hash proof caching.
+- `createSubmissionQueue(...)`: the non-blocking, bounded-retry log submitter with per-record-hash proof caching.
 
 **Type re-exports.** `AtribRecord`, `UnsignedAtribRecord`, `SignerEntry`,
 `ChainContext`, `DecodedToken`, `EntryInput`, `ProofBundle`,
@@ -496,26 +497,26 @@ record layer, re-exported verbatim from `@atrib/mcp` (grouped as in
 
 **Anchor plurality ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture), [§2.11.7-§2.11.13](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2117-anchors-generalizing-the-replication-target)), re-exported from `@atrib/mcp`.**
 
-- `ANCHOR_TYPES` — the [§2.11.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2118-anchor-type-registry) v1 registry (`atrib-log`, `sigstore-rekor`, `rfc3161-tsa`, `opentimestamps`).
-- `BUILT_IN_DEFAULT_ANCHOR_SET` — the two-anchor zero-config default ([§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) rule 1).
-- `resolveAnchorPosture(config)` / `resolveEffectiveAnchors(config)` — the pure [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) posture/effective-set resolution.
-- `createAnchorFanout(options)` / `submitToAnchors(...)` — the per-anchor transport fan-out the client uses on in-process attests; exported for hosts that anchor records themselves.
+- `ANCHOR_TYPES`: the [§2.11.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#2118-anchor-type-registry) v1 registry (`atrib-log`, `sigstore-rekor`, `rfc3161-tsa`, `opentimestamps`).
+- `BUILT_IN_DEFAULT_ANCHOR_SET`: the two-anchor zero-config default ([§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) rule 1).
+- `resolveAnchorPosture(config)` / `resolveEffectiveAnchors(config)`: the pure [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) posture/effective-set resolution.
+- `createAnchorFanout(options)` / `submitToAnchors(...)`: the per-anchor transport fan-out the client uses on in-process attests; exported for hosts that anchor records themselves.
 - Types `AnchorType`, `AnchorDescriptor`, `AnchorSetConfig`, `AnchorPostureResolution`, `AnchorConfigSidecarMarker`, `AnchorFanout`, `AnchorFanoutTicket`, `AnchorSubmissionOutcome`, `AnchorSubmissionStatus`.
 
 **Key handling ([§5.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#56-key-management)), re-exported from `@atrib/emit`.**
 
-- `resolveKey()` — the async key ladder: `ATRIB_PRIVATE_KEY` env → `ATRIB_KEY_FILE` → macOS Keychain → 1Password; `null` (pass-through) when nothing resolves.
-- `emitInProcess(input, options?)` — the in-process write engine the SDK's fallback path uses; exported for hosts that want it directly.
+- `resolveKey()`: the async key ladder: `ATRIB_PRIVATE_KEY` env → `ATRIB_KEY_FILE` → macOS Keychain → 1Password; `null` (pass-through) when nothing resolves.
+- `emitInProcess(input, options?)`: the in-process write engine the SDK's fallback path uses; exported for hosts that want it directly.
 - Types `EmitOutput`, `ResolvedKey`.
 
 ## Conformance
 
-`test/` runs the shared corpora — `spec/conformance/1.4/` (signing +
+`test/` runs the shared corpora: `spec/conformance/1.4/` (signing +
 adversarial), `1.2.6/` (provenance_token), `1.2.3/multi-producer/`
 (chain-root precedence), `2.6.1/` (submission validation, client-side),
 `evidence-envelope/` ([D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model) shape/build/validate), and the
 `mcp-extension/` receipt cases ([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133) `verifyAttributionReceipt` +
-consistency semantics) — against this package's exported surface. The
+consistency semantics), against this package's exported surface. The
 corpora are fixtures, not inspiration: any failure is a spec-bug
 discovery, not something to route around.
 
