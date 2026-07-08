@@ -1,5 +1,11 @@
 # @atrib/primitives-runtime
 
+## 0.1.22
+
+### Patch Changes
+
+- @atrib/verify-mcp@0.2.20
+
 ## 0.1.21
 
 ### Patch Changes
