@@ -4,6 +4,14 @@
 
 This is the **server-side half** of the atrib protocol: the package tool creators install. If you're building an agent that _calls_ MCP tools, you want [`@atrib/agent`](https://github.com/creatornader/atrib/blob/main/packages/agent/README.md) instead.
 
+## Install
+
+```bash
+pnpm add @atrib/mcp
+```
+
+Verify a local build with `pnpm --filter @atrib/mcp test`.
+
 ## Quick start
 
 ```typescript

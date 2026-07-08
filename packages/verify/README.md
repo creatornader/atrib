@@ -4,6 +4,14 @@
 
 This is the **verifier half** of the atrib protocol, used by merchants closing transactions, auditors checking agent activity, teams accepting handoffs, policy systems reviewing high-impact actions, regulators querying historical state, and any party that needs to validate atrib data independently. The agent and tool servers produce signed attribution records. The Merkle log stores them. This package answers the questions any verifier has to answer: _given the graph and the policy, is this distribution actually correct? Was this record actually signed by the key it claims? Did this action actually happen at the time it claims?_
 
+## Install
+
+```bash
+pnpm add @atrib/verify
+```
+
+Verify a local build with `pnpm --filter @atrib/verify test`.
+
 ## Quick start
 
 ```typescript

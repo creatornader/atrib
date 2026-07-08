@@ -4,6 +4,14 @@ MCP server for Atrib's verifiable action layer. Lets agents query their own prov
 
 The consumer-side counterpart to `@atrib/emit`: emit produces signed records, recall reads them back and exposes them to the agent through eight MCP tools. Each returned record carries a `signature_verified` boolean so a poorly-written agent treats tampered records as such.
 
+## Install
+
+```bash
+pnpm add @atrib/recall
+```
+
+Verify a local build with `pnpm --filter @atrib/recall test`.
+
 ## Tool surface
 
 Eight MCP tools cover the cognitive surface of the local mirror.

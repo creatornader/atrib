@@ -9,6 +9,14 @@ per-tool config can gate the call before execution, sign the outcome after
 execution, preserve chain context, and keep local mirrors for later recall,
 handoff, or verification.
 
+## Install
+
+```bash
+pnpm add @atrib/mcp-wrap
+```
+
+Verify a local build with `pnpm --filter @atrib/mcp-wrap test`.
+
 ## Why this exists
 
 `createAtribProxy` from `@atrib/mcp` does the MCP plumbing: spawn an upstream,

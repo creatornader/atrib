@@ -4,6 +4,14 @@ MCP server exposing the `summarize` tool for Atrib's verifiable action layer. It
 
 Closes the consumer-side cognitive-loop primitive companion to `atrib-trace`: trace returns the declared-relationship path; summarize returns the synthesized meaning across the selected records. Both read the same local mirror including the optional `_local` sidecar.
 
+## Install
+
+```bash
+pnpm add @atrib/summarize
+```
+
+Verify a local build with `pnpm --filter @atrib/summarize test`.
+
 ## Tool
 
 ```

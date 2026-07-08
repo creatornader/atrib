@@ -4,6 +4,14 @@ MCP server exposing the `atrib-revise` tool for Atrib's verifiable action layer.
 
 Records are immutable per spec [§1.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#16-immutability): once signed, the bytes are fixed forever. When the agent now holds a position incompatible with a prior claim, the only honest move is to sign a revision that points at the prior record, names the prior position, names the new one, and gives the reason. The prior record stays in the graph; the revision adds a REVISES edge that supersedes it. A reader walking the graph sees both, and any policy or recall pipeline that respects revision can prefer the latest.
 
+## Install
+
+```bash
+pnpm add @atrib/revise
+```
+
+Verify a local build with `pnpm --filter @atrib/revise test`.
+
 ## Tool
 
 ```

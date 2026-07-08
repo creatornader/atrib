@@ -4,6 +4,14 @@ MCP server exposing the `atrib-annotate` tool for Atrib's verifiable action laye
 
 Closes the producer-side recall-fidelity gap: an agent reading back its own past loses enormous nuance compared to the agent that signed it. An annotation lets the agent at signing time say "future-self: this one is critical, and here's why in one line", and the graph carries that judgment forward.
 
+## Install
+
+```bash
+pnpm add @atrib/annotate
+```
+
+Verify a local build with `pnpm --filter @atrib/annotate test`.
+
 ## Tool
 
 ```

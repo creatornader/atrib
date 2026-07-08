@@ -2,6 +2,14 @@
 
 MCP server exposing the explicit `emit` tool, the producer-side cognitive primitive for Atrib's verifiable action layer. It lets an agent sign observations, annotations, and revisions under its own atrib identity, beyond what `@atrib/mcp` auto-signs.
 
+## Install
+
+```bash
+pnpm add @atrib/emit
+```
+
+Verify a local build with `pnpm --filter @atrib/emit test`.
+
 ## Why this exists
 
 `@atrib/mcp` middleware auto-signs every MCP tool call as it passes through. That captures the _mechanical_ record-of-tool-call. But agents do plenty of cognitive work that doesn't go through MCP:

@@ -16,6 +16,14 @@ and run logs. Those integrations compose `@atrib/mcp-wrap`, host-specific proof
 code, `@atrib/openinference`, `@atrib/runtime-log`, `@atrib/verify`, and
 hook-class producers instead of turning `@atrib/agent` into the harness layer.
 
+## Install
+
+```bash
+pnpm add @atrib/agent
+```
+
+Verify a local build with `pnpm --filter @atrib/agent test`.
+
 ## Coverage Matrix 1: MCP Framework Adapters
 
 | Framework                                  | Package                          | Adapter helper                                                                                                                                                   | Integration shape                                                                                 | Status     |
