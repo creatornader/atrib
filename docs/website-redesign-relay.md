@@ -108,7 +108,7 @@ where this brief and the ADR drafts conflict, the drafts win.
 | "the public log" as trust root | "anchor plurality; log.atrib.dev is the reference anchor" |
 | "six payment protocols detected" (core claim) | "transaction records + cross-attestation in core; rails via the Payments Profile" |
 | "wrapper you install" (sole model) | "capability a server declares (`dev.atrib/attribution`), wrapper as the shim for everything else" |
-| "fan-out"/multi-agent framing alone | "orchestration topologies" (relay/baton-pass AND fan-out; see P050) |
+| "fan-out"/multi-agent framing alone | "orchestration topologies" (relay/baton-pass AND fan-out; see [D142](../DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions)) |
 
 ## What has NOT changed (do not drift on these)
 

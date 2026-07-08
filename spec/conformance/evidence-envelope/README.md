@@ -25,6 +25,7 @@ re-pinned here; they remain authoritative in
 | `unknown-profile--*` | Unknown-profile preservation: consumers MUST preserve unrecognized envelopes untouched (pinned by a JCS round-trip hash), MUST render them opaquely (URI, tier, payload hash), and MUST NOT drop them. |
 | `legacy-mapping--*` | The frozen legacy [§5.5.6](../../../atrib-spec.md#556-generic-authorization-evidence-blocks) `protocol` string set (`oauth2`, `mcp_oauth`, `aauth`, `x401`, `ap2_vi`) maps deterministically to envelope form; two independent implementations MUST produce identical envelopes; a sixth protocol string MUST be rejected. |
 | `tier--*` | Tier semantics: the tier belongs to the envelope instance, relaying under a swapped verifier identity is a violation, `verified`-with-withheld-payload reports as claimed-but-not-reproducible, and evidence NEVER flips `verifyRecord().valid`. |
+| `continuation-packet--*` | The ninth atrib-maintained profile ([D142](../../../DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions)): the continuation packet a baton-pass record hands to a successor. Raw-bytes hash rule for markdown packets, the `record_hash` sibling spelling for signed baton records, profile-level hash-mismatch rejection, and the private-body sanitization posture. |
 
 ## Cases
 
@@ -56,6 +57,10 @@ re-pinned here; they remain authoritative in
 | `cases/tier--relay-identity-swap-rejected.json` | Relaying another party's envelope with a swapped `verifier` identity MUST be flagged; re-verification produces a new instance. |
 | `cases/tier--verified-withheld-not-reproducible.json` | `tier: "verified"` with a withheld payload is well-formed but MUST be reported claimed-but-not-reproducible. |
 | `cases/tier--evidence-never-flips-valid.json` | A real signed record verified alongside failing OAuth evidence: the evidence block and mapped envelope carry `valid: false` while `verifyRecord().valid` stays `true`. |
+| `cases/continuation-packet--baton-envelope-valid.json` | Typical baton handoff: markdown packet under the raw-bytes hash rule, role-term routing facts, a real Ed25519-signed baton-pass observation named by `facts.baton_record_hash`. MUST accept. |
+| `cases/continuation-packet--packet-hash-mismatch.json` | Shape-valid envelope whose `payload.hash` does not match the packet bytes. Profile verification fails; the envelope stays shape-valid; no record validity changes. |
+| `cases/continuation-packet--withheld-packet-declared.json` | Public-projection posture: `ref.kind: "withheld"`, hash plus sanitized role-term facts only; packet bodies are private by default. MUST accept. |
+| `cases/continuation-packet--signed-baton-record.json` | The signed baton-pass observation itself as payload via the `ref.record_hash` sibling rule; `payload.hash` = sha256(JCS(record)); signature verifies independently. |
 
 ## Generator
 

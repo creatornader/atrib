@@ -10,7 +10,7 @@
  * AP2 / VI, human approvals, counterparty attestations, and future
  * profiles). Envelopes live only outside signed record bytes: in the local
  * mirror sidecar (§5.9.3), the archive evidence projection (§2.12),
- * verifier results, and host-owned packets. The corpus pins five contract
+ * verifier results, and host-owned packets. The corpus pins six contract
  * families:
  *
  *   1. shape/           Envelope schema validity: required fields, the
@@ -35,6 +35,15 @@
  *                       'verified'-with-withheld-payload reports as
  *                       claimed-but-not-reproducible, and evidence NEVER
  *                       flips verifyRecord().valid.
+ *   6. continuation-packet/
+ *                       The ninth atrib-maintained profile (D142): the
+ *                       continuation packet a baton-pass record hands to a
+ *                       successor. Raw-bytes hash rule for markdown
+ *                       packets, the record_hash sibling spelling for
+ *                       signed baton records, hash-mismatch rejection at
+ *                       profile level, and the private-body sanitization
+ *                       posture (hash and role-term facts public, packet
+ *                       body withheld).
  *
  * Seeds and timestamps are hardcoded so successive regenerations produce
  * byte-identical files. Re-run when:
@@ -139,6 +148,7 @@ const ATRIB_PROFILE_REGISTRY = [
   'human-approval',
   'counterparty-attestation',
   'delegation-certificate',
+  'continuation-packet',
 ] as const
 
 /**
@@ -1055,6 +1065,149 @@ async function main(): Promise<void> {
     },
   )
 
+  // ═════════════════ family: continuation-packet/ ═════════════════════
+  // The ninth atrib-maintained profile (D142): the continuation packet a
+  // baton-pass record hands to a successor agent. Packet bodies are
+  // private by default; envelopes carry the hash plus role-term routing
+  // facts. See docs/evidence-profiles/continuation-packet.md.
+
+  const PACKET_MATERIAL = [
+    '# Continuation packet: fixture',
+    '',
+    'Session arc, corrections ledger, and remaining work with routing',
+    'tiers. Deterministic fixture body for the continuation-packet',
+    'profile; real packets carry operator context and stay private.',
+  ].join('\n')
+  const packetHash = rawSha256(PACKET_MATERIAL)
+
+  const batonUnsigned = {
+    spec_version: 'atrib/1.0' as const,
+    content_id: rawSha256('evidence-envelope-continuation-packet-baton-fixture'),
+    creator_key: aliceKey,
+    chain_root: aliceGenesisChainRoot,
+    event_type: 'https://atrib.dev/v1/types/observation',
+    context_id: ALICE_CONTEXT,
+    timestamp: REFERENCE_TIME_MS + 2000,
+    signature: '',
+  }
+  const batonRecord = await signRecord(batonUnsigned as AtribRecord, ALICE_SEED)
+  const batonRecordHash = 'sha256:' + hex(sha256(canonicalRecord(batonRecord)))
+
+  const batonEnvelope: EvidenceEnvelope = {
+    envelope: 1,
+    profile: `${ATRIB_PROFILE_BASE}continuation-packet`,
+    profile_version: '1.0.0',
+    tier: 'declared',
+    payload: {
+      hash: packetHash,
+      media_type: 'text/markdown',
+      ref: { kind: 'mirror' },
+    },
+    facts: {
+      target_harness_role: 'successor-session',
+      reason: 'analysis session retiring; local successor continues the work',
+      baton_record_hash: batonRecordHash,
+    },
+    result: { valid: true, constraints: [], errors: [], warnings: [] },
+  }
+  emitCase(
+    'continuation-packet',
+    'baton-envelope-valid',
+    'A typical baton handoff: the payload is the continuation packet (text/markdown, raw-bytes hash rule), facts carry role-term routing (target_harness_role, reason) plus the signed baton-pass observation hash, tier is "declared" (asserted at handoff, nothing checked yet). The profile is the ninth atrib-maintained registry entry per D142. MUST accept.',
+    {
+      envelope: batonEnvelope as unknown as Record<string, unknown>,
+      packet_material_utf8: PACKET_MATERIAL,
+      referenced_baton_record: batonRecord as unknown as Record<string, unknown>,
+      atrib_profile_registry: [...ATRIB_PROFILE_REGISTRY],
+    },
+    {
+      accept: true,
+      registered: true,
+      atrib_maintained: true,
+      payload_hash_matches_packet: true,
+      referenced_baton_record_signature_ok: true,
+      baton_record_hash: batonRecordHash,
+    },
+  )
+
+  const mismatchEnvelope: EvidenceEnvelope = {
+    ...batonEnvelope,
+    payload: {
+      hash: rawSha256(PACKET_MATERIAL + '\n(tampered)'),
+      media_type: 'text/markdown',
+      ref: { kind: 'mirror' },
+    },
+  }
+  emitCase(
+    'continuation-packet',
+    'packet-hash-mismatch',
+    'A shape-valid envelope whose payload.hash does not match the packet bytes. Consumers MUST treat the mismatch as profile-verification failure on the re-verified instance (result.valid: false) while the envelope stays shape-valid and no record validity changes.',
+    {
+      envelope: mismatchEnvelope as unknown as Record<string, unknown>,
+      packet_material_utf8: PACKET_MATERIAL,
+    },
+    {
+      accept: false,
+      payload_hash_matches_packet: false,
+      reject_reasons: ['payload_hash_mismatch'],
+    },
+  )
+
+  const withheldEnvelope: EvidenceEnvelope = {
+    ...batonEnvelope,
+    payload: {
+      hash: packetHash,
+      media_type: 'text/markdown',
+      ref: { kind: 'withheld' },
+    },
+  }
+  emitCase(
+    'continuation-packet',
+    'withheld-packet-declared',
+    'The public-projection posture: continuation packet bodies are private by default (they routinely carry operator-internal context), so public surfaces carry ref.kind "withheld" with the hash and the sanitized role-term facts only. MUST accept; the body is not retrievable from the envelope.',
+    {
+      envelope: withheldEnvelope as unknown as Record<string, unknown>,
+    },
+    {
+      accept: true,
+      body_retrievable: false,
+      public_facts: ['baton_record_hash', 'reason', 'target_harness_role'],
+    },
+  )
+
+  const recordPayloadEnvelope: EvidenceEnvelope = {
+    envelope: 1,
+    profile: `${ATRIB_PROFILE_BASE}continuation-packet`,
+    profile_version: '1.0.0',
+    tier: 'attested',
+    payload: {
+      hash: batonRecordHash,
+      media_type: 'application/json',
+      ref: { kind: 'mirror', record_hash: batonRecordHash },
+    },
+    facts: {
+      target_harness_role: 'successor-session',
+      reason: 'analysis session retiring; local successor continues the work',
+    },
+    result: { valid: true, constraints: [], errors: [], warnings: [] },
+  }
+  emitCase(
+    'continuation-packet',
+    'signed-baton-record',
+    'The carried material is itself the signed baton-pass observation: ref.record_hash names it per the §5.5.7 sibling rule, payload.hash commits to its canonical JCS bytes, and ref.kind ("mirror") states where the bytes are retrievable. The record is a real Ed25519-signed observation; its signature verifies independently.',
+    {
+      envelope: recordPayloadEnvelope as unknown as Record<string, unknown>,
+      referenced_record: batonRecord as unknown as Record<string, unknown>,
+      signer_seed_hex: hex(ALICE_SEED),
+    },
+    {
+      accept: true,
+      record_hash: batonRecordHash,
+      payload_hash_matches_record: true,
+      referenced_record_signature_ok: true,
+    },
+  )
+
   // ═══════════════════════════ Manifest ═══════════════════════════════
 
   const manifest = {
@@ -1068,10 +1221,10 @@ async function main(): Promise<void> {
     atrib_profile_registry: [...ATRIB_PROFILE_REGISTRY],
     frozen_legacy_protocols: Object.keys(LEGACY_PROTOCOL_TO_PROFILE),
     legacy_protocol_to_profile: LEGACY_PROTOCOL_TO_PROFILE,
-    families: ['shape', 'registry', 'unknown-profile', 'legacy-mapping', 'tier'],
+    families: ['shape', 'registry', 'unknown-profile', 'legacy-mapping', 'tier', 'continuation-packet'],
     cases: manifestCases,
     keys: { alice_pubkey: aliceKey },
-    note: 'The five families collectively pin the §5.5.7 contract: schema validity with the closed tier and ref.kind enums (shape/), the HTTPS type-URI registration rule with full-URI profile identity (registry/), unknown-profile preservation (unknown-profile/), the frozen five-row legacy mapping with sixth-string rejection (legacy-mapping/), and instance-scoped tier semantics where evidence never flips verifyRecord().valid (tier/).',
+    note: 'The six families collectively pin the §5.5.7 contract: schema validity with the closed tier and ref.kind enums (shape/), the HTTPS type-URI registration rule with full-URI profile identity (registry/), unknown-profile preservation (unknown-profile/), the frozen five-row legacy mapping with sixth-string rejection (legacy-mapping/), instance-scoped tier semantics where evidence never flips verifyRecord().valid (tier/), and the D142 continuation-packet profile registration (continuation-packet/).',
   }
 
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
