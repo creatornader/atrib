@@ -1,5 +1,12 @@
 # @atrib/trace
 
+## 0.5.18
+
+### Patch Changes
+
+- Updated dependencies [3c8e63d]
+  - @atrib/mcp@0.19.0
+
 ## 0.5.17
 
 ### Patch Changes
