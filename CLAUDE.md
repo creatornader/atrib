@@ -352,7 +352,9 @@ tokens on the top tier in one day; see [P051](DECISIONS.md#p051-orchestration-in
    effort — set `model`/`effort` explicitly on every spawn; never let them
    inherit a premium session model. Prefer the pinned agent types in `.claude/agents/` (`mechanical-builder`: sonnet/low; `mechanical-sweeper`: haiku/low) via `agentType`/`subagent_type` — they enforce the tier by definition, independent of the orchestrator remembering per-spawn overrides. Judgment agents (adversarial judges,
    design drafters, cross-consistency reviewers) may inherit or upshift, and
-   are the ONLY agents that may.
+   are the ONLY agents that may. Floor: edits under ~20 lines
+   with obvious verification are exempt from all delegation ceremony —
+   do them in the warm context; packaging overhead exceeds the work.
 2. **Cross-harness offload is a first-class routing tier, above subagents.**
    Subagent fleets cannot cross the harness boundary, so offload to the
    operator's designated external harness (currently Codex / GPT-5.5, a
@@ -362,7 +364,14 @@ tokens on the top tier in one day; see [P051](DECISIONS.md#p051-orchestration-in
    by a Claude session — the [P050](DECISIONS.md#p050-orchestration-topology-baton-pass-and-fan-out-records)/[P036](DECISIONS.md#p036-cross-harness-continuation-packet-for-supportrca-investigations)
    relay. Before spawning ANY fleet for mechanical, self-contained work,
    first ask whether it should be a Codex work-package instead; when the
-   acceptance gates are executable, prefer the offload.
+   acceptance gates are executable, prefer the offload. Executor boundary:
+   executor legs never receive MCP tool access, credentials/secrets, or
+   GitHub mutation rights — those stay with the orchestrating session, which
+   also reviews every diff (gates catch what they encode; intent review is
+   never delegated). Dispatch ergonomics: right-size ceremony to package
+   size — committed charter files for multi-file packages, a single-shot
+   self-contained prompt with a written output artifact and a resume path
+   for small ones.
 3. **Every fleet gets a budget.** Workflows guard loops and fan-outs on the
    harness budget mechanism when one is provided; when none is provided and
    the fleet would plausibly exceed ~500k tokens, state the estimate to the
