@@ -167,7 +167,7 @@ client.recall(
 Single read verb over the local mirror (read source + write mirror, newest
 first). v0 serves the `history` and `session_chain` shapes; any other shape
 degrades to `via="none"` with a warning pointing at the TypeScript SDK or
-the primitives runtime, never a raise. With `verify_signatures=True`
+the primitives runtime, and never raises. With `verify_signatures=True`
 (default), records failing
 [§1.4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#143-verification-procedure)
 verification are dropped and each returned entry carries
@@ -403,9 +403,9 @@ derives from verifying signed records, never from the receipt.
 - `ATTRIBUTION_LOG_SUBMISSION_STATUSES`: `("queued", "submitted",
   "disabled", "failed")`; a queue status, never an awaited proof
   ([§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission)).
-- `parse_attribution_receipt_block(meta) -> AttributionReceiptBlock | None`
- : lenient extraction from a tool result's `_meta`: anything malformed
-  yields `None`, never a raise; wrong-typed fields drop.
+- `parse_attribution_receipt_block(meta) -> AttributionReceiptBlock | None`:
+  lenient extraction from a tool result's `_meta`: anything malformed
+  yields `None` without raising; wrong-typed fields drop.
 - `verify_attribution_receipt(block) -> AttributionReceiptVerification`:
   the extension-spec [§6.2](https://github.com/creatornader/atrib/blob/main/docs/extensions/dev.atrib-attribution/v0.1.md#62-receipt-block) consumer check over the RAW result block
   (structural well-formedness plus token ↔ receipt ↔ optional-record
@@ -457,8 +457,8 @@ is frozen). Envelopes live outside signed bytes. Conformance:
   (the one normative MUST-reject).
 - `order_envelope_instances(instances)`: tier desc, `checked_at_ms`
   desc, verifier name asc; `is_relay_identity_swap(original, relayed)`:
-  flags a verifier-block-only difference; `assess_reproducibility(envelope)`
- : `verified` + `ref.kind: "withheld"` is well-formed but
+  flags a verifier-block-only difference; `assess_reproducibility(envelope)`:
+  `verified` + `ref.kind: "withheld"` is well-formed but
   claimed-not-reproducible; `render_envelope_opaque(envelope)`: the
   unknown-profile preservation surface (never drop, never affect record
   validity).
