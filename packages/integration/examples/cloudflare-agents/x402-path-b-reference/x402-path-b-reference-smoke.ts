@@ -269,10 +269,14 @@ export async function runCloudflareX402PathBReference(): Promise<CloudflareX402P
     const counterpartySignersValid = await verifyAllTransactionSigners(
       counterpartyAttestedTransaction,
     )
+    const counterpartyAttestedSignerCount = counterpartyAttestedTransaction.signers?.length ?? 0
+    if (counterpartyAttestedSignerCount !== 2) {
+      throw new Error('expected agent and counterparty transaction signers')
+    }
     const expectedContentId = computeContentId(PAID_ENDPOINT, 'checkout') as Sha256Uri
     const agentTransactionRecordHash = recordHash(agentTransactionRecord)
     const counterpartyAttestedTransactionHash = recordHash(counterpartyAttestedTransaction)
-    const lifecycle = {
+    const lifecycle: CloudflareX402PathBReferenceResult['payment_lifecycle'] = {
       schema: 'atrib.cloudflare-x402-paid-request-lifecycle.v1' as const,
       source: 'cloudflare_x402_v2_local_flow' as const,
       stage: 'origin_response' as const,
@@ -399,7 +403,7 @@ export async function runCloudflareX402PathBReference(): Promise<CloudflareX402P
             .getSessionPolicyRecord()
             ?.warnings.includes('transaction_emitted_by_agent') ?? false,
         agent_transaction_signer_count: 1,
-        counterparty_attested_signer_count: counterpartyAttestedTransaction.signers?.length ?? 0,
+        counterparty_attested_signer_count: counterpartyAttestedSignerCount,
         counterparty_signers_valid: counterpartySignersValid,
       },
       payment_lifecycle: lifecycle,
