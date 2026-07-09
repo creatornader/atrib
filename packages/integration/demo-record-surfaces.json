@@ -55,6 +55,13 @@
       "commands": ["cloudflare-x402-paid-agent-proof"]
     },
     {
+      "id": "cloudflare-x402-path-b-reference",
+      "path": "examples/cloudflare-agents/x402-path-b-reference",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["cloudflare-x402-path-b-reference"]
+    },
+    {
       "id": "vercel-ai-sdk",
       "path": "examples/vercel-ai-sdk",
       "record_class": "offline-local",

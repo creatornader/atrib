@@ -304,6 +304,33 @@ The committed proof packet is
 [`proof-packets/cloudflare-x402-paid-agent/`](../../../../proof-packets/cloudflare-x402-paid-agent/).
 It is fixture-only and does not call Cloudflare Monetization Gateway beta APIs.
 
+### x402 Path B reference
+
+The local proof at [`x402-path-b-reference/`](x402-path-b-reference/) exercises
+the beta-independent x402 path atrib can own today. It models the open x402 v2
+header flow: 402 challenge, `PAYMENT-SIGNATURE` retry,
+`PAYMENT-RESPONSE` origin response, `@atrib/agent` transaction detection, and
+agent-side Path B transaction emission when the merchant response has no atrib
+token.
+
+The proof also signs the pre-payment Action Gate decision, preserves
+`traceparent` and `X-atrib-Context` across the paid retry, binds hash-only
+lifecycle facts to the decision, outcome, and transaction record, and appends a
+counterparty attestation over the same transaction bytes. No funds move, and no
+Gateway beta API is called.
+
+Run it with:
+
+```text
+pnpm --filter @atrib/integration cloudflare-x402-path-b-reference
+```
+
+The committed proof packet is
+[`proof-packets/cloudflare-x402-path-b-reference/`](../../../../proof-packets/cloudflare-x402-path-b-reference/).
+When Gateway exposes route, rule, payment attempt, settlement, and export
+fields, those fields should replace the local lifecycle source while preserving
+the same proof shape.
+
 ### OAuth evidence infrastructure reference
 
 The reference at [`oauth-evidence-infra/`](oauth-evidence-infra/) is a Cloudflare

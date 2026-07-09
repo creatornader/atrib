@@ -1,0 +1,43 @@
+{
+  "packet": "cloudflare-x402-path-b-reference",
+  "schema": "atrib.proof-packet-redaction-manifest.v1",
+  "public_artifact": "verifier-output.json",
+  "redactions": [
+    {
+      "item": "raw x402 challenge header",
+      "public_binding": "payment_lifecycle.challenge_hash",
+      "reason": "Only the challenge hash belongs in the public packet."
+    },
+    {
+      "item": "raw PAYMENT-SIGNATURE header",
+      "public_binding": "payment_lifecycle.payment_signature_hash",
+      "reason": "The retry proof needs the hash, not reusable payment material."
+    },
+    {
+      "item": "raw PAYMENT-RESPONSE header",
+      "public_binding": "payment_lifecycle.payment_response_hash",
+      "reason": "The settlement proof needs the hash and status, not the raw header."
+    },
+    {
+      "item": "wallet addresses and signer material",
+      "public_binding": "payment_lifecycle.payer_hash and payment_lifecycle.payee_hash",
+      "reason": "The packet proves binding without publishing wallet material."
+    },
+    {
+      "item": "origin response payload",
+      "public_binding": "payment_lifecycle.origin_response_hash",
+      "reason": "The paid content is outside the public proof packet."
+    }
+  ],
+  "safe_to_publish": [
+    "record hashes",
+    "hash-only lifecycle fields",
+    "route id",
+    "rule id",
+    "price",
+    "asset",
+    "network labels",
+    "proof booleans",
+    "package and protocol surface names"
+  ]
+}
