@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 // Fail before Changesets tries to publish a package that npm has never seen.
 // First publishes need an npm owner account, then trusted publishing can take over.
+//
+// The Changesets ignore list deliberately does NOT exempt a package here:
+// `changeset publish` attempts every non-private workspace package whose
+// local version is absent from npm, and the ignore list only gates
+// `changeset version`. An ignored-but-public unseeded package failed
+// release.yml on every main push on 2026-07-10; the working protection is
+// `"private": true` until the seed, and this gate enforces it.
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
@@ -93,31 +100,28 @@ function npmPackageExists(name) {
 const changesetsConfig = readJson('.changeset/config.json')
 const ignored = new Set(changesetsConfig.ignore ?? [])
 const checked = []
-const skipped = []
 const missing = []
 const lookupErrors = []
 
+// Every non-private package is checked, ignore list or not: the publish
+// step does not consult the ignore list, so neither does the gate.
 for (const pkg of publicWorkspacePackages()) {
-  if (ignored.has(pkg.name)) {
-    skipped.push(pkg)
-    continue
-  }
-
+  const entry = { ...pkg, ignored_by_changesets: ignored.has(pkg.name) }
   const result = npmPackageExists(pkg.name)
   if (result.exists === true) {
-    checked.push(pkg)
+    checked.push(entry)
   } else if (result.exists === false) {
-    missing.push(pkg)
+    missing.push(entry)
   } else {
-    lookupErrors.push({ ...pkg, error: result.error })
+    lookupErrors.push({ ...entry, error: result.error })
   }
 }
 
 const summary = {
   checked,
-  skipped,
   missing,
   lookupErrors,
+  changesets_ignore: [...ignored],
 }
 
 if (JSON_MODE) {
@@ -131,10 +135,13 @@ if (missing.length > 0 || lookupErrors.length > 0) {
     if (missing.length > 0) {
       console.error('\nThese public workspace packages do not exist on npm:')
       for (const pkg of missing) {
-        console.error(`- ${pkg.name}@${pkg.version} (${pkg.dir})`)
+        const note = pkg.ignored_by_changesets
+          ? ' [in the Changesets ignore list, which does NOT stop changeset publish]'
+          : ''
+        console.error(`- ${pkg.name}@${pkg.version} (${pkg.dir})${note}`)
       }
       console.error(
-        '\nEither complete the manual first publish and trusted-publisher setup, or add the package to .changeset/config.json ignore until that setup is done.',
+        '\nEither complete the manual first publish and trusted-publisher setup, or keep the package "private": true until that setup is done. The Changesets ignore entry only gates changeset version; it does not protect the publish step.',
       )
       console.error('See docs/publishing-new-npm-package.md.')
     }
@@ -151,6 +158,6 @@ if (missing.length > 0 || lookupErrors.length > 0) {
 
 if (!JSON_MODE) {
   console.log(
-    `Release publish readiness ok: ${checked.length} npm packages exist, ${skipped.length} package(s) ignored by Changesets.`,
+    `Release publish readiness ok: all ${checked.length} non-private workspace packages exist on npm (${ignored.size} name(s) in the Changesets ignore list).`,
   )
 }
