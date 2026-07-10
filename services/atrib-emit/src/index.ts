@@ -60,7 +60,12 @@ function readMirrorPath(): string {
   return (
     process.env['ATRIB_AUTOCHAIN_SOURCE'] ??
     process.env['ATRIB_MIRROR_FILE'] ??
-    join(homedir(), '.atrib', 'records', `${process.env['ATRIB_AGENT'] ?? 'claude-code'}.jsonl`)
+    join(
+      homedir(),
+      '.atrib',
+      'records',
+      `atrib-emit-${process.env['ATRIB_AGENT'] ?? 'claude-code'}.jsonl`,
+    )
   )
 }
 
