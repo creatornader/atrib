@@ -90,12 +90,18 @@ async function main() {
 
   const realNow = Date.now
   Date.now = () => FIXED_TIMESTAMP_MS
-  const tmp = mkdtempSync(join(tmpdir(), 'atribd-parity-gen-'))
+  const tempDirs = []
   mkdirSync(CORPUS_DIR, { recursive: true })
 
   try {
     for (const spec of CASES) {
-      const mirror = join(tmp, `${spec.name}.jsonl`)
+      // One directory per case: mirror-tail resolution is corpus-scoped
+      // (D146), so a shared directory would chain later cases onto the
+      // first record instead of signing the genesis record of the fixed
+      // context.
+      const caseTmp = mkdtempSync(join(tmpdir(), `atribd-parity-gen-${spec.name}-`))
+      tempDirs.push(caseTmp)
+      const mirror = join(caseTmp, 'mirror.jsonl')
       process.env.ATRIB_MIRROR_FILE = mirror
       const handle = await spec.factory()
       const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
@@ -121,7 +127,7 @@ async function main() {
 
       const fixture = {
         name: spec.name,
-        spec_section: 'P046',
+        spec_section: 'D147',
         description:
           `The same ${spec.tool} call through a standalone stdio server, the daemon HTTP ` +
           'surface, and the daemon alias mount MUST produce byte-identical canonical ' +
@@ -145,7 +151,9 @@ async function main() {
     }
   } finally {
     Date.now = realNow
-    rmSync(tmp, { recursive: true, force: true })
+    for (const dir of tempDirs) {
+      rmSync(dir, { recursive: true, force: true })
+    }
   }
 }
 

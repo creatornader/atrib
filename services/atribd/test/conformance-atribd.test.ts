@@ -489,7 +489,13 @@ interface ParityFixture {
 describe('atribd corpus: record-byte-parity', () => {
   for (const { name, fixture } of familyCases<ParityFixture>('record-byte-parity')) {
     it(name, { timeout: 20_000 }, async () => {
-      const tmp = mkdtempSync(join(tmpdir(), 'atribd-parity-'))
+      // Mirror-tail resolution is corpus-scoped per D146 (every *.jsonl in
+      // the effective mirror's directory), so each surface gets its own
+      // directory; sharing one would chain surface (b) and (c) onto (a)'s
+      // record instead of signing the genesis record of the fixed context.
+      const tmpA = mkdtempSync(join(tmpdir(), 'atribd-parity-a-'))
+      const tmpB = mkdtempSync(join(tmpdir(), 'atribd-parity-b-'))
+      const tmpC = mkdtempSync(join(tmpdir(), 'atribd-parity-c-'))
       vi.spyOn(Date, 'now').mockReturnValue(fixture.input.timestamp_ms)
       process.env['ATRIB_PRIVATE_KEY'] = fixture.input.private_key_seed_base64url
       process.env['ATRIB_LOG_ENDPOINT'] = STUB_LOG
@@ -498,7 +504,7 @@ describe('atribd corpus: record-byte-parity', () => {
       try {
         // Surface (a): standalone server over InMemoryTransport (the same
         // server object the stdio binary connects to a transport).
-        const mirrorA = join(tmp, 'standalone.jsonl')
+        const mirrorA = join(tmpA, 'standalone.jsonl')
         process.env['ATRIB_MIRROR_FILE'] = mirrorA
         const standalonePayload = await callThroughStandalone(
           fixture.input.tool,
@@ -508,12 +514,12 @@ describe('atribd corpus: record-byte-parity', () => {
 
         // Surfaces (b) HTTP and (c) alias mount share one daemon backend;
         // each call signs the genesis record of the fixed context against
-        // its own fresh mirror.
+        // its own fresh mirror corpus.
         const backend = await createAtribdBackend({
           primitives: [[spec.mountName, spec.factory]],
         })
         const host = await bindAtribdHttpHost({ port: 0, backendFactory: async () => backend })
-        const mirrorB = join(tmp, 'daemon-http.jsonl')
+        const mirrorB = join(tmpB, 'daemon-http.jsonl')
         try {
           process.env['ATRIB_MIRROR_FILE'] = mirrorB
           const response = await postJson(host.endpoint, {
@@ -524,7 +530,7 @@ describe('atribd corpus: record-byte-parity', () => {
           })
           expect(response.status).toBe(200)
 
-          const mirrorC = join(tmp, 'daemon-alias.jsonl')
+          const mirrorC = join(tmpC, 'daemon-alias.jsonl')
           process.env['ATRIB_MIRROR_FILE'] = mirrorC
           const aliasResult = (await backend.callTool({
             name: fixture.input.tool,
@@ -547,7 +553,9 @@ describe('atribd corpus: record-byte-parity', () => {
           await host.close()
         }
       } finally {
-        rmSync(tmp, { recursive: true, force: true })
+        for (const dir of [tmpA, tmpB, tmpC]) {
+          rmSync(dir, { recursive: true, force: true })
+        }
       }
     })
   }
