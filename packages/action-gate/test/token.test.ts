@@ -281,7 +281,7 @@ describe('action-bound authorization tokens', () => {
     expect(results.map((result) => result.reason).sort()).toEqual(['consumed', 'ok'])
   })
 
-  it('allows D150 elevation after a successful token check', async () => {
+  it('allows D144 elevation after a successful token check', async () => {
     const token = issueActionToken(INPUT)
     const check = await checkAndConsumeToken({
       token,
@@ -299,7 +299,7 @@ describe('action-bound authorization tokens', () => {
     expect(decision).toMatchObject({ outcome: 'allow', reason: 'token' })
   })
 
-  it('escalates D150 elevation after the token is consumed', async () => {
+  it('escalates D144 elevation after the token is consumed', async () => {
     const token = issueActionToken(INPUT)
     const store = createMemoryConsumptionStore()
     await checkAndConsumeToken({
