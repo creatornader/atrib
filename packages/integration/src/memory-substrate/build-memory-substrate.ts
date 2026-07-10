@@ -271,24 +271,44 @@ function renderLineCore(m: SignedMemory, compact = false, noteForm = false): str
   const isRevision = m.record.event_type === EVENT_TYPE_REVISION_URI || c.prior_position !== undefined
   if (noteForm) {
     // Natural-language note form: same information, no field markup.
+    // Factual values (statements, positions) never truncate; only commentary
+    // (reasons) may clip. A clipped value can amputate the fact itself.
     if (isRevision) {
       const priorText = String(c.prior_position ?? '')
-      return `- User previously ${clip(priorText, 90)}, but now ${clip(c.new_position, 90)} because ${clip(c.reason, 140)}`
+      return `- User previously ${priorText}, but now ${String(c.new_position ?? '')} because ${clip(c.reason, 140)}`
     }
-    return `- ${clip(c.statement, 110)}${c.reason ? ` because ${clip(c.reason, 90)}` : ''}`
+    return `- ${String(c.statement ?? '')}${c.reason ? ` because ${clip(c.reason, 90)}` : ''}`
   }
   if (isRevision) {
     const priorText = String(c.prior_position ?? '')
     if (compact)
-      return `- [REVISED] was: "${clip(priorText, 90)}" -> now: "${clip(c.new_position, 90)}" BECAUSE: "${clip(c.reason, 140)}"${c.topic ? ` (${c.topic})` : ''}`
+      return `- [REVISED] was: "${priorText}" -> now: "${String(c.new_position ?? '')}" BECAUSE: "${clip(c.reason, 140)}"${c.topic ? ` (${c.topic})` : ''}`
     return `- [REVISED] was: "${priorText}" -> now: "${c.new_position}" BECAUSE: "${c.reason}"${c.topic ? ` (${c.topic})` : ''}`
   }
-  if (compact) return `- ${clip(c.statement, 110)}${c.reason ? ` (reason: ${clip(c.reason, 90)})` : ''}${c.topic ? ` [${c.topic}]` : ''}`
+  if (compact) return `- ${String(c.statement ?? '')}${c.reason ? ` (reason: ${clip(c.reason, 90)})` : ''}${c.topic ? ` [${c.topic}]` : ''}`
   return `- ${c.statement}${c.reason ? ` (reason: ${c.reason})` : ''}${c.topic ? ` [${c.topic}]` : ''}`
 }
 
 function renderLine(m: SignedMemory, compact = false, noteForm = false): string {
   return appendTemporalProvenance(renderLineCore(m, compact, noteForm), m)
+}
+
+/**
+ * Format legend prepended to rendered memory. The temporal markers and
+ * [REVISED] lines carry supersession semantics that strong readers infer
+ * unaided but weaker readers miss; the legend states them explicitly. It
+ * describes the format only and never references note content.
+ */
+export const MEMORY_FORMAT_LEGEND =
+  'Reading these notes: an "as of msg N" or "as of <date>" marker records when a fact was stated; higher msg numbers are more recent. REVISED lines show a superseded state and its replacement. If notes conflict about the same fact, the note with the most recent marker is current.'
+
+/**
+ * The legend rides only on complete-document budgets where it costs at most
+ * a quarter of the budget; below that it would crowd out the notes it
+ * explains. Fragment renderers (expandMemory) never carry it.
+ */
+function legendFor(budget: number): string | null {
+  return budget >= MEMORY_FORMAT_LEGEND.length * 4 ? MEMORY_FORMAT_LEGEND : null
 }
 
 function chainTopic(records: SignedMemory[]): string {
@@ -687,6 +707,10 @@ export function selectMemory(records: SignedMemory[], query: string, opts: Retri
     return { seeds: [], text, rendered_chars: text.length }
   }
 
+  // Same legend reserve as retrieveMemoryDetailed so the select/expand split
+  // composes byte-for-byte with the one-call path.
+  const legend = legendFor(normalized.budget)
+  const noteBudget = legend ? Math.max(0, normalized.budget - legend.length - 1) : normalized.budget
   const ranked = rankVisibleRecords(visible, query)
   const seeds: MutableSelectedSeed[] = []
   const admitted = new Set<string>()
@@ -695,7 +719,7 @@ export function selectMemory(records: SignedMemory[], query: string, opts: Retri
     ranked,
     0,
     seeds,
-    normalized.budget,
+    noteBudget,
     false,
     true,
     seeds,
@@ -718,7 +742,8 @@ export function selectMemory(records: SignedMemory[], query: string, opts: Retri
     )
   }
 
-  const text = renderSelectedText(seeds, normalized.compact, normalized.noteForm)
+  const rendered = renderSelectedText(seeds, normalized.compact, normalized.noteForm)
+  const text = legend ? `${legend}\n${rendered}` : rendered
   return { seeds, text, rendered_chars: text.length }
 }
 
@@ -760,6 +785,10 @@ export function expandMemory(records: SignedMemory[], seeds: SignedMemory[], opt
 export function retrieveMemoryDetailed(records: SignedMemory[], query: string, opts: RetrieveOptions = {}): { text: string; stats: RetrieveStats } {
   const normalized = normalizeRetrieveOptions(opts)
   const budget = normalized.budget
+  // The legend is part of the rendered output, so its length is reserved out
+  // of the caller's budget; total text stays within budget_chars.
+  const legend = legendFor(budget)
+  const noteBudget = legend ? Math.max(0, budget - legend.length - 1) : budget
   const expand = opts.expandChains !== false
   const share = expand === false ? 0 : Math.min(0.9, Math.max(0, opts.expansionShare ?? 0.25))
   const visible = visibleRecords(records, opts)
@@ -787,7 +816,7 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
   const admitted = new Set<string>()
   const admission = createLineAdmission()
 
-  const seedBudget = (1 - share) * budget
+  const seedBudget = (1 - share) * noteBudget
   // When share > 0, A1 stops at first overflow so the reserve prefix stays contiguous.
   // share === 0 keeps trying smaller seeds to preserve pre-reserve behavior.
   const backfillStart = admitRankedSeeds(
@@ -846,7 +875,7 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
     ranked,
     backfillStart,
     backfilled,
-    budget,
+    noteBudget,
     false,
     false,
     choices,
@@ -862,7 +891,7 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
     const rendered = composeSeedWithLineage(choice.seed, choice.members, normalized.compact, normalized.noteForm, {
       droppedMembers: choice.droppedMembers,
       admitCompactLine: (line: string) => {
-        if (admission.lineLengthAfterAppend(line) > budget) return false
+        if (admission.lineLengthAfterAppend(line) > noteBudget) return false
         admission.admitLine(line)
         return true
       },
@@ -872,6 +901,7 @@ export function retrieveMemoryDetailed(records: SignedMemory[], query: string, o
   })
 
   const text = [
+    ...(legend ? [legend] : []),
     ...choiceLines,
     ...backfilled.map((choice) => renderLine(choice.seed, normalized.compact, normalized.noteForm)),
   ].join('\n')

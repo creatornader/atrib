@@ -7752,6 +7752,20 @@ are the current coverage.
 
 **Alternatives considered.** (a) Relax the topic gate to fuzzy topic similarity: topic strings are extractor vocabulary, not content evidence, and fuzzy-matching them imports extractor idiosyncrasy into graph facts, rejected. (b) Drop the topic gate and raise the overlap bar alone: measured to admit stopword-inflated false pairs, rejected. (c) Extractor-side topic normalization: helps one harness, leaves the substrate coupled, complementary but insufficient, noted for harness work.
 
+## D148: Factual values never truncate; complete-document renders carry a format legend
+
+**Date:** 2026-07-09
+
+**Status:** Accepted
+
+**Extends:** [D146](#d146-rendered-memory-lines-carry-temporal-provenance).
+
+**Context.** The held-out LongMemEval validation (20 questions, write and judge models fixed, answer model varied) produced four atrib misses, all knowledge-update. Autopsy attributed each one. Three had the gold answer present in the signed store. In one, compact rendering clipped statements at 110 characters and amputated the answer clause mid-sentence ("finished five issues" fell past the clip boundary). In two, everything rendered correctly with D146 temporal markers and the stronger reader answered correctly from the same text, but the weaker reader picked the superseded state. The fourth miss was an extraction gap: the update was never captured, so no read-side change can recover it.
+
+**Decision.** Two rendering changes. First, factual values (statements, prior and new positions) never truncate; only commentary (reasons) may clip. Budget pressure drops whole low-ranked notes instead of amputating value tails. Second, complete-document renders (retrieveMemoryDetailed, selectMemory) prepend a fixed format legend stating the marker semantics: "as of msg N" recency, REVISED supersession, and the conflict rule that the most recent marker is current. The legend reserves its own length out of the caller budget so total output stays within budget, and it rides only when it costs at most a quarter of the budget, so small-budget callers keep full note capacity. Fragment renders (expandMemory) never carry it. The legend describes the format and never references note content; it makes explicit the semantics strong readers infer unaided, which is where the measured weak-reader misses came from.
+
+**Alternatives considered.** (a) Chain-tail completion at retrieval, rendering a chain's latest member whenever any member is retrieved: rejected because the autopsy found zero instances of the mechanism it fixes (no case where a chain member was retrieved and its tail was absent), and it re-imposes newest-wins at the retrieval layer, which the D146 debate settled in favor of consensus plus path. (b) Cross-slot linking to join fragmented update chains (magazineReading versus readingHabit): rejected per [D147](#d147-cross-topic-revision-linking-under-a-stricter-content-bar); the legend handles the consequence at presentation level without minting graph facts. (c) Harness-level prompt instruction instead of a substrate legend: rejected because the marker semantics are part of the substrate's rendering contract and must ship with it, not with one harness.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
