@@ -8312,6 +8312,8 @@ Core keeps three things, and they are exactly the payments-accommodation surface
 
 **Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
 
+**Status (2026-07-10):** Execution started in a dedicated session on `feat/payments-profile-spinout`. The evidence-envelope dependency is satisfied ([D137](#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model) landed with [§5.5.7](atrib-spec.md#557-universal-evidence-envelope), the profile documents, and the conformance corpus), so the spec and docs reorganization proceeds per the full draft. No signed byte changes.
+
 **Cross-references.**
 
 - [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 7 (this item) and step 4 (envelope dependency).
