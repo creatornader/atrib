@@ -97,9 +97,10 @@ Check the release gate before merging:
 node scripts/check-release-publish-readiness.mjs
 ```
 
-The gate queries npm for every non-private workspace package that Changesets is
-allowed to publish. It exits non-zero if an unignored public package is missing
-from npm.
+The gate queries npm for every non-private workspace package, regardless of
+the Changesets ignore list, because `changeset publish` does not consult that
+list either. It exits non-zero if any non-private package is missing from
+npm; the fix is the `"private": true` guard above, not an ignore entry.
 
 ## Repo docs
 
