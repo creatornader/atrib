@@ -25,10 +25,10 @@ Carries a settlement recommendation document ([payments profile §9](../payments
 
 ## Tier semantics
 
-- `declared` — document hash and facts asserted at attach time. Nothing checked.
-- `shape` — document retrieved and schema-validated against [payments profile §9.1](../payments-profile.md#91-document-format); facts consistent with its content.
-- `attested` — a caller-owned path accepted the document (for example, its Ed25519 signature checked against the `calculated_by` key) without reproducing the calculation.
-- `verified` — document retrieved, `payload.hash` recomputed over its JCS bytes, its signature verified per [payments profile §9.2](../payments-profile.md#92-signing-the-recommendation), and the [payments profile §10.1](../payments-profile.md#101-verifying-a-settlement-recommendation) recalculation reproduced the `distribution` within the 1e-9 tolerance at the pinned `graph_tree_size`.
+- `declared`: document hash and facts asserted at attach time. Nothing checked.
+- `shape`: document retrieved and schema-validated against [payments profile §9.1](../payments-profile.md#91-document-format); facts consistent with its content.
+- `attested`: a caller-owned path accepted the document (for example, its Ed25519 signature checked against the `calculated_by` key) without reproducing the calculation.
+- `verified`: document retrieved, `payload.hash` recomputed over its JCS bytes, its signature verified per [payments profile §9.2](../payments-profile.md#92-signing-the-recommendation), and the [payments profile §10.1](../payments-profile.md#101-verifying-a-settlement-recommendation) recalculation reproduced the `distribution` within the 1e-9 tolerance at the pinned `graph_tree_size`.
 
 ## Verifier behavior
 

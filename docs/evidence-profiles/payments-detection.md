@@ -25,10 +25,10 @@ Carries detection facts for a `transaction` record: which rail fired, which hook
 
 ## Tier semantics
 
-- `declared` — detection facts and payload hash asserted by the producer at emission (the typical tier for Path 2 agent-side detection).
-- `shape` — the block shape-validated against this profile's facts vocabulary; no payload retrieval.
-- `attested` — a caller-owned path corroborated the detection (for example, a Path 1 merchant record or an upstream webhook receipt observed for the same economic event) without re-running the hook match.
-- `verified` — payload material retrieved, `payload.hash` recomputed under the declared hash rule, and the [payments profile §2](../payments-profile.md#2-transaction-detection-hooks) hook named in `facts.hook` re-run against the retrieved material with a matching result.
+- `declared`: detection facts and payload hash asserted by the producer at emission (the typical tier for Path 2 agent-side detection).
+- `shape`: the block shape-validated against this profile's facts vocabulary; no payload retrieval.
+- `attested`: a caller-owned path corroborated the detection (for example, a Path 1 merchant record or an upstream webhook receipt observed for the same economic event) without re-running the hook match.
+- `verified`: payload material retrieved, `payload.hash` recomputed under the declared hash rule, and the [payments profile §2](../payments-profile.md#2-transaction-detection-hooks) hook named in `facts.hook` re-run against the retrieved material with a matching result.
 
 ## Verifier behavior
 
