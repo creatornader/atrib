@@ -1,8 +1,12 @@
 name: Log smoke
 
+# Scheduled probing runs on the atrib-log-smoke-monitor Cloudflare Worker
+# instead of a cron here: an Actions schedule has to acquire a hosted runner
+# from a contended pool, and a run that cannot get one in time is cancelled and
+# surfaces as a false failure. A Worker cron has no runner queue. This workflow
+# is kept for manual, on-demand runs. The post-deploy smoke in
+# deploy-services.yml is separate and unaffected.
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
     inputs:
       scope:
@@ -31,5 +35,5 @@ jobs:
       - name: Check public log endpoints
         shell: bash
         env:
-          LOG_SMOKE_SCOPE: ${{ github.event_name == 'schedule' && 'health' || inputs.scope || 'all' }}
+          LOG_SMOKE_SCOPE: ${{ inputs.scope || 'all' }}
         run: node .github/scripts/check-log-smoke.mjs
