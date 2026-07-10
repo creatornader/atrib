@@ -1,6 +1,6 @@
 {
   "name": "@atrib/emit",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "description": "MCP server for atrib's verifiable action layer. Lets agents sign explicit observations, annotations, and revisions.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
