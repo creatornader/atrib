@@ -1,0 +1,23 @@
+{
+  "name": "matching-headers-accepted",
+  "spec_section": "D148",
+  "description": "SEP-2243 routing headers that match the parsed JSON-RPC body are accepted and the request routes normally.",
+  "input": {
+    "headers": {
+      "mcp-method": "tools/call",
+      "mcp-name": "fake_read"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "tools/call",
+      "params": {
+        "name": "fake_read",
+        "arguments": {}
+      }
+    }
+  },
+  "expected": {
+    "http_status": 200
+  }
+}

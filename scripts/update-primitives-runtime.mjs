@@ -10,9 +10,46 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const HOME = process.env.HOME ?? ''
-const LAUNCH_AGENT_PREFIX = 'com.nader.atrib-primitives.'
-const PRIMITIVES_PACKAGE = join(ROOT, 'services/atrib-primitives/package.json')
 const RECALL_PACKAGE = join(ROOT, 'services/atrib-recall/package.json')
+
+/**
+ * Runtime modes (D128). The legacy mode targets the private
+ * @atrib/primitives-runtime host with its per-session HTTP shape; atribd
+ * mode targets the stateless daemon, whose health report carries a
+ * `daemon` block plus top-level `primitive_contracts`, `behavioral_probes`,
+ * `recall_contract`, and `requests` (no `sessions` block).
+ */
+export const RUNTIME_MODES = {
+  'atrib-primitives': {
+    name: 'atrib-primitives',
+    launchAgentPrefix: 'com.nader.atrib-primitives.',
+    packagePath: join(ROOT, 'services/atrib-primitives/package.json'),
+    distEntrySuffix: '/services/atrib-primitives/dist/index.js',
+    buildFilter: '@atrib/primitives-runtime...',
+    healthShape: 'primitive-runtime',
+    topology: 'required',
+  },
+  atribd: {
+    name: 'atribd',
+    launchAgentPrefix: 'com.nader.atribd.',
+    packagePath: join(ROOT, 'services/atribd/package.json'),
+    distEntrySuffix: '/services/atribd/dist/index.js',
+    buildFilter: 'atribd...',
+    healthShape: 'daemon',
+    // The topology report still reads the legacy primitive-runtime health
+    // shape; its atribd gates land with the operator cutover (D120:
+    // measure, then flip). Skipping is recorded in the report, not silent.
+    topology: 'skipped-until-cutover',
+  },
+}
+
+function runtimeMode(name = 'atrib-primitives') {
+  const mode = RUNTIME_MODES[name]
+  if (!mode) {
+    throw new Error(`unknown runtime mode: ${name} (expected atrib-primitives or atribd)`)
+  }
+  return mode
+}
 const PRIMITIVE_PACKAGE_PATHS = {
   emit: join(ROOT, 'services/atrib-emit/package.json'),
   annotate: join(ROOT, 'services/atrib-annotate/package.json'),
@@ -63,6 +100,7 @@ function usage() {
   node scripts/update-primitives-runtime.mjs [options]
 
 Options:
+  --runtime <name>       Runtime mode: atrib-primitives (default) or atribd.
   --profile <name>       Target one profile. May be repeated or comma-separated.
   --skip-build           Do not run package builds before restart.
   --skip-restart         Do not restart launchd services. Still probes live endpoints.
@@ -77,12 +115,16 @@ Default behavior discovers host-owned com.nader.atrib-primitives.* LaunchAgents
 that run this checkout's services/atrib-primitives/dist/index.js, builds
 the @atrib/primitives-runtime dependency closure, restarts those LaunchAgents,
 then lists tools and directly calls recall_by_content over each Streamable HTTP
-MCP endpoint.
+MCP endpoint. With --runtime atribd the same build, restart, direct-probe, gate
+sequence targets com.nader.atribd.* LaunchAgents running
+services/atribd/dist/index.js and validates the stateless daemon health shape
+(daemon block, top-level contract blocks, requests counters, no sessions block).
 `
 }
 
 export function parseArgs(argv) {
   const out = {
+    runtime: 'atrib-primitives',
     profiles: [],
     skipBuild: false,
     skipRestart: false,
@@ -98,6 +140,9 @@ export function parseArgs(argv) {
     const arg = argv[i]
     if (arg === '--') {
       continue
+    } else if (arg === '--runtime') {
+      out.runtime = requireValue(argv, ++i, '--runtime')
+      runtimeMode(out.runtime)
     } else if (arg === '--profile') {
       out.profiles.push(...parseProfiles(requireValue(argv, ++i, '--profile')))
     } else if (arg === '--skip-build') {
@@ -170,10 +215,6 @@ function endpointFromProgramArguments(args) {
   return `http://${host}:${port}${path.startsWith('/') ? path : `/${path}`}`
 }
 
-function scriptPathFromProgramArguments(args) {
-  return args.find((arg) => arg.endsWith('/services/atrib-primitives/dist/index.js'))
-}
-
 function healthEndpointFor(endpoint) {
   const url = new URL(endpoint)
   url.pathname = url.pathname.replace(/\/$/, '') + '/health'
@@ -189,21 +230,28 @@ function isLoopbackEndpoint(endpoint) {
   }
 }
 
-export function normalizePrimitiveLaunchAgent(plist, plistPath, { root = ROOT } = {}) {
+export function normalizePrimitiveLaunchAgent(
+  plist,
+  plistPath,
+  { root = ROOT, mode = 'atrib-primitives' } = {},
+) {
+  const runtime = runtimeMode(mode)
   const label = typeof plist.Label === 'string' ? plist.Label : undefined
   const args = Array.isArray(plist.ProgramArguments) ? plist.ProgramArguments.map(String) : []
   const workingDirectory =
     typeof plist.WorkingDirectory === 'string' ? plist.WorkingDirectory : undefined
-  const scriptPath = scriptPathFromProgramArguments(args)
+  const scriptPath = args.find((arg) => arg.endsWith(runtime.distEntrySuffix))
   const transport = valueAfter(args, '--transport') ?? 'stdio'
   const endpoint = transport === 'streamable-http' ? endpointFromProgramArguments(args) : undefined
-  const profile = label?.startsWith(LAUNCH_AGENT_PREFIX)
-    ? label.slice(LAUNCH_AGENT_PREFIX.length)
+  const profile = label?.startsWith(runtime.launchAgentPrefix)
+    ? label.slice(runtime.launchAgentPrefix.length)
     : undefined
-  const expectedDistEntry = join(root, 'services/atrib-primitives/dist/index.js')
+  const expectedDistEntry = join(root, runtime.distEntrySuffix.replace(/^\//, ''))
   const reasons = []
 
-  if (!label?.startsWith(LAUNCH_AGENT_PREFIX)) reasons.push('label is not an atrib-primitives host')
+  if (!label?.startsWith(runtime.launchAgentPrefix)) {
+    reasons.push(`label is not a ${runtime.name} host`)
+  }
   if (!profile) reasons.push('profile could not be derived from launchd label')
   if (workingDirectory !== root) reasons.push(`working directory is not ${root}`)
   if (scriptPath !== expectedDistEntry) reasons.push(`program does not run ${expectedDistEntry}`)
@@ -241,13 +289,15 @@ export function discoverPrimitiveLaunchAgents({
   home = HOME,
   root = ROOT,
   launchAgentsDir = join(home, 'Library/LaunchAgents'),
+  mode = 'atrib-primitives',
 } = {}) {
+  const runtime = runtimeMode(mode)
   if (!launchAgentsDir || !existsSync(launchAgentsDir)) return []
   return readdirSync(launchAgentsDir)
-    .filter((name) => name.endsWith('.plist') && name.startsWith(LAUNCH_AGENT_PREFIX))
+    .filter((name) => name.endsWith('.plist') && name.startsWith(runtime.launchAgentPrefix))
     .map((name) => {
       const path = join(launchAgentsDir, name)
-      return normalizePrimitiveLaunchAgent(parsePlist(path), path, { root })
+      return normalizePrimitiveLaunchAgent(parsePlist(path), path, { root, mode })
     })
     .sort((a, b) => String(a.label).localeCompare(String(b.label)))
 }
@@ -275,9 +325,10 @@ function runCommand(command, args, { label, dryRun = false } = {}) {
 }
 
 function buildPackages(options) {
+  const runtime = runtimeMode(options.runtime)
   return [
-    runCommand('pnpm', ['--filter', '@atrib/primitives-runtime...', 'build'], {
-      label: 'build @atrib/primitives-runtime dependency closure',
+    runCommand('pnpm', ['--filter', runtime.buildFilter, 'build'], {
+      label: `build ${runtime.buildFilter} dependency closure`,
       dryRun: options.dryRun,
     }),
   ]
@@ -362,16 +413,37 @@ function arraysEqual(left, right) {
 
 export function validateHealthPayload(
   body,
-  { expectedRuntimeVersion, expectedPrimitiveVersions = expectedPrimitivePackageVersions() },
+  {
+    expectedRuntimeVersion,
+    expectedPrimitiveVersions = expectedPrimitivePackageVersions(),
+    mode = 'atrib-primitives',
+  },
 ) {
-  const runtime = body?.report?.primitive_runtime
-  const contract = runtime?.recall_contract
-  const primitiveContracts = runtime?.primitive_contracts
-  const behavioralProbes = runtime?.behavioral_probes
+  const healthShape = runtimeMode(mode).healthShape
+  const runtime = healthShape === 'daemon' ? body?.report?.daemon : body?.report?.primitive_runtime
+  const contractSource = healthShape === 'daemon' ? body?.report : body?.report?.primitive_runtime
+  const runtimeLabel = healthShape === 'daemon' ? 'report.daemon' : 'report.primitive_runtime'
+  const contractLabel = healthShape === 'daemon' ? 'report' : 'report.primitive_runtime'
+  const contract = contractSource?.recall_contract
+  const primitiveContracts = contractSource?.primitive_contracts
+  const behavioralProbes = contractSource?.behavioral_probes
   const issues = []
-  if (!runtime) issues.push('missing report.primitive_runtime')
+  if (!runtime) issues.push(`missing ${runtimeLabel}`)
   if (runtime?.version !== expectedRuntimeVersion) {
     issues.push(`expected primitive runtime ${expectedRuntimeVersion}, got ${runtime?.version}`)
+  }
+  if (healthShape === 'daemon') {
+    if (body?.report?.sessions !== undefined) {
+      issues.push('retired sessions block present in daemon report')
+    }
+    if (!body?.report?.requests || typeof body.report.requests !== 'object') {
+      issues.push('missing report.requests counters')
+    }
+    if (runtime && runtime.transport !== 'streamable-http-stateless') {
+      issues.push(
+        `expected daemon.transport streamable-http-stateless, got ${runtime?.transport}`,
+      )
+    }
   }
   if (contract?.status !== 'pass') {
     issues.push(`expected recall_contract.status pass, got ${contract?.status}`)
@@ -387,7 +459,7 @@ export function validateHealthPayload(
     )
   }
   if (!primitiveContracts || typeof primitiveContracts !== 'object') {
-    issues.push('missing report.primitive_runtime.primitive_contracts')
+    issues.push(`missing ${contractLabel}.primitive_contracts`)
   } else {
     for (const [primitive, expectedTools] of Object.entries(EXPECTED_PRIMITIVE_TOOLS)) {
       const primitiveContract = primitiveContracts[primitive]
@@ -433,7 +505,7 @@ export function validateHealthPayload(
     }
   }
   if (!behavioralProbes || typeof behavioralProbes !== 'object') {
-    issues.push('missing report.primitive_runtime.behavioral_probes')
+    issues.push(`missing ${contractLabel}.behavioral_probes`)
   } else {
     for (const [primitive, expectedStatus] of Object.entries(EXPECTED_BEHAVIORAL_PROBES)) {
       const probe = behavioralProbes[primitive]
@@ -524,12 +596,12 @@ async function waitForEndpointSettled(agent, { timeoutMs }) {
   )
 }
 
-function serviceRequire() {
-  return createRequire(pathToFileURL(PRIMITIVES_PACKAGE))
+function serviceRequire(mode = 'atrib-primitives') {
+  return createRequire(pathToFileURL(runtimeMode(mode).packagePath))
 }
 
-async function loadMcpClientModules() {
-  const req = serviceRequire()
+async function loadMcpClientModules(mode) {
+  const req = serviceRequire(mode)
   const clientPath = req.resolve('@modelcontextprotocol/sdk/client/index.js')
   const transportPath = req.resolve('@modelcontextprotocol/sdk/client/streamableHttp.js')
   const [{ Client }, { StreamableHTTPClientTransport }] = await Promise.all([
@@ -622,8 +694,8 @@ export function validateToolSurfacePayload(tools) {
   }
 }
 
-async function probeMcpEndpoint(agent, { timeoutMs, probeQuery }) {
-  const { Client, StreamableHTTPClientTransport } = await loadMcpClientModules()
+async function probeMcpEndpoint(agent, { timeoutMs, probeQuery, runtime }) {
+  const { Client, StreamableHTTPClientTransport } = await loadMcpClientModules(runtime)
   const transport = new StreamableHTTPClientTransport(new URL(agent.endpoint))
   const client = new Client({
     name: `atrib-primitives-runtime-update-${agent.profile}`,
@@ -660,8 +732,16 @@ function topologyGateStatus(report, name) {
   return report.gates?.find((gate) => gate.name === name)?.status
 }
 
-function checkTopology({ dryRun = false } = {}) {
+function checkTopology({ dryRun = false, runtime = 'atrib-primitives' } = {}) {
   if (dryRun) return { status: 'skipped' }
+  if (runtimeMode(runtime).topology === 'skipped-until-cutover') {
+    return {
+      status: 'skipped',
+      reason:
+        'topology gates read the legacy primitive-runtime health shape; ' +
+        'atribd topology gates land with the operator LaunchAgent cutover',
+    }
+  }
   const result = spawnSync('node', ['scripts/report-local-substrate-topology.mjs', '--json'], {
     cwd: ROOT,
     encoding: 'utf8',
@@ -701,15 +781,15 @@ function checkTopology({ dryRun = false } = {}) {
   }
 }
 
-function expectedVersions() {
+function expectedVersions(mode = 'atrib-primitives') {
   return {
-    primitive_runtime: readJson(PRIMITIVES_PACKAGE).version,
+    primitive_runtime: readJson(runtimeMode(mode).packagePath).version,
     primitives: expectedPrimitivePackageVersions(),
     recall: readJson(RECALL_PACKAGE).version,
   }
 }
 
-function assertTargets(discovered, targets, profiles) {
+function assertTargets(discovered, targets, profiles, mode = 'atrib-primitives') {
   if (targets.length) return
   const wanted = profiles.length ? ` for profile(s) ${profiles.join(', ')}` : ''
   const candidates = discovered.map((agent) => ({
@@ -719,22 +799,24 @@ function assertTargets(discovered, targets, profiles) {
     reasons: agent.reasons,
   }))
   throw new Error(
-    `no eligible atrib-primitives LaunchAgents found${wanted}: ${JSON.stringify(candidates)}`,
+    `no eligible ${runtimeMode(mode).name} LaunchAgents found${wanted}: ${JSON.stringify(candidates)}`,
   )
 }
 
 async function run(options) {
-  const versions = expectedVersions()
-  const discovered = discoverPrimitiveLaunchAgents()
+  const versions = expectedVersions(options.runtime)
+  const discovered = discoverPrimitiveLaunchAgents({ mode: options.runtime })
   const targets = selectTargetLaunchAgents(discovered, options.profiles)
-  assertTargets(discovered, targets, options.profiles)
+  assertTargets(discovered, targets, options.profiles, options.runtime)
 
   const report = {
     schema: REPORT_SCHEMA,
     generated_at: new Date().toISOString(),
     root: ROOT,
+    runtime: options.runtime,
     expected_versions: versions,
     options: {
+      runtime: options.runtime,
       profiles: options.profiles,
       skip_build: options.skipBuild,
       skip_restart: options.skipRestart,
@@ -769,6 +851,7 @@ async function run(options) {
     const health = validateHealthPayload(await waitForHealth(agent, options), {
       expectedRuntimeVersion: versions.primitive_runtime,
       expectedPrimitiveVersions: versions.primitives,
+      mode: options.runtime,
     })
     const probe = await probeMcpEndpoint(agent, options)
     report.probes.push({
@@ -796,7 +879,7 @@ async function run(options) {
 
 function formatTextReport(report) {
   const lines = [
-    'atrib primitives runtime update proof passed',
+    `atrib primitives runtime update proof passed (runtime: ${report.runtime})`,
     `root: ${report.root}`,
     `expected: @atrib/primitives-runtime ${report.expected_versions.primitive_runtime}, ${Object.values(
       report.expected_versions.primitives,

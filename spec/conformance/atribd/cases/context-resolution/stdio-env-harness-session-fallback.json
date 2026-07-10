@@ -1,0 +1,14 @@
+{
+  "name": "stdio-env-harness-session-fallback",
+  "spec_section": "D148",
+  "check": "stdio-env",
+  "description": "stdio shim ladder: with ATRIB_CONTEXT_ID unset, a registered harness env var (CLAUDE_CODE_SESSION_ID) resolves by stripping hyphens and lowercasing to 32-hex.",
+  "input": {
+    "env": {
+      "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129"
+    }
+  },
+  "expected": {
+    "context_id": "93f5745511c04a1fab9ca59bcfc54129"
+  }
+}

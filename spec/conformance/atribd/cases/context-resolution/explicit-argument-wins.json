@@ -1,0 +1,30 @@
+{
+  "name": "explicit-argument-wins",
+  "spec_section": "D148",
+  "check": "http-carrier",
+  "description": "Rung 1: an explicit 32-hex context_id argument beats every inbound carrier. The daemon passes the call through untouched and injects nothing.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "content": {
+            "what": "explicit"
+          }
+        },
+        "_meta": {
+          "atrib": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo.BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+          "traceparent": "00-dddddddddddddddddddddddddddddddd-00f067aa0ba902b7-01"
+        }
+      }
+    }
+  },
+  "expected": {
+    "received_context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "received_chain_root": null
+  }
+}

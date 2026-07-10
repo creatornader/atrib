@@ -13,6 +13,7 @@ packages:
   - 'services/atrib-revise'
   - 'services/atrib-recall'
   - 'services/atrib-primitives'
+  - 'services/atribd'
   - 'services/atrib-trace'
   - 'services/atrib-summarize'
   - 'services/atrib-verify'
