@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { verifyRecord } from '@atrib/verify'
 import { signMemoryItems, retrieveMemory, type MemoryItem } from '../src/memory-substrate/build-memory-substrate.js'
-import { retrieveMemoryDetailed, MEMORY_FORMAT_LEGEND } from '../src/memory-substrate/build-memory-substrate.js'
+import { retrieveMemoryDetailed } from '../src/memory-substrate/build-memory-substrate.js'
 import { selectMemory, expandMemory } from '../src/memory-substrate/build-memory-substrate.js'
 
 const ITEMS: MemoryItem[] = [
@@ -290,8 +290,7 @@ describe('memory substrate', () => {
     expect(transitiveOut).toContain('audiobooks kept mind racing')
     expect(transitiveOut).toContain('eye strain')
     expect(transitiveOut).toContain('screens disrupt sleep')
-    expect(transitiveOut.split('\n')[0]).toBe(MEMORY_FORMAT_LEGEND)
-    expect(transitiveOut.split('\n')[1]).toBe('- [chain: reading, 3 steps]')
+    expect(transitiveOut.split('\n')[0]).toBe('- [chain: reading, 3 steps]')
     expect(transitiveOut).toMatch(/step 3\/3: .*meditation/)
 
     const budgetOut = retrieveMemory(signed, 'meditation notebook', { budgetTokens: 50 })
@@ -305,9 +304,7 @@ describe('memory substrate', () => {
     ]
     const echoSigned = await signMemoryItems(echoItems, 'ctx-echo-skip')
     const echoOut = retrieveMemory(echoSigned, 'sells collection moving abroad', { budgetTokens: 400 })
-    const echoLines = echoOut.split('\n')
-    expect(echoLines[0]).toBe(MEMORY_FORMAT_LEGEND)
-    expect(echoLines.length).toBe(2)
+    expect(echoOut.split('\n').length).toBe(1)
     expect(echoOut).toContain('moving abroad soon')
   })
 
@@ -388,7 +385,7 @@ describe('memory substrate', () => {
     expect(compactResult.stats.chains_compacted).toBe(1)
 
     const fullResult = retrieveMemoryDetailed(signed, COMPACT_CHAIN_QUERY, { budgetTokens: 1000, chainDepth: 12 })
-    expect(fullResult.text).toBe(`${MEMORY_FORMAT_LEGEND}\n${EXPECTED_COMPACT_CHAIN_FULL}`)
+    expect(fullResult.text).toBe(EXPECTED_COMPACT_CHAIN_FULL)
     expect(fullResult.text).not.toMatch(/earlier \([0-9]+ steps?\): /)
     expect(fullResult.stats.chains_compacted).toBe(0)
   })
@@ -408,7 +405,7 @@ describe('memory substrate', () => {
     expect(compactResult.stats.chains_compacted).toBe(1)
 
     const fullResult = retrieveMemoryDetailed(signed, TAIL_PRIORITY_QUERY, { budgetTokens: 5000, chainDepth: 12, compact: false })
-    expect(fullResult.text).toBe(`${MEMORY_FORMAT_LEGEND}\n${EXPECTED_TAIL_PRIORITY_FULL}`)
+    expect(fullResult.text).toBe(EXPECTED_TAIL_PRIORITY_FULL)
     expect(fullResult.text).not.toMatch(/earlier \([0-9]+ steps?\): /)
     expect(fullResult.text).not.toMatch(/later \([0-9]+ steps?\): /)
     expect(fullResult.stats.chains_compacted).toBe(0)
