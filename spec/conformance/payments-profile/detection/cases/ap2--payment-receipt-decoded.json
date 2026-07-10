@@ -1,0 +1,37 @@
+{
+  "name": "payment-receipt-decoded",
+  "corpus": "payments-profile/detection",
+  "rail": "ap2",
+  "profile_section": "2.5",
+  "description": "AP2 v0.2: a decoded PaymentReceipt with status \"Success\" and the full receipt field set, inside an A2A artifact DataPart. Detected as AP2.",
+  "input": {
+    "tool_name": "agent_payment",
+    "response": {
+      "kind": "task",
+      "artifacts": [
+        {
+          "parts": [
+            {
+              "kind": "data",
+              "data": {
+                "ap2.PaymentReceipt": {
+                  "status": "Success",
+                  "iss": "example-pisp.com",
+                  "iat": 1772020800,
+                  "reference": "closed-payment-mandate-hash",
+                  "payment_id": "pay_123",
+                  "psp_confirmation_id": "psp_123",
+                  "network_confirmation_id": "net_123"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "AP2"
+  }
+}

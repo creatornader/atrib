@@ -1,0 +1,18 @@
+{
+  "name": "completion-without-order",
+  "corpus": "payments-profile/detection",
+  "rail": "acp",
+  "profile_section": "2.1",
+  "description": "A \"completed\" status without an embedded order object is not a completion signal. The tool name carries no heuristic keyword, so nothing is detected.",
+  "input": {
+    "tool_name": "get_order_state",
+    "response": {
+      "id": "checkout_session_123",
+      "status": "completed"
+    }
+  },
+  "expected": {
+    "detected": false,
+    "protocol": null
+  }
+}

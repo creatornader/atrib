@@ -1,0 +1,20 @@
+{
+  "name": "legacy-x-payment-response-v1",
+  "corpus": "payments-profile/detection",
+  "rail": "x402",
+  "profile_section": "2.3",
+  "description": "x402 v1 legacy header X-PAYMENT-RESPONSE (deprecated per RFC 6648, still deployed). Detection MUST accept both names.",
+  "input": {
+    "tool_name": "fetch_paid_resource",
+    "response": {
+      "ok": true
+    },
+    "headers": {
+      "X-PAYMENT-RESPONSE": "eyJzdWNjZXNzIjp0cnVlfQ=="
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "x402"
+  }
+}

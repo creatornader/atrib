@@ -1,0 +1,41 @@
+{
+  "name": "only-failed-receipts-not-detected",
+  "corpus": "payments-profile/detection",
+  "rail": "a2a-x402",
+  "profile_section": "2.5",
+  "description": "Detection requires BOTH the payment-completed status AND a receipt with success true. A task with only failed receipts is a failed settlement, not a transaction event.",
+  "input": {
+    "tool_name": "agent_settle",
+    "response": {
+      "kind": "task",
+      "id": "task-124",
+      "status": {
+        "state": "working",
+        "message": {
+          "kind": "message",
+          "role": "agent",
+          "parts": [
+            {
+              "kind": "text",
+              "text": "Payment failed."
+            }
+          ],
+          "metadata": {
+            "x402.payment.status": "payment-completed",
+            "x402.payment.receipts": [
+              {
+                "success": false,
+                "transaction": "0xdead",
+                "network": "base"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "detected": false,
+    "protocol": null
+  }
+}

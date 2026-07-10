@@ -1,0 +1,17 @@
+{
+  "name": "tool-name-fallback",
+  "corpus": "payments-profile/detection",
+  "rail": "heuristic",
+  "profile_section": "3",
+  "description": "Tool-name heuristic, last resort only: no protocol-level signal, but the tool name contains a commerce keyword. Detected with protocol \"heuristic\"; the session policy record gains a transaction_detected_by_heuristic warning.",
+  "input": {
+    "tool_name": "complete_checkout",
+    "response": {
+      "ok": true
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "heuristic"
+  }
+}

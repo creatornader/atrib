@@ -1,0 +1,33 @@
+{
+  "name": "completion-with-ucp-envelope",
+  "corpus": "payments-profile/detection",
+  "rail": "ucp",
+  "profile_section": "2.2",
+  "description": "UCP checkout completion: identical on-wire shape to ACP plus the top-level ucp.version envelope. The envelope discriminates UCP from ACP.",
+  "input": {
+    "tool_name": "complete_checkout",
+    "response": {
+      "ucp": {
+        "version": "2026-01-11",
+        "capabilities": [
+          {
+            "name": "dev.ucp.shopping.checkout",
+            "version": "2026-01-11"
+          }
+        ]
+      },
+      "id": "chk_123456789",
+      "status": "completed",
+      "currency": "USD",
+      "order": {
+        "id": "ord_99887766",
+        "permalink_url": "https://merchant.com/orders/ord_99887766"
+      }
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "UCP",
+    "checkout_url": "https://merchant.com/orders/ord_99887766"
+  }
+}

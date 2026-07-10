@@ -1,0 +1,17 @@
+{
+  "name": "no-signal-no-detection",
+  "corpus": "payments-profile/detection",
+  "rail": "heuristic",
+  "profile_section": "3",
+  "description": "No protocol signal and no heuristic keyword. Nothing is detected; the SDK signs a plain tool_call record.",
+  "input": {
+    "tool_name": "search_products",
+    "response": {
+      "results": []
+    }
+  },
+  "expected": {
+    "detected": false,
+    "protocol": null
+  }
+}

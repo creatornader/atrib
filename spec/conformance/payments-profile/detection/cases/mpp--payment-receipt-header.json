@@ -1,0 +1,21 @@
+{
+  "name": "payment-receipt-header",
+  "corpus": "payments-profile/detection",
+  "rail": "mpp",
+  "profile_section": "2.4",
+  "description": "MPP: a 200 response carrying the Payment-Receipt header per draft-ryan-httpauth-payment-01. Detected as MPP, never as x402: the two protocols use different headers, and an earlier draft that attributed Payment-Receipt to both was corrected.",
+  "input": {
+    "tool_name": "fetch_paid_resource",
+    "response": {
+      "ok": true
+    },
+    "headers": {
+      "Payment-Receipt": "eyJzdGF0dXMiOiJzdWNjZXNzIn0",
+      "Cache-Control": "private"
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "MPP"
+  }
+}

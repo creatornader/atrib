@@ -9,6 +9,15 @@ and verifier compose against AP2-shaped evidence. This corpus fixes named
 cryptographic edge behavior so dependency upgrades cannot silently change the
 trust boundary.
 
+**Ownership.** The vectors are unchanged by the
+[P048](../../../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)
+payments spin-out; the corpus path is a stable identifier and does not move.
+The normative owner of the AP2 / VI evidence-check catalog is now
+[payments profile §11](../../../docs/payments-profile.md#11-ap2--verifiable-intent-evidence-checks)
+(relocated from core [§5.5.4](../../../atrib-spec.md#554-ap2--verifiable-intent-evidence-checks),
+whose anchor remains stable). The `ap2-vi` evidence-envelope profile keeps
+its URI, document path, and this corpus path unchanged.
+
 ## Scope
 
 - JOSE header policy: unsupported `alg`, unexpected `crit`, malformed compact

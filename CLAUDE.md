@@ -174,6 +174,8 @@ atrib/
       3.2.4/                   # Full graph edge derivation conformance corpus (§3.2.4, D101). Covers all nine edge types, all-pairs session edges, and dangling producer-declared references.
       4.6/                     # Calculation conformance corpus (test vectors for §4.6)
       6/                       # Public-key directory conformance corpus (test vectors for §6, D034). Skeleton; fixtures land alongside the directory implementation.
+      payments-profile/
+        detection/             # Payments-profile per-rail detection corpus (P048). Positive and negative detectTransaction vectors for ACP, UCP, x402, MPP, AP2, and a2a-x402 per payments profile §2-§3, consumed by packages/agent tests. Not an evidence-envelope registration; the envelope-level payments families live in evidence-envelope/.
       local-substrate-coordinator/ # D120 design-gate corpus for the optional host-owned coordinator contract. Covers startup-spawn harnesses, long-lived local agents, watcher WAL paths, and topology-report snapshots before any default config change.
 ```
 
