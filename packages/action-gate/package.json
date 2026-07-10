@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
+    "@atrib/verify": "workspace:*",
     "canonicalize": "^3.0.0"
   },
   "devDependencies": {

@@ -7701,6 +7701,20 @@ Full design document: [docs/adr-draft-p049-mcp-extension.md](docs/adr-draft-p049
 
 **Alternatives considered.** (a) Store an authority field on records. Rejected because it makes authority a graph fact and lets a producer assert its own trust level. (b) Add an `ANCESTOR_AUTHORITY` edge type. Rejected because edges are derived from observable record structure only, while authority is a policy judgement. (c) Trust a record's own origin without walking lineage. Rejected because arXiv 2606.24322 proves this is unsound under summarization and tool-echo laundering.
 
+## D150: Pre-action elevation gate composes authority propagation with cross-attestation
+
+**Date:** 2026-07-10
+
+**Status:** Accepted
+
+**Extends:** [D149](#d149-authority-propagation-is-verifier-side-policy-over-informed_by), [D052](#d052-cross-attestation-requirement-for-transaction-records), [D133](#d133-action-gate-is-a-host-owned-controlproof-package)
+
+**Context.** [D149](#d149-authority-propagation-is-verifier-side-policy-over-informed_by) defines the authority audit over `informed_by` lineage. A host needs the same evaluation before a consequential action runs. arXiv 2606.24322 Algorithm 1 permits an untrusted-derived value only after independent corroboration or a fresh authorization bound to the exact action. Invariant 3 requires the act-time gate and the after-the-fact authority audit to agree over the same graph.
+
+**Decision.** `@atrib/action-gate` evaluates the driving value with [D149](#d149-authority-propagation-is-verifier-side-policy-over-informed_by) at action time. Agent or trusted authority allows the action. An untrusted-derived value is elevated only when at least two distinct trusted signer keys corroborate it, reusing atrib's existing cross-attestation distinctness rule from [D052](#d052-cross-attestation-requirement-for-transaction-records) and [D107](#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes). A fresh token allows the action only when it binds to the exact current action. Otherwise the gate escalates to a one-time human confirmation and never silently allows. Block remains reserved for structurally forbidden action classes; structurally invalid elevation inputs return an error.
+
+**Alternatives considered.** (a) Hard-block uncorroborated actions. Rejected because a hard block destroys legitimate utility that a one-time confirmation preserves, matching the paper's uncorr-auto control. (b) Count repeated corroboration. Rejected because Sybil and self-echo are the laundering channel the distinctness rule closes. (c) Use session-scoped authorization. Rejected in favor of an action-bound token because binding to the exact value voids the authorization if the value changes after approval.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
