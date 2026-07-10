@@ -1,0 +1,19 @@
+{
+  "name": "bare-request-accepted",
+  "spec_section": "P046",
+  "description": "A bare tools/list POST with no prior initialize and no session header MUST be served. The 2026-07-28 stateless transport has no initialize-first gate; every request is self-describing.",
+  "input": {
+    "headers": {},
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    }
+  },
+  "expected": {
+    "http_status": 200,
+    "mcp_session_id_response_header": null,
+    "result_present": true
+  }
+}

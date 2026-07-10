@@ -1,0 +1,24 @@
+{
+  "name": "name-mismatch-rejected",
+  "spec_section": "P046",
+  "description": "An Mcp-Name header that diverges from the tools/call tool name MUST be rejected with HTTP 400. Gateways route and rate-limit on these headers; a divergent body is a smuggling vector.",
+  "input": {
+    "headers": {
+      "mcp-method": "tools/call",
+      "mcp-name": "summarize"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "tools/call",
+      "params": {
+        "name": "fake_read",
+        "arguments": {}
+      }
+    }
+  },
+  "expected": {
+    "http_status": 400,
+    "error_message_contains": "Mcp-Name"
+  }
+}

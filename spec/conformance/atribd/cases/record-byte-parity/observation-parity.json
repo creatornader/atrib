@@ -1,0 +1,37 @@
+{
+  "name": "observation-parity",
+  "spec_section": "P046",
+  "description": "The same emit call through a standalone stdio server, the daemon HTTP surface, and the daemon alias mount MUST produce byte-identical canonical records and the same _local.producer sidecar label. Fixed key (fill-42 test seed) and frozen timestamp make the signed bytes reproducible.",
+  "input": {
+    "tool": "emit",
+    "arguments": {
+      "event_type": "observation",
+      "context_id": "c0ffee00c0ffee00c0ffee00c0ffee00",
+      "content": {
+        "what": "atribd record-byte-parity conformance vector",
+        "topics": [
+          "P046",
+          "record-byte-parity"
+        ]
+      }
+    },
+    "private_key_seed_base64url": "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio",
+    "timestamp_ms": 1781136000000
+  },
+  "expected": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e75fd1dea166274504c5300f7cb46476d218abb3526c1d7658ff218ab173f6e3",
+      "creator_key": "GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE",
+      "chain_root": "sha256:23e0bf16a8233d47b230a49057b3cb566175ab84135cd5574e55f092b77775db",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "c0ffee00c0ffee00c0ffee00c0ffee00",
+      "timestamp": 1781136000000,
+      "signature": "EkyjbC71aHejQJlfZQucWLJOKzQYe4fUqSM-Q6ZbvxOu6iFBsBDIiyLBa00A7M6AKsINYkRt8AKMllb3JM10Bg",
+      "args_hash": "sha256:a307b9085556195c6efc844894dc0868d769ed120effe2eb29b0b5ff8dfb3d87"
+    },
+    "record_hash": "sha256:9d59ecd1c7dcd1188b883b5a2e4b054af496b87e3f05dcf3aa520506fec638da",
+    "canonical_record_sha256": "9d59ecd1c7dcd1188b883b5a2e4b054af496b87e3f05dcf3aa520506fec638da",
+    "producer_label": "atrib-emit"
+  }
+}

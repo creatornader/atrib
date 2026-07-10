@@ -1,0 +1,17 @@
+{
+  "name": "absent-headers-accepted",
+  "spec_section": "P046",
+  "description": "Requests without Mcp-Method / Mcp-Name headers are accepted during the legacy compatibility window; session-era SDK clients do not send them.",
+  "input": {
+    "headers": {},
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    }
+  },
+  "expected": {
+    "http_status": 200
+  }
+}

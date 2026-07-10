@@ -1,0 +1,20 @@
+{
+  "name": "method-mismatch-rejected",
+  "spec_section": "P046",
+  "description": "An Mcp-Method header that diverges from the body method MUST be rejected with HTTP 400 and a JSON-RPC error, with no state consulted (SEP-2243: servers MUST reject header/body mismatches).",
+  "input": {
+    "headers": {
+      "mcp-method": "tools/call"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    }
+  },
+  "expected": {
+    "http_status": 400,
+    "error_message_contains": "Mcp-Method"
+  }
+}

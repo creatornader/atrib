@@ -1,0 +1,22 @@
+{
+  "name": "legacy-session-header-ignored",
+  "spec_section": "P046",
+  "description": "A request carrying a legacy Mcp-Session-Id header MUST be served with the header ignored, never rejected with 404 Session not found. Pre-cutover clients keep working through the compatibility window.",
+  "input": {
+    "headers": {
+      "mcp-session-id": "stale-session-from-before-the-stateless-cutover"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    }
+  },
+  "expected": {
+    "http_status": 200,
+    "mcp_session_id_response_header": null,
+    "result_present": true,
+    "counter_incremented": "legacy_session_header_ignored"
+  }
+}

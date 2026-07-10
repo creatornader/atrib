@@ -1,0 +1,27 @@
+{
+  "name": "healthy-report",
+  "spec_section": "P046",
+  "description": "All D127/D129/D130 gates pass: status is healthy, the report carries a requests counter block, and the retired sessions block is absent.",
+  "input": {
+    "runtime_contracts": {
+      "primitives": {},
+      "behavioral_probes": {},
+      "recall_content": {
+        "status": "pass",
+        "package": "@atrib/recall",
+        "runtime_metadata_available": true,
+        "expected_coverage_version": "coverage-v1",
+        "expected_content_index_version": "content-index-v1",
+        "version": "0.0.0",
+        "coverage_version": "coverage-v1",
+        "content_index_version": "content-index-v1"
+      }
+    }
+  },
+  "expected": {
+    "status": "healthy",
+    "sessions_block_absent": true,
+    "requests_block_present": true,
+    "daemon_transport": "streamable-http-stateless"
+  }
+}

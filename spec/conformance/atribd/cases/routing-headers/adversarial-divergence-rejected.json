@@ -1,0 +1,30 @@
+{
+  "name": "adversarial-divergence-rejected",
+  "spec_section": "P046",
+  "description": "Adversarial divergence on both axes: headers claim a read (fake_read) while the body invokes a write (emit). Infrastructure allowlisting on headers alone would be bypassed if the server did not reject the mismatch; nothing may route.",
+  "input": {
+    "headers": {
+      "mcp-method": "tools/call",
+      "mcp-name": "fake_read"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "content": {
+            "what": "smuggled"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "http_status": 400,
+    "error_message_contains": "Mcp-Name",
+    "no_tool_routed": true
+  }
+}

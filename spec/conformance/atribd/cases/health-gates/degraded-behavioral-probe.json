@@ -1,0 +1,48 @@
+{
+  "name": "degraded-behavioral-probe",
+  "spec_section": "P046",
+  "description": "D130: a failing non-mutating behavioral probe degrades the daemon. Write primitives stay skipped (no validate-only contract); skipped never degrades.",
+  "input": {
+    "runtime_contracts": {
+      "primitives": {},
+      "behavioral_probes": {
+        "trace": {
+          "status": "fail",
+          "primitive": "trace",
+          "tool_names": [
+            "trace",
+            "trace_forward"
+          ],
+          "probe_kind": "read-only",
+          "mutates_log_on_call": false,
+          "reason": "trace returned unexpected direction"
+        },
+        "emit": {
+          "status": "skipped",
+          "primitive": "emit",
+          "tool_names": [
+            "emit"
+          ],
+          "probe_kind": "not-available",
+          "mutates_log_on_call": true,
+          "reason": "write primitive has no validate-only contract; health checks must not sign records"
+        }
+      },
+      "recall_content": {
+        "status": "pass",
+        "package": "@atrib/recall",
+        "runtime_metadata_available": true,
+        "expected_coverage_version": "coverage-v1",
+        "expected_content_index_version": "content-index-v1",
+        "version": "0.0.0",
+        "coverage_version": "coverage-v1",
+        "content_index_version": "content-index-v1"
+      }
+    }
+  },
+  "expected": {
+    "status": "degraded",
+    "sessions_block_absent": true,
+    "requests_block_present": true
+  }
+}

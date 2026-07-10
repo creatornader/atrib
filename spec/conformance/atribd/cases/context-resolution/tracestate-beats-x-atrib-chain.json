@@ -1,0 +1,30 @@
+{
+  "name": "tracestate-beats-x-atrib-chain",
+  "spec_section": "P046",
+  "check": "http-carrier",
+  "description": "Ladder order per §1.5.4/§1.5.3: the atrib= tracestate entry beats the X-Atrib-Chain fallback carrier.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "content": {
+            "what": "carrier"
+          }
+        },
+        "_meta": {
+          "tracestate": "atrib=u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7s.BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+          "X-Atrib-Chain": "zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw.BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+          "traceparent": "00-dddddddddddddddddddddddddddddddd-00f067aa0ba902b7-01"
+        }
+      }
+    }
+  },
+  "expected": {
+    "received_context_id": "dddddddddddddddddddddddddddddddd",
+    "received_chain_root": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+}

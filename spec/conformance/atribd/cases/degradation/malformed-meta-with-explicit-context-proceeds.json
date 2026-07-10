@@ -1,0 +1,31 @@
+{
+  "name": "malformed-meta-with-explicit-context-proceeds",
+  "spec_section": "P046",
+  "description": "D018 lenient-parse posture: malformed inbound carriers are ignored, not fatal. With an explicit context_id argument the write proceeds on rung 1 as if the garbage carriers were absent.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "content": {
+            "what": "lenient"
+          }
+        },
+        "_meta": {
+          "atrib": "not-a-token",
+          "tracestate": "atrib=%%%garbage%%%",
+          "traceparent": "zz-not-a-traceparent",
+          "X-Atrib-Chain": 42
+        }
+      }
+    }
+  },
+  "expected": {
+    "received_context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "received_chain_root": null
+  }
+}

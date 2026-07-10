@@ -1,0 +1,34 @@
+{
+  "name": "revision-parity",
+  "spec_section": "P046",
+  "description": "The same atrib-revise call through a standalone stdio server, the daemon HTTP surface, and the daemon alias mount MUST produce byte-identical canonical records and the same _local.producer sidecar label. Fixed key (fill-42 test seed) and frozen timestamp make the signed bytes reproducible.",
+  "input": {
+    "tool": "atrib-revise",
+    "arguments": {
+      "revises": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "prior_position": "prior fixture position",
+      "new_position": "revised fixture position",
+      "reason": "atribd record-byte-parity revision vector",
+      "context_id": "c0ffee00c0ffee00c0ffee00c0ffee00"
+    },
+    "private_key_seed_base64url": "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio",
+    "timestamp_ms": 1781136000000
+  },
+  "expected": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:3282e5fccf8a561f19bcd95c75473b5fdf36ed689cea1ed36e4f85265e686a9e",
+      "creator_key": "GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE",
+      "chain_root": "sha256:23e0bf16a8233d47b230a49057b3cb566175ab84135cd5574e55f092b77775db",
+      "event_type": "https://atrib.dev/v1/types/revision",
+      "context_id": "c0ffee00c0ffee00c0ffee00c0ffee00",
+      "timestamp": 1781136000000,
+      "signature": "I4E-gauLwqiNChjShFYjSgIN9-lvqzmnJoJ00wJiMWicerzXGodtWYY2ximqmanQ3rcWgZ1zEyAD6W7859ApDw",
+      "args_hash": "sha256:19d5bc403a48be0522b15a778807f2f85bf2cb9a70418f91422ab0cba12a6981",
+      "revises": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "record_hash": "sha256:0a72c8811734ac2292d3c0975025e6a57f82208692ef671a6f2fa64415234a62",
+    "canonical_record_sha256": "0a72c8811734ac2292d3c0975025e6a57f82208692ef671a6f2fa64415234a62",
+    "producer_label": "atrib-revise"
+  }
+}

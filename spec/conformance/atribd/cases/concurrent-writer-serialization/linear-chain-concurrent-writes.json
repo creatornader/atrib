@@ -1,0 +1,17 @@
+{
+  "name": "linear-chain-concurrent-writes",
+  "spec_section": "P046",
+  "description": "N concurrent write-primitive requests against one context_id through one daemon instance yield a linear chain: zero forks, the first record anchored at the genesis chain_root, every later record chaining to its immediate predecessor. This pins the genesis-race fix motivated by the 2026-07-10 chain-fork measurement (1,001 forks, 517 within five seconds, no locking on read-tail, sign, append).",
+  "input": {
+    "tool": "emit",
+    "concurrent_writes": 8,
+    "context_id": "11ce11ce11ce11ce11ce11ce11ce11ce",
+    "private_key_seed_base64url": "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio"
+  },
+  "expected": {
+    "records": 8,
+    "forks": 0,
+    "first_chain_root": "genesis",
+    "chain_linear": true
+  }
+}

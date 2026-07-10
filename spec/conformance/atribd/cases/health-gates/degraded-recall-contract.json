@@ -1,0 +1,24 @@
+{
+  "name": "degraded-recall-contract",
+  "spec_section": "P046",
+  "description": "D127: a failing recall content-index contract degrades the daemon. Degraded is a report state, not a fatal one; the daemon keeps serving.",
+  "input": {
+    "runtime_contracts": {
+      "primitives": {},
+      "behavioral_probes": {},
+      "recall_content": {
+        "status": "fail",
+        "package": "@atrib/recall",
+        "runtime_metadata_available": false,
+        "expected_coverage_version": "coverage-v1",
+        "expected_content_index_version": "content-index-v1",
+        "reason": "@atrib/recall does not export getAtribRecallRuntimeContract"
+      }
+    }
+  },
+  "expected": {
+    "status": "degraded",
+    "sessions_block_absent": true,
+    "requests_block_present": true
+  }
+}

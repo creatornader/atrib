@@ -1,0 +1,20 @@
+{
+  "name": "name-without-tools-call-rejected",
+  "spec_section": "P046",
+  "description": "An Mcp-Name header on a body with no tools/call request is a header/body divergence and MUST be rejected with HTTP 400.",
+  "input": {
+    "headers": {
+      "mcp-name": "fake_read"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    }
+  },
+  "expected": {
+    "http_status": 400,
+    "error_message_contains": "Mcp-Name"
+  }
+}
