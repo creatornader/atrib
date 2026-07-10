@@ -17,6 +17,29 @@ import {
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 
+export { evaluateElevation } from './elevation.js'
+export type {
+  ActionBoundToken,
+  Corroborator,
+  ElevationDecision,
+  ElevationInput,
+  ElevationOutcome,
+} from './elevation.js'
+export {
+  checkAndConsumeToken,
+  computeActionBinding,
+  createMemoryConsumptionStore,
+  issueActionToken,
+} from './token.js'
+export type {
+  ActionBindingInput,
+  IssuedActionToken,
+  TokenCheckInput,
+  TokenCheckReason,
+  TokenCheckResult,
+  TokenConsumptionStore,
+} from './token.js'
+
 export const ACTION_GATE_DECISION_EVENT_TYPE_URI =
   'https://atrib.dev/v1/extensions/action-gate/decision' as const
 export const ACTION_GATE_OUTCOME_EVENT_TYPE_URI =

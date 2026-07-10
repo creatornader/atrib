@@ -7687,6 +7687,48 @@ Full design document: [docs/adr-draft-p049-mcp-extension.md](docs/adr-draft-p049
 - [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args), orchestrator-injected context for the receiving side.
 - [D137](#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model), the envelope this profile registers under; [D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys), the authority binding.
 
+## D143: Authority propagation is verifier-side policy over informed_by
+
+**Date:** 2026-07-10
+
+**Status:** Accepted
+
+**Extends:** [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D113](#d113-unvalidated-informed_by-refs-are-omitted-by-default)
+
+**Context.** The graph stays a pure fact layer under [§3.6](atrib-spec.md#36-facts-vs-policy). Authority is computed, never stored. Producer signatures already bind records to their write-time origin, but origin alone does not settle the authority of derived work. arXiv 2606.24322 proves a laundering gap in defenses that trust declared lineage: an agent can summarize untrusted content into benign-looking text, or a trusted tool can echo output derived from untrusted input.
+
+**Decision.** `@atrib/verify` evaluates authority as policy over a record, its `informed_by` lineage, and an origin-authority policy. Propagation takes the minimum authority along every reachable `informed_by` path, so no transformation can raise authority. Unresolved references and lineage left unexplored by a depth limit are conservatively untrusted. No authority field is added to records, no edge type is added, and the graph is not mutated. This is the evaluation half of the write-time origin binding that atrib already provides through producer signatures. It closes the laundering gap that arXiv 2606.24322 proves is fatal to defenses which trust declared lineage.
+
+**Alternatives considered.** (a) Store an authority field on records. Rejected because it makes authority a graph fact and lets a producer assert its own trust level. (b) Add an `ANCESTOR_AUTHORITY` edge type. Rejected because edges are derived from observable record structure only, while authority is a policy judgement. (c) Trust a record's own origin without walking lineage. Rejected because arXiv 2606.24322 proves this is unsound under summarization and tool-echo laundering.
+
+## D144: Pre-action elevation gate composes authority propagation with cross-attestation
+
+**Date:** 2026-07-10
+
+**Status:** Accepted
+
+**Extends:** [D143](#d143-authority-propagation-is-verifier-side-policy-over-informed_by), [D052](#d052-cross-attestation-requirement-for-transaction-records), [D133](#d133-action-gate-is-a-host-owned-controlproof-package)
+
+**Context.** [D143](#d143-authority-propagation-is-verifier-side-policy-over-informed_by) defines the authority audit over `informed_by` lineage. A host needs the same evaluation before a consequential action runs. arXiv 2606.24322 Algorithm 1 permits an untrusted-derived value only after independent corroboration or a fresh authorization bound to the exact action. Invariant 3 requires the act-time gate and the after-the-fact authority audit to agree over the same graph.
+
+**Decision.** `@atrib/action-gate` evaluates the driving value with [D143](#d143-authority-propagation-is-verifier-side-policy-over-informed_by) at action time. Agent or trusted authority allows the action. An untrusted-derived value is elevated only when at least two distinct trusted signer keys corroborate it, reusing atrib's existing cross-attestation distinctness rule from [D052](#d052-cross-attestation-requirement-for-transaction-records) and [D107](#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes). A fresh token allows the action only when it binds to the exact current action. Otherwise the gate escalates to a one-time human confirmation and never silently allows. Block remains reserved for structurally forbidden action classes; structurally invalid elevation inputs return an error.
+
+**Alternatives considered.** (a) Hard-block uncorroborated actions. Rejected because a hard block destroys legitimate utility that a one-time confirmation preserves, matching the paper's uncorr-auto control. (b) Count repeated corroboration. Rejected because Sybil and self-echo are the laundering channel the distinctness rule closes. (c) Use session-scoped authorization. Rejected in favor of an action-bound token because binding to the exact value voids the authorization if the value changes after approval.
+
+## D145: Action-bound single-use authorization tokens
+
+**Date:** 2026-07-10
+
+**Status:** Accepted
+
+**Extends:** [D144](#d144-pre-action-elevation-gate-composes-authority-propagation-with-cross-attestation), [D133](#d133-action-gate-is-a-host-owned-controlproof-package), [D111](#d111-host-owned-oauth-evidence-infrastructure)
+
+**Context.** arXiv 2606.24322 defines an authorization token over the tuple (tool, value, amount, nonce, timestamp). The token must stop authorizing an action when its security-relevant value changes after approval. It must also prevent two concurrent checks from accepting the same approval while preserving a valid pending approval when an attacker probes it with the wrong binding.
+
+**Decision.** `@atrib/action-gate` derives the action binding by applying JCS and SHA-256 to the five-field tuple. Any change to the driving value after approval derives a different binding and voids the authorization. A host-owned consumption store enforces single use through one atomic `consume` operation, following the [D111](#d111-host-owned-oauth-evidence-infrastructure) replay-cache precedent. atrib ships the check, and the host owns the state. The guarantee is at most one successful check per binding per store. Coupling consumption to execution is the host's contract. The host must check immediately before each attempt and never reuse a prior result's `fresh` flag. Freshness is caller-clocked, so the check stays pure apart from the single consume call. A failed pure check never reaches `consume`, so probing with mismatched bindings cannot burn a legitimate pending approval.
+
+**Alternatives considered.** (a) Use session-scoped authorization. Rejected in [D144](#d144-pre-action-elevation-gate-composes-authority-propagation-with-cross-attestation) and again here because value drift after approval must void the grant. (b) Sign tokens as atrib records. Deferred. The composition path binds a token to a signed human-approval record through `informed_by` per [D118](#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain), and the check itself does not require that representation. (c) Consume on any check attempt. Rejected because it gives an attacker a denial-of-authorization primitive against pending approvals. (d) Use a split `has` and `add` store interface. Rejected because the read-then-write gap lets two concurrent checks both observe an unused binding, causing a double-spend. A synchronous-only interface also cannot back the shared-store adapters required by the [D111](#d111-host-owned-oauth-evidence-infrastructure) precedent.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
