@@ -1,6 +1,6 @@
 {
   "name": "read-unscoped-proceeds",
-  "spec_section": "P046",
+  "spec_section": "D147",
   "check": "http-carrier",
   "description": "Read primitives that support unscoped queries proceed per their own scope rules; the explicit-required policy binds writes only.",
   "input": {

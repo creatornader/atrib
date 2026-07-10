@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Reference test for the P046 atribd conformance corpus.
+ * Reference test for the D147 atribd conformance corpus (promoted from P046).
  *
  * Walks spec/conformance/atribd/manifest.json and executes every case
  * against the live implementation: HTTP vectors against bindAtribdHttpHost
@@ -12,7 +12,7 @@
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server as HttpServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -26,6 +26,7 @@ import {
   canonicalRecord,
   genesisChainRoot,
   hexEncode,
+  inheritChainContext,
   resolveChainRoot,
   resolveEnvContextId,
   sha256,
@@ -34,7 +35,6 @@ import {
   bindAtribdHttpHost,
   createAtribdBackend,
   type AtribdBackend,
-  type AtribdHttpHost,
   type AtribdPrimitiveFactory,
   type AtribdRuntimeContracts,
 } from '../src/index.js'
@@ -42,7 +42,6 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url))
 const CORPUS = resolve(HERE, '../../../spec/conformance/atribd')
 const MULTI_PRODUCER_CORPUS = resolve(HERE, '../../../spec/conformance/1.2.3/multi-producer')
-const UNREACHABLE_LOG = 'http://127.0.0.1:0/v1/entries'
 
 interface ManifestFamily {
   name: string
@@ -408,8 +407,11 @@ describe('atribd corpus: context-resolution', () => {
         return
       }
       // chain-root-corpus: re-run the §1.2.3 multi-producer corpus from the
-      // daemon's dependency surface; resolveChainRoot output must be
-      // unchanged case for case.
+      // daemon's dependency surface; chain selection output must be
+      // unchanged case for case. Fixtures with a mirror_corpus input run
+      // through inheritChainContext against a materialized on-disk corpus,
+      // exactly as the upstream reference test does (D146 corpus-scoped
+      // resolution is on the daemon's dependency surface too).
       const upstream = JSON.parse(
         readFileSync(join(MULTI_PRODUCER_CORPUS, 'manifest.json'), 'utf-8'),
       ) as { cases: { file: string }[] }
@@ -424,8 +426,36 @@ describe('atribd corpus: context-resolution', () => {
             auto_chain_tail_hex: string | null
             env: Record<string, string>
             mirror_tail_hex: string | null
+            mirror_corpus?: {
+              effective_file: string
+              files: { file: string; lines: unknown[] }[]
+            }
           }
           expected: { chain_root: string }
+        }
+        const corpus = upstreamCase.input.mirror_corpus
+        if (corpus) {
+          const corpusTmp = mkdtempSync(join(tmpdir(), 'atribd-corpus-rerun-'))
+          try {
+            for (const file of corpus.files) {
+              const path = join(corpusTmp, file.file)
+              mkdirSync(dirname(path), { recursive: true })
+              writeFileSync(
+                path,
+                `${file.lines.map((line) => JSON.stringify(line)).join('\n')}\n`,
+              )
+            }
+            const chain = await inheritChainContext({
+              callerContextId: upstreamCase.input.context_id,
+              mirrorPath: join(corpusTmp, corpus.effective_file),
+              env: upstreamCase.input.env,
+              randomContextId: () => 'f'.repeat(32),
+            })
+            expect(chain.chainRoot).toBe(upstreamCase.expected.chain_root)
+          } finally {
+            rmSync(corpusTmp, { recursive: true, force: true })
+          }
+          continue
         }
         const result = resolveChainRoot({
           contextId: upstreamCase.input.context_id,

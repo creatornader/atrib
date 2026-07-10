@@ -1,6 +1,6 @@
 {
   "name": "bare-request-accepted",
-  "spec_section": "P046",
+  "spec_section": "D147",
   "description": "A bare tools/list POST with no prior initialize and no session header MUST be served. The 2026-07-28 stateless transport has no initialize-first gate; every request is self-describing.",
   "input": {
     "headers": {},

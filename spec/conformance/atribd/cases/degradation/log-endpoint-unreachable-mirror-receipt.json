@@ -1,6 +1,6 @@
 {
   "name": "log-endpoint-unreachable-mirror-receipt",
-  "spec_section": "P046",
+  "spec_section": "D147",
   "description": "§5.8: with the log endpoint unreachable, a write-primitive call still returns a signed record_hash and the record lands in the local mirror. Submission is queued and retried in the background; the primary call never blocks on network state.",
   "input": {
     "tool": "emit",

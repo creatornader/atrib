@@ -1,6 +1,6 @@
 {
   "name": "malformed-meta-with-explicit-context-proceeds",
-  "spec_section": "P046",
+  "spec_section": "D147",
   "description": "D018 lenient-parse posture: malformed inbound carriers are ignored, not fatal. With an explicit context_id argument the write proceeds on rung 1 as if the garbage carriers were absent.",
   "input": {
     "body": {

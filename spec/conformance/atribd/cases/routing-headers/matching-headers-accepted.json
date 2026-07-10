@@ -1,6 +1,6 @@
 {
   "name": "matching-headers-accepted",
-  "spec_section": "P046",
+  "spec_section": "D147",
   "description": "SEP-2243 routing headers that match the parsed JSON-RPC body are accepted and the request routes normally.",
   "input": {
     "headers": {

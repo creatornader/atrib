@@ -1,6 +1,6 @@
 {
   "name": "outside-writer-fork-boundary",
-  "spec_section": "P046",
+  "spec_section": "D147",
   "description": "Documented boundary: a writer that appends to the corpus without routing through the daemon sits outside the serialization boundary and can still fork the chain (here: an outside record signed against a stale genesis tail after the daemon already extended the chain). Corpus-scoped tail resolution narrows this window; only daemon routing eliminates it. The daemon cannot repair outside forks, but its own subsequent writes remain single-parented on the newest tail.",
   "input": {
     "context_id": "0b5e40e50b5e40e50b5e40e50b5e40e5",

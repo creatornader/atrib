@@ -1,6 +1,6 @@
 {
   "name": "replay-fresh-instance-equivalent",
-  "spec_section": "P046",
+  "spec_section": "D147",
   "description": "An identical read request replayed against a different instance (fresh backend, fresh host) MUST return an equivalent result. No transport state survives a response, so any request can land on any instance.",
   "input": {
     "headers": {},

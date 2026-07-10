@@ -1,6 +1,6 @@
 {
   "name": "legacy-session-header-ignored",
-  "spec_section": "P046",
+  "spec_section": "D147",
   "description": "A request carrying a legacy Mcp-Session-Id header MUST be served with the header ignored, never rejected with 404 Session not found. Pre-cutover clients keep working through the compatibility window.",
   "input": {
     "headers": {

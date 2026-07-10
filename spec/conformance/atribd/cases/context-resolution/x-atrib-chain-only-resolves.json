@@ -1,6 +1,6 @@
 {
   "name": "x-atrib-chain-only-resolves",
-  "spec_section": "P046",
+  "spec_section": "D147",
   "check": "http-carrier",
   "description": "An X-Atrib-Chain-only request resolves. Callers that send only the §1.5.3 fallback carrier depend on this rung; dropping it would break them silently.",
   "input": {

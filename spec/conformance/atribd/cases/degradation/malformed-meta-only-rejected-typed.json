@@ -1,6 +1,6 @@
 {
   "name": "malformed-meta-only-rejected-typed",
-  "spec_section": "P046",
+  "spec_section": "D147",
   "description": "Malformed carriers with no explicit argument fall through the whole ladder: the write gets the typed missing-context tool error, never an HTTP 500 or a crash.",
   "input": {
     "body": {

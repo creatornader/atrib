@@ -1,6 +1,6 @@
 {
   "name": "missing-context-write-rejected",
-  "spec_section": "P046",
+  "spec_section": "D147",
   "check": "http-carrier",
   "description": "Rung 3: nothing resolves, so the write primitive returns a typed tool error. This is today's ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID=1 behavior promoted to the HTTP default.",
   "input": {
