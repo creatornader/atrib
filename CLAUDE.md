@@ -202,9 +202,9 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 
 ## Sync triggers
 
-The full event-to-doc mapping lives at [`DOC-SYNC-TRIGGERS.md`](DOC-SYNC-TRIGGERS.md) (52 rows). It was extracted from this file so the hub doc stays under the 40k-char SessionStart performance threshold. Both files are authoritative; this section is the quick reference, the linked file is the canonical source.
+The full event-to-doc mapping lives at [`DOC-SYNC-TRIGGERS.md`](DOC-SYNC-TRIGGERS.md) (65 rows; the `doc-sync-triggers-row-count` check keeps this claim honest). It was extracted from this file so the hub doc stays under the 40k-char SessionStart performance threshold. Both files are authoritative; this section is the quick reference, the linked file is the canonical source.
 
-A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (run via `pnpm doc-sync` and integrated into CI). It detects number-word drift between canonical sources and target documents (edge type count, node type count, dashboard view count, public package count, workspace package list completeness). When adding a new "<word> <thing>" claim that should remain synchronized with an enumeration, extend the script with a new check to avoid reliance on manual review.
+A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (run via `pnpm doc-sync` and integrated into CI). It detects number-word drift between canonical sources and target documents (edge type count, node type count, dashboard view count, public package count, workspace package list completeness, payment protocol count, evidence profile count, DOC-SYNC-TRIGGERS row count). When adding a new "<word> <thing>" claim that should remain synchronized with an enumeration, extend the script with a new check to avoid reliance on manual review.
 
 ### Quick reference (most-frequent triggers)
 
