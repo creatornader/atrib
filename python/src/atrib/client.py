@@ -37,7 +37,7 @@ from .keys import ResolvedKey, resolve_key
 from .mirror import (
     default_mirror_read_path,
     default_mirror_write_path,
-    mirror_tail_hash_hex,
+    mirror_corpus_tail_hash_hex,
     read_mirror,
 )
 from .records import build_and_sign_emit_record
@@ -345,9 +345,14 @@ class AtribClient:
 
         if provenance_token is not None:
             # §1.2.6 genesis-only invariant: refuse when the context already
-            # has records on the local mirror (middleware SHOULD refuse).
-            if mirror_tail_hash_hex(self._mirror_write, effective_context) is not None or (
-                mirror_tail_hash_hex(self._mirror_read, effective_context) is not None
+            # has records on the local mirror corpus (middleware SHOULD
+            # refuse). Corpus-scoped per D146: a record in any sibling
+            # mirror file already breaks the genesis-only claim.
+            if mirror_corpus_tail_hash_hex(
+                self._mirror_write, effective_context
+            ) is not None or (
+                mirror_corpus_tail_hash_hex(self._mirror_read, effective_context)
+                is not None
             ):
                 raise ValueError(
                     "atrib: provenance_token is genesis-only; context already has records"
@@ -512,11 +517,17 @@ class AtribClient:
         return self._resolved_key
 
     def _mirror_tail_for(self, context_id: str) -> str | None:
-        # Prefer the write mirror (our own newest record), then the shared
-        # read source — mirroring @atrib/emit's inheritance ordering.
-        return mirror_tail_hash_hex(self._mirror_write, context_id) or mirror_tail_hash_hex(
-            self._mirror_read, context_id
-        )
+        # Corpus-scoped per D146: the effective file identifies its
+        # directory corpus, so one lookup already covers every sibling
+        # producer file. The write and read defaults usually share a
+        # directory; only consult the read source when it names a
+        # different corpus.
+        tail = mirror_corpus_tail_hash_hex(self._mirror_write, context_id)
+        if tail is not None:
+            return tail
+        if Path(self._mirror_read).parent != Path(self._mirror_write).parent:
+            return mirror_corpus_tail_hash_hex(self._mirror_read, context_id)
+        return None
 
     def _mirror_and_submit(
         self,

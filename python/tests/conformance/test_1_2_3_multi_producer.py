@@ -25,11 +25,12 @@ The corpus files are fixtures and are never modified.
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 
 import pytest
 
-from atrib import genesis_chain_root, resolve_chain_root
+from atrib import genesis_chain_root, mirror_corpus_tail_hash_hex, resolve_chain_root
 
 CORPUS_DIR = (
     Path(__file__).resolve().parents[3]
@@ -46,7 +47,7 @@ CASES = [
     for entry in MANIFEST["cases"]
 ]
 
-EXPECTED_CASE_COUNT = 10
+EXPECTED_CASE_COUNT = 12
 
 PRECEDENCE_LAYERS = frozenset(
     {"inbound", "auto-chain", "env-tail", "mirror-tail", "genesis"}
@@ -54,21 +55,50 @@ PRECEDENCE_LAYERS = frozenset(
 
 
 def _resolve(case: dict) -> str:
-    """Call resolve_chain_root with the case input, nulls passed as None."""
+    """Two-part runner mirroring the TypeScript reference test.
+
+    Pure precedence cases pass their inputs straight to
+    ``resolve_chain_root`` (JSON ``null`` becomes ``None``). Cases carrying
+    a ``mirror_corpus`` input are materialized into a temporary directory
+    first; the corpus tail resolved by ``mirror_corpus_tail_hash_hex``
+    (D146, §1.2.3.1 step 4) then feeds the same resolver, so the file
+    boundary is covered too.
+    """
     inp = case["input"]
-    return resolve_chain_root(
-        context_id=inp["context_id"],
-        inbound_record_hash_hex=inp["inbound_record_hash_hex"],
-        auto_chain_tail_hex=inp["auto_chain_tail_hex"],
-        mirror_tail_hex=inp["mirror_tail_hex"],
-        env=inp["env"],
-    )
+    corpus = inp.get("mirror_corpus")
+    if corpus is None:
+        return resolve_chain_root(
+            context_id=inp["context_id"],
+            inbound_record_hash_hex=inp["inbound_record_hash_hex"],
+            auto_chain_tail_hex=inp["auto_chain_tail_hex"],
+            mirror_tail_hex=inp["mirror_tail_hex"],
+            env=inp["env"],
+        )
+    with tempfile.TemporaryDirectory(prefix="atrib-conformance-mirror-") as tmp:
+        root = Path(tmp)
+        for file_entry in corpus["files"]:
+            target = root / file_entry["file"]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(
+                "".join(json.dumps(line) + "\n" for line in file_entry["lines"]),
+                encoding="utf-8",
+            )
+        corpus_tail = mirror_corpus_tail_hash_hex(
+            root / corpus["effective_file"], inp["context_id"]
+        )
+        return resolve_chain_root(
+            context_id=inp["context_id"],
+            inbound_record_hash_hex=inp["inbound_record_hash_hex"],
+            auto_chain_tail_hex=inp["auto_chain_tail_hex"],
+            mirror_tail_hex=corpus_tail,
+            env=inp["env"],
+        )
 
 
 class TestCorpusIntegrity:
     """The manifest enumerates the whole on-disk corpus."""
 
-    def test_manifest_lists_all_ten_cases(self) -> None:
+    def test_manifest_lists_every_case(self) -> None:
         assert len(MANIFEST["cases"]) == EXPECTED_CASE_COUNT
         assert len(CASES) == EXPECTED_CASE_COUNT
 
