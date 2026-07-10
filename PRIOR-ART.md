@@ -45,7 +45,7 @@ The layer where attribution events originate.
 
 ## Layer 3: Agentic Commerce Protocols
 
-Where transaction events fire. These are atrib's settlement hooks.
+Where transaction events fire. These are atrib's settlement hooks. The per-rail detection rules live in the [atrib Payments Profile §2](docs/payments-profile.md#2-transaction-detection-hooks) ([P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)); the core spec keeps the `transaction` event type and the cross-attestation rule.
 
 | Name                                     | Maintainer                         | Status                     | Relationship | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                         | URL                                                 |
 | ---------------------------------------- | ---------------------------------- | -------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
