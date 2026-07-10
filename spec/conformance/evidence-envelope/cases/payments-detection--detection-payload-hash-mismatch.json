@@ -1,0 +1,60 @@
+{
+  "name": "detection-payload-hash-mismatch",
+  "spec_section": "5.5.7",
+  "family": "payments-detection",
+  "description": "A shape-valid detection envelope whose payload.hash does not match the detection material. Consumers MUST treat the mismatch as profile-verification failure on the re-verified instance (result.valid: false) while the envelope stays shape-valid and the transaction record verdicts stay untouched.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/payments-detection",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:231e5af9f30220964b1627415ed0a630ae519d72fc22800eab593b1ad9903a43",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "mirror"
+        }
+      },
+      "facts": {
+        "protocol": "AP2",
+        "hook": "checkout_receipt",
+        "receipt_identity_source": "checkout_receipt"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "payload_material": {
+      "kind": "task",
+      "artifacts": [
+        {
+          "parts": [
+            {
+              "kind": "data",
+              "data": {
+                "ap2.CheckoutReceipt": {
+                  "status": "Success",
+                  "iss": "example-verifier.dev",
+                  "iat": 1772020800,
+                  "reference": "closed-checkout-mandate-hash",
+                  "order_id": "order_fixture_1"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expected": {
+    "accept": false,
+    "payload_hash_matches_material": false,
+    "reject_reasons": [
+      "payload_hash_mismatch"
+    ]
+  }
+}

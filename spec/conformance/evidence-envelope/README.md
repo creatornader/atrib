@@ -26,6 +26,8 @@ re-pinned here; they remain authoritative in
 | `legacy-mapping--*` | The frozen legacy [§5.5.6](../../../atrib-spec.md#556-generic-authorization-evidence-blocks) `protocol` string set (`oauth2`, `mcp_oauth`, `aauth`, `x401`, `ap2_vi`) maps deterministically to envelope form; two independent implementations MUST produce identical envelopes; a sixth protocol string MUST be rejected. |
 | `tier--*` | Tier semantics: the tier belongs to the envelope instance, relaying under a swapped verifier identity is a violation, `verified`-with-withheld-payload reports as claimed-but-not-reproducible, and evidence NEVER flips `verifyRecord().valid`. |
 | `continuation-packet--*` | The ninth atrib-maintained profile ([D142](../../../DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions)): the continuation packet a baton-pass record hands to a successor. Raw-bytes hash rule for markdown packets, the `record_hash` sibling spelling for signed baton records, profile-level hash-mismatch rejection, and the private-body sanitization posture. |
+| `payments-detection--*` | The tenth atrib-maintained profile ([P048](../../../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core), owned by the [payments profile §12](../../../docs/payments-profile.md#12-evidence-profiles)): rail detection facts on a transaction record. JCS hash rule for detection material, hash-mismatch rejection, the no-payments-profile degradation posture (`profile_unrecognized` at tier `declared` with record verdicts unchanged), and a [D052](../../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) duplicate-signer re-pin across the profile split. Hook re-verification semantics live in `spec/conformance/payments-profile/detection/`, not here. |
+| `payments-settlement--*` | The eleventh atrib-maintained profile ([P048](../../../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core), owned by the [payments profile §12](../../../docs/payments-profile.md#12-evidence-profiles)): a settlement recommendation document attached as evidence by hash. JCS hash rule, tampered-document rejection, and the hash-only public posture for withheld documents. Recalculation semantics live in `spec/conformance/4.6/`, not here. |
 
 ## Cases
 
@@ -61,6 +63,13 @@ re-pinned here; they remain authoritative in
 | `cases/continuation-packet--packet-hash-mismatch.json` | Shape-valid envelope whose `payload.hash` does not match the packet bytes. Profile verification fails; the envelope stays shape-valid; no record validity changes. |
 | `cases/continuation-packet--withheld-packet-declared.json` | Public-projection posture: `ref.kind: "withheld"`, hash plus sanitized role-term facts only; packet bodies are private by default. MUST accept. |
 | `cases/continuation-packet--signed-baton-record.json` | The signed baton-pass observation itself as payload via the `ref.record_hash` sibling rule; `payload.hash` = sha256(JCS(record)); signature verifies independently. |
+| `cases/payments-detection--detection-envelope-valid.json` | Producer-declared detection envelope on a cross-attested transaction record: JCS-hashed detection material, rail/hook/receipt-identity facts, two distinct verified signer keys. MUST accept. |
+| `cases/payments-detection--detection-payload-hash-mismatch.json` | Shape-valid detection envelope whose `payload.hash` does not match the detection material. Profile verification fails; envelope stays shape-valid; record verdicts untouched. |
+| `cases/payments-detection--unloaded-profile-degrades.json` | The degradation family: no payments profile loaded. `profile_unrecognized: true`, tier capped at `declared`, signature and cross-attestation verdicts identical to a payments-aware run. |
+| `cases/payments-detection--duplicate-signer-not-inflated.json` | [D052](../../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) re-pin: the same agent signer entry twice. One distinct verified signer, `cross_attestation_missing: true`; the detection envelope never substitutes for a counterparty signature. |
+| `cases/payments-settlement--recommendation-envelope-valid.json` | Settlement recommendation attached by JCS hash with session, calculator, policy-record, and tree-size facts. MUST accept; recalculation is profile-internal. |
+| `cases/payments-settlement--tampered-recommendation-rejected.json` | Recommendation with an altered distribution: recomputed hash mismatch. Profile verification fails; envelope stays shape-valid. |
+| `cases/payments-settlement--withheld-recommendation-declared.json` | Hash-only public posture: `ref.kind: "withheld"` with sanitized facts; distribution bodies stay private. MUST accept. |
 
 ## Generator
 
@@ -99,9 +108,14 @@ load the same fixtures and assert the same invariants.
 
 ## Status
 
-**Initial 26-case corpus shipped across five families.** Future
-per-profile families (`oauth2/`, `mcp-oauth/`, `aauth/`, `x401/`,
-`ap2-vi/`, `human-approval/`, `counterparty-attestation/`) land in the
-same commit as each `docs/evidence-profiles/<name>.md` profile document,
-plus `hashing/` and `sanitization/` families as the producer and archive
-surfaces adopt envelope form.
+**37 cases across eight families.** The initial 26-case corpus shipped
+across five families; the `continuation-packet--*` family landed with
+[D142](../../../DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions),
+and the `payments-detection--*` and `payments-settlement--*` families
+landed with the [P048](../../../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)
+payments-profile registrations. Future per-profile families (`oauth2/`,
+`mcp-oauth/`, `aauth/`, `x401/`, `ap2-vi/`, `human-approval/`,
+`counterparty-attestation/`) land in the same commit as each
+`docs/evidence-profiles/<name>.md` profile document, plus `hashing/` and
+`sanitization/` families as the producer and archive surfaces adopt
+envelope form.
