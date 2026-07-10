@@ -12,6 +12,7 @@ log (§5.9.4).
 from __future__ import annotations
 
 import json
+import math
 import os
 import sys
 import time
@@ -55,7 +56,10 @@ def default_mirror_write_path(env: Mapping[str, str] | None = None) -> Path:
 
 def default_mirror_read_path(env: Mapping[str, str] | None = None) -> Path:
     """Chain-inheritance read source: $ATRIB_AUTOCHAIN_SOURCE, then
-    $ATRIB_MIRROR_FILE, then ``~/.atrib/records/<agent>.jsonl``."""
+    $ATRIB_MIRROR_FILE, then ``~/.atrib/records/atrib-emit-<agent>.jsonl``.
+    The fallback names the same file the write path uses; the earlier
+    ``<agent>.jsonl`` fallback named a file no producer writes (fixed with
+    D146, matching the TypeScript atrib-emit read default)."""
     environment: Mapping[str, str] = os.environ if env is None else env
     source = environment.get("ATRIB_AUTOCHAIN_SOURCE") or environment.get(
         "ATRIB_MIRROR_FILE"
@@ -63,7 +67,7 @@ def default_mirror_read_path(env: Mapping[str, str] | None = None) -> Path:
     if source:
         return Path(source)
     agent = environment.get("ATRIB_AGENT") or "claude-code"
-    return Path.home() / ".atrib" / "records" / f"{agent}.jsonl"
+    return Path.home() / ".atrib" / "records" / f"atrib-emit-{agent}.jsonl"
 
 
 def _has_required_fields(candidate: Mapping[str, object]) -> bool:
@@ -141,6 +145,64 @@ def mirror_tail_hash_hex(path: Path | str, context_id: str) -> str | None:
     """Bare-hex record hash of the newest same-context record, in the shape
     ``resolve_chain_root(mirror_tail_hex=…)`` expects."""
     tail = read_mirror_tail(path, context_id)
+    if tail is None:
+        return None
+    return record_hash_hex(tail)
+
+
+def _record_timestamp(record: AtribRecord) -> float:
+    """Signed timestamp for cross-file ordering; anything non-numeric or
+    non-finite sorts before every real timestamp (TypeScript parity:
+    ``Number.isFinite`` gating to negative infinity)."""
+    value = record.get("timestamp")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        numeric = float(value)
+        if math.isfinite(numeric):
+            return numeric
+    return float("-inf")
+
+
+def _is_later_corpus_tail(candidate: AtribRecord, current: AtribRecord) -> bool:
+    candidate_ts = _record_timestamp(candidate)
+    current_ts = _record_timestamp(current)
+    if candidate_ts != current_ts:
+        return candidate_ts > current_ts
+    # Two producers can sign in the same millisecond. The canonical record
+    # hash gives a total order two implementations agree on (§1.2.3.1).
+    return record_hash_hex(candidate) > record_hash_hex(current)
+
+
+def read_mirror_corpus_tail(
+    effective_path: Path | str, context_id: str
+) -> AtribRecord | None:
+    """Corpus-scoped tail per §1.2.3.1 step 4 (D146). The effective mirror
+    file identifies a corpus: every ``*.jsonl`` file in its directory.
+    Append order selects the tail within one file; across files the greatest
+    signed ``timestamp`` wins, and equal timestamps break to the
+    lexicographically greater canonical record hash, so repeated resolution
+    is deterministic. An unreadable directory falls back to the effective
+    file alone; a corpus with no matching records returns ``None`` (§5.8)."""
+    effective = Path(effective_path)
+    try:
+        paths = sorted(effective.parent.glob("*.jsonl"))
+    except OSError:
+        paths = []
+    if not paths:
+        return read_mirror_tail(effective, context_id)
+    best: AtribRecord | None = None
+    for path in paths:
+        tail = read_mirror_tail(path, context_id)
+        if tail is None:
+            continue
+        if best is None or _is_later_corpus_tail(tail, best):
+            best = tail
+    return best
+
+
+def mirror_corpus_tail_hash_hex(effective_path: Path | str, context_id: str) -> str | None:
+    """Bare-hex record hash of the corpus tail, in the shape
+    ``resolve_chain_root(mirror_tail_hex=…)`` expects."""
+    tail = read_mirror_corpus_tail(effective_path, context_id)
     if tail is None:
         return None
     return record_hash_hex(tail)
