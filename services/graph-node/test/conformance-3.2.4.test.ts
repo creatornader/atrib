@@ -10,6 +10,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import { canonicalRecord, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
+import { calculate, DEFAULT_POLICY } from '@atrib/verify'
 import { buildGraph } from '../src/graph-builder.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -53,6 +54,7 @@ interface CaseFile {
   expected: {
     edges: ExpectedEdge[]
     edge_count_by_type: Record<EdgeType, number>
+    calculation_input_record_indices?: number[]
   }
 }
 
@@ -113,6 +115,29 @@ function expectedKey(edge: ExpectedEdge, records: AtribRecord[]): string {
   })
 }
 
+function calculationInputNodeIds(graph: Awaited<ReturnType<typeof buildGraph>>): string[] {
+  const transactionIds = new Set(
+    graph.nodes.filter((node) => node.event_type === 'transaction').map((node) => node.id),
+  )
+  const linkedToTransaction = new Set(
+    graph.edges
+      .filter(
+        (edge) =>
+          (edge.type === 'CONVERGES_ON' || edge.type === 'CROSS_SESSION') &&
+          transactionIds.has(edge.target),
+      )
+      .map((edge) => edge.source),
+  )
+  return graph.nodes
+    .filter(
+      (node) =>
+        (node.event_type === 'tool_call' || node.event_type === 'gap_node') &&
+        linkedToTransaction.has(node.id),
+    )
+    .map((node) => node.id)
+    .sort()
+}
+
 describe('§3.2.4 full edge derivation conformance corpus', () => {
   const manifest = loadManifest()
 
@@ -141,6 +166,22 @@ describe('§3.2.4 full edge derivation conformance corpus', () => {
         expect(counts[type] ?? 0, `${fixture.name} ${type} count`).toBe(
           fixture.expected.edge_count_by_type[type],
         )
+      }
+
+      if (fixture.expected.calculation_input_record_indices) {
+        const expectedCalculationNodeIds = fixture.expected.calculation_input_record_indices
+          .map((index) => nodeIdFor(fixture.input.records[index]!))
+          .sort()
+        expect(calculationInputNodeIds(graph)).toEqual(expectedCalculationNodeIds)
+
+        const expectedCreatorKeys = [
+          ...new Set(
+            fixture.expected.calculation_input_record_indices.map(
+              (index) => fixture.input.records[index]!.creator_key,
+            ),
+          ),
+        ].sort()
+        expect(Object.keys(calculate(graph, DEFAULT_POLICY)).sort()).toEqual(expectedCreatorKeys)
       }
     })
   }

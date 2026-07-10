@@ -44,7 +44,9 @@
         "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "timestamp": 1767225603000,
         "signature": "h_fDE_d9HO3dxt3WhKJdjSs22jV1l01JJFlDO_Ut1swP1VKdsUCwis4Qn56_5TgM_YmU3jYadmFXxtkGReCXBg",
-        "informed_by": ["sha256:c6f96d81023dde392a7c85d7cc942befa228cb67d21e6d1c8993ae95f3a13d59"],
+        "informed_by": [
+          "sha256:c6f96d81023dde392a7c85d7cc942befa228cb67d21e6d1c8993ae95f3a13d59"
+        ],
         "session_token": "edge-derivation-session-token"
       },
       {

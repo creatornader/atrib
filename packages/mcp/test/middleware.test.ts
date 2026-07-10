@@ -7,6 +7,7 @@ import { decodeToken, encodeToken } from '../src/token.js'
 import { canonicalRecord } from '../src/canon.js'
 import { hexEncode, sha256 } from '../src/hash.js'
 import { LOCAL_SUBSTRATE_RESPONSE_SCHEMA } from '../src/local-substrate.js'
+import { issueDelegationCertificate } from '../src/delegation.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AtribRecord } from '../src/types.js'
 import type {
@@ -543,6 +544,36 @@ describe('atrib() middleware', () => {
       const expectedPubKey = await getPublicKey(TEST_PRIVATE_KEY)
       const { base64urlEncode: enc } = await import('../src/base64url.js')
       expect(rec.creator_key).toBe(enc(expectedPubKey))
+    })
+
+    it('carries delegationCert only in the local sidecar', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const runPubkey = base64urlEncode(await getPublicKey(TEST_PRIVATE_KEY))
+      const certificate = await issueDelegationCertificate(new Uint8Array(32).fill(41), {
+        run_pubkey: runPubkey,
+        not_after: 2_000_000_000_000,
+        context_id: '4bf92f3577b34da6a3ce929d0e0e4736',
+        scope: { tool_names: ['search_web'] },
+      })
+      const observed: Array<{ record: AtribRecord; sidecar?: OnRecordSidecar }> = []
+
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        logSubmission: 'disabled',
+        delegationCert: certificate,
+        onRecord: (record, sidecar) => {
+          observed.push({ record, sidecar })
+        },
+      })
+      registerToolHandler(vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }))
+
+      await getToolHandler()!(createToolCallRequest('search_web'), {})
+
+      expect(observed).toHaveLength(1)
+      expect(observed[0]!.sidecar?.delegation_cert).toEqual(certificate)
+      expect('delegation_cert' in observed[0]!.record).toBe(false)
+      expect('delegation_cert_hash' in observed[0]!.record).toBe(false)
     })
 
     it('onRecord errors do not break tool calls or block submission (§5.8)', async () => {

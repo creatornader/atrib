@@ -18,6 +18,7 @@ const CONTEXT_ID = '11111111111111111111111111111111'
 describe('sandbox signer proxy example', () => {
   it('signs records outside the sandbox and returns a record hash', async () => {
     const signer = createHostSignerProxy({ privateKey: HOST_PRIVATE_KEY })
+    expect(await signer.capabilities()).toEqual({ creator_key: await signer.creatorKey() })
     const sandbox = createSandboxSignerClient({
       contextId: CONTEXT_ID,
       serverUrl: 'https://sandbox.example/mcp',

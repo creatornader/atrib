@@ -8,6 +8,10 @@
  *   keygen [--keychain] [--service NAME]    Generate an Ed25519 keypair.
  *   export-pubkey --keychain [--service NAME]   Print the pubkey for a Keychain entry.
  *   delete-key --keychain [--service NAME]   Remove a Keychain entry.
+ *   delegate [--keychain [--service NAME] | --key-file PATH] --scope PATH --ttl SECONDS
+ *            [--context HEX] [--not-before UNIX_MS]
+ *                                            Issue a §1.11 certificate for
+ *                                            a new ephemeral run key.
  *   publish-claim --keychain [--service NAME] [--display-name NAME] [--organization ORG] [--email EMAIL] [--url URL]
  *                  [--directory URL] [--capabilities-file PATH] [--tool-names CSV] [--event-types CSV]
  *                  [--max-amount-currency USD --max-amount-value 100] [--counterparties CSV] [--expires-at ISO8601]
@@ -26,10 +30,20 @@ import {
   deleteSeed,
 } from './keychain.js'
 import { keygen, printKeypair } from './keygen.js'
-import { base64urlDecode, getPublicKey, base64urlEncode } from '@atrib/mcp'
+import {
+  base64urlDecode,
+  base64urlEncode,
+  canonicalRecord,
+  genesisChainRoot,
+  getPublicKey,
+  hexEncode,
+  issueDelegationCertificate,
+  sha256,
+  signRecord,
+} from '@atrib/mcp'
+import type { AtribRecord, DelegationScope } from '@atrib/mcp'
 import { signClaim } from '@atrib/directory'
 import type { IdentityClaim, CapabilityEnvelope } from '@atrib/directory'
-import { signRecord, genesisChainRoot, sha256, hexEncode, canonicalRecord } from '@atrib/mcp'
 import { readFileSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 
@@ -48,6 +62,13 @@ Usage:
 
   atrib delete-key --keychain [--service NAME]
       Remove a Keychain entry.
+
+  atrib delegate [--keychain [--service NAME] | --key-file PATH] --scope PATH --ttl SECONDS [--context HEX] [--not-before UNIX_MS]
+      Generate an ephemeral run key and issue a §1.11 delegation certificate
+      signed by the principal key. The principal defaults to the macOS
+      Keychain service "atrib-creator"; --key-file is the fallback. Prints
+      ATRIB_KEY with the run seed and ATRIB_DELEGATION_CERT with the base64url-
+      encoded certificate JSON for injection into the delegated process.
 
   atrib revoke {--keychain [--service NAME] | --key-file PATH} --reason {rotation|retirement|compromise} [--successor PUBKEY] [--log URL] [--context-id HEX] [--dry-run]
       Submit a §1.9 key_revocation record signed by the key being retired.
@@ -114,12 +135,18 @@ interface Flags {
   maxAmountCurrency?: string
   maxAmountValue?: string
   expiresAt?: string
+  scope?: string
+  ttl?: string
+  context?: string
+  notBefore?: string
   dryRun?: boolean
 }
 
+type StringFlagKey = Exclude<keyof Flags, 'keychain' | 'dryRun'>
+
 function parseFlags(args: string[]): Flags {
   const flags: Flags = { keychain: false }
-  const stringFlags: Array<{ flag: string; key: keyof Flags }> = [
+  const stringFlags: Array<{ flag: string; key: StringFlagKey }> = [
     { flag: '--service', key: 'service' },
     { flag: '--key-file', key: 'keyFile' },
     { flag: '--reason', key: 'reason' },
@@ -139,6 +166,10 @@ function parseFlags(args: string[]): Flags {
     { flag: '--max-amount-currency', key: 'maxAmountCurrency' },
     { flag: '--max-amount-value', key: 'maxAmountValue' },
     { flag: '--expires-at', key: 'expiresAt' },
+    { flag: '--scope', key: 'scope' },
+    { flag: '--ttl', key: 'ttl' },
+    { flag: '--context', key: 'context' },
+    { flag: '--not-before', key: 'notBefore' },
   ]
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
@@ -154,8 +185,7 @@ function parseFlags(args: string[]): Flags {
     if (sf) {
       const value = args[i + 1]
       if (!value) throw new Error(`${arg} requires a value`)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(flags as any)[sf.key] = value
+      flags[sf.key] = value
       i++
       continue
     }
@@ -262,7 +292,134 @@ async function loadSigningSeed(flags: Flags): Promise<Uint8Array> {
     if (bytes.length !== 32) throw new Error(`Key file ${flags.keyFile} did not decode to 32 bytes (got ${bytes.length}).`)
     return bytes
   }
-  throw new Error('publish-claim needs --keychain (with optional --service NAME) or --key-file PATH.')
+  throw new Error('Signing needs --keychain (with optional --service NAME) or --key-file PATH.')
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function readStringList(
+  source: Record<string, unknown>,
+  field: 'tool_names' | 'event_types' | 'counterparties',
+): string[] | undefined {
+  const value = source[field]
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string' || !entry)) {
+    throw new Error(`--scope ${field} must be an array of non-empty strings`)
+  }
+  return value as string[]
+}
+
+function readDelegationScope(path: string): DelegationScope {
+  const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+  if (!isPlainObject(parsed)) {
+    throw new Error('--scope must contain a JSON object')
+  }
+  const allowed = new Set([
+    'tool_names',
+    'event_types',
+    'max_amount',
+    'counterparties',
+    'expires_at',
+  ])
+  const unknown = Object.keys(parsed).filter((field) => !allowed.has(field))
+  if (unknown.length > 0) {
+    throw new Error(`--scope contains unknown field(s): ${unknown.sort().join(', ')}`)
+  }
+
+  const scope: DelegationScope = {}
+  const toolNames = readStringList(parsed, 'tool_names')
+  const eventTypes = readStringList(parsed, 'event_types')
+  const counterparties = readStringList(parsed, 'counterparties')
+  if (toolNames) scope.tool_names = toolNames
+  if (eventTypes) scope.event_types = eventTypes
+  if (counterparties) scope.counterparties = counterparties
+
+  if (parsed.max_amount !== undefined) {
+    if (!isPlainObject(parsed.max_amount)) {
+      throw new Error('--scope max_amount must be an object')
+    }
+    const currency = parsed.max_amount.currency
+    const value = parsed.max_amount.value
+    if (typeof currency !== 'string' || !currency) {
+      throw new Error('--scope max_amount.currency must be a non-empty string')
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      throw new Error('--scope max_amount.value must be a non-negative number')
+    }
+    scope.max_amount = { currency, value }
+  }
+
+  if (parsed.expires_at !== undefined) {
+    if (!Number.isInteger(parsed.expires_at) || (parsed.expires_at as number) < 0) {
+      throw new Error('--scope expires_at must be a non-negative Unix-ms integer')
+    }
+    scope.expires_at = parsed.expires_at as number
+  }
+  if (Object.keys(scope).length === 0) {
+    throw new Error('--scope must contain at least one §6.7 capability constraint')
+  }
+  return scope
+}
+
+function parseIntegerFlag(value: string, flag: string, minimum: number): number {
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed) || parsed < minimum) {
+    throw new Error(`${flag} must be an integer greater than or equal to ${minimum}`)
+  }
+  return parsed
+}
+
+async function runDelegate(flags: Flags): Promise<void> {
+  if (!flags.scope) throw new Error('delegate requires --scope PATH')
+  if (!flags.ttl) throw new Error('delegate requires --ttl SECONDS')
+  if (flags.keychain && flags.keyFile) {
+    throw new Error('delegate accepts either --keychain or --key-file, not both')
+  }
+  if (flags.context && !/^[0-9a-f]{32}$/.test(flags.context)) {
+    throw new Error('--context must be 32 lowercase hex chars')
+  }
+
+  const scope = readDelegationScope(flags.scope)
+  const ttlSeconds = parseIntegerFlag(flags.ttl, '--ttl', 1)
+  const notBefore = flags.notBefore
+    ? parseIntegerFlag(flags.notBefore, '--not-before', 0)
+    : undefined
+  const validityStart = notBefore ?? Date.now()
+  const notAfter = validityStart + ttlSeconds * 1000
+  if (!Number.isSafeInteger(notAfter)) {
+    throw new Error('--ttl and --not-before produce an unsafe not_after timestamp')
+  }
+
+  const principalSeed = await loadSigningSeed(
+    flags.keyFile ? flags : { ...flags, keychain: true },
+  )
+  const runSeed = new Uint8Array(randomBytes(32))
+  try {
+    const runPubkey = base64urlEncode(await getPublicKey(runSeed))
+    const certificate = await issueDelegationCertificate(principalSeed, {
+      run_pubkey: runPubkey,
+      not_after: notAfter,
+      ...(notBefore !== undefined ? { not_before: notBefore } : {}),
+      ...(flags.context ? { context_id: flags.context } : {}),
+      scope,
+    })
+    const encodedCertificate = base64urlEncode(
+      new TextEncoder().encode(JSON.stringify(certificate)),
+    )
+    console.log(`ATRIB_KEY=${base64urlEncode(runSeed)}`)
+    console.log(`ATRIB_DELEGATION_CERT=${encodedCertificate}`)
+  } finally {
+    principalSeed.fill(0)
+    runSeed.fill(0)
+  }
+}
+
+type KeyRevocationRecord = AtribRecord & {
+  revoked_key: string
+  revocation_reason: 'rotation' | 'retirement' | 'compromise'
+  successor_key?: string
 }
 
 async function runRevoke(flags: Flags): Promise<void> {
@@ -292,7 +449,7 @@ async function runRevoke(flags: Flags): Promise<void> {
     throw new Error('--context-id must be 32 hex chars')
   }
 
-  const unsigned = {
+  const unsigned: KeyRevocationRecord = {
     spec_version: 'atrib/1.0' as const,
     content_id: 'sha256:' + hexEncode(sha256(Buffer.from(`revoke:${revokedKey}:${reason}:${Date.now()}`))),
     creator_key: creatorKey,
@@ -305,14 +462,12 @@ async function runRevoke(flags: Flags): Promise<void> {
     ...(flags.successor ? { successor_key: flags.successor } : {}),
     signature: '',
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const signed = await signRecord(unsigned as any, seedBytes)
+  const signed = (await signRecord(unsigned, seedBytes)) as KeyRevocationRecord
   seedBytes.fill(0)
 
   const recordHash = 'sha256:' + hexEncode(sha256(canonicalRecord(signed)))
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if ((flags as any).dryRun) {
+  if (flags.dryRun) {
     console.log(JSON.stringify(signed, null, 2))
     return
   }
@@ -434,6 +589,10 @@ async function main(): Promise<void> {
     }
     if (command === 'delete-key') {
       runDeleteKey(flags)
+      return
+    }
+    if (command === 'delegate') {
+      await runDelegate(flags)
       return
     }
     if (command === 'publish-claim') {
