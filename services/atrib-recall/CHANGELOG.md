@@ -1,5 +1,12 @@
 # @atrib/recall
 
+## 0.14.6
+
+### Patch Changes
+
+- Updated dependencies [f4a5ebd]
+  - @atrib/mcp@0.20.0
+
 ## 0.14.5
 
 ### Patch Changes

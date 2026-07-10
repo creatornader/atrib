@@ -1,5 +1,16 @@
 # @atrib/cli
 
+## 0.2.0
+
+### Minor Changes
+
+- f4a5ebd: Add delegation-certificate producer conveniences. The CLI can issue scoped certificates for ephemeral run keys, and MCP middleware carries a configured certificate in the local mirror sidecar. Agent receipt parsing now uses the shared MCP verifier.
+
+### Patch Changes
+
+- Updated dependencies [f4a5ebd]
+  - @atrib/mcp@0.20.0
+
 ## 0.1.34
 
 ### Patch Changes
