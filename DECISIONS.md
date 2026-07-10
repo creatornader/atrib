@@ -8229,6 +8229,8 @@ The daemon would own the key (or a [D102](#d102-sandboxed-signer-proxy-keeps-key
 
 **Status (2026-07-06):** Approved by the operator. Execution proceeding per the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) landing order; the entry promotes to a Dxxx ADR as its implementation lands.
 
+**Status (2026-07-10):** Amended with the chain-fork measurement. A live mirror-corpus analysis (1,001 forks; no locking on the read-tail, sign, append path; 20 of 21 inheritance-dead forks with the sibling record in a different mirror file; 105 of 3,190 contexts spanning more than one file) both strengthens and bounds the daemon case. It strengthens the genesis-race argument: one daemon per profile serializes writes per context and removes same-corpus races among daemon-routed callers by construction, and the draft's conformance plan gains a `concurrent-writer-serialization/` family to pin exactly that. It bounds the authority: tail resolution must be corpus-scoped (the whole profile mirror directory, never one file), and that fix lands producer-side in `resolveChainRoot` (executor charter: [`docs/chain-tail-corpus-scoped-charter.md`](docs/chain-tail-corpus-scoped-charter.md)) so every producer inherits it whether or not it routes through a daemon. Cross-harness contexts cross the daemon's per-signing-identity boundary by design, so daemon serialization never substitutes for explicit context injection per [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args).
+
 **Cross-references.**
 
 - [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 5 and the "Forcing function: MCP goes stateless" section.
