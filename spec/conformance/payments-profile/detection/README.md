@@ -6,7 +6,7 @@ Per-rail positive and negative transaction detection vectors for the
 detection hooks and
 [§3](../../../../docs/payments-profile.md#3-sdk-transaction-detection)
 SDK detection contract), landed with the
-[P048](../../../../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)
+[D147](../../../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)
 spin-out. Rail detection is SDK behavior, not an evidence-envelope
 profile; this directory does not claim envelope registration. The
 envelope-level payments families live in

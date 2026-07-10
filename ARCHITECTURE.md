@@ -195,7 +195,7 @@ The decision is documented in [D006](DECISIONS.md#d006-merkle-log-c2sp-tlog-tile
 
 ## Payment protocol integration
 
-The split is: core accommodates, profile implements. The core spec keeps three payment-facing elements: the `transaction` event type (URI and 0x02 log-entry byte), the cross-attestation rule ([§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)), and the universal evidence envelope ([§5.5.7](atrib-spec.md#557-universal-evidence-envelope)). Everything rail-specific (per-rail detection hooks, the SDK detection contract, the policy format, the calculation algorithm, and settlement documents) lives in the independently versioned [atrib Payments Profile](docs/payments-profile.md) ([P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)), so rail churn never edits the core spec.
+The split is: core accommodates, profile implements. The core spec keeps three payment-facing elements: the `transaction` event type (URI and 0x02 log-entry byte), the cross-attestation rule ([§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)), and the universal evidence envelope ([§5.5.7](atrib-spec.md#557-universal-evidence-envelope)). Everything rail-specific (per-rail detection hooks, the SDK detection contract, the policy format, the calculation algorithm, and settlement documents) lives in the independently versioned [atrib Payments Profile](docs/payments-profile.md) ([D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)), so rail churn never edits the core spec.
 
 atrib detects transaction events from six agent commerce protocols simultaneously:
 

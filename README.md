@@ -279,7 +279,7 @@ Side-by-side quick-starts for each framework: [`packages/agent/README.md`](packa
 
 ## Payment protocol detection
 
-atrib detects transaction events from all six simultaneously. It does not move money or enforce transactions. The per-rail hooks are defined by the [atrib Payments Profile](docs/payments-profile.md), which versions independently of the core spec ([P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)); core keeps the `transaction` event type, the cross-attestation rule, and the evidence envelope.
+atrib detects transaction events from all six simultaneously. It does not move money or enforce transactions. The per-rail hooks are defined by the [atrib Payments Profile](docs/payments-profile.md), which versions independently of the core spec ([D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)); core keeps the `transaction` event type, the cross-attestation rule, and the evidence envelope.
 
 | Protocol     | Sponsor             | Detection signal                             | Profile ref                                                         |
 | ------------ | ------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
@@ -347,7 +347,7 @@ Store the output as `ATRIB_PRIVATE_KEY`. The public key is derived at runtime.
 - **[§1.9](atrib-spec.md#19-key-rotation-and-revocation):** Key rotation and revocation ([D033](DECISIONS.md#d033-key-rotation-and-revocation))
 - **[§2](atrib-spec.md#2-merkle-log-protocol):** Merkle log protocol (C2SP tlog-tiles, proofs, witnessing)
 - **[§3](atrib-spec.md#3-graph-query-interface):** Graph query interface (nine edge types)
-- **[§4](atrib-spec.md#4-attribution-policy-format):** Position of the policy layer; the policy format, negotiation, and calculation live in the [payments profile](docs/payments-profile.md) ([P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core))
+- **[§4](atrib-spec.md#4-attribution-policy-format):** Position of the policy layer; the policy format, negotiation, and calculation live in the [payments profile](docs/payments-profile.md) ([D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core))
 - **[§5](atrib-spec.md#5-sdk-specification):** SDK contract, automation, degradation guarantees
 - **[§6](atrib-spec.md#6-key-directory):** Public-key directory (AKD-based; [D034](DECISIONS.md#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers))
 - **[§7](atrib-spec.md#7-harness-integration-patterns):** Harness integration patterns (informative)

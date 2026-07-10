@@ -1166,27 +1166,27 @@ A creator who has not signed their contribution has not asserted a claim. The ga
 
 The transaction event closes the attribution loop: when tool calls converge on a purchase, a `transaction` record anchors the session's graph. This section retains the boundary pieces that stay core: the `transaction` event type itself ([§1.2.4](#124-event_type-values)) and the cross-attestation requirement ([§1.7.6](#176-cross-attestation-requirement-for-transaction-records)).
 
-The per-rail detection hooks, which define what byte pattern in a response constitutes a payment completion for ACP, UCP, x402, MPP, AP2, and a2a-x402, moved to the [atrib Payments Profile §2](docs/payments-profile.md#2-transaction-detection-hooks) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). The profile also carries the linking mechanism (embedding the `context_id` in transaction metadata at checkout initiation) and the SDK detection contract. Rail churn lands in the profile's version history, not this specification's.
+The per-rail detection hooks, which define what byte pattern in a response constitutes a payment completion for ACP, UCP, x402, MPP, AP2, and a2a-x402, moved to the [atrib Payments Profile §2](docs/payments-profile.md#2-transaction-detection-hooks) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). The profile also carries the linking mechanism (embedding the `context_id` in transaction metadata at checkout initiation) and the SDK detection contract. Rail churn lands in the profile's version history, not this specification's.
 
 #### 1.7.1 ACP (Agentic Commerce Protocol)
 
-_Moved to the [atrib Payments Profile §2.1](docs/payments-profile.md#21-acp-agentic-commerce-protocol) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §2.1](docs/payments-profile.md#21-acp-agentic-commerce-protocol) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 1.7.2 UCP (Universal Commerce Protocol)
 
-_Moved to the [atrib Payments Profile §2.2](docs/payments-profile.md#22-ucp-universal-commerce-protocol) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §2.2](docs/payments-profile.md#22-ucp-universal-commerce-protocol) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 1.7.3 x402
 
-_Moved to the [atrib Payments Profile §2.3](docs/payments-profile.md#23-x402) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §2.3](docs/payments-profile.md#23-x402) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 1.7.4 MPP (Machine Payments Protocol)
 
-_Moved to the [atrib Payments Profile §2.4](docs/payments-profile.md#24-mpp-machine-payments-protocol) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §2.4](docs/payments-profile.md#24-mpp-machine-payments-protocol) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 1.7.5 AP2 and a2a-x402
 
-_Moved to the [atrib Payments Profile §2.5](docs/payments-profile.md#25-ap2-and-a2a-x402) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §2.5](docs/payments-profile.md#25-ap2-and-a2a-x402) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 1.7.6 Cross-attestation requirement for transaction records
 
@@ -3099,7 +3099,7 @@ Contents
 
 _This section is informative._
 
-The three preceding sections define what happened. The policy layer defines how to evaluate what happened for the purpose of distributing value. Per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core), that layer lives in the [atrib Payments Profile](docs/payments-profile.md), which versions independently of this specification. Rail and settlement churn lands in the profile's version history, not here.
+The three preceding sections define what happened. The policy layer defines how to evaluate what happened for the purpose of distributing value. Per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core), that layer lives in the [atrib Payments Profile](docs/payments-profile.md), which versions independently of this specification. Rail and settlement churn lands in the profile's version history, not here.
 
 The position of policy relative to the protocol is unchanged by the relocation:
 
@@ -3116,99 +3116,99 @@ Core retains the payments-accommodation surface: the `transaction` event type ([
 
 ### 4.2 Policy Document Format
 
-_Moved to the [atrib Payments Profile §4](docs/payments-profile.md#4-policy-document-format) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §4](docs/payments-profile.md#4-policy-document-format) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.2.1 Top-Level Fields
 
-_Moved to the [atrib Payments Profile §4.1](docs/payments-profile.md#41-top-level-fields) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §4.1](docs/payments-profile.md#41-top-level-fields) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.2.2 Edge Weights
 
-_Moved to the [atrib Payments Profile §4.2](docs/payments-profile.md#42-edge-weights) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §4.2](docs/payments-profile.md#42-edge-weights) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.2.3 Modifiers
 
-_Moved to the [atrib Payments Profile §4.3](docs/payments-profile.md#43-modifiers) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §4.3](docs/payments-profile.md#43-modifiers) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.2.4 Distribution Method
 
-_Moved to the [atrib Payments Profile §4.4](docs/payments-profile.md#44-distribution-method) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §4.4](docs/payments-profile.md#44-distribution-method) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.2.5 Constraints
 
-_Moved to the [atrib Payments Profile §4.5](docs/payments-profile.md#45-constraints) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §4.5](docs/payments-profile.md#45-constraints) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ### 4.3 The Default Policy
 
-_Moved to the [atrib Payments Profile §5](docs/payments-profile.md#5-the-default-policy) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §5](docs/payments-profile.md#5-the-default-policy) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ### 4.4 Publication and Discovery
 
-_Moved to the [atrib Payments Profile §6](docs/payments-profile.md#6-publication-and-discovery) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §6](docs/payments-profile.md#6-publication-and-discovery) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ### 4.5 Session Negotiation
 
-_Moved to the [atrib Payments Profile §7](docs/payments-profile.md#7-session-negotiation) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §7](docs/payments-profile.md#7-session-negotiation) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.5.1 Negotiation Protocol
 
-_Moved to the [atrib Payments Profile §7.1](docs/payments-profile.md#71-negotiation-protocol) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §7.1](docs/payments-profile.md#71-negotiation-protocol) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.5.2 Conflict Resolution
 
-_Moved to the [atrib Payments Profile §7.2](docs/payments-profile.md#72-conflict-resolution) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §7.2](docs/payments-profile.md#72-conflict-resolution) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.5.3 Session Policy Record
 
-_Moved to the [atrib Payments Profile §7.3](docs/payments-profile.md#73-session-policy-record) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §7.3](docs/payments-profile.md#73-session-policy-record) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ### 4.6 The Calculation Algorithm
 
-_Moved to the [atrib Payments Profile §8](docs/payments-profile.md#8-the-calculation-algorithm) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §8](docs/payments-profile.md#8-the-calculation-algorithm) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.1 Inputs and Preconditions
 
-_Moved to the [atrib Payments Profile §8.1](docs/payments-profile.md#81-inputs-and-preconditions) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §8.1](docs/payments-profile.md#81-inputs-and-preconditions) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.2 Step 1: Identify Contributing Nodes
 
-_Moved to the [atrib Payments Profile §8.2](docs/payments-profile.md#82-step-1-identify-contributing-nodes) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §8.2](docs/payments-profile.md#82-step-1-identify-contributing-nodes) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.3 Step 2: Compute Raw Scores
 
-_Moved to the [atrib Payments Profile §8.3](docs/payments-profile.md#83-step-2-compute-raw-scores) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §8.3](docs/payments-profile.md#83-step-2-compute-raw-scores) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.4 Step 3: Apply Constraints
 
-_Moved to the [atrib Payments Profile §8.4](docs/payments-profile.md#84-step-3-apply-constraints) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §8.4](docs/payments-profile.md#84-step-3-apply-constraints) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.5 Step 4: Normalize to a Distribution
 
-_Moved to the [atrib Payments Profile §8.5](docs/payments-profile.md#85-step-4-normalize-to-a-distribution) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §8.5](docs/payments-profile.md#85-step-4-normalize-to-a-distribution) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.6 Step 5: Aggregate by Creator
 
-_Moved to the [atrib Payments Profile §8.6](docs/payments-profile.md#86-step-5-aggregate-by-creator) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §8.6](docs/payments-profile.md#86-step-5-aggregate-by-creator) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.7 Step 6: Apply Creator Floors
 
-_Moved to the [atrib Payments Profile §8.7](docs/payments-profile.md#87-step-6-apply-creator-floors) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §8.7](docs/payments-profile.md#87-step-6-apply-creator-floors) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ### 4.7 Settlement Recommendation Document
 
-_Moved to the [atrib Payments Profile §9](docs/payments-profile.md#9-settlement-recommendation-document) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §9](docs/payments-profile.md#9-settlement-recommendation-document) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.7.1 Document Format
 
-_Moved to the [atrib Payments Profile §9.1](docs/payments-profile.md#91-document-format) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §9.1](docs/payments-profile.md#91-document-format) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.7.2 Signing the Recommendation
 
-_Moved to the [atrib Payments Profile §9.2](docs/payments-profile.md#92-signing-the-recommendation) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §9.2](docs/payments-profile.md#92-signing-the-recommendation) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.7.3 Independent Verification
 
-_Moved to the [atrib Payments Profile §9.3](docs/payments-profile.md#93-independent-verification) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §9.3](docs/payments-profile.md#93-independent-verification) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ---
 
@@ -3554,11 +3554,11 @@ if (token) {
 
 #### 5.4.5 Transaction Detection
 
-_Moved to the [atrib Payments Profile §3](docs/payments-profile.md#3-sdk-transaction-detection) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §3](docs/payments-profile.md#3-sdk-transaction-detection) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 5.4.6 Session Policy Record Creation
 
-_Moved to the [atrib Payments Profile §7.4](docs/payments-profile.md#74-session-policy-record-creation-sdk) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §7.4](docs/payments-profile.md#74-session-policy-record-creation-sdk) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ---
 
@@ -3585,15 +3585,15 @@ const verifier = new AtribVerifier({
 
 #### 5.5.2 Verifying a Settlement Recommendation
 
-_Moved to the [atrib Payments Profile §10.1](docs/payments-profile.md#101-verifying-a-settlement-recommendation) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §10.1](docs/payments-profile.md#101-verifying-a-settlement-recommendation) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 5.5.3 Post-Hoc Calculation (No Agent SDK)
 
-_Moved to the [atrib Payments Profile §10.2](docs/payments-profile.md#102-post-hoc-calculation-no-agent-sdk) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §10.2](docs/payments-profile.md#102-post-hoc-calculation-no-agent-sdk) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 5.5.4 AP2 / Verifiable Intent Evidence Checks
 
-_Moved to the [atrib Payments Profile §11](docs/payments-profile.md#11-ap2--verifiable-intent-evidence-checks) per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
+_Moved to the [atrib Payments Profile §11](docs/payments-profile.md#11-ap2--verifiable-intent-evidence-checks) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 5.5.5 Handoff Claim Verification
 
@@ -3786,7 +3786,7 @@ The enum is closed at these four values. Extending it requires revising the evid
 
 **Profile registration rule.** A profile is registered by publishing, together: (1) a type URI — atrib-maintained profiles use `https://atrib.dev/v1/evidence/<name>`; third parties use an absolute HTTPS URI on a domain they control, the same self-sovereign convention as extension event_type URIs and deliberately below the [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar, because no event_type byte and no signed field is involved; (2) a profile document (for atrib-maintained profiles: `docs/evidence-profiles/<name>.md`) defining accepted payload media types and the applicable hash rule, the `facts` vocabulary (each fact's name, JSON type, and provenance class: `verifier-derived`, `caller-attested`, or `producer-declared`), what each tier requires for the profile, the sanitization contract (which facts and hashes may appear in public projections — raw payloads never, by default, per [D110](DECISIONS.md#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop) / [D134](DECISIONS.md#d134-x401-producer-capture-and-propagation-stay-sanitized)), and its own semver rules (`profile_version` refers to this document); and (3) a conformance case family at `spec/conformance/evidence-envelope/<name>/` in the same commit (atrib-maintained profiles only; third parties SHOULD publish equivalents). Profile identity is the full URI: a foreign domain reusing an atrib profile name (e.g. `https://example.com/v1/evidence/oauth2`) is a valid third-party profile URI and MUST NOT be treated as the atrib profile of the same name.
 
-The initial atrib-maintained registry is: `oauth2`, `mcp-oauth`, `aauth`, `x401`, `ap2-vi` (mapped 1:1 from the legacy [§5.5.6](#556-generic-authorization-evidence-blocks) adapters), `human-approval` (per [D118](DECISIONS.md#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain): the payload is the human-signed approval record itself — `ref.record_hash` names it, `ref.kind` states where its body is retrievable, `payload.hash` commits to its canonical bytes; facts: approver key, approval scope, decision), `counterparty-attestation` (out-of-band co-signature receipts that are external evidence per [D098](DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) / [D107](DECISIONS.md#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes)), and `delegation-certificate` (the certificate carrier defined by [§1.11.8](#1118-carriage): the payload is the certificate object under the JCS hash rule or its `cert_hash` reference; facts are the [§1.11.4](#1114-verifier-walk) walk outputs). Registered after the initial set, under the same rule: `continuation-packet` (per [D142](DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions): the payload is the continuation packet a baton-pass record hands to a successor agent — raw-bytes hash rule for document media types, the `ref.record_hash` sibling spelling when the carried material is itself a signed baton-pass observation; facts are role-term routing facts, with packet bodies private by default); and `payments-detection` plus `payments-settlement` (per [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core): rail detection facts on a transaction record and a settlement recommendation document attached by hash, both owned normatively by the [atrib Payments Profile §12](docs/payments-profile.md#12-evidence-profiles); detection material and recommendation bodies stay private by default).
+The initial atrib-maintained registry is: `oauth2`, `mcp-oauth`, `aauth`, `x401`, `ap2-vi` (mapped 1:1 from the legacy [§5.5.6](#556-generic-authorization-evidence-blocks) adapters), `human-approval` (per [D118](DECISIONS.md#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain): the payload is the human-signed approval record itself — `ref.record_hash` names it, `ref.kind` states where its body is retrievable, `payload.hash` commits to its canonical bytes; facts: approver key, approval scope, decision), `counterparty-attestation` (out-of-band co-signature receipts that are external evidence per [D098](DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) / [D107](DECISIONS.md#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes)), and `delegation-certificate` (the certificate carrier defined by [§1.11.8](#1118-carriage): the payload is the certificate object under the JCS hash rule or its `cert_hash` reference; facts are the [§1.11.4](#1114-verifier-walk) walk outputs). Registered after the initial set, under the same rule: `continuation-packet` (per [D142](DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions): the payload is the continuation packet a baton-pass record hands to a successor agent — raw-bytes hash rule for document media types, the `ref.record_hash` sibling spelling when the carried material is itself a signed baton-pass observation; facts are role-term routing facts, with packet bodies private by default); and `payments-detection` plus `payments-settlement` (per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core): rail detection facts on a transaction record and a settlement recommendation document attached by hash, both owned normatively by the [atrib Payments Profile §12](docs/payments-profile.md#12-evidence-profiles); detection material and recommendation bodies stay private by default).
 
 **Unknown-profile handling (normative).** Consumers MUST preserve envelopes whose profile URI they do not recognize, MUST render them opaquely (profile URI, tier, payload hash), MUST NOT drop them, and MUST NOT let them affect record validity — the same posture as unknown extension event types ([§1.2.4](#124-event_type-values)). Filtering to known profiles is a rendering choice, never a storage or relay behavior.
 
@@ -3805,7 +3805,7 @@ The initial atrib-maintained registry is: `oauth2`, `mcp-oauth`, `aauth`, `x401`
 
 **Invariants.** Fact/policy separation ([§3.6](#36-implementation-notes)) is preserved: `result.valid` and `facts` are verification facts, not weights; graph services never store, derive from, or serve envelopes. The [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) cross-attestation rule stays in core: the `signers[]` array over canonical transaction bytes remains the only way to satisfy the ≥2-distinct-keys minimum, and a verifier that sees only a `counterparty-attestation` envelope still reports `cross_attestation_missing: true` ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)). Producer-side envelope writers follow the degradation contract ([§5.8](#58-degradation-contract)): catch-all, silent-failure, `atrib:`-prefixed logging; a failed envelope construction drops the envelope, never the record or the primary tool response. The envelope is the concrete shape of trust layer 7 ("external evidence") in the [§8.7](#87-adversarial-threat-model) stack: it does not certify truth, it records what a named verifier accepted.
 
-**Conformance.** The envelope conformance corpus lives at `spec/conformance/evidence-envelope/` with eight case families: `shape/` (schema validity, closed enums, the `ref.record_hash` sibling rule), `registry/` (HTTPS type-URI rule, full-URI profile identity), `unknown-profile/` (preservation, opaque rendering), `legacy-mapping/` (the frozen five-row table with sixth-string rejection), `tier/` (instance-scoped tier semantics, relay-swap rejection, claimed-but-not-reproducible reporting, and the never-flips-`valid` invariant), `continuation-packet/` (the [D142](DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions) post-initial profile registration), and `payments-detection/` plus `payments-settlement/` (the [P048](DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core) payments-profile registrations, including the no-profile-loaded degradation family and a [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) duplicate-signer re-pin). The generator is `packages/log-dev/scripts/generate-conformance-evidence-envelope.ts`; the reference consumer is `packages/verify/test/conformance-evidence-envelope.test.ts`. Profile-internal semantics remain authoritative in the existing corpora at `spec/conformance/5.5.6/{oauth,aauth,x401}/` and `spec/conformance/ap2-vi-crypto/`, which are referenced, not moved.
+**Conformance.** The envelope conformance corpus lives at `spec/conformance/evidence-envelope/` with eight case families: `shape/` (schema validity, closed enums, the `ref.record_hash` sibling rule), `registry/` (HTTPS type-URI rule, full-URI profile identity), `unknown-profile/` (preservation, opaque rendering), `legacy-mapping/` (the frozen five-row table with sixth-string rejection), `tier/` (instance-scoped tier semantics, relay-swap rejection, claimed-but-not-reproducible reporting, and the never-flips-`valid` invariant), `continuation-packet/` (the [D142](DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions) post-initial profile registration), and `payments-detection/` plus `payments-settlement/` (the [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core) payments-profile registrations, including the no-profile-loaded degradation family and a [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) duplicate-signer re-pin). The generator is `packages/log-dev/scripts/generate-conformance-evidence-envelope.ts`; the reference consumer is `packages/verify/test/conformance-evidence-envelope.test.ts`. Profile-internal semantics remain authoritative in the existing corpora at `spec/conformance/5.5.6/{oauth,aauth,x401}/` and `spec/conformance/ap2-vi-crypto/`, which are referenced, not moved.
 
 ---
 

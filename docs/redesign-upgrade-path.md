@@ -4,7 +4,7 @@ Status: executing. The first tranche of drafts was accepted and landed as
 [D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)-[D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133)
 on 2026-07-06 (from P042-P045 and P049; full drafts remain in
 `docs/adr-draft-p04x-*.md`). Step 7, the payments profile spin-out
-([P048](../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)),
+([D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)),
 executed on 2026-07-10: [`docs/payments-profile.md`](payments-profile.md),
 the core tombstones, the two evidence-profile registrations, and the
 conformance corpora landed; the step-one package subpath split follows as a

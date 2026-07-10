@@ -10,7 +10,7 @@ cryptographic edge behavior so dependency upgrades cannot silently change the
 trust boundary.
 
 **Ownership.** The vectors are unchanged by the
-[P048](../../../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)
+[D147](../../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)
 payments spin-out; the corpus path is a stable identifier and does not move.
 The normative owner of the AP2 / VI evidence-check catalog is now
 [payments profile §11](../../../docs/payments-profile.md#11-ap2--verifiable-intent-evidence-checks)

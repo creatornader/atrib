@@ -4,7 +4,7 @@
 
 Editor: Nader Helmy
 
-This profile defines the payment-rail layer of the atrib protocol: per-rail transaction detection hooks, the SDK detection contract, the attribution policy format, the calculation algorithm, the settlement recommendation document, settlement verification, and the AP2 / Verifiable Intent evidence-check catalog. The material relocated here from the core specification under [P048](../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core); every vacated core section keeps a stable tombstone anchor that points at its new home.
+This profile defines the payment-rail layer of the atrib protocol: per-rail transaction detection hooks, the SDK detection contract, the attribution policy format, the calculation algorithm, the settlement recommendation document, settlement verification, and the AP2 / Verifiable Intent evidence-check catalog. The material relocated here from the core specification under [D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core); every vacated core section keeps a stable tombstone anchor that points at its new home.
 
 The core protocol accommodates payments through exactly three retained elements:
 
@@ -66,7 +66,7 @@ The core fact/policy separation ([§3.6](../atrib-spec.md#36-implementation-note
 
 **Versioning.** This document versions as `payments-profile vMAJOR.MINOR.PATCH`, independent of the core spec. Adding or changing a rail's detection hook is a MINOR change. Removing a rail or changing calculation semantics is a MAJOR change. Editorial fixes are PATCH.
 
-**Packaging.** Detection currently ships inside `@atrib/agent` and the settlement verifier surface inside `@atrib/verify`. The subpath split (`@atrib/agent/payments` and `@atrib/verify/payments` with root re-exports) and any later standalone package follow the schedule in [P048](../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). This document is the normative home for the contracts regardless of packaging.
+**Packaging.** Detection currently ships inside `@atrib/agent` and the settlement verifier surface inside `@atrib/verify`. The subpath split (`@atrib/agent/payments` and `@atrib/verify/payments` with root re-exports) and any later standalone package follow the schedule in [D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This document is the normative home for the contracts regardless of packaging.
 
 ---
 

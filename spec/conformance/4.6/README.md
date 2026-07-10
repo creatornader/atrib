@@ -3,7 +3,7 @@
 Deterministic distribution vectors for the calculation algorithm.
 
 **Ownership.** The vectors are unchanged by the
-[P048](../../../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)
+[D147](../../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)
 payments spin-out; the corpus path is a stable identifier and does not
 move. The normative owner of the algorithm is now
 [payments profile §8](../../../docs/payments-profile.md#8-the-calculation-algorithm)

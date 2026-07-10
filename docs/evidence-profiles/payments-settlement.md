@@ -2,7 +2,7 @@
 
 - **Type URI:** `https://atrib.dev/v1/evidence/payments-settlement`
 - **Profile version:** `1.0.0` (semver of this document)
-- **Status:** atrib-maintained, registered after the initial [D137](../../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model) set per [P048](../../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core). No legacy [§5.5.6](../../atrib-spec.md#556-generic-authorization-evidence-blocks) protocol string exists; the legacy set is frozen. This profile is envelope-native. Its normative owner is the [atrib Payments Profile](../payments-profile.md) ([§12](../payments-profile.md#12-evidence-profiles)).
+- **Status:** atrib-maintained, registered after the initial [D137](../../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model) set per [D147](../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). No legacy [§5.5.6](../../atrib-spec.md#556-generic-authorization-evidence-blocks) protocol string exists; the legacy set is frozen. This profile is envelope-native. Its normative owner is the [atrib Payments Profile](../payments-profile.md) ([§12](../payments-profile.md#12-evidence-profiles)).
 
 Carries a settlement recommendation document ([payments profile §9](../payments-profile.md#9-settlement-recommendation-document)) attached as evidence, by hash or archive reference. `payload.hash` commits to the document while the body stays private by default. Evidence never alters `verifyRecord().valid`; whether a merchant acts on a recommendation is downstream policy.
 
@@ -42,5 +42,5 @@ The verifier recomputes the payload hash from the retrieved document and reports
 
 - [payments profile §9](../payments-profile.md#9-settlement-recommendation-document), [§10](../payments-profile.md#10-settlement-verification), [§12](../payments-profile.md#12-evidence-profiles)
 - [§5.5.7](../../atrib-spec.md#557-universal-evidence-envelope)
-- [P048](../../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core), [D137](../../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)
+- [D147](../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core), [D137](../../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)
 - Envelope corpus: [`spec/conformance/evidence-envelope/`](../../spec/conformance/evidence-envelope/) (`payments-settlement--*` family); calculation vectors: [`spec/conformance/4.6/`](../../spec/conformance/4.6/)
