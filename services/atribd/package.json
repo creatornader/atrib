@@ -1,6 +1,7 @@
 {
   "name": "atribd",
   "version": "0.1.0",
+  "private": true,
   "description": "Local daemon for atrib. Serves the seven cognitive primitives from one stateless-native process over Streamable HTTP or stdio.",
   "author": "Nader Helmy",
   "license": "Apache-2.0",
