@@ -1,0 +1,28 @@
+{
+  "name": "legacy-initialize-no-session",
+  "spec_section": "D148",
+  "description": "A pre-2026-07-28 client that POSTs initialize gets a valid stateless response: capabilities returned, no session id issued, and later requests need no session header.",
+  "input": {
+    "headers": {},
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2025-06-18",
+        "capabilities": {},
+        "clientInfo": {
+          "name": "legacy-client",
+          "version": "0.0.0"
+        }
+      }
+    }
+  },
+  "expected": {
+    "http_status": 200,
+    "mcp_session_id_response_header": null,
+    "result_present": true,
+    "server_name": "atribd",
+    "counter_incremented": "legacy_initialize"
+  }
+}

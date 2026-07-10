@@ -20,3 +20,4 @@ __pycache__/
 *.pyc
 python/.venv/
 *.egg-info/
+.impeccable/

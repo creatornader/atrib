@@ -464,8 +464,9 @@ function checkWorkspacePackages() {
   if (monorepoMatch) {
     const claimedWord = monorepoMatch[1].toLowerCase()
     const bulletBlock = monorepoMatch[2]
-    // Count `@atrib/<name>` references in the bullet block (each is one package).
-    const enumerated = [...bulletBlock.matchAll(/`@atrib\/[a-z-]+`/g)].length
+    // Count package references in the bullet block (each is one package).
+    // Most are `@atrib/<name>`; the unscoped daemon package `atribd` counts too.
+    const enumerated = [...bulletBlock.matchAll(/`(?:@atrib\/[a-z-]+|atribd)`/g)].length
     const expectedWord = NUMBER_WORDS[enumerated]
     if (claimedWord !== expectedWord) {
       fail(
@@ -567,20 +568,41 @@ function checkConformanceCorpusConsistency() {
       mismatches++
       continue
     }
-    const declared = Array.isArray(manifest.cases) ? manifest.cases.length : 0
-    const declaredFiles = new Set((manifest.cases || []).map((c) => c.file).filter(Boolean))
+    // Two manifest shapes exist: a flat `cases[]` array, and a `families[]`
+    // array whose entries each carry a `cases[]` list of nested paths
+    // (spec/conformance/atribd/ introduced the family shape).
+    const familyCases = Array.isArray(manifest.families)
+      ? manifest.families.flatMap((f) => (Array.isArray(f.cases) ? f.cases : []))
+      : []
+    const flatCases = Array.isArray(manifest.cases)
+      ? manifest.cases.map((c) => c.file).filter(Boolean)
+      : []
+    const declaredList = flatCases.length ? flatCases : familyCases
+    const declared = Array.isArray(manifest.cases)
+      ? manifest.cases.length
+      : familyCases.length
+    const declaredFiles = new Set(declaredList)
     let actualCount = 0
     const actualFiles = new Set()
-    try {
-      const files = readdirSync(join(ROOT, 'spec/conformance', root, 'cases'))
-      for (const f of files) {
-        if (!f.endsWith('.json')) continue
-        actualCount++
-        actualFiles.add(`cases/${f}`)
+    function walkCases(rel) {
+      let entries
+      try {
+        entries = readdirSync(join(ROOT, 'spec/conformance', root, rel), {
+          withFileTypes: true,
+        })
+      } catch (_) {
+        return // No cases/ dir; manifest count of 0 is fine
       }
-    } catch (_) {
-      // No cases/ dir; manifest count of 0 is fine
+      for (const e of entries) {
+        if (e.isDirectory()) {
+          walkCases(`${rel}/${e.name}`)
+        } else if (e.name.endsWith('.json')) {
+          actualCount++
+          actualFiles.add(`${rel}/${e.name}`)
+        }
+      }
     }
+    walkCases('cases')
     if (declared !== actualCount) {
       fail(
         check,
@@ -599,6 +621,79 @@ function checkConformanceCorpusConsistency() {
   }
   if (mismatches === 0) {
     ok(check, `${corpusRoots.length} conformance corpora consistent (cases/*.json ↔ manifest.json)`)
+  }
+}
+
+// ─── daemon tool-surface count ─────────────────────────────────────────────
+//
+// Ground truth: the PRIMITIVE_SPECS enumeration in
+// services/atribd/src/backend.ts (each spec's expectedTools list; the same
+// enumeration drives the daemon's D129 surface contracts).
+//
+// Targets: CLAUDE.md and README.md "<n> physical MCP tools" claims plus
+// skills/atrib/SKILL.md's "<word> physical MCP tools" claims.
+
+function checkDaemonToolSurfaceCount() {
+  const check = 'daemon-tool-surface-count'
+  let source
+  try {
+    source = read('services/atribd/src/backend.ts')
+  } catch (e) {
+    fail(check, `cannot read services/atribd/src/backend.ts: ${e.message}`)
+    return
+  }
+  const specsMatch = source.match(
+    /const PRIMITIVE_SPECS: readonly PrimitiveSpec\[\] = \[([\s\S]*?)\n\]/,
+  )
+  if (!specsMatch) {
+    fail(check, 'PRIMITIVE_SPECS block not found in services/atribd/src/backend.ts')
+    return
+  }
+  let toolCount = 0
+  for (const m of specsMatch[1].matchAll(/expectedTools: \[([^\]]*)\]/g)) {
+    toolCount += [...m[1].matchAll(/'[a-z_-]+'/g)].length
+  }
+  if (toolCount === 0) {
+    fail(check, 'PRIMITIVE_SPECS enumerates zero expected tools; parser or source drift')
+    return
+  }
+  const expectedWord = NUMBER_WORDS[toolCount]
+  let mismatches = 0
+  for (const file of ['CLAUDE.md', 'README.md']) {
+    const text = read(file).replace(/\s+/g, ' ')
+    for (const m of text.matchAll(/\b(\d+) physical MCP tools\b/g)) {
+      if (Number(m[1]) !== toolCount) {
+        fail(check, `${file} claims "${m[0]}" but PRIMITIVE_SPECS enumerates ${toolCount}`, {
+          claimed: m[1],
+          expected: toolCount,
+        })
+        mismatches++
+      }
+    }
+    for (const m of text.matchAll(/\b([a-z-]+) physical MCP tools\b/gi)) {
+      if (/^\d+$/.test(m[1])) continue
+      if (m[1].toLowerCase() !== expectedWord) {
+        fail(check, `${file} claims "${m[0]}" but PRIMITIVE_SPECS enumerates ${toolCount}`, {
+          claimed: m[1],
+          expected: expectedWord,
+        })
+        mismatches++
+      }
+    }
+  }
+  const skill = read('skills/atrib/SKILL.md').replace(/\s+/g, ' ')
+  for (const m of skill.matchAll(/\b([a-z-]+) physical MCP tools\b/gi)) {
+    if (m[1].toLowerCase() !== expectedWord) {
+      fail(
+        check,
+        `skills/atrib/SKILL.md claims "${m[0]}" but PRIMITIVE_SPECS enumerates ${toolCount}`,
+        { claimed: m[1], expected: expectedWord },
+      )
+      mismatches++
+    }
+  }
+  if (mismatches === 0) {
+    ok(check, `daemon tool-surface claims agree with PRIMITIVE_SPECS (${toolCount} tools)`)
   }
 }
 
@@ -1161,6 +1256,7 @@ const checks = [
   checkWorkspacePackages,
   checkPublishedPackageCount,
   checkConformanceCorpusConsistency,
+  checkDaemonToolSurfaceCount,
   checkPaymentProtocolCount,
   checkEvidenceProfileCount,
   checkDocSyncTriggersRowCount,

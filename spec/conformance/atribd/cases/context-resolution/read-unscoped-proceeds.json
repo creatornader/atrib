@@ -1,0 +1,20 @@
+{
+  "name": "read-unscoped-proceeds",
+  "spec_section": "D148",
+  "check": "http-carrier",
+  "description": "Read primitives that support unscoped queries proceed per their own scope rules; the explicit-required policy binds writes only.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "method": "tools/call",
+      "params": {
+        "name": "fake_read",
+        "arguments": {}
+      }
+    }
+  },
+  "expected": {
+    "routed": true
+  }
+}

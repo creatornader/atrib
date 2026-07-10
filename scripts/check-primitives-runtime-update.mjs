@@ -279,4 +279,111 @@ assert.throws(
   /runtime.content_index_version/,
 )
 
+// atribd runtime mode (P046): stateless daemon LaunchAgents, daemon health
+// shape with top-level contract blocks, requests counters, and no sessions
+// block.
+
+const atribdPlist = {
+  Label: 'com.nader.atribd.claude-code',
+  WorkingDirectory: root,
+  ProgramArguments: [
+    '/opt/homebrew/bin/node',
+    '/workspace/atrib/services/atribd/dist/index.js',
+    '--transport',
+    'streamable-http',
+    '--host',
+    '127.0.0.1',
+    '--port',
+    '8796',
+    '--path',
+    '/mcp',
+    '--json',
+  ],
+}
+
+const atribdAgent = normalizePrimitiveLaunchAgent(atribdPlist, '/tmp/atribd.plist', {
+  root,
+  mode: 'atribd',
+})
+assert.equal(atribdAgent.eligible, true)
+assert.equal(atribdAgent.profile, 'claude-code')
+assert.equal(atribdAgent.endpoint, 'http://127.0.0.1:8796/mcp')
+
+const legacyUnderAtribd = normalizePrimitiveLaunchAgent(validPlist, '/tmp/codex.plist', {
+  root,
+  mode: 'atribd',
+})
+assert.equal(legacyUnderAtribd.eligible, false)
+assert.match(legacyUnderAtribd.reasons.join('\n'), /not a atribd host/)
+
+assert.equal(parseArgs(['--runtime', 'atribd']).runtime, 'atribd')
+assert.throws(() => parseArgs(['--runtime', 'nonsense']), /unknown runtime mode/)
+
+function atribdHealthBody() {
+  return {
+    status: 'healthy',
+    report: {
+      daemon: {
+        name: 'atribd',
+        pid: 456,
+        version: '0.1.0',
+        transport: 'streamable-http-stateless',
+        transport_adapter: 'session-sdk-per-request',
+      },
+      recall_contract: {
+        status: 'pass',
+        coverage_version: 'coverage-v1',
+        content_index_version: 'content-index-v1',
+      },
+      primitive_contracts: primitiveContractsFixture(),
+      behavioral_probes: behavioralProbesFixture(),
+      requests: {
+        served: 3,
+        rejected_header_mismatch: 0,
+        rejected_missing_context: 0,
+      },
+    },
+  }
+}
+
+const atribdHealth = validateHealthPayload(atribdHealthBody(), {
+  expectedRuntimeVersion: '0.1.0',
+  expectedPrimitiveVersions,
+  mode: 'atribd',
+})
+assert.equal(atribdHealth.pid, 456)
+assert.equal(atribdHealth.recall_contract, 'pass')
+assert.equal(atribdHealth.primitive_contracts.recall.tool_count, 8)
+assert.equal(atribdHealth.behavioral_probes.emit.status, 'skipped')
+
+assert.throws(() => {
+  const withSessions = atribdHealthBody()
+  withSessions.report.sessions = { active: 1 }
+  validateHealthPayload(withSessions, {
+    expectedRuntimeVersion: '0.1.0',
+    expectedPrimitiveVersions,
+    mode: 'atribd',
+  })
+}, /retired sessions block/)
+
+assert.throws(() => {
+  const withoutRequests = atribdHealthBody()
+  delete withoutRequests.report.requests
+  validateHealthPayload(withoutRequests, {
+    expectedRuntimeVersion: '0.1.0',
+    expectedPrimitiveVersions,
+    mode: 'atribd',
+  })
+}, /missing report.requests/)
+
+assert.equal(
+  endpointProbeSettled({
+    report: {
+      requests: { served: 4 },
+      tool_calls: { active_tool_calls: 0 },
+    },
+  }),
+  true,
+)
+
 process.stdout.write('primitives runtime update checks ok\n')
