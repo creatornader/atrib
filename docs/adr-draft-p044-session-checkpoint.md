@@ -17,7 +17,7 @@ Candidate set (cross-references between drafts resolve via this table):
 
 ---
 
-# ADR draft: `session_checkpoint` event type — the Merkle-committed session stream
+# ADR draft: `session_checkpoint` event type: the Merkle-committed session stream
 
 **Status:** Draft (pre-acceptance). Promotes redesign-upgrade-path step 2
 ([`docs/redesign-upgrade-path.md`](redesign-upgrade-path.md), "Session
@@ -73,18 +73,18 @@ Add one new event type, `https://atrib.dev/v1/types/session_checkpoint`, with
 log-entry byte **`0x08`** upon promotion. The byte allocation deliberately
 skips `0x07`, which stays where
 [D073](../DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr) left it: a
-design-level reservation for `handoff`, not an allocation — [D073](../DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr) explicitly
+design-level reservation for `handoff`, not an allocation; [D073](../DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr) explicitly
 declined to tighten the [§2.3.1](../atrib-spec.md#231-entry-serialization)
 reserved range. At promotion the [§2.3.1](../atrib-spec.md#231-entry-serialization) byte table must therefore represent
 the split explicitly: `0x07` "reserved for `handoff` per [D073](../DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr) (design-level,
-not yet allocated)", `0x08` `session_checkpoint`, and `0x09`–`0xFE` "reserved
-per [D036](../DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)" — not a single contiguous reserved range. A session checkpoint is an
+not yet allocated)", `0x08` `session_checkpoint`, and `0x09`-`0xFE` "reserved
+per [D036](../DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)", not a single contiguous reserved range. A session checkpoint is an
 ordinary signed atrib record whose body commits to the RFC 6962 Merkle root
 over the ordered `record_hash` values of its `context_id` so far, plus the
 interval range and the prior checkpoint's record hash. It is signed like any
 record ([§1.4](../atrib-spec.md#14-signing-and-verification)), chained like any
 record ([§1.2.3.1](../atrib-spec.md#1231-multi-producer-chain-composition)
-precedence via `resolveChainRoot` — never reimplemented), submitted like any
+precedence via `resolveChainRoot`, never reimplemented), submitted like any
 record ([§2.6.1](../atrib-spec.md#261-submit-entry)), and non-blocking like any
 record ([§5.3.5](../atrib-spec.md#535-log-submission),
 [§5.8](../atrib-spec.md#58-degradation-contract)).
@@ -140,7 +140,7 @@ Field semantics inside `checkpoint` (all REQUIRED unless marked):
 | `session_root` | string | `"sha256:" + 64 lowercase hex`. RFC 6962 root over leaves `0..tree_size-1`. |
 | `tree_size` | integer | ≥ 1. Number of leaves committed. The last covered leaf index is `tree_size - 1` (implicit; not a separate field). |
 | `first_index` | integer | `0 ≤ first_index < tree_size`. Index of the first leaf newly covered by this interval. MUST equal the prior checkpoint's `tree_size` when `prior_checkpoint` is present, and `0` when absent. |
-| `prior_checkpoint` | string, OPTIONAL | `"sha256:" + 64 hex` record hash of the immediately preceding `session_checkpoint` on the same `context_id`. MUST be present iff `first_index > 0`. Omitted — not null — on the first checkpoint (invariant 5 discipline). |
+| `prior_checkpoint` | string, OPTIONAL | `"sha256:" + 64 hex` record hash of the immediately preceding `session_checkpoint` on the same `context_id`. MUST be present iff `first_index > 0`. Omitted, not null, on the first checkpoint (invariant 5 discipline). |
 | `retroactive` | boolean, OPTIONAL | When present, MUST be `true`. `retroactive: false` MUST NOT be emitted (absence-not-null; presence changes the signature). See semantics below. |
 
 Validator rules ([§2.6.1](../atrib-spec.md#261-submit-entry) conformance targets):
@@ -150,8 +150,8 @@ on any other event_type; reject `tree_size < 1`, `first_index ≥ tree_size`,
 `first_index > 0`; reject `retroactive: false`.
 
 `content_id` follows the [§1.2.2](../atrib-spec.md#122-content_id-derivation)
-derivation — `"sha256:" + hex(SHA-256(UTF-8(input)))`, never the hex of the
-input string itself — with tool_name `"session_checkpoint"`, mirroring
+derivation (`"sha256:" + hex(SHA-256(UTF-8(input)))`, never the hex of the
+input string itself) with tool_name `"session_checkpoint"`, mirroring
 directory-node's `"<origin>:directory_anchor"` input (exact constant for
 origin-less cognitive producers is an open question). Per
 [D099](../DECISIONS.md#d099-explicit-emit-records-commit-local-content-through-default-args_hash),
@@ -161,7 +161,7 @@ tree root, with the list itself in `_local.content.leaves`.
 
 ### Tree construction rule
 
-- **Leaf value:** the raw 32-byte record hash of each covered record —
+- **Leaf value:** the raw 32-byte record hash of each covered record,
   hex-decoded from `"sha256:" + hex(SHA-256(JCS(complete signed record
   including signature)))`, exactly the record-hash definition in
   [§1.2.3](../atrib-spec.md#123-chain_root-for-genesis-records)'s normative
@@ -198,7 +198,7 @@ tree root, with the list itself in `_local.content.leaves`.
   `session_checkpoint` record on the context appears as a leaf.
 - **Self-exclusion:** a checkpoint MUST NOT include itself as a leaf (its
   hash depends on `session_root`). It becomes a leaf in the next checkpoint's
-  tree — checkpoints are part of the stream they formalize.
+  tree; checkpoints are part of the stream they formalize.
 - **Empty checkpoints prohibited:** `tree_size ≥ 1`; producers SHOULD skip an
   interval that added no new leaves.
 
@@ -207,20 +207,20 @@ tree root, with the list itself in `_local.content.leaves`.
 For consecutive checkpoints K_i → K_{i+1} on one `context_id`:
 `K_{i+1}.checkpoint.prior_checkpoint` = record hash of K_i;
 `K_{i+1}.first_index = K_i.tree_size`; and the leaf sequence
-`0..K_i.tree_size-1` MUST be identical — append-only extension, provable by
+`0..K_i.tree_size-1` MUST be identical: append-only extension, provable by
 an RFC 6962 §2.1.4 consistency proof from `(K_i.session_root, K_i.tree_size)`
-to `(K_{i+1}.session_root, K_{i+1}.tree_size)` — the same append-only check
+to `(K_{i+1}.session_root, K_{i+1}.tree_size)`, the same append-only check
 the log's witness protocol applies between successive log checkpoints
 ([§2.9](../atrib-spec.md#29-witnessing-and-cosignatures)). Two signed checkpoints
 from the same `creator_key` claiming the same `prior_checkpoint` (or
 overlapping ranges) with inconsistent roots constitute equivocation evidence
-against that key — the session-scale analogue of log equivocation in
+against that key, the session-scale analogue of log equivocation in
 [§2.11](../atrib-spec.md#211-cross-log-replication), reported as a categorical
 verifier fact.
 
 Honest scope ([§8.7](../atrib-spec.md#87-adversarial-threat-model)): the
 completeness claim is provable *relative to the creator's own committed
-stream* — a creator that maintains a never-checkpointed side chain is not
+stream*: a creator that maintains a never-checkpointed side chain is not
 detected by this mechanism; what changes is that any two committed views of
 the same session are now cryptographically comparable, so selective
 re-narration becomes attributable equivocation instead of deniable omission.
@@ -238,10 +238,10 @@ contemporaneous anchors.
   third-party history). The canonical case: the one-time backfill checkpoint
   over dogfood history that predates checkpoint adoption.
 - **Verifier rule:** verifiers assign one categorical freshness fact per
-  checkpoint — `contemporaneous`, `declared-retroactive`, or
+  checkpoint: `contemporaneous`, `declared-retroactive`, or
   `stale-undeclared` (checkpoint timestamp exceeds the max covered leaf
-  timestamp by more than a verifier-configured bound; proposed default 24h)
-  — mirroring the `in_envelope: false` signal-not-block posture of
+  timestamp by more than a verifier-configured bound; proposed default 24h),
+  mirroring the `in_envelope: false` signal-not-block posture of
   [D051](../DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) /
   [§6.7](../atrib-spec.md#67-capability-declarations).
 
@@ -264,7 +264,7 @@ row) is identical to `observation`: CHAIN_PRECEDES / SESSION_PRECEDES /
 SESSION_PARALLEL yes; CONVERGES_ON no; CROSS_SESSION no; INFORMED_BY and
 PROVENANCE_OF source/target yes;
 [§4.6](../atrib-spec.md#46-the-calculation-algorithm) attribution **skipped**.
-This is load-bearing for invariant 3 and
+The skip preserves invariant 3 and
 [§4.1](../atrib-spec.md#41-purpose-and-position-in-the-protocol): a session's
 attribution distribution MUST be bit-identical whether or not its producer
 adopted checkpointing, so checkpoints must never enter contributing-node
@@ -276,7 +276,7 @@ freshness results are verifier facts, not graph payloads.
 
 - **Selective disclosure:** an inclusion proof of leaf i against
   `session_root` reveals only the record hash, its position, and ~log2(n)
-  sibling hashes — never sibling record bodies. Composes with
+  sibling hashes, never sibling record bodies. Composes with
   [§8.3](../atrib-spec.md#83-salted-commitment-posture): position becomes
   provable while args/result stay salted commitments.
 - **Completeness:** "whole session as of checkpoint K," relative to the
@@ -286,7 +286,7 @@ freshness results are verifier facts, not graph payloads.
   multi-anchors ([D050](../DECISIONS.md#d050-cross-log-replication-for-equivocation-defense)).
 - **Position attestation:** a counterparty can co-attest "hash H at index i
   under root R" by signing an ordinary `annotation` over the checkpoint
-  record — existing machinery, no new signature scheme; whether this deserves
+  record (existing machinery, no new signature scheme); whether this deserves
   a step-4 evidence-envelope profile is an open question.
 
 ## Compatibility and migration
@@ -296,7 +296,7 @@ freshness results are verifier facts, not graph payloads.
   record hashes, chain roots, and propagation tokens all stand. No log entry
   byte, 90-byte layout, or checkpoint-note format
   ([§2.4](../atrib-spec.md#24-checkpoint-format), the *log's* checkpoints, an
-  unrelated concept — the spec section MUST add a disambiguation note)
+  unrelated concept; the spec section MUST add a disambiguation note)
   changes.
 - **Old verifiers/validators:** per the
   [§1.2.4](../atrib-spec.md#124-event_type-values) extension rules, an
@@ -318,7 +318,7 @@ freshness results are verifier facts, not graph payloads.
   checklist applies: log-node byte decoder, dashboard chip color, verify-loop
   `validEventTypes`, metrics filter, package constants. archive-node
   optionally accepts the leaf list as evidence per
-  [§2.12](../atrib-spec.md#212-record-body-archive-layer) — the archive stays a
+  [§2.12](../atrib-spec.md#212-record-body-archive-layer); the archive stays a
   separate service ([D070](../DECISIONS.md#d070-record-body-archive-layer)).
 - **Operator machines:** the mirror sidecar gains `_local.content.leaves`;
   old mirror lines are unaffected (read-time normalization only, per the
@@ -340,26 +340,26 @@ reference tests in `packages/verify/test/`, adversarial cases joining the
 [D101](../DECISIONS.md#d101-substrate-wide-adversarial-conformance-corpus)
 pattern. Case families:
 
-1. **canonical-form/** — `checkpoint` JCS slot between `chain_root` and
+1. **canonical-form/**: `checkpoint` JCS slot between `chain_root` and
    `content_id`; presence/absence of `prior_checkpoint` and `retroactive`
    changes the signature; `retroactive: false` rejected (absence-not-null,
    mirroring the 1.2.6 corpus contract).
-2. **tree-construction/** — pinned leaf lists → `session_root` for sizes 1,
+2. **tree-construction/**: pinned leaf lists → `session_root` for sizes 1,
    2, 3, 7, 8 (odd/unbalanced RFC 6962 shapes); a trap vector proving the
    raw-32-byte-leaf rule (tree over hex *strings* MUST NOT match).
-3. **inclusion/** — valid proof; wrong index; wrong root; truncated path.
-4. **consistency/** — valid append-only K1 → K2; reordered-leaf violation;
+3. **inclusion/**: valid proof; wrong index; wrong root; truncated path.
+4. **consistency/**: valid append-only K1 → K2; reordered-leaf violation;
    `first_index` mismatch; `prior_checkpoint` mismatch; equivocation pair
    (same prior, divergent roots) → equivocation fact.
-5. **structural-validation/** — `checkpoint` on wrong event_type rejected;
+5. **structural-validation/**: `checkpoint` on wrong event_type rejected;
    missing on `session_checkpoint` rejected; `tree_size 0`,
    `first_index ≥ tree_size`, prior/first-index coupling violations;
    foreign-`context_id` leaf → hard fault.
-6. **retroactive/** — declared-retroactive, contemporaneous, and
+6. **retroactive/**: declared-retroactive, contemporaneous, and
    stale-undeclared vectors with expected categorical facts.
-7. **byte-uri-duality/** — identical signed bytes under the `0xFF`
+7. **byte-uri-duality/**: identical signed bytes under the `0xFF`
    (pre-promotion) and `0x08` (post-promotion) log-entry encodings.
-8. **graph/** — a `spec/conformance/3.2.4/` addition pinning that
+8. **graph/**: a `spec/conformance/3.2.4/` addition pinning that
    session_checkpoint nodes derive chain-spine edges only, receive no
    CONVERGES_ON, and change no existing edge set.
 
@@ -384,8 +384,8 @@ pattern. Case families:
   `_local.content.leaves` already commit per
   [D099](../DECISIONS.md#d099-explicit-emit-records-commit-local-content-through-default-args_hash).
 - **A tenth CHECKPOINT_PRECEDES edge type from `prior_checkpoint`.**
-  Rejected for v1: the nine-edge count is load-bearing across docs, the
-  3.2.4 corpus, and graph-node; `chain_root` already orders checkpoints; and
+  Rejected for v1: the docs, the 3.2.4 corpus, and graph-node all depend on
+  the nine-edge count; `chain_root` already orders checkpoints; and
   [D118](../DECISIONS.md#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain)'s
   framing says presentation needs should be met by projection rules before
   new edge types. Revisit only with a demonstrated consumer query the
@@ -404,7 +404,7 @@ pattern. Case families:
 - **Log-operator-materialized per-context subtrees.** Rejected: turns a
   producer claim into operator trust, is unavailable offline/local-first, and
   erodes the separation instinct of
-  [D070](../DECISIONS.md#d070-record-body-archive-layer) — the log commits, it
+  [D070](../DECISIONS.md#d070-record-body-archive-layer): the log commits, it
   does not interpret.
 - **Group by `session_token` instead of `context_id`.** Rejected:
   `context_id` is the session anchor
@@ -427,11 +427,11 @@ pattern. Case families:
   subsection under [§1.2](../atrib-spec.md#12-the-attribution-record) (with [§1.2.1](../atrib-spec.md#121-field-definitions)
   table row noting the JCS slot); [§2.3.1](../atrib-spec.md#231-entry-serialization)
   byte table gains the `0x08` row at promotion, and the current single
-  `0x07`–`0xFE` reserved row is split into an explicit `0x07` row ("reserved
+  `0x07`-`0xFE` reserved row is split into an explicit `0x07` row ("reserved
   for `handoff` per
   [D073](../DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr),
-  design-level, not yet allocated") plus a `0x09`–`0xFE` reserved row —
-  honoring [D073](../DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr)'s choice not to tighten its reservation into an allocation —
+  design-level, not yet allocated") plus a `0x09`-`0xFE` reserved row
+  (honoring [D073](../DECISIONS.md#d073-handoff-event_type-byte-placeholder-adr)'s choice not to tighten its reservation into an allocation),
   plus a disambiguation note distinguishing session checkpoints from
   [§2.4](../atrib-spec.md#24-checkpoint-format) log checkpoints;
   [§3.2.1](../atrib-spec.md#321-node-types) participation-matrix row; Appendix A
@@ -444,7 +444,7 @@ pattern. Case families:
   `0x08` is now allocated adjacent to its `0x07` reservation, which remains
   design-level.
 - **`scripts/check-doc-sync.mjs`:** the node-type count check (Check 2) trips
-  when [§3.2.1](../atrib-spec.md#321-node-types)/ARCHITECTURE gain the row — update the enumeration ground
+  when [§3.2.1](../atrib-spec.md#321-node-types)/ARCHITECTURE gain the row, so update the enumeration ground
   truth; edge-type count (Check 1) stays at nine (assert unchanged); consider
   adding a byte-table ↔ URI-table consistency check while touching the
   script, per the CLAUDE.md guidance to extend rather than rely on review.
@@ -460,9 +460,9 @@ pattern. Case families:
 
 ## Open questions (operator decisions)
 
-- What producer_origin constant should origin-less cognitive producers use in the [§1.2.2](../atrib-spec.md#122-content_id-derivation) content_id input (they have no MCP server URL; directory-node uses its service origin) — a fixed 'atrib:' pseudo-origin, the producing package name, or something else?
+- What producer_origin constant should origin-less cognitive producers use in the [§1.2.2](../atrib-spec.md#122-content_id-derivation) content_id input (they have no MCP server URL; directory-node uses its service origin): a fixed 'atrib:' pseudo-origin, the producing package name, or something else?
 - Where does the checkpoint producer ship: the @atrib/emit family (a specialized emit like annotate/revise), the private primitives runtime / future atribd daemon (redesign step 5), or both?
-- What is the default checkpoint trigger policy for dogfood: every N records, every T minutes, at session end via a host hook, or a combination — and is the trigger host-owned or wrapper-owned?
+- What is the default checkpoint trigger policy for dogfood: every N records, every T minutes, at session end via a host hook, or a combination, and is the trigger host-owned or wrapper-owned?
 - Is 24h the right verifier default for the stale-undeclared freshness bound, and should it be per-verifier config only or a spec-recommended default?
 - Should counterparty position attestation ('hash H at index i under root R') get a step-4 universal-evidence-envelope profile, or is a plain annotation record sufficient indefinitely?
 - Should producers set informed_by to the prior checkpoint hash by default (giving a declared-plane INFORMED_BY edge between checkpoints), or leave that to explicit operator opt-in per [D113](../DECISIONS.md#d113-unvalidated-informed_by-refs-are-omitted-by-default) discipline?

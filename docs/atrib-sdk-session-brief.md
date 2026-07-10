@@ -13,7 +13,7 @@ Two client libraries exposing the atrib substrate to application code:
    exists across `@atrib/mcp` (signing, `resolveChainRoot`, mirror, submit
    queue) and `@atrib/emit`. The SDK effort extracts a clean
    `@atrib/core`-shaped API over it: `attest()` / `recall()` verbs, key/cert
-   handling, anchor submission, mirror access — consumable without running an
+   handling, anchor submission, mirror access, consumable without running an
    MCP server.
 2. **Python**: the first non-TypeScript implementation of [§1](../atrib-spec.md#1-attribution-record-format)/[§5](../atrib-spec.md#5-sdk-specification). This is the
    real test of the spec's "two implementations must agree" claims.
@@ -28,7 +28,7 @@ Two client libraries exposing the atrib substrate to application code:
   `1.4/` (signing, incl. adversarial vectors), `1.2.3/multi-producer/`
   (chain-root precedence), `3.2.4/` (edge derivation, if the SDK ships the
   derivation library), `2.6.1/` (submission API). Port failures are spec-bug
-  discoveries — file them, don't route around them.
+  discoveries: file them, don't route around them.
 - **Never reimplement chain selection ad hoc.** Python must port
   `resolveChainRoot` (packages/mcp/src/chain-root.ts) bit-for-bit against the
   corpus, per [D067](../DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract)'s corollary.
@@ -40,7 +40,7 @@ Two client libraries exposing the atrib substrate to application code:
 
 ## Design decisions already made in the redesign discussion
 
-- **Verbs: `attest` (write) / `recall` (read)** — tentatively agreed; final
+- **Verbs: `attest` (write) / `recall` (read)**, tentatively agreed; final
   naming gated on the impact catalog in
   [`attest-recall-rename-impact.md`](attest-recall-rename-impact.md). If that
   ADR hasn't landed when the SDK session starts, build the API surface with
@@ -80,7 +80,7 @@ Two client libraries exposing the atrib substrate to application code:
 
 ## What the SDK session should NOT do
 
-- Do not fork record semantics "for ergonomics" — no new optional fields, no
+- Do not fork record semantics "for ergonomics": no new optional fields, no
   reordered canonicalization, no convenience timestamps.
 - Do not embed framework adapters (structural typing / peer-dep discipline
   stays with `@atrib/agent`).
@@ -98,7 +98,7 @@ Two client libraries exposing the atrib substrate to application code:
 
 ## Session spawn prompt (paste as the first message of the SDK session)
 
-> ultracode — You are starting the dedicated atrib SDK session planned by the
+> ultracode: You are starting the dedicated atrib SDK session planned by the
 > redesign-analysis session on 2026-07-06. Mission: build the consolidated
 > JS/TS client SDK and the first Python SDK.
 > 1. `git fetch origin claude/atrib-redesign-analysis-4g0r9v && git checkout
@@ -108,7 +108,7 @@ Two client libraries exposing the atrib substrate to application code:
 >    `docs/redesign-upgrade-path.md`, `docs/attest-recall-rename-impact.md`,
 >    the CLAUDE.md invariants, and atrib-spec.md [§1](../atrib-spec.md#1-attribution-record-format) + [§5](../atrib-spec.md#5-sdk-specification).
 > 3. Check `docs/adr-draft-p04x-*.md` and DECISIONS.md pending entries
->    P042-P049 — they refine this brief and take precedence over it.
+>    P042-P049; they refine this brief and take precedence over it.
 > Then execute the bootstrap checklist: conformance corpora (1.2.6, 1.4,
 > 1.2.3/multi-producer, 2.6.1) red-to-green against a skeleton signer first;
 > TS consolidation before Python; Python ports `resolveChainRoot` bit-for-bit
@@ -120,7 +120,7 @@ Two client libraries exposing the atrib substrate to application code:
 
 ## Post-spawn addenda from the redesign session (2026-07-06, after P042-P050 landed)
 
-Message to the SDK session — read this on your next pull of the upstream
+Message to the SDK session: read this on your next pull of the upstream
 branch. The P042-P050 candidate set landed at commit `2fe8b29` AFTER your
 spawn prompt was written. Corrections and refinements that supersede the text
 above where they conflict:
@@ -136,12 +136,12 @@ above where they conflict:
    unchanged). Design config as an anchor *set* with `allow_single_anchor:
    true` as the explicit escape hatch. Critical crypto note: Rekor/TSA
    anchoring uses a fresh anchoring signature over a reconstructible
-   anchor-claim artifact — it can NOT reuse the record's own signature
+   anchor-claim artifact; it can NOT reuse the record's own signature
    (record_hash covers the signature; Pure Ed25519 cannot sign digests). Do
    not design the anchor interface assuming signature reuse.
 4. **Checkpoints ([D139](../DECISIONS.md#d139-session_checkpoint-event-type-the-session-stream-formalized)):** treat `session_checkpoint` as an extension-URI
    event type for now (`https://atrib.dev/v1/types/session_checkpoint` under
-   0xFF; normative byte 0x08 comes later — 0x07 stays reserved for handoff).
+   0xFF; normative byte 0x08 comes later; 0x07 stays reserved for handoff).
    Checkpoint object: `{session_root, tree_size, first_index,
    prior_checkpoint?, retroactive?}`; leaf rule reuses [§2.3.2](../atrib-spec.md#232-leaf-hash-computation) verbatim.
 5. **Key API headroom ([D140](../DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys)):** do NOT implement delegation certificates yet,
@@ -151,10 +151,10 @@ above where they conflict:
    genesis field (lex-slots between `creator_key` and `event_type`) as
    omitted-not-null.
 6. **Rename mechanics ([P047](../DECISIONS.md#p047-attestrecall-verb-rename-and-primitive-surface-collapse)):** `content_id` derives from the frozen synthetic
-   constant `mcp://atrib-emit` plus the event-type URI leaf — never derive
+   constant `mcp://atrib-emit` plus the event-type URI leaf; never derive
    content_id from the new verb names. `@atrib/recall` keeps its npm name;
    its `verification` parameter loads `@atrib/verify` as an optional peer
-   dependency (lazy, typed unavailable-result when absent per [§5.8](../atrib-spec.md#58-degradation-contract)) — mirror
+   dependency (lazy, typed unavailable-result when absent per [§5.8](../atrib-spec.md#58-degradation-contract)); mirror
    that pattern.
 7. **Payments boundary ([P048](../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)):** payment detection must be an injectable
    detector set; a core-only SDK never classifies transactions and never
@@ -197,7 +197,7 @@ write scope.
 
 **Merge topology.** This branch (`claude/atrib-redesign-analysis-4g0r9v`) is
 the integration trunk: the SDK session merges it INTO its branch (never the
-reverse — the redesign session performs reverse merges itself), and the final
+reverse; the redesign session performs reverse merges itself), and the final
 PR to main goes from this branch once both workstreams land. atrib-cloud
 alignment work stays in the atrib-cloud repo and consumes `@atrib/sdk` at
 first publish.
