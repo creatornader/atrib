@@ -31,7 +31,9 @@
       "human-approval",
       "counterparty-attestation",
       "delegation-certificate",
-      "continuation-packet"
+      "continuation-packet",
+      "payments-detection",
+      "payments-settlement"
     ]
   },
   "expected": {

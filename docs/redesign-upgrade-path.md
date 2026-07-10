@@ -1,11 +1,19 @@
 # Redesign upgrade path: clean-room findings → ordered, compatible spec changes
 
-Status: proposed working plan. Each item below is now a drafted candidate ADR,
-pending decisions [D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)-[D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133)
-with full drafts in `docs/adr-draft-p04x-*.md`; none is accepted yet. Source: the 2026-07-06 clean-room redesign analysis
-session. The governing constraint for every item: **no signed byte of any
-existing record, log entry, or checkpoint changes.** Every step is additive
-except step 7 (a subtraction of scope, not of bytes).
+Status: executing. The first tranche of drafts was accepted and landed as
+[D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)-[D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133)
+on 2026-07-06 (from P042-P045 and P049; full drafts remain in
+`docs/adr-draft-p04x-*.md`). Step 7, the payments profile spin-out
+([D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)),
+executed on 2026-07-10: [`docs/payments-profile.md`](payments-profile.md),
+the core tombstones, the two evidence-profile registrations, and the
+conformance corpora landed; the step-one package subpath split follows as a
+coordinated change. Steps 5 ([P046](../DECISIONS.md#p046-atribd-a-public-stateless-native-local-daemon-as-the-default-primitive-topology)
+daemon consolidation) and 6 ([P047](../DECISIONS.md#p047-attestrecall-verb-rename-and-primitive-surface-collapse)
+attest/recall rename) remain pending. Source: the 2026-07-06 clean-room
+redesign analysis session. The governing constraint for every item: **no
+signed byte of any existing record, log entry, or checkpoint changes.**
+Every step is additive except step 7 (a subtraction of scope, not of bytes).
 
 The clean-room exercise re-derived atrib's invariants (degradation contract,
 fact/policy separation, Ed25519, deterministic derivation, local mirror as the

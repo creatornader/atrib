@@ -1,0 +1,21 @@
+{
+  "name": "takes-precedence-over-mpp",
+  "corpus": "payments-profile/detection",
+  "rail": "x402",
+  "profile_section": "2.3",
+  "description": "When both PAYMENT-RESPONSE and Payment-Receipt are present, x402 takes precedence per the profile §3 detection order.",
+  "input": {
+    "tool_name": "fetch_paid_resource",
+    "response": {
+      "ok": true
+    },
+    "headers": {
+      "PAYMENT-RESPONSE": "eyJzdWNjZXNzIjp0cnVlfQ==",
+      "Payment-Receipt": "eyJzdGF0dXMiOiJzdWNjZXNzIn0"
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "x402"
+  }
+}

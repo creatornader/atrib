@@ -1,0 +1,21 @@
+{
+  "name": "no-payment-header",
+  "corpus": "payments-profile/detection",
+  "rail": "x402",
+  "profile_section": "2.3",
+  "description": "A 200 response with ordinary headers and no payment signal. Nothing is detected.",
+  "input": {
+    "tool_name": "fetch_resource",
+    "response": {
+      "ok": true
+    },
+    "headers": {
+      "Content-Type": "application/json",
+      "Cache-Control": "private"
+    }
+  },
+  "expected": {
+    "detected": false,
+    "protocol": null
+  }
+}

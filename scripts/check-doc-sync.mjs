@@ -697,38 +697,6 @@ function checkDaemonToolSurfaceCount() {
   }
 }
 
-// ─── DOC-SYNC-TRIGGERS row count ───────────────────────────────────────────
-//
-// Ground truth: data rows in DOC-SYNC-TRIGGERS.md (lines starting "| ",
-// minus the header and separator rows).
-//
-// Target: CLAUDE.md's "(N rows)" claim next to the DOC-SYNC-TRIGGERS link,
-// which went stale once before this check existed.
-
-function checkDocSyncTriggerRowCount() {
-  const check = 'doc-sync-trigger-row-count'
-  const triggers = read('DOC-SYNC-TRIGGERS.md')
-  const tableLines = triggers.split('\n').filter((line) => line.startsWith('| '))
-  const dataRows = tableLines.filter(
-    (line) => !/^\|\s*Event\s*\|/.test(line) && !/^\|\s*-+/.test(line),
-  ).length
-  const claude = read('CLAUDE.md')
-  const m = claude.match(/\[`DOC-SYNC-TRIGGERS\.md`\]\(DOC-SYNC-TRIGGERS\.md\) \((\d+) rows\)/)
-  if (!m) {
-    fail(check, 'CLAUDE.md "(N rows)" claim next to the DOC-SYNC-TRIGGERS link not found')
-    return
-  }
-  const claimed = Number(m[1])
-  if (claimed !== dataRows) {
-    fail(check, `CLAUDE.md claims ${claimed} DOC-SYNC-TRIGGERS rows, table has ${dataRows}`, {
-      claimed,
-      actual: dataRows,
-    })
-  } else {
-    ok(check, `DOC-SYNC-TRIGGERS row count claim matches (${dataRows} rows)`)
-  }
-}
-
 // ─── public-boundary wording ───────────────────────────────────────────────
 // Public repo text can describe external issues, release claims, proof
 // artifacts, and developer-facing examples. It should not publish operator
@@ -1086,6 +1054,193 @@ function buildInlineCodeMask(line) {
   return mask
 }
 
+// ─── Check: payment protocol count consistency ─────────────────────────────
+//
+// Ground truth: the payments-profile detection corpus manifest's `rails`
+// array (spec/conformance/payments-profile/detection/manifest.json), which
+// mirrors the canonical rail enumeration in docs/payments-profile.md §1
+// (P048). Cross-check the profile document's own sentence, then scan the
+// hub docs for "<word> payment protocols" / "<word> agent commerce
+// protocols" / "<word> protocols" claims.
+
+function checkPaymentProtocolCount() {
+  const check = 'payment-protocol-count'
+  let manifest
+  try {
+    manifest = JSON.parse(read('spec/conformance/payments-profile/detection/manifest.json'))
+  } catch (e) {
+    fail(check, `cannot read detection corpus manifest: ${e.message}`)
+    return
+  }
+  const rails = Array.isArray(manifest.rails) ? manifest.rails : []
+  const actualCount = rails.length
+  const expectedWord = NUMBER_WORDS[actualCount]
+  if (!expectedWord) {
+    fail(check, `detection corpus manifest enumerates ${actualCount} rails, outside the number-word table`)
+    return
+  }
+
+  let mismatchCount = 0
+
+  // The profile's canonical sentence must agree with the manifest, both in
+  // count word and in rail set.
+  const profile = read('docs/payments-profile.md')
+  const claim = profile.match(/This profile detects (\w+) payment protocols: ([^.]+)\./)
+  if (!claim) {
+    fail(check, 'docs/payments-profile.md canonical "This profile detects <word> payment protocols: ..." sentence not found')
+    return
+  }
+  if (claim[1].toLowerCase() !== expectedWord) {
+    fail(
+      check,
+      `docs/payments-profile.md claims "${claim[1]} payment protocols" but the detection corpus manifest enumerates ${actualCount} rails`,
+      { claimed: claim[1], actualCount, rails },
+    )
+    mismatchCount += 1
+  }
+  const enumerated = claim[2]
+    .split(/,|\band\b/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const railSet = new Set(rails.map((r) => String(r).toLowerCase()))
+  const drift = enumerated.filter((e) => !railSet.has(e.toLowerCase()))
+  if (drift.length > 0 || enumerated.length !== rails.length) {
+    fail(
+      check,
+      `docs/payments-profile.md rail enumeration does not match the detection corpus manifest rails array`,
+      { enumerated, rails, drift },
+    )
+    mismatchCount += 1
+  }
+
+  // Scan hub docs for count-word claims that disagree.
+  const targets = ['CLAUDE.md', 'README.md', 'ARCHITECTURE.md', 'docs/payments-profile.md']
+  const numberWordPattern = NUMBER_WORDS.slice(1, 16).join('|')
+  const re = new RegExp(
+    `\\b(${numberWordPattern})\\s+(?:payment protocols|agent commerce protocols|protocols)\\b`,
+    'gi',
+  )
+  for (const t of targets) {
+    const matches = findLineMatches(t, re)
+    for (const m of matches) {
+      const found = m.match[1].toLowerCase()
+      if (found !== expectedWord) {
+        fail(
+          check,
+          `${t}:${m.lineNo} says "${m.match[0]}", expected "${expectedWord}" (detection corpus manifest ground truth)`,
+          { file: t, line: m.lineNo, found, expected: expectedWord, snippet: m.line.trim().slice(0, 200) },
+        )
+        mismatchCount += 1
+      }
+    }
+  }
+  if (mismatchCount === 0) {
+    ok(check, `${actualCount} payment protocols, profile enumeration and hub docs agree`)
+  }
+}
+
+// ─── Check: evidence profile count consistency ─────────────────────────────
+//
+// Ground truth: the evidence-envelope corpus manifest's
+// atrib_profile_registry array. Every registered name must have a
+// docs/evidence-profiles/<name>.md document and vice versa, and the
+// CLAUDE.md "<word> atrib-maintained evidence-envelope profiles" claim
+// must match the count.
+
+function checkEvidenceProfileCount() {
+  const check = 'evidence-profile-count'
+  let registry
+  try {
+    registry = JSON.parse(read('spec/conformance/evidence-envelope/manifest.json')).atrib_profile_registry
+  } catch (e) {
+    fail(check, `cannot read evidence-envelope manifest: ${e.message}`)
+    return
+  }
+  if (!Array.isArray(registry) || registry.length === 0) {
+    fail(check, 'evidence-envelope manifest atrib_profile_registry missing or empty')
+    return
+  }
+  let files
+  try {
+    files = readdirSync(join(ROOT, 'docs/evidence-profiles')).filter((f) => f.endsWith('.md'))
+  } catch (e) {
+    fail(check, `cannot list docs/evidence-profiles: ${e.message}`)
+    return
+  }
+  let mismatchCount = 0
+  const missingDocs = registry.filter((name) => !files.includes(`${name}.md`))
+  const unregisteredDocs = files.filter((f) => !registry.includes(f.replace(/\.md$/, '')))
+  if (missingDocs.length > 0 || unregisteredDocs.length > 0) {
+    fail(
+      check,
+      'docs/evidence-profiles/*.md and the envelope manifest atrib_profile_registry disagree',
+      { missingDocs, unregisteredDocs },
+    )
+    mismatchCount += 1
+  }
+  const actualCount = registry.length
+  const expectedWord = NUMBER_WORDS[actualCount]
+  const claude = read('CLAUDE.md')
+  const m = claude.match(/\b(\w+) atrib-maintained evidence-envelope profiles\b/)
+  if (!m) {
+    fail(check, 'CLAUDE.md "<word> atrib-maintained evidence-envelope profiles" claim not found')
+    mismatchCount += 1
+  } else if (m[1].toLowerCase() !== expectedWord) {
+    fail(
+      check,
+      `CLAUDE.md claims "${m[1]} atrib-maintained evidence-envelope profiles" but the registry lists ${actualCount}`,
+      { claimed: m[1], actualCount, registry },
+    )
+    mismatchCount += 1
+  }
+  if (mismatchCount === 0) {
+    ok(check, `${actualCount} evidence profiles: registry, profile docs, and CLAUDE.md agree`)
+  }
+}
+
+// ─── Check: DOC-SYNC-TRIGGERS row count ────────────────────────────────────
+//
+// Ground truth: the data rows of the DOC-SYNC-TRIGGERS.md triggers table.
+// CLAUDE.md's quick-reference paragraph claims "(N rows)"; the two must
+// agree so the hub-doc claim can never drift again.
+
+function checkDocSyncTriggersRowCount() {
+  const check = 'doc-sync-triggers-row-count'
+  const triggers = read('DOC-SYNC-TRIGGERS.md')
+  let inTable = false
+  let rows = 0
+  for (const line of lines(triggers)) {
+    if (line.startsWith('| Event')) {
+      inTable = true
+      continue
+    }
+    if (!inTable) continue
+    if (/^\|\s*-/.test(line)) continue // separator row
+    if (line.startsWith('|')) rows += 1
+    else if (rows > 0) break
+  }
+  if (rows === 0) {
+    fail(check, 'DOC-SYNC-TRIGGERS.md triggers table not found')
+    return
+  }
+  const claude = read('CLAUDE.md')
+  const m = claude.match(/DOC-SYNC-TRIGGERS\.md\) \((\d+) rows\b/)
+  if (!m) {
+    fail(check, 'CLAUDE.md "(N rows)" claim for DOC-SYNC-TRIGGERS.md not found')
+    return
+  }
+  const claimed = Number(m[1])
+  if (claimed !== rows) {
+    fail(
+      check,
+      `CLAUDE.md claims DOC-SYNC-TRIGGERS.md has ${claimed} rows, table has ${rows} data rows`,
+      { claimed, rows },
+    )
+    return
+  }
+  ok(check, `DOC-SYNC-TRIGGERS.md has ${rows} rows, CLAUDE.md agrees`)
+}
+
 // ─── helpers ───────────────────────────────────────────────────────────────
 
 function capitalize(word) {
@@ -1102,7 +1257,9 @@ const checks = [
   checkPublishedPackageCount,
   checkConformanceCorpusConsistency,
   checkDaemonToolSurfaceCount,
-  checkDocSyncTriggerRowCount,
+  checkPaymentProtocolCount,
+  checkEvidenceProfileCount,
+  checkDocSyncTriggersRowCount,
   checkPublicBoundaryWording,
   checkPrivateWordlist,
   checkInlineLinks,

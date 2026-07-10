@@ -44,6 +44,20 @@
  *                       profile level, and the private-body sanitization
  *                       posture (hash and role-term facts public, packet
  *                       body withheld).
+ *   7. payments-detection/
+ *                       The tenth atrib-maintained profile (P048): rail
+ *                       detection facts on a transaction record. JCS hash
+ *                       rule for detection material, hash-mismatch
+ *                       rejection, the degradation family (no payments
+ *                       profile loaded: profile_unrecognized at tier
+ *                       'declared' with record verdicts unchanged), and a
+ *                       D052 duplicate-signer re-pin across the split.
+ *   8. payments-settlement/
+ *                       The eleventh atrib-maintained profile (P048): a
+ *                       settlement recommendation document attached as
+ *                       evidence by hash. JCS hash rule, tampered-document
+ *                       rejection, and the hash-only public posture for
+ *                       withheld documents.
  *
  * Seeds and timestamps are hardcoded so successive regenerations produce
  * byte-identical files. Re-run when:
@@ -62,6 +76,8 @@ import {
   getPublicKey,
   base64urlEncode,
   signRecord,
+  signTransactionRecord,
+  signTransactionAttestation,
   type AtribRecord,
 } from '@atrib/mcp'
 import { sha256 } from '@noble/hashes/sha2.js'
@@ -149,6 +165,8 @@ const ATRIB_PROFILE_REGISTRY = [
   'counterparty-attestation',
   'delegation-certificate',
   'continuation-packet',
+  'payments-detection',
+  'payments-settlement',
 ] as const
 
 /**
@@ -1208,6 +1226,274 @@ async function main(): Promise<void> {
     },
   )
 
+  // ═════════════════ family: payments-detection/ ══════════════════════
+  // The tenth atrib-maintained profile (P048): rail detection facts for a
+  // transaction record. Hook re-verification semantics are profile-internal
+  // and live in spec/conformance/payments-profile/detection/; this family
+  // pins the envelope-level contract only. See
+  // docs/evidence-profiles/payments-detection.md and
+  // docs/payments-profile.md §12.
+
+  const DETECTION_MATERIAL = {
+    kind: 'task',
+    artifacts: [
+      {
+        parts: [
+          {
+            kind: 'data',
+            data: {
+              'ap2.CheckoutReceipt': {
+                status: 'Success',
+                iss: 'example-verifier.dev',
+                iat: 1772020800,
+                reference: 'closed-checkout-mandate-hash',
+                order_id: 'order_fixture_1',
+              },
+            },
+          },
+        ],
+      },
+    ],
+  }
+  const detectionHash = jcsSha256(DETECTION_MATERIAL)
+
+  const COUNTERPARTY_SEED = new Uint8Array(32).fill(0x62)
+  const counterpartyKey = base64urlEncode(await getPublicKey(COUNTERPARTY_SEED))
+
+  const paymentsTxUnsigned = {
+    spec_version: 'atrib/1.0' as const,
+    content_id: jcsSha256({
+      protocol: 'AP2',
+      version: 1,
+      source: 'checkout_receipt',
+      fields: {
+        iss: 'example-verifier.dev',
+        reference: 'closed-checkout-mandate-hash',
+        order_id: 'order_fixture_1',
+      },
+    }),
+    creator_key: aliceKey,
+    chain_root: aliceGenesisChainRoot,
+    event_type: 'https://atrib.dev/v1/types/transaction',
+    context_id: ALICE_CONTEXT,
+    timestamp: REFERENCE_TIME_MS + 3000,
+    signature: '',
+  }
+  const paymentsTxAgentOnly = await signTransactionRecord(
+    paymentsTxUnsigned as AtribRecord,
+    ALICE_SEED,
+  )
+  const counterpartyEntry = await signTransactionAttestation(paymentsTxAgentOnly, COUNTERPARTY_SEED)
+  const paymentsTxRecord = {
+    ...paymentsTxAgentOnly,
+    signers: [...(paymentsTxAgentOnly as { signers: unknown[] }).signers, counterpartyEntry],
+  }
+
+  const detectionEnvelope: EvidenceEnvelope = {
+    envelope: 1,
+    profile: `${ATRIB_PROFILE_BASE}payments-detection`,
+    profile_version: '1.0.0',
+    tier: 'declared',
+    payload: {
+      hash: detectionHash,
+      media_type: 'application/json',
+      ref: { kind: 'mirror' },
+    },
+    facts: {
+      protocol: 'AP2',
+      hook: 'checkout_receipt',
+      receipt_identity_source: 'checkout_receipt',
+    },
+    result: { valid: true, constraints: [], errors: [], warnings: [] },
+  }
+  emitCase(
+    'payments-detection',
+    'detection-envelope-valid',
+    'A producer-declared detection envelope on a cross-attested transaction record: the payload is the detection material (application/json, JCS hash rule), facts carry the rail, the matched hook, and the D095 receipt identity source, and the record carries two distinct verified signer keys per D052 / core 1.7.6. The profile is the tenth atrib-maintained registry entry per P048. MUST accept.',
+    {
+      envelope: detectionEnvelope as unknown as Record<string, unknown>,
+      payload_material: DETECTION_MATERIAL,
+      transaction_record: paymentsTxRecord as unknown as Record<string, unknown>,
+      signer_seeds_hex: { agent: hex(ALICE_SEED), counterparty: hex(COUNTERPARTY_SEED) },
+      atrib_profile_registry: [...ATRIB_PROFILE_REGISTRY],
+    },
+    {
+      accept: true,
+      registered: true,
+      atrib_maintained: true,
+      payload_hash_matches_material: true,
+      distinct_verified_signers: 2,
+      cross_attestation_missing: false,
+    },
+  )
+
+  const detectionMismatchEnvelope: EvidenceEnvelope = {
+    ...detectionEnvelope,
+    payload: {
+      hash: jcsSha256({ ...DETECTION_MATERIAL, tampered: true }),
+      media_type: 'application/json',
+      ref: { kind: 'mirror' },
+    },
+  }
+  emitCase(
+    'payments-detection',
+    'detection-payload-hash-mismatch',
+    'A shape-valid detection envelope whose payload.hash does not match the detection material. Consumers MUST treat the mismatch as profile-verification failure on the re-verified instance (result.valid: false) while the envelope stays shape-valid and the transaction record verdicts stay untouched.',
+    {
+      envelope: detectionMismatchEnvelope as unknown as Record<string, unknown>,
+      payload_material: DETECTION_MATERIAL,
+    },
+    {
+      accept: false,
+      payload_hash_matches_material: false,
+      reject_reasons: ['payload_hash_mismatch'],
+    },
+  )
+
+  emitCase(
+    'payments-detection',
+    'unloaded-profile-degrades',
+    'The degradation family: the same record and envelope verified by a consumer with no payments profile loaded. The block reports profile_unrecognized: true with its tier capped at "declared" (the producer claim, nothing more), and the core verdicts are identical to a payments-aware run: signature checks pass, the distinct-verified-signer count is unchanged, and cross_attestation semantics are untouched. An unrecognized profile MUST NOT invalidate the record.',
+    {
+      envelope: detectionEnvelope as unknown as Record<string, unknown>,
+      transaction_record: paymentsTxRecord as unknown as Record<string, unknown>,
+      loaded_profiles: [],
+    },
+    {
+      profile_unrecognized: true,
+      tier_capped: 'declared',
+      record_invalidated: false,
+      distinct_verified_signers: 2,
+      cross_attestation_missing: false,
+    },
+  )
+
+  const duplicateSignerTx = {
+    ...paymentsTxAgentOnly,
+    signers: [
+      ...(paymentsTxAgentOnly as { signers: unknown[] }).signers,
+      ...(paymentsTxAgentOnly as { signers: unknown[] }).signers,
+    ],
+  }
+  emitCase(
+    'payments-detection',
+    'duplicate-signer-not-inflated',
+    'The D052 no-inflation rule re-pinned across the profile split: a transaction record whose signers array carries the same agent entry twice. Both entries verify individually, but duplicate signer entries from the same creator_key MUST NOT inflate the verified signer count, so the record reports one distinct verified signer and cross_attestation_missing: true. The attached detection envelope verifies independently and does not substitute for a counterparty signature.',
+    {
+      envelope: detectionEnvelope as unknown as Record<string, unknown>,
+      payload_material: DETECTION_MATERIAL,
+      transaction_record: duplicateSignerTx as unknown as Record<string, unknown>,
+      signer_seeds_hex: { agent: hex(ALICE_SEED) },
+    },
+    {
+      accept: true,
+      payload_hash_matches_material: true,
+      distinct_verified_signers: 1,
+      cross_attestation_missing: true,
+    },
+  )
+
+  // ═════════════════ family: payments-settlement/ ═════════════════════
+  // The eleventh atrib-maintained profile (P048): a settlement
+  // recommendation document attached as evidence by hash. Recommendation
+  // signature and recalculation semantics are profile-internal (payments
+  // profile §9-§10, spec/conformance/4.6/); this family pins the
+  // envelope-level contract only. See
+  // docs/evidence-profiles/payments-settlement.md.
+
+  const RECOMMENDATION_MATERIAL = {
+    spec_version: 'atrib/1.0',
+    document_type: 'settlement_recommendation',
+    context_id: ALICE_CONTEXT,
+    transaction_id: rawSha256('payments-settlement-transaction-fixture'),
+    policy_record_id: 'default',
+    graph_checkpoint: 'log.atrib.dev/v1',
+    graph_tree_size: 4821937,
+    calculated_at: REFERENCE_TIME_MS + 4000,
+    calculated_by: 'local',
+    distribution: { [aliceKey]: 1.0 },
+    maximum_total_share: null,
+    warnings: [],
+  }
+  const recommendationHash = jcsSha256(RECOMMENDATION_MATERIAL)
+
+  const settlementEnvelope: EvidenceEnvelope = {
+    envelope: 1,
+    profile: `${ATRIB_PROFILE_BASE}payments-settlement`,
+    profile_version: '1.0.0',
+    tier: 'attested',
+    payload: {
+      hash: recommendationHash,
+      media_type: 'application/json',
+      ref: { kind: 'mirror' },
+    },
+    facts: {
+      context_id: ALICE_CONTEXT,
+      calculated_by: 'local',
+      policy_record_id: 'default',
+      graph_tree_size: 4821937,
+    },
+    result: { valid: true, constraints: [], errors: [], warnings: [] },
+  }
+  emitCase(
+    'payments-settlement',
+    'recommendation-envelope-valid',
+    'A settlement recommendation document attached as evidence: the payload is the recommendation (application/json, JCS hash rule), facts carry the session, calculator identity, policy record id, and pinned graph tree size. The profile is the eleventh atrib-maintained registry entry per P048. MUST accept; recalculation and document-signature checks are profile-internal and are pinned by the payments-profile corpora, not here.',
+    {
+      envelope: settlementEnvelope as unknown as Record<string, unknown>,
+      payload_material: RECOMMENDATION_MATERIAL,
+      atrib_profile_registry: [...ATRIB_PROFILE_REGISTRY],
+    },
+    {
+      accept: true,
+      registered: true,
+      atrib_maintained: true,
+      payload_hash_matches_material: true,
+    },
+  )
+
+  const tamperedRecommendation = {
+    ...RECOMMENDATION_MATERIAL,
+    distribution: { [aliceKey]: 0.5, [counterpartyKey]: 0.5 },
+  }
+  emitCase(
+    'payments-settlement',
+    'tampered-recommendation-rejected',
+    'A shape-valid settlement envelope presented with a recommendation whose distribution was altered after the hash was committed. The recomputed JCS hash does not match payload.hash; consumers MUST treat this as profile-verification failure while the envelope stays shape-valid and no record validity changes.',
+    {
+      envelope: settlementEnvelope as unknown as Record<string, unknown>,
+      payload_material: tamperedRecommendation,
+    },
+    {
+      accept: false,
+      payload_hash_matches_material: false,
+      reject_reasons: ['payload_hash_mismatch'],
+    },
+  )
+
+  const withheldSettlementEnvelope: EvidenceEnvelope = {
+    ...settlementEnvelope,
+    tier: 'declared',
+    payload: {
+      hash: recommendationHash,
+      media_type: 'application/json',
+      ref: { kind: 'withheld' },
+    },
+  }
+  emitCase(
+    'payments-settlement',
+    'withheld-recommendation-declared',
+    'The public-projection posture: settlement recommendations carry creator keys and share fractions, so public surfaces MAY carry the hash plus sanitized facts only, with the document body withheld. MUST accept; the body is not retrievable from the envelope and a later verified-tier claim requires retrieving it.',
+    {
+      envelope: withheldSettlementEnvelope as unknown as Record<string, unknown>,
+    },
+    {
+      accept: true,
+      body_retrievable: false,
+      public_facts: ['calculated_by', 'context_id', 'graph_tree_size', 'policy_record_id'],
+    },
+  )
+
   // ═══════════════════════════ Manifest ═══════════════════════════════
 
   const manifest = {
@@ -1221,10 +1507,19 @@ async function main(): Promise<void> {
     atrib_profile_registry: [...ATRIB_PROFILE_REGISTRY],
     frozen_legacy_protocols: Object.keys(LEGACY_PROTOCOL_TO_PROFILE),
     legacy_protocol_to_profile: LEGACY_PROTOCOL_TO_PROFILE,
-    families: ['shape', 'registry', 'unknown-profile', 'legacy-mapping', 'tier', 'continuation-packet'],
+    families: [
+      'shape',
+      'registry',
+      'unknown-profile',
+      'legacy-mapping',
+      'tier',
+      'continuation-packet',
+      'payments-detection',
+      'payments-settlement',
+    ],
     cases: manifestCases,
     keys: { alice_pubkey: aliceKey },
-    note: 'The six families collectively pin the §5.5.7 contract: schema validity with the closed tier and ref.kind enums (shape/), the HTTPS type-URI registration rule with full-URI profile identity (registry/), unknown-profile preservation (unknown-profile/), the frozen five-row legacy mapping with sixth-string rejection (legacy-mapping/), instance-scoped tier semantics where evidence never flips verifyRecord().valid (tier/), and the D142 continuation-packet profile registration (continuation-packet/).',
+    note: 'The eight families collectively pin the §5.5.7 contract: schema validity with the closed tier and ref.kind enums (shape/), the HTTPS type-URI registration rule with full-URI profile identity (registry/), unknown-profile preservation (unknown-profile/), the frozen five-row legacy mapping with sixth-string rejection (legacy-mapping/), instance-scoped tier semantics where evidence never flips verifyRecord().valid (tier/), the D142 continuation-packet profile registration (continuation-packet/), and the P048 payments profile registrations with their degradation family and D052 duplicate-signer re-pin (payments-detection/, payments-settlement/).',
   }
 
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')

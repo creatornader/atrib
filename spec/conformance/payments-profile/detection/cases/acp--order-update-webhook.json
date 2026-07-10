@@ -1,0 +1,30 @@
+{
+  "name": "order-update-webhook",
+  "corpus": "payments-profile/detection",
+  "rail": "acp",
+  "profile_section": "2.1",
+  "description": "ACP order_update webhook event (post-creation state change). Detected as ACP.",
+  "input": {
+    "tool_name": "webhook_handler",
+    "response": {
+      "type": "order_update",
+      "data": {
+        "type": "order",
+        "checkout_session_id": "checkout_session_123",
+        "permalink_url": "https://www.testshop.com/orders/checkout_session_123",
+        "status": "shipped",
+        "refunds": [
+          {
+            "type": "original_payment",
+            "amount": 100
+          }
+        ]
+      }
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "ACP",
+    "checkout_url": "https://www.testshop.com/orders/checkout_session_123"
+  }
+}

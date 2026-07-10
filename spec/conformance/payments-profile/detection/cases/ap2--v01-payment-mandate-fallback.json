@@ -1,0 +1,36 @@
+{
+  "name": "v01-payment-mandate-fallback",
+  "corpus": "payments-profile/detection",
+  "rail": "ap2",
+  "profile_section": "2.5",
+  "description": "AP2 v0.1 compatibility fallback: an A2A Message DataPart whose data carries ap2.mandates.PaymentMandate. Implementations MAY keep this fallback; the reference implementation does.",
+  "input": {
+    "tool_name": "agent_payment",
+    "response": {
+      "messageId": "b5951b1a-8d5b-4ad3-a06f-92bf74e76589",
+      "contextId": "sample-payment-context",
+      "role": "user",
+      "parts": [
+        {
+          "kind": "data",
+          "data": {
+            "ap2.mandates.PaymentMandate": {
+              "payment_details": {
+                "payment_request_id": "order_shoes_123",
+                "amount": {
+                  "currency": "USD",
+                  "value": 120
+                }
+              },
+              "creation_time": "2025-08-26T19:36:36.377022Z"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "AP2"
+  }
+}

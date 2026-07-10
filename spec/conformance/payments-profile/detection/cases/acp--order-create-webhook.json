@@ -1,0 +1,25 @@
+{
+  "name": "order-create-webhook",
+  "corpus": "payments-profile/detection",
+  "rail": "acp",
+  "profile_section": "2.1",
+  "description": "ACP server-to-merchant order_create webhook event (snake_case event type, not dot-notation). Detected as ACP with data.permalink_url as the checkout URL.",
+  "input": {
+    "tool_name": "webhook_handler",
+    "response": {
+      "type": "order_create",
+      "data": {
+        "type": "order",
+        "checkout_session_id": "checkout_session_123",
+        "permalink_url": "https://www.testshop.com/orders/checkout_session_123",
+        "status": "created",
+        "refunds": []
+      }
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "ACP",
+    "checkout_url": "https://www.testshop.com/orders/checkout_session_123"
+  }
+}

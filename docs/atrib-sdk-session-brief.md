@@ -156,7 +156,7 @@ above where they conflict:
    its `verification` parameter loads `@atrib/verify` as an optional peer
    dependency (lazy, typed unavailable-result when absent per [§5.8](../atrib-spec.md#58-degradation-contract)); mirror
    that pattern.
-7. **Payments boundary ([P048](../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)):** payment detection must be an injectable
+7. **Payments boundary ([D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)):** payment detection must be an injectable
    detector set; a core-only SDK never classifies transactions and never
    blocks. Do not hard-wire the six protocol detectors into SDK core.
 8. **Extension receipts ([D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133)):** behind an opt-in flag, the SDK client should
