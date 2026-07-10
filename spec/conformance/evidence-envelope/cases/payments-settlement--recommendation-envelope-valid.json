@@ -1,0 +1,68 @@
+{
+  "name": "recommendation-envelope-valid",
+  "spec_section": "5.5.7",
+  "family": "payments-settlement",
+  "description": "A settlement recommendation document attached as evidence: the payload is the recommendation (application/json, JCS hash rule), facts carry the session, calculator identity, policy record id, and pinned graph tree size. The profile is the eleventh atrib-maintained registry entry per P048. MUST accept; recalculation and document-signature checks are profile-internal and are pinned by the payments-profile corpora, not here.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/payments-settlement",
+      "profile_version": "1.0.0",
+      "tier": "attested",
+      "payload": {
+        "hash": "sha256:e4fec9415fc2f30f3af8c63b296cdc4479143714298fa89f75a25e03c78a9f44",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "mirror"
+        }
+      },
+      "facts": {
+        "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "calculated_by": "local",
+        "policy_record_id": "default",
+        "graph_tree_size": 4821937
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "payload_material": {
+      "spec_version": "atrib/1.0",
+      "document_type": "settlement_recommendation",
+      "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "transaction_id": "sha256:893e2b349bdd2d888682aa150ba9471c3ae8d060c6014231636fbb0acc4f0083",
+      "policy_record_id": "default",
+      "graph_checkpoint": "log.atrib.dev/v1",
+      "graph_tree_size": 4821937,
+      "calculated_at": 1782864004000,
+      "calculated_by": "local",
+      "distribution": {
+        "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo": 1
+      },
+      "maximum_total_share": null,
+      "warnings": []
+    },
+    "atrib_profile_registry": [
+      "oauth2",
+      "mcp-oauth",
+      "aauth",
+      "x401",
+      "ap2-vi",
+      "human-approval",
+      "counterparty-attestation",
+      "delegation-certificate",
+      "continuation-packet",
+      "payments-detection",
+      "payments-settlement"
+    ]
+  },
+  "expected": {
+    "accept": true,
+    "registered": true,
+    "atrib_maintained": true,
+    "payload_hash_matches_material": true
+  }
+}

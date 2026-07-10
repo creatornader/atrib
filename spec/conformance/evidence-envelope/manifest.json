@@ -26,7 +26,9 @@
     "human-approval",
     "counterparty-attestation",
     "delegation-certificate",
-    "continuation-packet"
+    "continuation-packet",
+    "payments-detection",
+    "payments-settlement"
   ],
   "frozen_legacy_protocols": [
     "oauth2",
@@ -48,7 +50,9 @@
     "unknown-profile",
     "legacy-mapping",
     "tier",
-    "continuation-packet"
+    "continuation-packet",
+    "payments-detection",
+    "payments-settlement"
   ],
   "cases": [
     {
@@ -200,10 +204,45 @@
       "file": "cases/continuation-packet--signed-baton-record.json",
       "name": "signed-baton-record",
       "family": "continuation-packet"
+    },
+    {
+      "file": "cases/payments-detection--detection-envelope-valid.json",
+      "name": "detection-envelope-valid",
+      "family": "payments-detection"
+    },
+    {
+      "file": "cases/payments-detection--detection-payload-hash-mismatch.json",
+      "name": "detection-payload-hash-mismatch",
+      "family": "payments-detection"
+    },
+    {
+      "file": "cases/payments-detection--unloaded-profile-degrades.json",
+      "name": "unloaded-profile-degrades",
+      "family": "payments-detection"
+    },
+    {
+      "file": "cases/payments-detection--duplicate-signer-not-inflated.json",
+      "name": "duplicate-signer-not-inflated",
+      "family": "payments-detection"
+    },
+    {
+      "file": "cases/payments-settlement--recommendation-envelope-valid.json",
+      "name": "recommendation-envelope-valid",
+      "family": "payments-settlement"
+    },
+    {
+      "file": "cases/payments-settlement--tampered-recommendation-rejected.json",
+      "name": "tampered-recommendation-rejected",
+      "family": "payments-settlement"
+    },
+    {
+      "file": "cases/payments-settlement--withheld-recommendation-declared.json",
+      "name": "withheld-recommendation-declared",
+      "family": "payments-settlement"
     }
   ],
   "keys": {
     "alice_pubkey": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo"
   },
-  "note": "The six families collectively pin the §5.5.7 contract: schema validity with the closed tier and ref.kind enums (shape/), the HTTPS type-URI registration rule with full-URI profile identity (registry/), unknown-profile preservation (unknown-profile/), the frozen five-row legacy mapping with sixth-string rejection (legacy-mapping/), instance-scoped tier semantics where evidence never flips verifyRecord().valid (tier/), and the D142 continuation-packet profile registration (continuation-packet/)."
+  "note": "The eight families collectively pin the §5.5.7 contract: schema validity with the closed tier and ref.kind enums (shape/), the HTTPS type-URI registration rule with full-URI profile identity (registry/), unknown-profile preservation (unknown-profile/), the frozen five-row legacy mapping with sixth-string rejection (legacy-mapping/), instance-scoped tier semantics where evidence never flips verifyRecord().valid (tier/), the D142 continuation-packet profile registration (continuation-packet/), and the P048 payments profile registrations with their degradation family and D052 duplicate-signer re-pin (payments-detection/, payments-settlement/)."
 }

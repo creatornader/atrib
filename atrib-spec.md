@@ -14,7 +14,7 @@ This specification defines the atrib protocol for verifiable agent actions. When
 - [§1 Attribution Record Format](#1-attribution-record-format) (incl. [§1.9](#19-key-rotation-and-revocation) Key Rotation and Revocation)
 - [§2 Merkle Log Protocol](#2-merkle-log-protocol)
 - [§3 Graph Query Interface](#3-graph-query-interface)
-- [§4 Attribution Policy Format](#4-attribution-policy-format)
+- [§4 Attribution Policy Format](#4-attribution-policy-format) (policy layer relocated to the [payments profile](docs/payments-profile.md); position statement and stable anchors remain)
 - [§5 SDK Specification](#5-sdk-specification)
 - [§6 Key Directory](#6-key-directory)
 - [§7 Harness Integration Patterns](#7-harness-integration-patterns) (informative)
@@ -149,7 +149,7 @@ This is the support/RCA form of repair: a future agent can trace a bad hypothesi
 
 ### V. Settlement, attribution, and the post-advertising web
 
-The substrate produces a useful side effect: when commerce closes a chain (an agent purchases something, a tool is invoked in service of a transaction), the same signed record set is what a settlement document is computed from. The [§4.6](#46-the-calculation-algorithm) algorithm runs deterministically over the graph and produces a value distribution any merchant or auditor can recompute. This is the attribution-economy use case, and it is genuinely real, but it is one consequence of the substrate, not the reason for it.
+The substrate produces a useful side effect: when commerce closes a chain (an agent purchases something, a tool is invoked in service of a transaction), the same signed record set is what a settlement document is computed from. The [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) algorithm runs deterministically over the graph and produces a value distribution any merchant or auditor can recompute. This is the attribution-economy use case, and it is genuinely real, but it is one consequence of the substrate, not the reason for it.
 
 The deeper claim about advertising follows from this. We do not claim that advertising will disappear. We claim that the structural necessity of advertising as the primary funding model for the internet rests on a single foundation: the absence of native provenance infrastructure. When that foundation erodes, the model built on it becomes optional rather than inevitable.
 
@@ -198,12 +198,12 @@ Contents
     - [1.5.4.1 Negotiated Extension Carriage: dev.atrib/attribution](#1541-negotiated-extension-carriage-devatribattribution)
   - [1.5.5 Cross-trace session continuity](#155-cross-trace-session-continuity)
 - [1.6 Unsigned Hops and Gap Nodes](#16-unsigned-hops-and-gap-nodes)
-- [1.7 Transaction Event Hooks](#17-transaction-event-hooks)
-  - [1.7.1 ACP](#171-acp)
-  - [1.7.2 UCP](#172-ucp)
+- [1.7 Transaction Event Hooks](#17-transaction-event-hooks) (per-rail hooks moved to the [payments profile](docs/payments-profile.md#2-transaction-detection-hooks))
+  - [1.7.1 ACP](#171-acp-agentic-commerce-protocol)
+  - [1.7.2 UCP](#172-ucp-universal-commerce-protocol)
   - [1.7.3 x402](#173-x402)
-  - [1.7.4 MPP](#174-mpp)
-  - [1.7.5 AP2 / a2a-x402](#175-ap2--a2a-x402)
+  - [1.7.4 MPP](#174-mpp-machine-payments-protocol)
+  - [1.7.5 AP2 / a2a-x402](#175-ap2-and-a2a-x402)
 - [1.8 Scope Boundaries](#18-scope-boundaries)
 - [Interoperability Roadmap](#interoperability-roadmap)
 
@@ -216,9 +216,9 @@ The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RE
 This specification defines requirements for four conformance targets:
 
 - **MCP server middleware**: satisfies all MUST requirements in [§1.2](#12-the-attribution-record)-[§1.5](#15-context-propagation), [§2.3](#23-log-entry-format), [§2.6](#26-submission-api-write-interface), and [§5.3](#53-atribmcp-mcp-server-middleware).
-- **Agent middleware**: satisfies all MUST requirements in [§1.5](#15-context-propagation), [§1.7](#17-transaction-event-hooks), [§4.5](#45-session-negotiation), and [§5.4](#54-atribagent-agent-middleware).
+- **Agent middleware**: satisfies all MUST requirements in [§1.5](#15-context-propagation), [§1.7](#17-transaction-event-hooks), [payments profile §7](docs/payments-profile.md#7-session-negotiation), and [§5.4](#54-atribagent-agent-middleware).
 - **Log operator**: satisfies all MUST requirements in [§2](#2-merkle-log-protocol).
-- **Verification library**: satisfies all MUST requirements in [§4.6](#46-the-calculation-algorithm), [§4.7](#47-settlement-recommendation-document), and [§5.5](#55-atribverify-merchant-verification-library).
+- **Verification library**: satisfies all MUST requirements in [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm), [payments profile §9](docs/payments-profile.md#9-settlement-recommendation-document), and [§5.5](#55-atribverify-merchant-verification-library).
 
 A graph query service, when implemented, must satisfy all MUST requirements in [§3](#3-graph-query-interface). A witness, when implemented, must satisfy all MUST requirements in [§2.9](#29-witnessing-and-cosignatures).
 
@@ -229,7 +229,7 @@ All normative requirements in this section are prefixed with their requirement l
 This specification uses two role terms with distinct meanings:
 
 - **Validator** (log-side admission): the log operator's submission pipeline that decides whether to accept an incoming record into the log. Validators apply [§2.6.1](#261-submit-entry) checks (record format, signature, chain integrity, scope constraints like the genesis-record-only rule for `provenance_token` per [§1.2.6](#126-provenance_token)). A validator's output is binary: admit or reject.
-- **Verifier** (consumer-side audit): a downstream consumer that reads records and assesses trust. Verifiers apply [§4.6](#46-the-calculation-algorithm) calculation, [§6.7](#67-capability-declarations) capability checks, [§2.11](#211-cross-log-replication) cross-log threshold and equivocation detection, and the [§8.7](#87-adversarial-threat-model) trust assessment stack. A verifier's output is rich (validity flags, signals, annotations); the verifier never modifies records.
+- **Verifier** (consumer-side audit): a downstream consumer that reads records and assesses trust. Verifiers apply [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) calculation, [§6.7](#67-capability-declarations) capability checks, [§2.11](#211-cross-log-replication) cross-log threshold and equivocation detection, and the [§8.7](#87-adversarial-threat-model) trust assessment stack. A verifier's output is rich (validity flags, signals, annotations); the verifier never modifies records.
 
 Spec text uses "validator" when describing log-admission behavior and "verifier" when describing consumer-side assessment. When both roles can perform the same check (e.g., signature verification), the spec specifies which role MUST perform it.
 
@@ -382,7 +382,7 @@ The precedence ordering reflects fidelity to the upstream signal: inbound tokens
 | URI                                           | Binary | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | --------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `https://atrib.dev/v1/types/tool_call`        | `0x01` | An agent invoked a tool with input(s) and received a result. Emitted by an MCP server when it returns a successful (non-error) response to a `tools/call` request. MUST NOT be emitted when `isError: true` in the MCP result. Default for any active operation against external state.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `https://atrib.dev/v1/types/transaction`      | `0x02` | A commerce-protocol-detected closing event (ACP / UCP / x402 / MPP / AP2 / a2a-x402; see [§1.7](#17-transaction-event-hooks)). Emitted when a transaction completes, either by the merchant's agent writing a record, or by the atrib SDK reading a transaction webhook. The `content_id` for a transaction record usually uses the merchant's checkout endpoint URL as the server_url and `"checkout"` as the tool_name. AP2 Path 2 MAY use the receipt identity ladder in [§1.7.5](#175-ap2-and-a2a-x402). [§4.6](#46-the-calculation-algorithm) calculation is normatively gated on this URI.                                                                                                                                                                                                 |
+| `https://atrib.dev/v1/types/transaction`      | `0x02` | A commerce-protocol-detected closing event (ACP / UCP / x402 / MPP / AP2 / a2a-x402; see [§1.7](#17-transaction-event-hooks)). Emitted when a transaction completes, either by the merchant's agent writing a record, or by the atrib SDK reading a transaction webhook. The `content_id` for a transaction record usually uses the merchant's checkout endpoint URL as the server_url and `"checkout"` as the tool_name. AP2 Path 2 MAY use the receipt identity ladder in [payments profile §2.5](docs/payments-profile.md#25-ap2-and-a2a-x402). The [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) calculation is normatively gated on this URI.                                                                                                                                                                                                 |
 | `https://atrib.dev/v1/types/observation`      | `0x03` | A standalone perception or noting, with no required referent on a prior record. Two production shapes: (a) a passive perception captured by an ambient watcher or input source (the original framing in [§1.2.4.1](#1241-canonical-examples) example C below); (b) an agent self-emitted noting of an environmental fact, hypothesis, or in-the-moment discovery that does not point at a specific prior record. Distinguished from `tool_call` by the absence of agent-chosen action against external state. Distinguished from `annotation` and `revision` by the absence of a referent: observation has no `annotates` and no `revises` field. The agent or watcher is recording a first-class noting that future-self or downstream consumers can read back, weight, or anchor against.      |
 | `https://atrib.dev/v1/types/directory_anchor` | `0x04` | A commitment by a directory operator to its current state, emitted per [§6.2.4](#624-anchor-cross-reference-into-the-tessera-log) after each directory operation. Carries `directory_root`, `epoch`, and `version` for downstream verifier consultation per [§6.3](#63-verifier-consultation-algorithm) step 7 (AKD anchor consistency check). Emitted by atrib-system directory services, not by agents. Promoted from extension namespace by [D056](DECISIONS.md#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04).                                                                                                                                                                                                                                                       |
 | `https://atrib.dev/v1/types/annotation`       | `0x05` | A commentary record pointing at any prior record via the `annotates` field ([§1.2.7](#127-annotates)). The recall-fidelity primitive: an agent reading back its own signed records uses annotations to weight, summarize, and topic-tag earlier records that future-self should not lose to flat scanning. Distinct from `observation`: annotation is a forward-pointing claim _about_ an earlier record; observation is a first-class signed event. Validators MUST require `annotates` on annotation records and MUST reject `annotates` on any other event_type. The graph layer derives ANNOTATES edges per [§3.2.4](#324-edge-derivation-rules) step 8. Promoted from extension namespace by [D058](DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05).          |
@@ -423,7 +423,7 @@ Caption: an MCP server returned a non-error result for a `tools/call` request. T
 }
 ```
 
-Caption: payment closed via x402 / ACP / UCP / MPP / AP2 / a2a-x402. The `signers` array carries cross-attestation per [§1.7.6](#176-cross-attestation-requirement-for-transaction-records). [§4.6](#46-the-calculation-algorithm) calculation gates on this URI.
+Caption: payment closed via x402 / ACP / UCP / MPP / AP2 / a2a-x402. The `signers` array carries cross-attestation per [§1.7.6](#176-cross-attestation-requirement-for-transaction-records). The [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) calculation gates on this URI.
 
 **Example C: `observation` (passive watcher)**, ambient process noted environmental state.
 
@@ -685,7 +685,7 @@ A checkpoint signed now over an old chain proves the history existed and was tre
 
 **No new edge types; the nine-edge set of [§3.2.4](#324-edge-derivation-rules) is unchanged.** The Merkle root does not structurally reveal its member hashes; deriving per-leaf edges would require external leaf-list material, which violates the observable-structure rule ([§3.1](#31-design-principles-and-rationale)). The one field that IS observable structure, `checkpoint.prior_checkpoint`, deliberately stays verifier-side: checkpoint ordering is already coherent through `chain_root`, and producers wanting a declared graph relationship MAY additionally list the prior checkpoint hash in `informed_by`, reusing existing INFORMED_BY machinery (dangling-safe per [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), omission-by-default per [D113](DECISIONS.md#d113-unvalidated-informed_by-refs-are-omitted-by-default)).
 
-Node participation ([§3.2.1](#321-node-types)) is identical to `observation`: CHAIN_PRECEDES / SESSION_PRECEDES / SESSION_PARALLEL yes; CONVERGES_ON no; CROSS_SESSION no; INFORMED_BY and PROVENANCE_OF source/target yes; [§4.6](#46-the-calculation-algorithm) attribution **skipped**. This is load-bearing: a session's attribution distribution MUST be bit-identical whether or not its producer adopted checkpointing ([§4.1](#41-purpose-and-position-in-the-protocol) no-thumb rule), so checkpoint records never enter contributing-node sets. Graph endpoints continue to return no weighted or interpreted data ([§3.6](#36-implementation-notes)); ordering-consistency, equivocation, and freshness results are verifier facts, not graph payloads.
+Node participation ([§3.2.1](#321-node-types)) is identical to `observation`: CHAIN_PRECEDES / SESSION_PRECEDES / SESSION_PARALLEL yes; CONVERGES_ON no; CROSS_SESSION no; INFORMED_BY and PROVENANCE_OF source/target yes; [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) attribution **skipped**. This is load-bearing: a session's attribution distribution MUST be bit-identical whether or not its producer adopted checkpointing ([§4.1](#41-purpose-and-position-in-the-protocol) no-thumb rule), so checkpoint records never enter contributing-node sets. Graph endpoints continue to return no weighted or interpreted data ([§3.6](#36-implementation-notes)); ordering-consistency, equivocation, and freshness results are verifier facts, not graph payloads.
 
 ##### 1.2.10.5 Conformance
 
@@ -771,7 +771,7 @@ A checkpoint signed now over an old chain proves the history existed and was tre
 
 **No new edge types; the nine-edge set of [§3.2.4](#324-edge-derivation-rules) is unchanged.** The Merkle root does not structurally reveal its member hashes; deriving per-leaf edges would require external leaf-list material, which violates the observable-structure rule ([§3.1](#31-design-principles-and-rationale)). The one field that IS observable structure, `checkpoint.prior_checkpoint`, deliberately stays verifier-side: checkpoint ordering is already coherent through `chain_root`, and producers wanting a declared graph relationship MAY additionally list the prior checkpoint hash in `informed_by`, reusing existing INFORMED_BY machinery (dangling-safe per [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), omission-by-default per [D113](DECISIONS.md#d113-unvalidated-informed_by-refs-are-omitted-by-default)).
 
-Node participation ([§3.2.1](#321-node-types)) is identical to `observation`: CHAIN_PRECEDES / SESSION_PRECEDES / SESSION_PARALLEL yes; CONVERGES_ON no; CROSS_SESSION no; INFORMED_BY and PROVENANCE_OF source/target yes; [§4.6](#46-the-calculation-algorithm) attribution **skipped**. This is load-bearing: a session's attribution distribution MUST be bit-identical whether or not its producer adopted checkpointing ([§4.1](#41-purpose-and-position-in-the-protocol) no-thumb rule), so checkpoint records never enter contributing-node sets. Graph endpoints continue to return no weighted or interpreted data ([§3.6](#36-implementation-notes)); ordering-consistency, equivocation, and freshness results are verifier facts, not graph payloads.
+Node participation ([§3.2.1](#321-node-types)) is identical to `observation`: CHAIN_PRECEDES / SESSION_PRECEDES / SESSION_PARALLEL yes; CONVERGES_ON no; CROSS_SESSION no; INFORMED_BY and PROVENANCE_OF source/target yes; [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) attribution **skipped**. This is load-bearing: a session's attribution distribution MUST be bit-identical whether or not its producer adopted checkpointing ([§4.1](#41-purpose-and-position-in-the-protocol) no-thumb rule), so checkpoint records never enter contributing-node sets. Graph endpoints continue to return no weighted or interpreted data ([§3.6](#36-implementation-notes)); ordering-consistency, equivocation, and freshness results are verifier facts, not graph payloads.
 
 ##### 1.2.10.5 Conformance
 
@@ -1164,305 +1164,35 @@ A creator who has not signed their contribution has not asserted a claim. The ga
 
 ### 1.7 Transaction Event Hooks
 
-The attribution chain is complete when a transaction event closes the loop, connecting the tool calls that contributed to the commerce session to the actual moment of purchase. This section defines how atrib attaches to each supported commerce protocol.
+The transaction event closes the attribution loop: when tool calls converge on a purchase, a `transaction` record anchors the session's graph. This section retains the boundary pieces that stay core: the `transaction` event type itself ([§1.2.4](#124-event_type-values)) and the cross-attestation requirement ([§1.7.6](#176-cross-attestation-requirement-for-transaction-records)).
 
-In every case, the linking mechanism is the same: the `context_id` of the agent session must be embedded in the transaction metadata when the checkout is initiated, so that the transaction event webhook can be matched back to the attribution chain.
+The per-rail detection hooks, which define what byte pattern in a response constitutes a payment completion for ACP, UCP, x402, MPP, AP2, and a2a-x402, moved to the [atrib Payments Profile §2](docs/payments-profile.md#2-transaction-detection-hooks) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). The profile also carries the linking mechanism (embedding the `context_id` in transaction metadata at checkout initiation) and the SDK detection contract. Rail churn lands in the profile's version history, not this specification's.
 
 #### 1.7.1 ACP (Agentic Commerce Protocol)
 
-ACP is the open standard published at `github.com/agentic-commerce-protocol/agentic-commerce-protocol`. The transaction event hook is the success response from `POST /checkout_sessions/{id}/complete`. A successful completion is signaled by `status === "completed"` together with an embedded `order` object whose `id` is a string. The `order.permalink_url` (when present) is the canonical post-purchase URL atrib uses to derive the transaction record's `content_id`.
-
-Because ACP `POST /checkout_sessions/...` requests do not currently expose a free-form metadata field for arbitrary extension data, the `context_id` MUST travel via the same channels used for HTTP transports (per [§1.5.2](#152-http-transport-tracestate), [§1.5.3](#153-http-fallback-x-atrib-chain), and [§1.5.3.1](#1531-context-id-header-x-atrib-context)): the `X-atrib-Context` HTTP header on the outbound request, and `params._meta.atrib` for MCP-transport ACP integrations.
-
-```jsonc
-// POST /checkout_sessions/{id}/complete success response
-{
-  "id": "checkout_session_123",
-  "status": "completed", // detection signal
-  "currency": "usd",
-  "buyer": { "...": "..." },
-  "line_items": ["..."],
-  "totals": ["..."],
-  "order": {
-    // embedded order proves the completion
-    "id": "ord_abc123",
-    "checkout_session_id": "checkout_session_123",
-    "permalink_url": "https://example.com/orders/ord_abc123",
-  },
-}
-```
-
-The server-to-merchant order webhook events use snake_case event types, NOT dot-notation:
-
-```jsonc
-// order_create event (NOT "order.created" or "ORDER_CREATED")
-{
-  "type": "order_create",
-  "data": {
-    "type": "order",
-    "checkout_session_id": "checkout_session_123",
-    "permalink_url": "https://www.testshop.com/orders/checkout_session_123",
-    "status": "created",
-    "refunds": []
-  }
-}
-
-// order_update event (state changes after creation: shipped, refunded, etc.)
-{
-  "type": "order_update",
-  "data": {
-    "type": "order",
-    "checkout_session_id": "checkout_session_123",
-    "permalink_url": "https://www.testshop.com/orders/checkout_session_123",
-    "status": "shipped",
-    "refunds": [ { "type": "original_payment", "amount": 100 } ]
-  }
-}
-```
-
-Detection MUST match all three shapes (completion response, `order_create`, `order_update`).
+_Moved to the [atrib Payments Profile §2.1](docs/payments-profile.md#21-acp-agentic-commerce-protocol) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 1.7.2 UCP (Universal Commerce Protocol)
 
-UCP is the open standard published at `github.com/universal-commerce-protocol/ucp`. As of UCP version `2026-01-11`, the on-wire shape of a UCP checkout completion response is identical to ACP's, with one structural addition: a top-level `ucp` envelope carrying the protocol version and capability list. Detection MUST therefore use the presence of `ucp.version` to distinguish UCP from ACP when both produce a `status: "completed"` payload.
-
-```jsonc
-// POST /checkout-sessions/{id}/complete success response (UCP)
-{
-  "ucp": {
-    // distinguishes UCP from ACP
-    "version": "2026-01-11",
-    "capabilities": [{ "name": "dev.ucp.shopping.checkout", "version": "2026-01-11" }],
-  },
-  "id": "chk_123456789",
-  "status": "completed", // detection signal (same as ACP)
-  "currency": "USD",
-  "order": {
-    "id": "ord_99887766",
-    "permalink_url": "https://merchant.com/orders/ord_99887766",
-  },
-  "buyer": { "...": "..." },
-  "line_items": ["..."],
-  "totals": ["..."],
-}
-```
-
-UCP does not yet expose a documented free-form metadata field for arbitrary agent context. The `context_id` MUST travel via the `X-atrib-Context` HTTP header on UCP checkout requests, and via `params._meta.atrib` for any MCP-transport UCP integrations.
+_Moved to the [atrib Payments Profile §2.2](docs/payments-profile.md#22-ucp-universal-commerce-protocol) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 1.7.3 x402
 
-x402 is the Coinbase open payment protocol published at `github.com/coinbase/x402`. It uses HTTP 402 / 200 request-response cycles. The transaction event is the HTTP 200 response containing a **`PAYMENT-RESPONSE`** header (x402 v2), or the legacy **`X-PAYMENT-RESPONSE`** header (x402 v1, deprecated per RFC 6648 but still in deployment). Detection MUST accept both names case-insensitively.
-
-The header value is base64-encoded JSON containing a `SettlementResponse` object: `{ success, transaction, network, payer, requirements }`. atrib treats header presence as the on-wire detection signal; the body is not decoded for detection purposes (decoding is appropriate when extracting `transaction` or `payer` for content_id derivation in higher-fidelity downstream tooling).
-
-The agent MUST include the context_id as a custom header on the outbound payment request:
-
-```
-// Outbound x402 v2 payment request:
-GET /paid-resource HTTP/1.1
-PAYMENT-SIGNATURE: <base64 JSON>     // v2 (v1 used X-PAYMENT)
-X-atrib-Context: 4bf92f3577b34da6a3ce929d0e0e4736
-
-// 200 success response with the transaction signal:
-HTTP/1.1 200 OK
-PAYMENT-RESPONSE: <base64 JSON>      // v2 detection header
-Content-Type: application/json
-
-// The receiving server reads X-atrib-Context and includes it in the
-// transaction record it writes to the atrib log. If the server does
-// not have atrib installed, the context is present in the request
-// for future retrieval from proxy logs.
-```
+_Moved to the [atrib Payments Profile §2.3](docs/payments-profile.md#23-x402) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 1.7.4 MPP (Machine Payments Protocol)
 
-MPP is a separate protocol from x402, also built on HTTP 402, formally specified in IETF `draft-ryan-httpauth-payment-01` ("The 'Payment' HTTP Authentication Scheme") authored by engineers from Tempo Labs and Stripe and launched in March 2026. MPP uses the standard HTTP authentication scheme with `WWW-Authenticate: Payment` challenges and `Authorization: Payment` credentials.
-
-The transaction event is the HTTP 200 response containing a **`Payment-Receipt`** header (per draft [§5.3](#53-atribmcp-mcp-server-middleware)). The header value is base64url-nopad JSON with the required fields `{ status: "success", method, timestamp, reference }`. The draft specifies: _"Servers MUST NOT return a Payment-Receipt header on error responses,"_ so header presence is a reliable detection signal.
-
-**`PAYMENT-RESPONSE` (x402) and `Payment-Receipt` (MPP) are different headers for different protocols.** Earlier drafts of this specification incorrectly attributed `Payment-Receipt` to both protocols; this has been corrected after verification against the published x402 docs and the IETF MPP draft.
-
-The `context_id` MUST travel in the same `X-atrib-Context` custom header used for x402:
-
-```
-// MPP payment retry request (after fulfilling the WWW-Authenticate: Payment challenge):
-GET /paid-resource HTTP/1.1
-Authorization: Payment <credential>
-X-atrib-Context: 4bf92f3577b34da6a3ce929d0e0e4736
-
-// 200 success response with the MPP transaction signal:
-HTTP/1.1 200 OK
-Payment-Receipt: <base64url-nopad JSON>     // MPP detection header
-Cache-Control: private                      // required by draft §5.3
-Content-Type: application/json
-
-// For MCP transport (draft-payment-transport-mcp-00):
-// The context_id travels in params._meta as defined in §1.5.4
-// The MPP payment-completed message carries it in the task metadata.
-```
+_Moved to the [atrib Payments Profile §2.4](docs/payments-profile.md#24-mpp-machine-payments-protocol) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 1.7.5 AP2 and a2a-x402
 
-AP2 (Agentic Payment Protocol) is Google's open protocol at `github.com/google-agentic-commerce/AP2`, version v0.2. Current AP2 uses Checkout Mandates and Payment Mandates for authorization, then returns signed Checkout Receipts and Payment Receipts when a verifier accepts or rejects the mandate. The transaction event hook is the successful receipt, not the mandate itself.
-
-Detection MUST fire on either of these AP2 v0.2 success signals:
-
-1. A Payment Receipt with `status: "Success"` and the AP2 payment receipt fields (`iss`, `iat`, `reference`, `payment_id`, `psp_confirmation_id`, `network_confirmation_id`).
-2. A Checkout Receipt with `status: "Success"` and the AP2 checkout receipt fields (`iss`, `iat`, `reference`, `order_id`).
-
-When the signed receipt is returned as a compact JWT rather than a decoded object, implementations MAY detect the AP2 sample result envelope: `status: "success"` plus a `payment_receipt` or `checkout_receipt` compact JWT field. Detection does not need to decode the JWT. Verification and content extraction belong to a verifier-side evidence stage, not the detector.
-
-For Path 2 agent-side transaction records, AP2 implementations SHOULD derive `content_id` from a stable receipt identity when one is visible on the response. The derivation is `"sha256:" + hex(SHA-256(UTF-8(JCS(identity))))`, where `identity` is one of:
-
-1. decoded PaymentReceipt: `{ "protocol": "AP2", "version": 1, "source": "payment_receipt", "fields": { "iss", "reference", "payment_id", "psp_confirmation_id", "network_confirmation_id" } }`;
-2. compact payment receipt JWT: `{ "protocol": "AP2", "version": 1, "source": "payment_receipt_jwt", "fields": { "jwt_hash": "sha256:<compact-jwt-sha256>" } }`;
-3. decoded CheckoutReceipt: `{ "protocol": "AP2", "version": 1, "source": "checkout_receipt", "fields": { "iss", "reference", "order_id" } }`;
-4. compact checkout receipt JWT: `{ "protocol": "AP2", "version": 1, "source": "checkout_receipt_jwt", "fields": { "jwt_hash": "sha256:<compact-jwt-sha256>" } }`;
-5. AP2 v0.1 or legacy VC PaymentMandate fallback: `{ "protocol": "AP2", "version": 1, "source": "legacy_payment_mandate", "fields": { "mandate_hash": "sha256:<jcs-mandate-sha256>" } }`.
-
-PaymentReceipt forms take precedence over CheckoutReceipt forms when both are present. Decoded receipt fields take precedence over compact JWT fields. If no stable AP2 identity is present, Path 2 falls back to the generic AP2 rule in [§5.4.5](#545-transaction-detection): use the MCP server URL and `"checkout"`. See [D095](DECISIONS.md#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder).
-
-Implementations MUST NOT detect AP2 mandate-only payloads as transaction events. This includes closed mandate `vct` values such as `mandate.payment.1` and `mandate.checkout.1`, and open mandate values such as `mandate.payment.open.1` and `mandate.checkout.open.1`. Mandates authorize a future action. Receipts prove the verifier's result.
-
-Verifier-side AP2 / Verifiable Intent evidence checks SHOULD run off the middleware critical path. A verifier that receives AP2 and VI evidence SHOULD check:
-
-1. receipt success, compact receipt JWT signature when present, and `reference` binding to the closed mandate serialization or an explicit closed-mandate hash;
-2. VI L1 / L2 / L3 SD-JWT signatures, using trusted issuer keys for L1, the L1 `cnf.jwk` for L2, and delegated L2 agent keys for L3;
-3. `sd_hash` links across the delegation chain;
-4. SD-JWT disclosure digest links through `_sd` or `delegate_payload`;
-5. autonomous-mode consistency: the open checkout and open payment mandates bind the same `cnf.jwk`;
-6. final checkout/payment binding: `checkout_hash` matches `checkout_jwt`, and PaymentMandate `transaction_id` matches the checkout hash.
-
-Failure in this evidence stage MUST NOT undo or block the transaction detector. It is a verifier signal for settlement, audit, and dispute workflows. The reference TypeScript surfaces are `@atrib/verify` `verifyAp2ViEvidence()` for decoded evidence and `verifyAp2ViEvidenceAsync()` for compact signed receipt JWTs plus async SD-JWT / VC conformance; both include typed AP2 mandate constraint evaluation when open constraints are disclosed. `verifyRecord()` and `AtribVerifier.verify()` can also attach caller-supplied evidence as tiered `ap2_vi_evidence`. The opt-in AP2 live interop harness in `@atrib/integration` consumes AP2 reference-run artifacts through the same detector and verifier surfaces, not through a special AP2 runtime path. AP2 receipt JWT signatures MUST NOT be counted as [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) `signers[]` unless the AP2 participant also signs the atrib transaction record's cross-attestation canonical bytes. See [§5.5.4](#554-ap2--verifiable-intent-evidence-checks), [D089](DECISIONS.md#d089-ap2--verifiable-intent-evidence-checks-live-in-atribverify), [D090](DECISIONS.md#d090-ap2-receipt-jwt-verification-uses-jose-in-atribverify), [D091](DECISIONS.md#d091-ap2--vi-sd-jwt-conformance-uses-openwallet-sd-jwt-js), [D092](DECISIONS.md#d092-ap2--vi-mandate-constraints-are-typed-verifier-evidence), [D094](DECISIONS.md#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block), [D096](DECISIONS.md#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus), [D097](DECISIONS.md#d097-ap2-live-interop-uses-an-opt-in-reference-artifact-harness), [D098](DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation), and [D107](DECISIONS.md#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes).
-
-Implementations SHOULD embed the `context_id` in the agent protocol envelope where the host supports metadata. Until AP2 standardizes an atrib-specific metadata field, the `context_id` MUST also travel via `params._meta.atrib` per [§1.5.2](#152-http-transport-tracestate), [§1.5.3](#153-http-fallback-x-atrib-chain), and [§1.5.3.1](#1531-context-id-header-x-atrib-context).
-
-```jsonc
-// AP2 v0.2 PaymentReceipt artifact
-// Source: google-agentic-commerce/AP2 code/sdk/schemas/ap2/payment_receipt.json
-{
-  "kind": "task",
-  "artifacts": [
-    {
-      "parts": [
-        {
-          "kind": "data",
-          "data": {
-            "ap2.PaymentReceipt": {
-              "status": "Success", // detection signal
-              "iss": "example-pisp.com",
-              "iat": 1772020800,
-              "reference": "closed-payment-mandate-hash",
-              "payment_id": "pay_123",
-              "psp_confirmation_id": "psp_123",
-              "network_confirmation_id": "net_123"
-            }
-          }
-        }
-      ]
-    }
-  ]
-}
-
-// AP2 v0.2 sample result envelope with a signed receipt JWT
-{
-  "status": "success", // first detection signal
-  "order_id": "order_123",
-  "checkout_receipt": "<compact signed receipt JWT>" // second detection signal
-}
-```
-
-Older AP2 v0.1 deployments used an A2A (Agent2Agent) Message with a DataPart whose `data` object contains the key `ap2.mandates.PaymentMandate`. Implementations MAY keep this compatibility fallback. If they do, they MUST NOT detect `IntentMandate` or `CartMandate`.
-
-```jsonc
-// AP2 v0.1 compatibility fallback
-{
-  "messageId": "b5951b1a-8d5b-4ad3-a06f-92bf74e76589",
-  "contextId": "sample-payment-context",
-  "taskId": "sample-payment-task",
-  "role": "user",
-  "parts": [
-    {
-      "kind": "data",
-      "data": {
-        "ap2.mandates.PaymentMandate": {
-          // detection signal
-          "payment_details": {
-            "cart_mandate": "<user-signed hash>",
-            "payment_request_id": "order_shoes_123",
-            "merchant_agent_card": { "name": "MerchantAgent" },
-            "payment_method": { "supported_methods": "CARD", "data": { "token": "xyz789" } },
-            "amount": { "currency": "USD", "value": 120.0 },
-            "risk_info": { "device_imei": "abc123" },
-            "display_info": "<image bytes>",
-          },
-          "creation_time": "2025-08-26T19:36:36.377022Z",
-        },
-      },
-    },
-  ],
-}
-```
-
-**a2a-x402** (`github.com/google-agentic-commerce/a2a-x402`) is the AP2 extension for crypto payments via x402. When the merchant agent settles a payment on-chain it returns an A2A task whose `status.message.metadata` carries `x402.payment.status: "payment-completed"` and a `x402.payment.receipts` array with at least one entry where `success: true`. atrib reports this as `protocol: 'AP2'` because a2a-x402 is the AP2 crypto path; it is not a separate protocol.
-
-```jsonc
-// a2a-x402 payment-completed task message
-// Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
-{
-  "kind": "task",
-  "id": "task-123",
-  "status": {
-    "state": "working",
-    "message": {
-      "kind": "message",
-      "role": "agent",
-      "parts": [{ "kind": "text", "text": "Payment successful." }],
-      "metadata": {
-        "x402.payment.status": "payment-completed", // first detection signal
-        "x402.payment.receipts": [
-          {
-            "success": true, // second detection signal
-            "transaction": "0xabc123def456",
-            "network": "base",
-            "payer": "0xPAYER...",
-          },
-        ],
-      },
-    },
-    "artifacts": [],
-  },
-}
-```
-
-Detection MUST require BOTH the `payment-completed` status AND at least one receipt with `success: true`. A task that says "payment-completed" but contains only `success: false` receipts represents a failed settlement and is NOT a transaction event.
-
-For Path 2 `content_id`, an a2a-x402 success receipt MAY use the same [D095](DECISIONS.md#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder) AP2 identity envelope with `source: "a2a_x402_receipt"` and fields `{ transaction, network?, payer? }` when the receipt exposes a transaction id. If no transaction id is present, use the generic AP2 fallback in [§5.4.5](#545-transaction-detection).
-
-For backward compatibility with research forks of AP2 that may have implemented Payment Mandates as W3C Verifiable Credentials (matching the obsolete spec language), atrib's detector also accepts the legacy VC envelope shape:
-
-```jsonc
-// Legacy / non-canonical: VC-wrapped PaymentMandate (research forks only)
-{
-  "@context": ["https://www.w3.org/ns/credentials/v2"],
-  "type": ["VerifiableCredential", "PaymentMandateCredential"],   // v2 array form
-  "credentialSubject": { "io.atrib/context_id": "..." }
-}
-
-// Or v1 string form:
-{
-  "type": "VerifiableCredential",
-  "credentialSubject": { "type": "PaymentMandate" }
-}
-```
-
-Implementations MAY skip the v0.1 and legacy VC fallbacks if they target only AP2 v0.2 deployments.
+_Moved to the [atrib Payments Profile §2.5](docs/payments-profile.md#25-ap2-and-a2a-x402) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 1.7.6 Cross-attestation requirement for transaction records
 
 _This subsection is normative._
 
-Transaction records (`event_type = https://atrib.dev/v1/types/transaction`) are the highest-stakes record type in this specification. [§4.6](#46-the-calculation-algorithm) calculation is normatively gated on this URI; settlement decisions follow from the records' content. To prevent a single compromised key from fabricating arbitrary transactions, transaction records MUST carry signatures from at least two independent parties.
+Transaction records (`event_type = https://atrib.dev/v1/types/transaction`) are the highest-stakes record type in this specification. The [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) calculation is normatively gated on this URI; settlement decisions follow from the records' content. To prevent a single compromised key from fabricating arbitrary transactions, transaction records MUST carry signatures from at least two independent parties.
 
 **Required field on transaction records.** Transaction records MUST carry a `signers` field. Format:
 
@@ -1507,15 +1237,7 @@ The following topics are outside the scope of this specification. They are ackno
 
 **Key rotation.** Key rotation and revocation are normatively specified in [§1.9](#19-key-rotation-and-revocation). Creators rotate keys by submitting a `key_revocation` record with `revocation_reason: 'rotation'` and a `successor_key`; verifiers update accordingly. The directory ([§6](#6-key-directory)) tracks the active key per identity claim.
 
-**Policy versioning.** Policies are identified by URL with no formal versioning. The session policy record ([§4.5.3](#453-session-policy-record)) captures agreed terms at session time, which partially mitigates this. Policy evaluation uses the current active policy.
-
-**Dispute mechanism.** There is no protocol-defined dispute process. Creators contest recommendations by contacting merchants directly, using the session policy record as evidence.
-
-**Settlement webhook format.** Settlement recommendations are produced on demand only. This specification does not define a push-based delivery mechanism.
-
-**Multi-transaction sessions.** The calculation algorithm ([§4.6](#46-the-calculation-algorithm)) assumes one transaction node per session. Multiple transactions in a single session require separate calculation runs.
-
-**Agent-published policies.** Agents consume policies but do not publish their own, though the policy format can express learned weights. This specification does not define agent-side policy discovery or publication.
+**Policy and settlement boundaries.** Policy versioning, the dispute mechanism, the settlement webhook format, multi-transaction sessions, and agent-published policies are payments-layer topics. Their scope statements moved to the [atrib Payments Profile §13](docs/payments-profile.md#13-scope-boundaries).
 
 #### Related Standards Work
 
@@ -1568,7 +1290,7 @@ A revocation signed by any other key is invalid and MUST be rejected by verifier
 
 When a verifier sees a valid `key_revocation` record at log index `R` retiring `revoked_key`:
 
-- Records with `creator_key === revoked_key` AND `log_index >= R` are flagged `verification_state: 'revoked_after_revocation'`. They MUST NOT contribute to attribution calculations ([§4.6](#46-the-calculation-algorithm)).
+- Records with `creator_key === revoked_key` AND `log_index >= R` are flagged `verification_state: 'revoked_after_revocation'`. They MUST NOT contribute to attribution calculations ([payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm)).
 - Records with `creator_key === revoked_key` AND `log_index < R` retain their original `verification_state`. Past attribution remains valid.
 - When `successor_key` is present, the directory's active key for the identity claim MUST be updated to `successor_key`. Records signed by the successor inherit the identity claim that was active at the moment of rotation.
 
@@ -1605,7 +1327,7 @@ _This section is normative; issuing a certificate is OPTIONAL. Per [D140](DECISI
 
 A **delegation certificate** is a standalone JCS-canonical object in which a *principal* Ed25519 key certifies an ephemeral *run* key with an explicit scope, expiry, and optional session binding. Records signed by the run key occupy the existing `creator_key` slot in both the record ([§1.2.1](#121-field-definitions)) and the 90-byte log entry ([§2.3.1](#231-entry-serialization)) — no format change anywhere. The certificate is verifiable offline from the certificate alone; there is no deterministic linkage from a parent secret and no PKI ([§1.4.1](#141-key-format) posture).
 
-A record signed directly by a principal is **delegation depth 0**: no certificate exists or is needed, and verification is byte-for-byte the [§1.4.3](#143-verification-procedure) procedure. Every record ever signed is therefore already valid under this model, by definition. A record signed by a certified run key is **delegation depth 1**. Delegation never alters signature validity, graph derivation ([§3.2.4](#324-edge-derivation-rules)), or the [§4.6](#46-the-calculation-algorithm) calculation; it is attribution resolution and trust signal, exactly like [D051](DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) capability checks.
+A record signed directly by a principal is **delegation depth 0**: no certificate exists or is needed, and verification is byte-for-byte the [§1.4.3](#143-verification-procedure) procedure. Every record ever signed is therefore already valid under this model, by definition. A record signed by a certified run key is **delegation depth 1**. Delegation never alters signature validity, graph derivation ([§3.2.4](#324-edge-derivation-rules)), or the [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) calculation; it is attribution resolution and trust signal, exactly like [D051](DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) capability checks.
 
 #### 1.11.1 Certificate Format
 
@@ -1729,7 +1451,7 @@ Implementations MUST pass all vectors in [`spec/conformance/delegation-certifica
 
 #### 1.11.12 What This DOES NOT Cover
 
-Delegation depth > 1 (chains are rejected with `delegation_depth_exceeded`; future decision record). Principal-level aggregation in the [§4.6](#46-the-calculation-algorithm) calculation (unchanged; a future policy wanting it must take the certificate set as an *explicit input*, preserving the pure-function invariant, behind its own decision record). Graph changes of any kind (no new edge types; nodes remain keyed by `creator_key`; aggregation-by-principal is verifier output and product presentation). Truthfulness: a certificate certifies that a principal authorized a run key, not that the run key's records are honest — the [§8.7](#87-adversarial-threat-model) limit applies in full.
+Delegation depth > 1 (chains are rejected with `delegation_depth_exceeded`; future decision record). Principal-level aggregation in the [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) calculation (unchanged; a future policy wanting it must take the certificate set as an *explicit input*, preserving the pure-function invariant, behind its own decision record). Graph changes of any kind (no new edge types; nodes remain keyed by `creator_key`; aggregation-by-principal is verifier output and product presentation). Truthfulness: a certificate certifies that a principal authorized a run key, not that the run key's records are honest — the [§8.7](#87-adversarial-threat-model) limit applies in full.
 
 ---
 
@@ -2502,7 +2224,7 @@ An **anchor** is a service that:
 
 - (a) accepts a 32-byte SHA-256 hash,
 - (b) later yields a proof that the hash existed no later than an attested time, and
-- (c) whose proof is verifiable offline by a pure function `(proof, record_hash, trust_material) → { valid, anchored_at_ms | null, pending }` — no network calls, no wall clock, no randomness, the same determinism discipline as [§4.6](#46-the-calculation-algorithm). Two verifier runs on an identical bundle and trust configuration MUST produce identical output.
+- (c) whose proof is verifiable offline by a pure function `(proof, record_hash, trust_material) → { valid, anchored_at_ms | null, pending }` — no network calls, no wall clock, no randomness, the same determinism discipline as [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm). Two verifier runs on an identical bundle and trust configuration MUST produce identical output.
 
 atrib log-nodes are the richest conforming anchor: they provide inclusion, in-log ordering, and the read surfaces of [§2.5](#25-tile-api-read-interface). Sigstore Rekor, RFC 3161 timestamping authorities, and OpenTimestamps conform with existence-by-time semantics only. That weaker guarantee is sufficient for the plurality property: a verifier holding one atrib-log proof plus one independent existence-by-time proof no longer terminates its trust claim at a single operator.
 
@@ -2817,7 +2539,7 @@ The archive layer enables a three-tier verifiability story for any committed rec
 | **2: Body retrieval**            | The actual canonical bytes the hash commits to   | Body from producer mirror ([§5.9](#59-local-mirror-conventions)) OR archive ([§2.12.3](#2123-retrieval-api)) | Producer-local body works for all postures; archive body requires producer to have submitted |
 | **3: Signature re-verification** | The body was signed by the claimed `creator_key` | Body (Tier 2) + Ed25519 verification ([§1.4](#14-signing-and-verification))                                  | Same as Tier 2                                                                               |
 
-A verifier presented with only Tier 1 can prove "a record existed"; Tiers 2 + 3 prove "this is the record." Tools that depend on full verification (e.g., the [§4.6](#46-the-calculation-algorithm) calculation algorithm) require all three tiers. Tools that only need existence proof (e.g., audit-log replay, anomaly detection over event-type byte distributions) can operate at Tier 1 alone.
+A verifier presented with only Tier 1 can prove "a record existed"; Tiers 2 + 3 prove "this is the record." Tools that depend on full verification (e.g., the [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) calculation algorithm) require all three tiers. Tools that only need existence proof (e.g., audit-log replay, anomaly detection over event-type byte distributions) can operate at Tier 1 alone.
 
 #### 2.12.8 Conformance
 
@@ -2938,13 +2660,13 @@ The atrib attribution graph is a directed property multigraph. Nodes represent e
 | ----------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | tool_call   | event_type = `https://atrib.dev/v1/types/tool_call`   | A creator's contribution to the session. Carries creator identity, tool identity, chain position, and timestamp. The primary subject of attribution.                                                                                                      |
 | transaction | event_type = `https://atrib.dev/v1/types/transaction` | The commerce event that closes the attribution loop. The creator_key is the merchant's key. A session without a transaction node is attributable but not yet economically closed.                                                                         |
-| observation | event_type = `https://atrib.dev/v1/types/observation` | A passive perception captured by the agent. Witness, not action. Participates in chain ordering but not in [§4.6](#46-the-calculation-algorithm) attribution calculation. See [D042](DECISIONS.md#d042-lift-observation-graph-participation-restriction). |
+| observation | event_type = `https://atrib.dev/v1/types/observation` | A passive perception captured by the agent. Witness, not action. Participates in chain ordering but not in [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) attribution calculation. See [D042](DECISIONS.md#d042-lift-observation-graph-participation-restriction). |
 | gap_node    | OTel span without a signed record                     | An unsigned hop. Present in the graph so that invisible contributions are visible. Carries no creator_key, chain_root, or signature. See [§3.2.5](#325-gap-nodes).                                                                                        |
-| extension   | event_type = any URI outside atrib's normative set    | A consumer-namespace record. event_type URI preserved verbatim. Participates in chain ordering ([D043](DECISIONS.md#d043-extension-uri-participation-in-graph-derivation)) but not in CONVERGES_ON or [§4.6](#46-the-calculation-algorithm) calculation.  |
+| extension   | event_type = any URI outside atrib's normative set    | A consumer-namespace record. event_type URI preserved verbatim. Participates in chain ordering ([D043](DECISIONS.md#d043-extension-uri-participation-in-graph-derivation)) but not in CONVERGES_ON or [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) calculation.  |
 
 **Per-event-type graph participation matrix:**
 
-| Node type   | CHAIN_PRECEDES | SESSION_PRECEDES | SESSION_PARALLEL | CONVERGES_ON | CROSS_SESSION | INFORMED_BY ([D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)) | PROVENANCE_OF ([D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring)) | [§4.6](#46-the-calculation-algorithm) attribution |
+| Node type   | CHAIN_PRECEDES | SESSION_PRECEDES | SESSION_PARALLEL | CONVERGES_ON | CROSS_SESSION | INFORMED_BY ([D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type)) | PROVENANCE_OF ([D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring)) | [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) attribution |
 | ----------- | -------------- | ---------------- | ---------------- | ------------ | ------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
 | tool_call   | ✅             | ✅               | ✅               | ✅           | ✅            | ✅ source/target                                                                                | ✅ source/target                                                                                    | ✅ contributing                                   |
 | transaction | ✅             | ✅               | ✅               | ✅ (target)  | ✅ (target)   | ✅ source/target                                                                                | ✅ source/target                                                                                    | ✅ receiver                                       |
@@ -2952,7 +2674,7 @@ The atrib attribution graph is a directed property multigraph. Nodes represent e
 | extension   | ✅             | ✅               | ✅               | ❌           | ❌            | ✅ source/target                                                                                | ✅ source/target                                                                                    | ❌ skipped                                        |
 | gap_node    | ❌             | ✅               | ✅               | ✅           | ❌            | ❌                                                                                              | ❌                                                                                                  | ✅ contributing                                   |
 
-Observations and extension records DO participate in temporal chain edges (CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL) so the graph spine is complete. They DO NOT participate in CONVERGES_ON (which is the structural prerequisite for [§4.6](#46-the-calculation-algorithm) attribution; observations are witnesses, not contributors; extension URIs are consumer-namespace and atrib does not bless their attribution claims by default). Promotion of an extension URI to atrib's normative contributing set requires [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)'s bar.
+Observations and extension records DO participate in temporal chain edges (CHAIN_PRECEDES, SESSION_PRECEDES, SESSION_PARALLEL) so the graph spine is complete. They DO NOT participate in CONVERGES_ON (which is the structural prerequisite for [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) attribution; observations are witnesses, not contributors; extension URIs are consumer-namespace and atrib does not bless their attribution claims by default). Promotion of an extension URI to atrib's normative contributing set requires [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)'s bar.
 
 #### 3.2.2 Interaction Patterns and Their Structural Signatures
 
@@ -3019,7 +2741,7 @@ For each pair (A, B) of nodes sharing a context_id where no CHAIN_PRECEDES edge 
 
 For each transaction node T: for each other node N sharing T's context_id (tool_call or gap_node), create CONVERGES_ON N → T.
 
-If a session contains multiple transaction nodes, each non-transaction node receives CONVERGES_ON edges to all of them. The calculation algorithm ([§4.6](#46-the-calculation-algorithm)) uses the first transaction node (by log_index) for modifier computations such as temporal_decay.
+If a session contains multiple transaction nodes, each non-transaction node receives CONVERGES_ON edges to all of them. The calculation algorithm ([payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm)) uses the first transaction node (by log_index) for modifier computations such as temporal_decay.
 
 **Step 5:** CROSS_SESSION edges\*\*
 
@@ -3365,652 +3087,134 @@ _This section is informative._
 
 ## §4 Attribution Policy Format
 
-_Machine-readable weights. Negotiation. Calculation algorithm._
-
-The machine-readable document format for expressing how graph structure maps to value distribution, negotiated between creators and merchants before a session begins, applied to the completed graph after a transaction closes.
+_Position of the policy layer. The policy format, negotiation, calculation algorithm, and settlement document live in the [atrib Payments Profile](docs/payments-profile.md)._
 
 Contents
 
 - [4.1 Purpose and Position in the Protocol](#41-purpose-and-position-in-the-protocol)
-- [4.2 Policy Document Format](#42-policy-document-format)
-  - [4.2.1 Top-level fields](#421-top-level-fields)
-  - [4.2.2 Edge weights](#422-edge-weights)
-  - [4.2.3 Modifiers](#423-modifiers)
-  - [4.2.4 Distribution method](#424-distribution-method)
-  - [4.2.5 Constraints](#425-constraints)
-- [4.3 The Default Policy](#43-the-default-policy)
-- [4.4 Publication and Discovery](#44-publication-and-discovery)
-- [4.5 Session Negotiation](#45-session-negotiation)
-  - [4.5.1 Negotiation protocol](#451-negotiation-protocol)
-  - [4.5.2 Conflict resolution](#452-conflict-resolution)
-  - [4.5.3 Session policy record](#453-session-policy-record)
-- [4.6 The Calculation Algorithm](#46-the-calculation-algorithm)
-  - [4.6.1 Inputs and preconditions](#461-inputs-and-preconditions)
-  - [4.6.2 Step 1: Identify contributing nodes](#462-step-1-identify-contributing-nodes)
-  - [4.6.3 Step 2: Compute raw scores](#463-step-2-compute-raw-scores)
-  - [4.6.4 Step 3: Apply constraints](#464-step-3-apply-constraints)
-  - [4.6.5 Step 4: Normalize to a distribution](#465-step-4-normalize-to-a-distribution)
-  - [4.6.6 Step 5: Aggregate by creator](#466-step-5-aggregate-by-creator)
-  - [4.6.7 Step 6: Apply creator floors](#467-step-6-apply-creator-floors)
-- [4.7 Settlement Recommendation Document](#47-settlement-recommendation-document)
-  - [4.7.1 Document format](#471-document-format)
-  - [4.7.2 Signing the recommendation](#472-signing-the-recommendation)
-  - [4.7.3 Independent verification](#473-independent-verification)
-- [4.8 Scope Boundaries](#48-scope-boundaries) _(see [§1.8](#18-scope-boundaries))_
+- [4.2](#42-policy-document-format)–[4.7](#47-settlement-recommendation-document): tombstoned anchors pointing at the [payments profile](docs/payments-profile.md)
+- [4.8 Scope Boundaries](#48-scope-boundaries)
 
 ### 4.1 Purpose and Position in the Protocol
 
 _This section is informative._
 
-The three preceding sections define what happened. This section defines how to evaluate what happened for the purpose of distributing value.
+The three preceding sections define what happened. The policy layer defines how to evaluate what happened for the purpose of distributing value. Per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core), that layer lives in the [atrib Payments Profile](docs/payments-profile.md), which versions independently of this specification. Rail and settlement churn lands in the profile's version history, not here.
 
-Policies are first-class protocol primitives, not configuration files or implementation details. They are machine-readable documents that agents can fetch, parse, apply, and reason about autonomously. The spec defines the policy schema; creators and merchants define their own policies within that schema. The protocol defines how policies are negotiated and how the calculation is performed; it does not define what any contribution is worth.
+The position of policy relative to the protocol is unchanged by the relocation:
 
-Two moments in the session lifecycle are relevant to this section. **Negotiation** happens at session initialization, before any tool calls are made, the agent reads available creator and merchant policies and establishes the agreed policy for the session ([§4.5](#45-session-negotiation)). **Calculation** happens after the transaction closes, and the agreed policy is applied to the completed graph to produce a settlement recommendation ([§4.6](#46-the-calculation-algorithm)). These are distinct operations on distinct inputs separated in time. The policy negotiated at session start is the policy applied at calculation time, regardless of whether policies have changed in between.
+- **Policies are first-class primitives of the payments layer, not configuration files.** They are machine-readable documents that agents fetch, parse, apply, and reason about autonomously. The profile defines the policy schema; creators and merchants define their own policies within that schema.
+- **The protocol has no thumb on the scale.** atrib does not decide what contributions are worth. The profile provides the schema and the deterministic calculation; the parties provide the values.
+- **The calculation is a pure function.** Graph + policy = distribution. No network calls, no clock beyond record timestamps, no randomness. Any party with the same inputs must get the same result ([payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm)).
+- **Fact/policy separation is absolute.** The [§3](#3-graph-query-interface) graph is a pure fact layer and never returns weighted data ([§3.6](#36-implementation-notes)). The policy layer consumes the graph; it never feeds it. This separation is what made the relocation a documentation move with no signed-byte, record, or service change.
+
+Two moments in the session lifecycle remain relevant. **Negotiation** happens at session initialization, before any tool calls are made ([payments profile §7](docs/payments-profile.md#7-session-negotiation)). **Calculation** happens after the transaction closes ([payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm)). The policy negotiated at session start is the policy applied at calculation time, regardless of whether policies have changed in between.
+
+Core retains the payments-accommodation surface: the `transaction` event type ([§1.2.4](#124-event_type-values)), the cross-attestation requirement ([§1.7.6](#176-cross-attestation-requirement-for-transaction-records)), and the universal evidence envelope ([§5.5.7](#557-universal-evidence-envelope)). Everything rail- or settlement-specific attaches through those three elements.
 
 ---
 
 ### 4.2 Policy Document Format
 
-A policy document is a JSON object. It MUST be UTF-8 encoded and served with `Content-Type: application/json`. It MUST be valid JSON conforming to the schema defined in this section. Unknown fields MUST be ignored by implementations to allow forward compatibility.
+_Moved to the [atrib Payments Profile §4](docs/payments-profile.md#4-policy-document-format) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.2.1 Top-Level Fields
 
-```
-{
-  "spec_version":  "atrib/1.0",          // REQUIRED. Must be "atrib/1.0" for policies conforming to this specification.
-  "policy_id":     "https://example.com/.well-known/atrib-policy.json",
-                                           // REQUIRED. Stable URL where this policy is published.
-                                           // Used as the canonical identifier in session policy records.
-  "role":          "creator",            // REQUIRED. "creator", "merchant", or "default".
-  "edge_weights":  { /* [§4.2.2](#422-edge-weights) */ },     // REQUIRED.
-  "modifiers":     [ /* [§4.2.3](#423-modifiers) */ ],     // OPTIONAL. Default: no modifiers.
-  "distribution":  "proportional",      // REQUIRED. See [§4.2.4](#424-distribution-method).
-  "constraints":   { /* [§4.2.5](#425-constraints) */ }      // OPTIONAL. Default: no constraints.
-}
-```
+_Moved to the [atrib Payments Profile §4.1](docs/payments-profile.md#41-top-level-fields) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.2.2 Edge Weights
 
-Edge weights define the base score assigned to a node based on its structural relationship to the transaction. The key is an edge type from [§3.2.3](#323-edge-types). The value is a non-negative decimal. Nodes may have multiple edges; if a node has edges of multiple types, its base score is the _maximum_ of the applicable edge weights, not their sum.
-
-```
-"edge_weights": {
-  "CHAIN_PRECEDES":   1.0,  // node is structurally upstream in the attribution chain
-  "SESSION_PRECEDES":  0.5,  // node preceded the transaction temporally, no chain link
-  "SESSION_PARALLEL":  0.3,  // node co-occurred with no temporal ordering
-  "CONVERGES_ON":      0.3,  // all non-transaction nodes have this; lowest-weight baseline
-  "CROSS_SESSION":     0.7,  // node contributed from a different session via linking token
-  "unsigned":          0.0   // gap nodes: no creator signature, no weight by default
-}
-
-// The numeric values above are illustrative only; they show the schema structure.
-// They are not defaults. Only the default policy ([§4.3](#43-the-default-policy)) specifies default weights.
-// A creator or merchant policy must specify its own values for any edge types it cares about.
-// All edge type keys are optional. Missing keys default to 0.0.
-// "unsigned" is a pseudo-key for gap nodes; it is not an edge type but follows the same schema.
-// Weights may be any non-negative decimal. They are relative, not absolute.
-// a policy with all weights doubled is equivalent to one with all weights halved.
-```
-
-**Note (Why maximum, not sum):** A node in a CHAIN_PRECEDES relationship with a transaction also has a CONVERGES_ON edge (since every non-transaction node in a session gets CONVERGES_ON). If weights were summed, every node would receive a CONVERGES_ON bonus on top of its primary edge weight, inflating scores for all structural contributors equally and making the CONVERGES_ON weight meaningless as a differentiator. Taking the maximum means the primary relationship dominates, which is the intuitive behavior: a node that is structurally upstream is scored as a chain contributor, not as a chain contributor plus a co-occurrence contributor.
+_Moved to the [atrib Payments Profile §4.2](docs/payments-profile.md#42-edge-weights) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.2.3 Modifiers
 
-Modifiers adjust a node's raw score after the base edge weight is assigned. They are applied multiplicatively, in order. A final score of zero means the node receives no distribution share. All modifiers are optional; a policy with no modifiers array applies only the base edge weights.
-
-```
-"modifiers": [
-  {
-    "type": "temporal_decay",
-    "half_life_ms": 30000
-    // Multiplies the base score by: 2^(-(delta_ms / half_life_ms))
-    // where delta_ms = transaction.timestamp - node.timestamp.
-    // A node 30 seconds before the transaction is halved.
-    // A node 60 seconds before is quartered.
-    // Nodes after the transaction timestamp are scored as 0.
-  },
-  {
-    "type": "chain_depth_penalty",
-    "penalty_per_level": 0.1
-    // Multiplies the base score by: max(0, 1.0 - (chain_depth * penalty_per_level))
-    // where chain_depth is the number of CHAIN_PRECEDES hops from this node to the
-    // nearest transaction node (via any path). Genesis nodes have chain_depth = 0.
-    // A penalty_per_level of 0.1 reduces a depth-3 node to 70% of base.
-    // Nodes deeper than 1/penalty_per_level receive score 0.
-  },
-  {
-    "type": "call_count_boost",
-    "multiplier_per_call": 0.2,
-    "cap": 2.0
-    // For nodes whose content_id appears more than once in the session,
-    // multiplies score by: min(cap, 1.0 + (call_count - 1) * multiplier_per_call)
-    // A tool called 3 times gets: min(2.0, 1.0 + 2 * 0.2) = 1.4×
-    // Useful for policies that weight repeated use as stronger contribution.
-  }
-]
-
-// Only these three modifier types are defined by this specification.
-// Unknown modifier types MUST be ignored with a warning in the session policy record.
-```
+_Moved to the [atrib Payments Profile §4.3](docs/payments-profile.md#43-modifiers) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.2.4 Distribution Method
 
-The distribution method determines how final scores are converted into share fractions. One method is defined by this specification:
-
-| Value        | Behavior                                                                                                                                                                                                                                                                                       |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| proportional | Each contributor's share is their final score divided by the sum of all final scores. If all final scores are zero (which can occur if all nodes are gap nodes under a policy that weights unsigned nodes at 0.0) the calculation produces an empty distribution with a warning, not an error. |
-
-Additional distribution methods (`equal`, `last_touch`, `first_touch`) are reserved identifiers. Their semantics are not defined by this specification. Implementations MUST reject policies with unknown distribution values rather than silently falling back to proportional.
+_Moved to the [atrib Payments Profile §4.4](docs/payments-profile.md#44-distribution-method) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.2.5 Constraints
 
-Constraints impose floors and caps on individual contributor shares. They MUST be applied after raw scores are computed and an initial proportional normalization is performed, but before the final normalization ([§4.6.5](#465-step-4-normalize-to-a-distribution)) and before aggregation by creator ([§4.6.6](#466-step-5-aggregate-by-creator)). The sequence is: raw scores → initial proportional pass → apply constraints → final renormalization → aggregate by creator → apply creator floors ([§4.6.7](#467-step-6-apply-creator-floors)) → final renormalization.
-
-Two constraint fields involve floors but serve different purposes and are applied differently. **`minimum_share`** is a merchant-level constraint: when present in the merchant policy, it sets a floor for _every_ contributing node, so no contributor receives less than this fraction. It prevents any one creator from being allocated a trivially small share that is economically meaningless. **`minimum_own_share`** is a creator-level constraint: when present in a creator policy, it expresses the minimum fraction of the total distribution that creator requires for their own nodes. It is the creator's asking price. These two fields are distinct, exist on different policy roles, and are applied at different points in negotiation ([§4.5.2](#452-conflict-resolution)) and calculation ([§4.6.4](#464-step-3-apply-constraints)).
-
-```
-"constraints": {
-  "minimum_share": 0.05,
-  // MERCHANT POLICY ONLY. Floor applied to every contributing node after normalization.
-  // Any node with a share below this threshold is boosted to this value;
-  // other shares are scaled down proportionally.
-
-  "minimum_own_share": 0.15,
-  // CREATOR POLICY ONLY. Minimum fraction of total distribution the creator
-  // requires for their own nodes, summed across all their tool calls in the session.
-  // Read during negotiation ([§4.5.2](#452-conflict-resolution)), not applied by the calculation algorithm directly.
-  // the session policy record captures the agreed floor per creator,
-  // and the calculation algorithm applies it as a per-creator post-aggregation adjustment.
-
-  "maximum_share": 0.80,
-  // Any contributing node whose post-normalization share exceeds this
-  // threshold is capped at this value. Excess is redistributed
-  // proportionally to other nodes.
-
-  "maximum_total_share": 0.15
-  // MERCHANT POLICY ONLY. The maximum fraction of transaction value distributed
-  // to ALL contributors combined. The remainder stays with the merchant.
-  // This constraint does not affect the distribution fractions (which sum to 1.0);
-  // it is applied at payout time to the currency amount.
-  // If both merchant and creator policies specify maximum_total_share,
-  // the merchant's value takes precedence ([§4.5.2](#452-conflict-resolution)).
-}
-```
-
-**Note (Share fractions vs. currency amounts):** Policy documents, settlement recommendations, and the calculation algorithm work entirely in share fractions: dimensionless rationals summing to 1.0. The conversion from share fraction to currency amount requires a transaction value, which the policy document does not contain and should not contain. Currency conversion is performed by the merchant at payout time using the transaction value from the commerce protocol's transaction event. This separation keeps the policy independent of transaction size and currency.
-
----
+_Moved to the [atrib Payments Profile §4.5](docs/payments-profile.md#45-constraints) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ### 4.3 The Default Policy
 
-The default policy applies when: no merchant policy is present, policies cannot be negotiated to a compatible agreement ([§4.5.2](#452-conflict-resolution)), or the agreed policy fails schema validation at calculation time. It is designed to be conservative, uncontroversial, and auditable, correct enough to be used as a baseline without anyone having designed it for the specific situation.
-
-When the default policy applies because no merchant policy is present, creator `minimum_own_share` floors from individual creator policies are still honored. The default policy has no `maximum_total_share` constraint, so there is no cap to conflict with. Creator floors are applied as post-aggregation adjustments per [§4.6](#46-the-calculation-algorithm) even when the default governs the edge weights and distribution method. This ensures creators who have published policies are not disadvantaged by a merchant who has not.
-
-```
-{
-  "spec_version": "atrib/1.0",
-  "policy_id":    "https://atrib.dev/policies/default/v1",
-  "role":         "default",
-  "edge_weights": {
-    "CHAIN_PRECEDES":  1.0,
-    "SESSION_PRECEDES": 1.0,
-    "SESSION_PARALLEL": 1.0,
-    "CONVERGES_ON":     1.0,
-    "CROSS_SESSION":    1.0,
-    "unsigned":         0.0
-  },
-  "modifiers":    [],
-  "distribution": "proportional",
-  "constraints":  {}
-}
-```
-
-The default policy assigns equal weight to every signed node regardless of its edge type, and zero weight to unsigned gap nodes.
-
-**Note (Why unsigned nodes receive zero weight):** Gap nodes represent unsigned hops with no verifiable claim to honor (see section 1.6). A merchant may choose to honor unsigned contributions through a custom policy, but doing so is an explicit opt-in, not the default.
-
----
+_Moved to the [atrib Payments Profile §5](docs/payments-profile.md#5-the-default-policy) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ### 4.4 Publication and Discovery
 
-Policy documents are published at a well-known URL and fetched by agents at session initialization. This follows the same convention used by UCP merchant profiles (published at `/.well-known/ucp`) and MCP server cards (at `/.well-known/mcp.json`).
-
-**Creator policies**
-
-An MCP server operator SHOULD publish their attribution policy at:
-
-```
-GET https:///.well-known/atrib-policy.json
-```
-
-The `mcp-server-host` is the hostname of the server URL used to compute `content_id` values ([§1.2.2](#122-content_id-derivation)). An agent that knows the server URL of a tool it is about to call can derive the policy URL directly without any additional lookup.
-
-**Merchant policies**
-
-A merchant SHOULD publish their attribution policy at:
-
-```
-GET https:///.well-known/atrib-policy.json
-```
-
-The `merchant-domain` is the domain used as the server URL for the merchant's transaction records ([§1.7](#17-transaction-event-hooks), the checkout endpoint URL). An agent preparing to initiate a checkout can derive the merchant's policy URL from the checkout endpoint.
-
-**Response requirements**
-
-Servers hosting policy documents MUST respond with HTTP 200 and a valid policy document, or HTTP 404 if no policy is published. A 404 response means the default policy applies. Any other response code SHOULD be treated as a transient error; agents SHOULD retry once with a 2-second delay and fall back to the default policy if the retry also fails.
-
-Policy documents SHOULD be cacheable for at least 5 minutes. Agents SHOULD not re-fetch policies within a running session even if the cache TTL expires. The policy in effect at session initialization is the policy that applies to that session.
-
----
+_Moved to the [atrib Payments Profile §6](docs/payments-profile.md#6-publication-and-discovery) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ### 4.5 Session Negotiation
 
-Negotiation is the process by which an agent, at session initialization, reads available policies from the tools it expects to call and from the merchant it expects to transact with, and establishes the agreed policy that will govern the eventual calculation.
+_Moved to the [atrib Payments Profile §7](docs/payments-profile.md#7-session-negotiation) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.5.1 Negotiation Protocol
 
-At session initialization, the agent SHOULD:
-
-Step 1: Fetch the merchant's policy from `/.well-known/atrib-policy.json`. If the merchant has no policy, use the default.
-
-Step 2: For each MCP server the agent intends to call, fetch the creator's policy from `/.well-known/atrib-policy.json`. If a creator has no policy (404 response, schema validation failure, or fetch error after retry) they have no stated preferences: no `minimum_own_share` floor, no edge weight preferences. Their contribution is calculated entirely under the merchant's policy (or the default if the merchant has none). This is not a conflict; it is the absence of a stated position.
-
-Step 3: Check compatibility between the merchant's policy and each creator's policy ([§4.5.2](#452-conflict-resolution)). If all are compatible, the merchant's policy governs the calculation; creator policies constrain what the merchant's policy can do but do not override its structure.
-
-Step 4: Record the agreed policy in the session policy record ([§4.5.3](#453-session-policy-record)) and embed the policy record ID in the session's W3C Baggage as `atrib-policy=`.
-
-**Note (Negotiation is best-effort):** Session initialization may be fast-path and policy fetching may add latency. Agents MAY skip negotiation and proceed under the default policy when latency constraints require it. When this happens, the session policy record MUST indicate that the default policy was used due to a negotiation skip. Merchants and creators who require specific policies SHOULD ensure their policies are available with low latency and published at stable, well-cached URLs.
+_Moved to the [atrib Payments Profile §7.1](docs/payments-profile.md#71-negotiation-protocol) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.5.2 Conflict Resolution
 
-Two policies conflict when they specify requirements that cannot be simultaneously satisfied. The resolution rules are:
-
-**Rule 1:** Merchant controls total payout cap.\*\* If the merchant policy specifies `maximum_total_share`, that value governs regardless of what creator policies specify. A creator policy that implicitly requires a higher total payout (because its `minimum_own_share` constraint, combined with the number of contributing creators, would sum to more than the merchant's cap) is in conflict with the merchant policy.
-
-**Rule 2:** Creator minimum floors are honored within the cap.\*\* If a creator policy specifies `minimum_own_share`, that floor MUST be honored in the calculation for that creator's contribution, subject to the merchant's `maximum_total_share`. If honoring all creator minimums would require exceeding the merchant's total cap, creator minimums are scaled down proportionally until the total cap is satisfied.
-
-**Rule 3:** Irreconcilable conflicts fall back to default.\*\* If after applying Rules 1 and 2 the policies remain irreconcilable (for example, a single creator's minimum floor alone exceeds the merchant's total cap) the session proceeds under the default policy for all contributors, and the conflict is logged in the session policy record with the incompatible policies identified.
-
-**Rule 4:** Edge weight disagreements do not block negotiation.\*\* When creator and merchant policies specify different edge weights, the merchant's edge weights govern the calculation. The creator's edge weights are advisory (they express what the creator believes their contributions are worth) but the merchant's policy is the operative one. A creator who is unwilling to operate under a merchant's policy can choose not to serve that merchant's agents; this is a business decision, not a protocol enforcement point.
-
-**Rule 5:** Creator floors summing to more than 1.0 are irreconcilable.\*\* If the sum of all `minimum_own_share` values across all creators in the session exceeds 1.0, the floors are mathematically impossible to honor simultaneously regardless of any merchant cap. This condition MUST be detected at negotiation time and triggers Rule 3 (fall back to default). The session policy record MUST identify all creators whose floors contributed to the irreconcilable sum.
-
-**Rule 6:** Contradictory constraints within a single policy are invalid.\*\* A policy document where `minimum_share` is greater than `maximum_share`, or where any constraint value is negative, MUST be rejected at parse time as if it were a 404 response. The agent MUST log a warning identifying the contradictory fields. A policy that is invalid for the purposes of negotiation is treated as absent; the creator or merchant has no stated policy.
-
-**Rule 7:** No agent SDK means no session policy record; calculation defaults.\*\* When no agent-side atrib SDK was present during the session, no session policy record exists. The merchant discovering the session post-transaction may still run the calculation using the default policy and the graph as constructed from log data. In this case, `calculated_by` in the settlement recommendation is set to `"local"`, the merchant signs with their own key, and `policy_record_id` is set to `"default"` to indicate the default policy was applied without a negotiated record.
+_Moved to the [atrib Payments Profile §7.2](docs/payments-profile.md#72-conflict-resolution) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.5.3 Session Policy Record
 
-The session policy record is a lightweight document created at negotiation time and stored by the agent. It records the policies that were considered and the resulting agreed policy, providing an audit trail that both creator and merchant can inspect after the fact.
-
-```
-{
-  "spec_version":    "atrib/1.0",
-  "record_id":       "sha256:",
-  // The record_id is computed as SHA-256(JCS(record_without_record_id)),
-  // where record_without_record_id is the session policy record with the
-  // record_id field omitted (not set to empty string). The JCS serialization
-  // follows RFC 8785. Used as a stable reference.
-  "context_id":      "4bf92f3577b34da6a3ce929d0e0e4736",
-  "created_at":      1743850000000,
-  "merchant_policy": "https://merchant.example.com/.well-known/atrib-policy.json",
-  // URL of the merchant policy fetched, or "default" if none was published.
-  "creator_policies": [
-    {
-      "server_url": "https://tools.example.com",
-      "policy_url": "https://tools.example.com/.well-known/atrib-policy.json",
-      "status":     "compatible"
-      // "compatible" | "floor_scaled" | "conflict_defaulted" | "not_found"
-    }
-  ],
-  "agreed_policy":   "https://merchant.example.com/.well-known/atrib-policy.json",
-  // The operative policy URL, or "default" if the default was used.
-  "applied_constraints": {
-    "minimum_floors": {
-      "https://tools.example.com": 0.10
-      // Creator minimum floors that were honored in this session.
-    }
-  },
-  "warnings": []
-  // Array of strings describing any non-fatal issues encountered during
-  // negotiation (unknown modifier types, missing policies, etc.)
-}
-```
-
-The session policy record is not submitted to the Merkle log; it is not an attribution record. It is stored locally by the agent and SHOULD be made available to the merchant on request. It serves as evidence of the policy terms in effect during the session if a dispute arises.
-
----
+_Moved to the [atrib Payments Profile §7.3](docs/payments-profile.md#73-session-policy-record) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ### 4.6 The Calculation Algorithm
 
-The calculation algorithm is a pure function: given the attribution graph for a session ([§3](#3-graph-query-interface)) and the agreed policy document ([§4.5](#45-session-negotiation)), it produces a distribution: a mapping from creator public keys to share fractions summing to 1.0. No other inputs are required. No network calls are made. No timestamps beyond those in the records are used.
-
-Any party (creator, merchant, auditor, regulator) with access to the graph data and the policy document MUST be able to run this algorithm locally and arrive at the same result as any other party running the same inputs. The atrib resolution API (at `https://resolve.atrib.dev/v1/calculate`) is a convenience implementation of this algorithm, not an authority. Its output is no more or less trustworthy than a local implementation producing the same output from the same inputs.
-
-All arithmetic in the calculation algorithm uses IEEE 754 double-precision floating-point. Intermediate rounding is acceptable. The 1e-9 tolerance in `distributionsMatch()` ([§4.7.3](#473-independent-verification)) accounts for accumulated floating-point error across implementations.
+_Moved to the [atrib Payments Profile §8](docs/payments-profile.md#8-the-calculation-algorithm) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.1 Inputs and Preconditions
 
-Inputs:
-
-- `G`: the attribution graph for the session, as returned by the graph query API ([§3.4.1](#341-get-v1graphcontext_id)) with `include_gap_nodes=true` and `include_cross_session=true`.
-
-- `P`: the agreed policy document for the session ([§4.5.3](#453-session-policy-record)).
-
-Preconditions that MUST hold before the algorithm runs:
-
-- `G` contains at least one transaction node. If no transaction node is present, the session is not closed and calculation MUST NOT proceed.
-
-- `P` is a valid policy document per the schema in [§4.2](#42-policy-document-format). If validation fails, use the default policy.
-
-- All nodes in `G` whose `verification_state` is `signature_valid` or higher are eligible for distribution. Nodes with `verification_state: unsigned` are eligible only if `P.edge_weights.unsigned > 0`.
+_Moved to the [atrib Payments Profile §8.1](docs/payments-profile.md#81-inputs-and-preconditions) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.2 Step 1: Identify Contributing Nodes
 
-A node `N` is a contributing node if all of the following hold:
-
-- `N.event_type` is `tool_call` or `gap_node` (not `transaction`).
-
-  **Note (event_type matching).** Throughout [§4.6](#46-the-calculation-algorithm), the short labels `tool_call`, `transaction`, and `gap_node` refer to the corresponding atrib normative URIs (`https://atrib.dev/v1/types/tool_call`, `https://atrib.dev/v1/types/transaction`) plus the synthetic graph-layer type `gap_node`. The other normative URI `https://atrib.dev/v1/types/observation` ([D042](DECISIONS.md#d042-lift-observation-graph-participation-restriction)) and any extension URI ([D043](DECISIONS.md#d043-extension-uri-participation-in-graph-derivation)) are NOT contributing nodes. observations are witnesses (the agent did not invoke a tool to produce them) and are skipped from contribution selection. Extension URIs are consumer-namespace and atrib does not bless their attribution claims by default; consumers wanting their extension URIs to count for attribution express it in their own [§4](#4-attribution-policy-format) policy document, not via [§4.6](#46-the-calculation-algorithm) default. Promotion of an extension URI to atrib's normative contributing set requires [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)'s bar.
-
-  **Note (transaction record cross-attestation per [§1.7.6](#176-cross-attestation-requirement-for-transaction-records)).** For a transaction node `T` to serve as the [§4.6](#46-the-calculation-algorithm) receiver, `T`'s `signers` array MUST contain at least 2 distinct verified signer keys (cross-attestation requirement). Verification of each signature follows [§1.4](#14-signing-and-verification). If `T` carries fewer than 2 distinct verified signer keys (or only the legacy top-level `signature` field with no `signers` array), the verifier MUST set `T.cross_attestation_missing = true` on the verification output. Strict consumer policies MAY reject [§4.6](#46-the-calculation-algorithm) calculation entirely when `cross_attestation_missing: true`; the default behavior is to compute the calculation, return it, and surface the flag. The receiver-vs-contributor distinction does NOT relax cross-attestation: the substrate's strongest robustness commitment lives at the transaction layer, and the calculation algorithm is one of the consumers that benefits from it.
-
-- `N` has at least one edge to a transaction node in `G`, either a CONVERGES_ON edge (same session) or a CROSS_SESSION edge (linked session). This is always true for all non-transaction nodes when the graph is queried for a closed session, but is stated explicitly to prevent implementation errors.
-
-Let `C` be the set of all contributing nodes.
+_Moved to the [atrib Payments Profile §8.2](docs/payments-profile.md#82-step-1-identify-contributing-nodes) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.3 Step 2: Compute Raw Scores
 
-For each node `n` in `C`, compute its raw score `raw(n)`:
-
-```
-function raw_score(n, G, P):
-  // Step 2a: determine base weight from edge type
-  if n.event_type == "gap_node":
-    base = P.edge_weights["unsigned"] ?? 0.0
-  else:
-    // collect all edge types connecting n to any transaction node
-    edge_types = {e.type for e in G.edges where e.source == n.id
-                  and G.nodes[e.target].event_type == "https://atrib.dev/v1/types/transaction"}
-    // also include CHAIN_PRECEDES and SESSION_* edges between non-transaction nodes
-    // that form a path leading to a transaction node
-    edge_types |= {e.type for e in all_edges_on_paths_to_transaction(n, G)}
-    // all_edges_on_paths_to_transaction(n, G) returns the set of edges on any
-    // path from n to a transaction node. The algorithm: (1) build both directed
-    // (CHAIN_PRECEDES, SESSION_PRECEDES, CONVERGES_ON, CROSS_SESSION) and
-    // undirected (SESSION_PARALLEL) adjacency from G; (2) reverse BFS from all
-    // transaction nodes to find the set of nodes that can reach a transaction;
-    // (3) forward BFS from n, collecting edge types for edges whose target is
-    // in the reachable set. This ensures that intermediate structural edges
-    // (e.g., CHAIN_PRECEDES between non-transaction nodes on a path to a
-    // transaction) contribute their weight to n's base score.
-    //
-    // When traversing an undirected SESSION_PARALLEL edge from node A to node B,
-    // the traversal proceeds in both directions. If B can reach a transaction
-    // node, SESSION_PARALLEL is added to A's collected edge types. The collected
-    // edge types for a node are the union of all edge types on any path (directed
-    // or undirected) from that node to any transaction node.
-    weights = [P.edge_weights[t] ?? 0.0 for t in edge_types]
-    base = max(weights) if weights else 0.0
-
-  // Step 2b: apply modifiers in order
-  score = base
-  for modifier in P.modifiers:
-    score = apply_modifier(modifier, score, n, G)
-
-  return max(0.0, score)  // scores cannot be negative
-
-function apply_modifier(modifier, score, n, G):
-  if modifier.type == "temporal_decay":
-    T = transaction_node(G).timestamp
-    delta_ms = T - n.timestamp
-    if delta_ms < 0: return 0.0  // node is after transaction
-    return score * pow(2.0, -(delta_ms / modifier.half_life_ms))
-
-  if modifier.type == "chain_depth_penalty":
-    depth = shortest_chain_path_length(n, G)  // hops to nearest transaction via CHAIN_PRECEDES
-    // The shortest chain path length from node N to any transaction node is the
-    // minimum number of CHAIN_PRECEDES edges on any directed path from N to a
-    // transaction node. If no directed CHAIN_PRECEDES path exists from N to any
-    // transaction node, the depth is set to the ceiling of
-    // `1.0 / penalty_per_level`, which is the smallest integer that drives
-    // `max(0.0, 1.0 - depth * penalty_per_level)` to zero. The resulting
-    // factor is 0.0.
-    factor = max(0.0, 1.0 - depth * modifier.penalty_per_level)
-    return score * factor
-
-  if modifier.type == "call_count_boost":
-    // Nodes with `content_id: null` (gap nodes) do not match any other node's
-    // content_id. Their call count is always 1.
-    count = count_nodes_with_same_content_id(n.content_id, G)
-    factor = min(modifier.cap, 1.0 + (count - 1) * modifier.multiplier_per_call)
-    return score * factor
-
-  return score  // unknown modifier types are ignored
-```
+_Moved to the [atrib Payments Profile §8.3](docs/payments-profile.md#83-step-2-compute-raw-scores) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.4 Step 3: Apply Constraints
 
-Constraints are applied after an initial proportional pass on the raw scores and before the final normalization step. The pseudocode below incorporates the initial proportional pass internally.
-
-```
-function apply_constraints(raw_scores, constraints):
-  // Filter to nodes with non-zero scores (only contributors receive shares)
-  contributors = {n: s for n, s in raw_scores.items() if s > 0.0}
-
-  if not contributors:
-    return {}  // empty distribution; all nodes were gap nodes under zero-weight policy
-
-  total = sum(contributors.values())
-  normalized = {n: s/total for n, s in contributors.items()}
-
-  // Apply minimum_share floor
-  if constraints.minimum_share:
-    normalized = apply_minimum_floor(normalized, constraints.minimum_share)
-
-  // Apply maximum_share cap
-  if constraints.maximum_share:
-    normalized = apply_maximum_cap(normalized, constraints.maximum_share)
-
-  // Note: maximum_total_share is NOT applied here.
-  // It affects the currency conversion at payout, not the distribution fractions.
-  // The distribution fractions always sum to 1.0 among contributing nodes.
-  // The merchant retains (1.0 - maximum_total_share) of transaction value
-  // by applying the total share cap to the dollar amount, not the fractions.
-
-  return normalized
-
-function apply_minimum_floor(normalized, floor):
-  // Boost any node below floor to floor, scale others down proportionally.
-  below = {n: s for n, s in normalized.items() if s < floor}
-  above = {n: s for n, s in normalized.items() if s >= floor}
-  boost_needed = sum(floor - s for s in below.values())
-  above_total = sum(above.values())
-  if above_total <= boost_needed:
-    return {n: 1.0/len(normalized) for n in normalized}  // equal distribution fallback
-    // The equal distribution fallback MAY produce node shares below
-    // `minimum_share`. This is acceptable because the constraint cannot be
-    // honored: the sum of all minimum floors exceeds 1.0. The fallback
-    // preserves the sum-to-1.0 invariant at the cost of the floor invariant.
-  scale = (above_total - boost_needed) / above_total
-  result = {n: floor for n in below}
-  result |= {n: s * scale for n, s in above.items()}
-  return result
-
-function apply_maximum_cap(normalized, cap):
-  // Cap any node above cap, redistribute excess proportionally to others.
-  above = {n: s for n, s in normalized.items() if s > cap}
-  below = {n: s for n, s in normalized.items() if s <= cap}
-  excess = sum(s - cap for s in above.values())
-  below_total = sum(below.values())
-  result = {n: cap for n in above}
-  if below_total > 0:
-    scale = (below_total + excess) / below_total
-    result |= {n: s * scale for n, s in below.items()}
-  else:
-    result |= below
-  return result
-```
-
-This order is normative. Implementations MUST apply minimum_share before maximum_share.
+_Moved to the [atrib Payments Profile §8.4](docs/payments-profile.md#84-step-3-apply-constraints) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.5 Step 4: Normalize to a Distribution
 
-After applying constraints, re-normalize so shares sum to exactly 1.0, correcting for any floating-point accumulation during constraint application:
-
-```
-function final_normalize(shares):
-  total = sum(shares.values())
-  if total == 0.0: return {}
-  return {n: s/total for n, s in shares.items()}
-```
+_Moved to the [atrib Payments Profile §8.5](docs/payments-profile.md#85-step-4-normalize-to-a-distribution) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.6 Step 5: Aggregate by Creator
 
-The per-node distribution is aggregated by `creator_key`, summing all shares belonging to the same creator. A creator who appears multiple times in a session (via multiple tool calls or multiple tools) receives the sum of all their node shares.
-
-```
-function aggregate_by_creator(normalized_shares, G):
-  by_creator = {}
-  for node_id, share in normalized_shares.items():
-    node = G.nodes[node_id]
-    key = node.creator_key ?? "__unsigned__"  // gap nodes aggregate under a sentinel key
-    by_creator[key] = by_creator.get(key, 0.0) + share
-  return by_creator
-```
-
-The `__unsigned__` sentinel key is present in the output only if gap nodes received non-zero weight under the policy. Its presence signals to the merchant that some share of value is attributed to unsigned contributions, and it is the merchant's responsibility to decide how to handle.
+_Moved to the [atrib Payments Profile §8.6](docs/payments-profile.md#86-step-5-aggregate-by-creator) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.6.7 Step 6: Apply Creator Floors
 
-After aggregation by creator, apply any `minimum_own_share` floors from the session policy record's `applied_constraints.minimum_floors` map. These floors were established during negotiation ([§4.5.2](#452-conflict-resolution)) and represent the agreed minimum share for each creator who published one. This step adjusts the aggregated distribution to honor those floors, scaling down other creators' shares proportionally.
-
-```
-function apply_creator_floors(by_creator, creator_floors):
-  // creator_floors: { creator_key → minimum_own_share } from session policy record
-  // Only contains entries for creators whose floors survived negotiation (Rules 1-5).
-  // If no floors, return by_creator unchanged.
-  if not creator_floors: return by_creator
-
-  result = dict(by_creator)
-  floored_keys = set()
-
-  // Identify creators below their floor
-  for key, floor in creator_floors.items():
-    if key not in result: continue  // creator didn't contribute; floor doesn't apply
-    if result[key] < floor:
-      floored_keys.add(key)
-
-  if not floored_keys: return result  // all creators already meet their floors
-
-  // Boost floored creators, scale others down proportionally
-  boost_needed = sum(creator_floors[k] - result[k] for k in floored_keys)
-  non_floored = {k: v for k, v in result.items() if k not in floored_keys}
-  non_floored_total = sum(non_floored.values())
-
-  if non_floored_total <= boost_needed:
-    // Cannot honor all floors without taking from other floored creators.
-    // This should have been caught by Rule 5 at negotiation time.
-    // If reached, return current result unchanged and log a warning.
-    return result
-
-  scale = (non_floored_total - boost_needed) / non_floored_total
-  for k in floored_keys:
-    result[k] = creator_floors[k]
-  for k in non_floored:
-    result[k] = non_floored[k] * scale
-
-  return result
-```
-
-After this step, re-normalize with `final_normalize` ([§4.6.5](#465-step-4-normalize-to-a-distribution)) to correct for floating-point accumulation. The complete call sequence for the full algorithm is:
-
-```
-function calculate(G, P, session_policy_record):
-  C                = identify_contributing_nodes(G)
-  raw_scores       = {n: raw_score(n, G, P) for n in C}
-  constrained      = apply_constraints(raw_scores, P.constraints)
-  normalized       = final_normalize(constrained)
-  by_creator       = aggregate_by_creator(normalized, G)
-  creator_floors   = session_policy_record.applied_constraints.minimum_floors ?? {}
-  floored          = apply_creator_floors(by_creator, creator_floors)
-  return final_normalize(floored)  // final renorm after floor application
-```
-
----
+_Moved to the [atrib Payments Profile §8.7](docs/payments-profile.md#87-step-6-apply-creator-floors) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ### 4.7 Settlement Recommendation Document
 
-The settlement recommendation document is the output of the calculation algorithm. It is a structured, signed record of the recommended distribution for a specific session. It is not a payment instruction; the merchant decides whether and how to act on it. But it is sufficiently precise and self-contained that any party can verify it was correctly calculated.
+_Moved to the [atrib Payments Profile §9](docs/payments-profile.md#9-settlement-recommendation-document) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.7.1 Document Format
 
-```
-{
-  "spec_version":    "atrib/1.0",
-  "document_type":   "settlement_recommendation",
-  "context_id":      "4bf92f3577b34da6a3ce929d0e0e4736",
-  "transaction_id":  "sha256:8b2f1c...",     // record_hash of the transaction node
-  "policy_record_id":"sha256:3f8a2b...",    // record_id of the session policy record ([§4.5.3](#453-session-policy-record))
-  "graph_checkpoint":"log.atrib.dev/v1",   // log origin used for graph data
-  "graph_tree_size": 4821937,              // log tree size at calculation time
-  "calculated_at":   1743860000000,
-  "calculated_by":   "https://resolve.atrib.dev/v1",
-  // URL of the service that ran the calculation, or "local" if self-calculated.
-
-  "distribution": {
-    "ABC...creatorkey1": 0.4500,    // base64url Ed25519 public key → share fraction
-    "DEF...creatorkey2": 0.3500,
-    "GHI...creatorkey3": 0.2000
-  },
-  // Share fractions sum to 1.0 (within floating-point tolerance of 1e-9).
-  // __unsigned__ may appear if policy weights unsigned > 0.
-
-  "maximum_total_share": 0.15,
-  // From merchant policy constraints.maximum_total_share, or null if unconstrained.
-  // The currency amount distributed to each creator is:
-  // creator_amount = transaction_value * maximum_total_share * distribution[creator_key]
-  // If null, the merchant determines the total share independently.
-
-  "warnings": [],
-  // Non-fatal issues encountered during calculation. Empty if clean.
-
-  "signature": "base64url..."
-  // Ed25519 signature by calculated_by over the JCS-canonical record minus this field.
-  // If calculated_by = "local", the merchant signs with their own key.
-}
-```
+_Moved to the [atrib Payments Profile §9.1](docs/payments-profile.md#91-document-format) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.7.2 Signing the Recommendation
 
-The settlement recommendation MUST be signed by whoever produced it, using their Ed25519 private key and the same JCS canonicalization procedure defined in [§1.4.2](#142-signing-procedure). This signature proves that the stated party produced this exact recommendation at the stated time. It does not prove the recommendation is correct; correctness is established by independent verification.
-
-When the atrib resolution API produces the recommendation, it signs with atrib's key (published at `https://resolve.atrib.dev/v1/pubkey`). When a merchant or third party runs the calculation locally, they sign with their own key. Any verifier who checks the signature must use the appropriate public key based on `calculated_by`.
+_Moved to the [atrib Payments Profile §9.2](docs/payments-profile.md#92-signing-the-recommendation) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 4.7.3 Independent Verification
 
-Any party with access to the graph data and the session policy record can independently verify a settlement recommendation by:
-
-Step 1: Verify the recommendation's signature using the public key of `calculated_by`.
-
-Step 2: Fetch the graph for `context_id` from `graph_checkpoint` (the log identified by `graph_checkpoint` at tree size `graph_tree_size`).
-
-Step 3: Fetch the session policy record identified by `policy_record_id`. Retrieve the agreed policy from `agreed_policy`.
-
-Step 4: Run the calculation algorithm ([§4.6](#46-the-calculation-algorithm)) with those inputs.
-
-Step 5: Compare the output with the `distribution` field. Shares MUST match within a floating-point tolerance of `1e-9`. Any discrepancy beyond this tolerance indicates either a bug, a different policy was applied, or the recommendation was tampered with.
-
-**Important:** Verification requires the same graph snapshot\*\* The graph for a session can grow after a transaction closes: late attribution records may arrive, gap nodes may be resolved by creators who submit delayed records, CROSS_SESSION edges may be added as session_token links are discovered. The `graph_tree_size` field pins the graph to a specific log state. Independent verifiers MUST use the same tree size to reconstruct the same graph. Using the current graph state may produce a different result if the graph has grown since calculation time. This is not an error; it is expected behavior. If a merchant wishes to recalculate with a more complete graph, they may do so and produce a new recommendation.
+_Moved to the [atrib Payments Profile §9.3](docs/payments-profile.md#93-independent-verification) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ---
 
 ### 4.8 Scope Boundaries
 
-_See [§1.8](#18-scope-boundaries) for protocol-wide scope boundaries including policy versioning, dispute mechanism, settlement webhooks, multi-transaction sessions, and agent-published policies._
+_See [§1.8](#18-scope-boundaries) for protocol-wide scope boundaries. Policy- and settlement-specific boundaries (policy versioning, dispute mechanism, settlement webhook format, multi-transaction sessions, agent-published policies) live in the [atrib Payments Profile §13](docs/payments-profile.md#13-scope-boundaries)._
 
 ---
 
@@ -4078,6 +3282,8 @@ Three packages are defined in this specification. All are TypeScript/JavaScript 
 
 All three packages are open source under the Apache 2.0 license. The npm package names are reserved.
 
+Transaction detection, policy negotiation, session policy records, and settlement verification are payments-layer contracts defined by the [atrib Payments Profile](docs/payments-profile.md). The packages implement those contracts when a deployment uses the profile; a core-only deployment signs `tool_call` records and never classifies transactions, per the degradation contract ([§5.8](#58-degradation-contract)).
+
 Beyond the three spec-defined middleware packages, the reference distribution also ships consolidated client SDKs (informative): `@atrib/sdk` for TypeScript and the `atrib` distribution for Python expose `attest()` (write) and `recall()` (read) verbs over the same record layer, adding no new signing implementation. The Python distribution is the first non-TypeScript implementation of the [§1](#1-attribution-record-format) and [§5](#5-sdk-specification) contracts; both are held byte-identical through the shared conformance corpora. They are clients over this specification, not additional conformance surfaces. The reference implementations are maintained at `github.com/atrib-io`. Third-party implementations are permitted and encouraged, provided they satisfy the conformance requirements in this section.
 
 ---
@@ -4108,9 +3314,9 @@ const server = atrib(new McpServer({ name: 'my-tool', version: '1.0.0' }), {
 | creatorKey       | string     | Required | Base64url-encoded 32-byte Ed25519 seed. Used to sign all attribution records emitted by this server. See [§5.6](#56-key-management) for generation and storage requirements.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | logEndpoint      | string     | Optional | URL of the Merkle log submission endpoint. Default: `https://log.atrib.dev/v1/entries`. Override for private log deployments.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | logSubmission    | string     | Optional | `enabled` or `disabled`. Default: `enabled`. Set to `disabled` for offline tests and local-mirror-only hosts that should sign records and run `onRecord` without POSTing to a log.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| policy           | object     | Optional | Inline attribution policy document ([§4.2](#42-policy-document-format)). If provided, served at `/.well-known/atrib-policy.json`. If absent, a 404 is served at that path (default policy applies for callers).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| policy           | object     | Optional | Inline attribution policy document ([payments profile §4](docs/payments-profile.md#4-policy-document-format)). If provided, served at `/.well-known/atrib-policy.json`. If absent, a 404 is served at that path (default policy applies for callers).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | serverUrl        | string     | Optional | Canonical URL of this MCP server, used to compute `content_id` values ([§1.2.2](#122-content_id-derivation)). Default: derived from the server's HTTP host header. MUST be set explicitly for stdio transport where no host header is available.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| transactionTools | string\[\] | Optional | Array of tool names that complete commerce transactions. When a successful call to one of these tools is detected, `@atrib/mcp` emits a record with `event_type: "https://atrib.dev/v1/types/transaction"` rather than `"https://atrib.dev/v1/types/tool_call"`. This is how Path 1 merchant-side transaction emission ([§5.4.5](#545-transaction-detection)) is implemented. The merchant's checkout tool name(s) should be listed here. If not set, `@atrib/mcp` emits only `tool_call` records and Path 2 agent-side detection applies.                                                                                                                                                                                                                           |
+| transactionTools | string\[\] | Optional | Array of tool names that complete commerce transactions. When a successful call to one of these tools is detected, `@atrib/mcp` emits a record with `event_type: "https://atrib.dev/v1/types/transaction"` rather than `"https://atrib.dev/v1/types/tool_call"`. This is how Path 1 merchant-side transaction emission ([payments profile §3](docs/payments-profile.md#3-sdk-transaction-detection)) is implemented. The merchant's checkout tool name(s) should be listed here. If not set, `@atrib/mcp` emits only `tool_call` records and Path 2 agent-side detection applies.                                                                                                                                                                                                                           |
 | onRecord         | function   | Optional | `(record: AtribRecord) => void \| Promise<void>`. Observer invoked once per signed record AFTER signing and BEFORE log submission. Lets a host persist or audit the record locally; without this hook the original signed JSON is unrecoverable because the log stores only commitments ([§2.10](#210-what-the-log-stores-and-what-it-does-not)). Errors thrown or promises rejected by the observer are caught and warned via `console.warn`; they MUST NOT block submission, MUST NOT affect the attribution token in `_meta`, and MUST NOT affect the tool response, preserving the [§5.8](#58-degradation-contract) degradation contract. Typical uses: dogfood verification (replay `verifyRecord` against `creator_key`), local audit trail, replay debugging. |
 
 #### 5.3.2 Inbound Context Reading
@@ -4293,11 +3499,11 @@ During initialization the middleware:
 
 4\. For each tool server in the agent's tool list, fetches creator policies **concurrently** (all in parallel, not sequentially). Uses a 1-second per-fetch timeout with no retry. Reads from `/.well-known/atrib-policy.json` for HTTP servers, or from `serverInfo["io.atrib/policy"]` for stdio servers. Collects all policies that responded within the timeout window; treats non-responding servers as having no policy.
 
-5\. Runs policy negotiation per [§4.5](#45-session-negotiation) and creates the session policy record per [§4.5.3](#453-session-policy-record).
+5\. Runs policy negotiation per [payments profile §7](docs/payments-profile.md#7-session-negotiation) and creates the session policy record per [payments profile §7.3](docs/payments-profile.md#73-session-policy-record).
 
 The entire initialization sequence MUST complete within 3 seconds. If it does not, the middleware proceeds under the default policy and records a timeout warning in the session policy record. The 1-second per-fetch timeout, with all creator fetches running concurrently, means total init time is bounded by: merchant fetch (≤1s) + max single creator fetch (≤1s) + negotiation logic (negligible) = well within 3 seconds even with many tools.
 
-**Note (Init timeouts differ from runtime policy fetch timeouts):** The [§4.4](#44-publication-and-discovery) retry-once-with-2-second-delay behavior applies to _runtime_ policy document requests from policy evaluation tools, not to SDK init. During init, the SDK must fail fast; a slow policy server should not delay the first tool call by 4+ seconds. The tradeoff is that a transiently slow server during init is treated as having no policy; if the server recovers, it will serve its policy correctly on the next tool call's context propagation path.
+**Note (Init timeouts differ from runtime policy fetch timeouts):** The [payments profile §6](docs/payments-profile.md#6-publication-and-discovery) retry-once-with-2-second-delay behavior applies to _runtime_ policy document requests from policy evaluation tools, not to SDK init. During init, the SDK must fail fast; a slow policy server should not delay the first tool call by 4+ seconds. The tradeoff is that a transiently slow server during init is treated as having no policy; if the server recovers, it will serve its policy correctly on the next tool call's context propagation path.
 
 #### 5.4.3 Outbound Context Forwarding
 
@@ -4348,127 +3554,11 @@ if (token) {
 
 #### 5.4.5 Transaction Detection
 
-The middleware detects transaction events automatically from the response shapes defined in [§1.7](#17-transaction-event-hooks). No developer input is required. The detection logic checks each successful tool call response for the presence of transaction signals:
-
-```
-function detectTransaction(toolName, response, headers):
-  // ACP / UCP: completion response with embedded order, OR ACP webhook event.
-  // Per [§1.7.1](#171-acp-agentic-commerce-protocol) and [§1.7.2](#172-ucp-universal-commerce-protocol), both protocols converged on the same shape; UCP
-  // is distinguished by the top-level `ucp.version` envelope.
-  if (response?.status === 'completed' && typeof response?.order?.id === 'string'):
-    const isUcp = typeof response?.ucp?.version === 'string'
-    return {
-      detected: true,
-      protocol: isUcp ? 'UCP' : 'ACP',
-      checkoutUrl: response.order.permalink_url ?? null,
-    }
-  if (response?.type === 'order_create' || response?.type === 'order_update'):
-    return {
-      detected: true,
-      protocol: 'ACP',
-      checkoutUrl: response.data?.permalink_url ?? null,
-    }
-
-  // x402 and MPP: distinct protocols, distinct headers (case-insensitive
-  // per RFC 7230). x402 takes precedence if both are present.
-  //   x402 v2 → PAYMENT-RESPONSE      (renamed from v1 X-PAYMENT-RESPONSE)
-  //   MPP     → Payment-Receipt       (per draft-ryan-httpauth-payment-01 [§5.3](#53-atribmcp-mcp-server-middleware))
-  const lower = lowercaseKeys(headers)
-  if (lower['payment-response'] || lower['x-payment-response']):
-    return { detected: true, protocol: 'x402' }
-  if (lower['payment-receipt']):
-    return { detected: true, protocol: 'MPP' }
-
-  // AP2 v0.2: successful CheckoutReceipt or PaymentReceipt.
-  // Source: google-agentic-commerce/AP2 receipt schemas and sample agents.
-  // Mandate-only payloads are not transaction events.
-  if (containsSuccessfulAp2PaymentReceipt(response)
-      || containsSuccessfulAp2CheckoutReceipt(response)
-      || hasAp2SuccessEnvelopeWithReceiptJwt(response)):
-    return { detected: true, protocol: 'AP2' }
-
-  // AP2 v0.1 compatibility: PaymentMandate Message inside an A2A DataPart.
-  // Source: github.com/google-agentic-commerce/ap2 docs/specification.md v0.1
-  if (Array.isArray(response?.parts)):
-    for (part in response.parts):
-      if (typeof part?.data === 'object'
-          && 'ap2.mandates.PaymentMandate' in part.data):
-        return { detected: true, protocol: 'AP2' }
-
-  // a2a-x402 extension: payment-completed via A2A task status metadata.
-  // Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
-  // Requires BOTH the payment-completed status AND a successful receipt.
-  const meta = response?.status?.message?.metadata
-  if (meta?.['x402.payment.status'] === 'payment-completed'
-      && Array.isArray(meta?.['x402.payment.receipts'])
-      && meta['x402.payment.receipts'].some(r => r?.success === true)):
-    return { detected: true, protocol: 'AP2' }
-
-  // Legacy / non-canonical: W3C VC envelope around a PaymentMandate
-  // (research forks only; AP2 v0.1 itself does NOT use W3C VCs).
-  // Accepts both v2 array form and v1 string form.
-  if (Array.isArray(response?.type)
-      && response.type.includes('VerifiableCredential')
-      && response.type.some(t => /paymentmandate/i.test(t))):
-    return { detected: true, protocol: 'AP2' }
-  if (response?.type === 'VerifiableCredential'
-      && /paymentmandate/i.test(response?.credentialSubject?.type ?? '')):
-    return { detected: true, protocol: 'AP2' }
-
-  // Tool name heuristic, last resort only, lower reliability
-  // Note: this local list is NOT the transactionTools init option from @atrib/mcp.
-  // transactionTools is merchant-configured; this list is agent-side pattern matching.
-  const heuristicKeywords = ['create_order', 'complete_checkout', 'process_payment',
-                              'place_order', 'purchase', 'checkout']
-  if (heuristicKeywords.some(k => toolName.toLowerCase().includes(k))):
-    return { detected: true, protocol: 'heuristic' }
-
-  return { detected: false }
-```
-
-When a transaction is detected, the middleware emits a `transaction` attribution record ([§1.2.4](#124-event_type-values)). The `content_id` is derived from the merchant's checkout endpoint URL per [§1.2.2](#122-content_id-derivation), making the transaction identifiable regardless of who signed it. The `creator_key` depends on which emission path is in use:
-
-**Path 1:** Merchant-side emission (preferred).\*\* The merchant configures `@atrib/mcp` with `transactionTools: ['checkout', 'complete_order']` (or equivalent tool names). When a call to one of these tools succeeds, `@atrib/mcp` emits a `transaction` record signed with the merchant's `ATRIB_PRIVATE_KEY` and writes an attribution context token to the response. This is the cleanest model: the merchant's key is on the transaction record, and the agent detects Path 1 by seeing the token in the response.
-
-**Path 2:** Agent-side detection (fallback).\*\* When the merchant has no atrib integration, the agent detects the transaction and emits the record itself. The record carries an agent `signers[]` entry over the [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) canonical transaction bytes. Until a counterparty signs the same bytes, verifiers still report `cross_attestation.missing: true`. The `content_id` is derived as follows by protocol:
-
-- **ACP / UCP:** use `order.permalink_url` from the completion response as the server_url, with tool_name `"checkout"`. If the response is an `order_create` / `order_update` webhook event, use `data.permalink_url`. If neither is available (e.g., the merchant returned a minimal completion without an order URL), fall back to the MCP server URL of the tool that was called.
-
-- **x402:** use the HTTP endpoint URL that returned the `PAYMENT-RESPONSE` header as the server_url, with tool_name `"checkout"`.
-
-- **MPP:** use the HTTP endpoint URL that returned the `Payment-Receipt` header as the server_url, with tool_name `"checkout"`.
-
-- **AP2 / a2a-x402:** if the detector returns a protocol-specific `content_id` from the AP2 receipt identity ladder in [§1.7.5](#175-ap2-and-a2a-x402), use it as-is. Otherwise use the MCP server URL of the tool that returned the successful AP2 receipt as the server_url, with tool_name `"checkout"`.
-
-- **Heuristic:** use the MCP server URL of the tool that was called as the server_url, with the actual tool_name. This is the weakest case; the content_id identifies the tool, not the checkout endpoint specifically.
-
-The session policy record MUST include a warning: `"transaction_emitted_by_agent"` when this path is taken.
-
-AP2 receipt JWT signatures and Verifiable Intent credentials are not Path 2 counterparty signers. They remain verifier evidence unless the AP2 participant also returns a signature over the atrib transaction record bytes. See [D098](DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation).
-
-**Path selection rule:** preventing double-emission.\*\* The agent middleware MUST NOT emit a transaction record (Path 2) when the checkout tool response contains an attribution context token (i.e., `params._meta.atrib`, `tracestate: atrib=...`, or `X-atrib-Chain` is present in the response). The presence of an attribution token in the checkout response indicates that `@atrib/mcp` is installed on the merchant's server and has already emitted the transaction record (Path 1). Emitting a second record would create two transaction nodes for the same economic event, violating the single-transaction-per-session assumption in [§4.6.1](#461-inputs-and-preconditions). When Path 1 is detected, the agent updates its session state with the inbound context token as normal, but skips transaction record emission.
-
-In both paths, when Path 2 is taken, the record MUST be submitted to the log immediately, because the transaction event is the closing anchor of the attribution graph.
-
-**Note (Heuristic detection is a fallback):** The tool name heuristic fires only when no protocol-level transaction signal is present. It is less reliable; a tool named `checkout` might be a UI component, not a payment completion. When heuristic detection fires, the transaction record's `event_type` is still `https://atrib.dev/v1/types/transaction` but the session policy record includes a warning: `"transaction_detected_by_heuristic"`. Merchants may choose to require protocol-level detection for settlement purposes by filtering on this warning in their verification workflow.
+_Moved to the [atrib Payments Profile §3](docs/payments-profile.md#3-sdk-transaction-detection) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 5.4.6 Session Policy Record Creation
 
-The session policy record ([§4.5.3](#453-session-policy-record)) is created at session initialization ([§5.4.2](#542-session-initialization)) and updated as the session progresses. The middleware MUST populate it as follows:
-
-- `context_id`: set at session init from the OTel trace ID.
-
-- `merchant_policy`: URL fetched at init, or `"default"` if none was found.
-
-- `creator_policies`: populated as creator policies are fetched during init. Each entry's `status` field reflects the negotiation outcome per [§4.5.2](#452-conflict-resolution).
-
-- `agreed_policy`: set after negotiation completes.
-
-- `applied_constraints.minimum_floors`: populated with all `minimum_own_share` values from creator policies that survived negotiation (Rules 1–5 of [§4.5.2](#452-conflict-resolution)).
-
-- `warnings`: appended throughout the session, on policy fetch failures, heuristic transaction detection, agent-side transaction emission (path 2 of [§5.4.5](#545-transaction-detection)), unknown modifier types, negotiation skips, and policy negotiation timeouts.
-
-The session policy record is stored in memory and SHOULD be persisted to disk or a database at session end. It is made available to the merchant via a call to `interceptor.getSessionPolicyRecord(context_id)` on the object returned by `atrib()` ([§5.4.1](#541-init-interface)).
+_Moved to the [atrib Payments Profile §7.4](docs/payments-profile.md#74-session-policy-record-creation-sdk) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 ---
 
@@ -4495,162 +3585,15 @@ const verifier = new AtribVerifier({
 
 #### 5.5.2 Verifying a Settlement Recommendation
 
-Given a settlement recommendation document ([§4.7](#47-settlement-recommendation-document)), the verifier independently reproduces the calculation and compares results.
-
-```
-const result = await verifier.verify(recommendationDoc)
-
-// result shape:
-{
-  valid:        true,          // signature verifies AND calculation matches
-  signatureOk:  true,          // Ed25519 sig over document verified
-  calcMatch:    true,          // local recalculation matches distribution within 1e-9
-  distribution: { ... },       // local recalculation output (matches doc if calcMatch)
-  warnings:     [],            // any non-fatal issues encountered
-  graph_node_count: 4         // number of nodes used in calculation
-}
-```
-
-The verifier fetches the graph at the tree size specified in `graph_tree_size`, fetches the session policy record identified by `policy_record_id`, fetches the agreed policy document, and runs the calculation algorithm ([§4.6](#46-the-calculation-algorithm)) locally. It does not call the resolution API.
+_Moved to the [atrib Payments Profile §10.1](docs/payments-profile.md#101-verifying-a-settlement-recommendation) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 5.5.3 Post-Hoc Calculation (No Agent SDK)
 
-When no agent SDK was present during the session, no session policy record exists. The merchant can still calculate using the default policy:
-
-```
-const recommendation = await verifier.calculate({
-  context_id:   '4bf92f3577b34da6a3ce929d0e0e4736',
-  policy:       'default',                  // or a policy document object
-  signWith:     'merchant',                 // signs with merchantKey from init
-})
-
-// recommendation is a signed settlement recommendation document ([§4.7](#47-settlement-recommendation-document))
-// with policy_record_id: "default" and calculated_by: "local"
-```
-
-The verifier fetches the graph for the given `context_id`, applies the specified policy, runs the algorithm, and returns a signed recommendation. This path corresponds directly to Rule 7 of [§4.5.2](#452-conflict-resolution).
+_Moved to the [atrib Payments Profile §10.2](docs/payments-profile.md#102-post-hoc-calculation-no-agent-sdk) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 5.5.4 AP2 / Verifiable Intent Evidence Checks
 
-`@atrib/verify` also exposes a local AP2 / Verifiable Intent evidence checker. This is not part of the [§4.6](#46-the-calculation-algorithm) settlement calculation and does not change graph derivation. It is a verifier-side signal for merchants, auditors, and dispute tooling that want to inspect AP2 authorization evidence after a transaction has been detected.
-
-Callers MAY pass the same evidence bundle into `verifyRecord(record, { ap2ViEvidence, ap2ViEvidenceOptions })` for transaction records or into `AtribVerifier.verify(recommendation, { ap2ViEvidence, ap2ViEvidenceOptions })`. The result is attached as `ap2_vi_evidence`. This block does not alter the base `valid`, `signatureOk`, `cross_attestation`, or `calcMatch` checks; `ap2_vi_evidence.valid` carries the AP2 / VI authorization result. The verifier does not fetch AP2 / VI bodies from receipts or hashes. The caller supplies the evidence material. AP2 receipt signatures do not count toward `cross_attestation.signers_valid` unless they are accompanied by an atrib-record signature over the [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) canonical bytes. See [D094](DECISIONS.md#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block) and [D098](DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation).
-
-```
-import { verifyAp2ViEvidence, verifyAp2ViEvidenceAsync } from '@atrib/verify'
-
-const result = verifyAp2ViEvidence({
-  trustedIssuerKeys: [issuerJwk],
-  ap2: {
-    paymentReceipt,
-    checkoutReceipt,
-    closedPaymentMandate,
-    closedCheckoutMandate,
-  },
-  vi: {
-    credentials: [
-      { layer: 'L1', sdJwt: issuerCredential },
-      { layer: 'L2', sdJwt: userMandate },
-      { layer: 'L3_PAYMENT', sdJwt: agentPaymentMandate, parentPresentation },
-      { layer: 'L3_CHECKOUT', sdJwt: agentCheckoutMandate, parentPresentation },
-    ],
-  },
-})
-
-const jwtResult = await verifyAp2ViEvidenceAsync(
-  {
-    receiptJwtIssuers: [
-      {
-        issuer: 'https://verifier.example',
-        audience: 'merchant:checkout',
-        metadataUrl: 'https://verifier.example/.well-known/ap2',
-      },
-    ],
-    ap2: {
-      paymentReceiptJwt,
-      closedPaymentMandate,
-    },
-  },
-  { receiptJwtPolicy: 'require' },
-)
-```
-
-The result shape is:
-
-```
-{
-  valid: true,
-  transactionAccepted: true,
-  ap2: {
-    paymentReceipt: {
-      success: true,
-      referenceOk: true,
-      missingFields: [],
-      jwt: {
-        verified: true,
-        issuer: 'https://verifier.example',
-        kid: 'receipt-key-1',
-        alg: 'ES256',
-        jwksSource: 'metadata',
-      },
-    },
-    checkoutReceipt: { success: true, referenceOk: true, missingFields: [] },
-  },
-  vi: {
-    mode: 'immediate' | 'autonomous' | 'unknown',
-    credentials: [
-      {
-        layer: 'L1',
-        signature: { status: 'verified' },
-        sdJwtConformance: { status: 'verified', profile: 'sd-jwt-vc' },
-        sdHashOk: true,
-      },
-      {
-        layer: 'L2',
-        signature: { status: 'verified' },
-        sdJwtConformance: { status: 'verified', profile: 'sd-jwt-vc' },
-        disclosuresOk: true,
-      },
-    ],
-    delegationOk: true,
-    checkoutPaymentBindingOk: true,
-    constraints: {
-      status: 'passed' | 'failed' | 'unresolved' | 'not_applicable' | 'not_checked',
-      checks: [
-        { type: 'payment.amount_range', domain: 'payment', status: 'passed' },
-      ],
-    },
-  },
-  errors: [],
-  warnings: [],
-}
-```
-
-The default signature policy is `require`: missing keys or invalid signatures make `valid` false while still returning a structured result. Callers that only need structural triage MAY pass `signaturePolicy: "best-effort"`, in which case missing-key checks become warnings.
-
-For compact AP2 receipt JWTs, callers MUST provide a trust root through `receiptJwtIssuers`. Each issuer entry MAY provide local `jwks`, a `jwksUrl`, or a `metadataUrl` whose JSON contains inline `jwks` or `jwks_uri`. The async verifier enforces ES256, configured issuer, optional audience, registered JWT expiry and not-before claims when present, AP2 receipt fields, and mandate `reference` binding. The default `receiptJwtPolicy` is `require`; `receiptJwtPolicy: "best-effort"` turns JWT verification failures into warnings when decoded receipt objects are already available.
-
-Receipt JWT headers are verifier-policy input, not passive metadata. Verifiers MUST reject unsupported `alg` values, `alg: "none"`, unexpected `crit`, missing `kid`, malformed compact JWTs, empty JWKS documents, duplicate `kid` entries in one JWKS, non-EC or non-P-256 keys, non-ES256 `alg` metadata, `use` values other than `"sig"`, and `key_ops` that do not allow verification. Verifiers SHOULD report these as named evidence findings rather than collapsing them into a generic invalid result.
-
-When verifier metadata supplies both inline `jwks` and `jwks_uri`, inline `jwks` takes precedence. A verifier MUST isolate key selection by issuer before matching `kid`, so two trusted issuers may safely reuse the same `kid` without sharing key material. Static-JWKS verification MUST NOT perform network access. Metadata-based verification MAY fetch only the configured metadata or JWKS URLs.
-
-Receipt JWT clock checks MUST honor the configured skew for `nbf` and `exp`. Verifiers MUST also reject `iat` values later than `now + skew`; this prevents a receipt from being accepted before its claimed issuance time.
-
-The async verifier also runs SD-JWT / SD-JWT VC conformance for VI credentials when present. The default `sdJwtConformancePolicy` is `require`; `sdJwtConformancePolicy: "best-effort"` turns conformance failures into warnings, and `"off"` skips the async conformance layer. The default profile is `sd-jwt-vc`; callers MAY pass `sdJwtConformanceProfile: "sd-jwt"` for the core SD-JWT profile.
-
-VI SD-JWT verification MUST reject duplicate disclosures, duplicate `_sd` digest references, duplicate `delegate_payload` digest references, unsupported `_sd_alg` values, unused disclosures, and `nbf` values later than `now + skew`. These structural checks are AP2 / VI evidence policy checks that run alongside the SD-JWT library conformance layer.
-
-VC type metadata and status-list checks are opt-in. Callers that set `sdJwtVc.loadTypeMetadata` or submit credentials with VC status references SHOULD provide `sdJwtVc.vctFetcher` and `sdJwtVc.statusListFetcher`. The verifier does not perform implicit network fetches for these checks.
-
-When open AP2 mandates disclose constraints, the verifier evaluates the typed subset codified in [D092](DECISIONS.md#d092-ap2--vi-mandate-constraints-are-typed-verifier-evidence): `checkout.allowed_merchants`, `checkout.line_items`, `payment.amount_range`, `payment.allowed_payees`, `payment.allowed_payment_instruments`, `payment.allowed_pisps`, `payment.execution_date`, and `payment.reference`. The default `constraintPolicy` is `require`; failed, unresolved, or unsupported disclosed constraints make `valid` false. `constraintPolicy: "best-effort"` turns those findings into warnings, and `"off"` returns `vi.constraints.status: "not_checked"`.
-
-Payment amount bounds are evaluated against AP2 integer minor-unit amounts. Checkout line items use deterministic max-flow matching so overlapping acceptable-item sets produce stable results. Verifiers SHOULD accept both `line_items[]` payloads and AP2 / VI checkout JWT payloads that carry purchased products under `cart.items[]`, with product identity taken from `product.id`, `product.sku`, `id`, or `sku`. `payment.reference` is evaluated against the open checkout mandate disclosure digest and the same final checkout-payment binding used for `checkoutPaymentBindingOk`. Missing checkout payloads, missing closed payment mandates, undisclosed allowed-list entries, and unsupported constraint types are explicit unresolved evidence, not silent passes.
-
-The AP2 / VI crypto conformance corpus lives at `spec/conformance/ap2-vi-crypto/` and is enforced by `@atrib/verify` tests. It is offline by default. Static-JWKS cases fail on unexpected network access, and metadata cases allow only the URLs named by the case. See [D096](DECISIONS.md#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus).
-
-The AP2 live interop harness lives in `@atrib/integration` and is opt-in. It accepts AP2 result artifacts plus AP2 / VI evidence JSON produced by a reference AP2 run, then requires `detectTransaction()` and `verifyAp2ViEvidenceAsync()` to agree. When supplied with an atrib transaction-record artifact, it also runs `verifyRecord()`, checks that the record `content_id` matches the AP2 receipt identity, and requires `cross_attestation.missing: false`. The default test suite exercises the artifact contract with local fixtures, including compact receipt JWTs generated by the official AP2 Python SDK and a combined AP2 / VI fixture generated from the official AP2 SDK plus the public Verifiable Intent Python reference implementation. It does not start live AP2 services. See [D097](DECISIONS.md#d097-ap2-live-interop-uses-an-opt-in-reference-artifact-harness) and [D107](DECISIONS.md#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes).
-
-Path 2 producers SHOULD use `signTransactionRecord()` from `@atrib/mcp` when emitting transaction records. The helper signs the [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) canonical bytes with the producer key and preserves any caller-supplied counterparty signers that already signed the same bytes. AP2 counterparties SHOULD use `signTransactionAttestation()` to produce their signer entry over the finalized transaction record bytes. See [D098](DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) and [D107](DECISIONS.md#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes).
+_Moved to the [atrib Payments Profile §11](docs/payments-profile.md#11-ap2--verifiable-intent-evidence-checks) per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This anchor is stable; the section number is not reused._
 
 #### 5.5.5 Handoff Claim Verification
 
@@ -4787,7 +3730,7 @@ This section is intentionally at the verifier layer. Authorization systems decid
 
 The universal evidence envelope is the single protocol-level attachment model for all externally verifiable material: OAuth / MCP authorization results, AAuth tokens, x401 proofs, AP2 / Verifiable Intent receipts, human approvals, counterparty co-signature receipts, and every future evidence type. Each evidence type is a **profile** of the envelope, identified by an absolute HTTPS type URI and versioned independently of this specification. The generic blocks of [§5.5.6](#556-generic-authorization-evidence-blocks) are the legacy pre-envelope form; this section freezes their `protocol` string set and defines the deterministic mapping from that form into envelope form.
 
-Envelopes are verifier-layer objects and never touch signed bytes. They exist only in: (a) the local mirror sidecar ([§5.9.3](#593-the-_local-sidecar-shape)), (b) the archive evidence projection ([§2.12](#212-record-body-archive-layer)), (c) verifier results, and (d) host-owned packets (handoff claims per [D105](DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance), continuation packets, action-gate packets per [D133](DECISIONS.md#d133-action-gate-is-a-host-owned-controlproof-package), proof packets). Envelopes MUST NOT be carried in propagation tokens ([§1.5.2](#152-http-transport-tracestate)) and MUST NOT enter the 90-byte log entry ([§2.3.1](#231-entry-serialization)). Evidence MUST NOT alter record signature verification, graph derivation ([§3.2.4](#324-edge-derivation-rules)), the [§4.6](#46-the-calculation-algorithm) calculation, or `verifyRecord().valid`. A signed action is real even when its external evidence is missing, expired, over-scoped, or forged; consumers apply their own policy over tiers. See [D109](DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks).
+Envelopes are verifier-layer objects and never touch signed bytes. They exist only in: (a) the local mirror sidecar ([§5.9.3](#593-the-_local-sidecar-shape)), (b) the archive evidence projection ([§2.12](#212-record-body-archive-layer)), (c) verifier results, and (d) host-owned packets (handoff claims per [D105](DECISIONS.md#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance), continuation packets, action-gate packets per [D133](DECISIONS.md#d133-action-gate-is-a-host-owned-controlproof-package), proof packets). Envelopes MUST NOT be carried in propagation tokens ([§1.5.2](#152-http-transport-tracestate)) and MUST NOT enter the 90-byte log entry ([§2.3.1](#231-entry-serialization)). Evidence MUST NOT alter record signature verification, graph derivation ([§3.2.4](#324-edge-derivation-rules)), the [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) calculation, or `verifyRecord().valid`. A signed action is real even when its external evidence is missing, expired, over-scoped, or forged; consumers apply their own policy over tiers. See [D109](DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks).
 
 **Envelope schema (normative).** One schema, versioned by the integer `envelope` field:
 
@@ -4843,7 +3786,7 @@ The enum is closed at these four values. Extending it requires revising the evid
 
 **Profile registration rule.** A profile is registered by publishing, together: (1) a type URI — atrib-maintained profiles use `https://atrib.dev/v1/evidence/<name>`; third parties use an absolute HTTPS URI on a domain they control, the same self-sovereign convention as extension event_type URIs and deliberately below the [D036](DECISIONS.md#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary) promotion bar, because no event_type byte and no signed field is involved; (2) a profile document (for atrib-maintained profiles: `docs/evidence-profiles/<name>.md`) defining accepted payload media types and the applicable hash rule, the `facts` vocabulary (each fact's name, JSON type, and provenance class: `verifier-derived`, `caller-attested`, or `producer-declared`), what each tier requires for the profile, the sanitization contract (which facts and hashes may appear in public projections — raw payloads never, by default, per [D110](DECISIONS.md#d110-mcpoauth-evidence-capture-closes-the-producer-to-verifier-loop) / [D134](DECISIONS.md#d134-x401-producer-capture-and-propagation-stay-sanitized)), and its own semver rules (`profile_version` refers to this document); and (3) a conformance case family at `spec/conformance/evidence-envelope/<name>/` in the same commit (atrib-maintained profiles only; third parties SHOULD publish equivalents). Profile identity is the full URI: a foreign domain reusing an atrib profile name (e.g. `https://example.com/v1/evidence/oauth2`) is a valid third-party profile URI and MUST NOT be treated as the atrib profile of the same name.
 
-The initial atrib-maintained registry is: `oauth2`, `mcp-oauth`, `aauth`, `x401`, `ap2-vi` (mapped 1:1 from the legacy [§5.5.6](#556-generic-authorization-evidence-blocks) adapters), `human-approval` (per [D118](DECISIONS.md#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain): the payload is the human-signed approval record itself — `ref.record_hash` names it, `ref.kind` states where its body is retrievable, `payload.hash` commits to its canonical bytes; facts: approver key, approval scope, decision), `counterparty-attestation` (out-of-band co-signature receipts that are external evidence per [D098](DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) / [D107](DECISIONS.md#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes)), and `delegation-certificate` (the certificate carrier defined by [§1.11.8](#1118-carriage): the payload is the certificate object under the JCS hash rule or its `cert_hash` reference; facts are the [§1.11.4](#1114-verifier-walk) walk outputs). Registered after the initial set, under the same rule: `continuation-packet` (per [D142](DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions): the payload is the continuation packet a baton-pass record hands to a successor agent — raw-bytes hash rule for document media types, the `ref.record_hash` sibling spelling when the carried material is itself a signed baton-pass observation; facts are role-term routing facts, with packet bodies private by default).
+The initial atrib-maintained registry is: `oauth2`, `mcp-oauth`, `aauth`, `x401`, `ap2-vi` (mapped 1:1 from the legacy [§5.5.6](#556-generic-authorization-evidence-blocks) adapters), `human-approval` (per [D118](DECISIONS.md#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain): the payload is the human-signed approval record itself — `ref.record_hash` names it, `ref.kind` states where its body is retrievable, `payload.hash` commits to its canonical bytes; facts: approver key, approval scope, decision), `counterparty-attestation` (out-of-band co-signature receipts that are external evidence per [D098](DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) / [D107](DECISIONS.md#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes)), and `delegation-certificate` (the certificate carrier defined by [§1.11.8](#1118-carriage): the payload is the certificate object under the JCS hash rule or its `cert_hash` reference; facts are the [§1.11.4](#1114-verifier-walk) walk outputs). Registered after the initial set, under the same rule: `continuation-packet` (per [D142](DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions): the payload is the continuation packet a baton-pass record hands to a successor agent — raw-bytes hash rule for document media types, the `ref.record_hash` sibling spelling when the carried material is itself a signed baton-pass observation; facts are role-term routing facts, with packet bodies private by default); and `payments-detection` plus `payments-settlement` (per [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core): rail detection facts on a transaction record and a settlement recommendation document attached by hash, both owned normatively by the [atrib Payments Profile §12](docs/payments-profile.md#12-evidence-profiles); detection material and recommendation bodies stay private by default).
 
 **Unknown-profile handling (normative).** Consumers MUST preserve envelopes whose profile URI they do not recognize, MUST render them opaquely (profile URI, tier, payload hash), MUST NOT drop them, and MUST NOT let them affect record validity — the same posture as unknown extension event types ([§1.2.4](#124-event_type-values)). Filtering to known profiles is a rendering choice, never a storage or relay behavior.
 
@@ -4862,7 +3805,7 @@ The initial atrib-maintained registry is: `oauth2`, `mcp-oauth`, `aauth`, `x401`
 
 **Invariants.** Fact/policy separation ([§3.6](#36-implementation-notes)) is preserved: `result.valid` and `facts` are verification facts, not weights; graph services never store, derive from, or serve envelopes. The [§1.7.6](#176-cross-attestation-requirement-for-transaction-records) cross-attestation rule stays in core: the `signers[]` array over canonical transaction bytes remains the only way to satisfy the ≥2-distinct-keys minimum, and a verifier that sees only a `counterparty-attestation` envelope still reports `cross_attestation_missing: true` ([D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)). Producer-side envelope writers follow the degradation contract ([§5.8](#58-degradation-contract)): catch-all, silent-failure, `atrib:`-prefixed logging; a failed envelope construction drops the envelope, never the record or the primary tool response. The envelope is the concrete shape of trust layer 7 ("external evidence") in the [§8.7](#87-adversarial-threat-model) stack: it does not certify truth, it records what a named verifier accepted.
 
-**Conformance.** The envelope conformance corpus lives at `spec/conformance/evidence-envelope/` with six case families: `shape/` (schema validity, closed enums, the `ref.record_hash` sibling rule), `registry/` (HTTPS type-URI rule, full-URI profile identity), `unknown-profile/` (preservation, opaque rendering), `legacy-mapping/` (the frozen five-row table with sixth-string rejection), `tier/` (instance-scoped tier semantics, relay-swap rejection, claimed-but-not-reproducible reporting, and the never-flips-`valid` invariant), and `continuation-packet/` (the [D142](DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions) post-initial profile registration). The generator is `packages/log-dev/scripts/generate-conformance-evidence-envelope.ts`; the reference consumer is `packages/verify/test/conformance-evidence-envelope.test.ts`. Profile-internal semantics remain authoritative in the existing corpora at `spec/conformance/5.5.6/{oauth,aauth,x401}/` and `spec/conformance/ap2-vi-crypto/`, which are referenced, not moved.
+**Conformance.** The envelope conformance corpus lives at `spec/conformance/evidence-envelope/` with eight case families: `shape/` (schema validity, closed enums, the `ref.record_hash` sibling rule), `registry/` (HTTPS type-URI rule, full-URI profile identity), `unknown-profile/` (preservation, opaque rendering), `legacy-mapping/` (the frozen five-row table with sixth-string rejection), `tier/` (instance-scoped tier semantics, relay-swap rejection, claimed-but-not-reproducible reporting, and the never-flips-`valid` invariant), `continuation-packet/` (the [D142](DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions) post-initial profile registration), and `payments-detection/` plus `payments-settlement/` (the [D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core) payments-profile registrations, including the no-profile-loaded degradation family and a [D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) duplicate-signer re-pin). The generator is `packages/log-dev/scripts/generate-conformance-evidence-envelope.ts`; the reference consumer is `packages/verify/test/conformance-evidence-envelope.test.ts`. Profile-internal semantics remain authoritative in the existing corpora at `spec/conformance/5.5.6/{oauth,aauth,x401}/` and `spec/conformance/ap2-vi-crypto/`, which are referenced, not moved.
 
 ---
 
@@ -4920,9 +3863,9 @@ This section is normative. A conforming implementation MUST fire each trigger at
 | -------------------- | ----------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | session_init         | Before the first outbound `tools/call` in a session                                                         | @atrib/agent | Establish context_id, generate session_token, fetch and negotiate policies, create session policy record ([§5.4.2](#542-session-initialization)).                                                                                                                                                                                                                                                 |
 | tool_call_outbound   | Immediately before every outbound `tools/call` request is sent                                              | @atrib/agent | Attach attribution context token to request headers and `params._meta` ([§5.4.3](#543-outbound-context-forwarding)).                                                                                                                                                                                                                                                                              |
-| tool_call_inbound    | Immediately after every inbound `tools/call` response is received, if `isError: false`                      | @atrib/agent | Read and store attribution context from response. Update session state ([§5.4.4](#544-inbound-context-accumulation)). Check for transaction signal ([§5.4.5](#545-transaction-detection)).                                                                                                                                                                                                        |
+| tool_call_inbound    | Immediately after every inbound `tools/call` response is received, if `isError: false`                      | @atrib/agent | Read and store attribution context from response. Update session state ([§5.4.4](#544-inbound-context-accumulation)). Check for transaction signal ([payments profile §3](docs/payments-profile.md#3-sdk-transaction-detection)).                                                                                                                                                                                                        |
 | tool_served          | Immediately after a tool handler completes successfully (`isError: false`), before the response is returned | @atrib/mcp   | Construct, sign, and write attribution record (event_type: `tool_call` URI, or `transaction` URI if tool is in `transactionTools`; see [§1.2.4](#124-event_type-values)). Attach context token to response ([§5.3.3](#533-record-construction-and-signing)–5.3.4). Submit to log (synchronously for transaction records, asynchronously for tool_call records per [§5.3.5](#535-log-submission)). |
-| transaction_detected | When `detectTransaction()` returns `true` during `tool_call_inbound` processing                             | @atrib/agent | Apply path selection rule ([§5.4.5](#545-transaction-detection)): if attribution token is present in the response, Path 1 is in use: update session state and skip emission. If no token, Path 2 applies: emit a `transaction` record, submit to log immediately (high priority, non-blocking), finalize session policy record.                                                                   |
+| transaction_detected | When `detectTransaction()` returns `true` during `tool_call_inbound` processing                             | @atrib/agent | Apply path selection rule ([payments profile §3](docs/payments-profile.md#3-sdk-transaction-detection)): if attribution token is present in the response, Path 1 is in use: update session state and skip emission. If no token, Path 2 applies: emit a `transaction` record, submit to log immediately (high priority, non-blocking), finalize session policy record.                                                                   |
 | task_created         | When a `tasks/create` response is received                                                                  | @atrib/agent | Store the task ID and associate it with the current session context. Continue forwarding attribution context on subsequent requests within the task.                                                                                                                                                                                                                                              |
 | task_completed       | When a task polling response indicates completion                                                           | @atrib/agent | Treat task completion as a successful `tools/call` response. Apply `tool_call_inbound` trigger logic to the final task result.                                                                                                                                                                                                                                                                    |
 

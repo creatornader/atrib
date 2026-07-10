@@ -1,0 +1,43 @@
+{
+  "name": "withheld-recommendation-declared",
+  "spec_section": "5.5.7",
+  "family": "payments-settlement",
+  "description": "The public-projection posture: settlement recommendations carry creator keys and share fractions, so public surfaces MAY carry the hash plus sanitized facts only, with the document body withheld. MUST accept; the body is not retrievable from the envelope and a later verified-tier claim requires retrieving it.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/payments-settlement",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:e4fec9415fc2f30f3af8c63b296cdc4479143714298fa89f75a25e03c78a9f44",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "facts": {
+        "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "calculated_by": "local",
+        "policy_record_id": "default",
+        "graph_tree_size": 4821937
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    }
+  },
+  "expected": {
+    "accept": true,
+    "body_retrievable": false,
+    "public_facts": [
+      "calculated_by",
+      "context_id",
+      "graph_tree_size",
+      "policy_record_id"
+    ]
+  }
+}

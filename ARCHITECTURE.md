@@ -64,7 +64,7 @@ Three protocol layers, one SDK layer that automates them. The append-only flow i
                                          │
                                          ▼
                 ┌─────────────────────────────────────────────────────┐
-                │  Policy & Settlement (§4)                           │
+                │  Policy & Settlement (payments profile)             │
                 │                                                     │
                 │  Pure function: graph + policy = distribution        │
                 │  Any party can run locally and verify independently │
@@ -163,7 +163,7 @@ Log consistency: consecutive checkpoints can be verified for consistency. This p
 
 Graph edges: all nine edge types are deterministically derived from record fields. Given the same records, any implementation following Section 3.2.4 must produce the same graph. You can verify by rebuilding it yourself.
 
-Settlement calculation: the algorithm (Section 4.6) is a pure function. Graph + policy in, distribution out. No network calls, no randomness. Any party with the same inputs gets the same answer. `@atrib/verify` exists so merchants can run this locally and check.
+Settlement calculation: the algorithm ([payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm)) is a pure function. Graph + policy in, distribution out. No network calls, no randomness. Any party with the same inputs gets the same answer. `@atrib/verify` exists so merchants can run this locally and check.
 
 **Trusted (but auditable):**
 
@@ -195,6 +195,8 @@ The decision is documented in [D006](DECISIONS.md#d006-merkle-log-c2sp-tlog-tile
 
 ## Payment protocol integration
 
+The split is: core accommodates, profile implements. The core spec keeps three payment-facing elements: the `transaction` event type (URI and 0x02 log-entry byte), the cross-attestation rule ([§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)), and the universal evidence envelope ([§5.5.7](atrib-spec.md#557-universal-evidence-envelope)). Everything rail-specific (per-rail detection hooks, the SDK detection contract, the policy format, the calculation algorithm, and settlement documents) lives in the independently versioned [atrib Payments Profile](docs/payments-profile.md) ([D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)), so rail churn never edits the core spec.
+
 atrib detects transaction events from six agent commerce protocols simultaneously:
 
 | Protocol                | Detection signal                                          | Source                       |
@@ -218,7 +220,7 @@ Protocol agnosticism. atrib works regardless of which payment rail the merchant 
 
 Separation of concerns. Attribution and payment are orthogonal problems. Attribution answers "who contributed to this outcome?" Payment answers "how does money move?" Coupling them would mean each one's adoption depends on the other's.
 
-When a transaction is detected, the agent emits a `transaction` record (event_type `"transaction"`) with the same `context_id` as the session. This closes the attribution loop -- the graph now has a terminal node that all contributing tool calls converge on. See Section 1.7 for the detection rules for each protocol.
+When a transaction is detected, the agent emits a `transaction` record (event_type `"transaction"`) with the same `context_id` as the session. This closes the attribution loop -- the graph now has a terminal node that all contributing tool calls converge on. See [payments profile §2](docs/payments-profile.md#2-transaction-detection-hooks) for the detection rules for each protocol.
 
 There are two emission paths for transaction records (Section 5.4.5, [D011](DECISIONS.md#d011-dual-transaction-emission-paths-with-anti-double-emission)). Path 1: the merchant has `@atrib/mcp` installed and emits the transaction record directly. Path 2: the merchant does not have atrib, so the agent detects the transaction from the response and emits it. Anti-double-emission logic prevents both from firing: the agent checks whether the response already contains an attribution token, and suppresses Path 2 if it does.
 
@@ -416,7 +418,7 @@ Two observation surfaces exist per protocol and compose cleanly:
 | Runtime       | `@atrib/agent` + framework adapter                  | Payment events during a single agent session                                  |
 | Retrospective | Protocol adapter (scanner + registry + attribution) | All protocol activity across the ecosystem, independent of any single session |
 
-A complete per-protocol artifact demonstrates both paths: **Path A** (retrospective scanner + attribution, exercising [§3](atrib-spec.md#3-graph-query-interface) graph and [§4](atrib-spec.md#4-attribution-policy-format) calculation) plus **Path B** (a reference agent using `@atrib/agent` to make real payments, with signed receipts flowing into the log and merchant-side verification via `@atrib/verify`, exercising [§1](atrib-spec.md#1-attribution-record-format), [§2.6.1](atrib-spec.md#261-submit-entry), [§5](atrib-spec.md#5-sdk-specification)).
+A complete per-protocol artifact demonstrates both paths: **Path A** (retrospective scanner + attribution, exercising the [§3](atrib-spec.md#3-graph-query-interface) graph and the [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) calculation) plus **Path B** (a reference agent using `@atrib/agent` to make real payments, with signed receipts flowing into the log and merchant-side verification via `@atrib/verify`, exercising [§1](atrib-spec.md#1-attribution-record-format), [§2.6.1](atrib-spec.md#261-submit-entry), [§5](atrib-spec.md#5-sdk-specification)).
 
 The spec stays protocol-agnostic. Protocol-specific attribution rationale lives in the adapter's documentation, not in the spec body. This preserves [§3.6](atrib-spec.md#36-implementation-notes)'s fact/policy separation.
 
@@ -529,7 +531,7 @@ Versioned URL paths (`/v1/checkpoint`, `/v6/lookup/<key>`) are immutable: once a
       approval UI.
 
 @atrib/verify         Merchant verification library
-  └── Runs §4.6 calculation locally, verifies settlement recommendations and AP2 / VI evidence
+  └── Runs the payments-profile calculation locally, verifies settlement recommendations and AP2 / VI evidence
 
 @atrib/runtime-log    Runtime-log proof helpers
   └── Builds and verifies log_window_manifest objects for host-owned run

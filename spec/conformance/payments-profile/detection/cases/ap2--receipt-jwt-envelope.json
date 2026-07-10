@@ -1,0 +1,19 @@
+{
+  "name": "receipt-jwt-envelope",
+  "corpus": "payments-profile/detection",
+  "rail": "ap2",
+  "profile_section": "2.5",
+  "description": "AP2 v0.2 sample result envelope: status \"success\" plus a compact checkout_receipt JWT. Detection does not decode the JWT.",
+  "input": {
+    "tool_name": "agent_checkout",
+    "response": {
+      "status": "success",
+      "order_id": "order_123",
+      "checkout_receipt": "eyJhbGciOiJFUzI1NiJ9.eyJzdGF0dXMiOiJTdWNjZXNzIn0.signature"
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "AP2"
+  }
+}

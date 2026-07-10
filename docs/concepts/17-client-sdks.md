@@ -58,7 +58,7 @@ Three accepted-ADR surfaces ride along with the verbs, all outside signed bytes:
 ## What is deliberately not in the SDK
 
 - **Summarize.** Not an SDK verb and not a recall shape. Synthesis belongs to the calling harness/model; the SDK returns verified raw material.
-- **Payments detection and settlement.** Transaction detection lives with the runtime middleware (`@atrib/agent`), and the payments layer is on a spin-out path from protocol core ([P048](../../DECISIONS.md#p048-payments-profile-spin-out-from-protocol-core)). The SDK keeps the transaction *record* layer (signing, cross-attestation helpers) because that is trust semantics, not rail plumbing.
+- **Payments detection and settlement.** Transaction detection lives with the runtime middleware (`@atrib/agent`), and the payments layer is on a spin-out path from protocol core ([D147](../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)). The SDK keeps the transaction *record* layer (signing, cross-attestation helpers) because that is trust semantics, not rail plumbing.
 - **Control decisions.** Deciding whether an action may run is host-owned: [`@atrib/action-gate`](../../packages/action-gate/README.md) per [D133](../../DECISIONS.md#d133-action-gate-is-a-host-owned-controlproof-package) signs allow/block/escalate decisions and outcomes at the host's boundary. The client SDK records and recalls; it does not gate.
 
 The line is the same in all three cases: the SDK is the substrate's client, not a policy engine, a synthesizer, or a payment rail.
