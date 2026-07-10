@@ -19,10 +19,9 @@
  *   4. Cross-producer mirror-file inheritance (caller pre-filters by ctx)
  *   5. Synthetic genesis: sha256:hex(SHA-256(UTF-8(context_id)))
  *
- * The corpus exercises resolveChainRoot directly. inheritChainContext
- * (which orchestrates context_id inheritance + mirror file I/O) is an
- * implementation-level convenience tested in @atrib/mcp's mirror.test.ts;
- * its decision tree is documented in the corpus README.
+ * The precedence cases exercise resolveChainRoot directly. Corpus-backed
+ * cases exercise inheritChainContext so the mirror I/O boundary is also
+ * pinned for other implementations.
  *
  * Seeds and timestamps are hardcoded so successive regenerations produce
  * byte-identical files. Re-run when:
@@ -34,7 +33,14 @@
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
-import { genesisChainRoot, resolveChainRoot } from '@atrib/mcp'
+import {
+  canonicalRecord,
+  genesisChainRoot,
+  hexEncode,
+  resolveChainRoot,
+  sha256,
+  type AtribRecord,
+} from '@atrib/mcp'
 
 const REFERENCE_TIME_MS = Date.UTC(2026, 0, 1, 0, 0, 0)
 const CONTEXT_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
@@ -56,6 +62,12 @@ interface CaseInput {
   auto_chain_tail_hex: string | null
   env: Record<string, string>
   mirror_tail_hex: string | null
+  mirror_corpus?: MirrorCorpusFixture
+}
+
+interface MirrorCorpusFixture {
+  effective_file: string
+  files: Array<{ file: string; lines: unknown[] }>
 }
 
 interface CaseBody {
@@ -63,7 +75,7 @@ interface CaseBody {
   spec_section: string
   description: string
   input: CaseInput
-  expected: { chain_root: string; precedence_layer: string }
+  expected: { chain_root: string; precedence_layer: string; mirror_source_file?: string }
 }
 
 function writeCase(name: string, body: CaseBody): void {
@@ -104,7 +116,81 @@ function buildCase(opts: {
   }
 }
 
+function fixtureRecord(opts: {
+  contextId: string
+  timestamp: number
+  contentDigit: string
+}): AtribRecord {
+  return {
+    spec_version: 'atrib/1.0',
+    content_id: `sha256:${opts.contentDigit.repeat(64)}`,
+    creator_key: 'A'.repeat(43),
+    chain_root: genesisChainRoot(opts.contextId),
+    event_type: 'https://atrib.dev/v1/types/tool_call',
+    context_id: opts.contextId,
+    timestamp: opts.timestamp,
+    signature: 'B'.repeat(86),
+  }
+}
+
+function buildMirrorCorpusCase(opts: {
+  name: string
+  description: string
+  effectiveFile: string
+  files: MirrorCorpusFixture['files']
+  expectedTail: AtribRecord
+  expectedSourceFile: string
+}): CaseBody {
+  const mirrorTailHex = hexEncode(sha256(canonicalRecord(opts.expectedTail)))
+  return {
+    name: opts.name,
+    spec_section: '1.2.3',
+    description: opts.description,
+    input: {
+      context_id: CONTEXT_A,
+      inbound_record_hash_hex: null,
+      auto_chain_tail_hex: null,
+      env: {},
+      mirror_tail_hex: null,
+      mirror_corpus: {
+        effective_file: opts.effectiveFile,
+        files: opts.files,
+      },
+    },
+    expected: {
+      chain_root: resolveChainRoot({ contextId: CONTEXT_A, mirrorTailHex, env: {} }),
+      precedence_layer: 'mirror-tail',
+      mirror_source_file: opts.expectedSourceFile,
+    },
+  }
+}
+
 function main(): void {
+  const crossFileOlder = fixtureRecord({
+    contextId: CONTEXT_A,
+    timestamp: REFERENCE_TIME_MS,
+    contentDigit: '8',
+  })
+  const crossFileNewer = fixtureRecord({
+    contextId: CONTEXT_A,
+    timestamp: REFERENCE_TIME_MS + 1,
+    contentDigit: '9',
+  })
+  const singleFileOlder = fixtureRecord({
+    contextId: CONTEXT_A,
+    timestamp: REFERENCE_TIME_MS + 2,
+    contentDigit: 'a',
+  })
+  const singleFileNewer = fixtureRecord({
+    contextId: CONTEXT_A,
+    timestamp: REFERENCE_TIME_MS + 3,
+    contentDigit: 'b',
+  })
+  const foreignContextRecord = fixtureRecord({
+    contextId: 'b'.repeat(32),
+    timestamp: REFERENCE_TIME_MS + 4,
+    contentDigit: 'c',
+  })
   const cases: CaseBody[] = [
     buildCase({
       name: 'inbound-wins',
@@ -186,6 +272,32 @@ function main(): void {
       mirror: TAIL_MIRROR,
       expectedLayer: 'env-tail',
     }),
+    buildMirrorCorpusCase({
+      name: 'mirror-corpus-cross-file-tail',
+      description:
+        "The effective mirror belongs to producer A, but producer B's sibling file contains the newer record on the same context_id. Mirror inheritance MUST use producer B's canonical record hash as the corpus tail.",
+      effectiveFile: 'producer-a.jsonl',
+      files: [
+        { file: 'producer-a.jsonl', lines: [crossFileOlder] },
+        { file: 'producer-b.jsonl', lines: [{ record: crossFileNewer }] },
+      ],
+      expectedTail: crossFileNewer,
+      expectedSourceFile: 'producer-b.jsonl',
+    }),
+    buildMirrorCorpusCase({
+      name: 'mirror-corpus-single-file-tail',
+      description:
+        'A corpus with one mirror file preserves append-order tail selection and context_id filtering. The later matching envelope wins even though a foreign-context record appears after it.',
+      effectiveFile: 'producer-only.jsonl',
+      files: [
+        {
+          file: 'producer-only.jsonl',
+          lines: [singleFileOlder, { record: singleFileNewer }, foreignContextRecord],
+        },
+      ],
+      expectedTail: singleFileNewer,
+      expectedSourceFile: 'producer-only.jsonl',
+    }),
   ]
   // Special-case: env-tail-malformed-falls-through needs a malformed env var
   // injected directly (buildCase only synthesizes valid sha256: prefixes).
@@ -211,7 +323,7 @@ function main(): void {
       tail_env: TAIL_ENV,
       tail_mirror: TAIL_MIRROR,
     },
-    note: 'Ten cases covering the precedence cascade (inbound > auto-chain > env-tail > mirror-tail > genesis), env-var malformation fall-through, env-var namespace isolation, and three multi-producer race vectors with conflicting tails. Producers in any language may consume this corpus by serializing their resolveChainRoot equivalent against each case input and asserting the chain_root output matches.',
+    note: 'Twelve cases covering the precedence cascade (inbound > auto-chain > env-tail > mirror-tail > genesis), env-var malformation fall-through, env-var namespace isolation, three multi-producer race vectors with conflicting tails, cross-file corpus tail selection, and preserved single-file behavior. Producers in any language may consume the pure cases through resolveChainRoot and the mirror_corpus cases through their mirror-inheritance boundary.',
   }
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
 

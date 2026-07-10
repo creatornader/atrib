@@ -1,0 +1,59 @@
+{
+  "name": "mirror-corpus-single-file-tail",
+  "spec_section": "1.2.3",
+  "description": "A corpus with one mirror file preserves append-order tail selection and context_id filtering. The later matching envelope wins even though a foreign-context record appears after it.",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": null,
+    "auto_chain_tail_hex": null,
+    "env": {},
+    "mirror_tail_hex": null,
+    "mirror_corpus": {
+      "effective_file": "producer-only.jsonl",
+      "files": [
+        {
+          "file": "producer-only.jsonl",
+          "lines": [
+            {
+              "spec_version": "atrib/1.0",
+              "content_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "creator_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+              "event_type": "https://atrib.dev/v1/types/tool_call",
+              "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "timestamp": 1767225600002,
+              "signature": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+            },
+            {
+              "record": {
+                "spec_version": "atrib/1.0",
+                "content_id": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "creator_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+                "event_type": "https://atrib.dev/v1/types/tool_call",
+                "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "timestamp": 1767225600003,
+                "signature": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+              }
+            },
+            {
+              "spec_version": "atrib/1.0",
+              "content_id": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "creator_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "chain_root": "sha256:bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83",
+              "event_type": "https://atrib.dev/v1/types/tool_call",
+              "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "timestamp": 1767225600004,
+              "signature": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expected": {
+    "chain_root": "sha256:4feb7c3b3bc6557517c8e99e8116089857f4e2ae53954640c3d84c9eb6ed2d13",
+    "precedence_layer": "mirror-tail",
+    "mirror_source_file": "producer-only.jsonl"
+  }
+}

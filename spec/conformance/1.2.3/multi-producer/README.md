@@ -20,7 +20,7 @@ for the decision rationale and the alternative paths considered.
 | 1. inbound     | `inboundRecordHashHex` (decoded from MCP `_meta.atrib`, W3C tracestate `atrib=...`, or `X-Atrib-Chain` header per [§1.5.2](../../../atrib-spec.md#152-http-transport-tracestate)) | The agent SDK threads the upstream record's hash explicitly into this call. The new record MUST chain to it.                    |
 | 2. auto-chain  | `autoChainTailHex` (in-memory tail)                                                                                                                                               | The producer signed a previous record under the same context in this process and remembers its hash. Within-process continuity. |
 | 3. env-tail    | `ATRIB_CHAIN_TAIL_<context_id>` env var, value matching `^sha256:[0-9a-f]{64}$`                                                                                                   | A parent process spawned this producer with the env var set. Cross-producer handoff.                                            |
-| 4. mirror-tail | `mirrorTailHex` (caller pre-reads a mirror file filtered to this context_id)                                                                                                      | A peer producer wrote to a shared on-disk mirror; we inherit its tail. File-as-IPC fallback.                                    |
+| 4. mirror-tail | `mirrorTailHex` (caller pre-reads the local mirror corpus filtered to this context_id)                                                                                            | A peer producer wrote to any `*.jsonl` sibling of the effective mirror file; we inherit the newest corpus tail.                 |
 | 5. genesis     | `sha256:hex(SHA-256(UTF-8(context_id)))` per [§1.2.3](../../../atrib-spec.md#123-chain_root-for-genesis-records)                                                                  | No upstream chain context exists.                                                                                               |
 
 ## Cases
@@ -37,22 +37,23 @@ for the decision rationale and the alternative paths considered.
 | `cases/race-inbound-over-stale-auto-chain.json` | Conflicting inbound and autoChain tails; inbound wins.                                                  |
 | `cases/race-auto-chain-over-stale-env.json`     | Conflicting autoChain and env tails; autoChain wins.                                                    |
 | `cases/race-env-over-stale-mirror.json`         | Conflicting env and mirror tails with no inbound or autoChain; env wins.                                |
+| `cases/mirror-corpus-cross-file-tail.json`      | The newest matching tail lives in a sibling file rather than the effective producer file.               |
+| `cases/mirror-corpus-single-file-tail.json`     | A one-file corpus preserves append-order selection and context filtering.                               |
 
 ## Reference implementation
 
-`@atrib/mcp`'s `resolveChainRoot` in `packages/mcp/src/chain-root.ts`. The
-unit tests at `packages/mcp/test/chain-root.test.ts` exercise the same
-precedence ordering, and the corpus reference test at
-`packages/mcp/test/conformance-1.2.3-multi-producer.test.ts` consumes
-each case JSON and asserts the resolver returns the expected chain_root.
+`@atrib/mcp`'s `resolveChainRoot` in `packages/mcp/src/chain-root.ts` and
+`inheritChainContext` in `packages/mcp/src/mirror.ts`. The corpus reference
+test at `packages/mcp/test/conformance-1.2.3-multi-producer.test.ts` sends
+pure precedence cases to the former and materializes `mirror_corpus` cases
+for the latter.
 
-The orchestration helper `inheritChainContext` in
-`packages/mcp/src/mirror.ts` builds on `resolveChainRoot` to handle the
-mirror-file I/O and context_id inheritance. Its decision tree is tested
-in `packages/mcp/test/mirror.test.ts`. The mirror filter-by-context_id
-invariant (a mirror tail on a DIFFERENT context_id MUST NOT be inherited
-when caller supplies a context_id) is part of the multi-producer
-contract; producers that read mirrors directly MUST honor it.
+`inheritChainContext` treats the effective mirror file's directory as one
+corpus. It selects the append-order tail in each file, then compares those
+tails by signed timestamp. Equal timestamps use the canonical record hash.
+The advisory index can be deleted at any time; a missing, stale, or invalid
+index returns to a full corpus scan. The context_id filter still applies
+before any tail is eligible.
 
 ## Generator
 
@@ -68,4 +69,5 @@ byte-identical files. Regenerate when:
 - The precedence ordering changes
 - A new precedence layer is added
 - The env-var name format changes (`ATRIB_CHAIN_TAIL_<context_id>`)
+- Mirror corpus selection changes
 - New test cases are needed

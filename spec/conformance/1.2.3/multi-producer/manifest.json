@@ -44,6 +44,14 @@
     {
       "file": "cases/race-env-over-stale-mirror.json",
       "name": "race-env-over-stale-mirror"
+    },
+    {
+      "file": "cases/mirror-corpus-cross-file-tail.json",
+      "name": "mirror-corpus-cross-file-tail"
+    },
+    {
+      "file": "cases/mirror-corpus-single-file-tail.json",
+      "name": "mirror-corpus-single-file-tail"
     }
   ],
   "constants": {
@@ -53,5 +61,5 @@
     "tail_env": "3333333333333333333333333333333333333333333333333333333333333333",
     "tail_mirror": "4444444444444444444444444444444444444444444444444444444444444444"
   },
-  "note": "Ten cases covering the precedence cascade (inbound > auto-chain > env-tail > mirror-tail > genesis), env-var malformation fall-through, env-var namespace isolation, and three multi-producer race vectors with conflicting tails. Producers in any language may consume this corpus by serializing their resolveChainRoot equivalent against each case input and asserting the chain_root output matches."
+  "note": "Twelve cases covering the precedence cascade (inbound > auto-chain > env-tail > mirror-tail > genesis), env-var malformation fall-through, env-var namespace isolation, three multi-producer race vectors with conflicting tails, cross-file corpus tail selection, and preserved single-file behavior. Producers in any language may consume the pure cases through resolveChainRoot and the mirror_corpus cases through their mirror-inheritance boundary."
 }
