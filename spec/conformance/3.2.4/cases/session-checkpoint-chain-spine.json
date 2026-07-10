@@ -1,0 +1,121 @@
+{
+  "name": "session-checkpoint-chain-spine",
+  "spec_section": "3.2.4",
+  "description": "A session_checkpoint links the surrounding records through CHAIN_PRECEDES but does not converge on the transaction and does not enter the calculation input projection.",
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:7000000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:5cfac09f7b171a7b492f1df33e8981f7b662a649329ffb8896f1ef816c41a6a6",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "77777777777777777777777777777777",
+        "timestamp": 1767225600000,
+        "signature": "p2bc5-1APKyHuamzgyc0HL8T6yZnfJCwhan2fQtMSKizxcm_Fj__2M8GZsLU1eT70BsGlNjcLDYmxreIjIooDA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "checkpoint": {
+          "first_index": 0,
+          "session_root": "sha256:49f63da8c980ae4d93066779552057472d6c2a5a4c4550fef3e7d89d99e610a2",
+          "tree_size": 1
+        },
+        "content_id": "sha256:7100000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+        "chain_root": "sha256:f90232c0651e566f50ee39f14861e91658255ca6b9143c5b613542a6794a063a",
+        "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+        "context_id": "77777777777777777777777777777777",
+        "timestamp": 1767225600001,
+        "signature": "GLsb1L9Xoq6v2KRM5vyjVz13Dw43B0GDvjIgkP0KLNFqe1-T3VAa2O3BsAkibrMRiSjJU1GGywxR3ZFoIVqfDA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:7200000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:1309d614033b8ca2dedffabd75225e6fd87e9f357cad9357b97dffd3fe5d5017",
+        "event_type": "https://atrib.dev/v1/types/tool_call",
+        "context_id": "77777777777777777777777777777777",
+        "timestamp": 1767225600002,
+        "signature": "GdNN5clFVHSNOIHv1vdLrtSJEh8bFJSkDREP4DkCW-rYXVe-pfa-t6QKf27cVoJfp4F4JVd1oDRgQNi4OaG0AA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:7300000000000000000000000000000000000000000000000000000000000000",
+        "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "chain_root": "sha256:1e0b81a360dd728ebf5e7c014122c356d1d17c13418658df4f1b8d3a31198f6f",
+        "event_type": "https://atrib.dev/v1/types/transaction",
+        "context_id": "77777777777777777777777777777777",
+        "timestamp": 1767225600003,
+        "signature": "xNhA8frsplByMokYgV3Li0tsMz5LDoVs_6nMIiFy58j_CQgnrHedPaRlF-zVPXsM9O5oHkToVANGxKNSolDwDw"
+      }
+    ]
+  },
+  "expected": {
+    "edges": [
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 0,
+        "target_record_index": 1,
+        "directed": true
+      },
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 1,
+        "target_record_index": 2,
+        "directed": true
+      },
+      {
+        "type": "CHAIN_PRECEDES",
+        "source_record_index": 2,
+        "target_record_index": 3,
+        "directed": true
+      },
+      {
+        "type": "SESSION_PRECEDES",
+        "source_record_index": 0,
+        "target_record_index": 2,
+        "directed": true
+      },
+      {
+        "type": "SESSION_PRECEDES",
+        "source_record_index": 0,
+        "target_record_index": 3,
+        "directed": true
+      },
+      {
+        "type": "SESSION_PRECEDES",
+        "source_record_index": 1,
+        "target_record_index": 3,
+        "directed": true
+      },
+      {
+        "type": "CONVERGES_ON",
+        "source_record_index": 0,
+        "target_record_index": 3,
+        "directed": true
+      },
+      {
+        "type": "CONVERGES_ON",
+        "source_record_index": 2,
+        "target_record_index": 3,
+        "directed": true
+      }
+    ],
+    "edge_count_by_type": {
+      "CHAIN_PRECEDES": 3,
+      "SESSION_PRECEDES": 3,
+      "SESSION_PARALLEL": 0,
+      "CONVERGES_ON": 2,
+      "CROSS_SESSION": 0,
+      "INFORMED_BY": 0,
+      "PROVENANCE_OF": 0,
+      "ANNOTATES": 0,
+      "REVISES": 0
+    },
+    "calculation_input_record_indices": [
+      0,
+      2
+    ]
+  }
+}
