@@ -122,6 +122,15 @@ export type {
   VerifyHandoffClaimsOptions,
 } from './handoff.js'
 
+// Verifier-side authority policy over informed_by lineage.
+export { evaluateAuthority, minAuthority } from './authority.js'
+export type {
+  AuthorityLevel,
+  AuthorityPolicy,
+  AuthorityRecord,
+  AuthorityResult,
+} from './authority.js'
+
 // Universal evidence envelope (§5.5.7, D137). Verifier-layer attachment model;
 // never touches signed bytes or verifyRecord().valid. The legacy §5.5.6
 // EvidenceVerificationBlock shape stays the mapped compatibility view.

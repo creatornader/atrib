@@ -7687,6 +7687,20 @@ Full design document: [docs/adr-draft-p049-mcp-extension.md](docs/adr-draft-p049
 - [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args), orchestrator-injected context for the receiving side.
 - [D137](#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model), the envelope this profile registers under; [D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys), the authority binding.
 
+## D149: Authority propagation is verifier-side policy over informed_by
+
+**Date:** 2026-07-10
+
+**Status:** Accepted
+
+**Extends:** [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D113](#d113-unvalidated-informed_by-refs-are-omitted-by-default)
+
+**Context.** The graph stays a pure fact layer under [§3.6](atrib-spec.md#36-facts-vs-policy). Authority is computed, never stored. Producer signatures already bind records to their write-time origin, but origin alone does not settle the authority of derived work. arXiv 2606.24322 proves a laundering gap in defenses that trust declared lineage: an agent can summarize untrusted content into benign-looking text, or a trusted tool can echo output derived from untrusted input.
+
+**Decision.** `@atrib/verify` evaluates authority as policy over a record, its `informed_by` lineage, and an origin-authority policy. Propagation takes the minimum authority along every reachable `informed_by` path, so no transformation can raise authority. Unresolved references and lineage left unexplored by a depth limit are conservatively untrusted. No authority field is added to records, no edge type is added, and the graph is not mutated. This is the evaluation half of the write-time origin binding that atrib already provides through producer signatures. It closes the laundering gap that arXiv 2606.24322 proves is fatal to defenses which trust declared lineage.
+
+**Alternatives considered.** (a) Store an authority field on records. Rejected because it makes authority a graph fact and lets a producer assert its own trust level. (b) Add an `ANCESTOR_AUTHORITY` edge type. Rejected because edges are derived from observable record structure only, while authority is a policy judgement. (c) Trust a record's own origin without walking lineage. Rejected because arXiv 2606.24322 proves this is unsound under summarization and tool-echo laundering.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
