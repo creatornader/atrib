@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -214,6 +214,170 @@ describe('inheritChainContext', () => {
     expect(result.contextId).toBe(CTX_A)
     expect(result.chainRoot).toBe(`sha256:${r1Hex}`)
     expect(result.inheritedFrom).toBe('mirror-tail')
+  })
+
+  it('caller context only + newer tail in sibling mirror: chains to the corpus tail', async () => {
+    const older = await makeRecord({
+      context_id: CTX_A,
+      timestamp: 1,
+      content_id: `sha256:${'1'.repeat(64)}`,
+    })
+    const newer = await makeRecord({
+      context_id: CTX_A,
+      timestamp: 2,
+      content_id: `sha256:${'2'.repeat(64)}`,
+    })
+    const newerHex = hexEncode(sha256(canonicalRecord(newer)))
+    await writeFile(mirrorPath, JSON.stringify(older) + '\n')
+    await writeFile(join(tmpDir, 'sibling.jsonl'), JSON.stringify({ record: newer }) + '\n')
+
+    const result = await inheritChainContext({
+      callerContextId: CTX_A,
+      mirrorPath,
+      env: {},
+      randomContextId,
+    })
+
+    expect(result.contextId).toBe(CTX_A)
+    expect(result.chainRoot).toBe(`sha256:${newerHex}`)
+    expect(result.inheritedFrom).toBe('mirror-tail')
+  })
+
+  it('skips a malformed sibling mirror and resolves from the remaining corpus', async () => {
+    const valid = await makeRecord({ context_id: CTX_A, timestamp: 1 })
+    const validHex = hexEncode(sha256(canonicalRecord(valid)))
+    await writeFile(mirrorPath, JSON.stringify(valid) + '\n')
+    await writeFile(join(tmpDir, 'malformed.jsonl'), '{not-json}\n')
+
+    const result = await inheritChainContext({
+      callerContextId: CTX_A,
+      mirrorPath,
+      env: {},
+      randomContextId,
+    })
+
+    expect(result.chainRoot).toBe(`sha256:${validHex}`)
+    expect(result.inheritedFrom).toBe('mirror-tail')
+  })
+
+  it('resolves equal-timestamp corpus tails deterministically', async () => {
+    const first = await makeRecord({
+      context_id: CTX_A,
+      timestamp: 10,
+      content_id: `sha256:${'4'.repeat(64)}`,
+    })
+    const second = await makeRecord({
+      context_id: CTX_A,
+      timestamp: 10,
+      content_id: `sha256:${'5'.repeat(64)}`,
+    })
+    const expectedHex = [first, second]
+      .map((record) => hexEncode(sha256(canonicalRecord(record))))
+      .sort()
+      .pop()!
+    await writeFile(mirrorPath, JSON.stringify(first) + '\n')
+    await writeFile(join(tmpDir, 'sibling.jsonl'), JSON.stringify(second) + '\n')
+
+    const resolveFromCorpus = () =>
+      inheritChainContext({
+        callerContextId: CTX_A,
+        mirrorPath,
+        env: {},
+        randomContextId,
+      })
+    const firstRun = await resolveFromCorpus()
+    const secondRun = await resolveFromCorpus()
+
+    expect(firstRun.chainRoot).toBe(`sha256:${expectedHex}`)
+    expect(secondRun).toEqual(firstRun)
+  })
+
+  it('updates the advisory index when a sibling file is added', async () => {
+    const older = await makeRecord({
+      context_id: CTX_A,
+      timestamp: 1,
+      content_id: `sha256:${'6'.repeat(64)}`,
+    })
+    const newer = await makeRecord({
+      context_id: CTX_A,
+      timestamp: 2,
+      content_id: `sha256:${'7'.repeat(64)}`,
+    })
+    await writeFile(mirrorPath, JSON.stringify(older) + '\n')
+
+    const first = await inheritChainContext({
+      callerContextId: CTX_A,
+      mirrorPath,
+      env: {},
+      randomContextId,
+    })
+    expect(first.chainRoot).toBe(`sha256:${hexEncode(sha256(canonicalRecord(older)))}`)
+
+    await writeFile(join(tmpDir, 'late-sibling.jsonl'), JSON.stringify(newer) + '\n')
+    const second = await inheritChainContext({
+      callerContextId: CTX_A,
+      mirrorPath,
+      env: {},
+      randomContextId,
+    })
+    expect(second.chainRoot).toBe(`sha256:${hexEncode(sha256(canonicalRecord(newer)))}`)
+  })
+
+  it('rebuilds after advisory index deletion or corruption', async () => {
+    const record = await makeRecord({ context_id: CTX_A, timestamp: 1 })
+    const expected = `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+    const indexPath = join(tmpDir, '.atrib-mirror-tail-index-v1.json')
+    await writeFile(mirrorPath, JSON.stringify(record) + '\n')
+
+    const resolveFromCorpus = () =>
+      inheritChainContext({
+        callerContextId: CTX_A,
+        mirrorPath,
+        env: {},
+        randomContextId,
+      })
+    expect((await resolveFromCorpus()).chainRoot).toBe(expected)
+    expect(JSON.parse(await readFile(indexPath, 'utf-8'))).toMatchObject({
+      schema: 'atrib.mirror-tail-index.v1',
+    })
+
+    await rm(indexPath)
+    expect((await resolveFromCorpus()).chainRoot).toBe(expected)
+    await writeFile(indexPath, '{corrupt}\n')
+    expect((await resolveFromCorpus()).chainRoot).toBe(expected)
+    const temporaryFiles = (await readdir(tmpDir)).filter((name) => name.includes('.tmp'))
+    expect(temporaryFiles).toEqual([])
+  })
+
+  it('falls back to a full scan when a mirror file is rewritten', async () => {
+    const first = await makeRecord({ context_id: CTX_A, timestamp: 1 })
+    const priorTail = await makeRecord({
+      context_id: CTX_A,
+      timestamp: 2,
+      content_id: `sha256:${'8'.repeat(64)}`,
+    })
+    const replacement = await makeRecord({
+      context_id: CTX_A,
+      timestamp: 3,
+      content_id: `sha256:${'9'.repeat(64)}`,
+    })
+    await writeFile(mirrorPath, `${JSON.stringify(first)}\n${JSON.stringify(priorTail)}\n`)
+
+    const resolveFromCorpus = () =>
+      inheritChainContext({
+        callerContextId: CTX_A,
+        mirrorPath,
+        env: {},
+        randomContextId,
+      })
+    expect((await resolveFromCorpus()).chainRoot).toBe(
+      `sha256:${hexEncode(sha256(canonicalRecord(priorTail)))}`,
+    )
+
+    await writeFile(mirrorPath, JSON.stringify(replacement) + '\n')
+    expect((await resolveFromCorpus()).chainRoot).toBe(
+      `sha256:${hexEncode(sha256(canonicalRecord(replacement)))}`,
+    )
   })
 
   it('caller context only + mirror tail on DIFFERENT context: falls through to genesis (no env)', async () => {

@@ -244,8 +244,9 @@ describe('atrib-emit-cli wire contract', () => {
     ).toBe(false)
   })
 
-  it('happy path: uses the per-agent mirror path when ATRIB_MIRROR_FILE is unset', async () => {
+  it('happy path: reads and writes the same per-agent mirror path by default', async () => {
     delete process.env['ATRIB_MIRROR_FILE']
+    delete process.env['ATRIB_AUTOCHAIN_SOURCE']
     const home = join(tmpDir, 'home')
     await mkdir(home, { recursive: true })
     const envelope = {
@@ -263,9 +264,29 @@ describe('atrib-emit-cli wire contract', () => {
     expect(r.code).toBe(0)
     const out = JSON.parse(r.stdout) as { record_hash: string }
     expect(out.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+
+    const nextEnvelope = {
+      ...envelope,
+      content: { what: 'cli-default-mirror-path-second', topics: ['cli-test'] },
+    }
+    const next = await runCli(['--log-endpoint', log.url], JSON.stringify(nextEnvelope), {
+      HOME: home,
+      ATRIB_PRIVATE_KEY: seedHex,
+      ATRIB_AGENT: 'cli-default-test',
+    })
+    expect(next.code).toBe(0)
+    const nextOut = JSON.parse(next.stdout) as { record_hash: string }
+    expect(nextOut.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+
     const defaultMirrorPath = join(home, '.atrib', 'records', 'atrib-emit-cli-default-test.jsonl')
     const mirrorText = await readFile(defaultMirrorPath, 'utf8')
     expect(mirrorText).toContain('cli-default-mirror-path')
+    const mirrorLines = mirrorText
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { record: { chain_root: string } })
+    expect(mirrorLines).toHaveLength(2)
+    expect(mirrorLines[1]?.record.chain_root).toBe(out.record_hash)
   })
 
   it('sends local_substrate watcher-WAL metadata to the coordinator and falls back on rejection', async () => {
