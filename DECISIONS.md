@@ -7715,6 +7715,20 @@ Full design document: [docs/adr-draft-p049-mcp-extension.md](docs/adr-draft-p049
 
 **Alternatives considered.** (a) Hard-block uncorroborated actions. Rejected because a hard block destroys legitimate utility that a one-time confirmation preserves, matching the paper's uncorr-auto control. (b) Count repeated corroboration. Rejected because Sybil and self-echo are the laundering channel the distinctness rule closes. (c) Use session-scoped authorization. Rejected in favor of an action-bound token because binding to the exact value voids the authorization if the value changes after approval.
 
+## D151: Action-bound single-use authorization tokens
+
+**Date:** 2026-07-10
+
+**Status:** Accepted
+
+**Extends:** [D150](#d150-pre-action-elevation-gate-composes-authority-propagation-with-cross-attestation), [D133](#d133-action-gate-is-a-host-owned-controlproof-package), [D111](#d111-host-owned-oauth-evidence-infrastructure)
+
+**Context.** arXiv 2606.24322 defines an authorization token over the tuple (tool, value, amount, nonce, timestamp). The token must stop authorizing an action when its security-relevant value changes after approval. It must also prevent two concurrent checks from accepting the same approval while preserving a valid pending approval when an attacker probes it with the wrong binding.
+
+**Decision.** `@atrib/action-gate` derives the action binding by applying JCS and SHA-256 to the five-field tuple. Any change to the driving value after approval derives a different binding and voids the authorization. A host-owned consumption store enforces single use through one atomic `consume` operation, following the [D111](#d111-host-owned-oauth-evidence-infrastructure) replay-cache precedent. atrib ships the check, and the host owns the state. The guarantee is at most one successful check per binding per store. Coupling consumption to execution is the host's contract. The host must check immediately before each attempt and never reuse a prior result's `fresh` flag. Freshness is caller-clocked, so the check stays pure apart from the single consume call. A failed pure check never reaches `consume`, so probing with mismatched bindings cannot burn a legitimate pending approval.
+
+**Alternatives considered.** (a) Use session-scoped authorization. Rejected in [D150](#d150-pre-action-elevation-gate-composes-authority-propagation-with-cross-attestation) and again here because value drift after approval must void the grant. (b) Sign tokens as atrib records. Deferred. The composition path binds a token to a signed human-approval record through `informed_by` per [D118](#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain), and the check itself does not require that representation. (c) Consume on any check attempt. Rejected because it gives an attacker a denial-of-authorization primitive against pending approvals. (d) Use a split `has` and `add` store interface. Rejected because the read-then-write gap lets two concurrent checks both observe an unused binding, causing a double-spend. A synchronous-only interface also cannot back the shared-store adapters required by the D111 precedent.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

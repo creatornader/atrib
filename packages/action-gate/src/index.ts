@@ -25,6 +25,20 @@ export type {
   ElevationInput,
   ElevationOutcome,
 } from './elevation.js'
+export {
+  checkAndConsumeToken,
+  computeActionBinding,
+  createMemoryConsumptionStore,
+  issueActionToken,
+} from './token.js'
+export type {
+  ActionBindingInput,
+  IssuedActionToken,
+  TokenCheckInput,
+  TokenCheckReason,
+  TokenCheckResult,
+  TokenConsumptionStore,
+} from './token.js'
 
 export const ACTION_GATE_DECISION_EVENT_TYPE_URI =
   'https://atrib.dev/v1/extensions/action-gate/decision' as const
