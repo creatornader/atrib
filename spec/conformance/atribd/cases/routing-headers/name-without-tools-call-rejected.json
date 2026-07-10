@@ -1,6 +1,6 @@
 {
   "name": "name-without-tools-call-rejected",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "description": "An Mcp-Name header on a body with no tools/call request is a header/body divergence and MUST be rejected with HTTP 400.",
   "input": {
     "headers": {

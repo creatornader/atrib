@@ -60,11 +60,14 @@ where this brief and the ADR drafts conflict, the drafts win.
    run without rotating an identity; sandboxed agents hold keys worth
    exactly one run. Good enterprise/security page material once the spec
    section lands.
-5. **Local daemon consolidation** (P046): the seven-process topology
-   consolidates into one local daemon. Do not announce or name the daemon
-   in public copy until the P046 timing gate passes; until then, describe
-   the local runtime generically. Announcement-timing details live in the
-   private relay supplement.
+5. **Local daemon consolidation** (P046, promoted to the atribd daemon
+   ADR): the seven-process topology consolidates into one local daemon,
+   `atribd`. Do not announce or name the daemon in public website copy
+   until the daemon PR is merged AND the `atribd` package is live on npm;
+   until then, describe the local runtime generically. The former
+   timing-gate phrasing is obsolete: the MCP SDK gate binds only the
+   transport binding, and the daemon shipped behind a transport adapter.
+   Announcement-timing details live in the private relay supplement.
 6. **attest/recall rename sequencing** (P047): new names become primary in
    docs *inside* the alias window; legacy tool names stay documented for
    migration. npm package pages: `@atrib/attest` will be published fresh;
@@ -148,7 +151,9 @@ through
 facts 2, 3, 4, 8, and 9 above may now be written in PRESENT tense (the spec
 sections, conformance corpora, and the dev.atrib/attribution v0.1 extension
 document exist on this branch). The session-checkpoint event type remains
-extension-URI staged, so fact 3's language note still applies. Facts 1, 5,
-6, and 7 (P046-P048) remain roadmap tense; the fact-5 embargo stands. [D136](../DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested)
+extension-URI staged, so fact 3's language note still applies. Facts 1, 6,
+and 7 (P047, P048) remain roadmap tense. Fact 5 is implemented (the daemon
+ADR landed) but its embargo stands under the reworded condition above:
+merged PR plus live npm package, not the retired timing-gate date. [D136](../DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested)
 (consolidated `@atrib/sdk` + Python `atrib` SDKs) also landed and is safe to
 reference in developer-facing copy.

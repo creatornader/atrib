@@ -1,6 +1,6 @@
 {
   "name": "annotation-parity",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "description": "The same atrib-annotate call through a standalone stdio server, the daemon HTTP surface, and the daemon alias mount MUST produce byte-identical canonical records and the same _local.producer sidecar label. Fixed key (fill-42 test seed) and frozen timestamp make the signed bytes reproducible.",
   "input": {
     "tool": "atrib-annotate",

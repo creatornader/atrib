@@ -1,6 +1,6 @@
 {
   "name": "explicit-argument-wins",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "check": "http-carrier",
   "description": "Rung 1: an explicit 32-hex context_id argument beats every inbound carrier. The daemon passes the call through untouched and injects nothing.",
   "input": {

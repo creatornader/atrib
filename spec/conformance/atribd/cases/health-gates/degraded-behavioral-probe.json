@@ -1,6 +1,6 @@
 {
   "name": "degraded-behavioral-probe",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "description": "D130: a failing non-mutating behavioral probe degrades the daemon. Write primitives stay skipped (no validate-only contract); skipped never degrades.",
   "input": {
     "runtime_contracts": {

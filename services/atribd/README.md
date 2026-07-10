@@ -92,7 +92,7 @@ Read primitives that support unscoped queries proceed per their own scope
 rules. A single-tenant daemon can opt back into ambient env and profile-file
 discovery ([D078](../../DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)) with `--ambient-context` or `ATRIBD_AMBIENT_CONTEXT=1`;
 the flag name is a
-[D147](../../DECISIONS.md#d147-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime)
+[D148](../../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime)
 open question. The stdio surfaces keep the ambient ladder unchanged.
 
 ## Write serialization

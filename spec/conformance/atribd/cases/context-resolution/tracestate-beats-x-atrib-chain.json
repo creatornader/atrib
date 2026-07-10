@@ -1,6 +1,6 @@
 {
   "name": "tracestate-beats-x-atrib-chain",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "check": "http-carrier",
   "description": "Ladder order per §1.5.4/§1.5.3: the atrib= tracestate entry beats the X-Atrib-Chain fallback carrier.",
   "input": {

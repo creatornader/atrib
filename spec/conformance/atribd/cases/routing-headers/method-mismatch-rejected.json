@@ -1,6 +1,6 @@
 {
   "name": "method-mismatch-rejected",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "description": "An Mcp-Method header that diverges from the body method MUST be rejected with HTTP 400 and a JSON-RPC error, with no state consulted (SEP-2243: servers MUST reject header/body mismatches).",
   "input": {
     "headers": {

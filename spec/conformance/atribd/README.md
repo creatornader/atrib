@@ -1,7 +1,7 @@
 # atribd daemon conformance corpus
 
 This corpus is the executable design gate for
-[D147](../../../DECISIONS.md#d147-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime),
+[D148](../../../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime),
 the public stateless-native local daemon that consolidates the seven cognitive
 primitives. It pins the daemon contract before and independent of the MCP
 TypeScript SDK's stateless-transport release: the transport sits behind an

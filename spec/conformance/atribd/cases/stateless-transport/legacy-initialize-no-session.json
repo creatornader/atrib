@@ -1,6 +1,6 @@
 {
   "name": "legacy-initialize-no-session",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "description": "A pre-2026-07-28 client that POSTs initialize gets a valid stateless response: capabilities returned, no session id issued, and later requests need no session header.",
   "input": {
     "headers": {},

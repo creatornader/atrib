@@ -1,6 +1,6 @@
 {
   "name": "degraded-recall-contract",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "description": "D127: a failing recall content-index contract degrades the daemon. Degraded is a report state, not a fatal one; the daemon keeps serving.",
   "input": {
     "runtime_contracts": {

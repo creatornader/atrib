@@ -127,7 +127,7 @@ async function main() {
 
       const fixture = {
         name: spec.name,
-        spec_section: 'D147',
+        spec_section: 'D148',
         description:
           `The same ${spec.tool} call through a standalone stdio server, the daemon HTTP ` +
           'surface, and the daemon alias mount MUST produce byte-identical canonical ' +

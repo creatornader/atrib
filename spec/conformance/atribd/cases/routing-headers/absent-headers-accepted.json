@@ -1,6 +1,6 @@
 {
   "name": "absent-headers-accepted",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "description": "Requests without Mcp-Method / Mcp-Name headers are accepted during the legacy compatibility window; session-era SDK clients do not send them.",
   "input": {
     "headers": {},

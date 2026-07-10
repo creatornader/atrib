@@ -1,6 +1,6 @@
 {
   "name": "name-mismatch-rejected",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "description": "An Mcp-Name header that diverges from the tools/call tool name MUST be rejected with HTTP 400. Gateways route and rate-limit on these headers; a divergent body is a smuggling vector.",
   "input": {
     "headers": {

@@ -1,6 +1,6 @@
 {
   "name": "meta-atrib-beats-tracestate",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "check": "http-carrier",
   "description": "Rung 2, ladder order per §1.5.4: _meta.atrib beats the atrib= entry in _meta.tracestate. The resolved token seeds chain-tail resolution per D067 rung 1.",
   "input": {

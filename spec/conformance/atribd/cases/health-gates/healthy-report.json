@@ -1,6 +1,6 @@
 {
   "name": "healthy-report",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "description": "All D127/D129/D130 gates pass: status is healthy, the report carries a requests counter block, and the retired sessions block is absent.",
   "input": {
     "runtime_contracts": {

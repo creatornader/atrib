@@ -138,7 +138,7 @@ documents.
 
 ## 5. Daemon consolidation (`atribd`)
 
-**Promoted to [D147](../DECISIONS.md#d147-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime) on 2026-07-10.** The daemon shipped behind an isolated transport adapter; the MCP SDK timing gate binds the transport binding, not the daemon core.
+**Promoted to [D148](../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime) on 2026-07-10.** The daemon shipped behind an isolated transport adapter; the MCP SDK timing gate binds the transport binding, not the daemon core.
 
 **Promotes:** the private `services/atrib-primitives` runtime shape
 ([D120](../DECISIONS.md#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned),

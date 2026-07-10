@@ -1,6 +1,6 @@
 {
   "name": "resolve-chain-root-unchanged",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "check": "chain-root-corpus",
   "description": "Interaction vector: the daemon consumes resolveChainRoot unmodified. Every case in the §1.2.3 multi-producer corpus MUST resolve to the same chain_root when run from the daemon's dependency surface. The daemon never reimplements chain selection.",
   "input": {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Reference test for the D147 atribd conformance corpus (promoted from P046).
+ * Reference test for the D148 atribd conformance corpus (promoted from P046).
  *
  * Walks spec/conformance/atribd/manifest.json and executes every case
  * against the live implementation: HTTP vectors against bindAtribdHttpHost

@@ -1,6 +1,6 @@
 {
   "name": "probe-timeout-degraded-not-fatal",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "description": "A hung primitive call times out with the MCP request-timeout code and degrades health, but the daemon keeps serving subsequent calls. Timeouts are diagnostics, never process exits.",
   "input": {
     "tool_timeout_ms": 25

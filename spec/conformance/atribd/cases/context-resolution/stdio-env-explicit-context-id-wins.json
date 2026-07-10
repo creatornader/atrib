@@ -1,6 +1,6 @@
 {
   "name": "stdio-env-explicit-context-id-wins",
-  "spec_section": "D147",
+  "spec_section": "D148",
   "check": "stdio-env",
   "description": "stdio shim ladder (unchanged per D078/D083): ATRIB_CONTEXT_ID beats a registered harness env var.",
   "input": {
