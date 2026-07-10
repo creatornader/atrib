@@ -13,7 +13,9 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import {
+  SESSION_CHECKPOINT_EVENT_TYPE_URI,
   base64urlEncode,
+  buildCheckpointBody,
   canonicalRecord,
   genesisChainRoot,
   getPublicKey,
@@ -21,9 +23,11 @@ import {
   sha256,
   signRecord,
   type AtribRecord,
+  type SessionCheckpoint,
 } from '@atrib/mcp'
 
 const ALICE_SEED = new Uint8Array(32).fill(0x11)
+const BOB_SEED = new Uint8Array(32).fill(0x22)
 const REFERENCE_TIME_MS = Date.UTC(2026, 0, 1, 0, 0, 0)
 const HERE = dirname(fileURLToPath(import.meta.url))
 const CORPUS_ROOT = resolve(HERE, '../../../spec/conformance/3.2.4')
@@ -53,12 +57,14 @@ interface ExpectedEdge {
   reason?: string
 }
 
+type GraphConformanceRecord = AtribRecord & { checkpoint?: SessionCheckpoint }
+
 interface CaseBody {
   name: string
   spec_section: '3.2.4'
   description: string
   input: {
-    records: AtribRecord[]
+    records: GraphConformanceRecord[]
     options?: {
       includeCrossSession?: boolean
       compactIntraSessionEdges?: boolean
@@ -67,6 +73,7 @@ interface CaseBody {
   expected: {
     edges: ExpectedEdge[]
     edge_count_by_type: Record<EdgeType, number>
+    calculation_input_record_indices?: number[]
   }
 }
 
@@ -90,11 +97,11 @@ function countEdges(edges: ExpectedEdge[]): Record<EdgeType, number> {
   return counts
 }
 
-function recordHash(record: AtribRecord): string {
+function recordHash(record: GraphConformanceRecord): string {
   return hexEncode(sha256(canonicalRecord(record)))
 }
 
-function token16(record: AtribRecord): string {
+function token16(record: GraphConformanceRecord): string {
   return base64urlEncode(sha256(canonicalRecord(record)).slice(0, 16))
 }
 
@@ -113,11 +120,15 @@ async function makeRecord(opts: {
   provenanceToken?: string
   annotates?: string
   revises?: string
-}): Promise<AtribRecord> {
-  const pubkey = await getPublicKey(ALICE_SEED)
+  checkpoint?: SessionCheckpoint
+  seed?: Uint8Array
+}): Promise<GraphConformanceRecord> {
+  const seed = opts.seed ?? ALICE_SEED
+  const pubkey = await getPublicKey(seed)
   const record = {
     spec_version: 'atrib/1.0' as const,
     ...(opts.annotates ? { annotates: opts.annotates } : {}),
+    ...(opts.checkpoint ? { checkpoint: opts.checkpoint } : {}),
     content_id: opts.contentId,
     creator_key: base64urlEncode(pubkey),
     chain_root: opts.chainRoot ?? genesisChainRoot(opts.contextId),
@@ -129,15 +140,16 @@ async function makeRecord(opts: {
     ...(opts.provenanceToken ? { provenance_token: opts.provenanceToken } : {}),
     ...(opts.revises ? { revises: opts.revises } : {}),
     ...(opts.sessionToken ? { session_token: opts.sessionToken } : {}),
-  } satisfies AtribRecord
-  return signRecord(record, ALICE_SEED)
+  } satisfies GraphConformanceRecord
+  return (await signRecord(record, seed)) as GraphConformanceRecord
 }
 
 function caseBody(opts: {
   name: string
   description: string
-  records: AtribRecord[]
+  records: GraphConformanceRecord[]
   edges: ExpectedEdge[]
+  calculationInputRecordIndices?: number[]
   options?: CaseBody['input']['options']
 }): CaseBody {
   return {
@@ -148,6 +160,9 @@ function caseBody(opts: {
     expected: {
       edges: opts.edges,
       edge_count_by_type: countEdges(opts.edges),
+      ...(opts.calculationInputRecordIndices
+        ? { calculation_input_record_indices: opts.calculationInputRecordIndices }
+        : {}),
     },
   }
 }
@@ -384,6 +399,64 @@ async function danglingClaimEdges(): Promise<CaseBody> {
   })
 }
 
+async function sessionCheckpointChainSpine(): Promise<CaseBody> {
+  const contextId = '7'.repeat(32)
+  const firstTool = await makeRecord({
+    contextId,
+    timestamp: REFERENCE_TIME_MS,
+    contentId: contentId('70'),
+  })
+  const firstToolHash = recordHash(firstTool)
+  const checkpoint = await makeRecord({
+    contextId,
+    timestamp: REFERENCE_TIME_MS + 1,
+    contentId: contentId('71'),
+    eventType: SESSION_CHECKPOINT_EVENT_TYPE_URI,
+    chainRoot: `sha256:${firstToolHash}`,
+    checkpoint: buildCheckpointBody({
+      recordHashes: [sha256(canonicalRecord(firstTool))],
+      firstIndex: 0,
+    }),
+    seed: BOB_SEED,
+  })
+  const checkpointHash = recordHash(checkpoint)
+  const secondTool = await makeRecord({
+    contextId,
+    timestamp: REFERENCE_TIME_MS + 2,
+    contentId: contentId('72'),
+    chainRoot: `sha256:${checkpointHash}`,
+  })
+  const secondToolHash = recordHash(secondTool)
+  const transaction = await makeRecord({
+    contextId,
+    timestamp: REFERENCE_TIME_MS + 3,
+    contentId: contentId('73'),
+    eventType: 'https://atrib.dev/v1/types/transaction',
+    chainRoot: `sha256:${secondToolHash}`,
+  })
+
+  const records = [firstTool, checkpoint, secondTool, transaction]
+  const edges: ExpectedEdge[] = [
+    { type: 'CHAIN_PRECEDES', source_record_index: 0, target_record_index: 1, directed: true },
+    { type: 'CHAIN_PRECEDES', source_record_index: 1, target_record_index: 2, directed: true },
+    { type: 'CHAIN_PRECEDES', source_record_index: 2, target_record_index: 3, directed: true },
+    { type: 'SESSION_PRECEDES', source_record_index: 0, target_record_index: 2, directed: true },
+    { type: 'SESSION_PRECEDES', source_record_index: 0, target_record_index: 3, directed: true },
+    { type: 'SESSION_PRECEDES', source_record_index: 1, target_record_index: 3, directed: true },
+    { type: 'CONVERGES_ON', source_record_index: 0, target_record_index: 3, directed: true },
+    { type: 'CONVERGES_ON', source_record_index: 2, target_record_index: 3, directed: true },
+  ]
+
+  return caseBody({
+    name: 'session-checkpoint-chain-spine',
+    description:
+      'A session_checkpoint links the surrounding records through CHAIN_PRECEDES but does not converge on the transaction and does not enter the calculation input projection.',
+    records,
+    edges,
+    calculationInputRecordIndices: [0, 2],
+  })
+}
+
 async function main(): Promise<void> {
   mkdirSync(CASES_DIR, { recursive: true })
 
@@ -392,6 +465,7 @@ async function main(): Promise<void> {
     await fullPairwiseSessionPrecedes(),
     await equalTimestampParallelAllPairs(),
     await danglingClaimEdges(),
+    await sessionCheckpointChainSpine(),
   ]
 
   for (const c of cases) {
@@ -407,8 +481,9 @@ async function main(): Promise<void> {
     cases: cases.map((c) => ({ file: `cases/${c.name}.json`, name: c.name })),
     keys: {
       alice_pubkey: base64urlEncode(await getPublicKey(ALICE_SEED)),
+      bob_pubkey: base64urlEncode(await getPublicKey(BOB_SEED)),
     },
-    note: 'Full §3.2.4 corpus covering all nine edge types, all-pairs SESSION_PRECEDES, all-pairs SESSION_PARALLEL, and dangling producer-declared references. The companion graph-node property tests exercise generated families of ordered, equal-timestamp, chained, compacted, and input-order-invariant record sets.',
+    note: 'Full §3.2.4 corpus covering all nine edge types, all-pairs SESSION_PRECEDES, all-pairs SESSION_PARALLEL, dangling producer-declared references, and session_checkpoint chain-spine-only behavior. The companion graph-node property tests exercise generated families of ordered, equal-timestamp, chained, compacted, and input-order-invariant record sets.',
   }
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
 

@@ -42,7 +42,13 @@ export type HostSigningPolicy = (input: {
   request: SandboxSigningRequest
 }) => { ok: true } | { ok: false; error: string } | Promise<{ ok: true } | { ok: false; error: string }>
 
+export interface SignerProxyCapabilities {
+  /** Public key the host signer places in records it accepts. */
+  creator_key: string
+}
+
 export interface HostSignerProxy {
+  capabilities(): Promise<SignerProxyCapabilities>
   creatorKey(): Promise<string>
   sign(request: SandboxSigningRequest): Promise<SignerProxyResponse>
 }
@@ -54,8 +60,15 @@ export function createHostSignerProxy(options: {
 }): HostSignerProxy {
   const privateKey = new Uint8Array(options.privateKey)
   const creatorKeyReady = getPublicKey(privateKey).then(base64urlEncode)
+  const capabilitiesReady = creatorKeyReady.then((creator_key) =>
+    Object.freeze({ creator_key }),
+  )
 
   return Object.freeze({
+    async capabilities(): Promise<SignerProxyCapabilities> {
+      return capabilitiesReady
+    },
+
     async creatorKey(): Promise<string> {
       return creatorKeyReady
     },

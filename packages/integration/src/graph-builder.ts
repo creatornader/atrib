@@ -430,10 +430,17 @@ export async function buildGraphFromAllRecords(
   // Step 4. CONVERGES_ON (§3.2.4 step 4)
   for (const ctxNodes of byContext.values()) {
     const txNodes = ctxNodes.filter((n) => n.event_type === 'transaction')
-    const others = ctxNodes.filter((n) => n.event_type !== 'transaction')
+    const contributors = ctxNodes.filter(
+      (n) => n.event_type === 'tool_call' || n.event_type === 'gap_node',
+    )
     for (const tx of txNodes) {
-      for (const other of others) {
-        edges.push({ type: 'CONVERGES_ON', source: other.id, target: tx.id, directed: true })
+      for (const contributor of contributors) {
+        edges.push({
+          type: 'CONVERGES_ON',
+          source: contributor.id,
+          target: tx.id,
+          directed: true,
+        })
       }
     }
   }

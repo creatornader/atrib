@@ -36,6 +36,32 @@ atrib export-pubkey --keychain --service atrib-creator-claude-code
 # pubkey: <base64url-32-byte-pubkey>
 ```
 
+### `delegate`
+
+Issue a [§1.11](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#111-delegation-certificates) delegation certificate for a new ephemeral run key. The command reads the principal key from the macOS Keychain service `atrib-creator` by default. Use `--service` to select another Keychain entry or `--key-file` when Keychain is unavailable.
+
+The scope file uses the [§6.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#67-capability-declarations) capability-envelope fields. At least one constraint is required:
+
+```json
+{
+  "tool_names": ["search", "read_file"],
+  "event_types": ["https://atrib.dev/v1/types/tool_call"]
+}
+```
+
+```bash
+atrib delegate \
+  --service atrib-creator-claude-code \
+  --scope ./run-scope.json \
+  --ttl 3600 \
+  --context 4bf92f3577b34da6a3ce929d0e0e4736
+
+# ATRIB_KEY=<base64url-32-byte-run-seed>
+# ATRIB_DELEGATION_CERT=<base64url-certificate-json>
+```
+
+`--ttl` is measured in seconds from `--not-before` when supplied, or from the current time. The output is an env bundle for an orchestrator to inject into the delegated process. `ATRIB_KEY` is a secret. The certificate contains public keys, scope, and timestamps.
+
 ### `delete-key --keychain`
 
 Remove a Keychain entry. Operator-confirmable destructive operation.
@@ -79,7 +105,8 @@ The private seed is a secret and stays on your machine. `publish-claim` and
 the directory and log; the seed itself is never transmitted. Prefer
 `--keychain` (or the SDK `--key-file` path) so the seed is never written to a
 shell history or an `.env` file. Bare `keygen` prints the seed to stdout for
-piping; treat that output as a credential and do not commit or log it.
+piping; `delegate` prints the ephemeral run seed for process injection. Treat
+both outputs as credentials and do not commit or log them.
 
 ## Install
 

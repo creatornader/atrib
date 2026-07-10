@@ -24,53 +24,28 @@
  */
 
 import {
-  base64urlEncode,
-  canonicalRecord,
+  ATTRIBUTION_ACCEPT_VALUES,
+  ATTRIBUTION_EXTENSION_ID,
+  ATTRIBUTION_EXTENSION_VERSION,
+  MCP_CLIENT_CAPABILITIES_META_KEY,
   decodeToken,
-  encodeToken,
-  hexEncode,
-  sha256,
+  verifyAttributionReceipt,
 } from '@atrib/mcp'
-import type { AtribRecord } from '@atrib/mcp'
+import type {
+  AttributionAcceptValue,
+  AttributionReceipt,
+  AttributionResultBlock,
+} from '@atrib/mcp'
 
-// Protocol-frozen strings, mirroring @atrib/mcp's extension-attribution
-// module (the identifier freezes on publication per extension spec §3;
-// breaking changes require a new identifier).
-export const ATTRIBUTION_EXTENSION_ID = 'dev.atrib/attribution'
-export const ATTRIBUTION_EXTENSION_VERSION = '0.1'
-export const MCP_CLIENT_CAPABILITIES_META_KEY = 'io.modelcontextprotocol/clientCapabilities'
+export {
+  ATTRIBUTION_ACCEPT_VALUES,
+  ATTRIBUTION_EXTENSION_ID,
+  ATTRIBUTION_EXTENSION_VERSION,
+  MCP_CLIENT_CAPABILITIES_META_KEY,
+}
+export type { AttributionAcceptValue, AttributionReceipt, AttributionResultBlock }
 
-/** Receipt verbosities a client can request (extension spec §4.2 `accept`). */
-export const ATTRIBUTION_ACCEPT_VALUES = ['token', 'record'] as const
-export type AttributionAcceptValue = (typeof ATTRIBUTION_ACCEPT_VALUES)[number]
-
-const LOG_SUBMISSION_STATUSES: ReadonlySet<string> = new Set([
-  'queued',
-  'submitted',
-  'disabled',
-  'failed',
-])
 const HEX32 = /^[0-9a-f]{32}$/
-
-/** The v0.1 receipt object (extension spec §6.2). */
-export interface AttributionReceipt {
-  record_hash: string
-  creator_key: string
-  context_id: string
-  event_type: string
-  chain_root: string
-  /** Queue status at response time — a claim of local signing, never an awaited proof. */
-  log_submission: 'queued' | 'submitted' | 'disabled' | 'failed'
-}
-
-/** The parsed, consistency-checked result block. */
-export interface AttributionResultBlock {
-  /** Propagation token of the record named by the receipt. */
-  token: string
-  receipt: AttributionReceipt
-  /** Full signed record, present only when the server honored `accept: ["record"]`. */
-  record?: AtribRecord
-}
 
 /** Options for {@link declareAttributionExtension}. */
 export interface DeclareAttributionExtensionOptions {
@@ -164,48 +139,6 @@ export function declareAttributionExtension(
   }
 }
 
-function isStructurallyReceiptBlock(block: unknown): block is AttributionResultBlock {
-  if (!isPlainObject(block)) return false
-  if (typeof block.token !== 'string') return false
-  const receipt = block.receipt
-  if (!isPlainObject(receipt)) return false
-  for (const field of [
-    'record_hash',
-    'creator_key',
-    'context_id',
-    'event_type',
-    'chain_root',
-    'log_submission',
-  ]) {
-    if (typeof receipt[field] !== 'string') return false
-  }
-  if (block.record !== undefined && !isPlainObject(block.record)) return false
-  return true
-}
-
-/**
- * Internal-consistency check per extension spec §6.2: the token,
- * `record_hash`, and `creator_key` must agree with each other and — when
- * the full record body is attached — recompute from the record's canonical
- * bytes. Mirrors `verifyAttributionReceipt` in @atrib/mcp.
- */
-function receiptIsConsistent(block: AttributionResultBlock): boolean {
-  const decoded = decodeToken(block.token)
-  if (!decoded) return false
-  if (block.receipt.record_hash !== `sha256:${hexEncode(decoded.recordHash)}`) return false
-  if (block.receipt.creator_key !== base64urlEncode(decoded.creatorKey)) return false
-  if (!LOG_SUBMISSION_STATUSES.has(block.receipt.log_submission)) return false
-  if (block.record) {
-    if (block.token !== encodeToken(block.record)) return false
-    const recordHashHex = hexEncode(sha256(canonicalRecord(block.record)))
-    if (block.receipt.record_hash !== `sha256:${recordHashHex}`) return false
-    if (block.receipt.creator_key !== block.record.creator_key) return false
-    if (block.receipt.context_id !== block.record.context_id) return false
-    if (block.receipt.chain_root !== block.record.chain_root) return false
-  }
-  return true
-}
-
 /**
  * Parse the gated `dev.atrib/attribution` block from a tool result's
  * `_meta` (extension spec §6). Returns the typed, consistency-checked block,
@@ -230,15 +163,16 @@ export function parseAttributionReceipt(
     if (!isPlainObject(resultMeta)) return undefined
     if (!(ATTRIBUTION_EXTENSION_ID in resultMeta)) return undefined
     const block = resultMeta[ATTRIBUTION_EXTENSION_ID]
-    if (!isStructurallyReceiptBlock(block)) {
+    const verification = verifyAttributionReceipt(block)
+    if (!verification.valid && verification.mismatched.includes('malformed')) {
       console.warn('atrib: malformed dev.atrib/attribution receipt block, discarding')
       return undefined
     }
-    if (!receiptIsConsistent(block)) {
+    if (!verification.valid) {
       console.warn('atrib: inconsistent dev.atrib/attribution receipt, discarding')
       return undefined
     }
-    return block
+    return block as AttributionResultBlock
   } catch (err) {
     console.warn('atrib: failed to parse dev.atrib/attribution receipt, discarding', err)
     return undefined
