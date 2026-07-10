@@ -19,7 +19,7 @@ where this brief and the ADR drafts conflict, the drafts win.
    for the next."; tagline "Agents that reason from a past they can prove."
    These live in four synchronized places (README top, spec abstract, root
    package metadata, GitHub repo description). The approved redesign does NOT
-   change the protocol identity — evolve framing *around* these lines, don't
+   change the protocol identity; evolve framing *around* these lines, don't
    rewrite them unilaterally. If the overhaul concludes they must change,
    that's an operator decision updating all four surfaces in one commit.
 3. **Commercial framing stays out of the spec abstract and GitHub repo
@@ -37,14 +37,14 @@ where this brief and the ADR drafts conflict, the drafts win.
    (read)** (P047). The seven cognitive primitives collapse: emit/annotate/
    revise → `attest` with a relationship qualifier; recall/trace/verify →
    `recall` with shape and verification parameters; summarize relocates to
-   the harness (it is no longer an atrib primitive — remove it from
+   the harness (it is no longer an atrib primitive; remove it from
    primitive-surface marketing). The seven monomorphic tool names survive as
    *aliases* during a long migration window, so documentation pages keep
    them, but the front-door narrative is two verbs. Do not present
    "atrib-emit" as the headline write verb anywhere new.
 2. **Trust story changes from "the public log" to "anchor plurality"**
    (P043). log.atrib.dev stops being described as *the* trust root and
-   becomes the reference anchor — the best-behaved member of a ≥2-anchor
+   becomes the reference anchor, the best-behaved member of a ≥2-anchor
    default set (atrib log-node, Sigstore Rekor, RFC 3161 TSAs,
    OpenTimestamps). New copy shape: "verifiable against independent anchors,
    including infrastructure atrib doesn't operate." This is a *stronger*
@@ -70,8 +70,8 @@ where this brief and the ADR drafts conflict, the drafts win.
    migration. npm package pages: `@atrib/attest` will be published fresh;
    `@atrib/recall` keeps its name.
 7. **Payments move from core to a profile** (P048). The website must stop
-   presenting six-protocol payment detection as protocol core. Core keeps —
-   and pages should say exactly this — the `transaction` record type,
+   presenting six-protocol payment detection as protocol core. Core keeps
+   (and pages should say exactly this) the `transaction` record type,
    two-party cross-attestation, and the evidence envelope; rails (ACP, UCP,
    x402, MPP, AP2, a2a-x402) attach as an independently versioned Payments
    Profile. Settlement/policy/calculation become profile documentation, not
@@ -90,7 +90,7 @@ where this brief and the ADR drafts conflict, the drafts win.
    negotiation); atrib publishes `dev.atrib/attribution` v0.1 declaring
    server-side signing, propagation carriage, and attestation receipts.
    Timing: v0.1 is targeted *before* 2026-07-28 to own the
-   signed-action-record slot — coordinate any announcement copy with that
+   signed-action-record slot; coordinate any announcement copy with that
    window. Positioning care: "unofficial extension" is the correct formal
    status; official Extensions-Track status is possible later and must not
    be claimed early.
@@ -115,7 +115,7 @@ where this brief and the ADR drafts conflict, the drafts win.
 - Protocol identity lines (above), Ed25519/JCS/Merkle mechanics, the
   degradation contract, fact/policy separation, the graph's two reading
   planes ([D118](../DECISIONS.md#d118-primary-trace-path-is-a-presentation-rule-over-trace-and-chain) explorer framing), and every existing signed byte. Any page
-  claiming a format change is wrong by construction — the entire approved
+  claiming a format change is wrong by construction: the entire approved
   set is additive except the payments relocation.
 - The explorer (apps/dashboard) contract is unchanged today; anchor and
   checkpoint views arrive with their ADRs, not before.

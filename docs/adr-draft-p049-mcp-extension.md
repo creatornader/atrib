@@ -1,4 +1,4 @@
-# P049 candidate ADR draft: dev.atrib/attribution — atrib's propagation and attestation surface as a first-class MCP extension (SEP-2133)
+# P049 candidate ADR draft: dev.atrib/attribution: atrib's propagation and attestation surface as a first-class MCP extension (SEP-2133)
 
 Status: candidate ADR draft, not accepted. Compact pending entry: [DECISIONS.md P049](../DECISIONS.md). Generated 2026-07-06 by the redesign-overhaul workflow (research -> draft -> adversarial judge -> revise); source plan: [redesign-upgrade-path.md](redesign-upgrade-path.md).
 
@@ -17,7 +17,7 @@ Candidate set (cross-references between drafts resolve via this table):
 
 ---
 
-## DXXX: `dev.atrib/attribution` — atrib as a first-class MCP extension (SEP-2133)
+## DXXX: `dev.atrib/attribution`: atrib as a first-class MCP extension (SEP-2133)
 
 **Date:** 2026-07-06 (draft; pre-ADR)
 
@@ -62,7 +62,7 @@ replace (extension `_meta` keys must be vendor-prefixed; only
 `io.modelcontextprotocol/*` and `progressToken` are core-reserved).
 
 One coordination problem is internal: three candidate ADRs from the same
-redesign window touch inbound context resolution — this one (a new extension
+redesign window touch inbound context resolution: this one (a new extension
 carrier), the daemon-consolidation draft (redesign step 5, `atribd`, which
 sketches an HTTP-era ladder of "explicit `context_id` argument > `_meta.atrib`
 > `_meta.tracestate`" that omits both the extension rung and the
@@ -89,17 +89,17 @@ atrib.dev, which the project controls; the second label is not `mcp` or
 `modelcontextprotocol`, so the prefix is legal under SEP-2133's reserved-prefix
 rule). The extension declares three things and changes no signed byte:
 
-1. **Server-side signing capability** — a server advertises that tool calls
+1. **Server-side signing capability**: a server advertises that tool calls
    produce Ed25519-signed atrib records, with advisory metadata (event types
    signed, disclosure posture per [§8.3](../atrib-spec.md#83-salted-commitment-posture),
    expected creator key, log endpoints).
-2. **Propagation carriage** — a vendor-prefixed `_meta` block carrying exactly
+2. **Propagation carriage**: a vendor-prefixed `_meta` block carrying exactly
    two fields in v0.1: the existing 87-char propagation token
    ([§1.5.2](../atrib-spec.md#152-http-transport-tracestate)) and explicit
    `context_id`. This ADR also lands the single canonical inbound resolution
    definition (two ladders, defined below) as normative
    [§1.5.4](../atrib-spec.md#154-mcp-transport-params_meta) text.
-3. **Attestation receipts in tool results** — when (and only when) the client
+3. **Attestation receipts in tool results**: when (and only when) the client
    declared the extension on that request, the server returns a receipt block
    in `result._meta` naming the record it just signed, optionally with the
    full signed record body for immediate Tier-3 verification.
@@ -108,7 +108,7 @@ rule). The extension declares three things and changes no signed byte:
 implementations of the server and client sides respectively; `@atrib/mcp-wrap`
 becomes the shim that makes any non-adopting upstream server
 extension-conforming. The strategic shift: atrib stops being only "a wrapper
-you install" and becomes "a capability a server declares" — any server, in any
+you install" and becomes "a capability a server declares". Any server, in any
 language, can implement the extension spec directly and validate against the
 conformance corpus without any atrib package.
 
@@ -175,7 +175,7 @@ token-only receipts; adding `"record"` requests full signed record bodies.
 
 **Request carriage** (client → server). The extension reserves the `_meta` key
 `dev.atrib/attribution` on requests. The v0.1 block carries exactly two
-fields — `token` and `context_id`; unknown fields are ignored (forward
+fields, `token` and `context_id`; unknown fields are ignored (forward
 compatibility), and no other field is defined:
 
 ```json
@@ -196,7 +196,7 @@ compatibility), and no other field is defined:
 
 `token` is the unchanged [§1.5.2](../atrib-spec.md#152-http-transport-tracestate)
 propagation token. `context_id` is the raw 32-hex session anchor, carried
-explicitly per the stateless model — the MCP-transport analog of the
+explicitly per the stateless model, the MCP-transport analog of the
 [§1.5.3.1](../atrib-spec.md#1531-context-id-header-x-atrib-context)
 `X-atrib-Context` HTTP header, and the carriage form of the posture
 [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args)
@@ -212,7 +212,7 @@ without a conflict rule against existing producer state would be worse than
 not carrying it. `session_token` already travels normatively in `baggage`
 under `atrib-session` ([§1.5.5](../atrib-spec.md#155-cross-trace-session-continuity),
 a MUST, including for MCP `_meta`), and `@atrib/agent` accumulates session
-state across calls — a second inbound carrier would need
+state across calls; a second inbound carrier would need
 accumulated-vs-inbound precedence semantics that nothing currently requires.
 `provenance_token` is genesis-record-only and scoped to session ancestry
 ([§1.2.6](../atrib-spec.md#126-provenance_token)); it is host/orchestrator
@@ -229,11 +229,11 @@ daemon-consolidation ADR (redesign step 5, `atribd`) and the attest/recall
 rename ADR MUST cite [§1.5.4](../atrib-spec.md#154-mcp-transport-params_meta)
 for these ladders instead of restating rung lists; the step-5 draft's current
 three-rung sketch ("explicit `context_id` argument > `_meta.atrib` >
-`_meta.tracestate`") is subsumed here — it conflated the two ladders and
+`_meta.tracestate`") is subsumed here: it conflated the two ladders and
 omitted the `X-Atrib-Chain` fallback
 [`packages/mcp/src/context.ts`](../packages/mcp/src/context.ts) implements today.
 
-*Ladder 1 — propagation token (resolves the inbound chain token):*
+*Ladder 1: propagation token (resolves the inbound chain token):*
 
 ```
 _meta["dev.atrib/attribution"].token   (new, extension)
@@ -247,14 +247,14 @@ This refines only the "inbound propagation token" rung of the
 [§1.2.3.1](../atrib-spec.md#1231-multi-producer-chain-composition) chain-root
 ladder. The ladder itself (inbound token > within-process autoChain tail >
 `ATRIB_CHAIN_TAIL_<context_id>` env > mirror inheritance > synthetic genesis)
-is untouched, and `resolveChainRoot` remains the single implementation —
+is untouched, and `resolveChainRoot` remains the single implementation;
 the corollary "never reimplement chain selection in a new producer" holds.
 Conflict rule: when the extension key and a legacy carrier decode to different
 tokens, the extension key wins and the producer SHOULD log an
 `atrib:`-prefixed warning; a malformed extension token falls through to the
 next carrier (lenient parse, same posture as [D018](../DECISIONS.md#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow)).
 
-*Ladder 2 — context identity (resolves `context_id`):*
+*Ladder 2: context identity (resolves `context_id`):*
 
 ```
 explicit context_id tool argument      (application intent; primitives /
@@ -265,15 +265,15 @@ explicit context_id tool argument      (application intent; primitives /
   > undefined
 ```
 
-Conflict rules: an explicit tool argument always wins — the extension block
-is transport metadata, an argument is application intent; on mismatch the
+Conflict rules: an explicit tool argument always wins, because the extension block
+is transport metadata and an argument is application intent; on mismatch the
 producer uses the argument and SHOULD log an `atrib:`-prefixed warning. A
 `context_id` in the extension block that is not exactly 32 lowercase hex is
 ignored (falls through), never an error. When the extension block and
 `traceparent` disagree, the extension block wins with a warning (the
 trace-id rung remains for callers that carry no extension block). The
 [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)
-env/file resolution applies only when no per-request carrier resolved —
+env/file resolution applies only when no per-request carrier resolved;
 its internal ordering is unchanged and stays defined by those ADRs.
 
 **Receipt carriage** (server → client). Emitted **only** when the requesting
@@ -308,7 +308,7 @@ Receipt rules:
 
 - The receipt names a record the server has **already signed locally**.
   `log_submission` is a queue status (`queued | submitted | disabled |
-  failed`), never an awaited proof — log submission stays non-blocking per
+  failed`), never an awaited proof; log submission stays non-blocking per
   [§5.3.5](../atrib-spec.md#535-log-submission) (critical invariant 4). Proof
   bundles are fetched later, keyed by `record_hash`, exactly as today.
 - The optional full `record` is safe by construction: an `AtribRecord` carries
@@ -318,7 +318,7 @@ Receipt rules:
   `@atrib/verify`) without a mirror or
   [§2.12](../atrib-spec.md#212-record-body-archive-layer) archive round-trip.
 - If signing fails for any reason, the tool result is returned **without** the
-  extension block and without error —
+  extension block and without error;
   [§5.8](../atrib-spec.md#58-degradation-contract) applies to every extension
   behavior, producer-side, no exceptions.
 - Signing itself is NOT gated on the client's declaration. Whether a server
@@ -334,9 +334,9 @@ Receipt rules:
 schemas. v0.1 deliberately defines **no new methods, no notifications, no
 `resultType` values, and no URI schemes** (contrast with the Tasks extension).
 Staying a pure `_meta` + capability-map dialect maximizes gateway
-transparency: in the stateless model `_meta` is load-bearing protocol state
+transparency: in the stateless model `_meta` carries the protocol state
 that conformant intermediaries are structurally obliged to forward, and the
-documented real-world failure mode is accidental SDK `_meta` loss — which the
+documented real-world failure mode is accidental SDK `_meta` loss, which the
 degradation contract and the [D067](#d067-multi-producer-chain-composition-precedence-contract)
 fallback ladder already absorb. The extension spec states this loudly:
 designed for `_meta` loss, not `_meta` theft.
@@ -351,7 +351,7 @@ designed for `_meta` loss, not `_meta` theft.
   injects the prefixed carriage block alongside the legacy carriers, consumes
   receipts, and hands verified receipt material to the host.
 - `@atrib/mcp-wrap`: one config flag makes any wrapped upstream server
-  extension-conforming — the shim for non-adopting servers, multiplying
+  extension-conforming: the shim for non-adopting servers, multiplying
   extension coverage at zero per-server cost, exactly as it does for signing
   today.
 - Adjacent surfaces: [D133](#d133-action-gate-is-a-host-owned-controlproof-package)
@@ -367,7 +367,7 @@ designed for `_meta` loss, not `_meta` theft.
 
 1. **Now → 2026-07-28:** publish the v0.1 extension spec in-repo at
    `spec/extensions/dev.atrib-attribution/0.1/` (date/version-stamped layout
-   mirroring ext-apps), as an **Unofficial** extension per SEP-2133 — no
+   mirroring ext-apps), as an **Unofficial** extension per SEP-2133: no
    permission needed, the reverse-DNS prefix is self-sovereign. The identifier
    and framing exist in the vocabulary of the final-spec news cycle.
 2. Implement in `@atrib/mcp` / `@atrib/agent` / `@atrib/mcp-wrap` behind
@@ -378,19 +378,19 @@ designed for `_meta` loss, not `_meta` theft.
    TypeScript SDK ships stateless support. Validate against the conformance
    corpus. The **only** surface gated on the SDK rebuild is
    `services/atrib-primitives` adoption, and that gate is not defined here:
-   it is the daemon-consolidation (redesign step 5, `atribd`) ADR's gate —
-   stateless-transport SDK support with a hard review date of **2026-10-06**
-   and that draft's named fallbacks — shared by cross-reference so a slipped
+   it is the daemon-consolidation (redesign step 5, `atribd`) ADR's gate
+   (stateless-transport SDK support with a hard review date of **2026-10-06**
+   and that draft's named fallbacks), shared by cross-reference so a slipped
    SDK blocks both or neither, never leaves this ADR formally unblocked while
    its runtime vehicle is blocked.
 3. Engage the Interceptors WG (SEP-2624): position atrib as the reference
-   *verifiable audit interceptor* — the interceptor framework standardizes
+   *verifiable audit interceptor*: the interceptor framework standardizes
    where middleware mounts; this extension standardizes what attribution
    carries. Complementary, not competing.
 4. If adoption warrants: propose `experimental-ext-` incubation (requires WG
    association), then an Extensions Track SEP (requires a reference
    implementation in an official MCP SDK and review by the MCP core maintainers; official
-   extensions are Apache 2.0 with an LF contributor grant — atrib code is
+   extensions are Apache 2.0 with an LF contributor grant; atrib code is
    already Apache-2.0). Only the carriage-extension text would migrate to an
    `ext-*` repo; `atrib-spec.md` and all signed-record semantics remain
    governed here.
@@ -400,13 +400,13 @@ designed for `_meta` loss, not `_meta` theft.
 - *Identifier is frozen on publication.* Breaking changes force
   `dev.atrib/attribution-v2`. The pending attest/recall verb rename
   ([`docs/attest-recall-rename-impact.md`](attest-recall-rename-impact.md))
-  must either be settled first or the published name must be rename-proof —
+  must either be settled first or the published name must be rename-proof,
   which favors the noun `attribution` over any verb.
 - *Official-track capture.* Core maintainers have final authority; review is
   months-long; post-acceptance iteration is delegated to an ext-repo
   maintainer set atrib may not control alone. Posture: official status is
   optional legitimacy, never a dependency; if MCP governance ever conditioned
-  acceptance on changes to signed-record semantics, the answer is no — the
+  acceptance on changes to signed-record semantics, the answer is no: the
   carriage forks to a new identifier and records stay byte-identical.
 - *Competitive occupation.* SEP-2624 plus one ambitious gateway vendor could
   ship a "good enough" signed-log interceptor within a quarter; ATP owns the
@@ -424,14 +424,14 @@ every mechanism it declares already works today as an unnegotiated convention
 [D018](#d018-w3c-trace-context-and-baggage-conformance-leftmost-atrib-lenient-parse-evict-from-end-on-overflow),
 result-side token). Chains, records, verification, and the explorer are
 unaffected. The extension text then simply remains atrib's documented `_meta`
-dialect under its own prefix. The extension is upside — discovery, correct
-opt-in gating, gateway visibility, standards legitimacy — not a dependency.
+dialect under its own prefix. The extension is upside (discovery, correct
+opt-in gating, gateway visibility, standards legitimacy), not a dependency.
 
 ### Compatibility and migration
 
 - **Signed bytes: zero change.** No new signed field, no canonicalization
   change, no event_type change, no [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)
-  promotion needed — nothing new is signed. `context_id` in `_meta` carriage
+  promotion needed: nothing new is signed. `context_id` in `_meta` carriage
   maps to the existing record field under existing rules. The 90-byte log
   entry, checkpoints, and JCS forms are untouched.
 - **Existing signed records, log entries, proof bundles:** untouched and
@@ -444,7 +444,7 @@ opt-in gating, gateway visibility, standards legitimacy — not a dependency.
   above (the [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
   / redesign step-5 rebuild, which is already forced by the same MCP release).
 - **Deployed services:** `log-node`, `graph-node`, `directory-node`,
-  `archive-node` are untouched — the extension is entirely producer/client
+  `archive-node` are untouched: the extension is entirely producer/client
   side. No API, storage, or Fly deployment change.
 - **Operator machines:** no mirror or sidecar schema change. An optional,
   additive `_local.extension` sidecar telemetry field (negotiated: yes/no,
@@ -452,12 +452,12 @@ opt-in gating, gateway visibility, standards legitimacy — not a dependency.
 - **Sibling candidate ADRs:** the daemon-consolidation (`atribd`) and
   attest/recall rename drafts are edited in the same integration pass to cite
   the [§1.5.4](../atrib-spec.md#154-mcp-transport-params_meta) ladders defined
-  here instead of restating their own rung lists. This is a doc edit only —
+  here instead of restating their own rung lists. This is a doc edit only:
   neither draft's mechanism changes, and `resolveChainRoot` remains untouched
   by all three.
-- **Old/new interop matrix:** old client × new server — legacy result keys
+- **Old/new interop matrix:** old client × new server: legacy result keys
   still written, prefixed block absent, nothing breaks. New client × old
-  server — client writes both carriers; the old server reads the legacy ones
+  server: client writes both carriers; the old server reads the legacy ones
   or none; the chain ladder falls through as today. Both directions are
   conformance cases.
 
@@ -469,19 +469,19 @@ generator in `packages/log-dev/scripts/` following the
 `generate-conformance-1.2.6.ts` pattern, reference tests in
 `packages/mcp/test/` and `packages/verify/test/`. Case families:
 
-1. **capability-declaration** — valid server/client settings objects; unknown
+1. **capability-declaration**: valid server/client settings objects; unknown
    settings fields ignored; version handling; prefix-rule checks.
-2. **negotiation-gating** — client declared → prefixed receipt block present;
+2. **negotiation-gating**: client declared → prefixed receipt block present;
    client undeclared → block absent while legacy keys are byte-identical to
    pre-extension behavior; malformed `clientCapabilities` → treated as
    undeclared, no error injected into the tool path.
-3. **token-precedence** — extension key > `_meta.atrib` > tracestate >
+3. **token-precedence**: extension key > `_meta.atrib` > tracestate >
    `X-Atrib-Chain`; conflicting carriers → extension key wins; malformed
    extension token falls through to the next carrier; all carriers stripped →
    the [D067](#d067-multi-producer-chain-composition-precedence-contract)
    ladder continues (vectors compose with the existing
    `spec/conformance/1.2.3/multi-producer/` corpus).
-4. **context-identity-precedence** — explicit tool argument beats extension
+4. **context-identity-precedence**: explicit tool argument beats extension
    `context_id` (mismatch → argument used, warning); extension `context_id`
    beats `traceparent` trace-id; non-32-hex extension `context_id` ignored
    and falls through; no per-request carrier → env/file resolution per
@@ -489,18 +489,18 @@ generator in `packages/log-dev/scripts/` following the
    unknown extra fields in the block (including `session_token` /
    `provenance_token` sent by a future or nonconforming peer) ignored with no
    record-field effect.
-5. **receipt-integrity** — receipt `token` equals the token of the attached
+5. **receipt-integrity**: receipt `token` equals the token of the attached
    record; `record_hash` recomputes from the record's canonical bytes;
    `creator_key` matches the record signer; `log_submission` status present
    before any submission settles (non-blocking assertion).
-6. **degradation** — forced signing failure → tool result identical to
+6. **degradation**: forced signing failure → tool result identical to
    passthrough, receipt omitted, no thrown error; forced capability-read
    failure → same.
 
 ### Alternatives rejected
 
-- *Stay convention-only (do nothing).* Rejected as the primary plan — it
-  forfeits discovery, correct opt-in gating, and a closing standards window —
+- *Stay convention-only (do nothing).* Rejected as the primary plan (it
+  forfeits discovery, correct opt-in gating, and a closing standards window)
   but retained verbatim as the fallback posture; the convention keeps working.
 - *Carry `session_token` and `provenance_token` in the v0.1 block.* Rejected.
   Each already has exactly one carrier with defined semantics
@@ -525,7 +525,8 @@ generator in `packages/log-dev/scripts/` following the
   can mount as an interceptor while the payloads ride this extension.
 - *Put receipts in tool result `content`.* Rejected. `content` is the
   model-visible channel; receipts are machine material. `_meta` is the
-  designated machine channel and now load-bearing, forwarded protocol state.
+  designated machine channel, and in the stateless model it is forwarded
+  protocol state that intermediaries must preserve.
 - *Keep the bare `atrib` `_meta` key as the only carrier and just document
   it.* Rejected. Extension `_meta` keys must be vendor-prefixed under the new
   namespace discipline; an unprefixed key cannot be claimed by an extension
@@ -585,7 +586,7 @@ generator in `packages/log-dev/scripts/` following the
   [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers),
   the env/file context resolution the new ladder sits above.
 - [D100](#d100-mcp-middleware-can-sign-without-log-submission), signing
-  independent of submission — the basis for non-blocking receipts.
+  independent of submission, the basis for non-blocking receipts.
 - [D133](#d133-action-gate-is-a-host-owned-controlproof-package), pre-action
   gating that consumes the server capability declaration.
 - [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args),
