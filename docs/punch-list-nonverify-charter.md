@@ -12,7 +12,7 @@ These are the two non-verify categories of the redesign verifier punch list
 (`docs/redesign-upgrade-path.md`, "Verifier punch list" section). That section
 is authoritative where this summary drifts.
 
-## Deliverable A: §3.2.4 graph-derivation corpus addition
+## Deliverable A: [§3.2.4](../atrib-spec.md#324-edge-derivation-rules) graph-derivation corpus addition
 
 Pin `session_checkpoint` nodes as chain-spine-only: they participate in
 CHAIN_PRECEDES continuity but earn no CONVERGES_ON edge and never participate
@@ -23,7 +23,7 @@ existing generator-plus-reference-test pattern: extend the generator,
 regenerate, extend the reference test, same commit. Identify every consumer of
 this corpus before editing (the graph service tests consume it; check whether
 anything under `python/tests/` does too, and if so update it in the same
-commit: the D136 both-implementations rule, learned the hard way in PR #494).
+commit: the [D136](../DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested) both-implementations rule, learned the hard way in PR #494).
 
 ## Deliverable B: producer conveniences (four items)
 
@@ -31,9 +31,9 @@ commit: the D136 both-implementations rule, learned the hard way in PR #494).
    certificate at init, carry it to `_local.delegation_cert` in the mirror
    sidecar. Signed bytes unchanged; sidecar metadata only.
 2. `atrib delegate` CLI subcommand in `@atrib/cli`: issue a delegation
-   certificate for an ephemeral run key per §1.11 (D140), Keychain-first key
+   certificate for an ephemeral run key per [§1.11](../atrib-spec.md#111-delegation-certificates) ([D140](../DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys)), Keychain-first key
    handling per the existing `@atrib/cli` conventions.
-3. Signer-proxy capability advert gains a `creator_key` field (see the D102
+3. Signer-proxy capability advert gains a `creator_key` field (see the [D102](../DECISIONS.md#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox)
    signer-proxy example and its adapter surface).
 4. Receipt-logic dedup: `@atrib/agent` re-implements receipt parsing that
    `@atrib/mcp` now exports; collapse onto the exported symbols with no
@@ -42,7 +42,7 @@ commit: the D136 both-implementations rule, learned the hard way in PR #494).
 ## Non-goals
 
 - Anything in `packages/verify` (anchor transports, verifyRecord wiring,
-  §6.3 walk): locked behind two unmerged branches, separately chartered.
+  [§6.3](../atrib-spec.md#63-verifier-consultation-algorithm) walk): locked behind two unmerged branches, separately chartered.
 - Dependency changes. No package.json dependency edits, no lockfile churn:
   an open PR adds a new workspace package and owns the next lockfile change.
 - Signed-byte changes. Certificates ride sidecars and CLI output only.
@@ -56,13 +56,13 @@ pnpm -r build && pnpm -r test   # build first; single Vitest worker is
 pnpm doc-sync
 ```
 
-Plus: the extended §3.2.4 reference test passes; if `python/tests/` consumes
+Plus: the extended [§3.2.4](../atrib-spec.md#324-edge-derivation-rules) reference test passes; if `python/tests/` consumes
 anything you touched, the Python suite passes too
 (`python -m pytest python/tests -q`).
 
 ## Constraints
 
-- §5.8 degradation contract: no new throw path reaches a caller.
+- [§5.8](../atrib-spec.md#58-degradation-contract) degradation contract: no new throw path reaches a caller.
 - TypeScript strict, no `any`.
 - Commit locally in logical units; imperative subjects, conventional-commit
   prefixes, 72 chars max, no AI attribution trailers.
