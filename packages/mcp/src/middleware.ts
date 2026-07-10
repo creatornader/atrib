@@ -44,6 +44,7 @@ import type { AtribRecord, UnsignedAtribRecord } from './types.js'
 import type { ArchiveSubmissionOptions, SubmissionQueue, ProofBundle } from './submission.js'
 import type { CapturedMcpOAuthEvidence, McpOAuthEvidenceCaptureOptions } from './oauth-evidence.js'
 import type { CapturedX401Evidence, X401EvidenceCaptureOptions } from './x401-evidence.js'
+import type { DelegationCertificate } from './delegation.js'
 
 const HEX_32 = /^[0-9a-f]{32}$/
 const DEFAULT_LOCAL_SUBSTRATE_SHADOW_DEGRADATION: LocalSubstrateDegradationPolicy = {
@@ -191,6 +192,8 @@ export interface OnRecordSidecar {
   resolvedFacts?: {
     tool_name?: string
   }
+  /** Full §1.11 certificate carried only in the local mirror envelope. */
+  delegation_cert?: DelegationCertificate
 }
 
 /** Options for the atrib() middleware (§5.3.1). */
@@ -219,6 +222,12 @@ export interface AtribOptions {
    * stay local-only.
    */
   archiveSubmission?: ArchiveSubmissionOptions
+  /**
+   * Optional §1.11 delegation certificate for this producer's run key.
+   * The middleware carries it only in `_local.delegation_cert`; it does not
+   * add fields to the signed record or change log submission bytes.
+   */
+  delegationCert?: DelegationCertificate
   /** Inline attribution policy document (§4.2). */
   policy?: Record<string, unknown>
   /** Canonical URL of this MCP server for content_id derivation. */
@@ -1264,6 +1273,9 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         // submission below is unchanged, it only sees `built.signed`.
         const params = request.params as Record<string, unknown>
         const sidecar: OnRecordSidecar = { result: resultObj }
+        if (options.delegationCert !== undefined) {
+          sidecar.delegation_cert = options.delegationCert
+        }
         if (typeof params.name === 'string') {
           sidecar.toolName = params.name
           sidecar.resolvedFacts = { tool_name: params.name }
