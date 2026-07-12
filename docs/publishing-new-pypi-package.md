@@ -3,8 +3,8 @@
 Use this runsheet when adding a new public Python distribution to this repo
 (today: `atrib` in [`python/`](../python/README.md)). It is the PyPI sibling
 of [`publishing-new-npm-package.md`](publishing-new-npm-package.md): the same
-philosophy — first publish is manual and creates the project, later releases
-run through CI trusted publishing — with the PyPI-specific mechanics spelled
+philosophy (first publish is manual and creates the project, later releases
+run through CI trusted publishing) with the PyPI-specific mechanics spelled
 out.
 
 Nothing in this runsheet has been executed yet: `atrib` is intentionally
@@ -24,7 +24,7 @@ Every new public distribution must have, in `pyproject.toml`:
 - A src layout (`src/<package>/`) with a `py.typed` marker so type checkers
   consume the inline annotations.
 - Pinned-minimum dependencies only for what the record layer genuinely needs
-  (`cryptography`, `rfc8785`, `typing_extensions`) — no framework
+  (`cryptography`, `rfc8785`, `typing_extensions`); no framework
   dependencies, mirroring the npm rule that `@atrib/agent` peers stay out of
   core packages.
 - A README with install, quick start, the byte-identity guarantee, the
@@ -94,7 +94,7 @@ OIDC (no long-lived tokens), gates on the same preflight (pytest + mypy +
 cross-impl harness + doc-sync + a version-consistency check), and mirrors
 `release.yml`'s posture (build once, publish the exact artifacts that were
 tested; the publish job binds to the `pypi` environment). Changesets does
-not manage Python versions — bump `project.version` and `atrib.__version__`
+not manage Python versions; bump `project.version` and `atrib.__version__`
 together in the release commit, then dispatch the workflow.
 
 ## Naming

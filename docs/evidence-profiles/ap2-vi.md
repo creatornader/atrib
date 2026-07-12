@@ -30,13 +30,13 @@ Carries AP2 (Agent Payments Protocol) receipt evidence plus Verifiable Intent (V
 
 ## Tier semantics
 
-- `declared` / `shape` — asserted / offline-parsed receipt.
-- `attested` — a caller-owned AP2 path accepted the receipt; legacy-mapping default.
-- `verified` — receipt JWT, JWKS, and SD-JWT VC conformance verified against the pinned offline corpus ([D096](../../DECISIONS.md#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus)), reproducible from the envelope.
+- `declared` / `shape`: asserted / offline-parsed receipt.
+- `attested`: a caller-owned AP2 path accepted the receipt; legacy-mapping default.
+- `verified`: receipt JWT, JWKS, and SD-JWT VC conformance verified against the pinned offline corpus ([D096](../../DECISIONS.md#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus)), reproducible from the envelope.
 
 ## Verifier behavior
 
-`verifyAp2ViEvidenceAsync` / `evaluateAp2ViConstraints` in `@atrib/verify` produce the AP2 receipt checks, VI credential checks, and typed mandate-constraint evaluation. A verifier that sees only a `counterparty-attestation` envelope still reports `cross_attestation_missing: true` — the AP2 receipt signature is external evidence ([D098](../../DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation)).
+`verifyAp2ViEvidenceAsync` / `evaluateAp2ViConstraints` in `@atrib/verify` produce the AP2 receipt checks, VI credential checks, and typed mandate-constraint evaluation. A verifier that sees only a `counterparty-attestation` envelope still reports `cross_attestation_missing: true`: the AP2 receipt signature is external evidence ([D098](../../DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation)).
 
 ## Sanitization contract
 

@@ -12,7 +12,7 @@ Carries a human-in-the-loop approval for a high-impact agent action. The payload
 | ------------------ | ------------------------------------ | ------------------------------------------- |
 | `application/json` | Signed atrib approval record         | JCS over the record's canonical bytes       |
 
-`payload.hash` = `"sha256:" + hex(SHA-256(canonicalRecord(record)))` and MUST equal `ref.record_hash`. Because the payload is a record, `ref.record_hash` is set and `ref.kind` is `mirror`, `archive`, or `withheld` — never `inline` (a record body is not an inline evidence blob).
+`payload.hash` = `"sha256:" + hex(SHA-256(canonicalRecord(record)))` and MUST equal `ref.record_hash`. Because the payload is a record, `ref.record_hash` is set and `ref.kind` is `mirror`, `archive`, or `withheld`, never `inline` (a record body is not an inline evidence blob).
 
 ## Facts schema
 
@@ -26,10 +26,10 @@ Carries a human-in-the-loop approval for a high-impact agent action. The payload
 
 ## Tier semantics
 
-- `declared` — approval hash and facts asserted.
-- `shape` — approval record parsed and structurally validated.
-- `attested` — the approval record's signature accepted by a caller-owned path (typical carriage tier).
-- `verified` — the approval record's Ed25519 signature verified against `approver_key`, reproducible from the retrieved record body.
+- `declared`: approval hash and facts asserted.
+- `shape`: approval record parsed and structurally validated.
+- `attested`: the approval record's signature accepted by a caller-owned path (typical carriage tier).
+- `verified`: the approval record's Ed25519 signature verified against `approver_key`, reproducible from the retrieved record body.
 
 ## Verifier behavior
 

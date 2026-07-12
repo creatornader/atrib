@@ -30,9 +30,9 @@ The `mcp-oauth` profile differs from `oauth2` in the checks the verifier runs (M
 
 ## Tier semantics
 
-- `declared` / `shape` — asserted / offline-parsed.
-- `attested` — caller-owned introspection accepted the token ([D111](../../DECISIONS.md#d111-host-owned-oauth-evidence-infrastructure)); legacy-mapping default.
-- `verified` — token signature and DPoP proof verified against declared JWKS with the MCP resource binding reproducible.
+- `declared` / `shape`: asserted / offline-parsed.
+- `attested`: caller-owned introspection accepted the token ([D111](../../DECISIONS.md#d111-host-owned-oauth-evidence-infrastructure)); legacy-mapping default.
+- `verified`: token signature and DPoP proof verified against declared JWKS with the MCP resource binding reproducible.
 
 ## Verifier behavior
 

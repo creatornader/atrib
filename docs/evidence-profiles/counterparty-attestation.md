@@ -4,7 +4,7 @@
 - **Profile version:** `1.0.0` (semver of this document)
 - **Status:** atrib-maintained. Envelope-native (no legacy [§5.5.6](../../atrib-spec.md#556-generic-authorization-evidence-blocks) protocol string; frozen set).
 
-Carries an out-of-band co-signature receipt from a counterparty about an agent action or transaction — for example an AP2 receipt signature that arrives outside the record's `signers[]` array. This is external evidence about attestation, never a substitute for the [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) cross-attestation rule ([D098](../../DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) / [D107](../../DECISIONS.md#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes)). It never alters `verifyRecord().valid` ([§5.5.7](../../atrib-spec.md#557-universal-evidence-envelope)).
+Carries an out-of-band co-signature receipt from a counterparty about an agent action or transaction, for example an AP2 receipt signature that arrives outside the record's `signers[]` array. This is external evidence about attestation, never a substitute for the [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) cross-attestation rule ([D098](../../DECISIONS.md#d098-ap2-receipts-stay-external-evidence-for-cross-attestation) / [D107](../../DECISIONS.md#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes)). It never alters `verifyRecord().valid` ([§5.5.7](../../atrib-spec.md#557-universal-evidence-envelope)).
 
 ## Payload media types and hash rule
 
@@ -28,10 +28,10 @@ Carries an out-of-band co-signature receipt from a counterparty about an agent a
 
 ## Tier semantics
 
-- `declared` — receipt hash and facts asserted.
-- `shape` — receipt parsed and structurally validated.
-- `attested` — a caller-owned path accepted the counterparty signature.
-- `verified` — the counterparty signature verified against `attester_key` over the attested bytes, reproducible from the envelope.
+- `declared`: receipt hash and facts asserted.
+- `shape`: receipt parsed and structurally validated.
+- `attested`: a caller-owned path accepted the counterparty signature.
+- `verified`: the counterparty signature verified against `attester_key` over the attested bytes, reproducible from the envelope.
 
 ## Verifier behavior
 

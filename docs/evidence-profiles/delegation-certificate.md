@@ -12,7 +12,7 @@ The verifier-facing carrier for a delegation certificate: a principal key's sign
 | ------------------ | -------------------------------- | --------------------------- |
 | `application/json` | The certificate object           | JCS (RFC 8785, `jcsSha256`) |
 
-`payload.hash` = `"sha256:" + hex(SHA-256(JCS(certificate)))`, i.e. the certificate's `cert_hash`; the payload MAY instead be carried by reference as that `cert_hash`. **`ref.record_hash` never applies — a certificate is not a signed atrib record** ([§1.11.8](../../atrib-spec.md#1118-carriage)). `ref.kind` is `inline` (with the certificate body local-only), `mirror`, `archive`, or `withheld`.
+`payload.hash` = `"sha256:" + hex(SHA-256(JCS(certificate)))`, i.e. the certificate's `cert_hash`; the payload MAY instead be carried by reference as that `cert_hash`. **`ref.record_hash` never applies: a certificate is not a signed atrib record** ([§1.11.8](../../atrib-spec.md#1118-carriage)). `ref.kind` is `inline` (with the certificate body local-only), `mirror`, `archive`, or `withheld`.
 
 ## Facts schema
 
@@ -32,10 +32,10 @@ The profile's verifier facts are the [§1.11.4](../../atrib-spec.md#1114-verifie
 
 ## Tier semantics
 
-- `declared` — certificate hash and facts asserted.
-- `shape` — certificate parsed and structurally validated.
-- `attested` — a caller-owned path accepted the certificate.
-- `verified` — principal signature over `{run_pubkey, scope, not_after, context_id?}` verified and the [§1.11.4](../../atrib-spec.md#1114-verifier-walk) walk reproduced offline against declared trust roots.
+- `declared`: certificate hash and facts asserted.
+- `shape`: certificate parsed and structurally validated.
+- `attested`: a caller-owned path accepted the certificate.
+- `verified`: principal signature over `{run_pubkey, scope, not_after, context_id?}` verified and the [§1.11.4](../../atrib-spec.md#1114-verifier-walk) walk reproduced offline against declared trust roots.
 
 ## Verifier behavior
 
@@ -43,7 +43,7 @@ The verifier runs the [§1.11.4](../../atrib-spec.md#1114-verifier-walk) offline
 
 ## Sanitization contract
 
-Certificates contain only public keys, a scope, and timestamps — no salted-commitment or PII concern ([§1.11.8](../../atrib-spec.md#1118-carriage)). `cert_hash`, `principal_key`, and every walk fact MAY appear in public projections; the certificate body MAY be surfaced (public-key/scope/timestamp only), unlike raw tokens in other profiles.
+Certificates contain only public keys, a scope, and timestamps, so there is no salted-commitment or PII concern ([§1.11.8](../../atrib-spec.md#1118-carriage)). `cert_hash`, `principal_key`, and every walk fact MAY appear in public projections; the certificate body MAY be surfaced (public-key/scope/timestamp only), unlike raw tokens in other profiles.
 
 ## Sources
 

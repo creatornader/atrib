@@ -43,12 +43,12 @@ Requirements language follows core [§1.1](../atrib-spec.md#11-normative-require
 
 | Profile section | Core spec origin (tombstoned anchor) |
 | --- | --- |
-| [§2.1](#21-acp-agentic-commerce-protocol)–[§2.5](#25-ap2-and-a2a-x402) | [§1.7.1](../atrib-spec.md#171-acp-agentic-commerce-protocol)–[§1.7.5](../atrib-spec.md#175-ap2-and-a2a-x402) |
+| [§2.1](#21-acp-agentic-commerce-protocol)-[§2.5](#25-ap2-and-a2a-x402) | [§1.7.1](../atrib-spec.md#171-acp-agentic-commerce-protocol)-[§1.7.5](../atrib-spec.md#175-ap2-and-a2a-x402) |
 | [§3](#3-sdk-transaction-detection) | [§5.4.5](../atrib-spec.md#545-transaction-detection) |
 | [§4](#4-policy-document-format) | [§4.2](../atrib-spec.md#42-policy-document-format) |
 | [§5](#5-the-default-policy) | [§4.3](../atrib-spec.md#43-the-default-policy) |
 | [§6](#6-publication-and-discovery) | [§4.4](../atrib-spec.md#44-publication-and-discovery) |
-| [§7.1](#71-negotiation-protocol)–[§7.3](#73-session-policy-record) | [§4.5.1](../atrib-spec.md#451-negotiation-protocol)–[§4.5.3](../atrib-spec.md#453-session-policy-record) |
+| [§7.1](#71-negotiation-protocol)-[§7.3](#73-session-policy-record) | [§4.5.1](../atrib-spec.md#451-negotiation-protocol)-[§4.5.3](../atrib-spec.md#453-session-policy-record) |
 | [§7.4](#74-session-policy-record-creation-sdk) | [§5.4.6](../atrib-spec.md#546-session-policy-record-creation) |
 | [§8](#8-the-calculation-algorithm) | [§4.6](../atrib-spec.md#46-the-calculation-algorithm) |
 | [§9](#9-settlement-recommendation-document) | [§4.7](../atrib-spec.md#47-settlement-recommendation-document) |
@@ -762,7 +762,7 @@ The session policy record ([§7.3](#73-session-policy-record)) is created at ses
 
 - `agreed_policy`: set after negotiation completes.
 
-- `applied_constraints.minimum_floors`: populated with all `minimum_own_share` values from creator policies that survived negotiation (Rules 1–5 of [§7.2](#72-conflict-resolution)).
+- `applied_constraints.minimum_floors`: populated with all `minimum_own_share` values from creator policies that survived negotiation (Rules 1-5 of [§7.2](#72-conflict-resolution)).
 
 - `warnings`: appended throughout the session, on policy fetch failures, heuristic transaction detection, agent-side transaction emission (path 2 of [§3](#3-sdk-transaction-detection)), unknown modifier types, negotiation skips, and policy negotiation timeouts.
 

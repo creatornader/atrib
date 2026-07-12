@@ -20,7 +20,7 @@ Why atrib uses C2SP tlog-tiles + RFC 6962 inclusion proofs + signed-note checkpo
 - The tile API (read interface) and submission API (write interface)
 - Witnessing: independent parties cosigning checkpoints (defense against equivocation)
 - Cross-log replication (optional, [D050](../../DECISIONS.md))
-- What the log **stores** vs. **doesn't** (commitments, not content — see [§2.10](../../atrib-spec.md#210-what-the-log-stores-and-what-it-does-not))
+- What the log **stores** vs. **doesn't** (commitments, not content; see [§2.10](../../atrib-spec.md#210-what-the-log-stores-and-what-it-does-not))
 - Worked example: submit a record, get back an inclusion proof, verify it locally
 
 ## See also
