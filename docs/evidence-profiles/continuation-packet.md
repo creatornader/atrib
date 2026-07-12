@@ -28,10 +28,10 @@ When the payload is a signed record, `payload.hash` MUST equal `ref.record_hash`
 
 ## Tier semantics
 
-- `declared` — packet hash and routing facts asserted at handoff (the typical emission tier).
-- `shape` — packet retrieved and structurally parsed; facts consistent with its content.
-- `attested` — a caller-owned path observed the successor's receipt record (an observation whose `informed_by` names `baton_record_hash`).
-- `verified` — packet bytes retrieved and `payload.hash` recomputed; the baton record's Ed25519 signature verified; and, when the successor presents a [§1.11](../../atrib-spec.md#111-delegation-certificates) delegation certificate, the [§1.11.4](../../atrib-spec.md#1114-verifier-walk) walk passes with its principal matching `target_principal`.
+- `declared`: packet hash and routing facts asserted at handoff (the typical emission tier).
+- `shape`: packet retrieved and structurally parsed; facts consistent with its content.
+- `attested`: a caller-owned path observed the successor's receipt record (an observation whose `informed_by` names `baton_record_hash`).
+- `verified`: packet bytes retrieved and `payload.hash` recomputed; the baton record's Ed25519 signature verified; and, when the successor presents a [§1.11](../../atrib-spec.md#111-delegation-certificates) delegation certificate, the [§1.11.4](../../atrib-spec.md#1114-verifier-walk) walk passes with its principal matching `target_principal`.
 
 ## Verifier behavior
 
@@ -39,7 +39,7 @@ The verifier recomputes the payload hash from retrieved packet bytes under the d
 
 ## Sanitization contract
 
-`payload.hash`, `target_harness_role`, `target_principal`, `reason`, and `baton_record_hash` MAY appear in public projections. The packet body itself is private by default — continuation packets routinely carry context specific to the operating environment — and is disclosed only through mirror/archive retrieval under the operator's own boundary rules, never embedded in the envelope.
+`payload.hash`, `target_harness_role`, `target_principal`, `reason`, and `baton_record_hash` MAY appear in public projections. The packet body itself is private by default (continuation packets routinely carry context specific to the operating environment) and is disclosed only through mirror/archive retrieval under the operator's own boundary rules, never embedded in the envelope.
 
 ## Sources
 

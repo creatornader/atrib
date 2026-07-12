@@ -4,7 +4,7 @@
 
 **Status**: STUB
 **Spec anchors**: [§1.2 Record Format](../../atrib-spec.md#12-the-attribution-record) · [§1.3 Canonical Serialization](../../atrib-spec.md#13-canonical-serialization) · [§1.4 Signing and Verification](../../atrib-spec.md#14-signing-and-verification)
-**Builds on**: (none — this is the foundational atom)
+**Builds on**: (none; this is the foundational atom)
 **Enables**: every other concept
 
 ## What this teaches

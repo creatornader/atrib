@@ -30,10 +30,10 @@ Carries OAuth 2.x access-token authorization results for a signed agent action. 
 
 ## Tier semantics
 
-- `declared` — hash and facts asserted, nothing checked.
-- `shape` — token/introspection parsed and structurally validated offline.
-- `attested` — a caller-owned introspection path accepted the token ([D111](../../DECISIONS.md#d111-host-owned-oauth-evidence-infrastructure)). The legacy-mapping default tier.
-- `verified` — signature verified against declared JWKS/issuer with scope, audience, resource, and DPoP constraints reproducible from the envelope.
+- `declared`: hash and facts asserted, nothing checked.
+- `shape`: token/introspection parsed and structurally validated offline.
+- `attested`: a caller-owned introspection path accepted the token ([D111](../../DECISIONS.md#d111-host-owned-oauth-evidence-infrastructure)). The legacy-mapping default tier.
+- `verified`: signature verified against declared JWKS/issuer with scope, audience, resource, and DPoP constraints reproducible from the envelope.
 
 ## Verifier behavior
 

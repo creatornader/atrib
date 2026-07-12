@@ -13,7 +13,7 @@ What the log commits to vs. what it exposes, why "salting" lets you make arbitra
 
 ## What to cover when this gets written
 
-- The log entry is 90 bytes — there's no content in it (per [§2.3.1](../../atrib-spec.md#231-entry-serialization))
+- The log entry is 90 bytes; there's no content in it (per [§2.3.1](../../atrib-spec.md#231-entry-serialization))
 - `content_id` is a SHA-256 over the underlying content; it doesn't reveal content
 - `args_commit` / `result_commit`: SHA-256 over (args/result + optional salt)
 - The three postures:

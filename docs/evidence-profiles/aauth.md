@@ -30,9 +30,9 @@ Carries AAuth agent-authorization results: agent tokens, resource tokens, auth t
 
 ## Tier semantics
 
-- `declared` / `shape` — asserted / offline-parsed AAuth token.
-- `attested` — a caller-owned AAuth path accepted the token; legacy-mapping default.
-- `verified` — token signature, HTTP message signature, and R3 document hash verified against declared keys, reproducible from the envelope.
+- `declared` / `shape`: asserted / offline-parsed AAuth token.
+- `attested`: a caller-owned AAuth path accepted the token; legacy-mapping default.
+- `verified`: token signature, HTTP message signature, and R3 document hash verified against declared keys, reproducible from the envelope.
 
 ## Verifier behavior
 
