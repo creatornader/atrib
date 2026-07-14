@@ -50,20 +50,18 @@ function runtimeMode(name = 'atrib-primitives') {
   }
   return mode
 }
+// The attest/recall two-verb surface: three mounts serve the seventeen-tool
+// alias-window union (fifteen legacy names + attest + recall).
 const PRIMITIVE_PACKAGE_PATHS = {
-  emit: join(ROOT, 'services/atrib-emit/package.json'),
-  annotate: join(ROOT, 'services/atrib-annotate/package.json'),
-  revise: join(ROOT, 'services/atrib-revise/package.json'),
+  attest: join(ROOT, 'services/atrib-attest/package.json'),
   recall: RECALL_PACKAGE,
-  trace: join(ROOT, 'services/atrib-trace/package.json'),
   summarize: join(ROOT, 'services/atrib-summarize/package.json'),
-  verify: join(ROOT, 'services/atrib-verify/package.json'),
 }
 const EXPECTED_PRIMITIVE_TOOLS = {
-  emit: ['emit'],
-  annotate: ['atrib-annotate'],
-  revise: ['atrib-revise'],
+  attest: ['atrib-annotate', 'atrib-revise', 'attest', 'emit'],
   recall: [
+    'atrib-verify',
+    'recall',
     'recall_annotations',
     'recall_by_content',
     'recall_by_signer',
@@ -72,22 +70,18 @@ const EXPECTED_PRIMITIVE_TOOLS = {
     'recall_revisions',
     'recall_session_chain',
     'recall_walk',
+    'trace',
+    'trace_forward',
   ],
-  trace: ['trace', 'trace_forward'],
   summarize: ['summarize'],
-  verify: ['atrib-verify'],
 }
 const EXPECTED_TOOL_NAMES = Object.values(EXPECTED_PRIMITIVE_TOOLS)
   .flat()
   .sort((a, b) => a.localeCompare(b))
 const EXPECTED_BEHAVIORAL_PROBES = {
   recall: 'pass',
-  trace: 'pass',
   summarize: 'pass',
-  verify: 'pass',
-  emit: 'skipped',
-  annotate: 'skipped',
-  revise: 'skipped',
+  attest: 'skipped',
 }
 const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
 const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'

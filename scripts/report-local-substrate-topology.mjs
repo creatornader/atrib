@@ -16,20 +16,18 @@ const EXPECTED_RUNTIME_PACKAGE_PATHS = {
   coordinator: join(ROOT, 'services/atrib-emit/package.json'),
   primitive_runtime: join(ROOT, 'services/atrib-primitives/package.json'),
 }
+// The attest/recall two-verb surface: three mounts serve the seventeen-tool
+// alias-window union (fifteen legacy names + attest + recall).
 const EXPECTED_PRIMITIVE_PACKAGE_PATHS = {
-  emit: join(ROOT, 'services/atrib-emit/package.json'),
-  annotate: join(ROOT, 'services/atrib-annotate/package.json'),
-  revise: join(ROOT, 'services/atrib-revise/package.json'),
+  attest: join(ROOT, 'services/atrib-attest/package.json'),
   recall: join(ROOT, 'services/atrib-recall/package.json'),
-  trace: join(ROOT, 'services/atrib-trace/package.json'),
   summarize: join(ROOT, 'services/atrib-summarize/package.json'),
-  verify: join(ROOT, 'services/atrib-verify/package.json'),
 }
 const EXPECTED_PRIMITIVE_TOOLS = {
-  emit: ['emit'],
-  annotate: ['atrib-annotate'],
-  revise: ['atrib-revise'],
+  attest: ['atrib-annotate', 'atrib-revise', 'attest', 'emit'],
   recall: [
+    'atrib-verify',
+    'recall',
     'recall_annotations',
     'recall_by_content',
     'recall_by_signer',
@@ -38,19 +36,15 @@ const EXPECTED_PRIMITIVE_TOOLS = {
     'recall_revisions',
     'recall_session_chain',
     'recall_walk',
+    'trace',
+    'trace_forward',
   ],
-  trace: ['trace', 'trace_forward'],
   summarize: ['summarize'],
-  verify: ['atrib-verify'],
 }
 const EXPECTED_PRIMITIVE_BEHAVIORAL_PROBES = {
   recall: 'pass',
-  trace: 'pass',
   summarize: 'pass',
-  verify: 'pass',
-  emit: 'skipped',
-  annotate: 'skipped',
-  revise: 'skipped',
+  attest: 'skipped',
 }
 const DEFAULT_ROUTE_REGISTRY_PATH = join(HOME, '.atrib/local-substrate/routes.json')
 const LEGACY_KNOWLEDGE_BASE_RECEIPT_REPORT_ENV = ['ATRIB_HEALTH_SECOND', 'BRAIN_REPORT'].join('_')
@@ -87,7 +81,11 @@ const SAFE_ACTIVE_SESSION_PROFILE = /^[A-Za-z0-9._-]{1,64}$/
 const ACTIVE_SESSION_STATE_DIR = join(HOME, '.claude', 'state')
 const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
 const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
+// Both vocabularies stay listed for the whole alias window: live hosts may
+// still run per-primitive server generations while restarted hosts run the
+// three-mount union.
 const PRIMITIVE_SERVERS = [
+  'atrib-attest',
   'atrib-emit',
   'atrib-annotate',
   'atrib-revise',
