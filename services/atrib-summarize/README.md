@@ -95,6 +95,13 @@ From a monorepo checkout, use `"command": "node"` with
 live in the host env or in the cache file above. Do not write secret values
 into shared MCP config.
 
+## Relationship to the attest/recall rename ([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse))
+
+`summarize` has no successor shape in the `recall` verb. `recall` returns
+verified material; the caller synthesizes. `@atrib/summarize` stays
+mounted through the alias window. When the window closes, the npm package
+is deprecated without a replacement pointer.
+
 ## Status
 
 Published and maintained. Unit tests cover record selection (by hash, by context, unioned, missing-skip) and the degradation paths (no inputs, no API key). An integration test against a real LLM is gated behind `ATRIB_SUMMARIZE_API_KEY` and not run in CI.

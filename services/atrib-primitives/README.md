@@ -2,9 +2,9 @@
 
 Private local MCP runtime for atrib's verifiable action layer dogfood.
 
-`atrib-primitives` mounts the seven public cognitive-primitive MCP packages in process and exposes their 15 physical tools through one local runtime. It supports direct stdio for compatibility, Streamable HTTP for host-owned dogfood configs that should share one primitive backend across active threads for the same agent profile, and stdio-to-HTTP proxy mode for clients that only support stdio MCP.
+Per the attest/recall rename ([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)), `atrib-primitives` mounts three primitives in process: the `attest` write home (`@atrib/attest`), the `recall` read home (`@atrib/recall`), and `@atrib/summarize`. Together they serve the seventeen-tool union (fifteen legacy tool names plus `attest` plus `recall`) through one local runtime. It supports direct stdio for compatibility, Streamable HTTP for host-owned dogfood configs that should share one primitive backend across active threads for the same agent profile, and stdio-to-HTTP proxy mode for clients that only support stdio MCP.
 
-It does not replace the public packages. `@atrib/emit`, `@atrib/annotate`, `@atrib/revise`, `@atrib/recall`, `@atrib/trace`, `@atrib/summarize`, and `@atrib/verify-mcp` remain the published surfaces. This package is private and exists to reduce local process bloat in dogfood configs.
+It does not replace the public packages. `@atrib/attest`, `@atrib/recall`, and `@atrib/summarize` remain the published surfaces; `@atrib/emit`, `@atrib/annotate`, `@atrib/revise`, `@atrib/trace`, and `@atrib/verify-mcp` remain published as legacy re-export shims. This package is private and exists to reduce local process bloat in dogfood configs.
 
 ## Build
 
@@ -18,7 +18,7 @@ pnpm --filter @atrib/primitives-runtime build
 node services/atrib-primitives/dist/index.js
 ```
 
-The default server speaks MCP over stdio. A host can configure this binary instead of the seven standalone primitive binaries when it wants one local atrib primitive process per thread.
+The default server speaks MCP over stdio. A host can configure this binary instead of the three standalone primitive binaries when it wants one local atrib primitive process per thread.
 
 ## Run With Streamable HTTP
 
@@ -37,13 +37,13 @@ Streamable HTTP mode keeps one host-owned process alive and lets MCP clients for
 - MCP endpoint: `http://127.0.0.1:8796/mcp`
 - health endpoint: `http://127.0.0.1:8796/mcp/health`
 
-The HTTP host creates one mounted primitive backend per host process, gives each MCP client its own Streamable HTTP session transport, closes idle sessions after 12 hours by default, and never spawns the seven standalone primitive binaries.
+The HTTP host creates one mounted primitive backend per host process, gives each MCP client its own Streamable HTTP session transport, closes idle sessions after 12 hours by default, and never spawns the three standalone primitive binaries.
 
-The HTTP listener binds before the backend finishes mounting. During that window the health endpoint returns HTTP 503 with `status: "starting"` and `primitive_runtime.backend: "starting"` instead of refusing the connection. Once the seven primitive packages are mounted, health returns HTTP 200 with `status: "healthy"` and `primitive_runtime.backend: "shared"`. The `--json` ready line is still printed only after the shared backend is ready.
+The HTTP listener binds before the backend finishes mounting. During that window the health endpoint returns HTTP 503 with `status: "starting"` and `primitive_runtime.backend: "starting"` instead of refusing the connection. Once the three primitive packages are mounted, health returns HTTP 200 with `status: "healthy"` and `primitive_runtime.backend: "shared"`. The `--json` ready line is still printed only after the shared backend is ready.
 
 Each primitive tool dispatch has a runtime deadline. The default is 45 seconds and can be changed with `--tool-timeout-ms` or `ATRIB_PRIMITIVES_TOOL_TIMEOUT_MS`. If a child primitive call crosses the deadline, the runtime returns an MCP timeout before the client-level deadline, logs a structured `tool_call_timed_out` event on stderr, and keeps the underlying call visible in health until it settles. During that window health stays HTTP 200 but reports `status: "degraded"` with `report.tool_calls.active_tool_calls`, `calls_timed_out`, and `in_flight_tool_calls`.
 
-Health reports `report.primitive_runtime.primitive_contracts` for all seven mounted primitives. Each contract includes the mounted package version, expected and mounted tool names, missing or unexpected tools, whether normal calls mutate the log, and the probe mode used by the updater. Health also reports `report.primitive_runtime.behavioral_probes`. The runtime calls deterministic non-mutating probes for `recall`, `trace`, `summarize`, and `verify`; it reports `emit`, `atrib-annotate`, and `atrib-revise` as skipped until those write primitives expose validate-only contracts. Health still reports `report.primitive_runtime.recall_contract` for recall's content-index contract. Missing or stale primitive contract metadata, or a failed read-only behavioral probe, makes the host report `status: "degraded"` so stale long-lived MCP hosts do not look ready after source or npm has already moved forward.
+Health reports `report.primitive_runtime.primitive_contracts` for all three mounted primitives (`attest`, `recall`, `summarize`), plus the legacy alias tool names each one mounts. Each contract includes the mounted package version, expected and mounted tool names, missing or unexpected tools, whether normal calls mutate the log, and the probe mode used by the updater. Health also reports `report.primitive_runtime.behavioral_probes`. The runtime calls deterministic non-mutating probes for `recall`, `trace`, `summarize`, and `verify`; it reports `emit`, `atrib-annotate`, and `atrib-revise` as skipped until those write primitives expose validate-only contracts. Health still reports `report.primitive_runtime.recall_contract` for recall's content-index contract. Missing or stale primitive contract metadata, or a failed read-only behavioral probe, makes the host report `status: "degraded"` so stale long-lived MCP hosts do not look ready after source or npm has already moved forward.
 
 The health report includes the profile's context policy. Set `ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID=1` on hosts that should refuse write-primitive calls when neither the caller nor the harness can provide a `context_id`. The write primitives then return a warnings-only response instead of signing a synthesized orphan context.
 
@@ -87,4 +87,4 @@ Proxy mode uses the same tool timeout setting as the host runtime. The shared ho
 pnpm --filter @atrib/primitives-runtime test
 ```
 
-The protocol test lists all 15 tools over stdio, routes a recall call through the combined server, repeats the path through Streamable HTTP, checks the stdio proxy path, verifies that two HTTP sessions share one mounted primitive backend, checks the starting health state, asserts the health contract for explicit-context profiles, every primitive surface, deterministic non-mutating behavioral probes, and recall content-index support, and proves a hung child primitive returns a bounded timeout while health reports the stuck in-flight call. `pnpm doc-sync` also runs `scripts/check-primitives-runtime-update.mjs` so the LaunchAgent selection, primitive surface, behavioral probe, and direct recall payload contracts stay covered.
+The protocol test lists all seventeen tools over stdio, routes a recall call through the combined server, repeats the path through Streamable HTTP, checks the stdio proxy path, verifies that two HTTP sessions share one mounted primitive backend, checks the starting health state, asserts the health contract for explicit-context profiles, every primitive surface, deterministic non-mutating behavioral probes, and recall content-index support, and proves a hung child primitive returns a bounded timeout while health reports the stuck in-flight call. `pnpm doc-sync` also runs `scripts/check-primitives-runtime-update.mjs` so the LaunchAgent selection, primitive surface, behavioral probe, and direct recall payload contracts stay covered.

@@ -1,5 +1,16 @@
 # `@atrib/emit`
 
+**Legacy home.** The write-verb implementation moved to
+[`@atrib/attest`](../atrib-attest/README.md) per the attest/recall rename
+([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)).
+This package re-exports the same surface and forwards the `atrib-emit`,
+`atrib-emit-cli`, and `atrib-local-substrate` binaries to `@atrib/attest`'s
+handlers. Records signed through this package are byte-identical to
+records signed through `attest`; existing mirrors and records stay valid
+with no migration needed. New callers should prefer `@atrib/attest`. The
+`emit` tool name stays mounted as a permanent alias during the alias
+window, alongside the new `attest` tool.
+
 MCP server exposing the explicit `emit` tool, the producer-side cognitive primitive for atrib's verifiable action layer. It lets an agent sign observations, annotations, and revisions under its own atrib identity, beyond what `@atrib/mcp` auto-signs.
 
 ## Install

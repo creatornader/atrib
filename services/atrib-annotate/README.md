@@ -1,5 +1,14 @@
 # @atrib/annotate
 
+**Legacy home.** The write-verb implementation moved to
+[`@atrib/attest`](../atrib-attest/README.md) per the attest/recall rename
+([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)).
+Annotation folds into `attest` with `ref: { kind: "annotates", target }`.
+This package re-exports the same surface and forwards the `atrib-annotate`
+binary to `@atrib/attest`'s handlers. Records are byte-identical. The
+`atrib-annotate` tool name stays mounted as a permanent alias during the
+alias window, alongside the new `attest` tool.
+
 MCP server exposing the `atrib-annotate` tool for atrib's verifiable action layer. Marks a past signed record with importance, a one-line summary, and topics, so future recall can surface what mattered without re-scanning every record flat.
 
 Closes the producer-side recall-fidelity gap: an agent reading back its own past loses enormous nuance compared to the agent that signed it. An annotation lets the agent at signing time say "future-self: this one is critical, and here's why in one line", and the graph carries that judgment forward.

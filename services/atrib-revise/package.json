@@ -1,7 +1,7 @@
 {
   "name": "@atrib/revise",
   "version": "0.2.41",
-  "description": "MCP server for atrib's verifiable action layer. Lets agents supersede a prior signed position with a stated reason.",
+  "description": "Legacy home of atrib's revise write primitive. Superseded by @atrib/attest (the write verb, ref.kind=\"revises\"); this package re-exports the same surface and forwards the atrib-revise binary.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
     "atrib",

@@ -46,6 +46,41 @@ const EXPECTED_PRIMITIVE_BEHAVIORAL_PROBES = {
   summarize: 'pass',
   attest: 'skipped',
 }
+// Pre-rename generation, accepted for the whole alias window: live hosts may
+// still run the per-primitive topology until their next restart. A host's
+// generation is detected from its own primitive_contracts keys.
+const LEGACY_EXPECTED_PRIMITIVE_TOOLS = {
+  emit: ['emit'],
+  annotate: ['atrib-annotate'],
+  revise: ['atrib-revise'],
+  recall: [
+    'recall_annotations',
+    'recall_by_content',
+    'recall_by_signer',
+    'recall_my_attribution_history',
+    'recall_orphans',
+    'recall_revisions',
+    'recall_session_chain',
+    'recall_walk',
+  ],
+  trace: ['trace', 'trace_forward'],
+  summarize: ['summarize'],
+  verify: ['atrib-verify'],
+}
+const LEGACY_EXPECTED_PRIMITIVE_BEHAVIORAL_PROBES = {
+  recall: 'pass',
+  trace: 'pass',
+  summarize: 'pass',
+  verify: 'pass',
+  emit: 'skipped',
+  annotate: 'skipped',
+  revise: 'skipped',
+}
+
+function primitiveContractsGeneration(keyed) {
+  if (!keyed || typeof keyed !== 'object') return 'union'
+  return Object.prototype.hasOwnProperty.call(keyed, 'attest') ? 'union' : 'legacy'
+}
 const DEFAULT_ROUTE_REGISTRY_PATH = join(HOME, '.atrib/local-substrate/routes.json')
 const LEGACY_KNOWLEDGE_BASE_RECEIPT_REPORT_ENV = ['ATRIB_HEALTH_SECOND', 'BRAIN_REPORT'].join('_')
 const DEFAULT_KNOWLEDGE_BASE_RECEIPT_REPORT_GENERIC_PATH = join(
@@ -94,6 +129,19 @@ const PRIMITIVE_SERVERS = [
   'atrib-summarize',
   'atrib-verify',
 ]
+// Full standalone topologies for generation completeness. The legacy seven
+// binaries stay in place as forwarding shims for the whole alias window, so
+// a seven-server generation stays complete; atrib-attest is additive.
+const LEGACY_STANDALONE_PRIMITIVE_SERVERS = [
+  'atrib-emit',
+  'atrib-annotate',
+  'atrib-revise',
+  'atrib-recall',
+  'atrib-trace',
+  'atrib-summarize',
+  'atrib-verify',
+]
+const COLLAPSED_STANDALONE_PRIMITIVE_SERVERS = ['atrib-attest', 'atrib-recall', 'atrib-summarize']
 const PRIMITIVE_GENERATION_WINDOW_MS = 5000
 const LONG_LIVED_AGENT_LABELS = new Set(['ai.hermes.gateway', 'ai.openclaw.gateway'])
 const LOCAL_SUBSTRATE_INFRA_LABELS = new Set(['com.nader.atrib-drain'])
@@ -540,9 +588,19 @@ function standalonePrimitiveGenerations(rows) {
 
   return generations.map((generation) => {
     const services = unique(generation.rows.map((row) => row.service)).sort()
+    // A generation is complete when it covers a full standalone topology:
+    // the pre-rename seven-server set (whose binaries keep running as
+    // forwarding shims through the alias window), optionally joined by the
+    // atrib-attest server; or the collapsed write/read/summarize trio.
+    const legacyComplete = LEGACY_STANDALONE_PRIMITIVE_SERVERS.every((service) =>
+      services.includes(service),
+    )
+    const collapsedComplete = COLLAPSED_STANDALONE_PRIMITIVE_SERVERS.every((service) =>
+      services.includes(service),
+    )
     return {
       process_count: generation.rows.length,
-      complete: PRIMITIVE_SERVERS.every((service) => services.includes(service)),
+      complete: legacyComplete || collapsedComplete,
       services,
       pids: generation.rows.map((row) => row.pid).sort((a, b) => a - b),
       ...startWindow(generation.rows),
@@ -2106,13 +2164,17 @@ function primitiveRuntimeSurfaceContractFailures(item, expectedRuntimeVersions) 
     ]
   }
   const expectedContracts = expectedPrimitiveContracts(expectedRuntimeVersions)
+  const toolExpectations =
+    primitiveContractsGeneration(contracts) === 'legacy'
+      ? LEGACY_EXPECTED_PRIMITIVE_TOOLS
+      : EXPECTED_PRIMITIVE_TOOLS
   return unique([
-    ...Object.keys(EXPECTED_PRIMITIVE_TOOLS),
+    ...Object.keys(toolExpectations),
     ...Object.keys(expectedContracts),
   ]).flatMap((primitive) => {
     const contract = contracts[primitive]
     const expected = expectedContracts[primitive] ?? {}
-    const expectedTools = sortedStringArray(expected.tools ?? EXPECTED_PRIMITIVE_TOOLS[primitive])
+    const expectedTools = sortedStringArray(expected.tools ?? toolExpectations[primitive])
     const mountedTools = sortedStringArray(contract?.mounted_tools)
     const reasons = []
     if (!contract || typeof contract !== 'object') {
@@ -2169,7 +2231,11 @@ function primitiveRuntimeBehavioralProbeFailures(item) {
       },
     ]
   }
-  return Object.entries(EXPECTED_PRIMITIVE_BEHAVIORAL_PROBES).flatMap(
+  const probeExpectations =
+    primitiveContractsGeneration(probes) === 'legacy'
+      ? LEGACY_EXPECTED_PRIMITIVE_BEHAVIORAL_PROBES
+      : EXPECTED_PRIMITIVE_BEHAVIORAL_PROBES
+  return Object.entries(probeExpectations).flatMap(
     ([primitive, expectedStatus]) => {
       const probe = probes[primitive]
       const reasons = []

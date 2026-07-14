@@ -4,7 +4,7 @@
 
 **Status**: DRAFT
 **Spec anchors**: [D136](../../DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested) · [§5](../../atrib-spec.md#5-sdk-specification) · [§5.8](../../atrib-spec.md#58-degradation-contract) · [§1](../../atrib-spec.md#1-attribution-record-format)
-**Builds on**: [Records & signing](01-records-and-signing.md), [The chain](04-the-chain.md), [The seven cognitive primitives](11-cognitive-primitives.md), [Local substrate coordinator](13-local-substrate-coordinator.md)
+**Builds on**: [Records & signing](01-records-and-signing.md), [The chain](04-the-chain.md), [The cognitive primitives: two verbs, seven aliases](11-cognitive-primitives.md), [Local substrate coordinator](13-local-substrate-coordinator.md)
 **Enables**: one-import application access to the substrate; the first cross-language proof that two implementations of [§1](../../atrib-spec.md#1-attribution-record-format) agree byte-for-byte
 
 ## Why the consolidated SDKs exist
@@ -17,12 +17,12 @@ The defining constraint: **no third signing implementation**. Every `@atrib/sdk`
 
 ## The two verbs
 
-The seven cognitive primitives ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)) are the *agent-facing* surface: monomorphic MCP tools a model calls one at a time. Application code composes differently, so the SDK collapses the surface into two verbs (the upgrade-path step-6 naming, applied only to this greenfield surface; no existing package or tool name changes):
+The seven cognitive primitives ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)) were originally the *agent-facing* surface: monomorphic MCP tools a model calls one at a time. This SDK proposal's naming target became the actual MCP tool surface with the attest/recall rename ([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)): the two verbs below are now `attest` and `recall`, real MCP tools mounted alongside the seven legacy names, not an SDK-only abstraction:
 
 - **`attest()`** collapses the three writes. An optional `ref` discriminator selects the kind: no ref signs an observation (emit), `ref.kind: 'annotates'` signs an annotation, `ref.kind: 'revises'` signs a revision. The record bytes are identical to what the dedicated primitives would have signed.
 - **`recall()`** collapses the reads under one shape-discriminated query: history, walks, annotations, revisions, content search, session chains, orphans, signers, trace in both directions, and handoff verification ([D106](../../DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7)).
 
-The collapse is surface, not semantics: each shape still maps 1:1 to a physical primitive tool, and the MCP surface itself is untouched.
+The collapse is surface, not semantics: each ref/shape still maps 1:1 to what a dedicated primitive tool would have signed or returned. The seven legacy tool names stay mounted as permanent aliases over the same handlers per [D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse).
 
 ## Daemon-first, in-process fallback
 
@@ -91,5 +91,5 @@ Both records verify with the same verifier, hash with the same rules, and land i
 
 - Package references: [`packages/sdk/README.md`](../../packages/sdk/README.md) (full `@atrib/sdk` API reference), [`python/README.md`](../../python/README.md) (full Python API reference)
 - Decisions: [D136 Consolidated client SDKs](../../DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested), [D067 chain composition precedence](../../DECISIONS.md#d067-multi-producer-chain-composition-precedence-contract), [D099 explicit emit content commitment](../../DECISIONS.md#d099-explicit-emit-records-commit-local-content-through-default-args_hash), [D135 delegated-builder context threading](../../DECISIONS.md#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args)
-- Concepts: [Records & signing](01-records-and-signing.md) (what the SDKs sign), [The chain](04-the-chain.md) (what `informed_by` and chain roots mean), [The seven cognitive primitives](11-cognitive-primitives.md) (the agent-facing surface the verbs collapse), [Local substrate coordinator](13-local-substrate-coordinator.md) (the daemon topology)
+- Concepts: [Records & signing](01-records-and-signing.md) (what the SDKs sign), [The chain](04-the-chain.md) (what `informed_by` and chain roots mean), [The cognitive primitives: two verbs, seven aliases](11-cognitive-primitives.md) (the agent-facing surface the verbs collapse), [Local substrate coordinator](13-local-substrate-coordinator.md) (the daemon topology)
 - Session brief: [`docs/atrib-sdk-session-brief.md`](../atrib-sdk-session-brief.md)

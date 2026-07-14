@@ -1,7 +1,7 @@
 {
   "name": "@atrib/annotate",
   "version": "0.2.41",
-  "description": "MCP server for atrib's verifiable action layer. Lets agents mark a past record's importance and meaning for later recall.",
+  "description": "Legacy home of atrib's annotate write primitive. Superseded by @atrib/attest (the write verb, ref.kind=\"annotates\"); this package re-exports the same surface and forwards the atrib-annotate binary.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
     "atrib",

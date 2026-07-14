@@ -15,11 +15,15 @@
     },
     {
       "name": "ref-mapping",
-      "cases": ["cases/ref-mapping/ref-mapping.json"]
+      "cases": [
+        "cases/ref-mapping/ref-mapping.json"
+      ]
     },
     {
       "name": "read-equivalence",
-      "cases": ["cases/read-equivalence/vectors.json", "cases/read-equivalence/mirror.jsonl"]
+      "cases": [
+        "cases/read-equivalence/vectors.json"
+      ]
     },
     {
       "name": "alias-window",
@@ -32,13 +36,18 @@
     {
       "name": "persisted-labels",
       "cases": [
-        "cases/persisted-labels/expectations.json",
-        "cases/persisted-labels/mixed-calls.jsonl"
+        "cases/persisted-labels/expectations.json"
       ]
     },
     {
       "name": "frozen-constants",
-      "cases": ["cases/frozen-constants/frozen-constants.json"]
+      "cases": [
+        "cases/frozen-constants/frozen-constants.json"
+      ]
     }
+  ],
+  "fixtures": [
+    "cases/read-equivalence/mirror.jsonl",
+    "cases/persisted-labels/mixed-calls.jsonl"
   ]
 }

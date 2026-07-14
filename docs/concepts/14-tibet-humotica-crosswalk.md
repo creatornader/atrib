@@ -113,7 +113,7 @@ Humotica appears to push behavior through a product stack:
 - Fail-closed bootstrap by default, with a soft-bootstrap escape hatch.
 - Companion packages for identity, process integrity, discovery, and continuous verification.
 
-That is meaningful engineering, but it is not the same as proving agents will use the signed past well. In the sources reviewed so far, TIBET has token query and chain tracing, but no clear analogue to atrib's seven cognitive primitives: `emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, and `verify`.
+That is meaningful engineering, but it is not the same as proving agents will use the signed past well. In the sources reviewed so far, TIBET has token query and chain tracing, but no clear analogue to atrib's two cognitive verbs, `attest` and `recall` ([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)), or the seven legacy primitive names (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify`) still mounted as aliases.
 
 This is an important strategic difference. atrib has learned that signing actions is only half the problem. The other half is getting agents to read and use the signed past. TIBET is strong on the signed artifact and companion protocol framing. atrib is stronger today on the agent-facing read/write loop and on tested harness surfaces.
 
