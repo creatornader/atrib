@@ -5,7 +5,7 @@
 // @atrib/attest; this bin keeps the historical name working for operator
 // LaunchAgents and scripts that exec it.
 
-import { runLocalSubstrateHost } from '@atrib/attest/dist/local-substrate-host.js'
+import { runLocalSubstrateHost } from '@atrib/attest/local-substrate-host'
 
 runLocalSubstrateHost().catch((error: unknown) => {
   process.stderr.write(

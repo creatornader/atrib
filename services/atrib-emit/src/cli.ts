@@ -7,7 +7,7 @@
 // signed through this bin keep the historical 'atrib-emit-cli' label
 // (persisted-label rule L1) unless the envelope overrides `producer`.
 
-import { main } from '@atrib/attest/dist/cli.js'
+import { main } from '@atrib/attest/cli'
 
 void main(process.argv.slice(2)).then((code) => {
   process.exit(code)

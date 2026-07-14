@@ -2,7 +2,6 @@
   "name": "@atrib/attest",
   "version": "0.0.0",
   "description": "MCP server for atrib's write verb. One attest tool signs observations, annotations, and revisions; the legacy emit, atrib-annotate, and atrib-revise tool names stay mounted as aliases over the same handler.",
-  "author": "atrib <hello@atrib.dev>",
   "keywords": [
     "atrib",
     "mcp",
@@ -15,10 +14,26 @@
     "signed-records",
     "attest"
   ],
-  "homepage": "https://atrib.dev",
+  "author": "Nader Helmy",
+  "homepage": "https://github.com/creatornader/atrib/tree/main/services/atrib-attest",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    },
+    "./local-substrate-host": {
+      "types": "./dist/local-substrate-host.d.ts",
+      "import": "./dist/local-substrate-host.js"
+    }
+  },
   "bin": {
     "atrib-attest": "./dist/main.js",
     "atrib-attest-cli": "./dist/cli.js"

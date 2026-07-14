@@ -144,6 +144,32 @@ Environment variables are unchanged from the legacy emit surface:
 table with descriptions; the values and resolution order carried over
 unchanged.
 
+## Degradation and privacy
+
+atrib failures never affect the primary call ([spec §5.8](../../atrib-spec.md#58-degradation-contract)), and for the write
+verb that contract is the most important thing to know:
+
+- **Log endpoint unreachable.** `attest` still returns `signed: true` with
+  the `record_hash`, the mirror write to `~/.atrib/records/` lands before
+  the tool returns, and log submission is queued and retried silently in
+  the background. The `warnings` array names the degradation (for example
+  "submission queued; proof not yet available"). Nothing throws; nothing
+  blocks.
+- **What stays local vs what reaches the public log.** The full `content`
+  body stays in the local mirror's `_local` sidecar; the signed record
+  carries only the replay-checkable `args_hash` commitment over it. The
+  public log stores the 90-byte commitment entry (record hash, creator key,
+  context_id, timestamp, event_type byte), never the content.
+- **Refused writes are loud, not silent.** A malformed call (unknown
+  `ref.kind`, missing revises reason, a `ref`/content contradiction, a
+  provenance_token off genesis, or no resolvable signing key) returns
+  `signed: false` with a `refusals` array over the MCP error surface and
+  signs nothing. The CLI exits 3 on refusal and still prints the structured
+  JSON, so hook callers can absorb the exit code without losing the reason.
+- **No key, no crash.** With no resolvable signing key the server stays up
+  and every write refuses with the key-resolution hint; pass-through per
+  [§5.8](../../atrib-spec.md#58-degradation-contract).
+
 ## Conformance
 
 The attest/recall byte-identity, ref-mapping, and alias-window guarantees
