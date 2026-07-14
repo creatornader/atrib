@@ -32,7 +32,8 @@
     "./local-substrate-host": {
       "types": "./dist/local-substrate-host.d.ts",
       "import": "./dist/local-substrate-host.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "bin": {
     "atrib-attest": "./dist/main.js",
