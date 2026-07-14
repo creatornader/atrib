@@ -10,6 +10,11 @@ export type {
   VerifyRecommendationOptions,
 } from './verifier.js'
 
+// Payment profile surface. Deprecated at the root. Import from
+// `@atrib/verify/payments` for new code.
+/** @deprecated Import from '@atrib/verify/payments'. */
+export { verifySettlementRecommendation } from './payments.js'
+
 // Per-record verification (single AtribRecord). Distinct from
 // AtribVerifier.verify which operates on a settlement RecommendationDocument.
 // Surfaces the implemented D044, D041, D045, D051, D052, and D094 annotations.
@@ -189,7 +194,9 @@ export type {
   ProfileClassification,
 } from './evidence-envelope.js'
 
-// Calculation algorithm (§4.6). pure function, exported for direct use
+// Calculation algorithm (§4.6). Deprecated at the root. Import from
+// `@atrib/verify/payments` for new code.
+/** @deprecated Import from '@atrib/verify/payments'. */
 export { calculate, DEFAULT_POLICY, isValidPolicy } from './calculate.js'
 
 // Recommendation document signing/verification (§4.7)
@@ -210,7 +217,9 @@ export { fetchGraph, fetchSessionPolicyRecord, fetchPolicyDocument } from './gra
 export { buildRevocationRegistry, applyRevocation } from './revocations.js'
 export type { RevocationEntry, RevocationReason, MinimalRecord } from './revocations.js'
 
-// AP2 / Verifiable Intent evidence checks. Off the settlement critical path.
+// AP2 / Verifiable Intent evidence checks. Deprecated at the root. Import
+// from `@atrib/verify/payments` for new code.
+/** @deprecated Import from '@atrib/verify/payments'. */
 export {
   evaluateAp2ViConstraints,
   verifyAp2ViEvidence,

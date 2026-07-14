@@ -52,6 +52,14 @@
       "name": "consistency-valid-extension"
     },
     {
+      "file": "cases/consistency-proof-invalid.json",
+      "name": "consistency-proof-invalid"
+    },
+    {
+      "file": "cases/foreign-context-id-leaf.json",
+      "name": "foreign-context-id-leaf"
+    },
+    {
       "file": "cases/consistency-equivocation-pair.json",
       "name": "consistency-equivocation-pair"
     },
@@ -79,5 +87,5 @@
   "keys": {
     "agent_pubkey": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ"
   },
-  "note": "The seventeen cases collectively exercise the §1.2.10 contract: checkpoint object schema and presence rules (schema-*), real RFC 6962 roots over ordered record-hash leaves with the raw-32-byte-leaf trap (tree-*), append-only consistency with an RFC 6962 §2.1.4 proof plus an equivocating divergent-root pair (consistency-*), the present-only-when-true retroactive flag and categorical freshness facts (retroactive-* / freshness-*), and the 0xFF/0x08 log-entry duality over byte-identical signed records (byte-uri-duality)."
+  "note": "The cases exercise the §1.2.10 checkpoint object schema and presence rules, real RFC 6962 roots over ordered record-hash leaves, valid and invalid append-only consistency proofs, foreign-context disclosed leaves, equivocation, retroactive and freshness facts, and the 0xFF/0x08 log-entry duality over byte-identical signed records."
 }

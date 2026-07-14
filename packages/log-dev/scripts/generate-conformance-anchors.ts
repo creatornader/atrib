@@ -511,6 +511,62 @@ async function main(): Promise<void> {
     },
   })
 
+  // Per-type negative bindings are intentionally independent of the
+  // plurality threshold. A malformed commitment excludes only that anchor.
+  writeCase('rfc3161-binding-mismatch', {
+    name: 'rfc3161-binding-mismatch',
+    spec_section: '2.11',
+    description:
+      'An RFC 3161 structural proof whose hashed_message_hex binds a different record. The valid atrib-log proof remains usable; the TSA proof is invalid and never counted.',
+    input: {
+      record,
+      bundle: {
+        record_hash: recordHash,
+        log_proofs: [
+          elementA,
+          { ...tsaElement, proof: { ...tsaElement.proof, hashed_message_hex: filler1Hash.slice(7) } },
+        ],
+      },
+      trust: baseTrust,
+    },
+    expected: { invalid_indices: [1], hard_reject: false },
+  })
+
+  writeCase('opentimestamps-binding-mismatch', {
+    name: 'opentimestamps-binding-mismatch',
+    spec_section: '2.11',
+    description:
+      'An OpenTimestamps completion with a commitment_hex for a different record. It is invalid rather than pending, and it contributes no plurality evidence.',
+    input: {
+      record,
+      bundle: {
+        record_hash: recordHash,
+        log_proofs: [
+          elementA,
+          { ...otsCompleteElement, proof: { ...otsCompleteElement.proof, commitment_hex: filler1Hash.slice(7) } },
+        ],
+      },
+      trust: baseTrust,
+    },
+    expected: { invalid_indices: [1], hard_reject: false },
+  })
+
+  writeCase('malformed-unknown-precedence', {
+    name: 'malformed-unknown-precedence',
+    spec_section: '2.11',
+    description:
+      'A non-atrib anchor with an unknown discriminator but no anchor_id is malformed. Rule (b) malformation takes precedence over unknown-type preservation.',
+    input: {
+      record,
+      bundle: {
+        record_hash: recordHash,
+        log_proofs: [elementA, { anchor_type: 'example-quantum-beacon/v9', proof: {} }],
+      },
+      trust: baseTrust,
+    },
+    expected: { malformed_indices: [1], unknown_types: [], hard_reject: false },
+  })
+
   // ── Case 5: rekor-anchor-claim ────────────────────────────────────
   writeCase('rekor-anchor-claim', {
     name: 'rekor-anchor-claim',
@@ -851,6 +907,9 @@ async function main(): Promise<void> {
     'discriminator-malformed-elements',
     'unknown-anchor-type',
     'plurality-atrib-log-plus-rfc3161',
+    'rfc3161-binding-mismatch',
+    'opentimestamps-binding-mismatch',
+    'malformed-unknown-precedence',
     'rekor-anchor-claim',
     'rekor-claim-binding-mismatch',
     'record-signature-digest-path-invalid',
@@ -878,7 +937,7 @@ async function main(): Promise<void> {
       log_e_pubkey_b64: b64(logEPub),
       rekor_pubkey_b64: b64(rekorPub),
     },
-    note: 'The thirteen cases collectively exercise the anchor-interface contract: legacy absent-discriminator compatibility (1), discriminator malformation rules (2), unknown-type forward compatibility (3), structural rfc3161/opentimestamps variants with real binding fields (4, 8), the fresh anchoring-signature claim artifact with real Ed25519 crypto (5, 6), the digest-path impossibility proof (7), operator-group independence (9), §2.11.4 threshold/equivocation/censorship hard conditions unchanged (10, 11, 12), and the producer-side allow_single_anchor posture (13). Verifier determinism (two runs, identical annotation) is asserted by the reference test over every case.',
+    note: 'The cases exercise legacy absent-discriminator compatibility, discriminator malformation and unknown-type precedence, structural rfc3161/opentimestamps bindings with per-type negative vectors, fresh Rekor anchoring claims, operator-group independence, §2.11.4 threshold/equivocation/censorship conditions, and the producer-side allow_single_anchor posture. Verifier determinism is asserted by the reference test over every case.',
   }
 
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')

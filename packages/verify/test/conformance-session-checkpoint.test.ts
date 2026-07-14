@@ -330,6 +330,47 @@ describe('session_checkpoint conformance (§1.2.10)', () => {
     ).toBe(false)
   })
 
+  it('consistency-proof-invalid: a changed proof fails despite valid linkage and leaves', () => {
+    const c = loadCase('consistency-proof-invalid')
+    const first = c.input.first_checkpoint as SessionCheckpointRecord
+    const second = c.input.second_checkpoint as SessionCheckpointRecord
+    const expected = c.expected as {
+      prior_checkpoint_matches: boolean
+      first_index_equals_prior_tree_size: boolean
+      consistency_proof_verifies: boolean
+      append_only: boolean
+      consistent: boolean
+    }
+    const check = checkConsecutiveSessionCheckpoints(first, second, {
+      firstLeaves: c.input.first_leaves as string[],
+      secondLeaves: c.input.second_leaves as string[],
+      consistencyProof: (c.input.consistency_proof_hex as string[]).map(hexDecode),
+    })
+    expect(check.priorCheckpointMatches).toBe(expected.prior_checkpoint_matches)
+    expect(check.firstIndexMatchesPriorTreeSize).toBe(expected.first_index_equals_prior_tree_size)
+    expect(check.appendOnly).toBe(expected.append_only)
+    expect(check.consistencyProofVerifies).toBe(expected.consistency_proof_verifies)
+    expect(check.consistent).toBe(expected.consistent)
+  })
+
+  it('foreign-context-id-leaf: hash commitments do not authorize a foreign context record', async () => {
+    const c = loadCase('foreign-context-id-leaf')
+    const record = c.input.record as SessionCheckpointRecord
+    const leaves = c.input.leaves as string[]
+    const leafRecords = c.input.leaf_records as AtribRecord[]
+    const expected = c.expected as {
+      root_matches_leaves: boolean
+      args_hash_matches_leaves: boolean
+      leaf_contexts_match: boolean
+      validator_should_accept: boolean
+    }
+    const verification = await verifySessionCheckpointRecord(record, { leaves, leafRecords })
+    expect(verification.rootMatchesLeaves).toBe(expected.root_matches_leaves)
+    expect(verification.argsHashMatchesLeaves).toBe(expected.args_hash_matches_leaves)
+    expect(verification.leafContextsMatch).toBe(expected.leaf_contexts_match)
+    expect(expected.validator_should_accept).toBe(false)
+  })
+
   it('consistency-equivocation-pair: same prior, divergent roots → equivocation fact', async () => {
     const c = loadCase('consistency-equivocation-pair')
     const a = c.input.first_variant as SessionCheckpointRecord

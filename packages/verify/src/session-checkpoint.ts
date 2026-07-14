@@ -518,6 +518,12 @@ export function checkConsecutiveSessionCheckpoints(
 export interface VerifySessionCheckpointRecordOptions {
   /** Ordered `"sha256:<hex>"` refs of the disclosed leaf list (Tier 2 material). */
   leaves?: readonly string[] | undefined
+  /**
+   * Optional disclosed record bodies for the leaves. When present, every
+   * covered record must belong to the checkpoint's context_id. Hash-only
+   * leaves cannot establish that fact.
+   */
+  leafRecords?: readonly Pick<AtribRecord, 'context_id'>[] | undefined
   /** Max covered leaf timestamp for §1.2.10.3 freshness tiering. */
   maxCoveredLeafTimestamp?: number | undefined
   /** Verifier staleness bound; defaults to 24h. */
@@ -535,6 +541,8 @@ export interface SessionCheckpointVerification {
   rootMatchesLeaves?: boolean
   /** D099 args_hash replays from the disclosed leaves (undefined when not supplied). */
   argsHashMatchesLeaves?: boolean
+  /** Every disclosed leaf record belongs to this checkpoint's context_id. */
+  leafContextsMatch?: boolean
   /** §1.2.10.3 categorical freshness fact (undefined without a leaf timestamp). */
   freshness?: SessionCheckpointFreshness
 }
@@ -572,6 +580,12 @@ export async function verifySessionCheckpointRecord(
     }
   }
 
+  const leafContextsMatch =
+    opts.leafRecords === undefined
+      ? undefined
+      : opts.leafRecords.length === (opts.leaves?.length ?? opts.leafRecords.length) &&
+        opts.leafRecords.every((leaf) => leaf.context_id === record.context_id)
+
   const freshness =
     opts.maxCoveredLeafTimestamp !== undefined
       ? sessionCheckpointFreshness(
@@ -587,6 +601,7 @@ export async function verifySessionCheckpointRecord(
     ...(structuralRejection !== undefined ? { structuralRejection } : {}),
     ...(rootMatchesLeaves !== undefined ? { rootMatchesLeaves } : {}),
     ...(argsHashMatchesLeaves !== undefined ? { argsHashMatchesLeaves } : {}),
+    ...(leafContextsMatch !== undefined ? { leafContextsMatch } : {}),
     ...(freshness !== undefined ? { freshness } : {}),
   }
 }

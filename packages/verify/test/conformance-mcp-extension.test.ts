@@ -163,7 +163,9 @@ describe('mcp-extension conformance: capability', () => {
 function runGatedResult(c: CaseFile): Record<string, unknown> {
   const record = c.input.signed_record as AtribRecord
   const result: Record<string, unknown> = { content: [{ type: 'text', text: 'ok' }] }
-  extendResultWithAttribution(result, c.input.request_meta, () => record)
+  extendResultWithAttribution(result, c.input.request_meta, () => record, {
+    initializeCapabilities: c.input.initialize_capabilities,
+  })
   return result
 }
 
@@ -202,6 +204,20 @@ describe('mcp-extension conformance: gating', () => {
     const block = meta[EXT_ID] as Record<string, unknown>
     expect('record' in block).toBe(expected.record_body_present)
     expect(meta).toEqual(expected.result_meta)
+  })
+
+  it('legacy-initialize-declaration: initialize capabilities gate later receipts', () => {
+    const c = loadCase('gating--legacy-initialize-declaration')
+    const expected = c.expected as {
+      extension_block_present: boolean
+      result_meta: Record<string, unknown>
+      legacy_initialize_gating: boolean
+    }
+    const result = runGatedResult(c)
+    const meta = result._meta as Record<string, unknown>
+    expect(EXT_ID in meta).toBe(expected.extension_block_present)
+    expect(meta).toEqual(expected.result_meta)
+    expect(expected.legacy_initialize_gating).toBe(true)
   })
 
   it('undeclared-legacy-only: byte-identical to pre-extension writeOutboundContext output', () => {

@@ -175,6 +175,35 @@ describe('verifyRecord', () => {
     expect(result.provenance!.upstream_resolved).toBe(false)
     expect(result.provenance!.upstream_record_hash).toBeNull()
   })
+
+  it('surfaces anchor plurality without conflating it with evidence or delegation', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed)
+    const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+    const result = await verifyRecord(record, {
+      proofBundle: { record_hash: recordHash, log_proofs: [] },
+      anchorTrust: { trust_material: { logs: {} }, threshold_m: 0 },
+    })
+    expect(result.anchor_plurality?.anchor_plurality).toMatchObject({
+      proof_count: 0,
+      plurality_met: false,
+    })
+    expect(result.evidence).toBeUndefined()
+    expect(result.delegation).toBeUndefined()
+    expect(result.valid).toBe(true)
+  })
+
+  it('rejects a proof bundle bound to a different record hash', async () => {
+    const seed = await freshKey()
+    const record = await buildRecord(seed)
+    const result = await verifyRecord(record, {
+      proofBundle: { record_hash: `sha256:${'0'.repeat(64)}`, log_proofs: [] },
+      anchorTrust: { trust_material: { logs: {} }, threshold_m: 0 },
+    })
+    expect(result.anchor_plurality).toBeDefined()
+    expect(result.warnings).toContain('anchor proof bundle record_hash does not match record')
+    expect(result.valid).toBe(false)
+  })
 })
 
 describe('verifyRecord, informed_by_resolution', () => {

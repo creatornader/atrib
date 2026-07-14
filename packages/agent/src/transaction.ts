@@ -62,6 +62,13 @@ export interface TransactionDetection {
   contentId: string | null
 }
 
+/** One caller-composable payment detector from the payments profile. */
+export type TransactionDetector = (
+  toolName: string,
+  response: unknown,
+  headers?: Record<string, string | undefined>,
+) => TransactionDetection
+
 const HEURISTIC_KEYWORDS = [
   'create_order',
   'complete_checkout',

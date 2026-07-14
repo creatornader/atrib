@@ -380,6 +380,27 @@ async function main(): Promise<void> {
     },
   )
 
+  emitCase(
+    'shape',
+    'payload-hash-mismatch',
+    'A shape-valid envelope presented with different payload material. The envelope remains structurally valid, but a consumer that has the material MUST report the JCS commitment mismatch and reject that evidence claim.',
+    {
+      envelope: minimalEnvelope() as unknown as Record<string, unknown>,
+      payload_material: { note: 'substituted evidence material' },
+    },
+    { accept: true, payload_hash_matches_material: false, reject_reasons: ['payload_hash_mismatch'] },
+  )
+
+  const sanitizedWithheld = minimalEnvelope()
+  sanitizedWithheld.facts = { public_summary: 'authorization asserted', sanitized: true }
+  emitCase(
+    'shape',
+    'withheld-sanitized',
+    'A hash-only public projection. The payload body is withheld and facts contain only the explicit sanitized summary, so consumers can preserve the commitment without treating unavailable private material as public.',
+    { envelope: sanitizedWithheld as unknown as Record<string, unknown> },
+    { accept: true, body_retrievable: false, public_facts: ['public_summary', 'sanitized'] },
+  )
+
   const maximal: EvidenceEnvelope = {
     envelope: 1,
     profile: `${ATRIB_PROFILE_BASE}oauth2`,

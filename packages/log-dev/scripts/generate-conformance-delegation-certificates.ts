@@ -975,6 +975,81 @@ async function main(): Promise<void> {
     },
   })
 
+  // ── Edge vectors: malformed keys, ambiguity, and depth limit ──────
+  const malformedRunKeyCert = { ...certB1, run_pubkey: 'not-a-base64url-ed25519-key' }
+  writeCase('cert-malformed-run-key', {
+    name: 'cert-malformed-run-key',
+    spec_section: '1.11',
+    description:
+      'A certificate with a malformed run_pubkey. The verifier reports the named key-format error before attempting signature interpretation.',
+    input: { certificate: malformedRunKeyCert },
+    expected: { errors: ['run_pubkey_malformed'] },
+  })
+
+  const ambiguousCert = await signCertificate(
+    {
+      cert_type: 'atrib/delegation-cert/v1',
+      context_id: ctxB1,
+      not_after: CERT_NOT_AFTER,
+      not_before: CERT_NOT_BEFORE,
+      principal_key: rogueKey,
+      run_pubkey: runKey,
+      scope: SCOPE,
+    },
+    ROGUE_SEED,
+  )
+  writeCase('walk-ambiguous-principals', {
+    name: 'walk-ambiguous-principals',
+    spec_section: '1.11',
+    description:
+      'Two valid, overlapping certificates from different principals cover the same run key. The verifier must surface both candidates and resolve neither principal.',
+    input: { record: walkValidRecord, genesis_record: walkValidRecord, certificates: [certB1, ambiguousCert] },
+    expected: { delegation_ambiguous: true, candidate_count: 2, depth: 0 },
+  })
+
+  const ctxDepth = 'd1'.repeat(16)
+  const parentCert = await signCertificate(
+    {
+      cert_type: 'atrib/delegation-cert/v1',
+      context_id: ctxDepth,
+      not_after: CERT_NOT_AFTER,
+      not_before: CERT_NOT_BEFORE,
+      principal_key: principalKey,
+      run_pubkey: runKey,
+      scope: SCOPE,
+    },
+    PRINCIPAL_SEED,
+  )
+  const nestedCert = await signCertificate(
+    {
+      cert_type: 'atrib/delegation-cert/v1',
+      context_id: ctxDepth,
+      not_after: CERT_NOT_AFTER,
+      not_before: CERT_NOT_BEFORE,
+      principal_key: runKey,
+      run_pubkey: run2Key,
+      scope: SCOPE,
+    },
+    RUN_SEED,
+  )
+  const depthRecord = await runKeyGenesis(
+    ctxDepth,
+    'f8',
+    REFERENCE_TIME_MS + 60_000,
+    'search',
+    nestedCert,
+    RUN2_SEED,
+    run2Key,
+  )
+  writeCase('walk-depth-limit', {
+    name: 'walk-depth-limit',
+    spec_section: '1.11',
+    description:
+      'A would-be two-hop delegation: principal -> run key -> run2 key. §1.11 accepts one delegation hop only, so the covering nested certificate is rejected with delegation_depth_exceeded.',
+    input: { record: depthRecord, genesis_record: depthRecord, certificates: [parentCert, nestedCert] },
+    expected: { depth: 0, cert_valid: false, errors: ['delegation_depth_exceeded'] },
+  })
+
   // ── Manifest ──────────────────────────────────────────────────────
   const caseNames = [
     'cert-canonical-full',
@@ -991,6 +1066,9 @@ async function main(): Promise<void> {
     'revocation-run-key',
     'revocation-cert-not-covering',
     'multi-producer-cert-bound-null',
+    'cert-malformed-run-key',
+    'walk-ambiguous-principals',
+    'walk-depth-limit',
   ]
   const manifest = {
     spec_section: '1.11',
@@ -1012,7 +1090,8 @@ async function main(): Promise<void> {
       'delegation_cert_hash genesis lex-slotting (1), run-key revocation extending ' +
       'spec/conformance/1.9/ (2), D067 multi-producer cert_bound: null posture (1). ' +
       'The principal seed (0x01 fill) deliberately matches the §1.4 corpus signer, so ' +
-      'the depth-0 case is literally a principal signing directly.',
+      'the depth-0 case is literally a principal signing directly. Edge cases pin malformed keys, ' +
+      'multiple principal candidates, and the one-hop depth limit.',
   }
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
 

@@ -1,0 +1,35 @@
+{
+  "name": "cert-malformed-run-key",
+  "spec_section": "1.11",
+  "description": "A certificate with a malformed run_pubkey. The verifier reports the named key-format error before attempting signature interpretation.",
+  "input": {
+    "certificate": {
+      "cert_type": "atrib/delegation-cert/v1",
+      "context_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+      "not_after": 1767229200000,
+      "not_before": 1767225600000,
+      "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "run_pubkey": "not-a-base64url-ed25519-key",
+      "scope": {
+        "tool_names": [
+          "search",
+          "read_email"
+        ],
+        "max_amount": {
+          "currency": "USD",
+          "value": 100
+        },
+        "event_types": [
+          "https://atrib.dev/v1/types/tool_call",
+          "https://atrib.dev/v1/types/observation"
+        ]
+      },
+      "signature": "ImG13vEChva3MzmqQEQ7LaPNrm9RttThzg0c4J2jTjAEkGgeHe1giOUAFdYzbVDG2sj7IVJ87fjO4m4wjWJfBw"
+    }
+  },
+  "expected": {
+    "errors": [
+      "run_pubkey_malformed"
+    ]
+  }
+}

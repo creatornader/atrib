@@ -1,0 +1,56 @@
+{
+  "name": "foreign-context-id-leaf",
+  "spec_section": "1.2.10",
+  "description": "A checkpoint whose root and args_hash correctly commit to disclosed hashes, but one disclosed record belongs to a different context_id. Hash-only evidence cannot expose this; when records are supplied, a verifier must reject the cross-context leaf set.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:0594b777f7855ff1d6fbcb6acc595ef4438c1f041d5d944eb9db93b805d95112",
+      "checkpoint": {
+        "first_index": 0,
+        "session_root": "sha256:ea8d07f2e73621fa52d9756bd7b8093f9b091af183081ba0db2f2691daf113f8",
+        "tree_size": 2
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1782864010000,
+      "args_hash": "sha256:99a00e0f5295b87e6128612acddf8a58d8dbbc432a84119fcaef21b3844d33b0",
+      "signature": "QnOzdO7JLCSdSykiNa2OZWz9mS2L1bIy9RU3tYR6dPVP9qRTY5dnAGDjq6hzCOqun-gQmwh4bb4Ki2Y0QI7HDQ"
+    },
+    "leaves": [
+      "sha256:0594b777f7855ff1d6fbcb6acc595ef4438c1f041d5d944eb9db93b805d95112",
+      "sha256:479e4f24b5717c74780858664bbca490ef6f70385429afd0757656b396f1686e"
+    ],
+    "leaf_records": [
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:6965addfa3388a65c5602f92daf87ade678d6688ddf01cf535b0531da70ffcfa",
+        "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+        "chain_root": "sha256:d2f9fa9d99bb30b2b67fc6b0ea2694f345c0961596e0fd82561010b4f7570c2d",
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "abababababababababababababababab",
+        "timestamp": 1782864001000,
+        "signature": "ZofOLSyeox05Up60lramoQmXuj-jt7CYkPEcA_rDpLgw8yQyj2AxbxgxSjoOYz6HNMgJOaaaHSaPWHQiN6HRBA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "content_id": "sha256:2ab833d4ab7a0e53ebde708c54e900fbc1da2bc364c78788075cad5c269d1c12",
+        "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+        "chain_root": "sha256:83422a41180c2a61fe5f90f5e0b6c346c76ebd28cf4d07515d93e4c1f0c49e1c",
+        "event_type": "https://atrib.dev/v1/types/observation",
+        "context_id": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "timestamp": 1782864009000,
+        "signature": "ZnUsdAtLlG8XJ_hU4vBARx5Xs1H2hExziV1KNvaDMy46J2Qkg44zQ0QrgL1U8ARqHSi5EofP3d81yrlwamKNCA"
+      }
+    ],
+    "signer_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+  },
+  "expected": {
+    "root_matches_leaves": true,
+    "args_hash_matches_leaves": true,
+    "leaf_contexts_match": false,
+    "validator_should_accept": false
+  }
+}

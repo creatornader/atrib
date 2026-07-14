@@ -31,12 +31,10 @@
  *
  * The `atrib-log` transport reuses the existing §2.6.1 submission path
  * (`createSubmissionQueue`, non-blocking with retry). The `sigstore-rekor`,
- * `rfc3161-tsa`, and `opentimestamps` transports are STUBS behind the
- * `AnchorTransport` interface in this revision: they report `unsupported`
- * without touching the network. Real HTTP adapters are additive follow-ons
- * and deliberately live behind the same interface so nothing in this module
- * changes when they land (D138 outcome: the default set flips in the same
- * release the second default anchor is chosen).
+ * `rfc3161-tsa`, and `opentimestamps` adapters use their HTTP submission
+ * surfaces behind the same `AnchorTransport` interface. Non-log HTTP legs
+ * only activate for an explicitly configured anchor set; the built-in
+ * default remains network-silent under §5.8.
  *
  * Nothing in this module changes any signed byte: proof bundles are
  * post-signing artifacts (§2.8), and anchoring is permissionless and
@@ -134,9 +132,9 @@ export interface AnchorSetConfig {
 /**
  * The SDK's built-in default anchor set (§2.11.12 rule 1): two independent
  * anchors so zero-config producers get plurality without opting in. The
- * non-atrib member is OpenTimestamps per the D138 candidate shape; its
- * transport is a stub in this revision, so zero-config fan-out submits to
- * the atrib log exactly as today and reports the OTS leg `unsupported`.
+ * non-atrib member is OpenTimestamps per the D138 candidate shape. Its
+ * transport becomes active only when a producer explicitly configures the
+ * anchor leg, so zero-config fan-out never creates outbound HTTP traffic.
  */
 export const BUILT_IN_DEFAULT_ANCHOR_SET: readonly AnchorDescriptor[] = [
   { anchor_type: 'atrib-log', anchor_id: 'log.atrib.dev', url: 'https://log.atrib.dev/v1' },
@@ -407,6 +405,21 @@ export interface AnchorTransport {
   submit(request: AnchorSubmissionRequest): AnchorSubmissionOutcome | Promise<AnchorSubmissionOutcome>
 }
 
+/** Injectable fetch surface for offline adapter tests and host-owned HTTP policy. */
+export type AnchorFetch = (input: string, init?: RequestInit) => Promise<Response>
+
+export interface AnchorTransportOptions {
+  queue?: SubmissionQueue
+  maxQueueDepth?: number
+  /**
+   * Enables non-log HTTP submission. `createAnchorFanout` sets this only for
+   * explicit caller configuration; direct callers opt in deliberately.
+   */
+  allowNetwork?: boolean
+  /** Defaults to global fetch when network submission is enabled. */
+  fetchImpl?: AnchorFetch
+}
+
 function descriptorType(descriptor: AnchorDescriptor): AnchorType {
   // §2.11.9 rule (a) analog: absent anchor_type means atrib-log.
   return descriptor.anchor_type ?? 'atrib-log'
@@ -439,7 +452,7 @@ function descriptorId(descriptor: AnchorDescriptor): string {
  */
 export function createAtribLogAnchorTransport(
   descriptor: AnchorDescriptor,
-  options: { queue?: SubmissionQueue; maxQueueDepth?: number } = {},
+  options: AnchorTransportOptions = {},
 ): AnchorTransport {
   const anchorId = descriptorId(descriptor)
   const queue =
@@ -458,10 +471,9 @@ export function createAtribLogAnchorTransport(
 }
 
 /**
- * Stub transport for anchor types whose network adapters have not shipped
- * yet (`sigstore-rekor`, `rfc3161-tsa`, `opentimestamps`). Reports
- * `unsupported` without touching the network; real HTTP adapters replace
- * these behind the same `AnchorTransport` interface.
+ * Network-disabled transport for non-log anchors. This is a safe default,
+ * not an implementation gap: callers must explicitly configure the anchor
+ * set before the adapters below make outbound requests.
  */
 export function createStubAnchorTransport(
   anchorType: Exclude<AnchorType, 'atrib-log'>,
@@ -481,16 +493,158 @@ export function createStubAnchorTransport(
   }
 }
 
-/** Build the default transport for one descriptor (atrib-log real, others stubs). */
+function httpFetch(options: AnchorTransportOptions): AnchorFetch | null {
+  if (!options.allowNetwork) return null
+  return options.fetchImpl ?? globalThis.fetch
+}
+
+function recordHashBytes(recordHash: string): Uint8Array {
+  if (!RECORD_HASH_PATTERN.test(recordHash)) throw new TypeError('invalid record hash')
+  const hex = recordHash.slice('sha256:'.length)
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  }
+  return bytes
+}
+
+function binaryBody(bytes: Uint8Array): Blob {
+  return new Blob([bytes.slice().buffer as ArrayBuffer])
+}
+
+function derLength(length: number): number[] {
+  if (length < 128) return [length]
+  const bytes: number[] = []
+  for (let value = length; value > 0; value >>>= 8) bytes.unshift(value & 0xff)
+  return [0x80 | bytes.length, ...bytes]
+}
+
+function der(tag: number, value: number[]): number[] {
+  return [tag, ...derLength(value.length), ...value]
+}
+
+/** Build the minimal RFC 3161 TimeStampReq for a SHA-256 imprint. */
+export function rfc3161TimestampQuery(recordHash: string): Uint8Array {
+  const digest = [...recordHashBytes(recordHash)]
+  const sha256AlgorithmIdentifier = [
+    0x30, 0x0d,
+    0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01,
+    0x05, 0x00,
+  ]
+  const messageImprint = der(0x30, [...sha256AlgorithmIdentifier, ...der(0x04, digest)])
+  return new Uint8Array(der(0x30, [...der(0x02, [0x01]), ...messageImprint, 0x01, 0x01, 0xff]))
+}
+
+/** Real Rekor HTTP adapter. It submits an unsigned hashedrekord claim. */
+export function createRekorAnchorTransport(
+  descriptor: AnchorDescriptor,
+  options: AnchorTransportOptions = {},
+): AnchorTransport {
+  const anchorId = descriptorId(descriptor)
+  const fetchImpl = httpFetch(options)
+  const endpoint = descriptorEndpoint(descriptor)
+  if (!fetchImpl || !endpoint) return createStubAnchorTransport('sigstore-rekor', anchorId)
+  return {
+    anchorType: 'sigstore-rekor',
+    anchorId,
+    async submit(request) {
+      const artifact = anchorClaimArtifact(request.recordHash)
+      const response = await fetchImpl(`${endpoint.replace(/\/$/, '')}/api/v1/log/entries`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          apiVersion: '0.0.1',
+          kind: 'hashedrekord',
+          spec: {
+            data: {
+              hash: { algorithm: 'sha256', value: request.recordHash.slice('sha256:'.length) },
+              content: bytesToBase64(artifact),
+            },
+          },
+        }),
+      })
+      if (!response.ok) throw new Error(`Rekor submission failed: ${response.status}`)
+      return { anchor_type: 'sigstore-rekor', anchor_id: anchorId, status: 'queued' }
+    },
+  }
+}
+
+/** Real RFC 3161 HTTP adapter using a DER TimeStampReq with a SHA-256 imprint. */
+export function createRfc3161AnchorTransport(
+  descriptor: AnchorDescriptor,
+  options: AnchorTransportOptions = {},
+): AnchorTransport {
+  const anchorId = descriptorId(descriptor)
+  const fetchImpl = httpFetch(options)
+  const endpoint = descriptorEndpoint(descriptor)
+  if (!fetchImpl || !endpoint) return createStubAnchorTransport('rfc3161-tsa', anchorId)
+  return {
+    anchorType: 'rfc3161-tsa',
+    anchorId,
+    async submit(request) {
+      const response = await fetchImpl(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/timestamp-query',
+          accept: 'application/timestamp-reply',
+        },
+        body: binaryBody(rfc3161TimestampQuery(request.recordHash)),
+      })
+      if (!response.ok) throw new Error(`RFC 3161 submission failed: ${response.status}`)
+      const responseBytes = new Uint8Array(await response.arrayBuffer())
+      if (responseBytes.length === 0) throw new Error('RFC 3161 submission returned an empty response')
+      return { anchor_type: 'rfc3161-tsa', anchor_id: anchorId, status: 'queued' }
+    },
+  }
+}
+
+/** Real OpenTimestamps calendar adapter. Accepted receipts remain pending. */
+export function createOpenTimestampsAnchorTransport(
+  descriptor: AnchorDescriptor,
+  options: AnchorTransportOptions = {},
+): AnchorTransport {
+  const anchorId = descriptorId(descriptor)
+  const fetchImpl = httpFetch(options)
+  const calendars = descriptor.calendars ?? (descriptorEndpoint(descriptor) ? [descriptorEndpoint(descriptor)!] : [])
+  if (!fetchImpl || calendars.length === 0) return createStubAnchorTransport('opentimestamps', anchorId)
+  return {
+    anchorType: 'opentimestamps',
+    anchorId,
+    async submit(request) {
+      const digest = recordHashBytes(request.recordHash)
+      const failures: string[] = []
+      for (const calendar of calendars) {
+        try {
+          const response = await fetchImpl(`${calendar.replace(/\/$/, '')}/digest`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/octet-stream', accept: 'application/vnd.opentimestamps.ots' },
+            body: binaryBody(digest),
+          })
+          if (!response.ok) throw new Error(`${response.status}`)
+          const receipt = new Uint8Array(await response.arrayBuffer())
+          if (receipt.length === 0) throw new Error('empty receipt')
+          return { anchor_type: 'opentimestamps', anchor_id: anchorId, status: 'pending' }
+        } catch (error) {
+          failures.push(error instanceof Error ? error.message : String(error))
+        }
+      }
+      throw new Error(`OpenTimestamps submission failed: ${failures.join(', ')}`)
+    },
+  }
+}
+
+/** Build the default transport for one descriptor. */
 export function createAnchorTransport(
   descriptor: AnchorDescriptor,
-  options: { queue?: SubmissionQueue; maxQueueDepth?: number } = {},
+  options: AnchorTransportOptions = {},
 ): AnchorTransport {
   const anchorType = descriptorType(descriptor)
   if (anchorType === 'atrib-log') {
     return createAtribLogAnchorTransport(descriptor, options)
   }
-  return createStubAnchorTransport(anchorType, descriptorId(descriptor))
+  if (anchorType === 'sigstore-rekor') return createRekorAnchorTransport(descriptor, options)
+  if (anchorType === 'rfc3161-tsa') return createRfc3161AnchorTransport(descriptor, options)
+  return createOpenTimestampsAnchorTransport(descriptor, options)
 }
 
 /**
@@ -514,6 +668,8 @@ export interface CreateAnchorFanoutOptions {
   transports?: AnchorTransport[]
   /** Forwarded to atrib-log submission queues created by this fan-out. */
   maxQueueDepth?: number
+  /** Injectable HTTP client for explicitly configured non-log anchor legs. */
+  fetchImpl?: AnchorFetch
   /**
    * Observer invoked once per settled anchor leg. Errors are caught and
    * logged per §5.8; they never affect other legs or the caller.
@@ -558,6 +714,7 @@ export function createAnchorFanout(options: CreateAnchorFanoutOptions = {}): Anc
   }
 
   const injected = options.transports ?? []
+  const allowNetwork = Array.isArray(config.anchors)
   const transports: AnchorTransport[] = []
   for (const descriptor of resolveEffectiveAnchors(config)) {
     try {
@@ -572,6 +729,8 @@ export function createAnchorFanout(options: CreateAnchorFanoutOptions = {}): Anc
             ...(options.maxQueueDepth !== undefined
               ? { maxQueueDepth: options.maxQueueDepth }
               : {}),
+            allowNetwork,
+            ...(options.fetchImpl !== undefined ? { fetchImpl: options.fetchImpl } : {}),
           }),
       )
     } catch (err) {

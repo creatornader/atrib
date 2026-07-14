@@ -11,9 +11,12 @@ export { createSession, buildOutboundMeta, accumulateInboundContext } from './se
 export type { SessionState, LatestContext } from './session.js'
 export type { GapNode } from '@atrib/verify'
 
-// Transaction detection
+// Transaction detection. Deprecated at the root. Import from
+// `@atrib/agent/payments` for new code.
+/** @deprecated Import from '@atrib/agent/payments'. */
 export { detectTransaction } from './transaction.js'
-export type { TransactionDetection } from './transaction.js'
+/** @deprecated Import types from '@atrib/agent/payments'. */
+export type { TransactionDetection, TransactionDetector, TransactionProtocol } from './transaction.js'
 
 // Policy negotiation
 export { initializeSessionPolicy } from './policy.js'

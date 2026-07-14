@@ -1,0 +1,86 @@
+{
+  "name": "walk-depth-limit",
+  "spec_section": "1.11",
+  "description": "A would-be two-hop delegation: principal -> run key -> run2 key. §1.11 accepts one delegation hop only, so the covering nested certificate is rejected with delegation_depth_exceeded.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8",
+      "creator_key": "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E",
+      "chain_root": "sha256:bdf0fe5c9a09aa5684c4b56ea6278f9d5527e9aa8b0de23f7697766bbf39e873",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "wMWldbHGY8qiyukCViD181iExc30Zq4OodIhgZKZE_6CXVxIqsjAH1b4-yan2xeUQP5w4vDpLh94yj5RXto4Cg",
+      "delegation_cert_hash": "sha256:765a1cac5d71f0c2dcdd4518f193fa200f5fa3affa8ee9f44e6f257c5e951cbf"
+    },
+    "genesis_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8",
+      "creator_key": "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E",
+      "chain_root": "sha256:bdf0fe5c9a09aa5684c4b56ea6278f9d5527e9aa8b0de23f7697766bbf39e873",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "wMWldbHGY8qiyukCViD181iExc30Zq4OodIhgZKZE_6CXVxIqsjAH1b4-yan2xeUQP5w4vDpLh94yj5RXto4Cg",
+      "delegation_cert_hash": "sha256:765a1cac5d71f0c2dcdd4518f193fa200f5fa3affa8ee9f44e6f257c5e951cbf"
+    },
+    "certificates": [
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "max_amount": {
+            "currency": "USD",
+            "value": 100
+          },
+          "event_types": [
+            "https://atrib.dev/v1/types/tool_call",
+            "https://atrib.dev/v1/types/observation"
+          ]
+        },
+        "signature": "7hEKUlU_AicMotemoecbnsKLd23aVhcSA57KfmDqI2g_8k0vLcd3hlOb6mrp9lZzXVQpHFSbVfv_5uEYTExPCQ"
+      },
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "run_pubkey": "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "max_amount": {
+            "currency": "USD",
+            "value": 100
+          },
+          "event_types": [
+            "https://atrib.dev/v1/types/tool_call",
+            "https://atrib.dev/v1/types/observation"
+          ]
+        },
+        "signature": "e7m4EC-rXQ7HzIcoIGNJyO5z9hxPd1CZhHKvc2LdMR62WetlgauGlEiLt1u5n3nfqlQeM47dNME3w8pM_MV4AA"
+      }
+    ]
+  },
+  "expected": {
+    "depth": 0,
+    "cert_valid": false,
+    "errors": [
+      "delegation_depth_exceeded"
+    ]
+  }
+}

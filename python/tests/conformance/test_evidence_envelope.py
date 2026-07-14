@@ -164,6 +164,24 @@ def test_builder_raw_rule_matches_raw_sha256() -> None:
     assert built["payload"]["hash"] == raw_sha256("raw evidence text")
 
 
+def test_payload_hash_mismatch_and_withheld_sanitization_match_corpus() -> None:
+    mismatch = _load("shape--payload-hash-mismatch.json")
+    mismatch_envelope = cast("dict[str, object]", _input(mismatch)["envelope"])
+    mismatch_payload = cast("dict[str, object]", mismatch_envelope["payload"])
+    assert validate_envelope(mismatch_envelope).ok is True
+    assert jcs_sha256(_input(mismatch)["payload_material"]) != mismatch_payload["hash"]
+    assert _expected(mismatch)["payload_hash_matches_material"] is False
+
+    sanitized = _load("shape--withheld-sanitized.json")
+    sanitized_envelope = cast("dict[str, object]", _input(sanitized)["envelope"])
+    sanitized_payload = cast("dict[str, object]", sanitized_envelope["payload"])
+    assert validate_envelope(sanitized_envelope).ok is True
+    assert cast("dict[str, object]", sanitized_payload["ref"])["kind"] == "withheld"
+    assert sorted(cast("dict[str, object]", sanitized_envelope["facts"]).keys()) == sorted(
+        cast("list[str]", _expected(sanitized)["public_facts"])
+    )
+
+
 def test_builder_contradictory_input_raises() -> None:
     base: dict[str, object] = {
         "profile": "https://atrib.dev/v1/evidence/oauth2",

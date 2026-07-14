@@ -56,6 +56,10 @@
       "name": "gating--declared-token-only"
     },
     {
+      "file": "cases/gating--legacy-initialize-declaration.json",
+      "name": "gating--legacy-initialize-declaration"
+    },
+    {
       "file": "cases/gating--undeclared-legacy-only.json",
       "name": "gating--undeclared-legacy-only"
     },

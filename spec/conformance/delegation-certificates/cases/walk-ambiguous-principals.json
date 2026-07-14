@@ -1,0 +1,84 @@
+{
+  "name": "walk-ambiguous-principals",
+  "spec_section": "1.11",
+  "description": "Two valid, overlapping certificates from different principals cover the same run key. The verifier must surface both candidates and resolve neither principal.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:113933d8bbc5853ad39774efe60e4780ccae26584467c413d88dcf681f0516dc",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "xpttxqWbhD5MW_DdTjreBBkekQvo7y6_Dw214KzD_Vc8WSgmYzVpQDzILEc_rqSCDjAHskyG496I2SgGuGyyCQ",
+      "delegation_cert_hash": "sha256:69738f4816cca67db76c289737c52025e81ece8058a292a0d41b319bbf827126"
+    },
+    "genesis_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:113933d8bbc5853ad39774efe60e4780ccae26584467c413d88dcf681f0516dc",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "xpttxqWbhD5MW_DdTjreBBkekQvo7y6_Dw214KzD_Vc8WSgmYzVpQDzILEc_rqSCDjAHskyG496I2SgGuGyyCQ",
+      "delegation_cert_hash": "sha256:69738f4816cca67db76c289737c52025e81ece8058a292a0d41b319bbf827126"
+    },
+    "certificates": [
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "max_amount": {
+            "currency": "USD",
+            "value": 100
+          },
+          "event_types": [
+            "https://atrib.dev/v1/types/tool_call",
+            "https://atrib.dev/v1/types/observation"
+          ]
+        },
+        "signature": "ImG13vEChva3MzmqQEQ7LaPNrm9RttThzg0c4J2jTjAEkGgeHe1giOUAFdYzbVDG2sj7IVJ87fjO4m4wjWJfBw"
+      },
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "ypOsFwUYcHHWe4PH_w7-gQjo7EUwV113JoeTM9vavnw",
+        "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "max_amount": {
+            "currency": "USD",
+            "value": 100
+          },
+          "event_types": [
+            "https://atrib.dev/v1/types/tool_call",
+            "https://atrib.dev/v1/types/observation"
+          ]
+        },
+        "signature": "Z5Mu1UgUaxT9RJ_JpkZR7K4xFDaAXI-pSKwz02NEmSeBCjL5dg_7IeVtz2jdozYOMZg1l-lTnbQWCj1tYmZ-Bw"
+      }
+    ]
+  },
+  "expected": {
+    "delegation_ambiguous": true,
+    "candidate_count": 2,
+    "depth": 0
+  }
+}

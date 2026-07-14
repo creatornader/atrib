@@ -1,0 +1,38 @@
+{
+  "name": "withheld-sanitized",
+  "spec_section": "5.5.7",
+  "family": "shape",
+  "description": "A hash-only public projection. The payload body is withheld and facts contain only the explicit sanitized summary, so consumers can preserve the commitment without treating unavailable private material as public.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:330e4f8e81f32f4e8a7e876f26a5ecbe0fdfeb48220cee10670738da32dba01d",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      },
+      "facts": {
+        "public_summary": "authorization asserted",
+        "sanitized": true
+      }
+    }
+  },
+  "expected": {
+    "accept": true,
+    "body_retrievable": false,
+    "public_facts": [
+      "public_summary",
+      "sanitized"
+    ]
+  }
+}

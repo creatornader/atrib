@@ -1,0 +1,36 @@
+{
+  "name": "payload-hash-mismatch",
+  "spec_section": "5.5.7",
+  "family": "shape",
+  "description": "A shape-valid envelope presented with different payload material. The envelope remains structurally valid, but a consumer that has the material MUST report the JCS commitment mismatch and reject that evidence claim.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:330e4f8e81f32f4e8a7e876f26a5ecbe0fdfeb48220cee10670738da32dba01d",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "payload_material": {
+      "note": "substituted evidence material"
+    }
+  },
+  "expected": {
+    "accept": true,
+    "payload_hash_matches_material": false,
+    "reject_reasons": [
+      "payload_hash_mismatch"
+    ]
+  }
+}
