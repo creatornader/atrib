@@ -37,10 +37,10 @@
   "devDependencies": {
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.1.1",
     "canonicalize": "^3.0.0",
     "tsx": "^4.22.4",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.8"
   },
   "files": [
