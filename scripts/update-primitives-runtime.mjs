@@ -34,7 +34,7 @@ export const RUNTIME_MODES = {
     launchAgentPrefix: 'com.nader.atribd.',
     packagePath: join(ROOT, 'services/atribd/package.json'),
     distEntrySuffix: '/services/atribd/dist/index.js',
-    buildFilter: 'atribd...',
+    buildFilter: '@atrib/daemon...',
     healthShape: 'daemon',
     // The topology report still reads the legacy primitive-runtime health
     // shape; its atribd gates land with the operator cutover (D120:
