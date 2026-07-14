@@ -328,15 +328,15 @@ const REAL_WRITE_FACTORIES: Record<string, { mountName: string; factory: AtribdP
   {
     emit: {
       mountName: 'emit',
-      factory: async () => (await import('@atrib/emit')).createAtribEmitServer(),
+      factory: async () => (await import('@atrib/attest')).createAtribEmitServer(),
     },
     'atrib-annotate': {
       mountName: 'annotate',
-      factory: async () => (await import('@atrib/annotate')).createAtribAnnotateServer(),
+      factory: async () => (await import('@atrib/attest')).createAtribAnnotateServer(),
     },
     'atrib-revise': {
       mountName: 'revise',
-      factory: async () => (await import('@atrib/revise')).createAtribReviseServer(),
+      factory: async () => (await import('@atrib/attest')).createAtribReviseServer(),
     },
   }
 
@@ -652,7 +652,7 @@ describe('atribd corpus: degradation', () => {
               [
                 'emit',
                 async () =>
-                  (await import('@atrib/emit')).createAtribEmitServer({
+                  (await import('@atrib/attest')).createAtribEmitServer({
                     logEndpoint: fixture.input.log_endpoint,
                   }),
               ],
@@ -781,11 +781,12 @@ interface SerializationFixture {
 }
 
 async function realWriteBackend(): Promise<AtribdBackend> {
+  // One write mount serves the whole write union (attest + the three
+  // legacy names) since the attest/recall rename; the mixed-producer
+  // corpus cases still dispatch by tool name against it.
   return createAtribdBackend({
     primitives: [
-      ['emit', async () => (await import('@atrib/emit')).createAtribEmitServer()],
-      ['annotate', async () => (await import('@atrib/annotate')).createAtribAnnotateServer()],
-      ['revise', async () => (await import('@atrib/revise')).createAtribReviseServer()],
+      ['attest', async () => (await import('@atrib/attest')).createAtribAttestServer()],
     ],
   })
 }
@@ -816,7 +817,7 @@ describe('atribd corpus: concurrent-writer-serialization', () => {
                 content: { what: 'daemon write A' },
               },
             })
-            const { emitInProcess } = await import('@atrib/emit')
+            const { emitInProcess } = await import('@atrib/attest')
             const outside = await emitInProcess(
               {
                 event_type: 'observation',

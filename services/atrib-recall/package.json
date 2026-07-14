@@ -33,7 +33,11 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@atrib/verify": "workspace:*",
+    "@noble/ed25519": "^3.1.0",
+    "@noble/hashes": "^2.2.0",
     "@types/node": "^25.9.3",
+    "canonicalize": "^3.0.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
   },
@@ -48,5 +52,13 @@
     "type": "git",
     "url": "git+https://github.com/creatornader/atrib.git",
     "directory": "services/atrib-recall"
+  },
+  "peerDependencies": {
+    "@atrib/verify": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@atrib/verify": {
+      "optional": true
+    }
   }
 }

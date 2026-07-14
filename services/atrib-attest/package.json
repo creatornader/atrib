@@ -1,7 +1,7 @@
 {
-  "name": "@atrib/trace",
-  "version": "0.5.21",
-  "description": "Legacy home of atrib's trace read primitive. Superseded by @atrib/recall (the read verb, shape=walk with a direction); this package re-exports the same surface and forwards the atrib-trace binary.",
+  "name": "@atrib/attest",
+  "version": "0.0.0",
+  "description": "MCP server for atrib's write verb. One attest tool signs observations, annotations, and revisions; the legacy emit, atrib-annotate, and atrib-revise tool names stay mounted as aliases over the same handler.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
     "atrib",
@@ -11,26 +11,31 @@
     "verifiable",
     "agent",
     "cognitive-primitive",
-    "trace",
-    "provenance",
-    "lineage"
+    "ed25519",
+    "signed-records",
+    "attest"
   ],
   "homepage": "https://atrib.dev",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "atrib-trace": "./dist/main.js"
+    "atrib-attest": "./dist/main.js",
+    "atrib-attest-cli": "./dist/cli.js"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc",
+    "build": "rm -rf dist && tsc && chmod +x dist/main.js dist/cli.js dist/local-substrate-host.js",
     "start": "node dist/main.js",
     "dev": "tsx src/main.ts",
     "test": "vitest run"
   },
   "dependencies": {
-    "@atrib/recall": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "@atrib/mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@noble/ed25519": "^3.1.0",
+    "@noble/hashes": "^2.2.0",
+    "canonicalize": "^3.0.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
@@ -47,6 +52,6 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/creatornader/atrib.git",
-    "directory": "services/atrib-trace"
+    "directory": "services/atrib-attest"
   }
 }

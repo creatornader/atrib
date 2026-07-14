@@ -34,14 +34,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@atrib/annotate": "workspace:*",
-    "@atrib/emit": "workspace:*",
+    "@atrib/attest": "workspace:*",
     "@atrib/mcp": "workspace:*",
     "@atrib/recall": "workspace:*",
-    "@atrib/revise": "workspace:*",
     "@atrib/summarize": "workspace:*",
-    "@atrib/trace": "workspace:*",
-    "@atrib/verify-mcp": "workspace:*",
+    "@atrib/verify": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {

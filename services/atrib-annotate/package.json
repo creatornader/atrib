@@ -29,10 +29,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@atrib/emit": "workspace:*",
-    "@atrib/mcp": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^3.25.76"
+    "@atrib/attest": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

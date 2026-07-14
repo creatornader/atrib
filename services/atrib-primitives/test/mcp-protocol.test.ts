@@ -17,11 +17,15 @@ import {
 } from '../src/index.js'
 
 const BINARY = resolve(__dirname, '..', 'dist', 'index.js')
+// The alias-window union: the fifteen legacy tool names plus the attest
+// (write) and recall (read) verbs, served by three mounts.
 const EXPECTED_TOOL_NAMES = [
   'atrib-annotate',
   'atrib-revise',
   'atrib-verify',
+  'attest',
   'emit',
+  'recall',
   'recall_annotations',
   'recall_by_content',
   'recall_by_signer',
@@ -35,11 +39,16 @@ const EXPECTED_TOOL_NAMES = [
   'trace_forward',
 ]
 const EXPECTED_PRIMITIVE_CONTRACTS = {
-  annotate: { package: '@atrib/annotate', tools: ['atrib-annotate'], mutates: true },
-  emit: { package: '@atrib/emit', tools: ['emit'], mutates: true },
+  attest: {
+    package: '@atrib/attest',
+    tools: ['atrib-annotate', 'atrib-revise', 'attest', 'emit'],
+    mutates: true,
+  },
   recall: {
     package: '@atrib/recall',
     tools: [
+      'atrib-verify',
+      'recall',
       'recall_annotations',
       'recall_by_content',
       'recall_by_signer',
@@ -48,13 +57,12 @@ const EXPECTED_PRIMITIVE_CONTRACTS = {
       'recall_revisions',
       'recall_session_chain',
       'recall_walk',
+      'trace',
+      'trace_forward',
     ],
     mutates: false,
   },
-  revise: { package: '@atrib/revise', tools: ['atrib-revise'], mutates: true },
   summarize: { package: '@atrib/summarize', tools: ['summarize'], mutates: false },
-  trace: { package: '@atrib/trace', tools: ['trace', 'trace_forward'], mutates: false },
-  verify: { package: '@atrib/verify-mcp', tools: ['atrib-verify'], mutates: false },
 }
 
 interface HttpHost {
@@ -648,7 +656,7 @@ describe('atrib-primitives MCP runtime', () => {
       expect(health.report?.primitive_runtime?.session_model).toBe(
         'per-session-transport-shared-backend',
       )
-      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(7)
+      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(3)
       expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
       expect(health.report?.primitive_runtime?.recall_contract?.status).toBe('pass')
       expect(health.report?.primitive_runtime?.recall_contract?.content_index_version).toBe(
@@ -668,13 +676,11 @@ describe('atrib-primitives MCP runtime', () => {
       expect(Object.keys(behavioralProbes).sort()).toEqual(
         Object.keys(EXPECTED_PRIMITIVE_CONTRACTS).sort(),
       )
-      for (const primitive of ['recall', 'trace', 'summarize', 'verify']) {
+      for (const primitive of ['recall', 'summarize']) {
         expect(behavioralProbes[primitive]?.status).toBe('pass')
       }
-      for (const primitive of ['emit', 'annotate', 'revise']) {
-        expect(behavioralProbes[primitive]?.status).toBe('skipped')
-        expect(behavioralProbes[primitive]?.reason).toContain('validate-only')
-      }
+      expect(behavioralProbes['attest']?.status).toBe('skipped')
+      expect(behavioralProbes['attest']?.reason).toContain('validate-only')
       expect(health.report?.profile?.agent).toBe('test-agent')
       expect(health.report?.profile?.context_id_policy).toBe('explicit-required')
       expect(health.report?.profile?.requires_explicit_context_id).toBe(true)
@@ -727,7 +733,7 @@ describe('atrib-primitives MCP runtime', () => {
         }
       }
       expect(health.report?.primitive_runtime?.backend).toBe('shared')
-      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(7)
+      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(3)
       expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
       expect(health.report?.sessions?.active).toBe(2)
       expect(health.report?.sessions?.opened).toBe(2)

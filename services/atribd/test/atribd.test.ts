@@ -21,11 +21,15 @@ import {
 } from '../src/index.js'
 
 const BINARY = resolve(__dirname, '..', 'dist', 'index.js')
+// The alias-window union: the fifteen legacy tool names plus the attest
+// (write) and recall (read) verbs, all served by three mounts.
 const EXPECTED_TOOL_NAMES = [
   'atrib-annotate',
   'atrib-revise',
   'atrib-verify',
+  'attest',
   'emit',
+  'recall',
   'recall_annotations',
   'recall_by_content',
   'recall_by_signer',
@@ -832,7 +836,7 @@ describe('atribd real primitive mounts', () => {
     }
   })
 
-  it('serves the fifteen aliases over stateless HTTP with passing contracts', async () => {
+  it('serves the seventeen-tool alias union over stateless HTTP with passing contracts', async () => {
     const host = await startHttpHostProcess({
       ATRIB_AGENT: 'test-agent',
       ATRIB_RECORD_FILE: recordFile,
@@ -848,15 +852,13 @@ describe('atribd real primitive mounts', () => {
         }
       }
       expect(health.status).toBe('healthy')
-      expect(health.report?.daemon?.mounted_primitive_count).toBe(7)
+      expect(health.report?.daemon?.mounted_primitive_count).toBe(3)
       expect(health.report?.daemon?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
       expect(health.report?.recall_contract?.status).toBe('pass')
-      for (const primitive of ['recall', 'trace', 'summarize', 'verify']) {
+      for (const primitive of ['recall', 'summarize']) {
         expect(health.report?.behavioral_probes?.[primitive]?.status).toBe('pass')
       }
-      for (const primitive of ['emit', 'annotate', 'revise']) {
-        expect(health.report?.behavioral_probes?.[primitive]?.status).toBe('skipped')
-      }
+      expect(health.report?.behavioral_probes?.['attest']?.status).toBe('skipped')
 
       const response = await postJson(host.endpoint, TOOLS_LIST_BODY)
       const payload = (await response.json()) as {

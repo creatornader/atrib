@@ -45,12 +45,11 @@ import {
 } from '@atrib/mcp'
 import type { AtribRecord, EventTypeShortName } from '@atrib/mcp'
 
-const EventTypeFilterSchema = z.union([
-  z.enum(EVENT_TYPE_SHORT_NAMES),
-  z.string().refine((value) => isValidEventTypeUri(value), {
-    message: 'event_type must be an atrib shorthand alias or a syntactically valid absolute URI',
-  }),
-])
+// EventTypeFilterSchema moved to ./event-type-filter.js (leaf module) so
+// recall-verb.ts can use it at module init despite the import cycle with
+// this file. Re-exported here for existing importers.
+import { EventTypeFilterSchema } from './event-type-filter.js'
+export { EventTypeFilterSchema }
 
 // Layer 1 importance grading (per the recall semantic surface design). The five
 // canonical importance levels carried in annotation content per D058. The
@@ -184,6 +183,9 @@ import {
 } from './scoring.js'
 import type { BM25Index } from './scoring.js'
 import { buildLocalGraph, shortestDistances, walkFrom } from './graph.js'
+import { registerRecallVerbTool } from './recall-verb.js'
+import { extractRecordHashFieldsFromMcpResult, registerTraceTools } from './trace-tools.js'
+import { registerVerifyTool } from './verification.js'
 import type { EdgeType } from './graph.js'
 import { synthesizeDisplaySummary, resolveDisplayProducer, formatAge } from './legibility.js'
 
@@ -937,7 +939,7 @@ export function loadRecordsFromDir(dir: string): { records: AtribRecord[]; files
 
 type ContextScope = 'all' | 'env'
 
-interface RecallArgs {
+export interface RecallArgs {
   context_id?: string
   /**
    * Controls whether omitted context_id means cross-context recall or the
@@ -1385,40 +1387,7 @@ function fullify(bundles: VerifiedBundle[]): RecallRecordFull[] {
   })
 }
 
-function extractRecordHashFieldsFromMcpResult(result: unknown): string[] {
-  const seen = new Set<string>()
-  const pattern = /^sha256:[0-9a-f]{64}$/
-  const content = (result as { content?: unknown })?.content
-  const text =
-    Array.isArray(content) &&
-    typeof (content[0] as { text?: unknown } | undefined)?.text === 'string'
-      ? (content[0] as { text: string }).text
-      : undefined
-  let root: unknown = result
-  if (text) {
-    try {
-      root = JSON.parse(text)
-    } catch {
-      root = result
-    }
-  }
-  walk(root)
-  return Array.from(seen)
 
-  function walk(node: unknown): void {
-    if (node === null || node === undefined) return
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item)
-      return
-    }
-    if (typeof node !== 'object') return
-    const obj = node as Record<string, unknown>
-    if (typeof obj.record_hash === 'string' && pattern.test(obj.record_hash)) {
-      seen.add(obj.record_hash)
-    }
-    for (const value of Object.values(obj)) walk(value)
-  }
-}
 
 /**
  * Discover and load records per the mirror-discovery contract:
@@ -1624,13 +1593,446 @@ export interface AtribRecallServer {
   mcp: McpServer
 }
 
+// ─── Shape runners ───
+// Each legacy recall_* tool's handler body lives in a named runner that
+// returns the JSON payload object. The legacy registrations and the
+// `recall` verb (recall-verb.ts) both dispatch to these runners, so their
+// results are JSON-identical by construction (read-equivalence conformance
+// family). Do not fork per-surface behavior here.
+
+/** Args for the local derived-graph walk (legacy recall_walk). */
+export interface RecallWalkArgs {
+  from_record_hash: string
+  edge_types?: EdgeType[] | undefined
+  depth?: number | undefined
+}
+
+export async function runRecallWalk(args: RecallWalkArgs): Promise<Record<string, unknown>> {
+  const { loaded, annotationsByRecord } = getLoadedMirrorSnapshot()
+  const graph = buildLocalGraph(loaded)
+  const edgeTypes = args.edge_types ? new Set(args.edge_types) : undefined
+  const depth = typeof args.depth === 'number' ? args.depth : 3
+  const walk = walkFrom(graph, args.from_record_hash, edgeTypes, depth)
+  // Layer 1 v2 legibility: join walked hashes back to their loaded
+  // records so each step in the walk carries a readable label
+  // instead of just a hash + distance. Builds the index once for
+  // O(N) lookup across the walk; for typical walks (depth=3, k<50)
+  // this is fast.
+  const byHash = new Map(loaded.map((lr) => [lr.record_hash, lr]))
+  const now = Date.now()
+  const enriched = walk.map((step) => {
+    // walk derives from graph (built from `loaded`); byHash always has a hit.
+    const lr = byHash.get(step.record_hash)!
+    const ann = annotationsByRecord.get(step.record_hash)
+    return {
+      record_hash: step.record_hash,
+      distance: step.distance,
+      event_type: lr.record.event_type,
+      timestamp: lr.record.timestamp,
+      display_summary: synthesizeDisplaySummary(lr.record, lr.content, ann),
+      display_producer: resolveDisplayProducer(lr.record, lr.producer),
+      age: formatAge(lr.record.timestamp, now),
+    }
+  })
+  return {
+    from_record_hash: args.from_record_hash,
+    edge_types: args.edge_types ?? ['CHAIN_PRECEDES', 'INFORMED_BY', 'ANNOTATES', 'REVISES'],
+    depth,
+    count: enriched.length,
+    walk: enriched,
+  }
+}
+
+export async function runRecallAnnotations(args: {
+  record_hash: string
+}): Promise<Record<string, unknown>> {
+  const { annotationsByRecord } = getLoadedMirrorSnapshot()
+  const summary = annotationsByRecord.get(args.record_hash) ?? null
+  return { record_hash: args.record_hash, annotations: summary }
+}
+
+export async function runRecallRevisions(args: {
+  record_hash: string
+}): Promise<Record<string, unknown>> {
+  const { loaded, revisionsByRecord } = getLoadedMirrorSnapshot()
+  const byHash = new Map<string, LoadedRecord>()
+  for (const lr of loaded) byHash.set(lr.record_hash, lr)
+  // Walk the chain forward: the input record may be revised by R1;
+  // R1 may be revised by R2; collect them in order. Bounded by the
+  // mirror size (no cycles since timestamps are monotonic per
+  // signer; defensive seen-set anyway). Each entry enriches the
+  // bare record_hash with the revision's per-event_type content
+  // fields (D086-normative: new_position, reason, importance), so
+  // the agent can read the chain without a separate recall call
+  // per revision.
+  type ChainEntry = {
+    record_hash: string
+    timestamp?: number
+    new_position?: string
+    reason?: string
+    importance?: string
+    /**
+     * Hashes of OTHER revisions pointing at the same target as this
+     * entry's parent step (sibling fan-out). Present only when more
+     * than one revision targeted the same record; the chain follows
+     * the first-by-timestamp branch and lists the rest here so the
+     * agent learns about parallel revision branches that exist but
+     * weren't traversed. Agents wanting to read a sibling chain
+     * should call `recall_revisions` recursively on the sibling's
+     * record_hash.
+     */
+    sibling_hashes?: string[]
+  }
+  const chain: ChainEntry[] = []
+  const seen = new Set<string>()
+  let current = args.record_hash
+  while (!seen.has(current)) {
+    seen.add(current)
+    const next = revisionsByRecord.get(current)
+    if (!next || next.length === 0) break
+    // Each entry in the map's value array is a revision pointing at
+    // `current`. The chain follows the first-by-timestamp revision;
+    // the remaining entries are surfaced as `sibling_hashes` so the
+    // agent learns that branches exist without the chain shape
+    // having to explode into a tree.
+    const revHash = next[0]!
+    const siblings = next.slice(1)
+    const revLr = byHash.get(revHash)
+    const entry: ChainEntry = { record_hash: revHash }
+    if (revLr) {
+      entry.timestamp = revLr.record.timestamp
+      const c = revLr.content
+      if (c && typeof c === 'object' && !Array.isArray(c)) {
+        const cObj = c as Record<string, unknown>
+        if (typeof cObj.new_position === 'string') entry.new_position = cObj.new_position
+        if (typeof cObj.reason === 'string') entry.reason = cObj.reason
+        if (typeof cObj.importance === 'string') entry.importance = cObj.importance
+      }
+    }
+    if (siblings.length > 0) {
+      entry.sibling_hashes = siblings
+    }
+    chain.push(entry)
+    current = revHash
+  }
+  return { record_hash: args.record_hash, revision_chain: chain }
+}
+
+/** Args for BM25 content retrieval (legacy recall_by_content). */
+export interface RecallByContentArgs {
+  query: string
+  k?: number | undefined
+  max_records?: number | undefined
+  evidence_mode?: 'bounded' | 'require_complete' | undefined
+  include_tool_call_args?: boolean | undefined
+}
+
+export async function runRecallByContent(
+  args: RecallByContentArgs,
+): Promise<Record<string, unknown>> {
+  const evidenceMode = args.evidence_mode === 'require_complete' ? 'require_complete' : 'bounded'
+  const includeToolCallArgs = args.include_tool_call_args === true
+  const boundedLimit = resolveBoundedContentSearchLimit(args.max_records, Number.MAX_SAFE_INTEGER)
+  const snapshot = getContentSearchSnapshotForRecall(evidenceMode, boundedLimit)
+  const { entryByHash } = snapshot
+  const totalRecords = snapshot.totalRecords
+  const loadedLength = snapshot.entries.length
+  const searchLimit =
+    evidenceMode === 'require_complete'
+      ? resolveCompleteContentSearchLimit(args.max_records, loadedLength)
+      : Math.min(boundedLimit, loadedLength)
+  const explicitLimit = hasExplicitRecordLimit(args.max_records)
+  if (evidenceMode === 'require_complete' && explicitLimit && searchLimit < loadedLength) {
+    const k = Math.max(1, Math.min(50, args.k ?? 10))
+    return {
+      query: args.query,
+      k,
+      runtime: recallRuntimeMetadata(),
+      ...(includeToolCallArgs ? { include_tool_call_args: true } : {}),
+      evidence_mode: evidenceMode,
+      evidence_status: 'incomplete',
+      fallback_required: true,
+      fallback_reason:
+        `require_complete refused a partial corpus: search_cap=${searchLimit}, ` +
+        `total_records=${loadedLength}.`,
+      fallback:
+        'Rerun without max_records for full loaded-mirror coverage, or pass an explicit ' +
+        'partition filter through a caller-owned audit plan and treat each partition as its own coverage claim.',
+      total_records: loadedLength,
+      searched_records: 0,
+      search_cap: searchLimit,
+      coverage: recallCoverage(snapshot, 'incomplete_explicit_limit', 0, snapshot.index),
+      candidate_records: 0,
+      truncated_corpus: true,
+      count: 0,
+      results: [],
+    }
+  }
+  const bm25Index = getContentBm25IndexForNewestLimit(snapshot, searchLimit)
+  const queryTokens = tokenize(args.query)
+  const relevanceByHash = bm25ScoresForQuery(bm25Index, queryTokens)
+  const now = Date.now()
+  const searchPool =
+    queryTokens.length > 0
+      ? Array.from(relevanceByHash.keys())
+          .map((hash) => entryByHash.get(hash))
+          .filter((entry): entry is ContentIndexEntry => entry !== undefined)
+      : snapshot.newestEntries.slice(0, searchLimit)
+  const filteredSearchPool = searchPool.filter(
+    (entry) => !(entry.lifecycle_anchor && !queryMentionsLifecycle(queryTokens)),
+  )
+  const scored = filteredSearchPool.map((entry) => {
+    const ann = entry.annotations
+    const suppressLifecycleAnchor = entry.lifecycle_anchor && !queryMentionsLifecycle(queryTokens)
+    const toolCallScoreFactor = effectiveToolCallScoreFactor(entry, includeToolCallArgs)
+    const r = recencyScore(entry.timestamp, now, ATRIB_RECALL_TAU_DAYS) * toolCallScoreFactor
+    const i = suppressLifecycleAnchor ? 0 : importanceScore(ann)
+    const rawRel =
+      !suppressLifecycleAnchor && queryTokens.length > 0
+        ? (relevanceByHash.get(entry.record_hash) ?? 0)
+        : 0
+    const rel =
+      !suppressLifecycleAnchor && queryTokens.length > 0
+        ? normalizedBm25Relevance(bm25Index, entry.record_hash, queryTokens, rawRel) *
+          toolCallScoreFactor
+        : 0
+    const score = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
+    return { entry, score, recency: r, importance: i, relevance: rel }
+  })
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    return b.entry.timestamp - a.entry.timestamp
+  })
+  const k = Math.max(1, Math.min(50, args.k ?? 10))
+  const top = scored.slice(0, k)
+  const completeCoverage = !snapshot.partial && searchLimit >= loadedLength
+  return {
+    query: args.query,
+    k,
+    runtime: recallRuntimeMetadata(),
+    ...(includeToolCallArgs ? { include_tool_call_args: true } : {}),
+    evidence_mode: evidenceMode,
+    evidence_status: completeCoverage ? 'complete' : 'bounded',
+    fallback_required: false,
+    total_records: totalRecords,
+    searched_records: searchLimit,
+    coverage: recallCoverage(
+      snapshot,
+      completeCoverage ? 'complete_full_scan' : 'bounded_newest_first',
+      searchLimit,
+      snapshot.index,
+    ),
+    candidate_records: filteredSearchPool.length,
+    truncated_corpus: !completeCoverage,
+    count: top.length,
+    results: top.map(({ entry, score, recency, importance, relevance }) => {
+      return {
+        record_hash: entry.record_hash,
+        event_type: entry.event_type,
+        context_id: entry.context_id,
+        timestamp: entry.timestamp,
+        tool_name: entry.tool_name,
+        annotations: entry.annotations,
+        // Layer 1 v2 legibility fields (parity with compactify).
+        display_summary: entry.display_summary,
+        display_producer: entry.display_producer,
+        age: formatAge(entry.timestamp, now),
+        score,
+        components: { recency, importance, relevance },
+      }
+    }),
+  }
+}
+
+/** Args for the chronological session chain (legacy recall_session_chain). */
+export interface RecallSessionChainArgs {
+  context_id?: string | undefined
+  limit?: number | undefined
+  include_content?: boolean | undefined
+}
+
+export async function runRecallSessionChain(
+  args: RecallSessionChainArgs,
+): Promise<Record<string, unknown>> {
+  const ctx = args.context_id ?? resolveEnvContextId()
+  if (!ctx) {
+    return {
+      context_id: null,
+      count: 0,
+      records: [],
+      warning: 'no context_id supplied or resolvable via env',
+    }
+  }
+  const { loaded, annotationsByRecord } = getLoadedMirrorSnapshot()
+  const filtered = loaded
+    .filter((lr) => lr.record.context_id === ctx)
+    .sort((a, b) => a.record.timestamp - b.record.timestamp)
+  const limit = Math.max(1, Math.min(500, args.limit ?? 50))
+  const sliced = filtered.slice(0, limit)
+  const now = Date.now()
+  return {
+    context_id: ctx,
+    total: filtered.length,
+    returned: sliced.length,
+    truncated: filtered.length > sliced.length,
+    records: sliced.map((lr) => {
+      const ann = annotationsByRecord.get(lr.record_hash)
+      const entry: {
+        record_hash: string
+        event_type: AtribRecord['event_type']
+        timestamp: number
+        display_summary: string
+        display_producer: string
+        age: string
+        informed_by?: string[]
+        tool_name?: string
+        args_hash?: string
+        result_hash?: string
+        local_content?: unknown
+        local_producer?: string
+      } = {
+        record_hash: lr.record_hash,
+        event_type: lr.record.event_type,
+        timestamp: lr.record.timestamp,
+        display_summary: synthesizeDisplaySummary(lr.record, lr.content, ann),
+        display_producer: resolveDisplayProducer(lr.record, lr.producer),
+        age: formatAge(lr.record.timestamp, now),
+      }
+      const informedBy = (lr.record as AtribRecord & { informed_by?: string[] }).informed_by
+      const toolName = (lr.record as AtribRecord & { tool_name?: string }).tool_name
+      const argsHash = (lr.record as AtribRecord & { args_hash?: string }).args_hash
+      const resultHash = (lr.record as AtribRecord & { result_hash?: string }).result_hash
+      if (Array.isArray(informedBy) && informedBy.length > 0) {
+        entry.informed_by = informedBy
+      }
+      if (toolName) entry.tool_name = toolName
+      if (argsHash) entry.args_hash = argsHash
+      if (resultHash) entry.result_hash = resultHash
+      if (args.include_content === true && lr.content !== undefined) {
+        entry.local_content = lr.content
+      }
+      if (args.include_content === true && lr.producer !== undefined) {
+        entry.local_producer = lr.producer
+      }
+      return entry
+    }),
+  }
+}
+
+/** Args for loose-end discovery (legacy recall_orphans). */
+export interface RecallOrphansArgs {
+  context_id?: string | undefined
+  event_type?: string | undefined
+  creator_key?: string | undefined
+  limit?: number | undefined
+}
+
+export async function runRecallOrphans(
+  args: RecallOrphansArgs,
+): Promise<Record<string, unknown>> {
+  const { loaded, annotationsByRecord } = getLoadedMirrorSnapshot()
+  // Build the set of all record_hashes that appear in any record's
+  // informed_by field. Anything in `loaded` whose record_hash is
+  // NOT in this set is an orphan.
+  const cited = new Set<string>()
+  for (const lr of loaded) {
+    const ib = lr.record.informed_by
+    if (Array.isArray(ib)) {
+      for (const h of ib) if (typeof h === 'string') cited.add(h)
+    }
+  }
+  let orphans = loaded.filter((lr) => !cited.has(lr.record_hash))
+  if (args.context_id) {
+    orphans = orphans.filter((lr) => lr.record.context_id === args.context_id)
+  }
+  if (args.creator_key) {
+    orphans = orphans.filter((lr) => lr.record.creator_key === args.creator_key)
+  }
+  if (args.event_type) {
+    const targetUri = normalizeEventType(args.event_type)
+    orphans = orphans.filter((lr) => lr.record.event_type === targetUri)
+  }
+  orphans.sort((a, b) => b.record.timestamp - a.record.timestamp)
+  const limit = Math.max(1, Math.min(500, args.limit ?? 50))
+  const sliced = orphans.slice(0, limit)
+  const now = Date.now()
+  return {
+    total: orphans.length,
+    returned: sliced.length,
+    truncated: orphans.length > sliced.length,
+    records: sliced.map((lr) => {
+      const ann = annotationsByRecord.get(lr.record_hash)
+      return {
+        record_hash: lr.record_hash,
+        event_type: lr.record.event_type,
+        context_id: lr.record.context_id,
+        timestamp: lr.record.timestamp,
+        display_summary: synthesizeDisplaySummary(lr.record, lr.content, ann),
+        display_producer: resolveDisplayProducer(lr.record, lr.producer),
+        age: formatAge(lr.record.timestamp, now),
+      }
+    }),
+  }
+}
+
+export async function runRecallBySigner(args: {
+  min_records?: number | undefined
+}): Promise<Record<string, unknown>> {
+  const { loaded } = getLoadedMirrorSnapshot()
+  type SignerStat = {
+    creator_key: string
+    count: number
+    latest_timestamp: number
+    earliest_timestamp: number
+  }
+  const byKey = new Map<string, SignerStat>()
+  for (const lr of loaded) {
+    const key = lr.record.creator_key
+    const existing = byKey.get(key)
+    if (existing) {
+      existing.count++
+      if (lr.record.timestamp > existing.latest_timestamp)
+        existing.latest_timestamp = lr.record.timestamp
+      if (lr.record.timestamp < existing.earliest_timestamp)
+        existing.earliest_timestamp = lr.record.timestamp
+    } else {
+      byKey.set(key, {
+        creator_key: key,
+        count: 1,
+        latest_timestamp: lr.record.timestamp,
+        earliest_timestamp: lr.record.timestamp,
+      })
+    }
+  }
+  const minRecords = Math.max(1, args.min_records ?? 1)
+  const stats = [...byKey.values()]
+    .filter((s) => s.count >= minRecords)
+    .sort((a, b) => b.count - a.count)
+  return {
+    total_signers: stats.length,
+    total_records: loaded.length,
+    signers: stats,
+  }
+}
+
+function jsonToolResult(payload: unknown): {
+  content: Array<{ type: 'text'; text: string }>
+} {
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
+  }
+}
+
 // The recall semantic surface (as defined in the public protocol specification).
-// Eight distinct MCP tools: recall_my_attribution_history is the base
-// filter-and-page tool; recall_annotations + recall_revisions return
-// aggregated annotation summaries / revision chains for a specific
-// record_hash; recall_walk traverses the local Layer 1 derived graph;
-// recall_by_content runs BM25 free-form retrieval; recall_session_chain,
-// recall_orphans, and recall_by_signer cover common agent lookup shapes.
+// Eight distinct legacy MCP tools kept as permanent aliases over the shape
+// runners above: recall_my_attribution_history is the base filter-and-page
+// tool; recall_annotations + recall_revisions return aggregated annotation
+// summaries / revision chains for a specific record_hash; recall_walk
+// traverses the local Layer 1 derived graph; recall_by_content runs BM25
+// free-form retrieval; recall_session_chain, recall_orphans, and
+// recall_by_signer cover common agent lookup shapes. New callers should
+// prefer the `recall` verb (one tool, `shape` argument); results are
+// JSON-identical by construction.
 export function registerAtribRecallTools(server: McpServer): void {
   server.registerTool(
     'recall_my_attribution_history',
@@ -1648,7 +2050,8 @@ export function registerAtribRecallTools(server: McpServer): void {
         'omit all of them for cross-trace history. Results are sorted newest-first. Pagination uses ' +
         'offset; new records appended between calls invalidate offset stability. See the ' +
         'pagination_caveat in the response. The filtered_out_by_verification field reports how many ' +
-        'records were dropped due to signature failures (always 0 when include_unverified=true).',
+        'records were dropped due to signature failures (always 0 when include_unverified=true). ' +
+        "Legacy alias: new callers should prefer the `recall` tool with shape='history'.",
       inputSchema: {
         context_id: z
           .string()
@@ -1802,14 +2205,7 @@ export function registerAtribRecallTools(server: McpServer): void {
           // min_importance, topic_tags, include_revised, min_signers,
           // rank_by, rank_anchor, and toc.
           const result = await recall(args as RecallArgs)
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(result, null, 2),
-              },
-            ],
-          }
+          return jsonToolResult(result)
         },
         extractRecordHashFieldsFromMcpResult,
       ),
@@ -1823,7 +2219,7 @@ export function registerAtribRecallTools(server: McpServer): void {
     'recall_walk',
     {
       description:
-        'Walk the local derived graph from a starting record_hash. Returns records reachable via the requested edge types up to the given hop depth, ordered by ascending weighted distance. Layer 1 covers four edge types: CHAIN_PRECEDES (weight 1), INFORMED_BY (weight 1), ANNOTATES (weight 2), REVISES (weight 2). SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, and PROVENANCE_OF are deferred to subsequent releases. Useful for tracing the local causal neighborhood of a record before re-attempting a similar action.',
+        'Walk the local derived graph from a starting record_hash. Returns records reachable via the requested edge types up to the given hop depth, ordered by ascending weighted distance. Layer 1 covers four edge types: CHAIN_PRECEDES (weight 1), INFORMED_BY (weight 1), ANNOTATES (weight 2), REVISES (weight 2). SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, and PROVENANCE_OF are deferred to subsequent releases. Useful for tracing the local causal neighborhood of a record before re-attempting a similar action. Legacy alias: new callers should prefer the `recall` tool with shape=\'walk\' (no direction).',
       inputSchema: {
         from_record_hash: z
           .string()
@@ -1848,57 +2244,14 @@ export function registerAtribRecallTools(server: McpServer): void {
       logReadPrimitiveCall(
         'recall_walk',
         args,
-        async () => {
-          const { loaded, annotationsByRecord } = getLoadedMirrorSnapshot()
-          const graph = buildLocalGraph(loaded)
-          const edgeTypes = args.edge_types ? new Set(args.edge_types as EdgeType[]) : undefined
-          const depth = typeof args.depth === 'number' ? args.depth : 3
-          const walk = walkFrom(graph, args.from_record_hash, edgeTypes, depth)
-          // Layer 1 v2 legibility: join walked hashes back to their loaded
-          // records so each step in the walk carries a readable label
-          // instead of just a hash + distance. Builds the index once for
-          // O(N) lookup across the walk; for typical walks (depth=3, k<50)
-          // this is fast.
-          const byHash = new Map(loaded.map((lr) => [lr.record_hash, lr]))
-          const now = Date.now()
-          const enriched = walk.map((step) => {
-            // walk derives from graph (built from `loaded`); byHash always has a hit.
-            const lr = byHash.get(step.record_hash)!
-            const ann = annotationsByRecord.get(step.record_hash)
-            return {
-              record_hash: step.record_hash,
-              distance: step.distance,
-              event_type: lr.record.event_type,
-              timestamp: lr.record.timestamp,
-              display_summary: synthesizeDisplaySummary(lr.record, lr.content, ann),
-              display_producer: resolveDisplayProducer(lr.record, lr.producer),
-              age: formatAge(lr.record.timestamp, now),
-            }
-          })
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    from_record_hash: args.from_record_hash,
-                    edge_types: args.edge_types ?? [
-                      'CHAIN_PRECEDES',
-                      'INFORMED_BY',
-                      'ANNOTATES',
-                      'REVISES',
-                    ],
-                    depth,
-                    count: enriched.length,
-                    walk: enriched,
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          }
-        },
+        async () =>
+          jsonToolResult(
+            await runRecallWalk({
+              from_record_hash: args.from_record_hash,
+              edge_types: args.edge_types as EdgeType[] | undefined,
+              depth: typeof args.depth === 'number' ? args.depth : undefined,
+            }),
+          ),
         extractRecordHashFieldsFromMcpResult,
       ),
   )
@@ -1907,7 +2260,7 @@ export function registerAtribRecallTools(server: McpServer): void {
     'recall_annotations',
     {
       description:
-        "Return the aggregated annotation summary for a record: maximum annotation importance across all D058 annotation records pointing at it, the union of their topic tags, and the most recent summary string. Useful for surfacing the agent's prior critique on a record before re-attempting a similar action. Returns null annotations field when no annotation points at the record.",
+        "Return the aggregated annotation summary for a record: maximum annotation importance across all D058 annotation records pointing at it, the union of their topic tags, and the most recent summary string. Useful for surfacing the agent's prior critique on a record before re-attempting a similar action. Returns null annotations field when no annotation points at the record. Legacy alias: new callers should prefer the `recall` tool with shape='annotations'.",
       inputSchema: {
         record_hash: z
           .string()
@@ -1920,22 +2273,7 @@ export function registerAtribRecallTools(server: McpServer): void {
       logReadPrimitiveCall(
         'recall_annotations',
         args,
-        async () => {
-          const { annotationsByRecord } = getLoadedMirrorSnapshot()
-          const summary = annotationsByRecord.get(args.record_hash) ?? null
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  { record_hash: args.record_hash, annotations: summary },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          }
-        },
+        async () => jsonToolResult(await runRecallAnnotations(args)),
         extractRecordHashFieldsFromMcpResult,
       ),
   )
@@ -1944,7 +2282,7 @@ export function registerAtribRecallTools(server: McpServer): void {
     'recall_revisions',
     {
       description:
-        "Return the D059 revision chain for a record, with per-entry content + sibling-fan-out awareness. Walks revises edges forward from the given record_hash, surfacing each revision in turn. Each entry carries the revision's record_hash, timestamp, and content (`new_position`, `reason`, `importance`) so the agent can read the chain inline without follow-up recall calls per entry. When more than one revision targets the same record, the chain follows the first-by-timestamp branch and lists the other branch heads as `sibling_hashes` on that entry so the agent learns about parallel revision branches (common in multi-agent flows). Useful for checking whether a position the agent previously held has been revised before acting on it. Returns an empty chain when no revision points at the record.",
+        "Return the D059 revision chain for a record, with per-entry content + sibling-fan-out awareness. Walks revises edges forward from the given record_hash, surfacing each revision in turn. Each entry carries the revision's record_hash, timestamp, and content (`new_position`, `reason`, `importance`) so the agent can read the chain inline without follow-up recall calls per entry. When more than one revision targets the same record, the chain follows the first-by-timestamp branch and lists the other branch heads as `sibling_hashes` on that entry so the agent learns about parallel revision branches (common in multi-agent flows). Useful for checking whether a position the agent previously held has been revised before acting on it. Returns an empty chain when no revision points at the record. Legacy alias: new callers should prefer the `recall` tool with shape='revisions'.",
       inputSchema: {
         record_hash: z
           .string()
@@ -1957,81 +2295,7 @@ export function registerAtribRecallTools(server: McpServer): void {
       logReadPrimitiveCall(
         'recall_revisions',
         args,
-        async () => {
-          const { loaded, revisionsByRecord } = getLoadedMirrorSnapshot()
-          const byHash = new Map<string, LoadedRecord>()
-          for (const lr of loaded) byHash.set(lr.record_hash, lr)
-          // Walk the chain forward: the input record may be revised by R1;
-          // R1 may be revised by R2; collect them in order. Bounded by the
-          // mirror size (no cycles since timestamps are monotonic per
-          // signer; defensive seen-set anyway). Each entry enriches the
-          // bare record_hash with the revision's per-event_type content
-          // fields (D086-normative: new_position, reason, importance), so
-          // the agent can read the chain without a separate recall call
-          // per revision.
-          type ChainEntry = {
-            record_hash: string
-            timestamp?: number
-            new_position?: string
-            reason?: string
-            importance?: string
-            /**
-             * Hashes of OTHER revisions pointing at the same target as this
-             * entry's parent step (sibling fan-out). Present only when more
-             * than one revision targeted the same record; the chain follows
-             * the first-by-timestamp branch and lists the rest here so the
-             * agent learns about parallel revision branches that exist but
-             * weren't traversed. Agents wanting to read a sibling chain
-             * should call `recall_revisions` recursively on the sibling's
-             * record_hash.
-             */
-            sibling_hashes?: string[]
-          }
-          const chain: ChainEntry[] = []
-          const seen = new Set<string>()
-          let current = args.record_hash
-          while (!seen.has(current)) {
-            seen.add(current)
-            const next = revisionsByRecord.get(current)
-            if (!next || next.length === 0) break
-            // Each entry in the map's value array is a revision pointing at
-            // `current`. The chain follows the first-by-timestamp revision;
-            // the remaining entries are surfaced as `sibling_hashes` so the
-            // agent learns that branches exist without the chain shape
-            // having to explode into a tree.
-            const revHash = next[0]!
-            const siblings = next.slice(1)
-            const revLr = byHash.get(revHash)
-            const entry: ChainEntry = { record_hash: revHash }
-            if (revLr) {
-              entry.timestamp = revLr.record.timestamp
-              const c = revLr.content
-              if (c && typeof c === 'object' && !Array.isArray(c)) {
-                const cObj = c as Record<string, unknown>
-                if (typeof cObj.new_position === 'string') entry.new_position = cObj.new_position
-                if (typeof cObj.reason === 'string') entry.reason = cObj.reason
-                if (typeof cObj.importance === 'string') entry.importance = cObj.importance
-              }
-            }
-            if (siblings.length > 0) {
-              entry.sibling_hashes = siblings
-            }
-            chain.push(entry)
-            current = revHash
-          }
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  { record_hash: args.record_hash, revision_chain: chain },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          }
-        },
+        async () => jsonToolResult(await runRecallRevisions(args)),
         extractRecordHashFieldsFromMcpResult,
       ),
   )
@@ -2040,7 +2304,7 @@ export function registerAtribRecallTools(server: McpServer): void {
     'recall_by_content',
     {
       description:
-        "Free-form text search over the agent's signed past. Returns top-k records by hybrid retrieval: BM25 over each record's per-event_type indexable text (observation `what + why_noted + intent + rationale + topics`; tool_call `tool_name + args + result`; annotation `summary + topics`; revision `prior_position + new_position + reason + topics`; transaction counterparty + memo; directory_anchor tree_root; extension URIs via generic recursive string-walk per D086/D118) plus the annotation summary + topics when present as a curator-quality lift. Reranked by Park et al. weighted-sum scoring with annotation-derived importance and recency signals. Raw unannotated tool_call records are score-demoted so operation logs do not dominate substantive memory. BM25 contribution is clamped to [0, 1] before coverage scaling so the documented Park-component bound is honored. Responses include runtime metadata plus coverage.index, so callers can detect stale MCP processes and whether the durable content-token sidecar was hit, rebuilt, disabled, or bypassed. Useful when the agent has no specific filter and needs to ask 'what do I know about X?'.",
+        "Free-form text search over the agent's signed past. Returns top-k records by hybrid retrieval: BM25 over each record's per-event_type indexable text (observation `what + why_noted + intent + rationale + topics`; tool_call `tool_name + args + result`; annotation `summary + topics`; revision `prior_position + new_position + reason + topics`; transaction counterparty + memo; directory_anchor tree_root; extension URIs via generic recursive string-walk per D086/D118) plus the annotation summary + topics when present as a curator-quality lift. Reranked by Park et al. weighted-sum scoring with annotation-derived importance and recency signals. Raw unannotated tool_call records are score-demoted so operation logs do not dominate substantive memory. BM25 contribution is clamped to [0, 1] before coverage scaling so the documented Park-component bound is honored. Responses include runtime metadata plus coverage.index, so callers can detect stale MCP processes and whether the durable content-token sidecar was hit, rebuilt, disabled, or bypassed. Useful when the agent has no specific filter and needs to ask 'what do I know about X?'. Legacy alias: new callers should prefer the `recall` tool with shape='content'.",
       inputSchema: {
         query: z
           .string()
@@ -2080,160 +2344,7 @@ export function registerAtribRecallTools(server: McpServer): void {
       logReadPrimitiveCall(
         'recall_by_content',
         args,
-        async () => {
-          const evidenceMode =
-            args.evidence_mode === 'require_complete' ? 'require_complete' : 'bounded'
-          const includeToolCallArgs = args.include_tool_call_args === true
-          const boundedLimit = resolveBoundedContentSearchLimit(
-            args.max_records,
-            Number.MAX_SAFE_INTEGER,
-          )
-          const snapshot = getContentSearchSnapshotForRecall(evidenceMode, boundedLimit)
-          const { entryByHash } = snapshot
-          const totalRecords = snapshot.totalRecords
-          const loadedLength = snapshot.entries.length
-          const searchLimit =
-            evidenceMode === 'require_complete'
-              ? resolveCompleteContentSearchLimit(args.max_records, loadedLength)
-              : Math.min(boundedLimit, loadedLength)
-          const explicitLimit = hasExplicitRecordLimit(args.max_records)
-          if (evidenceMode === 'require_complete' && explicitLimit && searchLimit < loadedLength) {
-            const k = Math.max(1, Math.min(50, args.k ?? 10))
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(
-                    {
-                      query: args.query,
-                      k,
-                      runtime: recallRuntimeMetadata(),
-                      ...(includeToolCallArgs ? { include_tool_call_args: true } : {}),
-                      evidence_mode: evidenceMode,
-                      evidence_status: 'incomplete',
-                      fallback_required: true,
-                      fallback_reason:
-                        `require_complete refused a partial corpus: search_cap=${searchLimit}, ` +
-                        `total_records=${loadedLength}.`,
-                      fallback:
-                        'Rerun without max_records for full loaded-mirror coverage, or pass an explicit ' +
-                        'partition filter through a caller-owned audit plan and treat each partition as its own coverage claim.',
-                      total_records: loadedLength,
-                      searched_records: 0,
-                      search_cap: searchLimit,
-                      coverage: recallCoverage(
-                        snapshot,
-                        'incomplete_explicit_limit',
-                        0,
-                        snapshot.index,
-                      ),
-                      candidate_records: 0,
-                      truncated_corpus: true,
-                      count: 0,
-                      results: [],
-                    },
-                    null,
-                    2,
-                  ),
-                },
-              ],
-            }
-          }
-          const bm25Index = getContentBm25IndexForNewestLimit(snapshot, searchLimit)
-          const queryTokens = tokenize(args.query)
-          const relevanceByHash = bm25ScoresForQuery(bm25Index, queryTokens)
-          const now = Date.now()
-          const searchPool =
-            queryTokens.length > 0
-              ? Array.from(relevanceByHash.keys())
-                  .map((hash) => entryByHash.get(hash))
-                  .filter((entry): entry is ContentIndexEntry => entry !== undefined)
-              : snapshot.newestEntries.slice(0, searchLimit)
-          const filteredSearchPool = searchPool.filter(
-            (entry) => !(entry.lifecycle_anchor && !queryMentionsLifecycle(queryTokens)),
-          )
-          const scored = filteredSearchPool.map((entry) => {
-            const ann = entry.annotations
-            const suppressLifecycleAnchor =
-              entry.lifecycle_anchor && !queryMentionsLifecycle(queryTokens)
-            const toolCallScoreFactor = effectiveToolCallScoreFactor(entry, includeToolCallArgs)
-            const r =
-              recencyScore(entry.timestamp, now, ATRIB_RECALL_TAU_DAYS) * toolCallScoreFactor
-            const i = suppressLifecycleAnchor ? 0 : importanceScore(ann)
-            const rawRel =
-              !suppressLifecycleAnchor && queryTokens.length > 0
-                ? (relevanceByHash.get(entry.record_hash) ?? 0)
-                : 0
-            const rel =
-              !suppressLifecycleAnchor && queryTokens.length > 0
-                ? normalizedBm25Relevance(bm25Index, entry.record_hash, queryTokens, rawRel) *
-                  toolCallScoreFactor
-                : 0
-            const score = parkScore(
-              r,
-              i,
-              rel,
-              ATRIB_RECALL_ALPHA,
-              ATRIB_RECALL_BETA,
-              ATRIB_RECALL_GAMMA,
-            )
-            return { entry, score, recency: r, importance: i, relevance: rel }
-          })
-          scored.sort((a, b) => {
-            if (b.score !== a.score) return b.score - a.score
-            return b.entry.timestamp - a.entry.timestamp
-          })
-          const k = Math.max(1, Math.min(50, args.k ?? 10))
-          const top = scored.slice(0, k)
-          const completeCoverage = !snapshot.partial && searchLimit >= loadedLength
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    query: args.query,
-                    k,
-                    runtime: recallRuntimeMetadata(),
-                    ...(includeToolCallArgs ? { include_tool_call_args: true } : {}),
-                    evidence_mode: evidenceMode,
-                    evidence_status: completeCoverage ? 'complete' : 'bounded',
-                    fallback_required: false,
-                    total_records: totalRecords,
-                    searched_records: searchLimit,
-                    coverage: recallCoverage(
-                      snapshot,
-                      completeCoverage ? 'complete_full_scan' : 'bounded_newest_first',
-                      searchLimit,
-                      snapshot.index,
-                    ),
-                    candidate_records: filteredSearchPool.length,
-                    truncated_corpus: !completeCoverage,
-                    count: top.length,
-                    results: top.map(({ entry, score, recency, importance, relevance }) => {
-                      return {
-                        record_hash: entry.record_hash,
-                        event_type: entry.event_type,
-                        context_id: entry.context_id,
-                        timestamp: entry.timestamp,
-                        tool_name: entry.tool_name,
-                        annotations: entry.annotations,
-                        // Layer 1 v2 legibility fields (parity with compactify).
-                        display_summary: entry.display_summary,
-                        display_producer: entry.display_producer,
-                        age: formatAge(entry.timestamp, now),
-                        score,
-                        components: { recency, importance, relevance },
-                      }
-                    }),
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          }
-        },
+        async () => jsonToolResult(await runRecallByContent(args as RecallByContentArgs)),
         extractRecordHashFieldsFromMcpResult,
       ),
   )
@@ -2247,7 +2358,7 @@ export function registerAtribRecallTools(server: McpServer): void {
     'recall_session_chain',
     {
       description:
-        "Return all records in a context_id, ordered chronologically (oldest-first). The natural traversal of the CHAIN_PRECEDES topology for a single session/trace. Each entry carries record_hash, event_type, timestamp, display_summary (per-event_type human-readable text from D086), and producer label. Useful for 'what happened in this session?' without manually sorting filter results. Sibling tool to recall_my_attribution_history with built-in context_id scoping + chain-ascending order.",
+        "Return all records in a context_id, ordered chronologically (oldest-first). The natural traversal of the CHAIN_PRECEDES topology for a single session/trace. Each entry carries record_hash, event_type, timestamp, display_summary (per-event_type human-readable text from D086), and producer label. Useful for 'what happened in this session?' without manually sorting filter results. Sibling tool to recall_my_attribution_history with built-in context_id scoping + chain-ascending order. Legacy alias: new callers should prefer the `recall` tool with shape='chain'.",
       inputSchema: {
         context_id: z
           .string()
@@ -2273,95 +2384,7 @@ export function registerAtribRecallTools(server: McpServer): void {
       logReadPrimitiveCall(
         'recall_session_chain',
         args,
-        async () => {
-          const ctx = args.context_id ?? resolveEnvContextId()
-          if (!ctx) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(
-                    {
-                      context_id: null,
-                      count: 0,
-                      records: [],
-                      warning: 'no context_id supplied or resolvable via env',
-                    },
-                    null,
-                    2,
-                  ),
-                },
-              ],
-            }
-          }
-          const { loaded, annotationsByRecord } = getLoadedMirrorSnapshot()
-          const filtered = loaded
-            .filter((lr) => lr.record.context_id === ctx)
-            .sort((a, b) => a.record.timestamp - b.record.timestamp)
-          const limit = Math.max(1, Math.min(500, args.limit ?? 50))
-          const sliced = filtered.slice(0, limit)
-          const now = Date.now()
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    context_id: ctx,
-                    total: filtered.length,
-                    returned: sliced.length,
-                    truncated: filtered.length > sliced.length,
-                    records: sliced.map((lr) => {
-                      const ann = annotationsByRecord.get(lr.record_hash)
-                      const entry: {
-                        record_hash: string
-                        event_type: AtribRecord['event_type']
-                        timestamp: number
-                        display_summary: string
-                        display_producer: string
-                        age: string
-                        informed_by?: string[]
-                        tool_name?: string
-                        args_hash?: string
-                        result_hash?: string
-                        local_content?: unknown
-                        local_producer?: string
-                      } = {
-                        record_hash: lr.record_hash,
-                        event_type: lr.record.event_type,
-                        timestamp: lr.record.timestamp,
-                        display_summary: synthesizeDisplaySummary(lr.record, lr.content, ann),
-                        display_producer: resolveDisplayProducer(lr.record, lr.producer),
-                        age: formatAge(lr.record.timestamp, now),
-                      }
-                      const informedBy = (lr.record as AtribRecord & { informed_by?: string[] })
-                        .informed_by
-                      const toolName = (lr.record as AtribRecord & { tool_name?: string }).tool_name
-                      const argsHash = (lr.record as AtribRecord & { args_hash?: string }).args_hash
-                      const resultHash = (lr.record as AtribRecord & { result_hash?: string })
-                        .result_hash
-                      if (Array.isArray(informedBy) && informedBy.length > 0) {
-                        entry.informed_by = informedBy
-                      }
-                      if (toolName) entry.tool_name = toolName
-                      if (argsHash) entry.args_hash = argsHash
-                      if (resultHash) entry.result_hash = resultHash
-                      if (args.include_content === true && lr.content !== undefined) {
-                        entry.local_content = lr.content
-                      }
-                      if (args.include_content === true && lr.producer !== undefined) {
-                        entry.local_producer = lr.producer
-                      }
-                      return entry
-                    }),
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          }
-        },
+        async () => jsonToolResult(await runRecallSessionChain(args)),
         extractRecordHashFieldsFromMcpResult,
       ),
   )
@@ -2372,7 +2395,7 @@ export function registerAtribRecallTools(server: McpServer): void {
     'recall_orphans',
     {
       description:
-        "Return records that are NOT cited by any other record via informed_by (loose ends: decisions or observations the agent made but never followed up on). Surfaces records whose record_hash does NOT appear in any other record's informed_by[] array within the local mirror. Optionally scoped to one context_id, one event_type, or one creator_key. Useful for the agent to discover dropped balls (e.g. 'I noted X but never built on it').",
+        "Return records that are NOT cited by any other record via informed_by (loose ends: decisions or observations the agent made but never followed up on). Surfaces records whose record_hash does NOT appear in any other record's informed_by[] array within the local mirror. Optionally scoped to one context_id, one event_type, or one creator_key. Useful for the agent to discover dropped balls (e.g. 'I noted X but never built on it'). Legacy alias: new callers should prefer the `recall` tool with shape='orphans'.",
       inputSchema: {
         context_id: z
           .string()
@@ -2397,62 +2420,7 @@ export function registerAtribRecallTools(server: McpServer): void {
       logReadPrimitiveCall(
         'recall_orphans',
         args,
-        async () => {
-          const { loaded, annotationsByRecord } = getLoadedMirrorSnapshot()
-          // Build the set of all record_hashes that appear in any record's
-          // informed_by field. Anything in `loaded` whose record_hash is
-          // NOT in this set is an orphan.
-          const cited = new Set<string>()
-          for (const lr of loaded) {
-            const ib = lr.record.informed_by
-            if (Array.isArray(ib)) {
-              for (const h of ib) if (typeof h === 'string') cited.add(h)
-            }
-          }
-          let orphans = loaded.filter((lr) => !cited.has(lr.record_hash))
-          if (args.context_id) {
-            orphans = orphans.filter((lr) => lr.record.context_id === args.context_id)
-          }
-          if (args.creator_key) {
-            orphans = orphans.filter((lr) => lr.record.creator_key === args.creator_key)
-          }
-          if (args.event_type) {
-            const targetUri = normalizeEventType(args.event_type)
-            orphans = orphans.filter((lr) => lr.record.event_type === targetUri)
-          }
-          orphans.sort((a, b) => b.record.timestamp - a.record.timestamp)
-          const limit = Math.max(1, Math.min(500, args.limit ?? 50))
-          const sliced = orphans.slice(0, limit)
-          const now = Date.now()
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    total: orphans.length,
-                    returned: sliced.length,
-                    truncated: orphans.length > sliced.length,
-                    records: sliced.map((lr) => {
-                      const ann = annotationsByRecord.get(lr.record_hash)
-                      return {
-                        record_hash: lr.record_hash,
-                        event_type: lr.record.event_type,
-                        context_id: lr.record.context_id,
-                        timestamp: lr.record.timestamp,
-                        display_summary: synthesizeDisplaySummary(lr.record, lr.content, ann),
-                        display_producer: resolveDisplayProducer(lr.record, lr.producer),
-                        age: formatAge(lr.record.timestamp, now),
-                      }
-                    }),
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          }
-        },
+        async () => jsonToolResult(await runRecallOrphans(args)),
         extractRecordHashFieldsFromMcpResult,
       ),
   )
@@ -2466,7 +2434,7 @@ export function registerAtribRecallTools(server: McpServer): void {
     'recall_by_signer',
     {
       description:
-        "Aggregate the local mirror by creator_key. Returns the distinct creators present + per-creator record count + latest record timestamp. Useful when the mirror is multi-signer (multi-agent flows, transactions with counterparty signers) and the agent wants to discover who else's records are in scope before deciding whether to filter with creator_key. Pure aggregation; no records returned directly. Use recall_my_attribution_history with the creator_key filter to drill into one creator's records.",
+        "Aggregate the local mirror by creator_key. Returns the distinct creators present + per-creator record count + latest record timestamp. Useful when the mirror is multi-signer (multi-agent flows, transactions with counterparty signers) and the agent wants to discover who else's records are in scope before deciding whether to filter with creator_key. Pure aggregation; no records returned directly. Use recall_my_attribution_history with the creator_key filter to drill into one creator's records. Legacy alias: new callers should prefer the `recall` tool with shape='by_signer'.",
       inputSchema: {
         min_records: z
           .number()
@@ -2480,57 +2448,53 @@ export function registerAtribRecallTools(server: McpServer): void {
       logReadPrimitiveCall(
         'recall_by_signer',
         args,
-        async () => {
-          const { loaded } = getLoadedMirrorSnapshot()
-          type SignerStat = {
-            creator_key: string
-            count: number
-            latest_timestamp: number
-            earliest_timestamp: number
-          }
-          const byKey = new Map<string, SignerStat>()
-          for (const lr of loaded) {
-            const key = lr.record.creator_key
-            const existing = byKey.get(key)
-            if (existing) {
-              existing.count++
-              if (lr.record.timestamp > existing.latest_timestamp)
-                existing.latest_timestamp = lr.record.timestamp
-              if (lr.record.timestamp < existing.earliest_timestamp)
-                existing.earliest_timestamp = lr.record.timestamp
-            } else {
-              byKey.set(key, {
-                creator_key: key,
-                count: 1,
-                latest_timestamp: lr.record.timestamp,
-                earliest_timestamp: lr.record.timestamp,
-              })
-            }
-          }
-          const minRecords = Math.max(1, args.min_records ?? 1)
-          const stats = [...byKey.values()]
-            .filter((s) => s.count >= minRecords)
-            .sort((a, b) => b.count - a.count)
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    total_signers: stats.length,
-                    total_records: loaded.length,
-                    signers: stats,
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          }
-        },
+        async () => jsonToolResult(await runRecallBySigner(args)),
         extractRecordHashFieldsFromMcpResult,
       ),
   )
+}
+
+// ─── Re-export surface for the @atrib/trace and @atrib/verify-mcp shims
+// and for embedders. The implementations live in this package per the
+// attest/recall rename; the legacy packages re-export them.
+export {
+  compactVisited,
+  createAtribTraceServer,
+  registerTraceTools,
+  runTraceWalk,
+  summarizeSidecar,
+  TraceInput,
+} from './trace-tools.js'
+export { extractRecordHashFieldsFromMcpResult }
+export type { AtribTraceServer, TraceInputT } from './trace-tools.js'
+export {
+  createAtribVerifyServer,
+  handleAtribVerify,
+  loadVerifyModule,
+  registerVerifyTool,
+  tryHandleAtribVerify,
+  VerifyInput,
+} from './verification.js'
+export type {
+  AtribVerifyInput,
+  AtribVerifyOutput,
+  AtribVerifyServer,
+  RecallVerificationBlock,
+} from './verification.js'
+export { registerRecallVerbTool, RecallVerbInput, RECALL_SHAPES, runRecallVerb } from './recall-verb.js'
+export type { RecallShape, RecallVerbInputT } from './recall-verb.js'
+
+/**
+ * Register the full read union on one server: the `recall` verb plus every
+ * legacy read tool name it absorbs (8 recall_* tools, trace, trace_forward,
+ * atrib-verify). This is what the `atrib-recall` binary serves and what the
+ * primitive runtime / daemon mount for reads (alias-window rule W1).
+ */
+export function registerAtribReadTools(server: McpServer): void {
+  registerRecallVerbTool(server)
+  registerAtribRecallTools(server)
+  registerTraceTools(server)
+  registerVerifyTool(server)
 }
 
 export function createAtribRecallServer(): AtribRecallServer {
@@ -2538,7 +2502,7 @@ export function createAtribRecallServer(): AtribRecallServer {
     name: 'atrib-recall',
     version: readPackageVersion(),
   })
-  registerAtribRecallTools(mcp)
+  registerAtribReadTools(mcp)
   return { mcp }
 }
 

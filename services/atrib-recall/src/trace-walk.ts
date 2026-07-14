@@ -28,7 +28,7 @@
  * For typical mirror sizes (~14K records) this is negligible.
  */
 
-import type { IndexedRecord } from './storage.js'
+import type { IndexedRecord } from './trace-storage.js'
 import type { AtribRecord } from '@atrib/mcp'
 
 export type TraceDirection = 'backward' | 'forward'
