@@ -1,5 +1,14 @@
 # @atrib/sdk
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [b40f207]
+  - @atrib/emit@1.0.0
+  - @atrib/recall@1.0.0
+  - @atrib/verify-mcp@1.0.0
+
 ## 1.0.0
 
 ### Patch Changes
