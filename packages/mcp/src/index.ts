@@ -313,13 +313,16 @@ export type {
 export {
   ANCHOR_CLAIM_KIND, ANCHOR_CLAIM_PREFIX, ANCHOR_TYPES, BUILT_IN_DEFAULT_ANCHOR_SET,
   anchorClaimArtifact, buildAnchoringClaim, canonicalRecordHash, createAnchorFanout,
-  createAnchorTransport, createAtribLogAnchorTransport, createStubAnchorTransport,
+  createAnchorTransport, createAtribLogAnchorTransport, createOpenTimestampsAnchorTransport,
+  createRekorAnchorTransport, createRfc3161AnchorTransport, createStubAnchorTransport,
+  rfc3161TimestampQuery,
   resolveAnchorPosture, resolveEffectiveAnchors, submitToAnchors, verifyAnchoringClaim,
 } from './anchors.js'
 export type {
   AnchorConfigSidecarMarker, AnchorDescriptor, AnchorFanout, AnchorFanoutTicket,
   AnchoringClaim, AnchorPostureResolution, AnchorSetConfig, AnchorSubmissionOutcome,
-  AnchorSubmissionRequest, AnchorSubmissionStatus, AnchorTransport, AnchorType,
+  AnchorFetch, AnchorSubmissionRequest, AnchorSubmissionStatus, AnchorTransport,
+  AnchorTransportOptions, AnchorType,
   CreateAnchorFanoutOptions, SubmitToAnchorsOptions,
 } from './anchors.js'
 

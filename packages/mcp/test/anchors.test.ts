@@ -24,7 +24,11 @@ import {
   canonicalRecordHash,
   createAnchorFanout,
   createAtribLogAnchorTransport,
+  createOpenTimestampsAnchorTransport,
+  createRekorAnchorTransport,
+  createRfc3161AnchorTransport,
   createStubAnchorTransport,
+  rfc3161TimestampQuery,
   resolveAnchorPosture,
   resolveEffectiveAnchors,
   submitToAnchors,
@@ -305,6 +309,75 @@ describe('anchor transports', () => {
       expect(outcome.anchor_type).toBe(anchorType)
       expect(outcome.anchor_id).toBe(`${anchorType}-id`)
     }
+  })
+
+  it('Rekor submits an anchor-claim hash over explicit HTTP configuration', async () => {
+    const record = await makeSignedRecord()
+    const fetchImpl = vi.fn(async () => new Response('{}', { status: 201 }))
+    const transport = createRekorAnchorTransport(
+      { anchor_type: 'sigstore-rekor', anchor_id: 'rekor.test', url: 'https://rekor.test' },
+      { allowNetwork: true, fetchImpl },
+    )
+    const outcome = await transport.submit({ record, recordHash: canonicalRecordHash(record), priority: 'normal' })
+    expect(outcome).toEqual({ anchor_type: 'sigstore-rekor', anchor_id: 'rekor.test', status: 'queued' })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchImpl.mock.calls[0]!
+    expect(url).toBe('https://rekor.test/api/v1/log/entries')
+    const body = JSON.parse(init!.body as string) as { spec: { data: { hash: { value: string }, content: string } } }
+    expect(body.spec.data.hash.value).toBe(canonicalRecordHash(record).slice('sha256:'.length))
+    expect(new TextDecoder().decode(Uint8Array.from(atob(body.spec.data.content), (char) => char.charCodeAt(0)))).toBe(
+      `atrib-anchor/v1:${canonicalRecordHash(record)}`,
+    )
+  })
+
+  it('RFC 3161 sends a DER timestamp query over explicit HTTP configuration', async () => {
+    const record = await makeSignedRecord()
+    const fetchImpl = vi.fn(async () => new Response(Uint8Array.of(0x30, 0x00), { status: 200 }))
+    const recordHash = canonicalRecordHash(record)
+    const transport = createRfc3161AnchorTransport(
+      { anchor_type: 'rfc3161-tsa', anchor_id: 'tsa.test', url: 'https://tsa.test/timestamp' },
+      { allowNetwork: true, fetchImpl },
+    )
+    await expect(transport.submit({ record, recordHash, priority: 'normal' })).resolves.toEqual({
+      anchor_type: 'rfc3161-tsa', anchor_id: 'tsa.test', status: 'queued',
+    })
+    const query = rfc3161TimestampQuery(recordHash)
+    expect(query[0]).toBe(0x30)
+    expect([...query].map((byte) => byte.toString(16).padStart(2, '0')).join('')).toContain(
+      recordHash.slice('sha256:'.length),
+    )
+    expect(fetchImpl.mock.calls[0]![1]!.headers).toMatchObject({ 'content-type': 'application/timestamp-query' })
+  })
+
+  it('OpenTimestamps submits the raw digest and reports a pending receipt', async () => {
+    const record = await makeSignedRecord()
+    const fetchImpl = vi.fn(async () => new Response(Uint8Array.of(0x01), { status: 200 }))
+    const recordHash = canonicalRecordHash(record)
+    const transport = createOpenTimestampsAnchorTransport(
+      { anchor_type: 'opentimestamps', anchor_id: 'ots.test', calendars: ['https://ots.test'] },
+      { allowNetwork: true, fetchImpl },
+    )
+    await expect(transport.submit({ record, recordHash, priority: 'normal' })).resolves.toEqual({
+      anchor_type: 'opentimestamps', anchor_id: 'ots.test', status: 'pending',
+    })
+    expect(fetchImpl.mock.calls[0]![0]).toBe('https://ots.test/digest')
+    const body = fetchImpl.mock.calls[0]![1]!.body as Blob
+    const bodyHex = [...new Uint8Array(await body.arrayBuffer())]
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('')
+    expect(bodyHex).toBe(
+      recordHash.slice('sha256:'.length),
+    )
+  })
+
+  it('built-in default leaves the OpenTimestamps HTTP transport disabled', async () => {
+    const record = await makeSignedRecord()
+    const transport = createOpenTimestampsAnchorTransport(
+      { anchor_type: 'opentimestamps', calendars: ['https://ots.test'] },
+      { fetchImpl: vi.fn() },
+    )
+    expect(transport.submit({ record, recordHash: canonicalRecordHash(record), priority: 'normal' }))
+      .toMatchObject({ status: 'unsupported' })
   })
 })
 
