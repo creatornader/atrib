@@ -248,7 +248,9 @@ function startHttpHostProcess(env: NodeJS.ProcessEnv, extraArgs: string[] = []):
       settled = true
       child.kill('SIGTERM')
       rejectHost(new Error(`HTTP host did not become ready. stderr=${stderr}`))
-    }, 5000)
+      // The mount path runs the union behavioral probes (including the lazy
+      // @atrib/verify closure load), ~6s cold; 5s was too tight.
+    }, 30_000)
 
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString('utf8')
@@ -819,7 +821,7 @@ describe('atribd health surface', () => {
 })
 
 describe('atribd real primitive mounts', () => {
-  it('lists every cognitive primitive tool from one stdio process', async () => {
+  it('lists every cognitive primitive tool from one stdio process', { timeout: 30_000 }, async () => {
     const transport = new StdioClientTransport({
       command: 'node',
       args: [BINARY],
@@ -836,7 +838,7 @@ describe('atribd real primitive mounts', () => {
     }
   })
 
-  it('serves the seventeen-tool alias union over stateless HTTP with passing contracts', async () => {
+  it('serves the seventeen-tool alias union over stateless HTTP with passing contracts', { timeout: 30_000 }, async () => {
     const host = await startHttpHostProcess({
       ATRIB_AGENT: 'test-agent',
       ATRIB_RECORD_FILE: recordFile,
@@ -872,7 +874,7 @@ describe('atribd real primitive mounts', () => {
     }
   })
 
-  it('proxies stdio clients into the stateless HTTP daemon', async () => {
+  it('proxies stdio clients into the stateless HTTP daemon', { timeout: 30_000 }, async () => {
     const host = await startHttpHostProcess({
       ATRIB_AGENT: 'test-agent',
       ATRIB_RECORD_FILE: recordFile,

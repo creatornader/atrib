@@ -255,7 +255,9 @@ function startHttpHost(env: NodeJS.ProcessEnv, path = '/mcp'): Promise<HttpHost>
       settled = true
       child.kill('SIGTERM')
       rejectHost(new Error(`HTTP host did not become ready. stderr=${stderr}`))
-    }, 5000)
+      // The mount path runs the union behavioral probes (including the lazy
+      // @atrib/verify closure load), ~6s cold; 5s was too tight.
+    }, 30_000)
 
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString('utf8')
@@ -336,7 +338,7 @@ afterEach(() => {
 })
 
 describe('atrib-primitives MCP runtime', () => {
-  it('lists every cognitive primitive tool from one stdio process', async () => {
+  it('lists every cognitive primitive tool from one stdio process', { timeout: 30_000 }, async () => {
     const client = await connectStdioClient({ ATRIB_RECORD_FILE: recordFile })
     try {
       const listed = await client.listTools()
@@ -347,7 +349,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('routes a child primitive tool call through the combined server', async () => {
+  it('routes a child primitive tool call through the combined server', { timeout: 30_000 }, async () => {
     const client = await connectStdioClient({ ATRIB_RECORD_FILE: recordFile })
     try {
       const result = await client.callTool({
@@ -362,7 +364,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('surfaces write-primitive refusals as MCP tool errors through the combined server', async () => {
+  it('surfaces write-primitive refusals as MCP tool errors through the combined server', { timeout: 30_000 }, async () => {
     const refusalEnv = {
       HOME: tmp,
       ATRIB_RECORD_FILE: recordFile,
@@ -418,7 +420,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('proxies stdio clients into a host-owned Streamable HTTP runtime', async () => {
+  it('proxies stdio clients into a host-owned Streamable HTTP runtime', { timeout: 30_000 }, async () => {
     const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
     try {
       const client = await connectProxyClient(host.endpoint, {
@@ -445,7 +447,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('answers health while the shared HTTP backend is still mounting', async () => {
+  it('answers health while the shared HTTP backend is still mounting', { timeout: 30_000 }, async () => {
     let releaseBackend!: () => void
     const backendGate = new Promise<void>((resolveBackend) => {
       releaseBackend = resolveBackend
@@ -488,7 +490,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('degrades health when mounted recall lacks the content-index contract', async () => {
+  it('degrades health when mounted recall lacks the content-index contract', { timeout: 30_000 }, async () => {
     const backend = {
       ...fakeBackend(),
       runtimeContracts: () => ({
@@ -606,7 +608,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('serves the same tools from one host-owned Streamable HTTP process', async () => {
+  it('serves the same tools from one host-owned Streamable HTTP process', { timeout: 30_000 }, async () => {
     const host = await startHttpHost({
       ATRIB_AGENT: 'test-agent',
       ATRIB_RECORD_FILE: recordFile,
@@ -709,7 +711,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('shares one mounted primitive backend across HTTP sessions', async () => {
+  it('shares one mounted primitive backend across HTTP sessions', { timeout: 30_000 }, async () => {
     const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
     let first: Client | undefined
     let second: Client | undefined
@@ -764,7 +766,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('normalizes repeated trailing slashes in the HTTP path', async () => {
+  it('normalizes repeated trailing slashes in the HTTP path', { timeout: 30_000 }, async () => {
     const host = await startHttpHost({ ATRIB_RECORD_FILE: recordFile }, 'nested/mcp////')
     try {
       expect(new URL(host.endpoint).pathname).toBe('/nested/mcp')
