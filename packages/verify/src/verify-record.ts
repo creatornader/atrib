@@ -56,6 +56,15 @@ import { evaluateDelegation } from './delegation.js'
 import type { DelegatedRecord, DelegationCertificate, DelegationOutcome } from './delegation.js'
 import { mapLegacyEvidenceBlock } from './evidence-envelope.js'
 import type { EvidenceEnvelope, LegacyEvidenceBlock } from './evidence-envelope.js'
+import { resolveIdentity } from './resolve-identity.js'
+import type { ResolveIdentityOptions } from './resolve-identity.js'
+import { verifyAnchorPlurality } from './anchor-plurality.js'
+import type {
+  AnchorNotFoundResponse,
+  AnchorPluralityVerdict,
+  AnchorProofBundle,
+  AnchorTrustConfig,
+} from './anchor-plurality.js'
 
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
@@ -375,6 +384,12 @@ export interface RecordVerificationResult {
    * delegation fact ever pushes a warning.
    */
   delegation?: DelegationOutcome
+  /**
+   * Anchor plurality verdict (§2.11.7-D138). Populated only when the caller
+   * supplies both a proof bundle and its trust configuration. The annotation
+   * remains separate from evidence envelopes and delegation facts.
+   */
+  anchor_plurality?: AnchorPluralityVerdict
   warnings: string[]
 }
 
@@ -461,6 +476,12 @@ export interface VerifyRecordOptions {
    */
   delegationRevokedKeys?: ReadonlySet<string>
   /**
+   * Explicit directory options for §1.11.4 step 4. When supplied for a
+   * resolved depth-one delegation, verifyRecord resolves the principal and
+   * checks the run key's expected directory non-membership.
+   */
+  delegationDirectoryOptions?: Omit<ResolveIdentityOptions, 'recordTimestamp'>
+  /**
    * Caller-supplied AP2 / Verifiable Intent evidence for transaction
    * records. The signed atrib record commits to transaction payload hashes,
    * not full AP2 / VI bodies, so the verifier does not fetch or infer this
@@ -482,6 +503,12 @@ export interface VerifyRecordOptions {
    * `trusted_creator_keys`. Signal only: never flips record validity.
    */
   trustedCreatorKeys?: string[]
+  /** Trust configuration for the supplied multi-anchor proof bundle. */
+  anchorTrust?: AnchorTrustConfig
+  /** Post-signing anchor proofs for this record. */
+  proofBundle?: AnchorProofBundle
+  /** Optional trusted-log not-found observations for censorship surfacing. */
+  anchorNotFoundResponses?: AnchorNotFoundResponse[]
 }
 
 /**
@@ -610,6 +637,50 @@ export async function verifyRecord(
       options.delegationCertificates,
       options.delegationRevokedKeys ? { revokedKeys: options.delegationRevokedKeys } : {},
     )
+    if (
+      result.delegation.depth === 1 &&
+      result.delegation.principal_key !== null &&
+      options.delegationDirectoryOptions !== undefined
+    ) {
+      const directoryOptions = {
+        ...options.delegationDirectoryOptions,
+        recordTimestamp: record.timestamp,
+      }
+      try {
+        const principal = await resolveIdentity(result.delegation.principal_key, directoryOptions)
+        const runKey = await resolveIdentity(record.creator_key, directoryOptions)
+        result.delegation.principal_identity_resolution = principal
+        result.delegation.run_key_in_directory = runKey.identity_resolved !== null
+      } catch (err) {
+        warnings.push(`delegation directory resolution error: ${(err as Error).message}`)
+      }
+    }
+  }
+
+  // Anchor plurality (D138): verification needs both the post-signing proof
+  // bundle and caller-owned trust material. This is intentionally separate
+  // from envelopes and delegation, which carry different evidence shapes.
+  if (options.anchorTrust !== undefined || options.proofBundle !== undefined) {
+    if (options.anchorTrust === undefined || options.proofBundle === undefined) {
+      warnings.push('anchor verification requires both anchorTrust and proofBundle')
+    } else {
+      try {
+        const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+        if (options.proofBundle.record_hash !== recordHash) {
+          warnings.push('anchor proof bundle record_hash does not match record')
+        }
+        result.anchor_plurality = await verifyAnchorPlurality(
+          options.proofBundle,
+          options.anchorTrust,
+          options.anchorNotFoundResponses,
+        )
+        if (result.anchor_plurality.hard_reject) {
+          warnings.push('anchor plurality hard rejection')
+        }
+      } catch (err) {
+        warnings.push(`anchor verification error: ${(err as Error).message}`)
+      }
+    }
   }
 
   if (options.evidenceEnvelopes && result.evidence) {

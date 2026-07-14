@@ -30,6 +30,7 @@ import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 import canonicalize from 'canonicalize'
 import { base64urlDecode, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
+import type { IdentityResolution } from './resolve-identity.js'
 
 // @noble/ed25519 v3 needs sha512 wired (idempotent; @atrib/mcp wires the
 // same instance at import time — kept here so this module stands alone).
@@ -138,6 +139,10 @@ export interface DelegationOutcome {
   delegation_ambiguous?: boolean
   /** Present only alongside `delegation_ambiguous: true`. */
   candidates?: DelegationCandidate[]
+  /** §1.11.4 step 4 result for the resolved principal key. */
+  principal_identity_resolution?: IdentityResolution
+  /** §1.11.4 structural anomaly: a run key has a directory claim. */
+  run_key_in_directory?: boolean | null
 }
 
 export interface EvaluateDelegationOptions {
