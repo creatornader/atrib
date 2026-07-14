@@ -15,18 +15,24 @@ shipping and keep working.
 
 ## Install
 
-This package is a publish target; first publish is pending an operator
-decision on the final npm name. Until then, run it from the workspace:
+Published as `@atrib/daemon`; the daemon and its binary are named `atribd`:
 
 ```sh
-pnpm --filter atribd... build
-node services/atribd/dist/index.js --help
+npm install -g @atrib/daemon
+atribd --help
 ```
 
-After first publish, the command becomes:
+Or run without installing:
 
 ```sh
-npx atribd --help
+npx --package @atrib/daemon atribd --help
+```
+
+From the workspace (development):
+
+```sh
+pnpm --filter @atrib/daemon... build
+node services/atribd/dist/index.js --help
 ```
 
 ## Quick start
@@ -142,8 +148,8 @@ and mirror stay on the host.
 ## Verify locally
 
 ```sh
-pnpm --filter atribd... build
-pnpm --filter atribd test
+pnpm --filter @atrib/daemon... build
+pnpm --filter @atrib/daemon test
 ```
 
 The test suite includes the reference tests for

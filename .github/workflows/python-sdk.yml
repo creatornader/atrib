@@ -18,13 +18,6 @@ on:
       - 'spec/conformance/**'
       - '.github/workflows/python-sdk.yml'
   pull_request:
-    paths:
-      - 'python/**'
-      - 'packages/sdk/**'
-      - 'packages/mcp/**'
-      - 'services/atrib-emit/**'
-      - 'spec/conformance/**'
-      - '.github/workflows/python-sdk.yml'
 
 # Default to read-only GITHUB_TOKEN; jobs that need more (release.yml does)
 # specify their own permissions block.
