@@ -26,7 +26,7 @@ node services/atribd/dist/index.js --help
 After first publish, the command becomes:
 
 ```sh
-npx atribd --help
+npx --package @atrib/daemon atribd --help
 ```
 
 ## Quick start
