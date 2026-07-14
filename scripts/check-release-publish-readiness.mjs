@@ -16,6 +16,10 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const JSON_MODE = process.argv.includes('--json')
+// The npm registry stores package descriptions truncated at 255 characters;
+// @atrib/verify-mcp@1.0.0 shipped with its description cut mid-word. Gate
+// the length here so the cut never reaches the registry again.
+const NPM_DESCRIPTION_LIMIT = 255
 
 function read(rel) {
   return readFileSync(join(ROOT, rel), 'utf8')
@@ -69,6 +73,7 @@ function publicWorkspacePackages() {
       name: manifest.name,
       version: manifest.version,
       dir,
+      description: typeof manifest.description === 'string' ? manifest.description : '',
     })
   }
   return packages
@@ -102,11 +107,20 @@ const ignored = new Set(changesetsConfig.ignore ?? [])
 const checked = []
 const missing = []
 const lookupErrors = []
+const oversizedDescriptions = []
 
 // Every non-private package is checked, ignore list or not: the publish
 // step does not consult the ignore list, so neither does the gate.
 for (const pkg of publicWorkspacePackages()) {
   const entry = { ...pkg, ignored_by_changesets: ignored.has(pkg.name) }
+  if (pkg.description.length > NPM_DESCRIPTION_LIMIT) {
+    oversizedDescriptions.push({
+      name: pkg.name,
+      dir: pkg.dir,
+      length: pkg.description.length,
+      limit: NPM_DESCRIPTION_LIMIT,
+    })
+  }
   const result = npmPackageExists(pkg.name)
   if (result.exists === true) {
     checked.push(entry)
@@ -121,6 +135,7 @@ const summary = {
   checked,
   missing,
   lookupErrors,
+  oversizedDescriptions,
   changesets_ignore: [...ignored],
 }
 
@@ -128,7 +143,7 @@ if (JSON_MODE) {
   console.log(JSON.stringify(summary, null, 2))
 }
 
-if (missing.length > 0 || lookupErrors.length > 0) {
+if (missing.length > 0 || lookupErrors.length > 0 || oversizedDescriptions.length > 0) {
   if (!JSON_MODE) {
     console.error('Release publish readiness failed.')
 
@@ -152,12 +167,22 @@ if (missing.length > 0 || lookupErrors.length > 0) {
         console.error(`- ${pkg.name}: ${pkg.error}`)
       }
     }
+
+    if (oversizedDescriptions.length > 0) {
+      console.error(
+        '\nThese package descriptions exceed the npm registry limit and would be stored truncated:',
+      )
+      for (const pkg of oversizedDescriptions) {
+        console.error(`- ${pkg.name} (${pkg.dir}): ${pkg.length} chars, limit ${pkg.limit}`)
+      }
+      console.error('Shorten the description field to a complete sentence within the limit.')
+    }
   }
   process.exit(1)
 }
 
 if (!JSON_MODE) {
   console.log(
-    `Release publish readiness ok: all ${checked.length} non-private workspace packages exist on npm (${ignored.size} name(s) in the Changesets ignore list).`,
+    `Release publish readiness ok: all ${checked.length} non-private workspace packages exist on npm with registry-safe description lengths (${ignored.size} name(s) in the Changesets ignore list).`,
   )
 }
