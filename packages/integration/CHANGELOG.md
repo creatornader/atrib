@@ -1,5 +1,11 @@
 # @atrib/integration
 
+## 0.0.44
+
+### Patch Changes
+
+- @atrib/sdk@2.0.1
+
 ## 0.0.43
 
 ### Patch Changes
