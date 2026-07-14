@@ -1,5 +1,5 @@
 ---
-"atribd": minor
+"@atrib/daemon": minor
 ---
 
 First public release of atribd, the stateless-native local daemon for the

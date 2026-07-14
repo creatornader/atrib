@@ -1,7 +1,18 @@
 {
-  "name": "atribd",
+  "name": "@atrib/daemon",
   "version": "0.1.0",
   "description": "Local daemon for atrib. Serves the seven cognitive primitives from one stateless-native process over Streamable HTTP or stdio.",
+  "keywords": [
+    "atrib",
+    "mcp",
+    "model-context-protocol",
+    "attribution",
+    "verifiable",
+    "agent",
+    "cognitive-primitive",
+    "daemon",
+    "ed25519"
+  ],
   "author": "Nader Helmy",
   "license": "Apache-2.0",
   "homepage": "https://github.com/creatornader/atrib/tree/main/services/atribd",
