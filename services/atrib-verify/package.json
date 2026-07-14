@@ -1,6 +1,6 @@
 {
   "name": "@atrib/verify-mcp",
-  "version": "0.2.22",
+  "version": "1.0.0",
   "description": "Legacy home of atrib's handoff-verification read primitive. Superseded by @atrib/recall (the read verb, verification parameter); this package re-exports the same surface, forwards the atrib-verify binary, and keeps a hard dependency on the @atrib/verify library so the verifier always resolves.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [

@@ -1,6 +1,6 @@
 {
   "name": "@atrib/emit",
-  "version": "0.17.3",
+  "version": "1.0.0",
   "description": "Legacy home of atrib's emit write primitive. Superseded by @atrib/attest (the write verb); this package re-exports the same surface and forwards the atrib-emit, atrib-emit-cli, and atrib-local-substrate binaries. Signed records are byte-identical.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
