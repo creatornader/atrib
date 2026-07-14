@@ -1,5 +1,11 @@
 # @atrib/verify-mcp
 
+## 1.0.1
+
+### Patch Changes
+
+- 1f50763: Shorten the package description under the npm registry's 255-character limit; the 1.0.0 description was stored truncated mid-word on the registry.
+
 ## 1.0.0
 
 ### Major Changes

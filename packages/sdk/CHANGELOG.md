@@ -1,5 +1,12 @@
 # @atrib/sdk
 
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [1f50763]
+  - @atrib/verify-mcp@1.0.1
+
 ## 2.0.0
 
 ### Patch Changes
