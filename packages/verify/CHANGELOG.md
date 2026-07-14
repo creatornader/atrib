@@ -1,5 +1,17 @@
 # @atrib/verify
 
+## 0.9.0
+
+### Minor Changes
+
+- c8f2fb2: Add payments subpath exports and injectable transaction detectors.
+- c8f2fb2: Add anchor plurality results to per-record verification.
+
+### Patch Changes
+
+- Updated dependencies [c8f2fb2]
+  - @atrib/mcp@0.21.0
+
 ## 0.8.3
 
 ### Patch Changes

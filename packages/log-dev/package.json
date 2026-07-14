@@ -1,6 +1,6 @@
 {
   "name": "@atrib/log-dev",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "description": "In-memory dev Merkle log stub for local atrib action-layer tests and examples.",
   "license": "Apache-2.0",
   "repository": {

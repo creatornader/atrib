@@ -1,5 +1,13 @@
 # @atrib/recall
 
+## 0.14.7
+
+### Patch Changes
+
+- 72d0f05: Add an `include_tool_call_args` query flag so `recall_by_content` can lift raw tool_call score suppression when callers need to search indexed args and result excerpts.
+- Updated dependencies [c8f2fb2]
+  - @atrib/mcp@0.21.0
+
 ## 0.14.6
 
 ### Patch Changes

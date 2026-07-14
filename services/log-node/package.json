@@ -1,6 +1,6 @@
 {
   "name": "@atrib/log-node",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "description": "Production Merkle log service for atrib's verifiable action layer.",
   "private": true,
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@atrib/annotate",
-  "version": "0.2.40",
+  "version": "0.2.41",
   "description": "MCP server for atrib's verifiable action layer. Lets agents mark a past record's importance and meaning for later recall.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [

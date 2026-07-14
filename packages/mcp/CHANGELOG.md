@@ -1,5 +1,11 @@
 # @atrib/mcp
 
+## 0.21.0
+
+### Minor Changes
+
+- c8f2fb2: Add opt-in HTTP transports for Rekor, RFC 3161, and OpenTimestamps anchors.
+
 ## 0.20.0
 
 ### Minor Changes
