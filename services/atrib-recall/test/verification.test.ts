@@ -12,7 +12,7 @@ import {
   signRecord,
   type AtribRecord,
 } from '@atrib/mcp'
-import { handleAtribVerify } from '../src/index.js'
+import { handleAtribVerify } from '../src/verification.js'
 
 ed.hashes.sha512 = sha512
 

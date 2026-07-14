@@ -1,0 +1,57 @@
+{
+  "name": "annotation-identity",
+  "spec_section": "attest-recall rename (P047 promotion)",
+  "description": "The same statement signed through the legacy atrib-annotate tool and through `attest` MUST produce byte-identical canonical records and signatures given identical key, timestamp, and chain inputs. Only the `_local.producer` sidecar label differs (persisted-label rule L1). Fixed fill-42 test seed and frozen timestamp make the signed bytes reproducible.",
+  "input": {
+    "legacy": {
+      "tool": "atrib-annotate",
+      "arguments": {
+        "annotates": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "importance": "high",
+        "summary": "attest-recall byte-identity annotation vector",
+        "topics": [
+          "P047"
+        ],
+        "context_id": "a77e57a77e57a77e57a77e57a77e57a0"
+      }
+    },
+    "attest": {
+      "tool": "attest",
+      "arguments": {
+        "ref": {
+          "kind": "annotates",
+          "target": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "content": {
+          "importance": "high",
+          "summary": "attest-recall byte-identity annotation vector",
+          "topics": [
+            "P047"
+          ]
+        },
+        "context_id": "a77e57a77e57a77e57a77e57a77e57a0"
+      }
+    },
+    "private_key_seed_base64url": "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio",
+    "timestamp_ms": 1783641600000
+  },
+  "expected": {
+    "event_type": "https://atrib.dev/v1/types/annotation",
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:ed7971ab53ef206f307c0df4b951b666f42f4d6077ce931cc7a9738be74770ba",
+      "creator_key": "GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE",
+      "chain_root": "sha256:f1cfd123349e45db8fcca23876d8ebb3a732755843cce6e9fa4916e7ff5a411b",
+      "event_type": "https://atrib.dev/v1/types/annotation",
+      "context_id": "a77e57a77e57a77e57a77e57a77e57a0",
+      "timestamp": 1783641600000,
+      "signature": "DPff0mFd5HjiqTWaYsrfk2bH6gXbO1OOmPsMezHgyUGoJKN-taO5Gd-L7Xr1daPvSoTjk6txMHJDyBkIY1djDw",
+      "annotates": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "args_hash": "sha256:48f145a9d1731cab25cae8277703ebfb05fa41f0e53fdb37a3b65020562f0615"
+    },
+    "record_hash": "sha256:a2a775bb9b26254599354c351b5657c8ba239bf63f4e2bad919a061c966098c8",
+    "canonical_record_sha256": "a2a775bb9b26254599354c351b5657c8ba239bf63f4e2bad919a061c966098c8",
+    "legacy_producer_label": "atrib-annotate",
+    "attest_producer_label": "atrib-attest"
+  }
+}

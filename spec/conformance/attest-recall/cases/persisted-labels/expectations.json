@@ -1,0 +1,26 @@
+{
+  "name": "persisted-labels",
+  "spec_section": "attest-recall rename (P047 promotion)",
+  "description": "`_local.producer` is an opaque pass-through, permanently (L1). The shared mirror fixture mixes legacy and attest-family labels; readers MUST accept the union and never filter or join on hardcoded producer equality. mixed-calls.jsonl mixes legacy tool names with recall:<shape> values in the D084 `primitive` field; analyzers MUST accept both vocabularies (L2) and never rewrite history.",
+  "mirror_file": "../read-equivalence/mirror.jsonl",
+  "expected": {
+    "producer_labels": [
+      "atrib-emit",
+      "atrib-attest",
+      "atrib-annotate",
+      "atrib-revise",
+      "atrib-attest-cli",
+      "claude-hooks-builtin-2b",
+      "atrib-emit-cli"
+    ],
+    "distinct_labels_accepted": [
+      "atrib-annotate",
+      "atrib-attest",
+      "atrib-attest-cli",
+      "atrib-emit",
+      "atrib-emit-cli",
+      "atrib-revise",
+      "claude-hooks-builtin-2b"
+    ]
+  }
+}

@@ -1,17 +1,20 @@
 # atribd
 
-Local daemon for atrib. Serves the seven cognitive primitives from one
-stateless-native process over Streamable HTTP or stdio.
+Local daemon for atrib. Serves the two-verb cognitive surface plus the
+legacy alias tools from one stateless-native process over Streamable HTTP
+or stdio.
 
-atribd mounts the seven primitive MCP servers (`@atrib/emit`,
-`@atrib/annotate`, `@atrib/revise`, `@atrib/recall`, `@atrib/trace`,
-`@atrib/summarize`, `@atrib/verify-mcp`) in process and exposes their fifteen
-physical tools as thin aliases over two internal handlers (write, read). A
-record signed through the daemon is byte-identical to one signed through the
-standalone per-primitive binary: same handler code paths, same
-`_local.producer` sidecar labels, same `resolveChainRoot` chain selection.
-The daemon is the recommended local topology; the standalone binaries keep
-shipping and keep working.
+Per the attest/recall rename
+([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)),
+atribd mounts three primitives in process: the `attest` write home
+(`@atrib/attest`), the `recall` read home (`@atrib/recall`), and
+`@atrib/summarize`. Together they serve the seventeen-tool union: the
+fifteen legacy tool names plus `attest` plus `recall`. A record signed
+through the daemon is byte-identical to one signed through the standalone
+per-primitive binary: same handler code paths, same `_local.producer`
+sidecar labels, same `resolveChainRoot` chain selection. The daemon is the
+recommended local topology; the standalone binaries keep shipping and keep
+working.
 
 ## Install
 
@@ -75,7 +78,9 @@ instance:
   resolve through the spec [§1.5.4](../../atrib-spec.md#154-mcp-transport-params_meta) ladder with the [§1.5.3](../../atrib-spec.md#153-http-fallback-x-atrib-chain) `X-Atrib-Chain`
   fallback.
 - `tools/list` responses carry `ttlMs` and `cacheScope` (SEP-2549) so clients
-  can cache the tool catalogue. Tune with `--tools-list-ttl-ms`.
+  can cache the tool catalogue. The default `ttlMs` is 5 minutes during the
+  alias window (operator-tunable via `--tools-list-ttl-ms` /
+  `ATRIBD_TOOLS_LIST_TTL_MS`).
 
 The transport binding sits behind an adapter
 (`src/transport-adapter.ts`). The current adapter runs the session-era MCP
@@ -103,13 +108,14 @@ open question. The stdio surfaces keep the ambient ladder unchanged.
 
 ## Write serialization
 
-The daemon serializes write-primitive calls per resolved `context_id`:
-read-tail, sign, append runs one writer at a time per context, so concurrent
-writes routed through one daemon yield a linear chain. Writers that append
-to the mirror corpus without routing through the daemon sit outside this
-boundary and can still fork a chain; the
-`spec/conformance/atribd/cases/concurrent-writer-serialization/` family pins
-both sides of that line.
+The daemon serializes calls to any write-union tool name (`attest`, `emit`,
+`atrib-annotate`, `atrib-revise`) per resolved `context_id`: read-tail,
+sign, append runs one writer at a time per context, so concurrent writes
+routed through one daemon, regardless of which tool name the caller used,
+yield a linear chain. Writers that append to the mirror corpus without
+routing through the daemon sit outside this boundary and can still fork a
+chain; the `spec/conformance/atribd/cases/concurrent-writer-serialization/`
+family pins both sides of that line.
 
 ## Degradation
 

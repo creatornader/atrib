@@ -183,15 +183,16 @@ describe('MCP protocol surface', () => {
       const res = await client.send('tools/list', {}, 1)
       expect(res.error).toBeUndefined()
       const tools = (res.result as { tools: { name: string }[] }).tools
-      // Layer 1 registers eight tools: the existing recall_my_attribution_history
-      // plus siblings recall_annotations / recall_revisions / recall_walk /
-      // recall_by_content (the original four), plus the post-D086 audit-pass
-      // additions recall_session_chain / recall_orphans / recall_by_signer
-      // — all functional and exposing the cognitive surface beyond base
-      // filter-and-page.
-      expect(tools).toHaveLength(8)
+      // The read union per the attest/recall rename: the `recall` verb plus
+      // every legacy read name it absorbs, mounted together through the
+      // alias window (W1). The eight legacy recall_* tools stay aliases of
+      // the shape runners; trace / trace_forward / atrib-verify moved in
+      // from @atrib/trace and @atrib/verify-mcp.
+      expect(tools).toHaveLength(12)
       const names = tools.map((t) => t.name).sort()
       expect(names).toEqual([
+        'atrib-verify',
+        'recall',
         'recall_annotations',
         'recall_by_content',
         'recall_by_signer',
@@ -200,6 +201,8 @@ describe('MCP protocol surface', () => {
         'recall_revisions',
         'recall_session_chain',
         'recall_walk',
+        'trace',
+        'trace_forward',
       ])
     } finally {
       client.close()

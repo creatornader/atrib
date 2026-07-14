@@ -261,7 +261,7 @@ Options:
   --port <port>                  HTTP bind port. Defaults to 8796. Use 0 for ephemeral.
   --path <path>                  HTTP MCP path. Defaults to /mcp.
   --tool-timeout-ms <ms>         Bound each primitive tool call. Defaults to 45000.
-  --tools-list-ttl-ms <ms>       SEP-2549 freshness hint on tools/list. Defaults to 24 hours.
+  --tools-list-ttl-ms <ms>       SEP-2549 freshness hint on tools/list. Defaults to 5 minutes (alias-window W2).
   --ambient-context              Opt the HTTP surface back into ambient context discovery
                                  (D078/D083). Default is explicit-required.
   --session-idle-ms <ms>         Deprecated; ignored (the stateless daemon has no sessions).

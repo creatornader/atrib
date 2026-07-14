@@ -11,13 +11,13 @@ import {
   signRecord,
   type AtribRecord,
 } from '@atrib/mcp'
-import { traceBackward, traceForward, buildReverseInformedByIndex } from '../src/trace.js'
-import type { IndexedRecord } from '../src/storage.js'
+import { traceBackward, traceForward, buildReverseInformedByIndex } from '../src/trace-walk.js'
+import type { IndexedRecord } from '../src/trace-storage.js'
 import {
   compactVisited,
   extractRecordHashFieldsFromMcpResult,
   summarizeSidecar,
-} from '../src/index.js'
+} from '../src/trace-tools.js'
 
 const SEED = new Uint8Array(32).fill(0x42)
 const REFERENCE_TIME_MS = Date.now()
@@ -186,7 +186,7 @@ describe('summarizeSidecar — per-event_type content shape handling (D086)', ()
         // we don't want to bring all of D062 envelope semantics into the
         // test surface.
         content,
-      } as unknown as import('../src/storage.js').SidecarPayload,
+      } as unknown as import('../src/trace-storage.js').SidecarPayload,
     }
   }
 

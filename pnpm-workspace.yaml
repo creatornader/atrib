@@ -8,6 +8,7 @@ packages:
   - 'services/graph-node'
   - 'services/directory-node'
   - 'services/archive-node'
+  - 'services/atrib-attest'
   - 'services/atrib-emit'
   - 'services/atrib-annotate'
   - 'services/atrib-revise'

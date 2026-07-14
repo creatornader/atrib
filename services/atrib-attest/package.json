@@ -1,0 +1,73 @@
+{
+  "name": "@atrib/attest",
+  "version": "0.0.0",
+  "description": "MCP server for atrib's write verb. One attest tool signs observations, annotations, and revisions; the legacy emit, atrib-annotate, and atrib-revise tool names stay mounted as aliases over the same handler.",
+  "keywords": [
+    "atrib",
+    "mcp",
+    "model-context-protocol",
+    "attribution",
+    "verifiable",
+    "agent",
+    "cognitive-primitive",
+    "ed25519",
+    "signed-records",
+    "attest"
+  ],
+  "author": "Nader Helmy",
+  "homepage": "https://github.com/creatornader/atrib/tree/main/services/atrib-attest",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    },
+    "./local-substrate-host": {
+      "types": "./dist/local-substrate-host.d.ts",
+      "import": "./dist/local-substrate-host.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "atrib-attest": "./dist/main.js",
+    "atrib-attest-cli": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc && chmod +x dist/main.js dist/cli.js dist/local-substrate-host.js",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@atrib/mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@noble/ed25519": "^3.1.0",
+    "@noble/hashes": "^2.2.0",
+    "canonicalize": "^3.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creatornader/atrib.git",
+    "directory": "services/atrib-attest"
+  }
+}

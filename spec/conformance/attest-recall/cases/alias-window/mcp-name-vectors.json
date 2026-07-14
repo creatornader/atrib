@@ -1,0 +1,12 @@
+{
+  "name": "mcp-name-vectors",
+  "spec_section": "attest-recall rename (P047 promotion)",
+  "description": "SEP-2243 routing-header consistency across both vocabularies: for the whole window, old-name and new-name calls MUST both pass Mcp-Name validation, and a header/body mismatch MUST be rejected by a stateless server.",
+  "cases": [
+    { "name": "matching-attest-accepted", "mcp_name_header": "attest", "body_tool": "attest", "expected": "accepted" },
+    { "name": "matching-legacy-accepted", "mcp_name_header": "emit", "body_tool": "emit", "expected": "accepted" },
+    { "name": "matching-recall-accepted", "mcp_name_header": "recall", "body_tool": "recall", "expected": "accepted" },
+    { "name": "attest-header-emit-body-rejected", "mcp_name_header": "attest", "body_tool": "emit", "expected": "rejected" },
+    { "name": "legacy-header-recall-body-rejected", "mcp_name_header": "recall_walk", "body_tool": "recall", "expected": "rejected" }
+  ]
+}

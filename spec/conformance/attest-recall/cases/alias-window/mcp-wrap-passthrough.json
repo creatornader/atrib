@@ -1,0 +1,10 @@
+{
+  "name": "mcp-wrap-passthrough",
+  "spec_section": "attest-recall rename (P047 promotion)",
+  "description": "@atrib/mcp-wrap never renames tools: params.name MUST reach the upstream server unmodified for both vocabularies, so a wrapped call can never produce an Mcp-Name header/body mismatch downstream. If a rewriting transform is ever added, it MUST rewrite the routing header and the JSON-RPC body atomically.",
+  "cases": [
+    { "name": "attest-passes-through", "tool": "attest" },
+    { "name": "legacy-emit-passes-through", "tool": "emit" },
+    { "name": "recall-passes-through", "tool": "recall" }
+  ]
+}

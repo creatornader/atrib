@@ -100,7 +100,7 @@ Stale detection reuses the
 rule: fingerprint mismatch or model-identity mismatch means rebuild, never
 silent reuse.
 
-**V3: fusion in scoring, not a second tool.** `recall_by_content` gains an
+**V3: fusion in scoring, not a second tool.** Content recall (`recall` shape `content`; legacy `recall_by_content` per [D164](../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)) gains an
 optional dense channel: reciprocal-rank fusion (the tuning-free standard)
 combines the BM25 ranking and the cosine ranking into the relevance component,
 which then flows through the existing Park weighted-sum with recency and
@@ -141,7 +141,7 @@ conversational memory, not on atrib's record shapes.
 ## 4. What it would mean strategically
 
 **It upgrades a cognitive primitive; it does not cross the product boundary.**
-Scoped to the signed-record corpus, a vector layer makes `atrib-recall` better
+Scoped to the signed-record corpus, a vector layer makes the `recall` verb (the `@atrib/recall` read home) better
 at its existing job: finding what the agent signed when the query shares no
 vocabulary with it. That stays inside
 [D108](../DECISIONS.md#d108-observability-span-trees-are-intake-local-sidecars-are-cognitive-payload)'s

@@ -59,7 +59,14 @@ import {
 export const DEFAULT_HTTP_HOST = '127.0.0.1'
 export const DEFAULT_HTTP_PORT = 8796
 export const DEFAULT_HTTP_PATH = '/mcp'
-export const DEFAULT_TOOLS_LIST_TTL_MS = 24 * 60 * 60 * 1000
+// Alias-window rule W2 (attest/recall rename): while legacy tool names are
+// still being retired, every default deployment advertises a short tools/list
+// ttlMs so a rename propagates on cache expiry within minutes, and a name may
+// leave the default list only after the longest ttlMs the deployment ever
+// advertised has elapsed. Operators tune via --tools-list-ttl-ms /
+// ATRIBD_TOOLS_LIST_TTL_MS; the pre-window default was 24 hours and can
+// return once retirement completes.
+export const DEFAULT_TOOLS_LIST_TTL_MS = 5 * 60 * 1000
 const MAX_JSON_BODY_BYTES = 1024 * 1024
 
 export interface AtribdRequestCounters {

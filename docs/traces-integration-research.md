@@ -35,7 +35,7 @@ the harness-transcript landscape added.
 | Harness session transcript | Claude Code `~/.claude/projects/*.jsonl`, Codex `~/.codex/sessions/**/rollout-*.jsonl`, Pi sessions, Hermes Agent session export | The harness (host runtime) | Runtime log: a host-owned event stream over one run or session ([D121](../DECISIONS.md#d121-runtime-log-proof-manifests-verify-host-owned-run-windows)) |
 | OTel / OpenInference span tree | A `trace_id`-scoped tree of nested spans from instrumentation | The instrumentation pipeline | Intake and correlation surface, not canonical evidence ([D108](../DECISIONS.md#d108-observability-span-trees-are-intake-local-sidecars-are-cognitive-payload)) |
 | atrib provenance trace | `GET /v1/trace/{record_hash}` ([§3.4.5](../atrib-spec.md#345-get-v1tracerecord_hash)) | The graph service, derived from signed records | Declared-relationship projection: walks INFORMED_BY, ANNOTATES, REVISES; never CHAIN_PRECEDES |
-| `atrib-trace` primitive walk | The `trace` / `trace_forward` MCP tools over the local mirror | The agent's own substrate | Bounded `informed_by` walk with sidecar summaries (cognitive primitive #5) |
+| Primitive walk (the `recall` verb, shape `walk` with a direction; `trace` / `trace_forward` stay mounted as permanent aliases per [D164](../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)) | The read-verb MCP surface over the local mirror | The agent's own substrate | Bounded `informed_by` walk with sidecar summaries (cognitive primitive #5) |
 
 ARCHITECTURE.md pins the rule that makes the first row work: hosts call the
 same object "a session log, event stream, thread, trace, or run history. The
@@ -173,9 +173,10 @@ as deferred future work.
 
 **Retrieval semantics from the benchmark work.**
 [D149](../DECISIONS.md#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance)-[D162](../DECISIONS.md#d162-factual-values-never-truncate-in-rendered-memory)
-separated memory retrieval into selection (BM25 ranking, mapping to
-`atrib-recall`) and expansion (graph walk from seeds, mapping to
-`atrib-trace`), and hardened rendering: own signed content wins over
+separated memory retrieval into selection (BM25 ranking, mapping to the
+`recall` verb's content and history shapes) and expansion (graph walk from
+seeds, mapping to its walk shapes; the legacy `atrib-trace` names stay
+mounted as aliases per [D164](../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)), and hardened rendering: own signed content wins over
 chain-derived text, lineage renders as ordered chains, rendered lines carry
 temporal provenance, factual values never truncate. These rules were tuned on
 memory benchmarks and apply to whatever corpus the substrate holds.
@@ -301,7 +302,7 @@ turns "the trace existed" into "the trace is retrievable and its bytes match
 the root." No new object; exercises existing fields.
 
 **O4 (hold for an explicit ADR): transcript content as a recall corpus.**
-Letting `recall_by_content` search raw transcript content would cross two
+Letting content recall (`recall` shape `content`; legacy `recall_by_content`) search raw transcript content would cross two
 standing boundaries at once: the unit of indexing (one signed record's sidecar,
 [D086](../DECISIONS.md#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content)) and the
 substrate's scope (what the agent signed, not everything the host recorded).

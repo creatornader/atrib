@@ -37,7 +37,7 @@ const CASES = [
     name: 'observation-parity',
     tool: 'emit',
     producer: 'atrib-emit',
-    factory: async () => (await import('@atrib/emit')).createAtribEmitServer(),
+    factory: async () => (await import('@atrib/attest')).createAtribEmitServer(),
     args: {
       event_type: 'observation',
       context_id: FIXED_CONTEXT_ID,
@@ -51,7 +51,7 @@ const CASES = [
     name: 'annotation-parity',
     tool: 'atrib-annotate',
     producer: 'atrib-annotate',
-    factory: async () => (await import('@atrib/annotate')).createAtribAnnotateServer(),
+    factory: async () => (await import('@atrib/attest')).createAtribAnnotateServer(),
     args: {
       annotates: ANNOTATES_TARGET,
       importance: 'high',
@@ -64,7 +64,7 @@ const CASES = [
     name: 'revision-parity',
     tool: 'atrib-revise',
     producer: 'atrib-revise',
-    factory: async () => (await import('@atrib/revise')).createAtribReviseServer(),
+    factory: async () => (await import('@atrib/attest')).createAtribReviseServer(),
     args: {
       revises: REVISES_TARGET,
       prior_position: 'prior fixture position',

@@ -160,27 +160,16 @@ interface PrimitiveSpec {
 }
 
 export const PRIMITIVE_SPECS: readonly PrimitiveSpec[] = [
+  // The attest/recall two-verb surface with the fifteen legacy tool names
+  // mounted as aliases (alias-window rule W1). Three mounts serve the
+  // seventeen-tool union: the write home (@atrib/attest), the read home
+  // (@atrib/recall), and summarize (no successor; relocates to the harness
+  // after the window).
   {
-    name: 'emit',
-    packageName: '@atrib/emit',
+    name: 'attest',
+    packageName: '@atrib/attest',
     kind: 'write',
-    expectedTools: ['emit'],
-    mutatesLogOnCall: true,
-    probeMode: 'package-and-tool-surface',
-  },
-  {
-    name: 'annotate',
-    packageName: '@atrib/annotate',
-    kind: 'write',
-    expectedTools: ['atrib-annotate'],
-    mutatesLogOnCall: true,
-    probeMode: 'package-and-tool-surface',
-  },
-  {
-    name: 'revise',
-    packageName: '@atrib/revise',
-    kind: 'write',
-    expectedTools: ['atrib-revise'],
+    expectedTools: ['atrib-annotate', 'atrib-revise', 'attest', 'emit'],
     mutatesLogOnCall: true,
     probeMode: 'package-and-tool-surface',
   },
@@ -189,6 +178,8 @@ export const PRIMITIVE_SPECS: readonly PrimitiveSpec[] = [
     packageName: '@atrib/recall',
     kind: 'read',
     expectedTools: [
+      'atrib-verify',
+      'recall',
       'recall_annotations',
       'recall_by_content',
       'recall_by_signer',
@@ -197,31 +188,17 @@ export const PRIMITIVE_SPECS: readonly PrimitiveSpec[] = [
       'recall_revisions',
       'recall_session_chain',
       'recall_walk',
+      'trace',
+      'trace_forward',
     ],
     mutatesLogOnCall: false,
     probeMode: 'read-only-behavioral-probe',
-  },
-  {
-    name: 'trace',
-    packageName: '@atrib/trace',
-    kind: 'read',
-    expectedTools: ['trace', 'trace_forward'],
-    mutatesLogOnCall: false,
-    probeMode: 'package-and-tool-surface',
   },
   {
     name: 'summarize',
     packageName: '@atrib/summarize',
     kind: 'read',
     expectedTools: ['summarize'],
-    mutatesLogOnCall: false,
-    probeMode: 'package-and-tool-surface',
-  },
-  {
-    name: 'verify',
-    packageName: '@atrib/verify-mcp',
-    kind: 'read',
-    expectedTools: ['atrib-verify'],
     mutatesLogOnCall: false,
     probeMode: 'package-and-tool-surface',
   },
@@ -235,13 +212,9 @@ export const WRITE_TOOL_NAMES: ReadonlySet<string> = new Set(
 )
 
 const PRIMITIVES: readonly [string, AtribdPrimitiveFactory][] = [
-  ['emit', async () => (await import('@atrib/emit')).createAtribEmitServer()],
-  ['annotate', async () => (await import('@atrib/annotate')).createAtribAnnotateServer()],
-  ['revise', async () => (await import('@atrib/revise')).createAtribReviseServer()],
+  ['attest', async () => (await import('@atrib/attest')).createAtribAttestServer()],
   ['recall', async () => (await import('@atrib/recall')).createAtribRecallServer()],
-  ['trace', async () => (await import('@atrib/trace')).createAtribTraceServer()],
   ['summarize', async () => (await import('@atrib/summarize')).createAtribSummarizeServer()],
-  ['verify', async () => (await import('@atrib/verify-mcp')).createAtribVerifyServer()],
 ]
 
 export function readPackageVersion(): string {
@@ -676,6 +649,68 @@ async function probeVerifyBehavior(
   })
 }
 
+
+async function probeRecallVerbBehavior(
+  primitive: MountedPrimitive,
+  spec: PrimitiveSpec,
+  timeoutMs: number,
+): Promise<AtribdBehavioralProbeDiagnostic> {
+  const payload = await callProbeTool(
+    primitive,
+    'recall',
+    {
+      shape: 'walk',
+      direction: 'backward',
+      start: HEALTH_PROBE_ABSENT_HASH,
+      depth: 0,
+      compact: true,
+    },
+    timeoutMs,
+  )
+  if (payload.start_hash !== HEALTH_PROBE_ABSENT_HASH) {
+    throw new Error(`recall verb returned unexpected start_hash ${String(payload.start_hash)}`)
+  }
+  if (payload.direction !== 'backward') {
+    throw new Error(`recall verb returned unexpected direction ${String(payload.direction)}`)
+  }
+  const dangling = assertArray(payload.dangling, 'recall.dangling')
+  if (!dangling.includes(HEALTH_PROBE_ABSENT_HASH)) {
+    throw new Error('recall verb did not surface the absent probe hash as dangling')
+  }
+  const visited = assertArray(payload.visited, 'recall.visited')
+  if (visited.length !== 0) {
+    throw new Error('recall verb visited records for an absent probe hash')
+  }
+  return behavioralProbePassed(spec, 'read-only', {
+    tool: 'recall',
+    shape: 'walk',
+    absent_hash_dangling: true,
+  })
+}
+
+/**
+ * The read home mounts the whole read union (recall verb + 8 recall_* +
+ * trace + trace_forward + atrib-verify), so its behavioral probe runs the
+ * per-family probes against one mount and combines them. Any single
+ * failure fails the union probe.
+ */
+async function probeReadUnionBehavior(
+  primitive: MountedPrimitive,
+  spec: PrimitiveSpec,
+  timeoutMs: number,
+): Promise<AtribdBehavioralProbeDiagnostic> {
+  const recallProbe = await probeRecallBehavior(primitive, spec, timeoutMs)
+  const traceProbe = await probeTraceBehavior(primitive, spec, timeoutMs)
+  const verifyProbe = await probeVerifyBehavior(primitive, spec, timeoutMs)
+  const verbProbe = await probeRecallVerbBehavior(primitive, spec, timeoutMs)
+  return behavioralProbePassed(spec, 'read-only', {
+    recall: recallProbe.observed ?? {},
+    trace: traceProbe.observed ?? {},
+    verify: verifyProbe.observed ?? {},
+    recall_verb: verbProbe.observed ?? {},
+  })
+}
+
 async function inspectPrimitiveBehavioralProbes(
   mounted: readonly MountedPrimitive[],
   timeoutMs: number,
@@ -700,13 +735,9 @@ async function inspectPrimitiveBehavioralProbes(
     }
     try {
       if (spec.name === 'recall') {
-        entries.push([spec.name, await probeRecallBehavior(primitive, spec, timeoutMs)])
-      } else if (spec.name === 'trace') {
-        entries.push([spec.name, await probeTraceBehavior(primitive, spec, timeoutMs)])
+        entries.push([spec.name, await probeReadUnionBehavior(primitive, spec, timeoutMs)])
       } else if (spec.name === 'summarize') {
         entries.push([spec.name, await probeSummarizeBehavior(primitive, spec, timeoutMs)])
-      } else if (spec.name === 'verify') {
-        entries.push([spec.name, await probeVerifyBehavior(primitive, spec, timeoutMs)])
       } else {
         entries.push([spec.name, behavioralProbeSkipped(spec, 'no behavioral probe defined')])
       }
@@ -834,9 +865,12 @@ export async function createAtribdBackend(
   let callsSettledAfterTimeout = 0
 
   for (const primitive of mounted) {
-    // Unknown mount names default to the read handler; only tools served by
-    // a registered write primitive go through the write handler's lock.
-    const kind: AtribdHandlerKind = specByName.get(primitive.name)?.kind ?? 'read'
+    // Route kind is per TOOL, not per mount: any tool name the write
+    // handler serves (the write union: attest plus its legacy aliases)
+    // goes through the write lock regardless of which mount exposes it.
+    // Unknown tool names on unknown mounts default to the read handler,
+    // unless the mount is a registered write primitive.
+    const mountKind: AtribdHandlerKind = specByName.get(primitive.name)?.kind ?? 'read'
     for (const tool of primitive.tools) {
       const existing = routeByTool.get(tool.name)
       if (existing) {
@@ -844,6 +878,7 @@ export async function createAtribdBackend(
           `duplicate atrib primitive tool ${tool.name}: ${existing.primitive} and ${primitive.name}`,
         )
       }
+      const kind: AtribdHandlerKind = WRITE_TOOL_NAMES.has(tool.name) ? 'write' : mountKind
       routeByTool.set(tool.name, { primitive: primitive.name, kind, client: primitive.client })
       tools.push(tool)
     }

@@ -33,7 +33,7 @@ Options:
 
 Run package builds first:
   pnpm --filter @atrib/mcp build
-  pnpm --filter @atrib/emit build
+  pnpm --filter @atrib/emit... build
 `
 }
 

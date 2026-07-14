@@ -1,0 +1,28 @@
+{
+  "name": "tools-list-union",
+  "spec_section": "attest-recall rename (P047 promotion)",
+  "description": "During the alias window every default deployment serves the seventeen-tool union (fifteen legacy names + attest + recall) and advertises a tools/list ttlMs at or below the W2 ceiling so a rename propagates on cache expiry. A name may leave a default list only after the longest ttlMs ever advertised has elapsed plus the W4 zero-dispatch cycle.",
+  "expected": {
+    "tools": [
+      "atrib-annotate",
+      "atrib-revise",
+      "atrib-verify",
+      "attest",
+      "emit",
+      "recall",
+      "recall_annotations",
+      "recall_by_content",
+      "recall_by_signer",
+      "recall_my_attribution_history",
+      "recall_orphans",
+      "recall_revisions",
+      "recall_session_chain",
+      "recall_walk",
+      "summarize",
+      "trace",
+      "trace_forward"
+    ],
+    "max_default_ttl_ms": 300000,
+    "cache_scope": "private"
+  }
+}

@@ -1,5 +1,17 @@
 # @atrib/verify-mcp
 
+**Legacy home.** The read-verb implementation moved to
+[`@atrib/recall`](../atrib-recall/README.md) per the attest/recall rename
+([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)).
+`atrib-verify` folds into `recall` through its `verification` parameter.
+This package re-exports the same surface and forwards the `atrib-verify`
+binary to `@atrib/recall`'s handlers. Results are JSON-identical. The
+`atrib-verify` tool name stays mounted as a permanent alias during the
+alias window, alongside the new `recall` tool. `@atrib/verify` (the
+verifier library) is NOT renamed. This package keeps a hard dependency on
+`@atrib/verify` so the verifier always resolves, independent of
+`@atrib/recall`'s optional-peer posture toward it.
+
 MCP server exposing the `atrib-verify` cognitive primitive for atrib's verifiable action layer. It verifies counterparty handoff evidence before a receiving agent signs follow-up work that cites those records through `informed_by`.
 
 The package is read-only. It accepts caller-supplied evidence, returns accepted and rejected hashes, and leaves the follow-up signing step to `atrib-emit` or normal wrapped tool calls.
