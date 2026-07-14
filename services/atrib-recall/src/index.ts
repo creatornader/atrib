@@ -791,6 +791,14 @@ function getContentBm25IndexForNewestLimit(
   return index
 }
 
+function effectiveToolCallScoreFactor(
+  entry: ContentIndexEntry,
+  includeToolCallArgs: boolean,
+): number {
+  if (includeToolCallArgs && entry.tool_call_score_factor < 1) return 1
+  return entry.tool_call_score_factor
+}
+
 function hasExplicitRecordLimit(requested: unknown): requested is number {
   return typeof requested === 'number' && Number.isFinite(requested)
 }
@@ -2060,6 +2068,12 @@ export function registerAtribRecallTools(server: McpServer): void {
               'loaded record, and refuses partial results with evidence_status=incomplete plus ' +
               'fallback_required=true when max_records is explicitly below total_records.',
           ),
+        include_tool_call_args: z
+          .boolean()
+          .optional()
+          .describe(
+            'Lift the operational tool_call score suppression for this query so unannotated tool_call records, including their indexed args and result excerpts, rank by ordinary recency and relevance. The default keeps them down-weighted so operational noise does not dominate conversational recall.',
+          ),
       },
     },
     async (args) =>
@@ -2069,6 +2083,7 @@ export function registerAtribRecallTools(server: McpServer): void {
         async () => {
           const evidenceMode =
             args.evidence_mode === 'require_complete' ? 'require_complete' : 'bounded'
+          const includeToolCallArgs = args.include_tool_call_args === true
           const boundedLimit = resolveBoundedContentSearchLimit(
             args.max_records,
             Number.MAX_SAFE_INTEGER,
@@ -2093,6 +2108,7 @@ export function registerAtribRecallTools(server: McpServer): void {
                       query: args.query,
                       k,
                       runtime: recallRuntimeMetadata(),
+                      ...(includeToolCallArgs ? { include_tool_call_args: true } : {}),
                       evidence_mode: evidenceMode,
                       evidence_status: 'incomplete',
                       fallback_required: true,
@@ -2140,7 +2156,7 @@ export function registerAtribRecallTools(server: McpServer): void {
             const ann = entry.annotations
             const suppressLifecycleAnchor =
               entry.lifecycle_anchor && !queryMentionsLifecycle(queryTokens)
-            const toolCallScoreFactor = entry.tool_call_score_factor
+            const toolCallScoreFactor = effectiveToolCallScoreFactor(entry, includeToolCallArgs)
             const r =
               recencyScore(entry.timestamp, now, ATRIB_RECALL_TAU_DAYS) * toolCallScoreFactor
             const i = suppressLifecycleAnchor ? 0 : importanceScore(ann)
@@ -2179,6 +2195,7 @@ export function registerAtribRecallTools(server: McpServer): void {
                     query: args.query,
                     k,
                     runtime: recallRuntimeMetadata(),
+                    ...(includeToolCallArgs ? { include_tool_call_args: true } : {}),
                     evidence_mode: evidenceMode,
                     evidence_status: completeCoverage ? 'complete' : 'bounded',
                     fallback_required: false,

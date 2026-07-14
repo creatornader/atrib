@@ -75,6 +75,7 @@ export const ReviseInput = z.object({
 type ReviseInputT = z.infer<typeof ReviseInput>
 
 type ReviseOutput = {
+  signed: true
   record_hash: string
   log_index: number | null
   inclusion_proof: unknown
@@ -156,7 +157,14 @@ export async function createAtribReviseServer(
         producer: 'atrib-revise',
         localSubstrate,
       })
+      if (!result.signed) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: result.refusals.join('\n') }],
+        }
+      }
       const out: ReviseOutput = {
+        signed: true,
         record_hash: result.record_hash,
         log_index: result.log_index,
         inclusion_proof: result.inclusion_proof,

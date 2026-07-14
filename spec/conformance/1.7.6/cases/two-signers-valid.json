@@ -33,7 +33,8 @@
     "cross_attestation": {
       "signers_count": 2,
       "signers_valid": 2,
-      "missing": false
+      "missing": false,
+      "trust_evaluated": false
     },
     "validator_should_accept": true
   }

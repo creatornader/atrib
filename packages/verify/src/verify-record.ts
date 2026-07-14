@@ -187,6 +187,55 @@ export interface CrossAttestationAnnotation {
    * valid via the legacy top-level signature.
    */
   missing: boolean
+  /**
+   * `true` iff a trust set (`VerifyRecordOptions.trustedCreatorKeys`) was
+   * supplied and the trusted-signer composition was evaluated. Always present
+   * on transaction cross_attestation, so that `false` is a LOUD signal: the
+   * annotation reflects only the trust-blind verified-key count, and a
+   * consumer gating a consequential action MUST NOT read `signers_valid >= 2`
+   * as trusted authority without supplying a trust set. Per §1.7.6 trusted
+   * signer composition. `signers_trusted` / `sybil_suspected` are present only
+   * when this is `true`.
+   */
+  trust_evaluated: boolean
+  /**
+   * Number of distinct verified signer keys that are ALSO members of the
+   * trust set supplied via `VerifyRecordOptions.trustedCreatorKeys`. A
+   * verified signer key is not necessarily a trusted one: `signers_valid`
+   * counts distinct keys whose signatures verify, this counts how many of
+   * those keys the caller trusts. Present ONLY when `trust_evaluated` is true;
+   * omitted otherwise. Non-malleable transaction authority requires
+   * `signers_trusted >= 2` (see `isTrustedCrossAttested`), per §1.7.6.
+   */
+  signers_trusted?: number
+  /**
+   * `true` iff `signers_valid >= 2` but `signers_trusted < 2`: the record
+   * meets the distinct-verified-key minimum yet fewer than two of those keys
+   * are trusted (a Sybil / corroboration posture, e.g. two attacker-controlled
+   * keys signing the same bytes). Present ONLY when a trust set is supplied.
+   * Like `missing`, this is a SIGNAL and MUST NOT by itself invalidate the
+   * record. Gate non-malleable authority on `isTrustedCrossAttested` (i.e.
+   * `signers_trusted >= 2`), NOT on `!sybil_suspected`: a single trusted
+   * signer (`signers_valid < 2`) is not sybil_suspected yet is not attested.
+   */
+  sybil_suspected?: boolean
+}
+
+/**
+ * Non-malleable cross-attestation predicate. Returns `true` iff the record
+ * carries at least 2 distinct verified signer keys that are members of the
+ * caller's trust set (`signers_trusted >= 2`). This is the guarded gate a
+ * consumer requiring Sybil-resistant transaction authority should call, in
+ * place of the footgun `signers_valid >= 2` (which two untrusted keys also
+ * satisfy) or `!sybil_suspected` (which a single trusted signer also
+ * satisfies). Requires `verifyRecord` to have been called with a
+ * `trustedCreatorKeys` trust set; returns `false` when trust was not
+ * evaluated. Per §1.7.6 trusted signer composition.
+ */
+export function isTrustedCrossAttested(
+  annotation: CrossAttestationAnnotation | undefined,
+): boolean {
+  return (annotation?.signers_trusted ?? 0) >= 2
 }
 
 /**
@@ -421,6 +470,18 @@ export interface VerifyRecordOptions {
   ap2ViEvidence?: Ap2ViEvidenceBundle
   /** Options passed through to `verifyAp2ViEvidenceAsync()`. */
   ap2ViEvidenceOptions?: VerifyAp2ViEvidenceOptions
+  /**
+   * Trust set for transaction cross-attestation (§1.7.6 trusted signer
+   * composition). Base64url Ed25519 public keys the verifier trusts as
+   * independent attesting principals. When supplied, `cross_attestation`
+   * additionally surfaces `signers_trusted` and `sybil_suspected` so a
+   * consumer can gate non-malleable authority on trusted (not merely
+   * verified) signer keys, via `isTrustedCrossAttested`. When omitted, the
+   * trust fields are not surfaced and cross_attestation is byte-identical to
+   * its pre-trust shape. Same trust vocabulary as handoff verification's
+   * `trusted_creator_keys`. Signal only: never flips record validity.
+   */
+  trustedCreatorKeys?: string[]
 }
 
 /**
@@ -506,7 +567,7 @@ export async function verifyRecord(
   // cross_attestation (D052 / §1.7.6), surface only on transaction records.
   // Other event types continue to use the standard single-signer path.
   if (record.event_type === 'https://atrib.dev/v1/types/transaction') {
-    result.cross_attestation = await resolveCrossAttestation(record)
+    result.cross_attestation = await resolveCrossAttestation(record, options.trustedCreatorKeys)
   }
 
   if (options.ap2ViEvidence !== undefined) {
@@ -802,14 +863,41 @@ function resolveCapabilityCheck(
  * verified above by `verifyRecordSignature`) keeps the record
  * cryptographically valid; cross_attestation is a policy signal.
  */
-async function resolveCrossAttestation(record: AtribRecord): Promise<CrossAttestationAnnotation> {
+async function resolveCrossAttestation(
+  record: AtribRecord,
+  trustedCreatorKeys?: string[],
+): Promise<CrossAttestationAnnotation> {
+  // §1.7.6 trusted signer composition. `signers_valid` and `missing` keep
+  // their existing (trust-blind) semantics on every path. `trust_evaluated`
+  // is ALWAYS attached, so `false` is a loud signal that only the trust-blind
+  // count was computed. When a trust set is supplied we additionally attach
+  // `signers_trusted` / `sybil_suspected` by intersecting the already-verified
+  // keys with the trust set. Signal only: never pushes to warnings[] or flips
+  // `valid`.
+  const withTrust = (
+    base: { signers_count: number; signers_valid: number; missing: boolean },
+    validKeys: ReadonlySet<string>,
+  ): CrossAttestationAnnotation => {
+    if (trustedCreatorKeys === undefined) return { ...base, trust_evaluated: false }
+    const trustSet = new Set(trustedCreatorKeys)
+    let signers_trusted = 0
+    for (const key of validKeys) if (trustSet.has(key)) signers_trusted++
+    return {
+      ...base,
+      trust_evaluated: true,
+      signers_trusted,
+      sybil_suspected: base.signers_valid >= 2 && signers_trusted < 2,
+    }
+  }
+
   const signers = Array.isArray(record.signers) ? record.signers : []
   const signers_count = signers.length
+  const NO_KEYS: ReadonlySet<string> = new Set()
 
   if (signers_count === 0) {
     // Legacy single-signer transaction record. Per §1.7.6 normative
     // minimum is 2; flag as missing.
-    return { signers_count: 0, signers_valid: 0, missing: true }
+    return withTrust({ signers_count: 0, signers_valid: 0, missing: true }, NO_KEYS)
   }
 
   // All signers cover the same canonical bytes (§1.7.6).
@@ -819,7 +907,7 @@ async function resolveCrossAttestation(record: AtribRecord): Promise<CrossAttest
   } catch {
     // Canonicalization shouldn't fail on a structurally-valid record;
     // if it does, treat all signers as unverifiable.
-    return { signers_count, signers_valid: 0, missing: true }
+    return withTrust({ signers_count, signers_valid: 0, missing: true }, NO_KEYS)
   }
 
   const validSignerKeys = new Set<string>()
@@ -836,11 +924,14 @@ async function resolveCrossAttestation(record: AtribRecord): Promise<CrossAttest
   }
   const signers_valid = validSignerKeys.size
 
-  return {
-    signers_count,
-    signers_valid,
-    missing: signers_valid < 2,
-  }
+  return withTrust(
+    {
+      signers_count,
+      signers_valid,
+      missing: signers_valid < 2,
+    },
+    validSignerKeys,
+  )
 }
 
 async function verifyCreatorSignerSignature(record: AtribRecord): Promise<boolean> {

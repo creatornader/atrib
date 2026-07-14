@@ -1,0 +1,326 @@
+// SPDX-License-Identifier: Apache-2.0
+
+/**
+ * Causal-brief builder: turn a generic agent-run trace into a readable brief
+ * derived from atrib's real §3.2.4 graph.
+ *
+ * This module is deliberately generic. It knows nothing about any specific
+ * benchmark; it consumes an OpenInference-shaped span list and produces two
+ * kinds of brief that differ ONLY in structure, never in content volume:
+ *
+ *   - 'flat'  : a chronological table, one line per span, fixed content budget.
+ *   - 'atrib' : the same table PLUS a causal tree walked from the atrib graph
+ *               (CHAIN_PRECEDES + INFORMED_BY edges derived by
+ *               `buildGraphFromAllRecords`) PLUS a mechanical anomaly appendix.
+ *
+ * Both modes truncate every span's content with the SAME constant, so an A/B
+ * comparison isolates the effect of atrib's causal structure rather than the
+ * effect of showing more raw text. `buildCausalBrief` is a pure, deterministic
+ * function of its input: no clock, no randomness, no I/O, no network. The
+ * records are signed with a single fixed seed so the derived graph carries real
+ * `signature_valid` verification state, but the seed and every field are
+ * functions of the trace bytes alone.
+ */
+
+import {
+  sha256,
+  hexEncode,
+  canonicalRecord,
+  genesisChainRoot,
+  getPublicKey,
+  base64urlEncode,
+  signRecord,
+  EVENT_TYPE_TOOL_CALL_URI,
+  EVENT_TYPE_OBSERVATION_URI,
+  type AtribRecord,
+} from '@atrib/mcp'
+import type { GraphResponse, GraphEdge } from '@atrib/verify'
+import { buildGraphFromAllRecords } from '../graph-builder.js'
+
+/** OpenInference-shaped span, flattened from a trace tree. Generic on purpose. */
+export interface TraceSpan {
+  span_id: string
+  parent_span_id: string | null
+  span_name: string
+  /** openinference.span.kind, e.g. LLM | CHAIN | TOOL | AGENT | '' */
+  kind: string
+  /** span start, epoch ms */
+  timestamp_ms: number
+  /** wall-clock duration in ms (0 when absent) */
+  duration_ms: number
+  /** OK | ERROR | '' */
+  status_code: string
+  status_message: string
+  input_value: string
+  output_value: string
+  prompt_tokens: number | null
+  completion_tokens: number | null
+  total_tokens: number | null
+}
+
+export interface TraceDoc {
+  trace_id: string
+  spans: TraceSpan[]
+}
+
+/**
+ * Brief structure levels, forming an ablation ladder over the same content:
+ *   flat       -> chronology table only.
+ *   atrib_tree -> chronology + causal tree (INFORMED_BY lineage), no anomalies.
+ *   atrib      -> chronology + causal tree + fixed-rule anomaly appendix.
+ * flat->atrib_tree isolates the causal tree; atrib_tree->atrib isolates the
+ * anomaly appendix.
+ */
+export type BriefMode = 'flat' | 'atrib_tree' | 'atrib'
+
+/**
+ * Fixed content-truncation budget shared by both modes. The ONLY levers that
+ * differ between 'flat' and 'atrib' are the structural sections, so this
+ * constant is what keeps the comparison honest.
+ */
+export const CONTENT_TRUNC = 400
+
+/** Deterministic signing seed. A function of nothing but a fixed constant. */
+const BRIEF_SEED = new Uint8Array(32).fill(0x07)
+
+/** The anomaly rules, stated verbatim so a reader sees they are generic. */
+export const ANOMALY_RULES: readonly string[] = [
+  'A. status_code == ERROR, or a non-empty status_message (verbatim trace fact).',
+  'B. output contains an HTTP 4xx/5xx status string (regex /[^0-9](4|5)[0-9]{2}[^0-9]/).',
+  'C. retry cluster: the same (span_name, input digest) repeats 3 or more times.',
+]
+
+function truncate(s: string, n: number = CONTENT_TRUNC): string {
+  const flat = (s ?? '').replace(/\s+/g, ' ').trim()
+  return flat.length <= n ? flat : flat.slice(0, n) + '…'
+}
+
+function recordHashHex(r: AtribRecord): string {
+  return hexEncode(sha256(canonicalRecord(r)))
+}
+
+function digest(s: string): string {
+  return hexEncode(sha256(new TextEncoder().encode(s ?? ''))).slice(0, 16)
+}
+
+/**
+ * Total order over spans: (timestamp asc, depth asc, span_id asc). Depth-asc
+ * guarantees a parent precedes its child on equal timestamps, so every record's
+ * `chain_root`/`informed_by` reference is to an already-built record.
+ */
+function orderSpans(spans: TraceSpan[]): { span: TraceSpan; depth: number }[] {
+  const byId = new Map(spans.map((s) => [s.span_id, s]))
+  const depthCache = new Map<string, number>()
+  const depthOf = (s: TraceSpan): number => {
+    const cached = depthCache.get(s.span_id)
+    if (cached !== undefined) return cached
+    let d = 0
+    let cur: TraceSpan | undefined = s
+    const seen = new Set<string>()
+    while (cur && cur.parent_span_id && !seen.has(cur.span_id)) {
+      seen.add(cur.span_id)
+      const parent = byId.get(cur.parent_span_id)
+      if (!parent) break
+      d += 1
+      cur = parent
+    }
+    depthCache.set(s.span_id, d)
+    return d
+  }
+  return spans
+    .map((span) => ({ span, depth: depthOf(span) }))
+    .sort((a, b) => {
+      if (a.span.timestamp_ms !== b.span.timestamp_ms) return a.span.timestamp_ms - b.span.timestamp_ms
+      if (a.depth !== b.depth) return a.depth - b.depth
+      return a.span.span_id < b.span.span_id ? -1 : a.span.span_id > b.span.span_id ? 1 : 0
+    })
+}
+
+/**
+ * Construct one signed atrib record per span, in a parent-before-child total
+ * order. `chain_root` threads a linear chain; `informed_by` carries the parent
+ * span's record hash so `buildGraphFromAllRecords` derives real INFORMED_BY
+ * lineage. Returns records in trace order plus the span_id -> record_hash map.
+ */
+export async function buildCausalRecords(
+  doc: TraceDoc,
+): Promise<{ records: AtribRecord[]; hashBySpan: Map<string, string> }> {
+  const creatorKey = base64urlEncode(await getPublicKey(BRIEF_SEED))
+  const ordered = orderSpans(doc.spans)
+  const records: AtribRecord[] = []
+  const hashBySpan = new Map<string, string>()
+  let prevHash: string | null = null
+
+  for (const { span } of ordered) {
+    const informed_by: string[] =
+      span.parent_span_id && hashBySpan.has(span.parent_span_id)
+        ? ['sha256:' + hashBySpan.get(span.parent_span_id)!]
+        : []
+    const base: AtribRecord = {
+      spec_version: 'atrib/1.0',
+      content_id: 'sha256:' + hexEncode(sha256(new TextEncoder().encode(span.span_id))),
+      creator_key: creatorKey,
+      chain_root: prevHash ? 'sha256:' + prevHash : genesisChainRoot(doc.trace_id),
+      event_type: span.kind === 'TOOL' ? EVENT_TYPE_TOOL_CALL_URI : EVENT_TYPE_OBSERVATION_URI,
+      context_id: doc.trace_id,
+      timestamp: span.timestamp_ms,
+      signature: '',
+      ...(informed_by.length ? { informed_by } : {}),
+    } as AtribRecord
+    const signed = await signRecord(base, BRIEF_SEED)
+    const h = recordHashHex(signed)
+    hashBySpan.set(span.span_id, h)
+    records.push(signed)
+    prevHash = h
+  }
+  return { records, hashBySpan }
+}
+
+interface Anomaly {
+  span_id: string
+  rule: string
+  detail: string
+}
+
+/** Fixed, uniform anomaly detection. Every rule applies to every span. */
+function detectAnomalies(spans: TraceSpan[]): Anomaly[] {
+  const out: Anomaly[] = []
+  const clusterKey = (s: TraceSpan): string => `${s.span_name}\u0000${digest(s.input_value)}`
+  const clusterCounts = new Map<string, number>()
+  for (const s of spans) clusterCounts.set(clusterKey(s), (clusterCounts.get(clusterKey(s)) ?? 0) + 1)
+  const http = /[^0-9](4|5)[0-9]{2}[^0-9]/
+  for (const s of spans) {
+    if (s.status_code.toUpperCase() === 'ERROR' || s.status_message.trim())
+      out.push({ span_id: s.span_id, rule: 'A', detail: `status=${s.status_code || 'n/a'} ${truncate(s.status_message, 120)}`.trim() })
+    if (http.test(' ' + s.output_value + ' '))
+      out.push({ span_id: s.span_id, rule: 'B', detail: 'http-error-code in output' })
+    if ((clusterCounts.get(clusterKey(s)) ?? 0) >= 3)
+      out.push({ span_id: s.span_id, rule: 'C', detail: `${s.span_name} x${clusterCounts.get(clusterKey(s))}` })
+  }
+  // Dedup per (span_id, rule); stable order.
+  const seen = new Set<string>()
+  return out.filter((a) => {
+    const k = `${a.span_id}:${a.rule}`
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+}
+
+function chronologyTable(spans: TraceSpan[], order: string[]): string {
+  const idx = new Map(order.map((id, i) => [id, i]))
+  const rows = [...spans].sort((a, b) => (idx.get(a.span_id) ?? 0) - (idx.get(b.span_id) ?? 0))
+  const lines = rows.map((s, i) => {
+    const tok = s.total_tokens != null ? `tok=${s.total_tokens}` : 'tok=-'
+    return [
+      `#${i + 1}`,
+      s.span_id,
+      s.kind || '-',
+      s.span_name,
+      s.duration_ms ? `${s.duration_ms}ms` : '-',
+      s.status_code || '-',
+      tok,
+      `in="${truncate(s.input_value)}"`,
+      `out="${truncate(s.output_value)}"`,
+    ].join(' | ')
+  })
+  return lines.join('\n')
+}
+
+/**
+ * Render the causal tree by walking the derived graph. INFORMED_BY points
+ * child -> parent; CHAIN_PRECEDES points predecessor -> node. Children are
+ * grouped under the INFORMED_BY target (the span's tree parent).
+ */
+function causalTree(graph: GraphResponse, spanBySpanId: Map<string, TraceSpan>, hashBySpan: Map<string, string>): string {
+  const idToSpanId = new Map<string, string>()
+  for (const [spanId, hash] of hashBySpan) idToSpanId.set('sha256:' + hash, spanId)
+  const parentOf = new Map<string, string>() // childNodeId -> parentNodeId
+  for (const e of graph.edges as GraphEdge[]) {
+    if (e.type === 'INFORMED_BY' && idToSpanId.has(e.source) && idToSpanId.has(e.target)) {
+      parentOf.set(e.source, e.target)
+    }
+  }
+  const childrenOf = new Map<string, string[]>()
+  const roots: string[] = []
+  for (const nodeId of idToSpanId.keys()) {
+    const p = parentOf.get(nodeId)
+    if (p) {
+      const list = childrenOf.get(p) ?? []
+      list.push(nodeId)
+      childrenOf.set(p, list)
+    } else {
+      roots.push(nodeId)
+    }
+  }
+  const order = new Map<string, number>()
+  graph.nodes.forEach((n, i) => order.set(n.id, i))
+  const sortByTime = (a: string, b: string) => (order.get(a) ?? 0) - (order.get(b) ?? 0)
+  const lines: string[] = []
+  const walk = (nodeId: string, depth: number, seen: Set<string>) => {
+    if (seen.has(nodeId)) return
+    seen.add(nodeId)
+    const spanId = idToSpanId.get(nodeId)!
+    const span = spanBySpanId.get(spanId)!
+    const indent = '  '.repeat(depth)
+    lines.push(`${indent}- [${span.kind || '-'}] ${spanId} ${span.span_name}`)
+    for (const c of (childrenOf.get(nodeId) ?? []).sort(sortByTime)) walk(c, depth + 1, seen)
+  }
+  const seen = new Set<string>()
+  for (const r of roots.sort(sortByTime)) walk(r, 0, seen)
+  return lines.join('\n')
+}
+
+/**
+ * Build a brief. Pure and deterministic. `mode` selects structure; content
+ * truncation is identical across modes.
+ */
+export async function buildCausalBrief(doc: TraceDoc, mode: BriefMode): Promise<string> {
+  const spanBySpanId = new Map(doc.spans.map((s) => [s.span_id, s]))
+  const { records, hashBySpan } = await buildCausalRecords(doc)
+  const order = orderSpans(doc.spans).map((o) => o.span.span_id)
+  const rootSpan = orderSpans(doc.spans)[0]?.span
+  const header = [
+    `TRACE ${doc.trace_id}`,
+    `spans=${doc.spans.length}`,
+    rootSpan ? `task="${truncate(rootSpan.input_value, CONTENT_TRUNC)}"` : 'task=""',
+  ].join(' | ')
+
+  const table = `## Chronology (${doc.spans.length} spans)\n${chronologyTable(doc.spans, order)}`
+
+  if (mode === 'flat') {
+    return `${header}\n\n${table}\n`
+  }
+
+  const graph = await buildGraphFromAllRecords(records)
+  const tree = causalTree(graph, spanBySpanId, hashBySpan)
+  const sections = [
+    header,
+    '',
+    table,
+    '',
+    `## Causal structure (atrib graph: ${graph.node_count} nodes, ${graph.edge_count} edges)`,
+    'Tree edges are atrib INFORMED_BY lineage (child informed by parent); order is the atrib chain.',
+    tree,
+  ]
+
+  if (mode === 'atrib_tree') {
+    return sections.join('\n') + '\n'
+  }
+
+  // mode === 'atrib': add the fixed-rule anomaly appendix.
+  const anomalies = detectAnomalies(doc.spans)
+  const anomalyText = anomalies.length
+    ? anomalies.map((a) => `- rule ${a.rule} @ ${a.span_id}: ${a.detail}`).join('\n')
+    : '- none'
+  const rulesText = ANOMALY_RULES.map((r) => `  ${r}`).join('\n')
+  return [
+    ...sections,
+    '',
+    '## Mechanical anomaly appendix',
+    'Flags below are computed by these FIXED rules applied uniformly to every span:',
+    rulesText,
+    anomalyText,
+    '',
+  ].join('\n')
+}

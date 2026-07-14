@@ -81,6 +81,7 @@ describe('AP2 live interop harness', () => {
       signers_count: 2,
       signers_valid: 2,
       missing: false,
+      trust_evaluated: false,
     })
     expect(summary.recordVerification?.ap2_vi_evidence?.valid).toBe(true)
   })
@@ -116,6 +117,7 @@ describe('AP2 live interop harness', () => {
       signers_count: 1,
       signers_valid: 1,
       missing: true,
+      trust_evaluated: false,
     })
   })
 

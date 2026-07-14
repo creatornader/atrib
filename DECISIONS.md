@@ -7789,6 +7789,358 @@ Full draft: [docs/adr-draft-p048-payments-spinout.md](docs/adr-draft-p048-paymen
 
 **Open questions (operator):** final npm name (`atribd` vs `@atrib/daemon`); fate of the private `@atrib/primitives-runtime` package after cutover; the single-tenant ambient-context flag name and default; length and sunset criteria of the legacy-initialize window; whether the coordinator's residual duties merge into the daemon.
 
+## D149: Cross-attestation composes with a trust set for Sybil resistance
+
+**Date:** 2026-07-02
+
+**Status:** Accepted
+
+**Extends:** [D052](#d052-cross-attestation-requirement-for-transaction-records)
+and [D107](#d107-ap2-counterparty-attestation-signs-atrib-transaction-bytes).
+
+**Context.** [D052](#d052-cross-attestation-requirement-for-transaction-records)
+requires transaction records to carry ≥2 distinct verified signer keys, and
+`verifyRecord` surfaces this as `cross_attestation.signers_valid`. That count
+proves two distinct keys signed the same canonical bytes. It does not prove the
+two keys belong to independent parties the verifier trusts. Two keys an attacker
+controls satisfy the count without adding authority: a Sybil, or corroboration,
+attack. A consumer that reads `signers_valid >= 2` as "cross-attested, safe" is
+fooled by two untrusted keys. The trust vocabulary needed to catch this
+(`trusted_creator_keys`) already existed, but only on the separate handoff
+verification path ([§5.5.5](atrib-spec.md#555-handoff-claim-verification)), never
+composed with the cross-attestation annotation. So `verifyRecord`'s
+cross-attestation surface was Sybil-malleable.
+
+**Decision.** Compose the trust set with the cross-attestation annotation as an
+opt-in, signal-only extension. `VerifyRecordOptions` gains
+`trustedCreatorKeys?: string[]`. When supplied, `cross_attestation` additionally
+carries `signers_trusted` (distinct verified keys that are also in the trust set)
+and `sybil_suspected` (`signers_valid >= 2` but `signers_trusted < 2`). A
+`trust_evaluated` boolean is always present on transaction cross_attestation, so
+`false` is a loud signal that no trust set was supplied and only the trust-blind
+count was computed; a consumer gating a consequential action can tell the trust
+check was skipped rather than silently reading `signers_valid >= 2` as authority.
+`@atrib/verify` exports `isTrustedCrossAttested(annotation)`, which returns true
+iff `signers_trusted >= 2`. That predicate is the guarded gate a consumer
+requiring non-malleable transaction authority MUST use, in place of the footgun
+`signers_valid >= 2`. The spec adds a normative **Trusted signer composition**
+paragraph to [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+and names the Sybil channel in the [§8.7.2](atrib-spec.md#872-layered-trust-assessment)
+Layer 5 threat-model row.
+
+**Invariants preserved.**
+
+- `signers_valid` and `missing` keep their trust-blind semantics on every path;
+  the trust fields are additive.
+- The trust fields are omitted entirely when no trust set is supplied, so
+  existing callers and the seven pre-existing [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+  conformance vectors deep-equal unchanged (backward compatible).
+- Signal not block: like `cross_attestation_missing` and [§6.7](atrib-spec.md#67-capability-declarations)
+  `in_envelope`, the trust signal never pushes to `warnings[]` and never flips
+  `record.valid`. A Sybil-suspected record stays cryptographically valid; the
+  gate is consumer-side policy.
+
+**Alternatives considered.**
+
+- Redefine `signers_valid` to count only trusted keys. Rejected: breaks
+  [D052](#d052-cross-attestation-requirement-for-transaction-records)'s
+  distinct-verified-key contract and the existing conformance vectors, and
+  conflates two independent facts (a key verified; a key is trusted).
+- Gate on `!sybil_suspected`. Rejected as the documented consumer gate: a single
+  trusted signer (`signers_valid < 2`) is not `sybil_suspected` yet is not
+  attested, so `!sybil_suspected` re-opens a footgun. The correct predicate is
+  `signers_trusted >= 2`, exposed as `isTrustedCrossAttested`.
+- Reuse the handoff path's `verifyTrustedSigner`. Rejected: it checks one key
+  (the record creator) and carries a handoff-rejection side effect; only its
+  pure membership core (`trust set includes key`) is reused.
+
+**Conformance.** Two vectors added to
+[`spec/conformance/1.7.6/`](spec/conformance/1.7.6/): `sybil-two-untrusted-signers`
+(two valid signers, trust set excludes both: `signers_valid: 2`, `missing: false`,
+`signers_trusted: 0`, `sybil_suspected: true`, record still valid) and
+`two-trusted-signers` (`signers_trusted: 2`, `sybil_suspected: false`).
+
+**Cross-references.**
+
+- [D052](#d052-cross-attestation-requirement-for-transaction-records), the
+  distinct-verified-key requirement this composes with.
+- [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+  Trusted signer composition; [§8.7.2](atrib-spec.md#872-layered-trust-assessment)
+  Layer 5.
+- [`packages/verify/src/verify-record.ts`](packages/verify/src/verify-record.ts),
+  `resolveCrossAttestation` trust intersection and `isTrustedCrossAttested`.
+- [D133](#d133-action-gate-is-a-host-owned-controlproof-package), the host-owned
+  enforcement layer. `@atrib/action-gate`'s `requireTrustedTransaction` turns the
+  [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+  trust signal into a fail-closed authorization requirement: it authorizes
+  a transaction only when `isTrustedCrossAttested` holds, and blocks (or
+  escalates) on no trust set, a non-transaction record, an invalid signature, or
+  a merely-verified signer set. The verifier stays signal-not-block; the
+  action-gate is where the safe path
+  is made mandatory.
+
+## D150: Attestation is corroboration generalized off transactions (extension-first)
+
+**Date:** 2026-07-02
+
+**Status:** Accepted
+
+**Extends:** [D052](#d052-cross-attestation-requirement-for-transaction-records),
+[D149](#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance),
+and [D133](#d133-action-gate-is-a-host-owned-controlproof-package).
+
+**Context.** Cross-attestation ([§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records))
+lets a second party corroborate a claim only by CO-SIGNING the same transaction
+bytes, so it is bound to the `transaction` event_type and to synchronous
+signature over shared bytes. There was no way for a signer Z to durably vouch for
+an arbitrary record X that Z did not produce. The only multi-party attestation
+surface was transaction co-signing, which forced any corroboration use case (for
+example a memory-poisoning defense that elevates a record only on multiple
+independent trusted vouchers) to be modeled as a transaction. Annotation
+([D058](#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05) /
+[§1.2.7](atrib-spec.md#127-annotates)) references arbitrary records but is
+commentary/importance, and atrib explicitly does not certify that an annotation
+characterizes its target, so counting annotators as vouchers would overload a
+primitive defined not to mean that.
+
+**Decision.** Add attestation as the general form of Layer 5 corroboration,
+lifted off transactions and off shared-bytes co-signing. An attestation is a
+signer Z's separate signed record that vouches for a target record X by
+reference. Extension-first per [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)
+/ [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion):
+an attestation is an extension-URI record (`https://atrib.dev/v1/extensions/attestation`),
+NOT a new normative event_type byte, whose content `{ attests: 'reliable',
+target, reason? }` is committed via `args_hash` ([D099](#d099-explicit-emit-records-commit-local-content-through-default-args_hash))
+so it is tamper-evident. `@atrib/verify` adds `resolveAttestationCorroboration`,
+which aggregates distinct verified attestors of X and, reusing the
+[D149](#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance)
+trust-set model, surfaces `attestors_valid` / `attestors_trusted` /
+`under_corroborated` / `trust_evaluated`; `isCorroborated(result, N)` is the
+guarded gate (`attestors_trusted >= N`, default 2). `@atrib/action-gate` adds
+`requireCorroborated`, the fail-closed enforcement parallel to
+`requireTrustedTransaction`.
+
+**Invariants and guards.**
+
+- Signal not block: the verdict never flips any record's validity, matching
+  [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+  / [§6.7](atrib-spec.md#67-capability-declarations) / [D149](#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance).
+  The fail-closed requirement lives only in the action-gate.
+- The verifier counts ONLY records carrying the reserved `attests: 'reliable'`
+  marker at the attestation extension URI, and NEVER annotation records, so
+  recall-tagging cannot masquerade as corroboration.
+- Self-attestation is rejected: an attestor whose key equals the target
+  producer's key does not count (a producer cannot corroborate itself).
+- `trust_evaluated` is always present so a trust-blind verdict is a loud signal,
+  and the guarded gate is `attestors_trusted >= N`, not `!under_corroborated`
+  (the same footgun [D149](#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance) rejected).
+
+**Alternatives considered.**
+
+- Generalize `signers[]` co-signing to all event types. Rejected: co-signing
+  asserts joint authorship of one record and collides with the creator-signature
+  rule; it cannot express "Z vouches for X's record" (that is reference-based,
+  not co-authoring).
+- Overload annotation with a `reliable` importance. Rejected: annotation is
+  defined as commentary that atrib does not certify; a distinct marker keeps
+  trust and recall-tagging separate.
+- Ship a new normative event_type byte (0x07) + a tenth edge type now. Rejected
+  as premature per [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion):
+  prove the boundary-drawing test with real use first; the extension-URI content
+  convention carries the full semantics with a smaller footprint.
+
+**Deferred.** Promotion to a normative event_type byte and a dedicated ATTESTS
+edge type, once real use (for example the memory-poisoning-defense eval) shows
+the edge semantics are distinct enough to justify the [D036](#d036-bar-for-promoting-an-extension-uri-to-atribs-normative-event_type-vocabulary)
+/ [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion)
+gate. A formal conformance corpus lands at promotion; unit tests in
+[`packages/verify/test/attestation.test.ts`](packages/verify/test/attestation.test.ts)
+and [`packages/action-gate/test/corroboration.test.ts`](packages/action-gate/test/corroboration.test.ts)
+are the current coverage.
+
+**Cross-references.**
+
+- [D052](#d052-cross-attestation-requirement-for-transaction-records) /
+  [D149](#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance),
+  the co-signature special case and the reused trust kernel.
+- [D133](#d133-action-gate-is-a-host-owned-controlproof-package), the enforcement
+  home for `requireCorroborated`.
+- [`packages/verify/src/attestation.ts`](packages/verify/src/attestation.ts),
+  [`packages/action-gate/src/index.ts`](packages/action-gate/src/index.ts).
+
+## D151: Own signed content wins over chain-derived text in rendering
+
+**Date:** 2026-07-04
+
+**Status:** Accepted
+
+**Extends:** [D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06).
+
+**Context.** A revision record carries its own signed `prior_position`, `new_position`, and `reason`, plus an optional `revises` reference to the superseded record. The memory-substrate reference integration in `@atrib/integration` rendered a revision's "was" clause from the LINKED record's statement whenever a `revises` link existed, and used the record's own `prior_position` only as a fallback. When links are inferred rather than producer-declared (the reference integration approximates [D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06) links by text similarity), an incorrect inferred link makes the renderer display a prior the revision's signer never signed. The rendered causal claim is then covered by no signature on that record. That is a fabricated-prior integrity failure in a protocol whose purpose is that displayed history be verifiable.
+
+**Decision.** State the rendering rule generally: own signed content wins over chain-derived text. A renderer MUST present a record's own signed fields as that record's claim. Declared references (`revises`, `informed_by`) drive chain expansion, which surfaces the linked record as its own separately attributed line. They never substitute the linked record's text into the referencing record's rendered claim. `renderLine` in `build-memory-substrate.ts` now always renders the revision's own `prior_position` and takes no lookup map; retrieval chain expansion is the only consumer of the `revises` link. The same rule governs atrib-recall and atrib-trace display surfaces.
+
+**Alternatives considered.** (a) Substitute linked text only above a similarity threshold: still renders unsigned text as a signed claim, rejected. (b) Render both texts inline: conflates two records' content in one attributed line and spends budget; chain expansion already shows the linked record separately. (c) Fall back to linked text when the own `prior_position` is empty: reopens the fabrication channel exactly where the record is weakest, rejected. An empty own prior renders empty.
+
+## D152: Handoff verdicts are receiver-computed
+
+**Date:** 2026-07-04
+
+**Status:** Accepted
+
+**Extends:** [D105](#d105-verifier-side-pattern-3-handoff-claim-acceptance) and [D106](#d106-verify-is-promoted-to-cognitive-primitive-7).
+
+**Context.** The continuation-packet reference integration in `@atrib/integration` rendered a verification banner into packet text from a caller-supplied verdict. A consumer that trusts rendered prose trusts whoever rendered it: an adversary who controls packet text can print a PASSED banner over records whose signatures never verified. Any downstream decision made from that banner depends on the renderer being honest, which is exactly the assumption an attacker violates.
+
+**Decision.** A consumer of a handoff or continuation packet MUST derive its trust verdict from its own verification run over the packet's records ([§5.5.5](atrib-spec.md#555-handoff-evidence-packets) claims via `verifyHandoffClaims` / `verifyRecord`, or the `atrib-verify` primitive per [D106](#d106-verify-is-promoted-to-cognitive-primitive-7)). Verification claims embedded in packet content (banner lines, prose, body fields) are untrusted input and MUST NOT influence the verdict. `receivePacket` in `build-continuation-packet.ts` is the reference shape: it accepts no verdict parameter, recomputes acceptance itself, and renders the banner only from its own result. Renderers that accept a verdict argument remain legitimate for sender-side display and ablation harnesses; consumption is where the rule binds.
+
+**Alternatives considered.** (a) Sign the banner line itself: adds a signer for derived state and still requires the consumer to verify, so it collapses into the same rule. (b) Strip banner-shaped prose from bodies before display: blocklists over attacker-shaped text are unwinnable; the verdict's position and provenance carry the guarantee, not content filtering. (c) Keep trusting rendered banners: rejected, that is the vulnerability.
+
+## D153: Chain expansion competes through a reserved budget share
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D151](#d151-own-signed-content-wins-over-chain-derived-text-in-rendering). Supersedes, in part, the headroom-only expansion rule shipped with the memory-substrate retrieval rewrite.
+
+**Context.** The memory-substrate retrieval in `@atrib/integration` admitted chain-expansion members only into budget left over after BM25-ranked seeds. At saturating budgets seeds consume everything, so expansion never runs and callers silently receive chain-less retrieval. A paired accuracy pilot on PersonaMem (956 cells) measured the consequence: on reason-type questions where expansion had material to add, the chain-less configuration lost 22.9 accuracy points to a flat-notes baseline, recovered to parity when budget headroom let chains run, and the no-material control subset was unchanged at both budgets. The mechanism carries real accuracy value precisely because records that answer "why" often share few tokens with the query: lexical seeding cannot find them, which is the reason the graph walk exists. A rule that lets any weak lexical tail hit outrank any structurally linked record inverts the value ordering the walk is meant to express.
+
+**Decision.** Reserve a configurable share of the retrieval budget for chain-expansion members. Selection is three-phase: seeds fill up to (1 minus share) of the budget in rank order; chain members compete for the remainder under the existing depth bound, echo rule, and dedup; remaining seeds backfill whatever expansion does not use. The share defaults to 0.25; zero restores headroom-only behavior; `expandChains: false` still disables expansion entirely. Strong seeds can lose at most the reserve, weak tail seeds yield to structurally linked records, and no budget is wasted when chains have nothing to add. `retrieveMemoryDetailed` exposes engagement statistics so hosts and evaluations can observe whether expansion operated instead of inferring it from output text. The same observability principle applies to `atrib-recall` surfaces if they grow inline chain expansion.
+
+**Alternatives considered.** (a) Keep headroom-only expansion: measured starvation at default budgets, rejected. (b) Unrestricted displacement (the pre-rewrite behavior): evicts strong seeds and was measured harmful in aggregate, rejected. (c) Unified scoring where chain members inherit a fraction of their seed's relevance and compete record by record: more granular but breaks seed-adjacent rendering, adds a decay knob per hop, and its failure modes are harder to predict; the reserve achieves the same priority correction with one bounded parameter, so it wins on legibility.
+
+**Correction (2026-07-05).** Follow-up isolation runs bounded the accuracy attribution in the Context paragraph. With the reserve forcing full chain engagement at a fixed 2000-token budget, engaged-subset accuracy moved from 0.686 to 0.714 on the original corpus, and to 0.743 after the corpus was re-signed with the precision-filtered matcher, which kept only 81 of 480 revision links and exposed that the prior measurements walked a mostly spurious graph. The earlier 22.9-point recovery therefore cannot be attributed to chain content alone; deeper lexical seeding at larger budgets accounts for most of it. The reserve's justification stands on the mechanical evidence (measured starvation, bounded displacement, no wasted budget), not on an accuracy lift: with clean edges the chain contribution at fixed budget measured roughly three points and was not statistically significant on this benchmark. The engagement diagnostics exist precisely so hosts can measure this on their own corpora.
+
+## D154: Memory retrieval separates selection from expansion
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) and [D153](#d153-chain-expansion-competes-through-a-reserved-budget-share).
+
+**Context.** The memory-substrate retrieval answered two categorically different questions inside one function: which records are about the query, a similarity question anchored in text, and which records explain already-relevant records, a traversal question anchored in record hashes and typed edges. The two have different relevance criteria, different failure modes, and no principled exchange rate between their scores, which is why the composed function needed a reserved share at all. Collapsing them also hid the traversal stage's real input contract: when the corpus's revision links were later re-signed with the precision-filtered matcher, only 81 of 480 links survived, and no observer of the composed call could have seen that the walk had been following a mostly spurious graph. The protocol's agent surface already separates these verbs as `atrib-recall` and `atrib-trace`; the reference implementation should model the same two-call pattern instead of blurring it.
+
+**Decision.** Export the stages separately. `selectMemory` performs ranking and admission only. `expandMemory` walks caller-provided seeds with the existing depth bound and echo rule, reports per-member provenance, and budgets member lines alone. `retrieveMemoryDetailed` remains the composed convenience, built from the same internals, because one context window ultimately needs one arbitration; its reserve is now legible as two budgets expressed as one fraction. Composition is the only stage where the two evidence families meet. Each stage now has its own contract to test and calibrate: selection against retrieval relevance, expansion against edge quality, which the isolation runs showed is the traversal stage's controlling input.
+
+**Alternatives considered.** (a) Keep the single function and document the phases: leaves the stages uncalibratable in isolation and the edge-quality dependency invisible, rejected. (b) Split retrieval AND composition, making callers assemble text themselves: pushes budget arbitration onto every caller and forfeits the one-call convenience the harness and simple hosts legitimately want. (c) Replace the reserve with unified cross-family scoring: re-rejected for the reasons recorded in [D153](#d153-chain-expansion-competes-through-a-reserved-budget-share); a fabricated exchange rate hidden in a decay constant is not more principled than a stated fraction.
+
+## D155: Write-primitive refusals are error-shaped
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Clarifies the boundary of [§5.8](atrib-spec.md#58-degradation-contract).
+
+**Context.** The emit family returned one success-shaped output for two different situations: validation refusals where nothing was signed and the caller made a correctable mistake, and degradations where a record was signed but a downstream step deferred. The refusal carried `record_hash: "sha256:unknown"` plus a warnings entry, so any consumer that did not parse warnings text read a refusal as a signed record. The degradation contract exists so that instrumentation never breaks a wrapped primary tool call; an explicit write primitive is not instrumentation, the write IS its primary path, and a refused write reported as success is the same failure class as a database that returns OK for a rejected INSERT.
+
+**Decision.** `handleEmit` returns a discriminated result: `signed: true` with the record hash and any degradation warnings whenever a record was signed, `signed: false` with verbatim refusal reasons and no fabricated hash whenever validation refused the write. The MCP tool layer maps refusals to tool errors for emit, annotate, and revise alike. Hook-class producers stay unbreakable: `emitInProcess` never throws and the CLI signals refusal through exit code 3 plus machine-readable JSON, which hook helpers already absorb as silent failure. Degradations that sign a record (queued log submission, mirror-only operation, synthesized orphan context) remain quiet successes with warnings, exactly as [§5.8](atrib-spec.md#58-degradation-contract) intends.
+
+**Alternatives considered.** (a) Keep the success shape and rely on consumers checking warnings: produced a real false-signed belief in practice, rejected. (b) Throw from `handleEmit` itself: breaks hook-class producers whose primary path must never fail on atrib's account, rejected. (c) A `signed` boolean on an otherwise success-shaped payload without a tool-layer error: agents skimming tool results still misread refusals, and MCP has a first-class error channel for exactly this, rejected as insufficient alone.
+
+## D156: Tool-call score suppression is liftable per query
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D085](#d085-recall-calibration-defaults-survey-grounded-rationale) and [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content). If those anchors differ in the file, use the correct [D085](#d085-recall-calibration-defaults-survey-grounded-rationale) / [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) anchors verbatim from DECISIONS.md.
+
+**Context.** Recall down-weights unannotated tool_call records so hook-signed operational noise does not drown conversational memory. The calibration is right as a default and wrong as an absolute: tool_call args and results are fully content-indexed, and in one forensic case this session the decisive text lived only inside an emit call's captured args, indexed yet effectively invisible because the suppression factor multiplies both recency and relevance. The operator ruled that content search over tool_call args must be available on request without polluting default ranking.
+
+**Decision.** `recall_by_content` accepts `include_tool_call_args`, a per-query flag that substitutes the operational suppression factor with one at scoring time, in both the live path and the durable content index path, with no index rebuild. The default remains suppressed. Response metadata echoes the flag so query mode is visible in transcripts. Naming note: the flag name follows the operator decision that requested it; mechanically it lifts score suppression, since indexing never excluded these records.
+
+**Alternatives considered.** (a) Index-time inclusion toggle: args were always indexed, so this misdiagnoses the mechanism, rejected. (b) Global config to disable suppression: reintroduces the noise problem the calibration solved, rejected. (c) Automatic lift when the query matches few non-tool_call records: implicit magic that makes ranking unpredictable, rejected in favor of an explicit per-query flag.
+
+## D157: Revision lineage renders as an ordered, connected chain
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D151](#d151-own-signed-content-wins-over-chain-derived-text-in-rendering), [D153](#d153-chain-expansion-competes-through-a-reserved-budget-share), and [D154](#d154-memory-retrieval-separates-selection-from-expansion).
+
+**Context.** Retrieval walked certified revision chains and then rendered the visited records as disconnected lines in reverse-causal order with no linkage information. A reader of the composed block could not tell that the lines formed one ordered history: the connectivity and ordering that the signed edges certify, which is precisely the information a flat prose memory cannot carry with any guarantee, was discarded at the presentation boundary. Measured across an extended evaluation program, the multi-hop advantage of the graph never reached the consuming model in any configuration, and arm accuracy converged to information-equivalence with unordered prose notes.
+
+**Decision.** When a seed's admitted expansion members form a revision lineage with it, the block renders in causal order, root first and seed last with forward revisions continuing the sequence, each step labeled with its position and the block introduced by a chain header naming the topic thread and step count. Chainless rendering is byte-unchanged. Own signed content still wins over chain-derived text per [D151](#d151-own-signed-content-wins-over-chain-derived-text-in-rendering): ordering and labels present the relationship between records; no record's rendered claim borrows another's content. The composed block is thereby the faithful projection of what the graph knows: not a bag of change notes but a certified sequence.
+
+**Alternatives considered.** (a) Keep recency-first rendering and rely on the model to reassemble order from content: measured to forfeit the graph's distinctive value, rejected. (b) Render edge hashes inline for full fidelity: hashes spend budget on tokens no judge model uses; step labels carry the ordering information at negligible cost. (c) Emit a separate machine-readable lineage appendix: doubles the budget cost of every chain and splits one fact across two places, rejected for the composed path while remaining open to callers via expandMemory's structured members.
+
+## D158: Dropped chain members render as a compact ordered path line
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D153](#d153-chain-expansion-competes-through-a-reserved-budget-share), [D154](#d154-memory-retrieval-separates-selection-from-expansion), and [D157](#d157-revision-lineage-renders-as-an-ordered-connected-chain).
+
+**Context.** Retrieval walks certified revision lineages, but budget admission can reject lineage members the walk found. The rejection was silent: the composed block showed a shorter chain with no indication that certified history was missing. Measured on a depth-stressed corpus, gold-lineage coverage decayed from 0.997 to 0.707 as chains outgrew the budget, and answer accuracy about current state and trajectory decayed with it. The information lost is precisely what the graph certifies and what a consumer cannot reconstruct: which records exist in the lineage and in what order.
+
+**Decision.** When a seed's chain block omits walked lineage members for budget reasons, the block carries one compact path line naming the omitted members in causal order, using each record's own short form. The line never displaces admitted members, is capped with middle-ellipsis, and is counted in a new `chains_compacted` retrieval statistic. Full rendering remains the default whenever the lineage fits; chainless output is byte-unchanged. Per [D151](#d151-own-signed-content-wins-over-chain-derived-text-in-rendering), the line presents each omitted record's own content in short form; it borrows nothing across records.
+
+**Alternatives considered.** (a) Silent truncation (status quo): measured to discard certified order and depress deep-chain accuracy, rejected. (b) Compress admitted members instead, fitting more of the chain at lower fidelity per member: changes rendering of records that do fit and violates least-surprise for shallow chains, rejected. (c) Raise the expansion budget share: trades seed diversity for chain depth globally, when the failure is per-seed, rejected.
+
+## D159: The lineage tail wins budget admission
+
+**Date:** 2026-07-05
+
+**Status:** Accepted
+
+**Extends:** [D154](#d154-memory-retrieval-separates-selection-from-expansion), [D157](#d157-revision-lineage-renders-as-an-ordered-connected-chain), and [D158](#d158-dropped-chain-members-render-as-a-compact-ordered-path-line).
+
+**Context.** When lexical retrieval seeds on a mid-chain record, forward expansion toward the chain's terminal state competes for budget against backward history, and under pressure the terminal record can lose. Measured on a depth-stressed corpus, the terminal record was present in only 39 to 57 percent of deep-chain retrievals, every deep current-state miss was a terminal-absent case, and accuracy when the terminal record was rendered was 0.71 to 0.88. The record most consumers need most, the current state of the lineage, was the one budget dropped.
+
+**Decision.** Among a seed's lineage members, the forward-terminal record is offered to budget admission first; remaining members keep their existing order. Rendering, compaction, selection, and budget semantics are unchanged, and output is byte-identical whenever the lineage fits or the seed is the terminal record.
+
+**Alternatives considered.** (a) Render-side fix, promoting the terminal record's line position: measured to be unnecessary (accuracy is high whenever the record is present) and it cannot restore a record admission dropped, rejected. (b) Reserve a fixed byte quota for the terminal record: adds a second budget mechanism where an ordering rule suffices, rejected. (c) Always admit both terminal record and full path line unconditionally: can displace the seed's own content under extreme budgets, violating selection precedence, rejected.
+
+## D160: Rendered memory lines carry temporal provenance
+
+**Date:** 2026-07-06
+
+**Status:** Accepted
+
+**Extends:** [D157](#d157-revision-lineage-renders-as-an-ordered-connected-chain) and [D159](#d159-the-lineage-tail-wins-budget-admission).
+
+**Context.** When two records assert contradictory states of the same fact and no revision link connects them, the composed memory presented both as unordered peers. Measured on an external benchmark, the consuming model abstained on exactly these questions while chronologically-ordered raw text answered them, because time order alone arbitrates recency. Every signed record already carries temporal metadata; the renderer discarded it.
+
+**Decision.** Rendered memory lines append a compact temporal-provenance suffix derived from each record's own metadata, in every line form except the capped path line. Records without temporal metadata render without a suffix. Ordering, selection, linking, and budgets are unchanged: the suffix presents signed provenance, it does not synthesize relationships the graph has not certified.
+
+**Alternatives considered.** (a) Synthesize recency ordering for unlinked same-topic contradictions: invents relationships the graph does not certify, violating the fact-layer posture, rejected. (b) Strengthen the matcher so such contradictions always link: complementary and possibly worthwhile, but it cannot cover states that genuinely are not revisions, and it changes graph facts rather than presentation, deferred pending measurement of what provenance alone recovers. (c) Leave arbitration to the consumer: measured to produce abstention, rejected.
+
+## D161: Cross-topic revision linking under a stricter content bar
+
+**Date:** 2026-07-06
+
+**Status:** Rejected
+
+**Extends:** [D157](#d157-revision-lineage-renders-as-an-ordered-connected-chain) and [D160](#d160-rendered-memory-lines-carry-temporal-provenance).
+
+**Context.** Revision linking required topic equality plus a 0.5 content-overlap bar. Measured on external content whose extractor mints fine-grained unique topic labels, known-update chain formation ran near 30 percent: most true update pairs cleared the overlap bar and failed only the topic gate. The matcher was silently coupled to extractors with disciplined topic reuse, and unformed chains are the substrate's measured cost: contradictory states render as unlinked peers and consumers abstain.
+
+**Rejection.** Two measured matcher iterations bracketed the overlap-threshold design and both failed. The first path, overlap at or above 0.65 plus a shared distinctive entity, lost no existing links but added 154 cross-topic links on a base of 45 in the LongMemEval 18-corpus relink audit. Reviewed samples were mostly paraphrase restatements and topically adjacent noise. The second path, overlap at or above 0.7 plus shared entity plus a differing value slot, also lost no existing links but added zero links. It filtered out the true update pairs too, including the pages-read and Starbucks cases the judge checked. The mechanism is now clear: true cross-topic revision pairs are often low-overlap because they span sessions and verbosity levels, so overlap-threshold predicates cannot separate restatements from revisions. Frame-slot extraction is the plausible next design: extract entity, metric frame, and value triples first, then compare changed values inside a shared frame. Defer that design until measured results demand it. [D160](#d160-rendered-memory-lines-carry-temporal-provenance) temporal provenance remains the shipped mitigation and converted both measured misses.
+
+**Alternatives considered.** (a) Relax the topic gate to fuzzy topic similarity: topic strings are extractor vocabulary, not content evidence, and fuzzy-matching them imports extractor idiosyncrasy into graph facts, rejected. (b) Drop the topic gate and raise the overlap bar alone: measured to admit stopword-inflated false pairs, rejected. (c) Extractor-side topic normalization: helps one harness, leaves the substrate coupled, complementary but insufficient, noted for harness work.
+
+## D162: Factual values never truncate in rendered memory
+
+**Date:** 2026-07-09
+
+**Status:** Accepted
+
+**Extends:** [D160](#d160-rendered-memory-lines-carry-temporal-provenance).
+
+**Context.** The held-out LongMemEval validation (20 questions, write and judge models fixed, answer model varied) produced four atrib misses, all knowledge-update. Autopsy attributed each one. Three had the gold answer present in the signed store. In one, compact rendering clipped statements at 110 characters and amputated the answer clause mid-sentence ("finished five issues" fell past the clip boundary). In two, everything rendered correctly with [D160](#d160-rendered-memory-lines-carry-temporal-provenance) temporal markers and the stronger reader answered correctly from the same text, but the weaker reader picked the superseded state. The fourth miss was an extraction gap: the update was never captured, so no read-side change can recover it.
+
+**Decision.** Factual values (statements, prior and new positions) never truncate; only commentary (reasons) may clip. Budget pressure drops whole low-ranked notes instead of amputating value tails. This converted the amputated-clause miss on both reader models and a second update-chain miss, with no test or budget-contract regressions.
+
+**Measured and rejected: the format legend.** The same change initially shipped with a format legend prepended to complete-document renders (retrieveMemoryDetailed, selectMemory), stating the marker semantics: "as of msg N" recency, REVISED supersession, and most-recent-marker-wins on conflict. It reserved its own length out of the caller budget and rode only when it cost at most a quarter of the budget. Pre-registered predictions said it would convert the two weak-reader supersession misses. It converted neither. Across 71 tuning-set cells the legend configuration scored 50 against 52 for the value fix alone, and on the weak reader it lost on every set (held-out 15 versus 16, memory-mandatory 3 versus 5). On the strong reader it changed nothing (held-out 19 of 20 either way). Diagnosis: the weak reader fails supersession conflicts even with complete, correctly marked text on screen, and stating the rule does not fix that; the legend only added prompt surface that shuffled weak-reader outcomes. The legend was removed. Weak-reader conflict resolution stays open; the failure is in the reader, not the rendering.
+
+**Alternatives considered.** (a) Chain-tail completion at retrieval, rendering a chain's latest member whenever any member is retrieved: rejected because the autopsy found zero instances of the mechanism it fixes (no case where a chain member was retrieved and its tail was absent), and it re-imposes newest-wins at the retrieval layer, which the [D160](#d160-rendered-memory-lines-carry-temporal-provenance) debate settled in favor of consensus plus path. (b) Cross-slot linking to join fragmented update chains (magazineReading versus readingHabit): rejected per [D161](#d161-cross-topic-revision-linking-under-a-stricter-content-bar). (c) Harness-level prompt instruction instead of a substrate legend: superseded by the legend rejection above; the measured failure mode applies to both placements.
+
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

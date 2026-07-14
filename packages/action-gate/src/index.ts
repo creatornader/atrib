@@ -14,8 +14,16 @@ import {
   sha256,
   signRecord,
   verifyRecord,
+  EVENT_TYPE_TRANSACTION_URI,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
+import {
+  verifyRecord as verifyRecordAnnotated,
+  isTrustedCrossAttested,
+  resolveAttestationCorroboration,
+  isCorroborated,
+  type AttestationInput,
+} from '@atrib/verify'
 
 export { evaluateElevation } from './elevation.js'
 export type {
@@ -608,6 +616,172 @@ export async function verifyActionGateRun({
   }
 
   return { valid: issues.length === 0, issues }
+}
+
+/** Options for {@link requireTrustedTransaction}. */
+export interface RequireTrustedTransactionOptions {
+  /** The transaction `AtribRecord` the host is deciding whether to authorize. */
+  readonly record: AtribRecord
+  /**
+   * Base64url Ed25519 public keys the host trusts as independent attesting
+   * principals. Non-malleable authority requires at least two DISTINCT verified
+   * signer keys drawn from this set (§1.7.6 trusted signer composition, D149).
+   * An empty or absent trust set fails closed.
+   */
+  readonly trustedCreatorKeys?: readonly string[]
+  /**
+   * Outcome when the transaction is not trusted-cross-attested. Default
+   * `'block'` (fail closed). Use `'escalate'` to route to human review instead.
+   */
+  readonly onUntrusted?: 'block' | 'escalate'
+  readonly policyId?: string
+  readonly policyVersion?: string
+  readonly authority?: ActionGateAuthority
+  readonly approval?: ActionGateApproval
+}
+
+/**
+ * Host-owned fail-closed policy for transaction actions (D133 + D149). This is
+ * where §1.7.6 trusted signer composition becomes a REQUIREMENT rather than a
+ * signal: `verifyRecord` only surfaces the trust posture (signal-not-block), so
+ * a consumer that reads `signers_valid >= 2` can still be Sybil-fooled. This
+ * policy refuses to authorize a transaction unless it is trusted-cross-attested,
+ * i.e. `isTrustedCrossAttested` holds (>= 2 distinct verified signer keys in the
+ * caller's trust set).
+ *
+ * Returns `allow` only when the record is a transaction, its signature verifies,
+ * and it is trusted-cross-attested. Every other case fails closed: no trust set,
+ * a non-transaction record, an invalid signature, or a merely-verified (untrusted
+ * or Sybil) signer set all return `onUntrusted` (default `'block'`). The reason
+ * and `evidence` carry the cross-attestation posture so the signed decision
+ * records why authority was granted or withheld.
+ */
+export async function requireTrustedTransaction(
+  opts: RequireTrustedTransactionOptions,
+): Promise<ActionGatePolicyDecision> {
+  const policy_id = opts.policyId ?? 'atrib-trusted-transaction-gate'
+  const policy_version = opts.policyVersion ?? '1'
+  const untrusted = opts.onUntrusted ?? 'block'
+  const base = {
+    policy_id,
+    policy_version,
+    ...(opts.authority ? { authority: opts.authority } : {}),
+    ...(opts.approval ? { approval: opts.approval } : {}),
+  }
+  const fail = (reason: string, evidence?: Record<string, string>): ActionGatePolicyDecision => ({
+    ...base,
+    outcome: untrusted,
+    reason,
+    ...(evidence ? { evidence } : {}),
+  })
+
+  if (opts.record.event_type !== EVENT_TYPE_TRANSACTION_URI) {
+    return fail('action is not a transaction record; trusted cross-attestation does not apply')
+  }
+  if (!opts.trustedCreatorKeys || opts.trustedCreatorKeys.length === 0) {
+    return fail('no trust set supplied; cannot establish trusted cross-attestation')
+  }
+
+  const result = await verifyRecordAnnotated(opts.record, {
+    trustedCreatorKeys: [...opts.trustedCreatorKeys],
+  })
+  const attestation = result.cross_attestation
+  const evidence: Record<string, string> = {
+    signature_ok: String(result.signatureOk),
+    signers_valid: String(attestation?.signers_valid ?? 0),
+    signers_trusted: String(attestation?.signers_trusted ?? 0),
+    sybil_suspected: String(attestation?.sybil_suspected ?? false),
+    trust_evaluated: String(attestation?.trust_evaluated ?? false),
+  }
+
+  if (!result.signatureOk) {
+    return fail('transaction record signature did not verify', evidence)
+  }
+  if (!isTrustedCrossAttested(attestation)) {
+    return fail(
+      'transaction is not trusted-cross-attested (fewer than 2 distinct verified signer keys in the trust set)',
+      evidence,
+    )
+  }
+  return {
+    ...base,
+    outcome: 'allow',
+    reason: 'transaction is trusted-cross-attested',
+    evidence,
+  }
+}
+
+/** Options for {@link requireCorroborated}. */
+export interface RequireCorroboratedOptions {
+  /** `'sha256:<64-hex>'` record_hash of the record whose corroboration is required. */
+  readonly targetRecordHash: string
+  /** creator_key of the target, so self-attestation is rejected. Recommended. */
+  readonly targetCreatorKey?: string
+  /** Attestation records vouching for the target. */
+  readonly attestations: readonly AttestationInput[]
+  /** Trust set: base64url keys the host trusts as independent attestors. Empty/absent fails closed. */
+  readonly trustedCreatorKeys?: readonly string[]
+  /** Corroboration minimum. Default 2. */
+  readonly minCorroborators?: number
+  /** Outcome when not corroborated. Default `'block'` (fail closed). */
+  readonly onUncorroborated?: 'block' | 'escalate'
+  readonly policyId?: string
+  readonly policyVersion?: string
+  readonly authority?: ActionGateAuthority
+  readonly approval?: ActionGateApproval
+}
+
+/**
+ * Host-owned fail-closed policy requiring trusted corroboration of a target
+ * record before an action proceeds (D133 + D150). The verifier aggregation
+ * (`resolveAttestationCorroboration`) is signal-not-block; this policy turns it
+ * into a requirement. Returns `allow` only when the target is corroborated by at
+ * least `minCorroborators` (default 2) distinct verified attestors in the trust
+ * set (`isCorroborated`). Fails closed on no trust set or too few trusted
+ * attestors, blocking by default or escalating on request. The signed decision's
+ * `evidence` carries the corroboration posture.
+ */
+export async function requireCorroborated(
+  opts: RequireCorroboratedOptions,
+): Promise<ActionGatePolicyDecision> {
+  const policy_id = opts.policyId ?? 'atrib-corroboration-gate'
+  const policy_version = opts.policyVersion ?? '1'
+  const min = opts.minCorroborators ?? 2
+  const uncorroborated = opts.onUncorroborated ?? 'block'
+  const base = {
+    policy_id,
+    policy_version,
+    ...(opts.authority ? { authority: opts.authority } : {}),
+    ...(opts.approval ? { approval: opts.approval } : {}),
+  }
+
+  if (!opts.trustedCreatorKeys || opts.trustedCreatorKeys.length === 0) {
+    return { ...base, outcome: uncorroborated, reason: 'no trust set supplied; cannot establish trusted corroboration' }
+  }
+
+  const result = await resolveAttestationCorroboration({
+    targetRecordHash: opts.targetRecordHash,
+    ...(opts.targetCreatorKey ? { targetCreatorKey: opts.targetCreatorKey } : {}),
+    attestations: [...opts.attestations],
+    trustedCreatorKeys: [...opts.trustedCreatorKeys],
+    minCorroborators: min,
+  })
+  const evidence: Record<string, string> = {
+    attestors_valid: String(result.attestors_valid),
+    attestors_trusted: String(result.attestors_trusted ?? 0),
+    under_corroborated: String(result.under_corroborated ?? false),
+    trust_evaluated: String(result.trust_evaluated),
+    min_corroborators: String(min),
+  }
+  if (!isCorroborated(result, min)) {
+    return {
+      ...base,
+      outcome: uncorroborated,
+      reason: `target not corroborated by ${min} distinct trusted attestors`,
+      evidence,
+    }
+  }
+  return { ...base, outcome: 'allow', reason: 'target is trusted-corroborated', evidence }
 }
 
 export function digestCanonical(value: unknown): Sha256Uri {

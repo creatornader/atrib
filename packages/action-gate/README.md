@@ -70,6 +70,60 @@ throws while delivering a signed record to a mirror, log sink, or proof-packet
 writer, the action result still returns a complete decision/outcome pair and
 adds the callback failure to `record_delivery_errors`.
 
+## Trusted-transaction policy
+
+`requireTrustedTransaction()` is a ready-made `evaluate` policy for transaction
+actions. It is where [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+trusted signer composition ([D149](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance))
+becomes a requirement rather than a signal: `verifyRecord` only surfaces the trust posture,
+so a consumer reading `signers_valid >= 2` can still be Sybil-fooled by two
+untrusted co-signers. This policy returns `allow` only when the transaction
+record is trusted-cross-attested (`isTrustedCrossAttested`: at least two distinct
+verified signer keys drawn from the supplied `trustedCreatorKeys`). Every other
+case fails closed: no trust set, a non-transaction record, an invalid signature,
+or a merely-verified (untrusted or Sybil) signer set all return `block` by
+default, or `escalate` when `onUntrusted: 'escalate'`. The signed decision's
+`evidence` carries `signers_valid`, `signers_trusted`, `sybil_suspected`, and
+`trust_evaluated`, so the proof records why authority was granted or withheld.
+
+```ts
+import { runGatedAction, requireTrustedTransaction } from '@atrib/action-gate'
+
+const result = await runGatedAction({
+  action: { /* ...transaction action envelope... */ },
+  evaluate: () => requireTrustedTransaction({ record, trustedCreatorKeys }),
+  execute: () => settlePayment(),
+})
+```
+
+## Corroboration policy
+
+`requireCorroborated()` is the same fail-closed shape applied to any record, not
+only transactions. It is where [§8.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#876-attestation-corroboration-extension)
+attestation corroboration ([D150](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d150-attestation-is-corroboration-generalized-off-transactions-extension-first))
+becomes a requirement rather than a signal. It resolves the distinct verified
+attestors of a target record through `@atrib/verify` `resolveAttestationCorroboration`,
+reuses the [D149](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance)
+trust-set model, and returns `allow` only when the target is corroborated
+(`isCorroborated`: at least two distinct verified attestors drawn from the
+supplied `trustedCreatorKeys`, default threshold two). Every other case fails
+closed: no trust set, verified-but-untrusted attestors, self-attestation,
+annotation records masquerading as attestations, or a tampered commitment all
+return `block` by default, or `escalate` when `onUncorroborated: 'escalate'`. The
+signed decision's `evidence` carries `attestors_valid`, `attestors_trusted`, and
+`trust_evaluated`, so the proof records why the target was trusted or withheld.
+
+```ts
+import { runGatedAction, requireCorroborated } from '@atrib/action-gate'
+
+const result = await runGatedAction({
+  action: { /* ...action that depends on a corroborated target... */ },
+  evaluate: () =>
+    requireCorroborated({ targetRecordHash, targetCreatorKey, attestations, trustedCreatorKeys }),
+  execute: () => actOnCorroboratedTarget(),
+})
+```
+
 ## Privacy and degradation
 
 Signed records carry canonical hashes of the action arguments and outcome

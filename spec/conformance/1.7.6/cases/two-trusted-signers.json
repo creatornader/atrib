@@ -1,0 +1,49 @@
+{
+  "name": "two-trusted-signers",
+  "spec_section": "1.7.6",
+  "description": "Two distinct valid signers, both members of the trust set: non-malleable transaction authority. signers_trusted: 2 and sybil_suspected: false; isTrustedCrossAttested returns true. Contrast with sybil-two-untrusted-signers, which has the identical signers_valid: 2 but zero trusted signers.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:0909090909090909090909090909090909090909090909090909090909090909",
+      "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestamp": 1767225609000,
+      "signature": "",
+      "signers": [
+        {
+          "creator_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "signature": "8Q2_ZpTeR-VHuWfDJCLPknC1jFcKZm5dG2K_TO-dIaEBjXjfy6nmB6Z9L27rHIyiJvu0qQy5nrAHcipsZ2eEAg"
+        },
+        {
+          "creator_key": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+          "signature": "ZGxAvaorIJTpf9UD6jjmChZAqnETQYg8Sq2nl--sDHsRLZ4rzdJVkEIvk8OLtJUMLJDcyoK9JbdWQwH-V4iGBQ"
+        }
+      ]
+    },
+    "signer_seeds_hex": {
+      "agent": "1111111111111111111111111111111111111111111111111111111111111111",
+      "counterparty": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "trusted_creator_keys": [
+      "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA"
+    ]
+  },
+  "expected": {
+    "record_hash_hex": "8f3caff0360a7cb34c44998cf715fad74280d5e829913ab11345501bc2974b9a",
+    "cross_attestation": {
+      "signers_count": 2,
+      "signers_valid": 2,
+      "missing": false,
+      "trust_evaluated": true,
+      "signers_trusted": 2,
+      "sybil_suspected": false
+    },
+    "verifier_signature_ok": true,
+    "validator_should_accept": true,
+    "valid_after_signal": true
+  }
+}

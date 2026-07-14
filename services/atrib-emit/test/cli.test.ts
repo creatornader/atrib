@@ -8,8 +8,8 @@
  *
  *   - happy path: a valid envelope produces an EmitOutput on stdout with
  *     a real record_hash, log_index, and zero warnings (against a stub log)
- *   - degradation: invalid stdin and missing fields produce a structured
- *     fallback object on stdout, never throw, exit code stays 0
+ *   - refusal: invalid stdin, missing fields, and guard refusals produce a
+ *     signed:false object on stdout and exit 3
  *   - flags: --version / --help short-circuit before reading stdin
  */
 
@@ -191,29 +191,32 @@ describe('atrib-emit-cli wire contract', () => {
     expect(r.stderr).toContain('atrib-emit-cli')
   })
 
-  it('empty stdin: exits 0 with a structured fallback result', async () => {
+  it('empty stdin: exits 3 with a structured fallback result', async () => {
     const r = await runCli([], '')
-    expect(r.code).toBe(0)
-    const out = JSON.parse(r.stdout) as { record_hash: string; warnings: string[] }
-    expect(out.record_hash).toBe('sha256:unknown')
-    expect(out.warnings.some((w) => w.includes('empty stdin'))).toBe(true)
+    expect(r.code).toBe(3)
+    const out = JSON.parse(r.stdout) as { signed: boolean; refusals: string[] }
+    expect(out.signed).toBe(false)
+    expect(out).not.toHaveProperty('record_hash')
+    expect(out.refusals.some((r) => r.includes('empty stdin'))).toBe(true)
     expect(r.stderr).toContain('empty stdin')
   })
 
-  it('malformed JSON: exits 0 with a parse-error fallback', async () => {
+  it('malformed JSON: exits 3 with a parse-error fallback', async () => {
     const r = await runCli([], 'not-json')
-    expect(r.code).toBe(0)
-    const out = JSON.parse(r.stdout) as { record_hash: string; warnings: string[] }
-    expect(out.record_hash).toBe('sha256:unknown')
-    expect(out.warnings.some((w) => w.includes('stdin parse error'))).toBe(true)
+    expect(r.code).toBe(3)
+    const out = JSON.parse(r.stdout) as { signed: boolean; refusals: string[] }
+    expect(out.signed).toBe(false)
+    expect(out).not.toHaveProperty('record_hash')
+    expect(out.refusals.some((r) => r.includes('stdin parse error'))).toBe(true)
   })
 
-  it('envelope missing event_type or content: exits 0 with a missing-fields fallback', async () => {
+  it('envelope missing event_type or content: exits 3 with a missing-fields fallback', async () => {
     const r = await runCli([], JSON.stringify({ event_type: 'foo' }))
-    expect(r.code).toBe(0)
-    const out = JSON.parse(r.stdout) as { record_hash: string; warnings: string[] }
-    expect(out.record_hash).toBe('sha256:unknown')
-    expect(out.warnings.some((w) => w.includes('missing event_type or content'))).toBe(true)
+    expect(r.code).toBe(3)
+    const out = JSON.parse(r.stdout) as { signed: boolean; refusals: string[] }
+    expect(out.signed).toBe(false)
+    expect(out).not.toHaveProperty('record_hash')
+    expect(out.refusals.some((r) => r.includes('missing event_type or content'))).toBe(true)
   })
 
   it('happy path: a valid envelope produces a real record_hash on stdout', async () => {
@@ -232,16 +235,45 @@ describe('atrib-emit-cli wire contract', () => {
       record_hash: string
       log_index: number | null
       warnings: string[]
+      signed: boolean
     }
+    expect(out.signed).toBe(true)
     expect(out.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
     expect(out.log_index).not.toBeNull()
     expect(typeof out.log_index).toBe('number')
     expect(log.received.length).toBe(1)
-    // After flush the "submission queued" warning must NOT survive — same
+    // After flush the "submission queued" warning must NOT survive; same
     // contract as emitInProcess (see byte-identical.test.ts).
     expect(
       out.warnings.some((w) => w.startsWith('submission queued; proof not yet available')),
     ).toBe(false)
+  })
+
+  it('guard refusal: exits 3 with parseable signed:false JSON', async () => {
+    const envelope = {
+      event_type: 'https://atrib.dev/v1/types/observation',
+      content: { what: 'cli refusal missing explicit context' },
+    }
+    const r = await runCli(['--log-endpoint', log.url], JSON.stringify(envelope), {
+      ATRIB_PRIVATE_KEY: seedHex,
+      ATRIB_MIRROR_FILE: mirrorPath,
+      ATRIB_AUTOCHAIN_SOURCE: mirrorPath,
+      ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID: '1',
+    })
+
+    expect(r.code).toBe(3)
+    const out = JSON.parse(r.stdout) as {
+      signed: boolean
+      context_id: string
+      refusals: string[]
+    }
+    expect(out.signed).toBe(false)
+    expect(out.context_id).toMatch(/^[0-9a-f]{32}$/)
+    expect(out).not.toHaveProperty('record_hash')
+    expect(out.refusals).toContain(
+      'context_id is required by ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID; no record signed',
+    )
+    expect(log.received.length).toBe(0)
   })
 
   it('happy path: reads and writes the same per-agent mirror path by default', async () => {
@@ -262,7 +294,8 @@ describe('atrib-emit-cli wire contract', () => {
     })
 
     expect(r.code).toBe(0)
-    const out = JSON.parse(r.stdout) as { record_hash: string }
+    const out = JSON.parse(r.stdout) as { signed: boolean; record_hash: string }
+    expect(out.signed).toBe(true)
     expect(out.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
 
     const nextEnvelope = {
@@ -315,7 +348,8 @@ describe('atrib-emit-cli wire contract', () => {
       })
 
       expect(r.code).toBe(0)
-      const out = JSON.parse(r.stdout) as { record_hash: string; warnings: string[] }
+      const out = JSON.parse(r.stdout) as { signed: boolean; record_hash: string; warnings: string[] }
+      expect(out.signed).toBe(true)
       expect(out.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
       expect(
         out.warnings.some((w) => w.includes('local substrate watcher-WAL commit failed')),
@@ -343,12 +377,13 @@ describe('atrib-emit-cli wire contract', () => {
     }
   })
 
-  it('unknown CLI flag: exits 0 with an invalid-arguments fallback', async () => {
+  it('unknown CLI flag: exits 3 with an invalid-arguments fallback', async () => {
     const r = await runCli(['--bogus'], '')
-    expect(r.code).toBe(0)
-    const out = JSON.parse(r.stdout) as { record_hash: string; warnings: string[] }
-    expect(out.record_hash).toBe('sha256:unknown')
-    expect(out.warnings.some((w) => w.includes('invalid CLI arguments'))).toBe(true)
+    expect(r.code).toBe(3)
+    const out = JSON.parse(r.stdout) as { signed: boolean; refusals: string[] }
+    expect(out.signed).toBe(false)
+    expect(out).not.toHaveProperty('record_hash')
+    expect(out.refusals.some((r) => r.includes('invalid CLI arguments'))).toBe(true)
     expect(r.stderr).toContain('unknown argument')
   })
 
@@ -470,7 +505,8 @@ describe('atrib-emit-cli wire contract', () => {
       ATRIB_AUTOCHAIN_SOURCE: mirrorPath,
     })
     expect(r.code).toBe(0)
-    const out = JSON.parse(r.stdout) as { record_hash: string }
+    const out = JSON.parse(r.stdout) as { signed: boolean; record_hash: string }
+    expect(out.signed).toBe(true)
     expect(out.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
   })
 })

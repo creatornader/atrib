@@ -6,10 +6,28 @@
 // is the narrow input contract per D079, so that's what we test here.
 
 import { describe, expect, it } from 'vitest'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { AnnotateInput, createAtribAnnotateServer } from '../src/index.js'
 
 const VALID_HASH = 'sha256:' + 'a'.repeat(64)
 const VALID_CONTEXT = 'a'.repeat(32)
+
+async function callAnnotateTool(
+  server: Awaited<ReturnType<typeof createAtribAnnotateServer>>,
+  args: Record<string, unknown>,
+) {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  await server.mcp.connect(serverTransport)
+  const client = new Client({ name: 'atrib-annotate-test-client', version: '0.0.0' })
+  await client.connect(clientTransport)
+  try {
+    return await client.callTool({ name: 'atrib-annotate', arguments: args })
+  } finally {
+    await client.close()
+    await server.mcp.close()
+  }
+}
 
 describe('createAtribAnnotateServer', () => {
   it('returns an McpServer + flush handle', async () => {
@@ -21,6 +39,24 @@ describe('createAtribAnnotateServer', () => {
     expect(server.mcp).toBeTruthy()
     expect(typeof server.flush).toBe('function')
     await server.flush()
+  })
+
+  it('surfaces handleEmit guard refusals as MCP tool errors', async () => {
+    const server = await createAtribAnnotateServer({ key: null, logEndpoint: 'http://127.0.0.1:0' })
+    try {
+      const result = await callAnnotateTool(server, {
+        annotates: VALID_HASH,
+        importance: 'high',
+        summary: 'missing key refusal',
+        context_id: VALID_CONTEXT,
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0]?.type).toBe('text')
+      expect(result.content[0]?.text).toContain('no signing key resolved')
+    } finally {
+      await server.flush()
+    }
   })
 })
 

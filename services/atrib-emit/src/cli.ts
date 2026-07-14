@@ -12,7 +12,7 @@
 //
 // Wire contract (stable as of @atrib/emit@0.11.3):
 //
-//   stdin: one JSON object — the same envelope emitInProcess accepts.
+//   stdin: one JSON object, the same envelope emitInProcess accepts.
 //     {
 //       "event_type":   "https://atrib.dev/v1/types/observation" | "...annotation" | "...revision" | extension URI,
 //       "content":      { ... },
@@ -27,22 +27,18 @@
 //       "result_hash":  "sha256:..."?
 //     }
 //
-//   stdout: one JSON object — the EmitOutput shape emitInProcess returns.
-//     {
-//       "record_hash": "sha256:...",
-//       "log_index":   <number> | null,
-//       "checkpoint":  "..." | null,
-//       "warnings":    [ ... ]
-//     }
+//   stdout: one JSON object, the EmitOutput shape emitInProcess returns.
+//     signed:
+//       { "signed": true, "record_hash": "sha256:...", "warnings": [ ... ] }
+//     refused:
+//       { "signed": false, "context_id": "<32-hex>", "refusals": [ ... ] }
 //
 //   stderr: human-readable diagnostic line(s) for the spawning hook to log.
 //
-//   exit code: always 0. The caller cannot block on a non-zero from a
-//     signing helper without corrupting the user's session (§5.8
-//     degradation contract). All failure modes are surfaced as warnings
-//     inside the JSON result or as a stderr diagnostic line.
+//   exit code: 0 when signed, 3 when refused. Hook helpers parse stdout and
+//     absorb non-zero exits so the user's session stays unblocked.
 //
-// CLI flags (kept minimal — the envelope carries everything routable):
+// CLI flags (kept minimal because the envelope carries everything routable):
 //   --log-endpoint <url>     override ATRIB_LOG_ENDPOINT for this call
 //   --flush-deadline-ms <n>  override the 5000ms default
 //   --version                print package version and exit 0
@@ -56,6 +52,7 @@
 //   local-substrate attempts also read ATRIB_LOCAL_SUBSTRATE_ENDPOINT,
 //   ATRIB_LOCAL_SUBSTRATE_MODE=shadow|commit, and ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS.
 
+import { randomBytes } from 'node:crypto'
 import { readFileSync, realpathSync, accessSync, constants as fsConstants } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
@@ -63,6 +60,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createHttpLocalSubstrateTransport } from '@atrib/mcp'
 import { emitInProcess, type EmitLocalSubstrateCommitOptions } from './index.js'
 import { resolveKey } from './keys.js'
+
+const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 
 type Subcommand = 'emit' | 'doctor'
 
@@ -220,7 +219,7 @@ function buildDescription(): CliDescription {
     name: 'atrib-emit-cli',
     version: readPackageVersion(),
     description:
-      'Thin command-line wrapper around emitInProcess (atrib D082). Reads one JSON envelope on stdin, signs the record in-process, writes EmitOutput JSON to stdout. Exit code 0 per §5.8 degradation contract.',
+      'Thin command-line wrapper around emitInProcess (atrib D082). Reads one JSON envelope on stdin, signs the record in-process, writes EmitOutput JSON to stdout. Emit exits 0 when signed and 3 when refused.',
     subcommands: {
       emit: {
         description: 'Sign one cognitive event (default; runs when no subcommand is given).',
@@ -275,15 +274,18 @@ function buildDescription(): CliDescription {
       },
     },
     output_schema: {
+      signed:
+        'boolean discriminant. true means a record was signed; false means the write was refused.',
       record_hash:
-        '"sha256:<64-hex>" of the signed canonical form, or "sha256:unknown" on degraded fallback.',
+        '"sha256:<64-hex>" of the signed canonical form. Present only when signed is true.',
       log_index:
         'integer position in the log if submission confirmed within flush deadline, else null.',
       checkpoint: 'C2SP signed note string if confirmed, else null.',
       inclusion_proof:
         'array of base64 SHA-256 hashes (proof bundle) if confirmed, else null or omitted.',
       context_id: '32-hex trace id the record was signed under.',
-      warnings: 'array of strings: degraded paths (queued / flush-deadline / missing-key / etc).',
+      warnings: 'array of strings for signed degradation paths, such as queued submission.',
+      refusals: 'array of refusal reasons. Present only when signed is false.',
     },
     env_vars: [
       {
@@ -538,7 +540,7 @@ async function runDoctor(opts: { logEndpoint?: string }): Promise<DoctorReport> 
 
 function renderDoctorText(report: DoctorReport): string {
   const lines: string[] = []
-  lines.push(`atrib-emit-cli ${report.version} — substrate readiness check`)
+  lines.push(`atrib-emit-cli ${report.version}: substrate readiness check`)
   const fmt = (label: string, r: CheckResult): string => {
     const tag = r.ok ? '[OK]  ' : '[FAIL]'
     return `  ${tag} ${label.padEnd(18)} ${r.detail} (${r.timing_ms}ms)`
@@ -690,18 +692,26 @@ function writeStderrLine(line: string): void {
 // Compose a hook-safe fallback result for the cases where we cannot even
 // reach emitInProcess (stdin parse failure, etc). The caller's hook reads
 // our stdout and logs it; a structured payload keeps the contract uniform.
-function fallbackResult(reason: string): {
-  record_hash: string
-  log_index: null
-  checkpoint: null
-  warnings: string[]
+function fallbackResult(reason: string, rawInput?: unknown): {
+  signed: false
+  context_id: string
+  refusals: string[]
 } {
   return {
-    record_hash: 'sha256:unknown',
-    log_index: null,
-    checkpoint: null,
-    warnings: [`atrib-emit-cli skipped: ${reason}`],
+    signed: false,
+    context_id: contextIdFromRawInput(rawInput),
+    refusals: [`atrib-emit-cli skipped: ${reason}`],
   }
+}
+
+function contextIdFromRawInput(rawInput: unknown): string {
+  if (rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)) {
+    const contextId = (rawInput as Record<string, unknown>)['context_id']
+    if (typeof contextId === 'string' && HEX_32_PATTERN.test(contextId)) {
+      return contextId
+    }
+  }
+  return randomBytes(16).toString('hex')
 }
 
 export async function main(argv: readonly string[]): Promise<number> {
@@ -711,7 +721,7 @@ export async function main(argv: readonly string[]): Promise<number> {
   } catch (e) {
     writeStderrLine(`atrib-emit-cli: ${e instanceof Error ? e.message : String(e)}`)
     writeStdoutJson(fallbackResult('invalid CLI arguments'))
-    return 0
+    return 3
   }
 
   if (parsed.showVersion) {
@@ -734,7 +744,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     } else {
       process.stdout.write(renderDoctorText(report) + '\n')
     }
-    // Doctor exits non-zero on failure — operator-facing diagnostic, NOT the
+    // Doctor exits non-zero on failure: operator-facing diagnostic, NOT the
     // hook-safe always-0 contract of `emit`. Scripts can rely on this to gate
     // CI / deployment checks.
     return report.ok ? 0 : 1
@@ -749,13 +759,13 @@ export async function main(argv: readonly string[]): Promise<number> {
       `atrib-emit-cli: stdin read error: ${e instanceof Error ? e.message : String(e)}`,
     )
     writeStdoutJson(fallbackResult('stdin read error'))
-    return 0
+    return 3
   }
 
   if (raw.trim().length === 0) {
     writeStderrLine(`atrib-emit-cli: empty stdin; expected one JSON envelope`)
     writeStdoutJson(fallbackResult('empty stdin'))
-    return 0
+    return 3
   }
 
   let envelope: RawEnvelope
@@ -766,13 +776,13 @@ export async function main(argv: readonly string[]): Promise<number> {
       `atrib-emit-cli: stdin parse error: ${e instanceof Error ? e.message : String(e)}`,
     )
     writeStdoutJson(fallbackResult('stdin parse error'))
-    return 0
+    return 3
   }
 
   if (envelope.event_type === undefined || envelope.content === undefined) {
     writeStderrLine(`atrib-emit-cli: envelope missing required field(s) event_type or content`)
-    writeStdoutJson(fallbackResult('envelope missing event_type or content'))
-    return 0
+    writeStdoutJson(fallbackResult('envelope missing event_type or content', envelope))
+    return 3
   }
 
   const args = buildEmitInput(envelope)
@@ -807,21 +817,26 @@ export async function main(argv: readonly string[]): Promise<number> {
     const result = await emitInProcess(args, options)
     writeStdoutJson(result)
     const elapsed = Date.now() - t0
+    if (!result.signed) {
+      writeStderrLine(
+        `atrib-emit-cli: refused refusals=${result.refusals.length} elapsed=${elapsed}ms`,
+      )
+      return 3
+    }
     writeStderrLine(
       `atrib-emit-cli: ok record_hash=${String(result.record_hash).slice(0, 24)}… log_index=${result.log_index ?? 'null'} ` +
         `warnings=${result.warnings.length} elapsed=${elapsed}ms`,
     )
     return 0
   } catch (e) {
-    // emitInProcess only throws on a malformed input that fails EmitInput.parse.
-    // Operational failures (network down, key unresolvable) come back as
-    // warnings, not exceptions, per §5.8. Surface the parse error to the
-    // hook's log and degrade gracefully.
+    // emitInProcess returns refused writes as structured JSON. This catch is
+    // for unexpected setup failures or future regressions. Surface the error
+    // to the hook log and return structured fallback JSON on stdout.
     const elapsed = Date.now() - t0
     const message = e instanceof Error ? e.message : String(e)
     writeStderrLine(`atrib-emit-cli: emitInProcess threw: ${message} elapsed=${elapsed}ms`)
     writeStdoutJson(fallbackResult(`emitInProcess threw: ${message}`))
-    return 0
+    return 3
   }
 }
 
@@ -830,7 +845,7 @@ export async function main(argv: readonly string[]): Promise<number> {
 // creates one; operators may also create their own) matches the resolved
 // dist/cli.js path the module loader saw. Without realpath, the entrypoint
 // check fails when the binary is invoked via symlink and the CLI exits
-// silently with no work done — observed during D082 smoke testing.
+// silently with no work done. Observed during D082 smoke testing.
 function isInvokedAsEntrypoint(): boolean {
   const argv1 = process.argv[1]
   if (typeof argv1 !== 'string' || argv1.length === 0) return false

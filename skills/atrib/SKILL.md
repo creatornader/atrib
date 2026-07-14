@@ -474,7 +474,7 @@ Check in this order:
 1. `curl -s https://log.atrib.dev/v1/stats` → if tree_size hasn't grown since your write call, submission may be queued or the log may be down.
 2. `ls -lt ~/.atrib/records/` → check mtimes across all per-producer mirror files. The three write primitives (emit / annotate / revise) and the wrapper each persist to their own file by default (`ATRIB_MIRROR_FILE` env override applies per-process). If the mtime of the mirror for the primitive you just called is fresh, the local write landed; submission to the log is the bottleneck.
 3. `tail -1 <the-relevant-mirror>.jsonl | jq .` → confirm the bytes you intended.
-4. Re-call with verbose-mode mental model and check the `warnings` array on the response, submission failures, key-resolution issues, and chain-composition warnings all land there.
+4. Re-call with verbose-mode mental model: refused writes return `signed: false` with `refusals`, while signed submissions keep submission and chain-composition degradations in `warnings`.
 
 ### "I'm in a session and atrib is going to be silent unless I act"
 

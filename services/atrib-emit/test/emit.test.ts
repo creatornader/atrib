@@ -7,6 +7,8 @@ import * as ed from '@noble/ed25519'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import {
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_DIRECTORY_ANCHOR_URI,
@@ -25,10 +27,12 @@ import {
 } from '@atrib/mcp'
 import {
   createAtribEmitServer,
+  emitInProcess,
   resolveEmitLocalSubstrateCommitFromEnv,
   resolveEmitLocalSubstrateShadowFromEnv,
   __test_only__ as __index_test_only__,
   type EmitLocalSubstrateShadowAttempt,
+  type EmitOutput,
 } from '../src/index.js'
 import { buildAndSignEmitRecord, __test_only__ } from '../src/sign.js'
 import { createSubmissionQueue } from '@atrib/mcp'
@@ -38,12 +42,14 @@ const LOCAL_LOG = 'http://127.0.0.1:0/v1/entries'
 let testEnvPriorMirrorFile: string | undefined
 let testEnvPriorAutochainSource: string | undefined
 let testEnvPriorRecordsDir: string | undefined
+let testEnvPriorRequireExplicitContextId: string | undefined
 let testEnvTmpDir: string | undefined
 
 beforeEach(async () => {
   testEnvPriorMirrorFile = process.env['ATRIB_MIRROR_FILE']
   testEnvPriorAutochainSource = process.env['ATRIB_AUTOCHAIN_SOURCE']
   testEnvPriorRecordsDir = process.env['ATRIB_RECORDS_DIR']
+  testEnvPriorRequireExplicitContextId = process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID']
   testEnvTmpDir = await mkdtemp(join(tmpdir(), 'atrib-emit-test-'))
   process.env['ATRIB_MIRROR_FILE'] = join(testEnvTmpDir, 'mirror.jsonl')
   process.env['ATRIB_AUTOCHAIN_SOURCE'] = process.env['ATRIB_MIRROR_FILE']
@@ -61,6 +67,11 @@ afterEach(async () => {
   else process.env['ATRIB_AUTOCHAIN_SOURCE'] = testEnvPriorAutochainSource
   if (testEnvPriorRecordsDir === undefined) delete process.env['ATRIB_RECORDS_DIR']
   else process.env['ATRIB_RECORDS_DIR'] = testEnvPriorRecordsDir
+  if (testEnvPriorRequireExplicitContextId === undefined) {
+    delete process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID']
+  } else {
+    process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID'] = testEnvPriorRequireExplicitContextId
+  }
 })
 
 async function freshKey(): Promise<Uint8Array> {
@@ -83,6 +94,26 @@ async function waitFor<T>(read: () => T | undefined, message: string, attempts =
 function unsignedBody(record: AtribRecord): Record<string, unknown> {
   const { signature: _signature, ...body } = record
   return body as Record<string, unknown>
+}
+
+function expectSignedOutput(result: EmitOutput): asserts result is Extract<EmitOutput, { signed: true }> {
+  expect(result.signed).toBe(true)
+}
+
+async function callEmitTool(
+  server: Awaited<ReturnType<typeof createAtribEmitServer>>,
+  args: Record<string, unknown>,
+) {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  await server.mcp.connect(serverTransport)
+  const client = new Client({ name: 'atrib-emit-test-client', version: '0.0.0' })
+  await client.connect(clientTransport)
+  try {
+    return await client.callTool({ name: 'emit', arguments: args })
+  } finally {
+    await client.close()
+    await server.mcp.close()
+  }
 }
 
 describe('buildAndSignEmitRecord', () => {
@@ -342,13 +373,31 @@ describe('createAtribEmitServer', () => {
     expect(server.mcp).toBeTruthy()
     await server.flush()
   })
+
+  it('returns an MCP tool error when handleEmit refuses the write', async () => {
+    const server = await createAtribEmitServer({
+      key: null,
+      logEndpoint: LOCAL_LOG,
+    })
+    try {
+      const result = await callEmitTool(server, {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'missing key refusal' },
+        context_id: 'a'.repeat(32),
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0]?.type).toBe('text')
+      expect(result.content[0]?.text).toContain('no signing key resolved')
+    } finally {
+      await server.flush()
+    }
+  })
 })
 
 describe('handleEmit validation paths', () => {
   // These tests drive the internal handler exposed via __test_only__ so we
-  // can assert on the emptyOutput warnings rather than the McpServer
-  // dispatch shape. Per spec §5.8 graceful degradation: malformed inputs
-  // return warnings + a placeholder record_hash, never throw.
+  // can assert on refusal output rather than the McpServer dispatch shape.
   const { handleEmit } = __index_test_only__
 
   it('refuses chain_root without context_id (no anchoring context)', async () => {
@@ -364,8 +413,11 @@ describe('handleEmit validation paths', () => {
       queue,
     })
 
-    expect(result.record_hash).toBe('sha256:unknown')
-    expect(result.warnings.some((w) => w.includes('chain_root requires context_id'))).toBe(true)
+    expect(result.signed).toBe(false)
+    expect(result).not.toHaveProperty('record_hash')
+    if (!result.signed) {
+      expect(result.refusals.some((r) => r.includes('chain_root requires context_id'))).toBe(true)
+    }
     await queue.flush()
   })
 
@@ -387,11 +439,40 @@ describe('handleEmit validation paths', () => {
       queue,
     })
 
-    expect(result.record_hash).toBe('sha256:unknown')
-    expect(result.warnings.some((w) => w.includes('provenance_token is genesis-record-only'))).toBe(
+    expect(result.signed).toBe(false)
+    expect(result).not.toHaveProperty('record_hash')
+    expect(
+      !result.signed &&
+        result.refusals.some((r) => r.includes('provenance_token is genesis-record-only')),
+    ).toBe(
       true,
     )
     await queue.flush()
+  })
+
+  it('emitInProcess resolves with signed false when an explicit context is required', async () => {
+    process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID'] = '1'
+    const seed = await freshKey()
+
+    const result = await emitInProcess(
+      {
+        event_type: 'https://atrib.dev/v1/types/observation',
+        content: { what: 'missing explicit context' },
+      },
+      {
+        key: { privateKey: seed, source: 'env' },
+        logEndpoint: LOCAL_LOG,
+      },
+    )
+
+    expect(result.signed).toBe(false)
+    expect(result).not.toHaveProperty('record_hash')
+    expect(
+      !result.signed &&
+        result.refusals.includes(
+          'context_id is required by ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID; no record signed',
+        ),
+    ).toBe(true)
   })
 
   // Note: positive-path tests for caller-supplied chain_root + provenance_token
@@ -453,6 +534,7 @@ describe('local substrate shadow probe (P042 long-lived producer path)', () => {
         },
       })
 
+      expectSignedOutput(result)
       expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
       expect(submitted.length).toBe(1)
       const request = await waitFor(() => seenRequests[0], 'shadow request was not sent')
@@ -505,6 +587,7 @@ describe('local substrate shadow probe (P042 long-lived producer path)', () => {
       },
     })
 
+    expectSignedOutput(result)
     expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
     expect(submitted.length).toBe(1)
     const attempt = await waitFor(() => attempts[0], 'shadow fallback attempt was not observed')
@@ -644,7 +727,7 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
 
   it('signs successfully when env carries a valid parent hash', async () => {
     const { result, submitted } = await emitWithEnv(VALID_PARENT)
-    expect(result.record_hash).not.toBe('sha256:unknown')
+    expectSignedOutput(result)
     expect(result.warnings.some((w) => w.toLowerCase().includes('error'))).toBe(false)
     expect(submittedInformedBy(submitted)).toEqual([VALID_PARENT])
   })
@@ -659,20 +742,20 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
       const { result, submitted } = await emitWithEnv(bad)
       // Should still sign successfully, env is silently dropped, not raised
       // as an error.
-      expect(result.record_hash).not.toBe('sha256:unknown')
+      expectSignedOutput(result)
       expect(submittedInformedBy(submitted)).toBeUndefined()
     }
   })
 
   it('dedupes when caller informed_by already includes the parent hash', async () => {
     const { result, submitted } = await emitWithEnv(VALID_PARENT, [VALID_PARENT])
-    expect(result.record_hash).not.toBe('sha256:unknown')
+    expectSignedOutput(result)
     expect(submittedInformedBy(submitted)).toEqual([VALID_PARENT])
   })
 
   it('merges env-parent with caller-supplied informed_by', async () => {
     const { result, submitted } = await emitWithEnv(VALID_PARENT, [ANOTHER_VALID])
-    expect(result.record_hash).not.toBe('sha256:unknown')
+    expectSignedOutput(result)
     expect(submittedInformedBy(submitted)).toEqual([VALID_PARENT, ANOTHER_VALID])
   })
 
@@ -700,7 +783,7 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
       recordReferenceResolver: async () => 'not-found',
     })
 
-    expect(result.record_hash).not.toBe('sha256:unknown')
+    expectSignedOutput(result)
     expect(result.warnings).toContain(
       'dropped unresolved informed_by reference sha256:bbbbbbbbbbbb...bbbbbbbb; not found in local mirrors or log lookup',
     )
@@ -709,7 +792,7 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
 
   it('no-op when env is unset', async () => {
     const { result, submitted } = await emitWithEnv(undefined, [ANOTHER_VALID])
-    expect(result.record_hash).not.toBe('sha256:unknown')
+    expectSignedOutput(result)
     expect(submittedInformedBy(submitted)).toEqual([ANOTHER_VALID])
   })
 
@@ -739,7 +822,7 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
       recordReferenceResolver: async (ref) => (ref === known ? 'found' : 'not-found'),
     })
 
-    expect(result.record_hash).not.toBe('sha256:unknown')
+    expectSignedOutput(result)
     expect(
       result.warnings.some((w) => w.includes('dropped unresolved informed_by reference')),
     ).toBe(true)
@@ -771,7 +854,7 @@ describe('ATRIB_PARENT_RECORD_HASH env seeding (D104)', () => {
       recordReferenceResolver: async () => 'unknown',
     })
 
-    expect(result.record_hash).not.toBe('sha256:unknown')
+    expectSignedOutput(result)
     expect(
       result.warnings.some((w) => w.includes('dropped unvalidated informed_by reference')),
     ).toBe(true)
@@ -880,11 +963,13 @@ describe('D083 harness session-id discovery (consumer integration)', () => {
     delete process.env['ATRIB_ACTIVE_SESSION_PROFILE']
     process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID'] = '1'
     const result = await emitWithoutCallerContextId()
-    expect(result.record_hash).toBe('sha256:unknown')
+    expect(result.signed).toBe(false)
+    expect(result).not.toHaveProperty('record_hash')
     expect(
-      result.warnings.some((warning) =>
-        warning.includes('context_id is required by ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID'),
-      ),
+      !result.signed &&
+        result.refusals.some((refusal) =>
+          refusal.includes('context_id is required by ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID'),
+        ),
     ).toBe(true)
   })
 
@@ -893,7 +978,7 @@ describe('D083 harness session-id discovery (consumer integration)', () => {
     process.env['CLAUDE_CODE_SESSION_ID'] = '38af29c4-fc3a-4f88-8fec-392501b8a0a9'
     process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID'] = 'true'
     const result = await emitWithoutCallerContextId()
-    expect(result.record_hash).not.toBe('sha256:unknown')
+    expectSignedOutput(result)
     expect(result.context_id).toBe('38af29c4fc3a4f888fec392501b8a0a9')
   })
 })
@@ -968,6 +1053,7 @@ describe('event_type shorthand aliases', () => {
         queue,
       })
 
+      expectSignedOutput(result)
       expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
       expect(submitted.length).toBe(1)
       const record = submitted[0]!

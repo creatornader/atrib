@@ -384,8 +384,8 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
 
   it('handleEmit refuses revision without revises (require/forbid invariant per §1.2.9)', async () => {
     // The mirror of the §1.2.7 annotates require/forbid invariant: revision
-    // event_type without a revises field must be refused, returning a
-    // warnings-only response rather than signing a malformed record.
+    // event_type without a revises field must be refused without signing a
+    // malformed record.
     const { seed } = await fixedKey()
     const { __test_only__ } = await import('../src/index.js')
     const { createSubmissionQueue } = await import('@atrib/mcp')
@@ -401,8 +401,9 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
     })
     await queue.flush()
 
-    expect(result.record_hash).toBe('sha256:unknown')
-    expect(result.warnings.some((w) => w.includes('revises'))).toBe(true)
+    expect(result.signed).toBe(false)
+    expect(result).not.toHaveProperty('record_hash')
+    expect(result.refusals.some((refusal) => refusal.includes('revises'))).toBe(true)
     expect(log.received.length).toBe(0)
   })
 
@@ -423,8 +424,9 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
     })
     await queue.flush()
 
-    expect(result.record_hash).toBe('sha256:unknown')
-    expect(result.warnings.some((w) => w.includes('FORBIDDEN'))).toBe(true)
+    expect(result.signed).toBe(false)
+    expect(result).not.toHaveProperty('record_hash')
+    expect(result.refusals.some((refusal) => refusal.includes('FORBIDDEN'))).toBe(true)
     expect(log.received.length).toBe(0)
   })
 })
@@ -451,11 +453,12 @@ describe('emitInProcess (in-process entrypoint)', () => {
     )
 
     // EmitOutput shape.
+    expect(result.signed).toBe(true)
     expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
     expect(result.context_id).toMatch(/^[0-9a-f]{32}$/)
     expect(Array.isArray(result.warnings)).toBe(true)
 
-    // The record reached the log WITHOUT any caller-side flush — emitInProcess
+    // The record reached the log WITHOUT any caller-side flush. emitInProcess
     // drains the queue itself. This is the property the hook path depends on.
     expect(log.received.length).toBe(1)
     const landed = log.received[0]!
@@ -471,11 +474,12 @@ describe('emitInProcess (in-process entrypoint)', () => {
     expect(lines.length).toBe(1)
   })
 
-  it('throws on a malformed input, but not on operational failure', async () => {
+  it('returns signed false on malformed input without throwing', async () => {
     const { emitInProcess } = await import('../src/index.js')
-    // Missing the required event_type field → EmitInput.parse rejects.
-    await expect(
-      emitInProcess({ content: { what: 'no event_type' } }),
-    ).rejects.toThrow()
+    const result = await emitInProcess({ content: { what: 'no event_type' } })
+
+    expect(result.signed).toBe(false)
+    expect(result).not.toHaveProperty('record_hash')
+    expect(result.refusals.some((refusal) => refusal.includes('event_type'))).toBe(true)
   })
 })

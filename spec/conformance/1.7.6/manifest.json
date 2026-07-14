@@ -32,6 +32,14 @@
     {
       "file": "cases/duplicate-signer-key.json",
       "name": "duplicate-signer-key"
+    },
+    {
+      "file": "cases/sybil-two-untrusted-signers.json",
+      "name": "sybil-two-untrusted-signers"
+    },
+    {
+      "file": "cases/two-trusted-signers.json",
+      "name": "two-trusted-signers"
     }
   ],
   "keys": {
@@ -39,5 +47,5 @@
     "counterparty_pubkey": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
     "facilitator_pubkey": "F8t5-ytBIPKx7GXkGY1uCLKOgT_rAeSkAIObheGAgM4"
   },
-  "note": "The seven cases collectively exercise the §1.7.6 cross_attestation algorithm: legacy single-sig (case 1), below-minimum signer counts (cases 1-2 and case 7), the canonical happy path (case 3), above-minimum (case 4), tamper-detection (case 5), creator-signer separation (case 6), and duplicate-signer rejection (case 7). Per §1.7.6 missing cross-attestation is a signal, not invalidation: legacy, tampered, and duplicate-signer records remain cryptographically valid via the underlying signature path when the creator signer verifies, while a signers[] record with no creator signer is invalid even when two counterparty signatures verify."
+  "note": "The nine cases collectively exercise the §1.7.6 cross_attestation algorithm: legacy single-sig (case 1), below-minimum signer counts (cases 1-2 and case 7), the canonical happy path (case 3), above-minimum (case 4), tamper-detection (case 5), creator-signer separation (case 6), duplicate-signer rejection (case 7), and trusted signer composition (cases 8-9). Per §1.7.6 missing cross-attestation is a signal, not invalidation: legacy, tampered, and duplicate-signer records remain cryptographically valid via the underlying signature path when the creator signer verifies, while a signers[] record with no creator signer is invalid even when two counterparty signatures verify. Cases 8-9 add trust-set composition: two verified signer keys not in the trust set (case 8) surface signers_trusted: 0 and sybil_suspected: true while staying valid, whereas two trusted signer keys (case 9) surface signers_trusted: 2 and sybil_suspected: false. signers_valid and missing keep their trust-blind semantics on every case."
 }

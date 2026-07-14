@@ -79,6 +79,7 @@ describe('AP2 official SDK reference artifacts', () => {
       signers_count: 2,
       signers_valid: 2,
       missing: false,
+      trust_evaluated: false,
     })
     expect(summary.recordVerification?.ap2_vi_evidence?.valid).toBe(true)
   })
