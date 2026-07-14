@@ -8,6 +8,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./payments": {
+      "import": "./dist/payments.js",
+      "types": "./dist/payments.d.ts"
     }
   },
   "files": [

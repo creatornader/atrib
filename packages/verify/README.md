@@ -66,6 +66,10 @@ Per the [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58
 
 ## API reference
 
+Payment-specific APIs now also ship at `@atrib/verify/payments`:
+`verifySettlementRecommendation`, `calculate`, `verifyAp2ViEvidence`, and
+`verifyAp2ViEvidenceAsync`. Root exports remain during the deprecation cycle.
+
 ### `new AtribVerifier(options)`
 
 | Field             | Type     | Default                        | Description                                                                                                                  |

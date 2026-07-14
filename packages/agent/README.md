@@ -61,6 +61,17 @@ All detection logic lives in `packages/agent/src/transaction.ts` and runs agains
 
 ### What each detector actually looks for on the wire
 
+Payment detection now has its own import path:
+
+```typescript
+import { detectTransaction } from '@atrib/agent/payments'
+```
+
+The root export remains during the deprecation cycle. Pass
+`detectTransaction: [customDetector]` to `atrib()` when a host needs a
+caller-owned detector order. An empty array disables payment classification
+and leaves ordinary tool-call attribution on.
+
 These are the exact shapes the production `detectTransaction()` function in [`packages/agent/src/transaction.ts`](https://github.com/creatornader/atrib/blob/main/packages/agent/src/transaction.ts) matches against. Every shape below is covered by a unit test against a real spec fixture in [`packages/agent/test/fixtures/`](https://github.com/creatornader/atrib/blob/main/packages/agent/test/fixtures/), and the verifier question "what does atrib actually detect" has a one-paragraph answer per protocol.
 
 #### ACP: Stripe / OpenAI Agentic Commerce Protocol

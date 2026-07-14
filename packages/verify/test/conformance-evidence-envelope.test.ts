@@ -516,3 +516,32 @@ describe('spec §5.5.7 conformance: continuation-packet/', () => {
     expect(await verifyRecordSignature(record)).toBe(c.expected.referenced_record_signature_ok)
   })
 })
+
+describe('spec §5.5.7 conformance: payments envelopes', () => {
+  it.each([
+    ['payments-detection', 'detection-envelope-valid'],
+    ['payments-settlement', 'recommendation-envelope-valid'],
+  ])('%s/%s: the payments profile accepts the committed envelope', (family, name) => {
+    const c = loadCase(family, name)
+    const envelope = c.input.envelope as EnvelopeLike
+    expect(checkEnvelopeShape(envelope)).toEqual([])
+    expect(jcsSha256(c.input.payload_material)).toBe((envelope.payload as { hash: string }).hash)
+    const profile = classifyProfile(
+      envelope.profile as string,
+      c.input.atrib_profile_registry as string[],
+    )
+    expect(profile.registered).toBe(c.expected.registered)
+    expect(profile.atrib_maintained).toBe(c.expected.atrib_maintained)
+  })
+
+  it.each([
+    ['payments-detection', 'detection-payload-hash-mismatch'],
+    ['payments-settlement', 'tampered-recommendation-rejected'],
+  ])('%s/%s: profile payload mismatches remain visible', (family, name) => {
+    const c = loadCase(family, name)
+    const envelope = c.input.envelope as EnvelopeLike
+    expect(checkEnvelopeShape(envelope)).toEqual([])
+    expect(jcsSha256(c.input.payload_material)).not.toBe((envelope.payload as { hash: string }).hash)
+    expect(c.expected.accept).toBe(false)
+  })
+})

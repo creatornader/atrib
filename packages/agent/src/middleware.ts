@@ -23,7 +23,7 @@ import { createSession, buildOutboundMeta, accumulateInboundContext } from './se
 import type { SessionState } from './session.js'
 import type { GapNode } from '@atrib/verify'
 import { detectTransaction } from './transaction.js'
-import type { TransactionDetection } from './transaction.js'
+import type { TransactionDetection, TransactionDetector } from './transaction.js'
 import { initializeSessionPolicy } from './policy.js'
 import type { SessionPolicyRecord } from './policy.js'
 
@@ -39,6 +39,12 @@ export interface AgentAtribOptions {
   sessionToken?: string | undefined
   /** Server URLs for tools the agent will call (for policy fetch). */
   serverUrls?: string[] | undefined
+  /**
+   * Payment detectors, in caller priority order. An explicit list wins over
+   * the profile default. An empty list disables classification without
+   * affecting tool calls or ordinary attribution records.
+   */
+  detectTransaction?: TransactionDetector[] | undefined
 }
 
 /**
@@ -116,6 +122,7 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
   let sessionPolicyRecord: SessionPolicyRecord | null = null
   let initPromise: Promise<void> | null = null
   const pendingEmissions: Promise<void>[] = []
+  const transactionDetectors = options.detectTransaction ?? [detectTransaction]
 
   /**
    * Append a runtime warning to BOTH session.warnings and the session policy
@@ -232,7 +239,12 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
         }
 
         // §5.4.5: Transaction detection
-        const detection = detectTransaction(toolName, response, callOptions?.headers)
+        const detection = detectWithDetectors(
+          transactionDetectors,
+          toolName,
+          response,
+          callOptions?.headers,
+        )
 
         if (detection.detected) {
           // Path 1: Merchant has @atrib/mcp. token present in response
@@ -299,6 +311,23 @@ export function atrib(options: AgentAtribOptions = {}): ToolCallInterceptor {
       }
     },
   }
+}
+
+function detectWithDetectors(
+  detectors: TransactionDetector[],
+  toolName: string,
+  response: unknown,
+  headers?: Record<string, string | undefined>,
+): TransactionDetection {
+  for (const detector of detectors) {
+    try {
+      const result = detector(toolName, response, headers)
+      if (result.detected) return result
+    } catch (err) {
+      console.warn('atrib: transaction detector failed', err)
+    }
+  }
+  return { detected: false, protocol: null, checkoutUrl: null, contentId: null }
 }
 
 /**
