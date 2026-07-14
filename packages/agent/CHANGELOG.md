@@ -1,5 +1,19 @@
 # @atrib/agent
 
+## 0.4.0
+
+### Minor Changes
+
+- c8f2fb2: Add payments subpath exports and injectable transaction detectors.
+
+### Patch Changes
+
+- Updated dependencies [c8f2fb2]
+- Updated dependencies [c8f2fb2]
+- Updated dependencies [c8f2fb2]
+  - @atrib/verify@0.9.0
+  - @atrib/mcp@0.21.0
+
 ## 0.3.3
 
 ### Patch Changes

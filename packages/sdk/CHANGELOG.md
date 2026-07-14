@@ -1,5 +1,20 @@
 # @atrib/sdk
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [72d0f05]
+- Updated dependencies [c8f2fb2]
+- Updated dependencies [c8f2fb2]
+- Updated dependencies [c8f2fb2]
+- Updated dependencies [72d0f05]
+  - @atrib/recall@0.14.7
+  - @atrib/verify@0.9.0
+  - @atrib/mcp@0.21.0
+  - @atrib/emit@0.17.3
+  - @atrib/verify-mcp@0.2.22
+
 ## 0.1.3
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @atrib/annotate
 
+## 0.2.41
+
+### Patch Changes
+
+- 72d0f05: Make write-primitive refusals return `signed: false` and surface as MCP tool errors while signed degradations stay successful with warnings.
+- Updated dependencies [c8f2fb2]
+- Updated dependencies [72d0f05]
+  - @atrib/mcp@0.21.0
+  - @atrib/emit@0.17.3
+
 ## 0.2.40
 
 ### Patch Changes

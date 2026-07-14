@@ -1,5 +1,14 @@
 # @atrib/cloudflare-live-client-proof
 
+## 0.0.22
+
+### Patch Changes
+
+- Updated dependencies [c8f2fb2]
+- Updated dependencies [c8f2fb2]
+  - @atrib/agent@0.4.0
+  - @atrib/mcp@0.21.0
+
 ## 0.0.21
 
 ### Patch Changes
