@@ -14,20 +14,18 @@ import {
 } from './update-primitives-runtime.mjs'
 
 const root = '/workspace/atrib'
+// The attest/recall two-verb surface (D164): three mounts serve the
+// seventeen-tool alias-window union.
 const expectedPrimitiveVersions = {
-  emit: { package: '@atrib/emit', version: '0.16.2' },
-  annotate: { package: '@atrib/annotate', version: '0.2.37' },
-  revise: { package: '@atrib/revise', version: '0.2.37' },
-  recall: { package: '@atrib/recall', version: '0.14.3' },
-  trace: { package: '@atrib/trace', version: '0.5.17' },
-  summarize: { package: '@atrib/summarize', version: '0.4.19' },
-  verify: { package: '@atrib/verify-mcp', version: '0.2.17' },
+  attest: { package: '@atrib/attest', version: '0.0.0' },
+  recall: { package: '@atrib/recall', version: '0.14.7' },
+  summarize: { package: '@atrib/summarize', version: '0.4.23' },
 }
 const expectedPrimitiveTools = {
-  emit: ['emit'],
-  annotate: ['atrib-annotate'],
-  revise: ['atrib-revise'],
+  attest: ['atrib-annotate', 'atrib-revise', 'attest', 'emit'],
   recall: [
+    'atrib-verify',
+    'recall',
     'recall_annotations',
     'recall_by_content',
     'recall_by_signer',
@@ -36,10 +34,10 @@ const expectedPrimitiveTools = {
     'recall_revisions',
     'recall_session_chain',
     'recall_walk',
+    'trace',
+    'trace_forward',
   ],
-  trace: ['trace', 'trace_forward'],
   summarize: ['summarize'],
-  verify: ['atrib-verify'],
 }
 const allExpectedTools = Object.values(expectedPrimitiveTools).flat()
 
@@ -67,43 +65,17 @@ function behavioralProbesFixture() {
       mutates_log_on_call: false,
       tool_names: expectedPrimitiveTools.recall,
     },
-    trace: {
-      status: 'pass',
-      probe_kind: 'read-only',
-      mutates_log_on_call: false,
-      tool_names: expectedPrimitiveTools.trace,
-    },
     summarize: {
       status: 'pass',
       probe_kind: 'schema-only',
       mutates_log_on_call: false,
       tool_names: expectedPrimitiveTools.summarize,
     },
-    verify: {
-      status: 'pass',
-      probe_kind: 'read-only',
-      mutates_log_on_call: false,
-      tool_names: expectedPrimitiveTools.verify,
-    },
-    emit: {
+    attest: {
       status: 'skipped',
       probe_kind: 'not-available',
       mutates_log_on_call: true,
-      tool_names: expectedPrimitiveTools.emit,
-      reason: 'write primitive has no validate-only contract',
-    },
-    annotate: {
-      status: 'skipped',
-      probe_kind: 'not-available',
-      mutates_log_on_call: true,
-      tool_names: expectedPrimitiveTools.annotate,
-      reason: 'write primitive has no validate-only contract',
-    },
-    revise: {
-      status: 'skipped',
-      probe_kind: 'not-available',
-      mutates_log_on_call: true,
-      tool_names: expectedPrimitiveTools.revise,
+      tool_names: expectedPrimitiveTools.attest,
       reason: 'write primitive has no validate-only contract',
     },
   }
@@ -218,10 +190,10 @@ const health = validateHealthPayload(
 )
 assert.equal(health.pid, 123)
 assert.equal(health.recall_contract, 'pass')
-assert.equal(health.primitive_contracts.emit.status, 'pass')
-assert.equal(health.primitive_contracts.recall.tool_count, 8)
-assert.equal(health.behavioral_probes.verify.status, 'pass')
-assert.equal(health.behavioral_probes.emit.status, 'skipped')
+assert.equal(health.primitive_contracts.attest.status, 'pass')
+assert.equal(health.primitive_contracts.recall.tool_count, 12)
+assert.equal(health.behavioral_probes.recall.status, 'pass')
+assert.equal(health.behavioral_probes.attest.status, 'skipped')
 
 assert.throws(
   () =>
@@ -263,7 +235,7 @@ assert.equal(recall.coverage_index_status, 'memory_only')
 assert.equal(recall.content_index_version, 'content-index-v1')
 
 const toolSurface = validateToolSurfacePayload(allExpectedTools.map((name) => ({ name })))
-assert.equal(toolSurface.tool_count, 15)
+assert.equal(toolSurface.tool_count, 17)
 
 assert.throws(
   () => validateToolSurfacePayload([{ name: 'emit' }]),
@@ -353,8 +325,8 @@ const atribdHealth = validateHealthPayload(atribdHealthBody(), {
 })
 assert.equal(atribdHealth.pid, 456)
 assert.equal(atribdHealth.recall_contract, 'pass')
-assert.equal(atribdHealth.primitive_contracts.recall.tool_count, 8)
-assert.equal(atribdHealth.behavioral_probes.emit.status, 'skipped')
+assert.equal(atribdHealth.primitive_contracts.recall.tool_count, 12)
+assert.equal(atribdHealth.behavioral_probes.attest.status, 'skipped')
 
 assert.throws(() => {
   const withSessions = atribdHealthBody()
