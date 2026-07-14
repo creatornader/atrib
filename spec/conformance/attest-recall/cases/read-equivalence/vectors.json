@@ -1,0 +1,275 @@
+{
+  "name": "read-equivalence-vectors",
+  "spec_section": "attest-recall rename (P047 promotion)",
+  "description": "Each vector runs one legacy read tool and the `recall` verb mapping onto it against the fixed mirror fixture. Result sets and ordering MUST match JSON-for-JSON when both run in one process at one frozen wall-clock instant. Every compact result keeps record_hash so calls can be chained (D084).",
+  "mirror_file": "mirror.jsonl",
+  "query_timestamp_ms": 1783645200000,
+  "record_hashes": {
+    "r1": "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6",
+    "r2": "sha256:9f414073dae9f61789c596564b73193858a798d7b5aae89c49b88ee826d278b0",
+    "r3": "sha256:7e98e2decb6f092e01809e0a298b4b8b9a7bee6a2e8044785949cca0701e3007",
+    "r4": "sha256:fb8ef5faf4807981c4f07605d7fc75b7f8be372ef449bf317a8e8b9ac1abc8ab",
+    "r5": "sha256:ad390249b3d44817b1c84a06a526839ff811f401e20001b12544e7f8df31e683",
+    "r6": "sha256:3b4b8735291322aaad3652b443f0e8fc3cabe4e65c04624c7867714bb28301a2",
+    "r7": "sha256:ad711aa9acb2e29bb196fa7385aa561a68c697236dadf142fd580a107af78ee4"
+  },
+  "vectors": [
+    {
+      "name": "history",
+      "legacy": {
+        "tool": "recall_my_attribution_history",
+        "arguments": {
+          "limit": 50
+        }
+      },
+      "recall": {
+        "shape": "history",
+        "limit": 50
+      }
+    },
+    {
+      "name": "history-filtered",
+      "legacy": {
+        "tool": "recall_my_attribution_history",
+        "arguments": {
+          "context_id": "a11ce000a11ce000a11ce000a11ce000",
+          "event_type": "observation",
+          "limit": 10
+        }
+      },
+      "recall": {
+        "shape": "history",
+        "filters": {
+          "context_id": "a11ce000a11ce000a11ce000a11ce000",
+          "event_type": "observation"
+        },
+        "limit": 10
+      }
+    },
+    {
+      "name": "walk-graph",
+      "legacy": {
+        "tool": "recall_walk",
+        "arguments": {
+          "from_record_hash": "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6",
+          "depth": 3
+        }
+      },
+      "recall": {
+        "shape": "walk",
+        "start": "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6",
+        "depth": 3
+      }
+    },
+    {
+      "name": "walk-trace-backward",
+      "legacy": {
+        "tool": "trace",
+        "arguments": {
+          "record_hash": "sha256:ad711aa9acb2e29bb196fa7385aa561a68c697236dadf142fd580a107af78ee4",
+          "depth": 3,
+          "compact": true
+        }
+      },
+      "recall": {
+        "shape": "walk",
+        "direction": "backward",
+        "start": "sha256:ad711aa9acb2e29bb196fa7385aa561a68c697236dadf142fd580a107af78ee4",
+        "depth": 3,
+        "compact": true
+      }
+    },
+    {
+      "name": "walk-trace-forward",
+      "legacy": {
+        "tool": "trace_forward",
+        "arguments": {
+          "record_hash": "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6",
+          "depth": 3,
+          "compact": true
+        }
+      },
+      "recall": {
+        "shape": "walk",
+        "direction": "forward",
+        "start": "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6",
+        "depth": 3,
+        "compact": true
+      }
+    },
+    {
+      "name": "content",
+      "legacy": {
+        "tool": "recall_by_content",
+        "arguments": {
+          "query": "alpha two-verb surface",
+          "k": 5
+        }
+      },
+      "recall": {
+        "shape": "content",
+        "query": "alpha two-verb surface",
+        "limit": 5
+      }
+    },
+    {
+      "name": "chain",
+      "legacy": {
+        "tool": "recall_session_chain",
+        "arguments": {
+          "context_id": "a11ce000a11ce000a11ce000a11ce000",
+          "limit": 50
+        }
+      },
+      "recall": {
+        "shape": "chain",
+        "filters": {
+          "context_id": "a11ce000a11ce000a11ce000a11ce000"
+        },
+        "limit": 50
+      }
+    },
+    {
+      "name": "annotations",
+      "legacy": {
+        "tool": "recall_annotations",
+        "arguments": {
+          "record_hash": "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6"
+        }
+      },
+      "recall": {
+        "shape": "annotations",
+        "start": "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6"
+      }
+    },
+    {
+      "name": "revisions",
+      "legacy": {
+        "tool": "recall_revisions",
+        "arguments": {
+          "record_hash": "sha256:9f414073dae9f61789c596564b73193858a798d7b5aae89c49b88ee826d278b0"
+        }
+      },
+      "recall": {
+        "shape": "revisions",
+        "start": "sha256:9f414073dae9f61789c596564b73193858a798d7b5aae89c49b88ee826d278b0"
+      }
+    },
+    {
+      "name": "orphans",
+      "legacy": {
+        "tool": "recall_orphans",
+        "arguments": {
+          "context_id": "b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0",
+          "limit": 50
+        }
+      },
+      "recall": {
+        "shape": "orphans",
+        "filters": {
+          "context_id": "b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0"
+        },
+        "limit": 50
+      }
+    },
+    {
+      "name": "by_signer",
+      "legacy": {
+        "tool": "recall_by_signer",
+        "arguments": {
+          "min_records": 1
+        }
+      },
+      "recall": {
+        "shape": "by_signer",
+        "min_records": 1
+      }
+    }
+  ],
+  "verification": [
+    {
+      "name": "handoff-accept",
+      "description": "A mirror envelope with a valid signature and a matching required hash MUST be accepted.",
+      "arguments": {
+        "shape": "annotations",
+        "start": "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6",
+        "verification": {
+          "mode": "handoff",
+          "records": [
+            {
+              "record": {
+                "spec_version": "atrib/1.0",
+                "content_id": "sha256:e75fd1dea166274504c5300f7cb46476d218abb3526c1d7658ff218ab173f6e3",
+                "creator_key": "GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE",
+                "chain_root": "sha256:65da75579f3cbcaca36d27bfe44edfbef43d49e5cf8d3b3c27c200af58ea44f2",
+                "event_type": "https://atrib.dev/v1/types/observation",
+                "context_id": "a11ce000a11ce000a11ce000a11ce000",
+                "timestamp": 1783641601000,
+                "signature": "K9UsvvTcAFPbNE8d7_UIiIKgY29-1qQ8K4_uDRSnXMzLmH9tuHk_tA8WLkNinaurCUa1CPBWmyugTOrfigw1CQ",
+                "args_hash": "sha256:8eb75a9d71f363275b713187a5853eda7784f21d190d4756203aaecef5747fec"
+              },
+              "proof": null,
+              "written_at": 1783641601000,
+              "_local": {
+                "content": {
+                  "what": "design decision alpha: prefer the two-verb surface",
+                  "why_noted": "read-equivalence conformance fixture",
+                  "topics": [
+                    "alpha",
+                    "conformance"
+                  ]
+                },
+                "producer": "atrib-emit"
+              }
+            }
+          ],
+          "required_record_hashes": [
+            "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6"
+          ]
+        }
+      },
+      "expected": {
+        "status": "ok",
+        "all_accepted": true,
+        "accepted_record_hashes": [
+          "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6"
+        ]
+      }
+    },
+    {
+      "name": "handoff-reject-missing",
+      "description": "A required hash with no matching evidence MUST surface as a verifier rejection.",
+      "arguments": {
+        "verification": {
+          "mode": "handoff",
+          "records": [],
+          "required_record_hashes": [
+            "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          ]
+        }
+      },
+      "expected": {
+        "status": "ok",
+        "all_accepted": false
+      }
+    },
+    {
+      "name": "verifier-absent-degrades",
+      "description": "With the optional @atrib/verify peer unresolvable, the verification block MUST be the typed verifier_unavailable result and the read result MUST be unchanged.",
+      "arguments": {
+        "shape": "annotations",
+        "start": "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6",
+        "verification": {
+          "mode": "handoff",
+          "records": [],
+          "required_record_hashes": [
+            "sha256:bf77b6a907722fa6d17b006765f8538b9266411f0dbc9c03ef48e907e6df50b6"
+          ]
+        }
+      },
+      "expected": {
+        "status": "verifier_unavailable"
+      }
+    }
+  ]
+}

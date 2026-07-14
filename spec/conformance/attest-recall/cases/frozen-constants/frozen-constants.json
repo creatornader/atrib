@@ -1,0 +1,39 @@
+{
+  "name": "frozen-constants",
+  "spec_section": "attest-recall rename (P047 promotion)",
+  "description": "SYNTHETIC_SERVER_URL is frozen permanently as an opaque historical constant, including inside @atrib/attest. The six normative event-type URIs, their log-entry bytes, and the content_id derivation are pinned with it.",
+  "expected": {
+    "synthetic_server_url": "mcp://atrib-emit",
+    "event_types": {
+      "tool_call": {
+        "uri": "https://atrib.dev/v1/types/tool_call",
+        "byte": "0x01"
+      },
+      "transaction": {
+        "uri": "https://atrib.dev/v1/types/transaction",
+        "byte": "0x02"
+      },
+      "observation": {
+        "uri": "https://atrib.dev/v1/types/observation",
+        "byte": "0x03"
+      },
+      "directory_anchor": {
+        "uri": "https://atrib.dev/v1/types/directory_anchor",
+        "byte": "0x04"
+      },
+      "annotation": {
+        "uri": "https://atrib.dev/v1/types/annotation",
+        "byte": "0x05"
+      },
+      "revision": {
+        "uri": "https://atrib.dev/v1/types/revision",
+        "byte": "0x06"
+      }
+    },
+    "content_ids": {
+      "observation": "sha256:e75fd1dea166274504c5300f7cb46476d218abb3526c1d7658ff218ab173f6e3",
+      "annotation": "sha256:ed7971ab53ef206f307c0df4b951b666f42f4d6077ce931cc7a9738be74770ba",
+      "revision": "sha256:3282e5fccf8a561f19bcd95c75473b5fdf36ed689cea1ed36e4f85265e686a9e"
+    }
+  }
+}
