@@ -74,11 +74,22 @@ npm view <package-name> version --json
 
 Expected result for a new package: `E404`.
 
-If first publish will happen after the implementation PR lands, add the package
-to `.changeset/config.json` `ignore` in the same PR. Keep it ignored until an
-npm owner completes first publish and configures trusted publishing. This keeps
-`release.yml` from trying to create the package through OIDC, which npm rejects
-for package names that do not exist yet.
+If first publish will happen after the implementation PR lands, the package
+needs BOTH guards in the same PR, because they cover different steps:
+
+1. `"private": true` in the package's `package.json`. This is what actually
+   stops `changeset publish`: the publish step attempts every non-private
+   workspace package whose local version is absent from npm, and the
+   `ignore` list does not apply to it. Learned live on 2026-07-10, when an
+   ignored-but-public package failed `release.yml` on every main push (npm
+   rejects an OIDC PUT for a package name with no trusted-publishing
+   config).
+2. The package name in `.changeset/config.json` `ignore`. This keeps
+   `changeset version` from cutting version PRs for it.
+
+Keep both until an npm owner completes first publish and configures trusted
+publishing. At seed time, flip `private` to `false`, remove the `ignore`
+entry, and add the first changeset in one PR.
 
 Check the release gate before merging:
 
@@ -86,9 +97,10 @@ Check the release gate before merging:
 node scripts/check-release-publish-readiness.mjs
 ```
 
-The gate queries npm for every non-private workspace package that Changesets is
-allowed to publish. It exits non-zero if an unignored public package is missing
-from npm.
+The gate queries npm for every non-private workspace package, regardless of
+the Changesets ignore list, because `changeset publish` does not consult that
+list either. It exits non-zero if any non-private package is missing from
+npm; the fix is the `"private": true` guard above, not an ignore entry.
 
 ## Repo docs
 

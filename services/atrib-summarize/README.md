@@ -1,8 +1,16 @@
 # @atrib/summarize
 
-MCP server exposing the `summarize` tool for Atrib's verifiable action layer. It synthesizes a narrative across N records using an OpenAI-compatible LLM.
+MCP server exposing the `summarize` tool for atrib's verifiable action layer. It synthesizes a narrative across N records using an OpenAI-compatible LLM.
 
 Closes the consumer-side cognitive-loop primitive companion to `atrib-trace`: trace returns the declared-relationship path; summarize returns the synthesized meaning across the selected records. Both read the same local mirror including the optional `_local` sidecar.
+
+## Install
+
+```bash
+pnpm add @atrib/summarize
+```
+
+Verify a local build with `pnpm --filter @atrib/summarize test`.
 
 ## Tool
 
@@ -62,7 +70,7 @@ When a record lacks usable local content (legacy entry), the prompt includes a m
 - **Selection**: `record_hashes` ∪ records-with-matching-`context_id`, deduplicated.
 - **Capping**: chronological-ascending sort, then take `max_records`. Skipped count surfaced.
 - **Honest input flagging**: a per-record line in the prompt marks records lacking semantic content; the system prompt instructs the LLM not to invent semantics.
-- **Network access only on LLM call**: storage reads are local. Tests use the same FORBIDDEN_HOSTS guard as the rest of the workspace to prevent fixture leakage.
+- **Network access only on LLM call**: storage reads are local, but the selected record content is sent to the configured LLM endpoint (NVIDIA NIM by default) to produce the narrative. This is the one read primitive that sends mirror content off-machine. Point `ATRIB_SUMMARIZE_BASE_URL` at a self-hosted or local model to keep record content on-machine. Tests use the same FORBIDDEN_HOSTS guard as the rest of the workspace to prevent fixture leakage.
 - **No retry on LLM failure**: surfaces the error in `warnings` and returns null narrative. Caller decides whether to retry with smaller `max_records` or different model.
 - **Instrumented (per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) Surface 6)**: every call writes a per-invocation jsonl entry to `~/.atrib/state/read-primitives/calls.jsonl` for the unified loop-closure analyzer. Includes `elapsed_ms` covering the full LLM round-trip plus `errored: true` on LLM failure paths. Silent-failure per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); instrumentation never blocks the summarize response. `ATRIB_READ_PRIMITIVES_LOG` overrides the default path for tests.
 
@@ -73,8 +81,8 @@ Add to your MCP host config:
 ```json
 {
   "atrib-summarize": {
-    "command": "node",
-    "args": ["/path/to/atrib-summarize/dist/main.js"],
+    "command": "npx",
+    "args": ["-y", "@atrib/summarize"],
     "env": {
       "ATRIB_SUMMARIZE_MODEL": "qwen/qwen3.5-397b-a17b"
     }
@@ -82,11 +90,17 @@ Add to your MCP host config:
 }
 ```
 
-The API key can live in the host env or in the cache file above. Do not
-write secret values into shared MCP config.
+From a monorepo checkout, use `"command": "node"` with
+`"args": ["/path/to/atrib-summarize/dist/main.js"]` instead. The API key can
+live in the host env or in the cache file above. Do not write secret values
+into shared MCP config.
 
 ## Status
 
-Initial scaffold (v0.1.0). 6 unit tests covering record selection (by hash, by context, unioned, missing-skip) + degradation paths (no inputs, no API key). Integration test against a real LLM is gated behind `ATRIB_SUMMARIZE_API_KEY` and not run in CI.
+Published and maintained. Unit tests cover record selection (by hash, by context, unioned, missing-skip) and the degradation paths (no inputs, no API key). An integration test against a real LLM is gated behind `ATRIB_SUMMARIZE_API_KEY` and not run in CI.
 
 The companion `atrib-trace` is the structural primitive; together they close the consumer side of the cognitive loop.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

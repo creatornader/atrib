@@ -1,0 +1,43 @@
+{
+  "name": "capability--reserved-prefix-rejected",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "SEP-2133 identifier grammar: {reverse-dns-prefix}/{extension-name}. No DNS label of a third-party vendor prefix may be `mcp` or `modelcontextprotocol` (reserved for official extensions), and a bare name with no prefix is not a valid identifier. dev.atrib/attribution itself is legal.",
+  "input": {
+    "identifiers": [
+      "dev.atrib/attribution",
+      "io.modelcontextprotocol/attribution",
+      "mcp.example/attribution",
+      "attribution",
+      "dev.atrib/attribution/v2"
+    ]
+  },
+  "expected": {
+    "results": [
+      {
+        "identifier": "dev.atrib/attribution",
+        "valid": true
+      },
+      {
+        "identifier": "io.modelcontextprotocol/attribution",
+        "valid": false,
+        "reason": "prefix label \"modelcontextprotocol\" is reserved"
+      },
+      {
+        "identifier": "mcp.example/attribution",
+        "valid": false,
+        "reason": "prefix label \"mcp\" is reserved"
+      },
+      {
+        "identifier": "attribution",
+        "valid": false,
+        "reason": "missing reverse-DNS vendor prefix"
+      },
+      {
+        "identifier": "dev.atrib/attribution/v2",
+        "valid": false,
+        "reason": "exactly one \"/\" separator"
+      }
+    ]
+  }
+}

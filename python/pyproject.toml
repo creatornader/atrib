@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "atrib"
+version = "0.1.1"
+description = "atrib client SDK: verifiable agent actions. attest/recall verbs, Ed25519-signed chain-linked records, byte-identical to the TypeScript implementation."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [{ name = "atrib", email = "hello@atrib.dev" }]
+keywords = ["attribution", "mcp", "ed25519", "merkle", "attest", "recall"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
+dependencies = [
+  "cryptography>=42.0",
+  "rfc8785>=0.1.4",
+  "typing_extensions>=4.6",
+]
+
+[project.urls]
+Homepage = "https://atrib.dev"
+Repository = "https://github.com/creatornader/atrib"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "mypy>=1.10",
+  "pdoc>=15.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/atrib"]
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
+mypy_path = "src"
+packages = ["atrib"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

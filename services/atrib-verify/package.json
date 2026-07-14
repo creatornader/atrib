@@ -1,7 +1,7 @@
 {
   "name": "@atrib/verify-mcp",
-  "version": "0.2.17",
-  "description": "MCP server for Atrib's verifiable action layer. Verifies handoff evidence before agents link follow-up work.",
+  "version": "0.2.21",
+  "description": "MCP server for atrib's verifiable action layer. Verifies handoff evidence before agents link follow-up work.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
     "atrib",

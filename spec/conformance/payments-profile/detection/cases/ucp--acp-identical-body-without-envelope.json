@@ -1,0 +1,24 @@
+{
+  "name": "acp-identical-body-without-envelope",
+  "corpus": "payments-profile/detection",
+  "rail": "ucp",
+  "profile_section": "2.2",
+  "description": "The byte-identical completion body with the ucp envelope removed is ACP, not UCP. Pins the ucp.version discrimination rule.",
+  "input": {
+    "tool_name": "complete_checkout",
+    "response": {
+      "id": "chk_123456789",
+      "status": "completed",
+      "currency": "USD",
+      "order": {
+        "id": "ord_99887766",
+        "permalink_url": "https://merchant.com/orders/ord_99887766"
+      }
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "ACP",
+    "checkout_url": "https://merchant.com/orders/ord_99887766"
+  }
+}

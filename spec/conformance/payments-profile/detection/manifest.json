@@ -1,0 +1,126 @@
+{
+  "corpus": "payments-profile/detection",
+  "profile": "docs/payments-profile.md",
+  "profile_version": "1.0.0",
+  "profile_sections": [
+    "2",
+    "3"
+  ],
+  "decision_link": "D147 (payments profile spin-out, promoted from P048)",
+  "rails": [
+    "ACP",
+    "UCP",
+    "x402",
+    "MPP",
+    "AP2",
+    "a2a-x402"
+  ],
+  "reference_consumer": "packages/agent/test/conformance-payments-profile-detection.test.ts",
+  "cases": [
+    {
+      "file": "cases/acp--completion-with-order.json",
+      "name": "completion-with-order",
+      "rail": "acp"
+    },
+    {
+      "file": "cases/acp--completion-without-order.json",
+      "name": "completion-without-order",
+      "rail": "acp"
+    },
+    {
+      "file": "cases/acp--order-create-webhook.json",
+      "name": "order-create-webhook",
+      "rail": "acp"
+    },
+    {
+      "file": "cases/acp--order-update-webhook.json",
+      "name": "order-update-webhook",
+      "rail": "acp"
+    },
+    {
+      "file": "cases/ucp--completion-with-ucp-envelope.json",
+      "name": "completion-with-ucp-envelope",
+      "rail": "ucp"
+    },
+    {
+      "file": "cases/ucp--acp-identical-body-without-envelope.json",
+      "name": "acp-identical-body-without-envelope",
+      "rail": "ucp"
+    },
+    {
+      "file": "cases/x402--payment-response-header-v2.json",
+      "name": "payment-response-header-v2",
+      "rail": "x402"
+    },
+    {
+      "file": "cases/x402--legacy-x-payment-response-v1.json",
+      "name": "legacy-x-payment-response-v1",
+      "rail": "x402"
+    },
+    {
+      "file": "cases/x402--no-payment-header.json",
+      "name": "no-payment-header",
+      "rail": "x402"
+    },
+    {
+      "file": "cases/x402--takes-precedence-over-mpp.json",
+      "name": "takes-precedence-over-mpp",
+      "rail": "x402"
+    },
+    {
+      "file": "cases/mpp--payment-receipt-header.json",
+      "name": "payment-receipt-header",
+      "rail": "mpp"
+    },
+    {
+      "file": "cases/mpp--case-insensitive-header.json",
+      "name": "case-insensitive-header",
+      "rail": "mpp"
+    },
+    {
+      "file": "cases/ap2--payment-receipt-decoded.json",
+      "name": "payment-receipt-decoded",
+      "rail": "ap2"
+    },
+    {
+      "file": "cases/ap2--receipt-jwt-envelope.json",
+      "name": "receipt-jwt-envelope",
+      "rail": "ap2"
+    },
+    {
+      "file": "cases/ap2--failed-receipt-not-detected.json",
+      "name": "failed-receipt-not-detected",
+      "rail": "ap2"
+    },
+    {
+      "file": "cases/ap2--v01-payment-mandate-fallback.json",
+      "name": "v01-payment-mandate-fallback",
+      "rail": "ap2"
+    },
+    {
+      "file": "cases/ap2--intent-mandate-not-detected.json",
+      "name": "intent-mandate-not-detected",
+      "rail": "ap2"
+    },
+    {
+      "file": "cases/a2a-x402--payment-completed-with-success-receipt.json",
+      "name": "payment-completed-with-success-receipt",
+      "rail": "a2a-x402"
+    },
+    {
+      "file": "cases/a2a-x402--only-failed-receipts-not-detected.json",
+      "name": "only-failed-receipts-not-detected",
+      "rail": "a2a-x402"
+    },
+    {
+      "file": "cases/heuristic--tool-name-fallback.json",
+      "name": "tool-name-fallback",
+      "rail": "heuristic"
+    },
+    {
+      "file": "cases/heuristic--no-signal-no-detection.json",
+      "name": "no-signal-no-detection",
+      "rail": "heuristic"
+    }
+  ]
+}

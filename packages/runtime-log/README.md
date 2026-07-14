@@ -1,7 +1,7 @@
 # @atrib/runtime-log
 
 `@atrib/runtime-log` builds and verifies proof manifests for host-owned agent
-runtime logs in Atrib's verifiable action layer.
+runtime logs in atrib's verifiable action layer.
 
 A runtime log is the execution record a host uses to reconstruct, resume, fork,
 compact, replay, or audit a run. atrib does not need the raw log body by
@@ -187,3 +187,7 @@ an atrib record can later commit to.
 Raw event bodies can stay in the runtime store, a local mirror, a continuation
 packet, a private evidence bundle, or the Record Body Archive Layer. The public
 Merkle log only needs the signed commitment to the manifest.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

@@ -1,0 +1,54 @@
+{
+  "name": "mirror-corpus-cross-file-tail",
+  "spec_section": "1.2.3",
+  "description": "The effective mirror belongs to producer A, but producer B's sibling file contains the newer record on the same context_id. Mirror inheritance MUST use producer B's canonical record hash as the corpus tail.",
+  "input": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inbound_record_hash_hex": null,
+    "auto_chain_tail_hex": null,
+    "env": {},
+    "mirror_tail_hex": null,
+    "mirror_corpus": {
+      "effective_file": "producer-a.jsonl",
+      "files": [
+        {
+          "file": "producer-a.jsonl",
+          "lines": [
+            {
+              "spec_version": "atrib/1.0",
+              "content_id": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+              "creator_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+              "event_type": "https://atrib.dev/v1/types/tool_call",
+              "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "timestamp": 1767225600000,
+              "signature": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+            }
+          ]
+        },
+        {
+          "file": "producer-b.jsonl",
+          "lines": [
+            {
+              "record": {
+                "spec_version": "atrib/1.0",
+                "content_id": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+                "creator_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "chain_root": "sha256:3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547",
+                "event_type": "https://atrib.dev/v1/types/tool_call",
+                "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "timestamp": 1767225600001,
+                "signature": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expected": {
+    "chain_root": "sha256:79a6eae81be72a6fc684846343a14241e08f37e1bc89d4712cd9fa1010c8c62b",
+    "precedence_layer": "mirror-tail",
+    "mirror_source_file": "producer-b.jsonl"
+  }
+}

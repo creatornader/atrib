@@ -64,7 +64,7 @@ Three protocol layers, one SDK layer that automates them. The append-only flow i
                                          │
                                          ▼
                 ┌─────────────────────────────────────────────────────┐
-                │  Policy & Settlement (§4)                           │
+                │  Policy & Settlement (payments profile)             │
                 │                                                     │
                 │  Pure function: graph + policy = distribution        │
                 │  Any party can run locally and verify independently │
@@ -163,7 +163,7 @@ Log consistency: consecutive checkpoints can be verified for consistency. This p
 
 Graph edges: all nine edge types are deterministically derived from record fields. Given the same records, any implementation following Section 3.2.4 must produce the same graph. You can verify by rebuilding it yourself.
 
-Settlement calculation: the algorithm (Section 4.6) is a pure function. Graph + policy in, distribution out. No network calls, no randomness. Any party with the same inputs gets the same answer. `@atrib/verify` exists so merchants can run this locally and check.
+Settlement calculation: the algorithm ([payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm)) is a pure function. Graph + policy in, distribution out. No network calls, no randomness. Any party with the same inputs gets the same answer. `@atrib/verify` exists so merchants can run this locally and check.
 
 **Trusted (but auditable):**
 
@@ -195,6 +195,8 @@ The decision is documented in [D006](DECISIONS.md#d006-merkle-log-c2sp-tlog-tile
 
 ## Payment protocol integration
 
+The split is: core accommodates, profile implements. The core spec keeps three payment-facing elements: the `transaction` event type (URI and 0x02 log-entry byte), the cross-attestation rule ([§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)), and the universal evidence envelope ([§5.5.7](atrib-spec.md#557-universal-evidence-envelope)). Everything rail-specific (per-rail detection hooks, the SDK detection contract, the policy format, the calculation algorithm, and settlement documents) lives in the independently versioned [atrib Payments Profile](docs/payments-profile.md) ([D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)), so rail churn never edits the core spec.
+
 atrib detects transaction events from six agent commerce protocols simultaneously:
 
 | Protocol                | Detection signal                                          | Source                       |
@@ -218,7 +220,7 @@ Protocol agnosticism. atrib works regardless of which payment rail the merchant 
 
 Separation of concerns. Attribution and payment are orthogonal problems. Attribution answers "who contributed to this outcome?" Payment answers "how does money move?" Coupling them would mean each one's adoption depends on the other's.
 
-When a transaction is detected, the agent emits a `transaction` record (event_type `"transaction"`) with the same `context_id` as the session. This closes the attribution loop -- the graph now has a terminal node that all contributing tool calls converge on. See Section 1.7 for the detection rules for each protocol.
+When a transaction is detected, the agent emits a `transaction` record (event_type `"transaction"`) with the same `context_id` as the session. This closes the attribution loop -- the graph now has a terminal node that all contributing tool calls converge on. See [payments profile §2](docs/payments-profile.md#2-transaction-detection-hooks) for the detection rules for each protocol.
 
 There are two emission paths for transaction records (Section 5.4.5, [D011](DECISIONS.md#d011-dual-transaction-emission-paths-with-anti-double-emission)). Path 1: the merchant has `@atrib/mcp` installed and emits the transaction record directly. Path 2: the merchant does not have atrib, so the agent detects the transaction from the response and emits it. Anti-double-emission logic prevents both from firing: the agent checks whether the response already contains an attribution token, and suppresses Path 2 if it does.
 
@@ -416,7 +418,7 @@ Two observation surfaces exist per protocol and compose cleanly:
 | Runtime       | `@atrib/agent` + framework adapter                  | Payment events during a single agent session                                  |
 | Retrospective | Protocol adapter (scanner + registry + attribution) | All protocol activity across the ecosystem, independent of any single session |
 
-A complete per-protocol artifact demonstrates both paths: **Path A** (retrospective scanner + attribution, exercising [§3](atrib-spec.md#3-graph-query-interface) graph and [§4](atrib-spec.md#4-attribution-policy-format) calculation) plus **Path B** (a reference agent using `@atrib/agent` to make real payments, with signed receipts flowing into the log and merchant-side verification via `@atrib/verify`, exercising [§1](atrib-spec.md#1-attribution-record-format), [§2.6.1](atrib-spec.md#261-submit-entry), [§5](atrib-spec.md#5-sdk-specification)).
+A complete per-protocol artifact demonstrates both paths: **Path A** (retrospective scanner + attribution, exercising the [§3](atrib-spec.md#3-graph-query-interface) graph and the [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm) calculation) plus **Path B** (a reference agent using `@atrib/agent` to make real payments, with signed receipts flowing into the log and merchant-side verification via `@atrib/verify`, exercising [§1](atrib-spec.md#1-attribution-record-format), [§2.6.1](atrib-spec.md#261-submit-entry), [§5](atrib-spec.md#5-sdk-specification)).
 
 The spec stays protocol-agnostic. Protocol-specific attribution rationale lives in the adapter's documentation, not in the spec body. This preserves [§3.6](atrib-spec.md#36-implementation-notes)'s fact/policy separation.
 
@@ -454,11 +456,11 @@ The choices that define the protocol. Each is in [DECISIONS.md](DECISIONS.md) wi
 
 **Nine edge types, deterministic derivation ([D005](DECISIONS.md#d005-structure-not-causality-in-the-graph), [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring), [D058](DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05), [D059](DECISIONS.md#d059-promote-revision-to-atrib-normative-event_type-byte-0x06), Section 3.2.4).** The graph combines chronological structure with declared relationship claims. No edge encodes inferred causation; the declared relationship edges are derived from explicit fields the signer provided. Causal interpretation of those declarations remains the policy layer's job. The derivation rules are ordered and deterministic: two implementations on identical input must produce identical graphs.
 
-**Robustness layers ([D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense)-[D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records), [D135](DECISIONS.md#d135-cross-attestation-composes-with-a-trust-set-for-sybil-resistance)-[D136](DECISIONS.md#d136-attestation-is-corroboration-generalized-off-transactions-extension-first), Sections 1.7.6, 2.11, 6.7, 8.7.6).** Transaction records require ≥2 distinct verified signer keys (agent + counterparty per [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). A raw verified-key count is malleable: two keys the caller does not trust can co-sign the same bytes and read as authority, so the verifier composes the count with a caller-supplied trust set and surfaces `sybil_suspected` when the trusted count falls short ([D135](DECISIONS.md#d135-cross-attestation-composes-with-a-trust-set-for-sybil-resistance)). The same trusted-corroboration check generalizes off transactions to any signed target through a separate attestation extension record ([§8.7.6](atrib-spec.md#876-attestation-corroboration-extension), [D136](DECISIONS.md#d136-attestation-is-corroboration-generalized-off-transactions-extension-first)); `@atrib/verify` surfaces both as signals and `@atrib/action-gate` turns them into fail-closed policies. Records may be cross-replicated to multiple independent logs and verifiers detect equivocation across them ([§2.11](atrib-spec.md#211-cross-log-replication)). Identity claims may declare capability envelopes that verifiers check records against; out-of-envelope records are flagged as a signal ([§6.7](atrib-spec.md#67-capability-declarations)). These are additive defenses; single-signer transactions, single-log submissions, and capability-less identity claims remain conforming.
+**Robustness layers ([D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense)-[D052](DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records), [D149](DECISIONS.md#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance)-[D150](DECISIONS.md#d150-attestation-is-corroboration-generalized-off-transactions-extension-first), Sections 1.7.6, 2.11, 6.7, 8.7.6).** Transaction records require ≥2 distinct verified signer keys (agent + counterparty per [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). A raw verified-key count is malleable: two keys the caller does not trust can co-sign the same bytes and read as authority, so the verifier composes the count with a caller-supplied trust set and surfaces `sybil_suspected` when the trusted count falls short ([D149](DECISIONS.md#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance)). The same trusted-corroboration check generalizes off transactions to any signed target through a separate attestation extension record ([§8.7.6](atrib-spec.md#876-attestation-corroboration-extension), [D150](DECISIONS.md#d150-attestation-is-corroboration-generalized-off-transactions-extension-first)); `@atrib/verify` surfaces both as signals and `@atrib/action-gate` turns them into fail-closed policies. Records may be cross-replicated to multiple independent logs and verifiers detect equivocation across them ([§2.11](atrib-spec.md#211-cross-log-replication)). Identity claims may declare capability envelopes that verifiers check records against; out-of-envelope records are flagged as a signal ([§6.7](atrib-spec.md#67-capability-declarations)). These are additive defenses; single-signer transactions, single-log submissions, and capability-less identity claims remain conforming.
 
 Authorization evidence follows the same boundary. atrib verifies supplied OAuth, AAuth, x401, AP2 / VI, or future capability-chain evidence as tiered verifier signals, but it does not issue grants or enforce runtime access. The strategic boundary is spelled out in [Delegation and capabilities](docs/concepts/12-delegation-and-capabilities.md).
 
-**Adversarial threat model (Section 8.7).** atrib certifies what was signed, not whether the signed claim is true. A 10-layer trust assessment stack (signature, identity attestation, capability declaration, key revocation, transaction cross-attestation, tool-side response signing, external evidence, witnessing, cross-log replication, structural anomaly detection) lets verifiers build confidence in any individual record. No single layer is dispositive. The substrate provides structure for assessment, not guaranteed truth.
+**Adversarial threat model (Section 8.7).** atrib certifies what was signed, not whether the signed claim is true. A 10-layer trust assessment stack (signature, identity attestation, capability declaration, key revocation, transaction cross-attestation, tool-side response signing, external evidence, witnessing, anchor plurality, structural anomaly detection) lets verifiers build confidence in any individual record. No single layer is dispositive. The substrate provides structure for assessment, not guaranteed truth.
 
 **`workspace:*` for shared packages ([D014](DECISIONS.md#d014-cross-package-integration-tests-live-in-a-private-workspace-package-and-re-derive-primitives)).** Cross-package integration tests re-derive primitives independently rather than importing shared code. This validates that JCS + SHA-256 produce identical output across independent code paths, which is the core reproducibility property the protocol depends on.
 
@@ -529,11 +531,16 @@ Versioned URL paths (`/v1/checkpoint`, `/v6/lookup/<key>`) are immutable: once a
       approval UI.
 
 @atrib/verify         Merchant verification library
-  └── Runs §4.6 calculation locally, verifies settlement recommendations and AP2 / VI evidence
+  └── Runs the payments-profile calculation locally, verifies settlement recommendations and AP2 / VI evidence
 
 @atrib/runtime-log    Runtime-log proof helpers
   └── Builds and verifies log_window_manifest objects for host-owned run
       windows. It does not sign records or store raw runtime logs.
+
+@atrib/sdk            Consolidated client SDK (first-publish pending)
+  └── attest() / recall() verbs, daemon-first over the local primitives
+      runtime with in-process fallback; re-exports the §1 record layer.
+      Byte-identical Python sibling lives at python/ (PyPI `atrib`).
 
 @atrib/log-dev        In-memory dev log stub (private, never deploy)
   └── Implements §2.6 submission API for local testing
@@ -601,7 +608,7 @@ services/archive-node  Record Body Archive Layer (§2.12), deployed at https://a
       contract.
 ```
 
-The seventeen designed-public packages are in source: ten SDK and integration packages (`mcp`, `agent`, `action-gate`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`, `runtime-log`) and seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`). `@atrib/action-gate` is published on npm with Trusted Publisher configured for later releases. `runtime-log` version 0.2.0 was first-published manually, with Trusted Publisher configured for later releases. The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The private `@atrib/primitives-runtime` binary composes them into one local stdio server for harness configs that need fewer child processes; no separate deployment is needed.
+The nineteen designed-public packages are in source: eleven SDK and integration packages (`mcp`, `agent`, `action-gate`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`, `runtime-log`, `sdk`), seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`), and one local daemon (`atribd`, publish target, first publish pending). `@atrib/action-gate` is published on npm with Trusted Publisher configured for later releases. `runtime-log` version 0.2.0 was first-published manually, with Trusted Publisher configured for later releases. The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The `atribd` daemon composes them into one stateless-native local process (Streamable HTTP, direct stdio, or a stdio-to-HTTP proxy shim) with per-context write serialization; it is the recommended local topology per [D148](DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime), and signed records stay byte-identical to the standalone binaries. The private `@atrib/primitives-runtime` binary keeps the legacy session-based host until the operator cutover; no separate deployment is needed for either. The `atrib` Python distribution (`python/`, outside the pnpm workspace) is the first non-TypeScript implementation of the [§1](atrib-spec.md#1-attribution-record-format) record layer, held byte-identical to the TypeScript one by the shared conformance corpora and a cross-implementation determinism harness ([D136](DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested)).
 
 Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hashes` for SHA-256, `canonicalize` for JCS. Framework dependencies are structural-typed, never hard-imported.
 

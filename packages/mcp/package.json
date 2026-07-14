@@ -1,6 +1,6 @@
 {
   "name": "@atrib/mcp",
-  "version": "0.18.1",
+  "version": "0.20.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,10 +17,13 @@
   "files": [
     "dist"
   ],
-  "description": "MCP server middleware for Atrib's verifiable action layer. Signs and chains successful tool calls with one-line integration.",
+  "description": "MCP server middleware for atrib's verifiable action layer. Signs and chains successful tool calls with one-line integration.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "mcp",
     "model-context-protocol",

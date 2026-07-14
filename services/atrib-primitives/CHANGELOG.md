@@ -1,5 +1,49 @@
 # @atrib/primitives-runtime
 
+## 0.1.23
+
+### Patch Changes
+
+- @atrib/annotate@0.2.40
+- @atrib/emit@0.17.2
+- @atrib/recall@0.14.6
+- @atrib/revise@0.2.40
+- @atrib/summarize@0.4.22
+- @atrib/trace@0.5.20
+- @atrib/verify-mcp@0.2.21
+
+## 0.1.22
+
+### Patch Changes
+
+- @atrib/verify-mcp@0.2.20
+
+## 0.1.21
+
+### Patch Changes
+
+- Updated dependencies [1378d4f]
+  - @atrib/emit@0.17.1
+  - @atrib/annotate@0.2.39
+  - @atrib/revise@0.2.39
+  - @atrib/recall@0.14.5
+  - @atrib/trace@0.5.19
+  - @atrib/summarize@0.4.21
+  - @atrib/verify-mcp@0.2.19
+
+## 0.1.20
+
+### Patch Changes
+
+- Updated dependencies [3c8e63d]
+  - @atrib/emit@0.17.0
+  - @atrib/annotate@0.2.38
+  - @atrib/revise@0.2.38
+  - @atrib/recall@0.14.4
+  - @atrib/summarize@0.4.20
+  - @atrib/trace@0.5.18
+  - @atrib/verify-mcp@0.2.18
+
 ## 0.1.19
 
 ### Patch Changes

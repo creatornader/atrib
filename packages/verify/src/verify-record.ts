@@ -38,6 +38,7 @@ import {
   verifyRecord as verifyRecordSignature,
   type AtribRecord,
   type SignerEntry,
+  genesisChainRoot,
 } from '@atrib/mcp'
 import * as ed from '@noble/ed25519'
 import { verifyAp2ViEvidenceAsync } from './ap2-vi-evidence.js'
@@ -51,6 +52,10 @@ import type {
   AuthorizationEvidenceInput,
   EvidenceVerificationBlock,
 } from './authorization-evidence.js'
+import { evaluateDelegation } from './delegation.js'
+import type { DelegatedRecord, DelegationCertificate, DelegationOutcome } from './delegation.js'
+import { mapLegacyEvidenceBlock } from './evidence-envelope.js'
+import type { EvidenceEnvelope, LegacyEvidenceBlock } from './evidence-envelope.js'
 
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
@@ -356,6 +361,20 @@ export interface RecordVerificationResult {
    * `signatureOk`; each block carries its own `valid` bit and findings.
    */
   evidence?: EvidenceVerificationBlock[]
+  /**
+   * §5.5.7 (D137) envelope-form view of `evidence`, populated only when
+   * `options.evidenceEnvelopes` is set. Legacy `evidence[]` above stays the
+   * compatibility view; this is an additive, mapped projection. Blocks whose
+   * `protocol` is not a frozen-legacy string are skipped per §5.8.
+   */
+  evidenceEnvelopes?: EvidenceEnvelope[]
+  /**
+   * §1.11.4 delegation walk output (D140). Populated only when the caller
+   * supplies `delegationCertificates`. Every field is a signal per §6.7.3:
+   * nothing in this block alters `valid` or `signatureOk`, and no
+   * delegation fact ever pushes a warning.
+   */
+  delegation?: DelegationOutcome
   warnings: string[]
 }
 
@@ -414,6 +433,33 @@ export interface VerifyRecordOptions {
    * off the atrib record-validity path and attaches to `result.evidence`.
    */
   authorizationEvidence?: AuthorizationEvidenceInput[]
+  /**
+   * When true, verifyRecord also emits `result.evidenceEnvelopes`: each
+   * frozen-legacy `evidence[]` block mapped to §5.5.7 envelope form. Off by
+   * default so existing consumers see byte-identical output.
+   */
+  evidenceEnvelopes?: boolean
+  /**
+   * Delegation certificates covering the record's creator_key, supplied by
+   * the caller from any §1.11.8 carrier (sidecar, archive evidence,
+   * evidence envelope, out-of-band). When present (even as an empty
+   * array), verifyRecord runs the §1.11.4 walk and attaches
+   * `result.delegation`. Omitted → no delegation block (depth-0 records
+   * verify exactly as today).
+   */
+  delegationCertificates?: DelegationCertificate[]
+  /**
+   * The context genesis record for cert_bound / delegation_unresolved
+   * evaluation (§1.11.3). When omitted and the record is its own genesis
+   * (chain_root === genesisChainRoot(context_id)), the record itself is
+   * used; otherwise the genesis is treated as unavailable (cert_bound null).
+   */
+  contextGenesis?: AtribRecord
+  /**
+   * Keys the caller resolved as revoked at the record's log position
+   * (§1.9.3 log_index cutoff applied by the caller).
+   */
+  delegationRevokedKeys?: ReadonlySet<string>
   /**
    * Caller-supplied AP2 / Verifiable Intent evidence for transaction
    * records. The signed atrib record commits to transaction payload hashes,
@@ -549,6 +595,34 @@ export async function verifyRecord(
         pushEvidence(result, authorizationEvidenceErrorResult(err))
       }
     }
+  }
+
+  // delegation (D140 / §1.11.4): signal-not-block. The walk never throws,
+  // never pushes warnings, and never affects `valid` — delegation is
+  // attribution resolution, exactly like the D051 capability check.
+  if (options.delegationCertificates !== undefined) {
+    const genesis =
+      options.contextGenesis ??
+      (record.chain_root === genesisChainRoot(record.context_id) ? record : null)
+    result.delegation = await evaluateDelegation(
+      record as DelegatedRecord,
+      genesis as DelegatedRecord | null,
+      options.delegationCertificates,
+      options.delegationRevokedKeys ? { revokedKeys: options.delegationRevokedKeys } : {},
+    )
+  }
+
+  if (options.evidenceEnvelopes && result.evidence) {
+    const envelopes: EvidenceEnvelope[] = []
+    for (const block of result.evidence) {
+      try {
+        envelopes.push(mapLegacyEvidenceBlock(block as unknown as LegacyEvidenceBlock))
+      } catch {
+        // §5.8: non-frozen-protocol blocks (e.g. 'authorization' errors) are
+        // skipped, never thrown to the caller.
+      }
+    }
+    if (envelopes.length > 0) result.evidenceEnvelopes = envelopes
   }
 
   result.valid = signatureOk && warnings.length === 0

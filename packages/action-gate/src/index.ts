@@ -25,6 +25,29 @@ import {
   type AttestationInput,
 } from '@atrib/verify'
 
+export { evaluateElevation } from './elevation.js'
+export type {
+  ActionBoundToken,
+  Corroborator,
+  ElevationDecision,
+  ElevationInput,
+  ElevationOutcome,
+} from './elevation.js'
+export {
+  checkAndConsumeToken,
+  computeActionBinding,
+  createMemoryConsumptionStore,
+  issueActionToken,
+} from './token.js'
+export type {
+  ActionBindingInput,
+  IssuedActionToken,
+  TokenCheckInput,
+  TokenCheckReason,
+  TokenCheckResult,
+  TokenConsumptionStore,
+} from './token.js'
+
 export const ACTION_GATE_DECISION_EVENT_TYPE_URI =
   'https://atrib.dev/v1/extensions/action-gate/decision' as const
 export const ACTION_GATE_OUTCOME_EVENT_TYPE_URI =
@@ -602,7 +625,7 @@ export interface RequireTrustedTransactionOptions {
   /**
    * Base64url Ed25519 public keys the host trusts as independent attesting
    * principals. Non-malleable authority requires at least two DISTINCT verified
-   * signer keys drawn from this set (§1.7.6 trusted signer composition, D135).
+   * signer keys drawn from this set (§1.7.6 trusted signer composition, D149).
    * An empty or absent trust set fails closed.
    */
   readonly trustedCreatorKeys?: readonly string[]
@@ -618,7 +641,7 @@ export interface RequireTrustedTransactionOptions {
 }
 
 /**
- * Host-owned fail-closed policy for transaction actions (D133 + D135). This is
+ * Host-owned fail-closed policy for transaction actions (D133 + D149). This is
  * where §1.7.6 trusted signer composition becomes a REQUIREMENT rather than a
  * signal: `verifyRecord` only surfaces the trust posture (signal-not-block), so
  * a consumer that reads `signers_valid >= 2` can still be Sybil-fooled. This
@@ -710,7 +733,7 @@ export interface RequireCorroboratedOptions {
 
 /**
  * Host-owned fail-closed policy requiring trusted corroboration of a target
- * record before an action proceeds (D133 + D136). The verifier aggregation
+ * record before an action proceeds (D133 + D150). The verifier aggregation
  * (`resolveAttestationCorroboration`) is signal-not-block; this policy turns it
  * into a requirement. Returns `allow` only when the target is corroborated by at
  * least `minCorroborators` (default 2) distinct verified attestors in the trust

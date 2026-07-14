@@ -1,0 +1,16 @@
+{
+  "name": "token--meta-atrib-over-tracestate",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "No extension block. The pre-extension ladder is unchanged underneath: _meta.atrib beats the tracestate atrib= entry.",
+  "input": {
+    "request_meta": {
+      "atrib": "dMWbtK0FApUUFmBFt8EKtTCNsBqsxqncsjZDB9WnxII.LfBBJfABWvtHzoU674dyCU_5SYwUyxueEpc8KSfaD6Y",
+      "tracestate": "atrib=YfCaVpDuFO5svX1lIfdRdaeyme4zZnUDn2kpPwwGmiE.p_bfr484uJuozmSbWU-R5NAf3Ff5yUk99DteUKmYc2c"
+    }
+  },
+  "expected": {
+    "resolved_source": "meta-atrib",
+    "resolved_record_hash_hex": "74c59bb4ad05029514166045b7c10ab5308db01aacc6a9dcb2364307d5a7c482"
+  }
+}

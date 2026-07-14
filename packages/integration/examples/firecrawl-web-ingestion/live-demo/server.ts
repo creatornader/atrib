@@ -164,7 +164,7 @@ export function firecrawlDemoSurfaceFromWorkflow(
   return {
     category: 'grounding-pipeline',
     narrative:
-      'Firecrawl turns live web sources into clean context. Atrib signs the ingestion path before that context can influence a sensitive downstream action.',
+      'Firecrawl turns live web sources into clean context. atrib signs the ingestion path before that context can influence a sensitive downstream action.',
     source_pattern: [
       'Firecrawl examples center on RAG, AI search, deep research, enrichment, and AI-ready structured data.',
       'Firecrawl agent guidance chains search, scrape, extract, and crawl or map for live web work.',

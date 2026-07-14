@@ -1,0 +1,83 @@
+{
+  "spec_section": "1.2.10",
+  "spec_title": "checkpoint (session checkpoint commitment)",
+  "decision_link": "P044",
+  "event_type_uri": "https://atrib.dev/v1/types/session_checkpoint",
+  "promoted_byte": 8,
+  "generated_at": 1782864000000,
+  "generator": "packages/log-dev/scripts/generate-conformance-session-checkpoint.ts",
+  "cases": [
+    {
+      "file": "cases/schema-first-checkpoint.json",
+      "name": "schema-first-checkpoint"
+    },
+    {
+      "file": "cases/schema-missing-checkpoint-rejected.json",
+      "name": "schema-missing-checkpoint-rejected"
+    },
+    {
+      "file": "cases/schema-checkpoint-on-wrong-event-type-rejected.json",
+      "name": "schema-checkpoint-on-wrong-event-type-rejected"
+    },
+    {
+      "file": "cases/schema-first-index-bounds-rejected.json",
+      "name": "schema-first-index-bounds-rejected"
+    },
+    {
+      "file": "cases/schema-prior-present-at-first-index-zero-rejected.json",
+      "name": "schema-prior-present-at-first-index-zero-rejected"
+    },
+    {
+      "file": "cases/schema-prior-absent-at-positive-first-index-rejected.json",
+      "name": "schema-prior-absent-at-positive-first-index-rejected"
+    },
+    {
+      "file": "cases/tree-1-leaf.json",
+      "name": "tree-1-leaf"
+    },
+    {
+      "file": "cases/tree-2-leaves.json",
+      "name": "tree-2-leaves"
+    },
+    {
+      "file": "cases/tree-5-leaves.json",
+      "name": "tree-5-leaves"
+    },
+    {
+      "file": "cases/tree-empty-rejected.json",
+      "name": "tree-empty-rejected"
+    },
+    {
+      "file": "cases/consistency-valid-extension.json",
+      "name": "consistency-valid-extension"
+    },
+    {
+      "file": "cases/consistency-equivocation-pair.json",
+      "name": "consistency-equivocation-pair"
+    },
+    {
+      "file": "cases/retroactive-declared.json",
+      "name": "retroactive-declared"
+    },
+    {
+      "file": "cases/retroactive-false-rejected.json",
+      "name": "retroactive-false-rejected"
+    },
+    {
+      "file": "cases/retroactive-absence-not-null.json",
+      "name": "retroactive-absence-not-null"
+    },
+    {
+      "file": "cases/freshness-stale-undeclared.json",
+      "name": "freshness-stale-undeclared"
+    },
+    {
+      "file": "cases/byte-uri-duality.json",
+      "name": "byte-uri-duality"
+    }
+  ],
+  "keys": {
+    "agent_pubkey": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ"
+  },
+  "note": "The seventeen cases collectively exercise the §1.2.10 contract: checkpoint object schema and presence rules (schema-*), real RFC 6962 roots over ordered record-hash leaves with the raw-32-byte-leaf trap (tree-*), append-only consistency with an RFC 6962 §2.1.4 proof plus an equivocating divergent-root pair (consistency-*), the present-only-when-true retroactive flag and categorical freshness facts (retroactive-* / freshness-*), and the 0xFF/0x08 log-entry duality over byte-identical signed records (byte-uri-duality)."
+}

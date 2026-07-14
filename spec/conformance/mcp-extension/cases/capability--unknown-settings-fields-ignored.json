@@ -1,0 +1,30 @@
+{
+  "name": "capability--unknown-settings-fields-ignored",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "Forward compatibility: unknown settings fields MUST be ignored, and unknown `accept` values MUST be ignored. An unrecognized settings `version` under the same identifier is still a valid declaration (the identifier, not the version string, is the compatibility unit; breaking changes require a new identifier per SEP-2133).",
+  "input": {
+    "settings": {
+      "version": "0.2",
+      "accept": [
+        "token",
+        "proof-bundle"
+      ],
+      "future_hint": true
+    }
+  },
+  "expected": {
+    "valid": true,
+    "declared": true,
+    "negotiated_version": "0.2",
+    "effective_accept": [
+      "token"
+    ],
+    "ignored_settings_fields": [
+      "future_hint"
+    ],
+    "ignored_accept_values": [
+      "proof-bundle"
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 # `@atrib/agent`
 
-**Client-side middleware for Atrib's verifiable action layer. Outbound MCP tool calls carry atrib/W3C context, consume upstream signed records, record local gap nodes, and emit signed fallback transaction records when commerce closes. Works with major MCP framework surfaces. Sits above every major agent payment protocol so commerce-closing evidence can join the same trace.**
+**Client-side middleware for atrib's verifiable action layer. Outbound MCP tool calls carry atrib/W3C context, consume upstream signed records, record local gap nodes, and emit signed fallback transaction records when commerce closes. Works with major MCP framework surfaces. Sits above every major agent payment protocol so commerce-closing evidence can join the same trace.**
 
 `@atrib/agent` is the client-side half of the [atrib protocol](https://github.com/creatornader/atrib/blob/main/atrib-spec.md). It keeps outbound MCP calls in the atrib session lifecycle: context goes out, upstream atrib tokens come back in, unsigned hops become local gap nodes, and transaction-shaped responses can produce signed agent-side fallback records. That makes agent work easier to coordinate across calls, handoffs, and later verification. Ordinary `tool_call` records are signed at the tool boundary by `@atrib/mcp`, `@atrib/mcp-wrap`, or an instrumented upstream server.
 
@@ -15,6 +15,14 @@ own sessions, native tool hooks, approvals, subagents, checkpoints, telemetry,
 and run logs. Those integrations compose `@atrib/mcp-wrap`, host-specific proof
 code, `@atrib/openinference`, `@atrib/runtime-log`, `@atrib/verify`, and
 hook-class producers instead of turning `@atrib/agent` into the harness layer.
+
+## Install
+
+```bash
+pnpm add @atrib/agent
+```
+
+Verify a local build with `pnpm --filter @atrib/agent test`.
 
 ## Coverage Matrix 1: MCP Framework Adapters
 
@@ -196,7 +204,11 @@ const interceptor = atrib({
 })
 ```
 
-That's the interceptor. Now plug it into whichever framework you use:
+That's the interceptor. Now plug it into whichever framework you use.
+`@atrib/agent` types against each host framework structurally and does not
+depend on any of them, so install the framework package you use
+(`@modelcontextprotocol/sdk`, `@ai-sdk/mcp`, `agents`, `@langchain/mcp-adapters`,
+or `@anthropic-ai/claude-agent-sdk`) alongside `@atrib/agent`.
 
 ### Raw `@modelcontextprotocol/sdk`
 
@@ -217,6 +229,7 @@ const client = wrapMcpClient(raw, interceptor, {
 ```ts
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { atrib as wrapServer } from '@atrib/mcp'  // note: server-side package
+import { z } from 'zod' // ships with the Claude Agent SDK
 
 const sdkServer = createSdkMcpServer({
   name: 'my-tools',
@@ -359,3 +372,7 @@ The full protocol spec is at [`atrib-spec.md`](https://github.com/creatornader/a
 ---
 
 > **A note on documentation links.** The atrib protocol repository is currently private (in-progress public preparation). Links in this README to the spec and sister packages (`atrib-spec.md`, `packages/agent/README.md`, etc.) point at `github.com/creatornader/atrib/blob/main/...` URLs that will resolve once the repository goes public. Until then, see [`atrib.dev`](https://atrib.dev) for the protocol overview.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

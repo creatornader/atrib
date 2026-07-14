@@ -1,6 +1,6 @@
 # `@atrib/log-node`
 
-> Production Atrib log for the verifiable action layer, with real RFC 9162 Merkle inclusion proofs and C2SP tlog-tiles API.
+> Production atrib log for the verifiable action layer, with real RFC 9162 Merkle inclusion proofs and C2SP tlog-tiles API.
 >
 > This is **not** the dev stub. For local development and testing, use [`@atrib/log-dev`](../../packages/log-dev/README.md).
 

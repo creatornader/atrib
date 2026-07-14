@@ -1,26 +1,49 @@
 {
   "schema": "atrib.proof_packet.redaction_manifest.v1",
   "packet": "browserbase-stagehand",
+  "action_policy": {
+    "event_type": "https://browserbase-action-gate.atrib.dev/v1/decision",
+    "decisions": [
+      {
+        "decision": "allow",
+        "record_hash": "sha256:f69c1470d23ffc99eff13b53b9b623770db6671a72596683dfe925e1af16c113",
+        "reason_codes": ["policy_allow"],
+        "observed_record_hash": "sha256:afb2d48ba555b06efd1ea7feaf052a0e630f8bb57167990782d0ade5c383030a"
+      }
+    ],
+    "outcomes": [
+      {
+        "decision": "allow",
+        "executed": true,
+        "record_hash": "sha256:d5ea20d9ef67977ba3d37dc1c1579fbc2c121d8ee160e9fa8a17b3bfd0874c0a"
+      }
+    ],
+    "stopped_before": null,
+    "blocked_tool_executed": false
+  },
   "private_fields": [
     {
       "field": "target_url",
       "disclosure": "hash-only",
-      "hash": "sha256:100680ad546ce6a577f42f52df33b4cfdca756859e664b8d7de329b150d09ce9"
+      "hash": "sha256:7ff155fa92253f1e49f79487c507bb8d9d0f3e6d388ba410889dbdc64495b7cb"
     },
     {
       "field": "observe_instruction",
-      "disclosure": "hash-only",
-      "hash": "sha256:5e8f823187ba1e71ad6eb66fd488c1140134e58cfdf5ed695537310ad0774264"
+      "disclosure": "public-fixed"
     },
     {
       "field": "act_action",
-      "disclosure": "hash-only",
-      "hash": "sha256:e92427736ac5cb1394c3ca3e9b436facfbcd493cca64eb188e5c4011f97eecab"
+      "disclosure": "public-fixed",
+      "hash": "sha256:d929ca76215e074a44d023f0bc0aa8b1f25638c45e70e2d6497edbad3a89bda7"
     },
     {
       "field": "extract_instruction",
+      "disclosure": "public-fixed"
+    },
+    {
+      "field": "observed_state",
       "disclosure": "hash-only",
-      "hash": "sha256:10e12442c832ffc07d391f13e2842fe6c06e49765e9f27fa12e6d3e49901221e"
+      "hash": "sha256:0cc101ae51f1f16dc0e917e6672f48eae44b31a1193d429f146ac3f6baeeb382"
     },
     {
       "field": "browserbase_session_or_replay_url",

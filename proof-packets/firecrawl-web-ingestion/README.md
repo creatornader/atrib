@@ -11,7 +11,7 @@ The crawl step is capped to `maxDepth: 1` and `limit: 2`.
 ## What ran
 
 - Upstream surface: Firecrawl MCP server launched with `npx -y firecrawl-mcp`.
-- Atrib path: `@atrib/mcp-wrap` around an MCP stdio server.
+- atrib path: `@atrib/mcp-wrap` around an MCP stdio server.
 - Record policy: public records keep selected tool names plus `args_hash` and `result_hash`.
 - Verification: `@atrib/mcp` verifies each Ed25519 record signature after the wrapper writes its mirror.
 - Log proof: accepted records were submitted to `https://log.atrib.dev/v1/entries` after full-flow verification; inclusion was verified.

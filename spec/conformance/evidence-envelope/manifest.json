@@ -1,0 +1,248 @@
+{
+  "spec_section": "5.5.7",
+  "spec_title": "Universal Evidence Envelope",
+  "decision_link": "P042 (evidence-envelope ADR)",
+  "generated_at": 1782864000000,
+  "generator": "packages/log-dev/scripts/generate-conformance-evidence-envelope.ts",
+  "tier_enum": [
+    "declared",
+    "shape",
+    "attested",
+    "verified"
+  ],
+  "ref_kind_enum": [
+    "inline",
+    "mirror",
+    "archive",
+    "external",
+    "withheld"
+  ],
+  "atrib_profile_registry": [
+    "oauth2",
+    "mcp-oauth",
+    "aauth",
+    "x401",
+    "ap2-vi",
+    "human-approval",
+    "counterparty-attestation",
+    "delegation-certificate",
+    "continuation-packet",
+    "payments-detection",
+    "payments-settlement"
+  ],
+  "frozen_legacy_protocols": [
+    "oauth2",
+    "mcp_oauth",
+    "aauth",
+    "x401",
+    "ap2_vi"
+  ],
+  "legacy_protocol_to_profile": {
+    "oauth2": "https://atrib.dev/v1/evidence/oauth2",
+    "mcp_oauth": "https://atrib.dev/v1/evidence/mcp-oauth",
+    "aauth": "https://atrib.dev/v1/evidence/aauth",
+    "x401": "https://atrib.dev/v1/evidence/x401",
+    "ap2_vi": "https://atrib.dev/v1/evidence/ap2-vi"
+  },
+  "families": [
+    "shape",
+    "registry",
+    "unknown-profile",
+    "legacy-mapping",
+    "tier",
+    "continuation-packet",
+    "payments-detection",
+    "payments-settlement"
+  ],
+  "cases": [
+    {
+      "file": "cases/shape--minimal-valid.json",
+      "name": "minimal-valid",
+      "family": "shape"
+    },
+    {
+      "file": "cases/shape--maximal-valid.json",
+      "name": "maximal-valid",
+      "family": "shape"
+    },
+    {
+      "file": "cases/shape--missing-tier.json",
+      "name": "missing-tier",
+      "family": "shape"
+    },
+    {
+      "file": "cases/shape--missing-payload-hash.json",
+      "name": "missing-payload-hash",
+      "family": "shape"
+    },
+    {
+      "file": "cases/shape--invalid-tier-value.json",
+      "name": "invalid-tier-value",
+      "family": "shape"
+    },
+    {
+      "file": "cases/shape--invalid-hash-prefix.json",
+      "name": "invalid-hash-prefix",
+      "family": "shape"
+    },
+    {
+      "file": "cases/shape--inline-with-non-inline-ref.json",
+      "name": "inline-with-non-inline-ref",
+      "family": "shape"
+    },
+    {
+      "file": "cases/shape--record-kind-rejected.json",
+      "name": "record-kind-rejected",
+      "family": "shape"
+    },
+    {
+      "file": "cases/shape--record-hash-sibling.json",
+      "name": "record-hash-sibling",
+      "family": "shape"
+    },
+    {
+      "file": "cases/registry--atrib-profile-registered.json",
+      "name": "atrib-profile-registered",
+      "family": "registry"
+    },
+    {
+      "file": "cases/registry--third-party-profile.json",
+      "name": "third-party-profile",
+      "family": "registry"
+    },
+    {
+      "file": "cases/registry--non-https-profile-rejected.json",
+      "name": "non-https-profile-rejected",
+      "family": "registry"
+    },
+    {
+      "file": "cases/registry--bare-name-profile-rejected.json",
+      "name": "bare-name-profile-rejected",
+      "family": "registry"
+    },
+    {
+      "file": "cases/registry--foreign-domain-collision.json",
+      "name": "foreign-domain-collision",
+      "family": "registry"
+    },
+    {
+      "file": "cases/unknown-profile--unknown-profile-preserved.json",
+      "name": "unknown-profile-preserved",
+      "family": "unknown-profile"
+    },
+    {
+      "file": "cases/unknown-profile--unknown-profile-never-dropped.json",
+      "name": "unknown-profile-never-dropped",
+      "family": "unknown-profile"
+    },
+    {
+      "file": "cases/legacy-mapping--legacy-oauth2.json",
+      "name": "legacy-oauth2",
+      "family": "legacy-mapping"
+    },
+    {
+      "file": "cases/legacy-mapping--legacy-mcp-oauth.json",
+      "name": "legacy-mcp-oauth",
+      "family": "legacy-mapping"
+    },
+    {
+      "file": "cases/legacy-mapping--legacy-aauth.json",
+      "name": "legacy-aauth",
+      "family": "legacy-mapping"
+    },
+    {
+      "file": "cases/legacy-mapping--legacy-x401.json",
+      "name": "legacy-x401",
+      "family": "legacy-mapping"
+    },
+    {
+      "file": "cases/legacy-mapping--legacy-ap2-vi.json",
+      "name": "legacy-ap2-vi",
+      "family": "legacy-mapping"
+    },
+    {
+      "file": "cases/legacy-mapping--legacy-unknown-protocol-rejected.json",
+      "name": "legacy-unknown-protocol-rejected",
+      "family": "legacy-mapping"
+    },
+    {
+      "file": "cases/tier--tier-ladder-all-four.json",
+      "name": "tier-ladder-all-four",
+      "family": "tier"
+    },
+    {
+      "file": "cases/tier--relay-identity-swap-rejected.json",
+      "name": "relay-identity-swap-rejected",
+      "family": "tier"
+    },
+    {
+      "file": "cases/tier--verified-withheld-not-reproducible.json",
+      "name": "verified-withheld-not-reproducible",
+      "family": "tier"
+    },
+    {
+      "file": "cases/tier--evidence-never-flips-valid.json",
+      "name": "evidence-never-flips-valid",
+      "family": "tier"
+    },
+    {
+      "file": "cases/continuation-packet--baton-envelope-valid.json",
+      "name": "baton-envelope-valid",
+      "family": "continuation-packet"
+    },
+    {
+      "file": "cases/continuation-packet--packet-hash-mismatch.json",
+      "name": "packet-hash-mismatch",
+      "family": "continuation-packet"
+    },
+    {
+      "file": "cases/continuation-packet--withheld-packet-declared.json",
+      "name": "withheld-packet-declared",
+      "family": "continuation-packet"
+    },
+    {
+      "file": "cases/continuation-packet--signed-baton-record.json",
+      "name": "signed-baton-record",
+      "family": "continuation-packet"
+    },
+    {
+      "file": "cases/payments-detection--detection-envelope-valid.json",
+      "name": "detection-envelope-valid",
+      "family": "payments-detection"
+    },
+    {
+      "file": "cases/payments-detection--detection-payload-hash-mismatch.json",
+      "name": "detection-payload-hash-mismatch",
+      "family": "payments-detection"
+    },
+    {
+      "file": "cases/payments-detection--unloaded-profile-degrades.json",
+      "name": "unloaded-profile-degrades",
+      "family": "payments-detection"
+    },
+    {
+      "file": "cases/payments-detection--duplicate-signer-not-inflated.json",
+      "name": "duplicate-signer-not-inflated",
+      "family": "payments-detection"
+    },
+    {
+      "file": "cases/payments-settlement--recommendation-envelope-valid.json",
+      "name": "recommendation-envelope-valid",
+      "family": "payments-settlement"
+    },
+    {
+      "file": "cases/payments-settlement--tampered-recommendation-rejected.json",
+      "name": "tampered-recommendation-rejected",
+      "family": "payments-settlement"
+    },
+    {
+      "file": "cases/payments-settlement--withheld-recommendation-declared.json",
+      "name": "withheld-recommendation-declared",
+      "family": "payments-settlement"
+    }
+  ],
+  "keys": {
+    "alice_pubkey": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo"
+  },
+  "note": "The eight families collectively pin the §5.5.7 contract: schema validity with the closed tier and ref.kind enums (shape/), the HTTPS type-URI registration rule with full-URI profile identity (registry/), unknown-profile preservation (unknown-profile/), the frozen five-row legacy mapping with sixth-string rejection (legacy-mapping/), instance-scoped tier semantics where evidence never flips verifyRecord().valid (tier/), the D142 continuation-packet profile registration (continuation-packet/), and the P048 payments profile registrations with their degradation family and D052 duplicate-signer re-pin (payments-detection/, payments-settlement/)."
+}

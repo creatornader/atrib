@@ -17,21 +17,21 @@ The seven primitives:
 
 **Writes (sign new records):**
 
-- `atrib-emit` — RECORD. Present-moment noting / conclusion. Signs an observation.
-- `atrib-annotate` — MARK. Tag a past record's importance + topics + summary. Signs an annotation.
-- `atrib-revise` — CHANGE-MIND. Supersede a prior position with stated reason. Signs a revision.
+- `atrib-emit`: RECORD. Present-moment noting / conclusion. Signs an observation.
+- `atrib-annotate`: MARK. Tag a past record's importance + topics + summary. Signs an annotation.
+- `atrib-revise`: CHANGE-MIND. Supersede a prior position with stated reason. Signs a revision.
 
 **Reads (query the graph, no signing):**
 
-- `atrib-recall` — LOOK-UP. Find prior records by creator, context, time window, event_type.
-- `atrib-trace` — LINEAGE. Walk `informed_by` backward from a record_hash.
-- `atrib-summarize` — DIGEST. Condense N records into a narrative.
+- `atrib-recall`: LOOK-UP. Find prior records by creator, context, time window, event_type.
+- `atrib-trace`: LINEAGE. Walk `informed_by` backward from a record_hash.
+- `atrib-summarize`: DIGEST. Condense N records into a narrative.
 - `atrib-verify`: CHECK. Verify counterparty handoff evidence before citing accepted hashes.
 
 To cover:
 
 - Why exactly seven: the boundary-drawing test (different cognitive purpose, different required args, different graph effect) plus [D106](../../DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7)'s verify-before-linking use case
-- Why monomorphic and not polymorphic dispatch (per [D079](../../DECISIONS.md)): one tool, one job — the bash standard
+- Why monomorphic and not polymorphic dispatch (per [D079](../../DECISIONS.md)): one tool, one job: the bash standard
 - When to reach for each (the decision tree)
 - New write primitives require promotion of a new event_type per [D036](../../DECISIONS.md); new read primitives require the extension-first lifecycle gate per [D080](../../DECISIONS.md)
 - How the cognitive primitives compose: emit → annotate (mark the emit as important) → revise (later change mind about the emit)

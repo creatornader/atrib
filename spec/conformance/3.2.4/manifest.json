@@ -20,10 +20,15 @@
     {
       "file": "cases/dangling-claim-edges.json",
       "name": "dangling-claim-edges"
+    },
+    {
+      "file": "cases/session-checkpoint-chain-spine.json",
+      "name": "session-checkpoint-chain-spine"
     }
   ],
   "keys": {
-    "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc"
+    "alice_pubkey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+    "bob_pubkey": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA"
   },
-  "note": "Full §3.2.4 corpus covering all nine edge types, all-pairs SESSION_PRECEDES, all-pairs SESSION_PARALLEL, and dangling producer-declared references. The companion graph-node property tests exercise generated families of ordered, equal-timestamp, chained, compacted, and input-order-invariant record sets."
+  "note": "Full §3.2.4 corpus covering all nine edge types, all-pairs SESSION_PRECEDES, all-pairs SESSION_PARALLEL, dangling producer-declared references, and session_checkpoint chain-spine-only behavior. The companion graph-node property tests exercise generated families of ordered, equal-timestamp, chained, compacted, and input-order-invariant record sets."
 }

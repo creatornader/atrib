@@ -1,6 +1,6 @@
 # `@atrib/cli`
 
-**The operator CLI for Atrib's verifiable action layer. Generate Ed25519 keypairs, manage them in macOS Keychain, and publish identity claims to the atrib directory (spec [§6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#6-key-directory)).**
+**The operator CLI for atrib's verifiable action layer. Generate Ed25519 keypairs, manage them in macOS Keychain, and publish identity claims to the atrib directory (spec [§6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#6-key-directory)).**
 
 ```bash
 npx @atrib/cli keygen --keychain
@@ -35,6 +35,32 @@ Read a seed from Keychain and print the derived public key only. Useful for conf
 atrib export-pubkey --keychain --service atrib-creator-claude-code
 # pubkey: <base64url-32-byte-pubkey>
 ```
+
+### `delegate`
+
+Issue a [§1.11](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#111-delegation-certificates) delegation certificate for a new ephemeral run key. The command reads the principal key from the macOS Keychain service `atrib-creator` by default. Use `--service` to select another Keychain entry or `--key-file` when Keychain is unavailable.
+
+The scope file uses the [§6.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#67-capability-declarations) capability-envelope fields. At least one constraint is required:
+
+```json
+{
+  "tool_names": ["search", "read_file"],
+  "event_types": ["https://atrib.dev/v1/types/tool_call"]
+}
+```
+
+```bash
+atrib delegate \
+  --service atrib-creator-claude-code \
+  --scope ./run-scope.json \
+  --ttl 3600 \
+  --context 4bf92f3577b34da6a3ce929d0e0e4736
+
+# ATRIB_KEY=<base64url-32-byte-run-seed>
+# ATRIB_DELEGATION_CERT=<base64url-certificate-json>
+```
+
+`--ttl` is measured in seconds from `--not-before` when supplied, or from the current time. The output is an env bundle for an orchestrator to inject into the delegated process. `ATRIB_KEY` is a secret. The certificate contains public keys, scope, and timestamps.
 
 ### `delete-key --keychain`
 
@@ -72,6 +98,16 @@ Service naming convention (matches what `@atrib/mcp` and `@atrib/agent` look up)
 - `atrib-creator-<agent>`: agent-scoped (e.g. `atrib-creator-claude-code`)
 - `atrib-creator`: generic fallback
 
+## Key handling
+
+The private seed is a secret and stays on your machine. `publish-claim` and
+`revoke` send only the signed claim or revocation record and the public key to
+the directory and log; the seed itself is never transmitted. Prefer
+`--keychain` (or the SDK `--key-file` path) so the seed is never written to a
+shell history or an `.env` file. Bare `keygen` prints the seed to stdout for
+piping; `delegate` prints the ephemeral run seed for process injection. Treat
+both outputs as credentials and do not commit or log them.
+
 ## Install
 
 ```bash
@@ -83,3 +119,7 @@ npx @atrib/cli keygen --keychain
 ## License
 
 Apache-2.0.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

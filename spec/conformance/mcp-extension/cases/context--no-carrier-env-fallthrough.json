@@ -1,0 +1,17 @@
+{
+  "name": "context--no-carrier-env-fallthrough",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "No explicit argument, no extension block, no (valid) traceparent. Per-request transport resolution yields nothing; producers then apply the D078/D083 env-and-file registry, whose internal ordering is defined by those decisions, not by the extension. At the transport layer the resolved context is undefined.",
+  "input": {
+    "request_meta": {
+      "traceparent": "00-00000000000000000000000000000000-00f067aa0ba902b7-01"
+    }
+  },
+  "expected": {
+    "resolved_context_id": null,
+    "resolved_source": "env-registry-fallthrough",
+    "producer_side_resolution_per": "D078/D083",
+    "error_raised": false
+  }
+}

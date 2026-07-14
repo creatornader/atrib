@@ -1,0 +1,145 @@
+{
+  "ok": true,
+  "strategy": "cloudflare-x402-path-b-reference-v1",
+  "scope": {
+    "cloudflare_runtime": "workers-agents",
+    "x402_mode": "local-v2-protocol-flow",
+    "gateway_beta_access": false,
+    "real_funds_moved": false,
+    "gateway_ingest_slot": "future-lifecycle-export"
+  },
+  "open_protocol_surface": {
+    "headers": {
+      "challenge_status": 402,
+      "paid_retry_header": "PAYMENT-SIGNATURE",
+      "settlement_header": "PAYMENT-RESPONSE",
+      "legacy_settlement_header": "X-PAYMENT-RESPONSE"
+    },
+    "cloudflare_agents_sdk": {
+      "server": [
+        "paidTool",
+        "withX402"
+      ],
+      "client": [
+        "withX402Client"
+      ],
+      "test_network": "base-sepolia"
+    },
+    "x402_open_source": {
+      "http_client": "@x402/fetch wrapFetchWithPayment",
+      "hono_server": "@x402/hono paymentMiddleware",
+      "mcp_server": "@x402/mcp createPaymentWrapper",
+      "mcp_client": "@x402/mcp createx402MCPClient",
+      "protocol_version": 2
+    }
+  },
+  "atrib_product_surface": {
+    "action_gate_package": "@atrib/action-gate",
+    "agent_package": "@atrib/agent",
+    "detector": "PAYMENT-RESPONSE",
+    "event_types": {
+      "decision": "https://atrib.dev/v1/extensions/action-gate/decision",
+      "outcome": "https://atrib.dev/v1/extensions/action-gate/outcome",
+      "transaction": "https://atrib.dev/v1/types/transaction"
+    }
+  },
+  "paid_action": {
+    "run_id": "cloudflare-x402-path-b-reference",
+    "action_id": "paid-dataset-retry-after-402",
+    "agent_id": "cloudflare-agent-reference",
+    "surface": "cloudflare-agents",
+    "tool_name": "mcp.paid-dataset.lookup",
+    "risk": [
+      "payment",
+      "paid_mcp_tool",
+      "external_read"
+    ],
+    "price": "0.01",
+    "asset": "USDC",
+    "cloudflare_network": "base-sepolia",
+    "caip2_network": "eip155:84532",
+    "route_id": "route-paid-mcp-dataset",
+    "rule_id": "rule-price-cap-usdc-cent"
+  },
+  "x402_flow": {
+    "first_response_status": 402,
+    "paid_retry_sent": true,
+    "origin_response_status": 200,
+    "traceparent_preserved_across_retry": true,
+    "atrib_context_preserved_across_retry": true,
+    "challenge_hash": "sha256:e36172e5fef153bd40d973ceff36bd63dea92cef5f0da0008b71c773d27133c8",
+    "payment_signature_hash": "sha256:4a6f8ebc8cf1894bf9afb04e02d1e7546f45319638d349cc79e569bee91af537",
+    "payment_response_hash": "sha256:960463df833afac111cfa52089eec3fb15d1c50ca6ce83a3bc0d25016f06b7ee",
+    "settlement_reference_hash": "sha256:4168e925ece9bdbc8a92ede77a950d57fce7e470f819add27b7142395cd560bd",
+    "origin_response_hash": "sha256:c7974acaf41c57af2a7a0c0f85051cf7c4bf4a5c08ecaaa96d4d2b32132946cf"
+  },
+  "signed_records": {
+    "decision_record_hash": "sha256:6331b008cc6e173d78484dc61a30d5d32f23f417c0bda65529e8f4924e59dd59",
+    "outcome_record_hash": "sha256:a82a2ee335581ab29ba4b7d8c10c643b3a91e6b92145741c955a1040158cb528",
+    "agent_transaction_record_hash": "sha256:374467859a313d2f607e27f284c01ff7e72abdfe3e7bf5725bd2a65c3c2dbc30",
+    "counterparty_attested_transaction_hash": "sha256:1ca48a66c450213d08d26a03e0a59170ce4ed51902a339857d52e8d99300eb6f",
+    "decision_state": "allowed",
+    "outcome_status": "executed",
+    "transaction_protocol": "x402",
+    "transaction_content_id": "sha256:2d9a874788a216c805b099efe351d3faa0949221965d294d35bff8e0ed444730",
+    "transaction_content_id_matches_x402_endpoint": true,
+    "transaction_context_matches_gate": true,
+    "transaction_warning_recorded": true,
+    "agent_transaction_signer_count": 1,
+    "counterparty_attested_signer_count": 2,
+    "counterparty_signers_valid": true
+  },
+  "payment_lifecycle": {
+    "schema": "atrib.cloudflare-x402-paid-request-lifecycle.v1",
+    "source": "cloudflare_x402_v2_local_flow",
+    "stage": "origin_response",
+    "request_id": "cf-x402-path-b-req-001",
+    "payment_attempt_id": "cf-x402-path-b-pay-001",
+    "route_id": "route-paid-mcp-dataset",
+    "rule_id": "rule-price-cap-usdc-cent",
+    "method": "POST",
+    "url_hash": "sha256:cb91b280dfdca321249ab57ee3057ef6f4b830c728a9f34a541f222927045499",
+    "price": "0.01",
+    "asset": "USDC",
+    "cloudflare_network": "base-sepolia",
+    "caip2_network": "eip155:84532",
+    "payer_hash": "sha256:814eead2baf1fd22b916c3d27e953383ff1320f8fd8504dafd635406ef556290",
+    "payee_hash": "sha256:d098a6da0819b0aa506b06447997599237f7cfcb4e3f71dbcb1cc1f7f8b79201",
+    "challenge_hash": "sha256:e36172e5fef153bd40d973ceff36bd63dea92cef5f0da0008b71c773d27133c8",
+    "payment_signature_hash": "sha256:4a6f8ebc8cf1894bf9afb04e02d1e7546f45319638d349cc79e569bee91af537",
+    "payment_response_hash": "sha256:960463df833afac111cfa52089eec3fb15d1c50ca6ce83a3bc0d25016f06b7ee",
+    "settlement_reference_hash": "sha256:4168e925ece9bdbc8a92ede77a950d57fce7e470f819add27b7142395cd560bd",
+    "origin_response_hash": "sha256:c7974acaf41c57af2a7a0c0f85051cf7c4bf4a5c08ecaaa96d4d2b32132946cf",
+    "traceparent": "00-101112131415161718191a1b1c1d1e1f-2021222324252627-01",
+    "atrib_context_id": "101112131415161718191a1b1c1d1e1f",
+    "agent_session_id": "cloudflare-x402-path-b-reference",
+    "decision_record_hash": "sha256:6331b008cc6e173d78484dc61a30d5d32f23f417c0bda65529e8f4924e59dd59",
+    "outcome_record_hash": "sha256:a82a2ee335581ab29ba4b7d8c10c643b3a91e6b92145741c955a1040158cb528",
+    "transaction_record_hash": "sha256:374467859a313d2f607e27f284c01ff7e72abdfe3e7bf5725bd2a65c3c2dbc30",
+    "verify_status": "verified",
+    "settle_status": "settled"
+  },
+  "proof": {
+    "action_allowed_before_paid_retry": true,
+    "x402_detector_fired": true,
+    "path_b_transaction_emitted_by_agent": true,
+    "retry_kept_trace_context": true,
+    "lifecycle_bound_to_decision": true,
+    "lifecycle_bound_to_outcome": true,
+    "lifecycle_bound_to_transaction": true,
+    "lifecycle_uses_hash_only_payment_artifacts": true,
+    "counterparty_attested_same_transaction_bytes": true
+  },
+  "privacy": {
+    "raw_payment_challenge_omitted": true,
+    "raw_payment_signature_omitted": true,
+    "raw_payment_response_omitted": true,
+    "raw_wallet_material_omitted": true,
+    "raw_origin_payload_omitted": true
+  },
+  "caveats": [
+    "This proof uses local x402 v2 headers and no live funds.",
+    "It does not call Cloudflare Monetization Gateway beta APIs.",
+    "A Gateway beta adapter should replace the local lifecycle source when Cloudflare exposes route, rule, payment attempt, settlement, and export fields."
+  ]
+}

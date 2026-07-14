@@ -1,6 +1,6 @@
 # @atrib/memory-tool
 
-Memory Tool wrapper for Atrib's verifiable action layer.
+Memory Tool wrapper for atrib's verifiable action layer.
 
 Anthropic's Memory Tool is client-side: the application chooses where memory
 files live and implements handlers for `view`, `create`, `str_replace`,
@@ -25,7 +25,7 @@ import { createAtribMemoryTool } from '@atrib/memory-tool'
 const fsMemory = await BetaLocalFilesystemMemoryTool.init('./memory')
 const memory = betaMemoryTool(
   await createAtribMemoryTool(fsMemory, {
-    privateKey: process.env.ATRIB_PRIVATE_KEY,
+    privateKey: process.env.ATRIB_PRIVATE_KEY, // base64url Ed25519 32-byte seed
     contextId: '4bf92f3577b34da6a3ce929d0e0e4736',
   }),
 )
@@ -61,7 +61,7 @@ or archive policy.
 
 ```ts
 const records = []
-const memory = await createAtribMemoryTool(handlers, {
+const memory = await createAtribMemoryTool(fsMemory, { // fsMemory from the quick-start above
   privateKey,
   logSubmission: 'disabled',
   onRecord: (record) => records.push(record),
@@ -91,3 +91,7 @@ pnpm --filter @atrib/memory-tool smoke
 This package wraps Anthropic's TypeScript handler shape from
 `@anthropic-ai/sdk@0.100.1`. The Memory Tool is a beta surface, so callers should
 pin the SDK version they test against.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

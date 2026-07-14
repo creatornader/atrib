@@ -1,0 +1,42 @@
+{
+  "name": "payment-completed-with-success-receipt",
+  "corpus": "payments-profile/detection",
+  "rail": "a2a-x402",
+  "profile_section": "2.5",
+  "description": "a2a-x402: an A2A task whose status.message.metadata carries x402.payment.status \"payment-completed\" and at least one receipt with success true. Reported as protocol AP2 because a2a-x402 is the AP2 crypto path.",
+  "input": {
+    "tool_name": "agent_settle",
+    "response": {
+      "kind": "task",
+      "id": "task-123",
+      "status": {
+        "state": "working",
+        "message": {
+          "kind": "message",
+          "role": "agent",
+          "parts": [
+            {
+              "kind": "text",
+              "text": "Payment successful."
+            }
+          ],
+          "metadata": {
+            "x402.payment.status": "payment-completed",
+            "x402.payment.receipts": [
+              {
+                "success": true,
+                "transaction": "0xabc123def456",
+                "network": "base",
+                "payer": "0xPAYER"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "AP2"
+  }
+}

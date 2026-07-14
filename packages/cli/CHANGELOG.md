@@ -1,5 +1,32 @@
 # @atrib/cli
 
+## 0.2.0
+
+### Minor Changes
+
+- f4a5ebd: Add delegation-certificate producer conveniences. The CLI can issue scoped certificates for ephemeral run keys, and MCP middleware carries a configured certificate in the local mirror sidecar. Agent receipt parsing now uses the shared MCP verifier.
+
+### Patch Changes
+
+- Updated dependencies [f4a5ebd]
+  - @atrib/mcp@0.20.0
+
+## 0.1.34
+
+### Patch Changes
+
+- 1378d4f: Docs: bring every public package README and description to standalone-completeness parity. Lowercase the brand to `atrib` throughout, add a uniform Install section and a Part of atrib orientation block, and fix standalone gaps found in review: missing imports and undefined variables in quick-starts, the published npx wire-up form for the MCP servers, an off-machine privacy note for summarize, a worked handoff example for verify-mcp, and a rewrite of the directory README against its real class-based API. No code or public API changes.
+- Updated dependencies [1378d4f]
+  - @atrib/mcp@0.19.1
+  - @atrib/directory@0.2.1
+
+## 0.1.33
+
+### Patch Changes
+
+- Updated dependencies [3c8e63d]
+  - @atrib/mcp@0.19.0
+
 ## 0.1.32
 
 ### Patch Changes
@@ -240,7 +267,7 @@
   - All 6 descriptions now follow the consistent shape `<noun> for atrib. <specific value>.`
   - Removed em dashes per the writing rules
   - `@atrib/mcp-wrap` description no longer mentions an arbitrary "~30 MCPs" cap (it works for any MCP)
-  - Lowercased "Atrib" to "atrib" across author + description fields per the brand convention
+  - Lowercased "atrib" to "atrib" across author + description fields per the brand convention
   - Wrote READMEs for `@atrib/cli` and `@atrib/directory` (previously had none)
   - Rewrote 115 broken relative links across mcp/agent/verify READMEs to absolute github URLs that auto-heal at public-flip
   - Stripped temporary `repository` field from package.jsons (404s while repo is private; restored at public-flip)

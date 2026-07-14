@@ -359,7 +359,7 @@ function orderRevisionLineage(seed: SignedMemory, members: SignedMemory[]): { or
 }
 
 /**
- * D143 composition: signed revision edges must render as lineage. A disconnected
+ * D157 composition: signed revision edges must render as lineage. A disconnected
  * reverse-order list discards the edge information that the graph certifies.
  */
 function composeSeedWithLineage(

@@ -25,7 +25,7 @@ pnpm add @atrib/action-gate
 import { runGatedAction } from '@atrib/action-gate'
 
 const result = await runGatedAction({
-  privateKey,
+  privateKey, // base64url Ed25519 32-byte seed, from ATRIB_PRIVATE_KEY, @atrib/cli, or the OS keychain
   contextId: '5f9a8a2b68f94a5cb7f9361b2c8d4e10',
   action: {
     run_id: 'browser-run-42',
@@ -74,7 +74,7 @@ adds the callback failure to `record_delivery_errors`.
 
 `requireTrustedTransaction()` is a ready-made `evaluate` policy for transaction
 actions. It is where [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
-trusted signer composition ([D135](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d135-cross-attestation-composes-with-a-trust-set-for-sybil-resistance))
+trusted signer composition ([D149](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance))
 becomes a requirement rather than a signal: `verifyRecord` only surfaces the trust posture,
 so a consumer reading `signers_valid >= 2` can still be Sybil-fooled by two
 untrusted co-signers. This policy returns `allow` only when the transaction
@@ -100,10 +100,10 @@ const result = await runGatedAction({
 
 `requireCorroborated()` is the same fail-closed shape applied to any record, not
 only transactions. It is where [§8.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#876-attestation-corroboration-extension)
-attestation corroboration ([D136](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d136-attestation-is-corroboration-generalized-off-transactions-extension-first))
+attestation corroboration ([D150](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d150-attestation-is-corroboration-generalized-off-transactions-extension-first))
 becomes a requirement rather than a signal. It resolves the distinct verified
 attestors of a target record through `@atrib/verify` `resolveAttestationCorroboration`,
-reuses the [D135](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d135-cross-attestation-composes-with-a-trust-set-for-sybil-resistance)
+reuses the [D149](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance)
 trust-set model, and returns `allow` only when the target is corroborated
 (`isCorroborated`: at least two distinct verified attestors drawn from the
 supplied `trustedCreatorKeys`, default threshold two). Every other case fails
@@ -162,3 +162,7 @@ npx -y pnpm@9.15.4 --filter @atrib/action-gate test
 npx -y pnpm@9.15.4 --filter @atrib/action-gate build
 npx -y pnpm@9.15.4 --filter @atrib/integration action-control-gate-smoke
 ```
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

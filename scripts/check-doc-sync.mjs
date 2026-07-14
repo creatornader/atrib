@@ -18,7 +18,7 @@
 // Usage: node scripts/check-doc-sync.mjs [--json]
 
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -69,6 +69,21 @@ const NUMBER_WORDS = [
   'eighteen',
   'nineteen',
   'twenty',
+  'twenty-one',
+  'twenty-two',
+  'twenty-three',
+  'twenty-four',
+  'twenty-five',
+  'twenty-six',
+  'twenty-seven',
+  'twenty-eight',
+  'twenty-nine',
+  'thirty',
+  'thirty-one',
+  'thirty-two',
+  'thirty-three',
+  'thirty-four',
+  'thirty-five',
 ]
 
 const findings = []
@@ -490,13 +505,14 @@ function checkWorkspacePackages() {
   // CLAUDE.md's framing groups bullets explicitly: count those bullets and
   // verify the number-word claim matches.
   const monorepoMatch = claude.match(
-    /monorepo with \*\*([a-z]+) workspace packages\*\*:\s*\n([\s\S]*?)\n\n/,
+    /monorepo with \*\*([a-z-]+) workspace packages\*\*:\s*\n([\s\S]*?)\n\n/,
   )
   if (monorepoMatch) {
     const claimedWord = monorepoMatch[1].toLowerCase()
     const bulletBlock = monorepoMatch[2]
-    // Count `@atrib/<name>` references in the bullet block (each is one package).
-    const enumerated = [...bulletBlock.matchAll(/`@atrib\/[a-z-]+`/g)].length
+    // Count package references in the bullet block (each is one package).
+    // Most are `@atrib/<name>`; the unscoped daemon package `atribd` counts too.
+    const enumerated = [...bulletBlock.matchAll(/`(?:@atrib\/[a-z-]+|atribd)`/g)].length
     const expectedWord = NUMBER_WORDS[enumerated]
     if (claimedWord !== expectedWord) {
       fail(
@@ -598,20 +614,41 @@ function checkConformanceCorpusConsistency() {
       mismatches++
       continue
     }
-    const declared = Array.isArray(manifest.cases) ? manifest.cases.length : 0
-    const declaredFiles = new Set((manifest.cases || []).map((c) => c.file).filter(Boolean))
+    // Two manifest shapes exist: a flat `cases[]` array, and a `families[]`
+    // array whose entries each carry a `cases[]` list of nested paths
+    // (spec/conformance/atribd/ introduced the family shape).
+    const familyCases = Array.isArray(manifest.families)
+      ? manifest.families.flatMap((f) => (Array.isArray(f.cases) ? f.cases : []))
+      : []
+    const flatCases = Array.isArray(manifest.cases)
+      ? manifest.cases.map((c) => c.file).filter(Boolean)
+      : []
+    const declaredList = flatCases.length ? flatCases : familyCases
+    const declared = Array.isArray(manifest.cases)
+      ? manifest.cases.length
+      : familyCases.length
+    const declaredFiles = new Set(declaredList)
     let actualCount = 0
     const actualFiles = new Set()
-    try {
-      const files = readdirSync(join(ROOT, 'spec/conformance', root, 'cases'))
-      for (const f of files) {
-        if (!f.endsWith('.json')) continue
-        actualCount++
-        actualFiles.add(`cases/${f}`)
+    function walkCases(rel) {
+      let entries
+      try {
+        entries = readdirSync(join(ROOT, 'spec/conformance', root, rel), {
+          withFileTypes: true,
+        })
+      } catch (_) {
+        return // No cases/ dir; manifest count of 0 is fine
       }
-    } catch (_) {
-      // No cases/ dir; manifest count of 0 is fine
+      for (const e of entries) {
+        if (e.isDirectory()) {
+          walkCases(`${rel}/${e.name}`)
+        } else if (e.name.endsWith('.json')) {
+          actualCount++
+          actualFiles.add(`${rel}/${e.name}`)
+        }
+      }
     }
+    walkCases('cases')
     if (declared !== actualCount) {
       fail(
         check,
@@ -630,6 +667,79 @@ function checkConformanceCorpusConsistency() {
   }
   if (mismatches === 0) {
     ok(check, `${corpusRoots.length} conformance corpora consistent (cases/*.json ↔ manifest.json)`)
+  }
+}
+
+// ─── daemon tool-surface count ─────────────────────────────────────────────
+//
+// Ground truth: the PRIMITIVE_SPECS enumeration in
+// services/atribd/src/backend.ts (each spec's expectedTools list; the same
+// enumeration drives the daemon's D129 surface contracts).
+//
+// Targets: CLAUDE.md and README.md "<n> physical MCP tools" claims plus
+// skills/atrib/SKILL.md's "<word> physical MCP tools" claims.
+
+function checkDaemonToolSurfaceCount() {
+  const check = 'daemon-tool-surface-count'
+  let source
+  try {
+    source = read('services/atribd/src/backend.ts')
+  } catch (e) {
+    fail(check, `cannot read services/atribd/src/backend.ts: ${e.message}`)
+    return
+  }
+  const specsMatch = source.match(
+    /const PRIMITIVE_SPECS: readonly PrimitiveSpec\[\] = \[([\s\S]*?)\n\]/,
+  )
+  if (!specsMatch) {
+    fail(check, 'PRIMITIVE_SPECS block not found in services/atribd/src/backend.ts')
+    return
+  }
+  let toolCount = 0
+  for (const m of specsMatch[1].matchAll(/expectedTools: \[([^\]]*)\]/g)) {
+    toolCount += [...m[1].matchAll(/'[a-z_-]+'/g)].length
+  }
+  if (toolCount === 0) {
+    fail(check, 'PRIMITIVE_SPECS enumerates zero expected tools; parser or source drift')
+    return
+  }
+  const expectedWord = NUMBER_WORDS[toolCount]
+  let mismatches = 0
+  for (const file of ['CLAUDE.md', 'README.md']) {
+    const text = read(file).replace(/\s+/g, ' ')
+    for (const m of text.matchAll(/\b(\d+) physical MCP tools\b/g)) {
+      if (Number(m[1]) !== toolCount) {
+        fail(check, `${file} claims "${m[0]}" but PRIMITIVE_SPECS enumerates ${toolCount}`, {
+          claimed: m[1],
+          expected: toolCount,
+        })
+        mismatches++
+      }
+    }
+    for (const m of text.matchAll(/\b([a-z-]+) physical MCP tools\b/gi)) {
+      if (/^\d+$/.test(m[1])) continue
+      if (m[1].toLowerCase() !== expectedWord) {
+        fail(check, `${file} claims "${m[0]}" but PRIMITIVE_SPECS enumerates ${toolCount}`, {
+          claimed: m[1],
+          expected: expectedWord,
+        })
+        mismatches++
+      }
+    }
+  }
+  const skill = read('skills/atrib/SKILL.md').replace(/\s+/g, ' ')
+  for (const m of skill.matchAll(/\b([a-z-]+) physical MCP tools\b/gi)) {
+    if (m[1].toLowerCase() !== expectedWord) {
+      fail(
+        check,
+        `skills/atrib/SKILL.md claims "${m[0]}" but PRIMITIVE_SPECS enumerates ${toolCount}`,
+        { claimed: m[1], expected: expectedWord },
+      )
+      mismatches++
+    }
+  }
+  if (mismatches === 0) {
+    ok(check, `daemon tool-surface claims agree with PRIMITIVE_SPECS (${toolCount} tools)`)
   }
 }
 
@@ -732,6 +842,63 @@ function checkControlBytes() {
 
   if (count === 0) {
     ok(check, `${files.length} tracked text file(s) clean`)
+  }
+}
+
+// ─── private wordlist (operator-local) ─────────────────────────────────────
+// Public files describe operator infrastructure in role terms only. The
+// enforcing pattern list is operator-private and lives outside the repo:
+// ATRIB_DOC_SYNC_PRIVATE_WORDLIST points at it, with a fallback at
+// ~/.config/atrib/doc-sync-private-wordlist.txt. Each non-blank, non-#
+// line is a case-insensitive regular expression. When no wordlist is
+// present (CI, fresh clones), the check reports ok and skips.
+function checkPrivateWordlist() {
+  const check = 'private-wordlist'
+  const candidate =
+    process.env.ATRIB_DOC_SYNC_PRIVATE_WORDLIST ||
+    join(homedir(), '.config', 'atrib', 'doc-sync-private-wordlist.txt')
+  let raw
+  try {
+    raw = readFileSync(candidate, 'utf8')
+  } catch (_) {
+    ok(check, 'no private wordlist configured; skipped')
+    return
+  }
+  const rules = []
+  let badPatterns = 0
+  for (const line of lines(raw)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    try {
+      rules.push(new RegExp(trimmed, 'i'))
+    } catch (e) {
+      badPatterns += 1
+      fail(check, `invalid pattern in private wordlist: ${e.message}`)
+    }
+  }
+  if (rules.length === 0) {
+    if (badPatterns === 0) ok(check, 'private wordlist empty; skipped')
+    return
+  }
+  const files = listPublicBoundaryFiles()
+  let count = 0
+  for (const file of files) {
+    const rawLines = lines(read(file))
+    for (let i = 0; i < rawLines.length; i += 1) {
+      for (let r = 0; r < rules.length; r += 1) {
+        if (!rules[r].test(rawLines[i])) continue
+        count += 1
+        fail(check, `${file}:${i + 1} matches private wordlist pattern #${r + 1}`, {
+          file,
+          line: i + 1,
+          pattern: r + 1,
+          snippet: rawLines[i].trim().slice(0, 200),
+        })
+      }
+    }
+  }
+  if (count === 0 && badPatterns === 0) {
+    ok(check, `${files.length} text file(s) clear the private wordlist (${rules.length} pattern(s))`)
   }
 }
 
@@ -956,6 +1123,193 @@ function buildInlineCodeMask(line) {
   return mask
 }
 
+// ─── Check: payment protocol count consistency ─────────────────────────────
+//
+// Ground truth: the payments-profile detection corpus manifest's `rails`
+// array (spec/conformance/payments-profile/detection/manifest.json), which
+// mirrors the canonical rail enumeration in docs/payments-profile.md §1
+// (P048). Cross-check the profile document's own sentence, then scan the
+// hub docs for "<word> payment protocols" / "<word> agent commerce
+// protocols" / "<word> protocols" claims.
+
+function checkPaymentProtocolCount() {
+  const check = 'payment-protocol-count'
+  let manifest
+  try {
+    manifest = JSON.parse(read('spec/conformance/payments-profile/detection/manifest.json'))
+  } catch (e) {
+    fail(check, `cannot read detection corpus manifest: ${e.message}`)
+    return
+  }
+  const rails = Array.isArray(manifest.rails) ? manifest.rails : []
+  const actualCount = rails.length
+  const expectedWord = NUMBER_WORDS[actualCount]
+  if (!expectedWord) {
+    fail(check, `detection corpus manifest enumerates ${actualCount} rails, outside the number-word table`)
+    return
+  }
+
+  let mismatchCount = 0
+
+  // The profile's canonical sentence must agree with the manifest, both in
+  // count word and in rail set.
+  const profile = read('docs/payments-profile.md')
+  const claim = profile.match(/This profile detects (\w+) payment protocols: ([^.]+)\./)
+  if (!claim) {
+    fail(check, 'docs/payments-profile.md canonical "This profile detects <word> payment protocols: ..." sentence not found')
+    return
+  }
+  if (claim[1].toLowerCase() !== expectedWord) {
+    fail(
+      check,
+      `docs/payments-profile.md claims "${claim[1]} payment protocols" but the detection corpus manifest enumerates ${actualCount} rails`,
+      { claimed: claim[1], actualCount, rails },
+    )
+    mismatchCount += 1
+  }
+  const enumerated = claim[2]
+    .split(/,|\band\b/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const railSet = new Set(rails.map((r) => String(r).toLowerCase()))
+  const drift = enumerated.filter((e) => !railSet.has(e.toLowerCase()))
+  if (drift.length > 0 || enumerated.length !== rails.length) {
+    fail(
+      check,
+      `docs/payments-profile.md rail enumeration does not match the detection corpus manifest rails array`,
+      { enumerated, rails, drift },
+    )
+    mismatchCount += 1
+  }
+
+  // Scan hub docs for count-word claims that disagree.
+  const targets = ['CLAUDE.md', 'README.md', 'ARCHITECTURE.md', 'docs/payments-profile.md']
+  const numberWordPattern = NUMBER_WORDS.slice(1, 16).join('|')
+  const re = new RegExp(
+    `\\b(${numberWordPattern})\\s+(?:payment protocols|agent commerce protocols|protocols)\\b`,
+    'gi',
+  )
+  for (const t of targets) {
+    const matches = findLineMatches(t, re)
+    for (const m of matches) {
+      const found = m.match[1].toLowerCase()
+      if (found !== expectedWord) {
+        fail(
+          check,
+          `${t}:${m.lineNo} says "${m.match[0]}", expected "${expectedWord}" (detection corpus manifest ground truth)`,
+          { file: t, line: m.lineNo, found, expected: expectedWord, snippet: m.line.trim().slice(0, 200) },
+        )
+        mismatchCount += 1
+      }
+    }
+  }
+  if (mismatchCount === 0) {
+    ok(check, `${actualCount} payment protocols, profile enumeration and hub docs agree`)
+  }
+}
+
+// ─── Check: evidence profile count consistency ─────────────────────────────
+//
+// Ground truth: the evidence-envelope corpus manifest's
+// atrib_profile_registry array. Every registered name must have a
+// docs/evidence-profiles/<name>.md document and vice versa, and the
+// CLAUDE.md "<word> atrib-maintained evidence-envelope profiles" claim
+// must match the count.
+
+function checkEvidenceProfileCount() {
+  const check = 'evidence-profile-count'
+  let registry
+  try {
+    registry = JSON.parse(read('spec/conformance/evidence-envelope/manifest.json')).atrib_profile_registry
+  } catch (e) {
+    fail(check, `cannot read evidence-envelope manifest: ${e.message}`)
+    return
+  }
+  if (!Array.isArray(registry) || registry.length === 0) {
+    fail(check, 'evidence-envelope manifest atrib_profile_registry missing or empty')
+    return
+  }
+  let files
+  try {
+    files = readdirSync(join(ROOT, 'docs/evidence-profiles')).filter((f) => f.endsWith('.md'))
+  } catch (e) {
+    fail(check, `cannot list docs/evidence-profiles: ${e.message}`)
+    return
+  }
+  let mismatchCount = 0
+  const missingDocs = registry.filter((name) => !files.includes(`${name}.md`))
+  const unregisteredDocs = files.filter((f) => !registry.includes(f.replace(/\.md$/, '')))
+  if (missingDocs.length > 0 || unregisteredDocs.length > 0) {
+    fail(
+      check,
+      'docs/evidence-profiles/*.md and the envelope manifest atrib_profile_registry disagree',
+      { missingDocs, unregisteredDocs },
+    )
+    mismatchCount += 1
+  }
+  const actualCount = registry.length
+  const expectedWord = NUMBER_WORDS[actualCount]
+  const claude = read('CLAUDE.md')
+  const m = claude.match(/\b(\w+) atrib-maintained evidence-envelope profiles\b/)
+  if (!m) {
+    fail(check, 'CLAUDE.md "<word> atrib-maintained evidence-envelope profiles" claim not found')
+    mismatchCount += 1
+  } else if (m[1].toLowerCase() !== expectedWord) {
+    fail(
+      check,
+      `CLAUDE.md claims "${m[1]} atrib-maintained evidence-envelope profiles" but the registry lists ${actualCount}`,
+      { claimed: m[1], actualCount, registry },
+    )
+    mismatchCount += 1
+  }
+  if (mismatchCount === 0) {
+    ok(check, `${actualCount} evidence profiles: registry, profile docs, and CLAUDE.md agree`)
+  }
+}
+
+// ─── Check: DOC-SYNC-TRIGGERS row count ────────────────────────────────────
+//
+// Ground truth: the data rows of the DOC-SYNC-TRIGGERS.md triggers table.
+// CLAUDE.md's quick-reference paragraph claims "(N rows)"; the two must
+// agree so the hub-doc claim can never drift again.
+
+function checkDocSyncTriggersRowCount() {
+  const check = 'doc-sync-triggers-row-count'
+  const triggers = read('DOC-SYNC-TRIGGERS.md')
+  let inTable = false
+  let rows = 0
+  for (const line of lines(triggers)) {
+    if (line.startsWith('| Event')) {
+      inTable = true
+      continue
+    }
+    if (!inTable) continue
+    if (/^\|\s*-/.test(line)) continue // separator row
+    if (line.startsWith('|')) rows += 1
+    else if (rows > 0) break
+  }
+  if (rows === 0) {
+    fail(check, 'DOC-SYNC-TRIGGERS.md triggers table not found')
+    return
+  }
+  const claude = read('CLAUDE.md')
+  const m = claude.match(/DOC-SYNC-TRIGGERS\.md\) \((\d+) rows\b/)
+  if (!m) {
+    fail(check, 'CLAUDE.md "(N rows)" claim for DOC-SYNC-TRIGGERS.md not found')
+    return
+  }
+  const claimed = Number(m[1])
+  if (claimed !== rows) {
+    fail(
+      check,
+      `CLAUDE.md claims DOC-SYNC-TRIGGERS.md has ${claimed} rows, table has ${rows} data rows`,
+      { claimed, rows },
+    )
+    return
+  }
+  ok(check, `DOC-SYNC-TRIGGERS.md has ${rows} rows, CLAUDE.md agrees`)
+}
+
 // ─── helpers ───────────────────────────────────────────────────────────────
 
 function capitalize(word) {
@@ -971,8 +1325,13 @@ const checks = [
   checkWorkspacePackages,
   checkPublishedPackageCount,
   checkConformanceCorpusConsistency,
+  checkDaemonToolSurfaceCount,
+  checkPaymentProtocolCount,
+  checkEvidenceProfileCount,
+  checkDocSyncTriggersRowCount,
   checkPublicBoundaryWording,
   checkControlBytes,
+  checkPrivateWordlist,
   checkInlineLinks,
 ]
 

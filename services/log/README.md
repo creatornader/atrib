@@ -1,6 +1,6 @@
 # `services/log/` - atrib production Merkle log _(not yet built)_
 
-This directory is a placeholder for the production Atrib transparency log behind the verifiable action layer: a [Tessera](https://github.com/transparency-dev/tessera)-backed Merkle log implementing the [C2SP tlog-tiles](https://c2sp.org/tlog-tiles) specification, deployed at `log.atrib.dev/v1`.
+This directory is a placeholder for the production atrib transparency log behind the verifiable action layer: a [Tessera](https://github.com/transparency-dev/tessera)-backed Merkle log implementing the [C2SP tlog-tiles](https://c2sp.org/tlog-tiles) specification, deployed at `log.atrib.dev/v1`.
 
 **Status:** Not yet implemented. Tracked in [`DECISIONS.md`](../../DECISIONS.md). Work has not started in this directory.
 

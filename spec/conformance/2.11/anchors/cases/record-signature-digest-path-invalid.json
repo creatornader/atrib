@@ -1,0 +1,24 @@
+{
+  "name": "record-signature-digest-path-invalid",
+  "spec_section": "2.11",
+  "description": "Why the record's own signature MUST NOT be reused as the anchoring signature (the Rekor hashedrekord digest path): record_hash is computed over the COMPLETE record INCLUDING the signature field (§1.2.3), while the signature verifies over the signature-less canonical form (§1.4.2). The two byte strings differ, so an upload-time check that the signature verifies over the artifact behind record_hash fails by construction; and Pure EdDSA (RFC 8032 §5.1.6) cannot be verified from a digest alone. Anchors therefore carry a FRESH anchoring signature over the reconstructible claim artifact.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "chain_root": "sha256:d2f9fa9d99bb30b2b67fc6b0ea2694f345c0961596e0fd82561010b4f7570c2d",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1782864001000,
+      "signature": "gZpzxEt_HU3z3ayWrVnvBW8BcXzdHvD569YYhyzAiAi4yHfSelWegRdc-EEG84wQn8CPufGNq1LlrIjzB800DQ"
+    },
+    "creator_key_b64url": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo"
+  },
+  "expected": {
+    "record_hash": "sha256:c09397f49d090eab97ab27fee627abbcbf6148fba1fd6a0f947558f692952934",
+    "signature_verifies_over_signing_input": true,
+    "signature_verifies_over_full_canonical_record": false,
+    "signing_input_differs_from_hashed_bytes": true
+  }
+}

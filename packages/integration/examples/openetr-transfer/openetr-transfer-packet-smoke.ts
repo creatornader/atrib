@@ -1756,7 +1756,7 @@ This proof signs an OpenETR-shaped transfer-control flow through \`@atrib/mcp-wr
 ## What ran
 
 - Upstream surface: ${upstreamSurface}
-- Atrib path: \`@atrib/mcp-wrap\` around an MCP stdio server.
+- atrib path: \`@atrib/mcp-wrap\` around an MCP stdio server.
 - Record policy: public records keep selected tool names plus \`args_hash\` and \`result_hash\`.
 - Verification: \`@atrib/mcp\` verifies each Ed25519 record signature after the wrapper writes its mirror.
 - Log proof: ${logProof}.

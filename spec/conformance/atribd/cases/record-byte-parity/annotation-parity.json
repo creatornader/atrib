@@ -1,0 +1,36 @@
+{
+  "name": "annotation-parity",
+  "spec_section": "D148",
+  "description": "The same atrib-annotate call through a standalone stdio server, the daemon HTTP surface, and the daemon alias mount MUST produce byte-identical canonical records and the same _local.producer sidecar label. Fixed key (fill-42 test seed) and frozen timestamp make the signed bytes reproducible.",
+  "input": {
+    "tool": "atrib-annotate",
+    "arguments": {
+      "annotates": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "importance": "high",
+      "summary": "atribd record-byte-parity annotation vector",
+      "topics": [
+        "P046"
+      ],
+      "context_id": "c0ffee00c0ffee00c0ffee00c0ffee00"
+    },
+    "private_key_seed_base64url": "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio",
+    "timestamp_ms": 1781136000000
+  },
+  "expected": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:ed7971ab53ef206f307c0df4b951b666f42f4d6077ce931cc7a9738be74770ba",
+      "creator_key": "GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE",
+      "chain_root": "sha256:23e0bf16a8233d47b230a49057b3cb566175ab84135cd5574e55f092b77775db",
+      "event_type": "https://atrib.dev/v1/types/annotation",
+      "context_id": "c0ffee00c0ffee00c0ffee00c0ffee00",
+      "timestamp": 1781136000000,
+      "signature": "eN8AKQNKAxPmSELGLcM3AEPOagEwriIVIiADRVarjhpYnYqwyYZnB5nUIbkieowbuvszNi-jASLmG4f7BYmLCQ",
+      "annotates": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "args_hash": "sha256:cb13111c0dc8ae690f8c7fe17a0e33aef239c91c1aeb4735152768e99bfba87b"
+    },
+    "record_hash": "sha256:9b83eccffc64c269e4f2b66ff5704516fd8b420dd8ce761f481df9f9ed7ac4dd",
+    "canonical_record_sha256": "9b83eccffc64c269e4f2b66ff5704516fd8b420dd8ce761f481df9f9ed7ac4dd",
+    "producer_label": "atrib-annotate"
+  }
+}

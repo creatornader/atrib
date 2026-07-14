@@ -1,7 +1,7 @@
 {
   "name": "@atrib/directory-node",
-  "version": "0.1.32",
-  "description": "AKD-backed identity-claim directory HTTP service for Atrib's verifiable action layer.",
+  "version": "0.1.35",
+  "description": "AKD-backed identity-claim directory HTTP service for atrib's verifiable action layer.",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",

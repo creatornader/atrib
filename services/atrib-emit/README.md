@@ -1,6 +1,14 @@
 # `@atrib/emit`
 
-MCP server exposing the explicit `emit` tool, the producer-side cognitive primitive for Atrib's verifiable action layer. It lets an agent sign observations, annotations, and revisions under its own atrib identity, beyond what `@atrib/mcp` auto-signs.
+MCP server exposing the explicit `emit` tool, the producer-side cognitive primitive for atrib's verifiable action layer. It lets an agent sign observations, annotations, and revisions under its own atrib identity, beyond what `@atrib/mcp` auto-signs.
+
+## Install
+
+```bash
+pnpm add @atrib/emit
+```
+
+Verify a local build with `pnpm --filter @atrib/emit test`.
 
 ## Why this exists
 
@@ -104,7 +112,7 @@ If a 1Password item stores the seed with a `ATRIB_PRIVATE_KEY=<value>` label pre
 | `~/.claude/state/active-session-id-<ppid>` (state file)    | optional, host-written     | Per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v2: when `CLAUDE_CODE_SESSION_ID` env is unavailable (in-process MCP children whose env was frozen at Claude Code launch), the Claude Code registry entry's `fallbackFile` thunk resolves to `~/.claude/state/active-session-id-${process.ppid}`. A SessionStart-equivalent hook in the host's hook layer writes this file atomically (temp + rename, mode 0600) on every session start; the file contains the session UUID. Per-PPID keying isolates concurrent Claude Code instances. File-read constraints: max 128 bytes, trimmed whitespace, silent failure. Reader-side support is in `@atrib/mcp@0.9.0`+ via the extended `resolveEnvContextId`.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `~/.claude/state/active-session-id-<profile>` (state file) | optional, host-written     | Per [D083](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) v3: host-profile fallback for long-lived primitive hosts whose parent PID is not the interactive harness. The reader uses `ATRIB_ACTIVE_SESSION_PROFILE`, then `ATRIB_AGENT`, when the value is a safe profile name. The Codex hook writer prefers `CODEX_THREAD_ID` and maintains `active-session-id-codex`, so a launchd-owned `atrib-primitives` runtime with `ATRIB_AGENT=codex` can find the active thread even when `process.ppid` is `1`. Hook-envelope session ids are not trusted by default; `ATRIB_ACTIVE_SESSION_TRUST_HOOK_SESSION_ID=1` is only for harnesses whose envelope id is known to be stable. This is a single-active-session route per profile; callers that need two simultaneous sessions under one profile must pass `context_id` explicitly.                                                                                                                                                                                                                                                                                                                                         |
 | `ATRIB_PARENT_RECORD_HASH`                                 | optional                   | `sha256:<64-hex>` of a parent producer's record. When set to a valid value, `atrib-emit` auto-prepends it to the caller's `informed_by` array per [§1.2.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#125-informed_by), then dedupes via `Set`. Producers that spawn child processes (subagents, worker nodes, multi-agent framework children) should build the same-session child env with `@atrib/mcp` `buildSubagentProducerEnv()`, which sets `ATRIB_CONTEXT_ID`, `ATRIB_CHAIN_TAIL_<context_id>`, and `ATRIB_PARENT_RECORD_HASH` together per [D115](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle). Invalid values are silently ignored. Parent env seeds are producer-owned spawn anchors and are kept without mirror or log lookup per [D116](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d116-producer-side-informed_by-validation-is-source-aware). Caller-supplied `informed_by` refs are still validated unless `allow_unresolved_informed_by` is true. `atrib-emit` is stateless, so long-lived MCP hosts that need one-shot parent seeding should clear the env after the first child record or rely on the wrapper-signed first record. |
-| `ATRIB_LOCAL_SUBSTRATE_ENDPOINT`                           | optional                   | Opt-in [P042](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p042-local-substrate-coordinator-for-long-lived-and-multi-harness-dogfood) local-substrate coordinator endpoint. When set with `ATRIB_LOCAL_SUBSTRATE_MODE=shadow`, emit sends a bounded shadow probe with the exact unsigned record body while local signing, mirror append, and queue submission remain authoritative. When set with `ATRIB_LOCAL_SUBSTRATE_MODE=commit`, emit sends a bounded `sign_record` commit and skips its own log-submission queue only after the coordinator returns the expected `record_hash`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `ATRIB_LOCAL_SUBSTRATE_ENDPOINT`                           | optional                   | Opt-in [D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-local-substrate-coordinator-for-long-lived-and-multi-harness-dogfood) local-substrate coordinator endpoint. When set with `ATRIB_LOCAL_SUBSTRATE_MODE=shadow`, emit sends a bounded shadow probe with the exact unsigned record body while local signing, mirror append, and queue submission remain authoritative. When set with `ATRIB_LOCAL_SUBSTRATE_MODE=commit`, emit sends a bounded `sign_record` commit and skips its own log-submission queue only after the coordinator returns the expected `record_hash`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `ATRIB_LOCAL_SUBSTRATE_MODE`                               | optional                   | Local-substrate rollout mode. `shadow` is the default when an endpoint is present. `commit` is an opt-in long-lived-agent path that delegates log submission to the coordinator after hash matching. Watcher-WAL commit still requires the explicit `local_substrate` envelope described below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `ATRIB_LOCAL_SUBSTRATE_TIMEOUT_MS`                         | optional                   | Per local-substrate attempt timeout in milliseconds; defaults to `1500`. Timeout, rejection, and invalid responses fall back to the local signing and queue path.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
@@ -212,7 +220,7 @@ Broad default dogfood configs should wait for the process-health rollout gate in
 
 The package ships three binaries:
 
-- **`atrib-emit`**: the MCP server. Long-lived in an agent's MCP host (Claude Code, Claude Desktop). Surfaces the six [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) cognitive primitives to the agent at tool-discovery time. Use this for interactive in-session signing.
+- **`atrib-emit`**: the MCP server. Long-lived in an agent's MCP host (Claude Code, Claude Desktop). Surfaces the seven [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) cognitive primitives to the agent at tool-discovery time. Use this for interactive in-session signing.
 - **`atrib-emit-cli`**: a thin command-line wrapper around `emitInProcess` per [D082](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape). Reads one JSON envelope on stdin, signs the record in-process, writes the `EmitOutput` JSON to stdout. Use this for hook-class producers (Claude Code PostToolUse + lifecycle hooks, watchers, batch jobs) that spawn a short-lived signer rather than holding an MCP server warm.
 - **`atrib-local-substrate`**: a host-owned loopback HTTP coordinator process for opt-in P042 trials. Use this under a supervisor when several harnesses should target one local substrate boundary.
 
@@ -234,11 +242,26 @@ atrib-emit-cli doctor                  # exits 0 if key + log + mirror all ok, n
 atrib-emit-cli --describe              # stable JSON description for agent / tooling discovery
 ```
 
+Signing requires a resolvable key; without one the record is a warnings-only stub. See Key resolution below.
+
 Exit code on `emit` is always 0 per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); failures surface as warnings inside the result JSON or as a stderr diagnostic line. `doctor` exits non-zero on failure because it is an operator-facing diagnostic, not a hook-safe command.
 
 ## Installation in an MCP host
 
 For Claude Code or Claude Desktop, add to the MCP config:
+
+```jsonc
+{
+  "mcpServers": {
+    "atrib-emit": {
+      "command": "npx",
+      "args": ["-y", "@atrib/emit"],
+    },
+  },
+}
+```
+
+For a monorepo checkout or local development, point at the built binary directly:
 
 ```jsonc
 {
@@ -296,9 +319,13 @@ Both line shapes are accepted at read time: bare `AtribRecord` (the wrapper's co
 ## What v1 does NOT do
 
 - **No semantic validation of `content`.** Caller passes any shape; the verifier eventually derives edges based on the spec for normative event types. v2 could add per-event-type schemas.
-- **No annotation-specific tool.** v1 has one `emit` tool that handles all event types. v2 will add `atrib-annotate` with annotation-specific affordances (importance picker, automatic `annotates` linkage to most recent action).
+- Annotation and revision ship as separate primitives, `@atrib/annotate` and `@atrib/revise`.
 - **No batch mode.** One emit per call. v2 if a high-volume producer needs it.
 
 ## Test strategy
 
 `test/setup.ts` installs a fetch guard that refuses any submission to a production atrib endpoint (log/graph/directory/explore.atrib.dev). Same pattern as `@atrib/mcp` and `@atrib/agent`.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

@@ -1,7 +1,7 @@
 {
   "name": "@atrib/summarize",
-  "version": "0.4.19",
-  "description": "MCP server for Atrib's verifiable action layer. Summarizes signed records so agents read context, not raw bytes.",
+  "version": "0.4.22",
+  "description": "MCP server for atrib's verifiable action layer. Summarizes signed records so agents read context, not raw bytes.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
     "atrib",

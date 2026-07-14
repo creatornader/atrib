@@ -1,0 +1,139 @@
+{
+  "spec_section": "1.5.4",
+  "spec_title": "MCP Transport: params._meta — dev.atrib/attribution extension carriage",
+  "extension_identifier": "dev.atrib/attribution",
+  "extension_version": "0.1",
+  "extension_spec": "docs/extensions/dev.atrib-attribution/v0.1.md",
+  "decision_link": "P049 (mcp-extension ADR)",
+  "generated_at": 1783296000000,
+  "generator": "packages/log-dev/scripts/generate-conformance-mcp-extension.ts",
+  "ladder_1_token": [
+    "_meta[\"dev.atrib/attribution\"].token",
+    "_meta.atrib",
+    "_meta.tracestate atrib= entry",
+    "_meta[\"X-Atrib-Chain\"]"
+  ],
+  "ladder_2_context_identity": [
+    "explicit context_id tool argument",
+    "_meta[\"dev.atrib/attribution\"].context_id",
+    "_meta.traceparent trace-id",
+    "D078/D083 env-file registry",
+    "undefined"
+  ],
+  "log_submission_statuses": [
+    "queued",
+    "submitted",
+    "disabled",
+    "failed"
+  ],
+  "cases": [
+    {
+      "file": "cases/capability--server-declaration-valid.json",
+      "name": "capability--server-declaration-valid"
+    },
+    {
+      "file": "cases/capability--client-declaration-valid.json",
+      "name": "capability--client-declaration-valid"
+    },
+    {
+      "file": "cases/capability--unknown-settings-fields-ignored.json",
+      "name": "capability--unknown-settings-fields-ignored"
+    },
+    {
+      "file": "cases/capability--missing-version-rejected.json",
+      "name": "capability--missing-version-rejected"
+    },
+    {
+      "file": "cases/capability--reserved-prefix-rejected.json",
+      "name": "capability--reserved-prefix-rejected"
+    },
+    {
+      "file": "cases/gating--declared-receipt-present.json",
+      "name": "gating--declared-receipt-present"
+    },
+    {
+      "file": "cases/gating--declared-token-only.json",
+      "name": "gating--declared-token-only"
+    },
+    {
+      "file": "cases/gating--undeclared-legacy-only.json",
+      "name": "gating--undeclared-legacy-only"
+    },
+    {
+      "file": "cases/gating--malformed-clientcapabilities-undeclared.json",
+      "name": "gating--malformed-clientcapabilities-undeclared"
+    },
+    {
+      "file": "cases/token--extension-key-wins.json",
+      "name": "token--extension-key-wins"
+    },
+    {
+      "file": "cases/token--malformed-extension-falls-through.json",
+      "name": "token--malformed-extension-falls-through"
+    },
+    {
+      "file": "cases/token--meta-atrib-over-tracestate.json",
+      "name": "token--meta-atrib-over-tracestate"
+    },
+    {
+      "file": "cases/token--tracestate-over-x-atrib-chain.json",
+      "name": "token--tracestate-over-x-atrib-chain"
+    },
+    {
+      "file": "cases/token--x-atrib-chain-fallback.json",
+      "name": "token--x-atrib-chain-fallback"
+    },
+    {
+      "file": "cases/token--all-carriers-stripped.json",
+      "name": "token--all-carriers-stripped"
+    },
+    {
+      "file": "cases/context--explicit-argument-wins.json",
+      "name": "context--explicit-argument-wins"
+    },
+    {
+      "file": "cases/context--extension-over-traceparent.json",
+      "name": "context--extension-over-traceparent"
+    },
+    {
+      "file": "cases/context--invalid-extension-hex-falls-through.json",
+      "name": "context--invalid-extension-hex-falls-through"
+    },
+    {
+      "file": "cases/context--no-carrier-env-fallthrough.json",
+      "name": "context--no-carrier-env-fallthrough"
+    },
+    {
+      "file": "cases/context--unknown-fields-ignored.json",
+      "name": "context--unknown-fields-ignored"
+    },
+    {
+      "file": "cases/receipt--consistent.json",
+      "name": "receipt--consistent"
+    },
+    {
+      "file": "cases/receipt--hash-mismatch-flagged.json",
+      "name": "receipt--hash-mismatch-flagged"
+    },
+    {
+      "file": "cases/receipt--log-submission-nonblocking.json",
+      "name": "receipt--log-submission-nonblocking"
+    },
+    {
+      "file": "cases/degradation--signing-failure-passthrough.json",
+      "name": "degradation--signing-failure-passthrough"
+    },
+    {
+      "file": "cases/degradation--capability-read-failure-passthrough.json",
+      "name": "degradation--capability-read-failure-passthrough"
+    },
+    {
+      "file": "cases/degradation--missing-meta-never-blocks.json",
+      "name": "degradation--missing-meta-never-blocks"
+    }
+  ],
+  "keys": {
+    "server_pubkey": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo"
+  },
+  "note": "The six families collectively pin the extension contract: settings validity and the reserved-prefix rule (capability), receipt opt-in gating with byte-identical legacy fallback (gating), Ladder 1 inbound token precedence composing with the D067 chain ladder (token), Ladder 2 context-identity precedence above the D078/D083 registry (context), receipt consistency against real signed records with non-blocking log submission (receipt), and §5.8 silent passthrough under forced failures (degradation). No signed byte changes anywhere in this corpus."
+}

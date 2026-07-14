@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Attestation corroboration (D136, extension-first).
+ * Attestation corroboration (D150, extension-first).
  *
- * Cross-attestation (§1.7.6 / D052 / D135) is corroboration via CO-SIGNATURE of
+ * Cross-attestation (§1.7.6 / D052 / D149) is corroboration via CO-SIGNATURE of
  * shared transaction bytes: two parties sign the SAME record. Attestation is the
  * general form: corroboration via independent REFERENCE to any target record. A
  * signer Z who is NOT the target's producer emits a separate signed record that
  * vouches for target X's reliability. The verifier aggregates distinct trusted
- * attestors into a corroboration verdict, reusing the D135 trust-set model.
+ * attestors into a corroboration verdict, reusing the D149 trust-set model.
  *
  * Extension-first per D036 / D080: an attestation is an extension-URI record
  * (`https://atrib.dev/v1/extensions/attestation`), NOT a new normative
@@ -31,7 +31,7 @@ import canonicalize from 'canonicalize'
 import { sha256, hexEncode, type AtribRecord } from '@atrib/mcp'
 import { verifyRecord } from './verify-record.js'
 
-/** Extension event_type URI for attestation records (D136, extension-first). */
+/** Extension event_type URI for attestation records (D150, extension-first). */
 export const EVENT_TYPE_ATTESTATION_EXT_URI =
   'https://atrib.dev/v1/extensions/attestation'
 
@@ -64,7 +64,7 @@ export interface AttestationCorroborationOptions {
   attestations: AttestationInput[]
   /**
    * Base64url Ed25519 keys the verifier trusts as independent attesting
-   * principals (§1.7.6 / D135 trust vocabulary). When supplied, the verdict
+   * principals (§1.7.6 / D149 trust vocabulary). When supplied, the verdict
    * adds `attestors_trusted` / `under_corroborated`. Omitted: trust-blind.
    */
   trustedCreatorKeys?: string[]
@@ -114,7 +114,7 @@ function commitmentMatches(record: AtribRecord, content: AttestationContent): bo
 
 /**
  * Aggregate independent attestation records into a corroboration verdict for a
- * target record. Reuses the D135 trust-set intersection: `attestors_valid`
+ * target record. Reuses the D149 trust-set intersection: `attestors_valid`
  * stays trust-blind; when a trust set is supplied, `attestors_trusted` and
  * `under_corroborated` are added. Never flips any record's validity.
  */

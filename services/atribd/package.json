@@ -1,0 +1,57 @@
+{
+  "name": "atribd",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local daemon for atrib. Serves the seven cognitive primitives from one stateless-native process over Streamable HTTP or stdio.",
+  "author": "Nader Helmy",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/creatornader/atrib/tree/main/services/atribd",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creatornader/atrib.git",
+    "directory": "services/atribd"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "atribd": "./dist/index.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc && chmod +x dist/index.js",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@atrib/annotate": "workspace:*",
+    "@atrib/emit": "workspace:*",
+    "@atrib/mcp": "workspace:*",
+    "@atrib/recall": "workspace:*",
+    "@atrib/revise": "workspace:*",
+    "@atrib/summarize": "workspace:*",
+    "@atrib/trace": "workspace:*",
+    "@atrib/verify-mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8",
+    "zod": "^4.4.3"
+  },
+  "files": [
+    "dist"
+  ]
+}

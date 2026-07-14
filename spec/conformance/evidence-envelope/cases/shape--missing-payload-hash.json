@@ -1,0 +1,31 @@
+{
+  "name": "missing-payload-hash",
+  "spec_section": "5.5.7",
+  "family": "shape",
+  "description": "Required field omitted: payload.hash. The hash commitment is the identity of the evidence material; an envelope without it MUST be rejected.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    }
+  },
+  "expected": {
+    "accept": false,
+    "reject_reasons": [
+      "payload_hash"
+    ]
+  }
+}

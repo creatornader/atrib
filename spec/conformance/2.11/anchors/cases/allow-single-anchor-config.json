@@ -1,0 +1,106 @@
+{
+  "name": "allow-single-anchor-config",
+  "spec_section": "2.11",
+  "description": "Producer-side posture: zero-config resolves to the built-in two-anchor default set; explicit >= 2 configs are used as given; one anchor with allow_single_anchor true is deliberate (no warning); one anchor without the flag warns with an atrib: prefix and writes a sidecar degradation marker. Never a throw on the primary path, never disables signing (§5.8).",
+  "input": {
+    "configs": [
+      {
+        "name": "zero-config",
+        "config": {}
+      },
+      {
+        "name": "two-explicit",
+        "config": {
+          "anchors": [
+            {
+              "anchor_type": "atrib-log",
+              "url": "https://log.atrib.dev/v1"
+            },
+            {
+              "anchor_type": "opentimestamps",
+              "calendars": [
+                "https://a.pool.opentimestamps.org"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "single-with-flag",
+        "config": {
+          "anchors": [
+            {
+              "anchor_type": "atrib-log",
+              "url": "https://log.atrib.dev/v1"
+            }
+          ],
+          "allow_single_anchor": true
+        }
+      },
+      {
+        "name": "single-no-flag",
+        "config": {
+          "anchors": [
+            {
+              "anchor_type": "atrib-log",
+              "url": "https://log.atrib.dev/v1"
+            }
+          ]
+        }
+      },
+      {
+        "name": "empty-no-flag",
+        "config": {
+          "anchors": []
+        }
+      }
+    ]
+  },
+  "expected": {
+    "resolutions": [
+      {
+        "name": "zero-config",
+        "effective_anchor_count": 2,
+        "used_default_set": true,
+        "warn": false,
+        "sidecar_anchor_config": null
+      },
+      {
+        "name": "two-explicit",
+        "effective_anchor_count": 2,
+        "used_default_set": false,
+        "warn": false,
+        "sidecar_anchor_config": null
+      },
+      {
+        "name": "single-with-flag",
+        "effective_anchor_count": 1,
+        "used_default_set": false,
+        "warn": false,
+        "sidecar_anchor_config": null
+      },
+      {
+        "name": "single-no-flag",
+        "effective_anchor_count": 1,
+        "used_default_set": false,
+        "warn": true,
+        "sidecar_anchor_config": {
+          "configured": 1,
+          "allow_single_anchor": false
+        }
+      },
+      {
+        "name": "empty-no-flag",
+        "effective_anchor_count": 0,
+        "used_default_set": false,
+        "warn": true,
+        "sidecar_anchor_config": {
+          "configured": 0,
+          "allow_single_anchor": false
+        }
+      }
+    ],
+    "never_throws_on_primary_path": true,
+    "never_disables_signing": true
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "failed-receipt-not-detected",
+  "corpus": "payments-profile/detection",
+  "rail": "ap2",
+  "profile_section": "2.5",
+  "description": "An AP2 receipt with status \"Error\" is a verifier rejection, not a transaction event. The tool name carries no heuristic keyword.",
+  "input": {
+    "tool_name": "agent_payment",
+    "response": {
+      "ap2.PaymentReceipt": {
+        "status": "Error",
+        "iss": "example-pisp.com",
+        "iat": 1772020800,
+        "reference": "closed-payment-mandate-hash",
+        "payment_id": "pay_123",
+        "error": "invalid_mandate",
+        "error_description": "The mandate did not authorize this payment."
+      }
+    }
+  },
+  "expected": {
+    "detected": false,
+    "protocol": null
+  }
+}

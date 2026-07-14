@@ -10,6 +10,7 @@ This proof signs a Browserbase MCP shaped browser session through `@atrib/mcp-wr
 
 - Upstream surface: Browserbase hosted Streamable HTTP MCP endpoint.
 - atrib path: `@atrib/mcp-wrap` around a hosted Streamable HTTP MCP upstream.
+- Control path: `browserbase-action-gate-v0` signs the `act` decision and outcome before the Browserbase action runs.
 - Record policy: public records keep tool names plus `args_hash` and `result_hash`.
 - Verification: `@atrib/mcp` verifies each Ed25519 record signature after the wrapper writes its mirror.
 - Log proof: accepted records were submitted to `https://log.atrib.dev/v1/entries` after full-flow verification; inclusion was verified.
@@ -19,25 +20,48 @@ This proof signs a Browserbase MCP shaped browser session through `@atrib/mcp-wr
 
 | Tool     | Record hash                                                             | Public log index |
 | -------- | ----------------------------------------------------------------------- | ---------------- |
-| start    | sha256:535201b60e3660f1b2f5babcfdd85f09f3a1503f4ad73cfc419528285c696aae | 65792            |
-| navigate | sha256:1f92f466f3bcbab058f9dc2fec99c5536a6d2f9f71fd21aa6b1b48417f1ad19d | 65793            |
-| observe  | sha256:4fd3e736c98b2652fda30963ff5d379db210b4dff71db401c39805936a1361d4 | 65794            |
-| act      | sha256:9295f755361578f90242fe7e5d3d59c99a76e36942dfd2f7b34277dcf70cb65c | 65795            |
-| extract  | sha256:8910a05fcfc243096e9238c311218304af569c1cc7e71774ccd834531d2ec028 | 65796            |
-| end      | sha256:a78400352f4daab9d03ae606854c36565bbd911dba736ece22535f8a8ffec4a6 | 65797            |
+| start    | sha256:3fec4c4fe89b52120116e10df30738e735305622a5d11b5e6a58044bd79c8a35 | 69802            |
+| navigate | sha256:310c9186053fc9aca97c18535634862e1698d29e94f10e611ededca406a349fd | 69803            |
+| observe  | sha256:afb2d48ba555b06efd1ea7feaf052a0e630f8bb57167990782d0ade5c383030a | 69804            |
+| act      | sha256:3afb35ced45576a91d7b870520adfeab16a8e20503eef8527c0b313cd2eea5c3 | 69805            |
+| extract  | sha256:4dd3490d3eaed99cd2abc4ea112cf8d87970d9f591e5c73c0366c5cf270ccb85 | 69806            |
+| end      | sha256:9a9a4833f9df89deb95742d8a61781695fe2435e514b688fd7b9efcc033dbf8c | 69807            |
 
 Representative public links:
 
-- Explorer: <https://explore.atrib.dev/action/sha256:535201b60e3660f1b2f5babcfdd85f09f3a1503f4ad73cfc419528285c696aae>
-- Log proof: <https://log.atrib.dev/v1/proof/535201b60e3660f1b2f5babcfdd85f09f3a1503f4ad73cfc419528285c696aae>
+- Explorer: <https://explore.atrib.dev/action/sha256:3fec4c4fe89b52120116e10df30738e735305622a5d11b5e6a58044bd79c8a35>
+- Log proof: <https://log.atrib.dev/v1/proof/3fec4c4fe89b52120116e10df30738e735305622a5d11b5e6a58044bd79c8a35>
+
+## Action policy gate
+
+The runner evaluates `browserbase-action-gate-v0` before `act`. The decision
+record is signed before the Browserbase tool call. If the decision is `block`
+or `escalate`, the runner stops before `act` and closes the session with
+`end` when possible.
+
+| Tool | Decision | Decision record                                                         | Decision index | Outcome record                                                          | Outcome index |
+| ---- | -------- | ----------------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------- | ------------- |
+| act  | allow    | sha256:f69c1470d23ffc99eff13b53b9b623770db6671a72596683dfe925e1af16c113 | 69808          | sha256:d5ea20d9ef67977ba3d37dc1c1579fbc2c121d8ee160e9fa8a17b3bfd0874c0a | 69809         |
+
+- Policy event type: `https://browserbase-action-gate.atrib.dev/v1/decision`
+- Stopped before: none
+- Blocked tool executed: false
 
 ## Redaction line
 
-The wrapper saw private Browserbase-shaped payloads: session id, replay URL, page snapshot, selector, form value, and extracted page text. The public artifact stores only hashes for those fields. See `redaction-manifest.json`.
+The wrapper saw private Browserbase-shaped payloads: session id, replay URL,
+page snapshot, selector, form value, and extracted page text. The action policy
+also saw target, action, and observed-state inputs. The public artifact stores
+only hashes or public fixed instructions for those fields. See
+`redaction-manifest.json`.
 
 ## Weakness
 
-This proof run signs the wrapper path, record chain, hash-only disclosure, public log inclusion, verifier path, and real Browserbase MCP command path. It still keeps Browserbase replay material private. Hosted Browserbase MCP can return temporary model-capacity errors; public publication starts only after the full six-step flow verifies.
+This proof run signs the wrapper path, record chain, hash-only disclosure,
+public log inclusion, verifier path, real Browserbase MCP command path, and
+signed action-policy records. It still keeps Browserbase Live View and replay
+material private. Hosted Browserbase MCP can return temporary model-capacity
+errors; public publication starts only after the full six-step flow verifies.
 
 ## Demo boundary
 

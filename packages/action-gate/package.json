@@ -1,6 +1,6 @@
 {
   "name": "@atrib/action-gate",
-  "version": "0.0.3",
+  "version": "0.0.6",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -49,6 +49,7 @@
   "dependencies": {
     "@atrib/mcp": "workspace:*",
     "@atrib/verify": "workspace:*",
+    "@noble/hashes": "^2.2.0",
     "canonicalize": "^3.0.0"
   },
   "devDependencies": {

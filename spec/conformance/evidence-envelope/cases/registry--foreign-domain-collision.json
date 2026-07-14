@@ -1,0 +1,46 @@
+{
+  "name": "foreign-domain-collision",
+  "spec_section": "5.5.7",
+  "family": "registry",
+  "description": "A foreign domain reusing an atrib profile name (\"oauth2\") under an atrib-shaped path. Profile identity is the full URI, not the trailing name: this is a valid third-party profile URI and MUST NOT be treated as the atrib oauth2 profile (no atrib profile-specific rendering, sanitization, or facts vocabulary applies).",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://example.com/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:330e4f8e81f32f4e8a7e876f26a5ecbe0fdfeb48220cee10670738da32dba01d",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "atrib_profile_registry": [
+      "oauth2",
+      "mcp-oauth",
+      "aauth",
+      "x401",
+      "ap2-vi",
+      "human-approval",
+      "counterparty-attestation",
+      "delegation-certificate",
+      "continuation-packet",
+      "payments-detection",
+      "payments-settlement"
+    ]
+  },
+  "expected": {
+    "accept": true,
+    "uri_valid": true,
+    "atrib_maintained": false,
+    "registered": false,
+    "treat_as": "unknown-preserve"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "invalid-tier-value",
+  "spec_section": "5.5.7",
+  "family": "shape",
+  "description": "tier outside the closed four-value enum ('declared' | 'shape' | 'attested' | 'verified'). The enum is closed: extending it requires revising the evidence-envelope ADR, not a consumer. Consumers MUST reject.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "tier": "trusted",
+      "payload": {
+        "hash": "sha256:330e4f8e81f32f4e8a7e876f26a5ecbe0fdfeb48220cee10670738da32dba01d",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    }
+  },
+  "expected": {
+    "accept": false,
+    "reject_reasons": [
+      "tier"
+    ]
+  }
+}

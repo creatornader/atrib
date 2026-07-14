@@ -1,0 +1,71 @@
+{
+  "spec_section": "2.11",
+  "spec_title": "Cross-log replication: anchor interface and anchor plurality",
+  "decision_link": "P043 (anchor plurality ADR; extends D050)",
+  "generated_at": 1782864000000,
+  "generator": "packages/log-dev/scripts/generate-conformance-anchors.ts",
+  "anchor_claim_prefix": "atrib-anchor/v1:",
+  "cases": [
+    {
+      "file": "cases/legacy-single-log.json",
+      "name": "legacy-single-log"
+    },
+    {
+      "file": "cases/discriminator-malformed-elements.json",
+      "name": "discriminator-malformed-elements"
+    },
+    {
+      "file": "cases/unknown-anchor-type.json",
+      "name": "unknown-anchor-type"
+    },
+    {
+      "file": "cases/plurality-atrib-log-plus-rfc3161.json",
+      "name": "plurality-atrib-log-plus-rfc3161"
+    },
+    {
+      "file": "cases/rekor-anchor-claim.json",
+      "name": "rekor-anchor-claim"
+    },
+    {
+      "file": "cases/rekor-claim-binding-mismatch.json",
+      "name": "rekor-claim-binding-mismatch"
+    },
+    {
+      "file": "cases/record-signature-digest-path-invalid.json",
+      "name": "record-signature-digest-path-invalid"
+    },
+    {
+      "file": "cases/ots-pending-then-upgraded.json",
+      "name": "ots-pending-then-upgraded"
+    },
+    {
+      "file": "cases/same-operator-group.json",
+      "name": "same-operator-group"
+    },
+    {
+      "file": "cases/threshold-not-met.json",
+      "name": "threshold-not-met"
+    },
+    {
+      "file": "cases/equivocation-detected.json",
+      "name": "equivocation-detected"
+    },
+    {
+      "file": "cases/censorship-suspected.json",
+      "name": "censorship-suspected"
+    },
+    {
+      "file": "cases/allow-single-anchor-config.json",
+      "name": "allow-single-anchor-config"
+    }
+  ],
+  "keys": {
+    "creator_pubkey": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+    "anchoring_pubkey": "IBLLkMpg6OXY2vZuInLSIz4EhtVX6MZhQe2JIBd9frc",
+    "log_a_pubkey_b64": "rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne+B1R/KJODNB0=",
+    "log_b_pubkey_b64": "LfBBJfABWvtHzoU674dyCU/5SYwUyxueEpc8KSfaD6Y=",
+    "log_e_pubkey_b64": "p/bfr484uJuozmSbWU+R5NAf3Ff5yUk99DteUKmYc2c=",
+    "rekor_pubkey_b64": "K8KACzMW4Akgn/11fasZzPCuhLx66QZU4egXEtJw9lM="
+  },
+  "note": "The thirteen cases collectively exercise the anchor-interface contract: legacy absent-discriminator compatibility (1), discriminator malformation rules (2), unknown-type forward compatibility (3), structural rfc3161/opentimestamps variants with real binding fields (4, 8), the fresh anchoring-signature claim artifact with real Ed25519 crypto (5, 6), the digest-path impossibility proof (7), operator-group independence (9), §2.11.4 threshold/equivocation/censorship hard conditions unchanged (10, 11, 12), and the producer-side allow_single_anchor posture (13). Verifier determinism (two runs, identical annotation) is asserted by the reference test over every case."
+}

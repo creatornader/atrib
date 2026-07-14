@@ -1,0 +1,49 @@
+{
+  "name": "retroactive-absence-not-null",
+  "spec_section": "1.2.10",
+  "description": "Absence-not-null for the retroactive flag: a non-retroactive checkpoint’s canonical signing input contains no \"retroactive\" key. The flagged variant differs ONLY by retroactive: true inside the checkpoint object, yet its canonical form, signature, and record hash all change, mirroring the §1.2.6 omits-when-absent contract.",
+  "input": {
+    "record_without_flag": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:1bb633ec92cb98753c1144fd003259d08fdcef5f453a0935725c88ba97ec4c09",
+      "checkpoint": {
+        "first_index": 0,
+        "session_root": "sha256:0150290fe9db0030daf44b29845ef7b7742dfc753804429156a833462bc87599",
+        "tree_size": 1
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3",
+      "timestamp": 1782864005000,
+      "args_hash": "sha256:7b773769c5c3831d5f957cb0405c175f3750765ec5ae3ff5502e084b57073de0",
+      "signature": "wqs7JLxtTR9-gVaZNdF0G0hsJt-2FIdZ7Onn3uT5NJVp6LcMbq1sQNpk_UU3_boN4HeaLPHJ1858dAbW0O9ECg"
+    },
+    "record_with_flag": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:1bb633ec92cb98753c1144fd003259d08fdcef5f453a0935725c88ba97ec4c09",
+      "checkpoint": {
+        "first_index": 0,
+        "retroactive": true,
+        "session_root": "sha256:0150290fe9db0030daf44b29845ef7b7742dfc753804429156a833462bc87599",
+        "tree_size": 1
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3",
+      "timestamp": 1782864005000,
+      "args_hash": "sha256:7b773769c5c3831d5f957cb0405c175f3750765ec5ae3ff5502e084b57073de0",
+      "signature": "RPu2z7ucsji-f6Dn0T0sKGfJSMGlwZufejD1YkwXyPWel_hNy4A6k5BUA0jSx8s90BZg32gjaQl4wb2kg3dWDw"
+    },
+    "signer_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+  },
+  "expected": {
+    "canonical_signing_input_utf8": "{\"args_hash\":\"sha256:7b773769c5c3831d5f957cb0405c175f3750765ec5ae3ff5502e084b57073de0\",\"chain_root\":\"sha256:1bb633ec92cb98753c1144fd003259d08fdcef5f453a0935725c88ba97ec4c09\",\"checkpoint\":{\"first_index\":0,\"session_root\":\"sha256:0150290fe9db0030daf44b29845ef7b7742dfc753804429156a833462bc87599\",\"tree_size\":1},\"content_id\":\"sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b\",\"context_id\":\"f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3\",\"creator_key\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"event_type\":\"https://atrib.dev/v1/types/session_checkpoint\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1782864005000}",
+    "retroactive_in_canonical_form": false,
+    "record_hash_hex_without_flag": "21c07544c46667cc63bdd88b4fb3374933b869b345b45ed9a198d07a89188d9a",
+    "record_hash_hex_with_flag": "0e223f3cd6b794bc824dca4e6b59edc757944ed659f401cd6bcceb572b788538",
+    "record_hashes_differ": true,
+    "validator_should_accept_both": true
+  }
+}

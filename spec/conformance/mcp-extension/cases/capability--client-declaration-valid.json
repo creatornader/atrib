@@ -1,0 +1,25 @@
+{
+  "name": "capability--client-declaration-valid",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "A client capability settings object per extension spec §4.2, declared per-request under io.modelcontextprotocol/clientCapabilities. `accept: [\"token\",\"record\"]` requests full record bodies in receipts.",
+  "input": {
+    "settings": {
+      "version": "0.1",
+      "accept": [
+        "token",
+        "record"
+      ]
+    }
+  },
+  "expected": {
+    "valid": true,
+    "declared": true,
+    "negotiated_version": "0.1",
+    "effective_accept": [
+      "token",
+      "record"
+    ],
+    "accept_record": true
+  }
+}

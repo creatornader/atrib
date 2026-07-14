@@ -1,6 +1,6 @@
 # @atrib/verify-mcp
 
-MCP server exposing the `atrib-verify` cognitive primitive for Atrib's verifiable action layer. It verifies counterparty handoff evidence before a receiving agent signs follow-up work that cites those records through `informed_by`.
+MCP server exposing the `atrib-verify` cognitive primitive for atrib's verifiable action layer. It verifies counterparty handoff evidence before a receiving agent signs follow-up work that cites those records through `informed_by`.
 
 The package is read-only. It accepts caller-supplied evidence, returns accepted and rejected hashes, and leaves the follow-up signing step to `atrib-emit` or normal wrapped tool calls.
 
@@ -29,6 +29,32 @@ mcp__atrib-verify__atrib-verify({
   max_age_ms?: number,
   now_ms?: number,
 })
+```
+
+A worked call. Agent B received agent A's records (as a local-mirror envelope
+or a continuation packet) and wants to cite them in its own follow-up work.
+Verify them first, then link only the accepted hashes through `informed_by`:
+
+```ts
+mcp__atrib-verify__atrib-verify({
+  packet: {
+    required_record_hashes: ['sha256:<64-hex-of-A-record>'],
+    records: [
+      {
+        record: {
+          /* a full signed AtribRecord produced by agent A */
+        },
+        proof: {
+          /* optional inclusion proof from the public log */
+        },
+      },
+    ],
+    trusted_creator_keys: ['<agent-A-base64url-creator-key>'],
+  },
+  require_log_inclusion: true,
+})
+// The response's accepted hashes are the ones that passed every check.
+// Cite only those in the follow-up record's informed_by.
 ```
 
 ## Evidence
@@ -129,3 +155,7 @@ Public package for cognitive primitive #7. It depends on `@atrib/verify` for ver
 ## License
 
 Apache-2.0.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

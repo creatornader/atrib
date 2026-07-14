@@ -1,0 +1,98 @@
+{
+  "name": "detection-envelope-valid",
+  "spec_section": "5.5.7",
+  "family": "payments-detection",
+  "description": "A producer-declared detection envelope on a cross-attested transaction record: the payload is the detection material (application/json, JCS hash rule), facts carry the rail, the matched hook, and the D095 receipt identity source, and the record carries two distinct verified signer keys per D052 / core 1.7.6. The profile is the tenth atrib-maintained registry entry per P048. MUST accept.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/payments-detection",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:ce8ff3ed7f857db9d2ab350115e47f9115bc6e04d2f3076d4ad1c51c20677a6c",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "mirror"
+        }
+      },
+      "facts": {
+        "protocol": "AP2",
+        "hook": "checkout_receipt",
+        "receipt_identity_source": "checkout_receipt"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "payload_material": {
+      "kind": "task",
+      "artifacts": [
+        {
+          "parts": [
+            {
+              "kind": "data",
+              "data": {
+                "ap2.CheckoutReceipt": {
+                  "status": "Success",
+                  "iss": "example-verifier.dev",
+                  "iat": 1772020800,
+                  "reference": "closed-checkout-mandate-hash",
+                  "order_id": "order_fixture_1"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "transaction_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:f05827be01fa3ccebc6c32d7eb45eb821995a8cac70738b0581f0c29ba3e1420",
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "chain_root": "sha256:dfb417454d7432715ecfaa33d89abdaba4457c3b2cbd85a4a20620d0cd806da6",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "timestamp": 1782864003000,
+      "signature": "",
+      "signers": [
+        {
+          "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+          "signature": "ui6daxJkBftPXq_2bQzUL6Q66CDFQzkd3xW1sd1zCpZ6TMvytwNlGSLTdiB9VJMbNwC9omuivtaKMb70987RBw"
+        },
+        {
+          "creator_key": "LfBBJfABWvtHzoU674dyCU_5SYwUyxueEpc8KSfaD6Y",
+          "signature": "FjSMgvGXEedrMpH631IZ9k5DuS3qy0kF8PqgGJmP4bKv2k5LBK9VXlpUKvYW0gjsGydL9-IBnwjNPBeKHPt8Cg"
+        }
+      ]
+    },
+    "signer_seeds_hex": {
+      "agent": "5151515151515151515151515151515151515151515151515151515151515151",
+      "counterparty": "6262626262626262626262626262626262626262626262626262626262626262"
+    },
+    "atrib_profile_registry": [
+      "oauth2",
+      "mcp-oauth",
+      "aauth",
+      "x401",
+      "ap2-vi",
+      "human-approval",
+      "counterparty-attestation",
+      "delegation-certificate",
+      "continuation-packet",
+      "payments-detection",
+      "payments-settlement"
+    ]
+  },
+  "expected": {
+    "accept": true,
+    "registered": true,
+    "atrib_maintained": true,
+    "payload_hash_matches_material": true,
+    "distinct_verified_signers": 2,
+    "cross_attestation_missing": false
+  }
+}

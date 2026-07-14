@@ -1,6 +1,6 @@
 # Local substrate coordinator contract corpus
 
-This corpus is the first [P042](../../../DECISIONS.md#p042-local-substrate-coordinator-for-long-lived-and-multi-harness-dogfood) design gate. It is informative until P042 becomes an ADR, but it is still executable: `scripts/check-local-substrate-coordinator-fixtures.mjs` must pass before any default config moves to a host-owned coordinator.
+This corpus is the first [D137](../../../DECISIONS.md#d137-local-substrate-coordinator-for-long-lived-and-multi-harness-dogfood) design gate. It is informative until P042 becomes an ADR, but it is still executable: `scripts/check-local-substrate-coordinator-fixtures.mjs` must pass before any default config moves to a host-owned coordinator.
 
 The corpus tests one rule: a coordinator can own process, queue, WAL, and health work, but it must pass the exact same unsigned record body into the existing signing path that the direct producer path would have used. The coordinator is deployment architecture. It does not add a record field, event type, cognitive primitive, or graph edge.
 

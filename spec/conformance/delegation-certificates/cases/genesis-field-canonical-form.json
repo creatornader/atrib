@@ -1,0 +1,65 @@
+{
+  "name": "genesis-field-canonical-form",
+  "spec_section": "1.11",
+  "description": "JCS lex-slotting of the OPTIONAL delegation_cert_hash genesis field. Two genesis records identical except for the field: the with-field canonical form slots delegation_cert_hash between creator_key (c-r) and event_type (e); the without-field form omits it entirely (never null). Presence/absence changes the canonical bytes, so the two records carry DISTINCT signatures and DISTINCT record hashes. Records that omit the field are byte-identical to pre-delegation output.",
+  "input": {
+    "record_with_field": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:0bcdf9c38c18109d9ac16b8e2644794674ef9a4461f090affdf20216b617053f",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "HPjtDhEEAqUP2lORHevEFsjA2Rufes-Ds-mi11ryaNfQf80kvOOeCBeE4pyJRUtaXNlIrtpbL1tvzef6FhyvCg",
+      "delegation_cert_hash": "sha256:9d8a62431c728a1dfd5fdbc87705ff2f2dbaaf29247699095fe1102302bc3eee"
+    },
+    "record_without_field": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:0bcdf9c38c18109d9ac16b8e2644794674ef9a4461f090affdf20216b617053f",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "6sc85Syj_HKuGMJf1zxQMOQ-r85-NXCB20y_OR5kQcRM8Xlcvh3-G8fKzMTxerk0mutPoE2WYlj9UXbvBMX0CA"
+    },
+    "run_seed_hex": "0202020202020202020202020202020202020202020202020202020202020202",
+    "certificate": {
+      "cert_type": "atrib/delegation-cert/v1",
+      "context_id": "b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6",
+      "not_after": 1767229200000,
+      "not_before": 1767225600000,
+      "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "scope": {
+        "tool_names": [
+          "search",
+          "read_email"
+        ],
+        "max_amount": {
+          "currency": "USD",
+          "value": 100
+        },
+        "event_types": [
+          "https://atrib.dev/v1/types/tool_call",
+          "https://atrib.dev/v1/types/observation"
+        ]
+      },
+      "signature": "97jrzLhccmU1-MRs0c1ucES6iG7rrcbtohGTKnz6_CeglG3sPTwdSXM3MiA8EFq6YF_T8A-RP1l-PL-b3OkyCQ"
+    }
+  },
+  "expected": {
+    "with_field_canonical_signing_input_utf8": "{\"chain_root\":\"sha256:0bcdf9c38c18109d9ac16b8e2644794674ef9a4461f090affdf20216b617053f\",\"content_id\":\"sha256:e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6\",\"context_id\":\"b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6\",\"creator_key\":\"gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q\",\"delegation_cert_hash\":\"sha256:9d8a62431c728a1dfd5fdbc87705ff2f2dbaaf29247699095fe1102302bc3eee\",\"event_type\":\"https://atrib.dev/v1/types/tool_call\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225660000,\"tool_name\":\"search\"}",
+    "without_field_canonical_signing_input_utf8": "{\"chain_root\":\"sha256:0bcdf9c38c18109d9ac16b8e2644794674ef9a4461f090affdf20216b617053f\",\"content_id\":\"sha256:e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6e6\",\"context_id\":\"b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6\",\"creator_key\":\"gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q\",\"event_type\":\"https://atrib.dev/v1/types/tool_call\",\"spec_version\":\"atrib/1.0\",\"timestamp\":1767225660000,\"tool_name\":\"search\"}",
+    "field_slots_after": "creator_key",
+    "field_slots_before": "event_type",
+    "with_field_record_hash": "sha256:50e65b0945ebf8342b263c13f9f6ae87373452c081a311fe95766b4e14718115",
+    "without_field_record_hash": "sha256:2f892f2e34fc26f3fec6e2c2424dae59d490cc4ab3f4229b280b797ecc92d7ca",
+    "signatures_distinct": true,
+    "record_hashes_distinct": true,
+    "delegation_cert_hash": "sha256:9d8a62431c728a1dfd5fdbc87705ff2f2dbaaf29247699095fe1102302bc3eee"
+  }
+}

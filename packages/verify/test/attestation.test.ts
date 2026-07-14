@@ -72,7 +72,7 @@ async function attestation(
   return { record, content }
 }
 
-describe('resolveAttestationCorroboration (D136)', () => {
+describe('resolveAttestationCorroboration (D150)', () => {
   it('corroborates a record vouched for by two trusted attestors', async () => {
     const target = await observation(PRODUCER, '01')
     const targetHash = recordHash(target)

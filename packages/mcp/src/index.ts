@@ -25,6 +25,49 @@ export type {
 export { createAtribProxy } from './proxy.js'
 export type { AtribProxy, AtribProxyOptions, UpstreamTransport } from './proxy.js'
 
+// dev.atrib/attribution MCP extension v0.1 (D141 / spec §1.5.4.1). Opt-in
+// negotiated carriage + gated attestation receipts; changes no signed byte.
+export {
+  ATTRIBUTION_ACCEPT_VALUES,
+  ATTRIBUTION_EXTENSION_ID,
+  ATTRIBUTION_EXTENSION_VERSION,
+  ATTRIBUTION_KNOWN_SETTINGS_FIELDS,
+  ATTRIBUTION_LOG_SUBMISSION_STATUSES,
+  MCP_CLIENT_CAPABILITIES_META_KEY,
+  RESERVED_EXTENSION_PREFIX_LABELS,
+  applyAttributionReceipt,
+  buildAttributionMetaBlock,
+  buildAttributionReceipt,
+  declaresExtension,
+  detectClientDeclaration,
+  extendResultWithAttribution,
+  resolveContextIdentity,
+  resolveInboundToken,
+  validateAttributionSettings,
+  validateExtensionIdentifier,
+  verifyAttributionReceipt,
+} from './extension-attribution.js'
+export type {
+  ApplyAttributionReceiptOptions,
+  AttributionAcceptValue,
+  AttributionClientSettings,
+  AttributionContextResolution,
+  AttributionContextSource,
+  AttributionLogSubmissionStatus,
+  AttributionReceipt,
+  AttributionReceiptVerification,
+  AttributionRequestBlock,
+  AttributionResultBlock,
+  AttributionServerSettings,
+  AttributionSettingsValidation,
+  AttributionTokenResolution,
+  AttributionTokenSource,
+  BuildAttributionMetaBlockInput,
+  BuildAttributionReceiptOptions,
+  DeclaresExtensionOptions,
+  ExtendResultWithAttributionOptions,
+} from './extension-attribution.js'
+
 // HTTP handler for well-known endpoints (§5.3.5, §5.3.6)
 export { createAtribHttpHandler, handleAtribRequest } from './http.js'
 export type { AtribHttpResult } from './http.js'
@@ -265,6 +308,21 @@ export type {
   SubmissionSidecar,
 } from './submission.js'
 
+// Anchor plurality (D138, §2.11.7-§2.11.13): producer-side anchor-set config,
+// the §2.11.10 anchoring-claim builder, and non-blocking fan-out submission.
+export {
+  ANCHOR_CLAIM_KIND, ANCHOR_CLAIM_PREFIX, ANCHOR_TYPES, BUILT_IN_DEFAULT_ANCHOR_SET,
+  anchorClaimArtifact, buildAnchoringClaim, canonicalRecordHash, createAnchorFanout,
+  createAnchorTransport, createAtribLogAnchorTransport, createStubAnchorTransport,
+  resolveAnchorPosture, resolveEffectiveAnchors, submitToAnchors, verifyAnchoringClaim,
+} from './anchors.js'
+export type {
+  AnchorConfigSidecarMarker, AnchorDescriptor, AnchorFanout, AnchorFanoutTicket,
+  AnchoringClaim, AnchorPostureResolution, AnchorSetConfig, AnchorSubmissionOutcome,
+  AnchorSubmissionRequest, AnchorSubmissionStatus, AnchorTransport, AnchorType,
+  CreateAnchorFanoutOptions, SubmitToAnchorsOptions,
+} from './anchors.js'
+
 // RFC 6962 Merkle tree (for log service and @atrib/verify)
 export {
   leafHash,
@@ -295,3 +353,62 @@ export {
   EVENT_TYPE_EXTENSION,
 } from './entry.js'
 export type { EntryInput } from './entry.js'
+
+// Delegation certificates (§1.11 / D140): principal keys certify ephemeral
+// run keys. Issuance, the genesis delegation_cert_hash stamp (composes with
+// the existing signRecord/handleEmit flow; no new signing path), and the
+// §1.11.5 principal-signed run-key revocation builder.
+export {
+  DELEGATION_CERT_TYPE,
+  DELEGATION_CERT_HASH_PATTERN,
+  EVENT_TYPE_KEY_REVOCATION_URI,
+  buildRunKeyRevocationRecord,
+  canonicalDelegationCert,
+  delegationCertErrors,
+  delegationCertHash,
+  delegationCertSigningInput,
+  issueDelegationCertificate,
+  withDelegationCertHash,
+} from './delegation.js'
+export type {
+  BuildRunKeyRevocationRecordOptions,
+  DelegatedAtribRecord,
+  DelegationCertificate,
+  DelegationScope,
+  IssueDelegationCertificateOptions,
+  RunKeyRevocationRecord,
+  UnsignedDelegationCertificate,
+} from './delegation.js'
+
+// Session checkpoints (§1.2.10 / D139): RFC 6962 session roots over ordered
+// record hashes, checkpoint record assembly under the extension URI (byte
+// 0x08 staged, not allocated), inclusion/consistency proofs, and
+// equivocation detection. Producer emission lives in @atrib/emit.
+export {
+  SESSION_CHECKPOINT_CONTENT_ID_ORIGIN,
+  SESSION_CHECKPOINT_EVENT_TYPE_URI,
+  SESSION_CHECKPOINT_PROMOTED_EVENT_TYPE_BYTE,
+  buildCheckpointBody,
+  buildSessionCheckpointRecord,
+  checkConsecutiveSessionCheckpoints,
+  computeSessionRoot,
+  detectSessionCheckpointEquivocation,
+  sessionCheckpointArgsHash,
+  sessionCheckpointContentId,
+  sessionConsistencyProof,
+  sessionInclusionProof,
+  sessionLeavesFromRefs,
+  verifySessionConsistency,
+  verifySessionInclusion,
+} from './session-checkpoint.js'
+export type {
+  BuildCheckpointBodyOptions,
+  BuildSessionCheckpointRecordOptions,
+  CheckConsecutiveSessionCheckpointsOptions,
+  ConsecutiveSessionCheckpointCheck,
+  SessionCheckpoint,
+  SessionCheckpointEquivocationEvidence,
+  SessionCheckpointRecord,
+  VerifySessionConsistencyOptions,
+  VerifySessionInclusionOptions,
+} from './session-checkpoint.js'

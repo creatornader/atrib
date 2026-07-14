@@ -1,0 +1,21 @@
+{
+  "name": "payment-response-header-v2",
+  "corpus": "payments-profile/detection",
+  "rail": "x402",
+  "profile_section": "2.3",
+  "description": "x402 v2: a 200 response carrying the PAYMENT-RESPONSE header (mixed casing; HTTP header names are case-insensitive per RFC 7230). Header presence is the detection signal; the body is not decoded.",
+  "input": {
+    "tool_name": "fetch_paid_resource",
+    "response": {
+      "ok": true
+    },
+    "headers": {
+      "Payment-Response": "eyJzdWNjZXNzIjp0cnVlfQ==",
+      "Content-Type": "application/json"
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "x402"
+  }
+}

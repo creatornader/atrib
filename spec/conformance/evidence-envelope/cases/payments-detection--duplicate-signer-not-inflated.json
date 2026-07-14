@@ -1,0 +1,82 @@
+{
+  "name": "duplicate-signer-not-inflated",
+  "spec_section": "5.5.7",
+  "family": "payments-detection",
+  "description": "The D052 no-inflation rule re-pinned across the profile split: a transaction record whose signers array carries the same agent entry twice. Both entries verify individually, but duplicate signer entries from the same creator_key MUST NOT inflate the verified signer count, so the record reports one distinct verified signer and cross_attestation_missing: true. The attached detection envelope verifies independently and does not substitute for a counterparty signature.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/payments-detection",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:ce8ff3ed7f857db9d2ab350115e47f9115bc6e04d2f3076d4ad1c51c20677a6c",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "mirror"
+        }
+      },
+      "facts": {
+        "protocol": "AP2",
+        "hook": "checkout_receipt",
+        "receipt_identity_source": "checkout_receipt"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "payload_material": {
+      "kind": "task",
+      "artifacts": [
+        {
+          "parts": [
+            {
+              "kind": "data",
+              "data": {
+                "ap2.CheckoutReceipt": {
+                  "status": "Success",
+                  "iss": "example-verifier.dev",
+                  "iat": 1772020800,
+                  "reference": "closed-checkout-mandate-hash",
+                  "order_id": "order_fixture_1"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "transaction_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:f05827be01fa3ccebc6c32d7eb45eb821995a8cac70738b0581f0c29ba3e1420",
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "chain_root": "sha256:dfb417454d7432715ecfaa33d89abdaba4457c3b2cbd85a4a20620d0cd806da6",
+      "event_type": "https://atrib.dev/v1/types/transaction",
+      "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "timestamp": 1782864003000,
+      "signature": "",
+      "signers": [
+        {
+          "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+          "signature": "ui6daxJkBftPXq_2bQzUL6Q66CDFQzkd3xW1sd1zCpZ6TMvytwNlGSLTdiB9VJMbNwC9omuivtaKMb70987RBw"
+        },
+        {
+          "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+          "signature": "ui6daxJkBftPXq_2bQzUL6Q66CDFQzkd3xW1sd1zCpZ6TMvytwNlGSLTdiB9VJMbNwC9omuivtaKMb70987RBw"
+        }
+      ]
+    },
+    "signer_seeds_hex": {
+      "agent": "5151515151515151515151515151515151515151515151515151515151515151"
+    }
+  },
+  "expected": {
+    "accept": true,
+    "payload_hash_matches_material": true,
+    "distinct_verified_signers": 1,
+    "cross_attestation_missing": true
+  }
+}

@@ -1,5 +1,43 @@
 # @atrib/agent
 
+## 0.3.3
+
+### Patch Changes
+
+- f4a5ebd: Add delegation-certificate producer conveniences. The CLI can issue scoped certificates for ephemeral run keys, and MCP middleware carries a configured certificate in the local mirror sidecar. Agent receipt parsing now uses the shared MCP verifier.
+- Updated dependencies [f4a5ebd]
+  - @atrib/mcp@0.20.0
+  - @atrib/verify@0.8.3
+
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [6f6ca5f]
+  - @atrib/verify@0.8.2
+
+## 0.3.1
+
+### Patch Changes
+
+- 1378d4f: Docs: bring every public package README and description to standalone-completeness parity. Lowercase the brand to `atrib` throughout, add a uniform Install section and a Part of atrib orientation block, and fix standalone gaps found in review: missing imports and undefined variables in quick-starts, the published npx wire-up form for the MCP servers, an off-machine privacy note for summarize, a worked handoff example for verify-mcp, and a rewrite of the directory README against its real class-based API. No code or public API changes.
+- Updated dependencies [1378d4f]
+  - @atrib/mcp@0.19.1
+  - @atrib/verify@0.8.1
+
+## 0.3.0
+
+### Minor Changes
+
+- 3c8e63d: Add client-side `dev.atrib/attribution` extension support per [D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133): declare the extension on outbound requests and parse attestation receipts from `result._meta`, behind an opt-in flag with unchanged behavior when unset.
+
+### Patch Changes
+
+- Updated dependencies [3c8e63d]
+- Updated dependencies [3c8e63d]
+  - @atrib/mcp@0.19.0
+  - @atrib/verify@0.8.0
+
 ## 0.2.23
 
 ### Patch Changes
@@ -204,7 +242,7 @@
   `@noble/hashes` 1 → 2 (where applicable), `canonicalize` 2 → 3, and
   `@opentelemetry/sdk-trace-base` 1 → 2 (peer dep on `@atrib/openinference`).
 
-  Atrib's own public APIs are unchanged, and signing-output, hash-output, and
+  atrib's own public APIs are unchanged, and signing-output, hash-output, and
   JCS-canonicalization-output remain byte-identical — verified by the signing
   corpus (spec [§1.4](../atrib-spec.md#14-signing-and-verification)) and the Wycheproof Ed25519 test vectors.
 
@@ -304,7 +342,7 @@
   - All 6 descriptions now follow the consistent shape `<noun> for atrib. <specific value>.`
   - Removed em dashes per the writing rules
   - `@atrib/mcp-wrap` description no longer mentions an arbitrary "~30 MCPs" cap (it works for any MCP)
-  - Lowercased "Atrib" to "atrib" across author + description fields per the brand convention
+  - Lowercased "atrib" to "atrib" across author + description fields per the brand convention
   - Wrote READMEs for `@atrib/cli` and `@atrib/directory` (previously had none)
   - Rewrote 115 broken relative links across mcp/agent/verify READMEs to absolute github URLs that auto-heal at public-flip
   - Stripped temporary `repository` field from package.jsons (404s while repo is private; restored at public-flip)

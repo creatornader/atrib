@@ -1,0 +1,74 @@
+{
+  "name": "walk-wrong-principal-signature",
+  "spec_section": "1.11",
+  "description": "The only certificate covering the run key carries a signature that does not verify under its declared principal_key. The certificate is rejected as delegation evidence (principal_signature_invalid) and the record falls back to depth 0: plain attribution to its signing key, signature validity unchanged.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:6850c0cf83da1a5a252c511ff224de024f8688dad677820117d712dbbad77118",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "z8Hdv4C7eHvLvNDMgRQsukUDIl2mqh0Y0I5_AMcJOBM_YoDYc5MaPgSBlBMM9KfqAWqJ1-Zk6Dp6WvkkevuxDQ",
+      "delegation_cert_hash": "sha256:7f912baaf4198cdb63499a0ef99e3f7bc85291ec4a0510e240b8c9164f58f3d4"
+    },
+    "genesis_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:6850c0cf83da1a5a252c511ff224de024f8688dad677820117d712dbbad77118",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "z8Hdv4C7eHvLvNDMgRQsukUDIl2mqh0Y0I5_AMcJOBM_YoDYc5MaPgSBlBMM9KfqAWqJ1-Zk6Dp6WvkkevuxDQ",
+      "delegation_cert_hash": "sha256:7f912baaf4198cdb63499a0ef99e3f7bc85291ec4a0510e240b8c9164f58f3d4"
+    },
+    "certificates": [
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "max_amount": {
+            "currency": "USD",
+            "value": 100
+          },
+          "event_types": [
+            "https://atrib.dev/v1/types/tool_call",
+            "https://atrib.dev/v1/types/observation"
+          ]
+        },
+        "signature": "MS7_q6sqed5GqWOmGfThlDPVEIRtEXKtMOQtCpbT_bllxHX7T18l2rTYh23jy9aAc3xu4UtdETUXRmLCqn5MAA"
+      }
+    ]
+  },
+  "expected": {
+    "record_signature_valid": true,
+    "record_hash": "sha256:b90dff4056ce7bf0a1ca027f1daf1abe48a039ebaf4c8cc77523bc332cad934c",
+    "delegation": {
+      "depth": 0,
+      "principal_key": null,
+      "cert_hash": "sha256:7f912baaf4198cdb63499a0ef99e3f7bc85291ec4a0510e240b8c9164f58f3d4",
+      "cert_valid": false,
+      "in_window": null,
+      "context_bound": null,
+      "cert_bound": null,
+      "scope_check": null,
+      "revoked": null,
+      "errors": [
+        "principal_signature_invalid"
+      ]
+    }
+  }
+}

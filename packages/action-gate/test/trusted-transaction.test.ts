@@ -43,7 +43,7 @@ async function txRecord(topSeed: Uint8Array, extraSeeds: Uint8Array[] = []): Pro
   return { ...base, signers: [...(base.signers ?? []), ...extras] } as AtribRecord
 }
 
-describe('requireTrustedTransaction (D133 + D135 fail-closed policy)', () => {
+describe('requireTrustedTransaction (D133 + D149 fail-closed policy)', () => {
   it('allows a transaction co-signed by two trusted keys', async () => {
     const record = await txRecord(A, [B])
     const decision = await requireTrustedTransaction({

@@ -1,0 +1,20 @@
+{
+  "name": "case-insensitive-header",
+  "corpus": "payments-profile/detection",
+  "rail": "mpp",
+  "profile_section": "2.4",
+  "description": "MPP header matching is case-insensitive per RFC 7230.",
+  "input": {
+    "tool_name": "fetch_paid_resource",
+    "response": {
+      "ok": true
+    },
+    "headers": {
+      "PAYMENT-RECEIPT": "eyJzdGF0dXMiOiJzdWNjZXNzIn0"
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "MPP"
+  }
+}

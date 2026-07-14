@@ -1,8 +1,16 @@
 # `@atrib/recall`
 
-MCP server for Atrib's verifiable action layer. Lets agents query their own provable past from the local signed-record mirror with per-record signature verification.
+MCP server for atrib's verifiable action layer. Lets agents query their own provable past from the local signed-record mirror with per-record signature verification.
 
 The consumer-side counterpart to `@atrib/emit`: emit produces signed records, recall reads them back and exposes them to the agent through eight MCP tools. Each returned record carries a `signature_verified` boolean so a poorly-written agent treats tampered records as such.
+
+## Install
+
+```bash
+pnpm add @atrib/recall
+```
+
+Verify a local build with `pnpm --filter @atrib/recall test`.
 
 ## Tool surface
 
@@ -181,3 +189,7 @@ Or run via `npx`:
 - **No log-inclusion verification.** Local signature verification ≠ log commitment proof. Use the log API for inclusion proofs.
 - **No graph derivation.** Returns records, not the [§3.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#324-edge-derivation-rules) graph. For declared-relationship walks, use `@atrib/trace`; for graph projections, query graph-node directly.
 - **No write surface.** Read-only. Use `@atrib/emit` to sign new records.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

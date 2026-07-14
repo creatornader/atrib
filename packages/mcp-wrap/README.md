@@ -1,6 +1,6 @@
 # @atrib/mcp-wrap
 
-Generic config-driven MCP wrapper for Atrib's verifiable action layer. Spawns
+Generic config-driven MCP wrapper for atrib's verifiable action layer. Spawns
 any upstream MCP server and applies the `@atrib/mcp` middleware so every tool
 call becomes a signed, chain-linked record submitted to the atrib log.
 
@@ -8,6 +8,14 @@ This is the fastest path for existing MCP tools to gain action-layer behavior:
 per-tool config can gate the call before execution, sign the outcome after
 execution, preserve chain context, and keep local mirrors for later recall,
 handoff, or verification.
+
+## Install
+
+```bash
+pnpm add @atrib/mcp-wrap
+```
+
+Verify a local build with `pnpm --filter @atrib/mcp-wrap test`.
 
 ## Why this exists
 
@@ -25,16 +33,24 @@ upstream by writing a config; no per-server code.
 
 ## Install + run
 
-The wrapper is a workspace package; build then point an MCP host at the
-binary:
+Install the package, then point an MCP host at the `atrib-wrap` binary it
+ships:
 
 ```bash
-pnpm --filter @atrib/mcp-wrap build
-node ~/repos/atrib/packages/mcp-wrap/dist/main.js path/to/wrap-config.json
+pnpm add @atrib/mcp-wrap
+npx atrib-wrap path/to/wrap-config.json
 ```
 
-Or set `ATRIB_WRAP_CONFIG` in the host's MCP server entry. With no argument
-and no env var, the wrapper reads `~/.atrib/wrap-config.json`.
+In an MCP host config, set the server `command` to `atrib-wrap` (or
+`npx -y @atrib/mcp-wrap`) with the config path as the argument, or set
+`ATRIB_WRAP_CONFIG` in the host's MCP server entry. With no argument and no env
+var, the wrapper reads `~/.atrib/wrap-config.json`. From a monorepo checkout,
+`node packages/mcp-wrap/dist/main.js path/to/wrap-config.json` runs the built
+binary directly.
+
+Signing runs through `@atrib/mcp`, so it inherits the [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)
+degradation contract: a per-call signing or log-submission failure is caught
+and never changes the upstream tool's response.
 
 ## Filesystem smoke
 
@@ -200,3 +216,7 @@ Useful when you want the wrapper's plumbing but a different bootstrap
 [D116](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d116-producer-side-informed_by-validation-is-source-aware)
 resolver guard used by `wrap()` when custom bootstraps need to pass
 `recordReferenceResolver` manually.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

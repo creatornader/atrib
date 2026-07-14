@@ -1,0 +1,66 @@
+{
+  "name": "relay-identity-swap-rejected",
+  "spec_section": "5.5.7",
+  "family": "tier",
+  "description": "A consumer MUST NOT relay another party's envelope with its own identity in verifier (or with a raised tier); re-verification produces a NEW envelope instance with new checks. The relayed instance here is byte-identical to the original except for verifier.name, the structural signature of an identity swap: same tier, same checked_at_ms, same facts, same result, no re-run evidence. The reference checker MUST flag it.",
+  "input": {
+    "original": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "payload": {
+        "hash": "sha256:98d45081f8667ab997c70eb72113a99d157d9e201bb988115d04512371c96776",
+        "media_type": "application/jwt",
+        "ref": {
+          "kind": "mirror"
+        }
+      },
+      "facts": {
+        "issuer": "https://as.example",
+        "subject": "agent-7"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      },
+      "tier": "attested",
+      "verifier": {
+        "name": "introspection-gateway",
+        "checked_at_ms": 1782864000002
+      }
+    },
+    "relayed": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "payload": {
+        "hash": "sha256:98d45081f8667ab997c70eb72113a99d157d9e201bb988115d04512371c96776",
+        "media_type": "application/jwt",
+        "ref": {
+          "kind": "mirror"
+        }
+      },
+      "facts": {
+        "issuer": "https://as.example",
+        "subject": "agent-7"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      },
+      "tier": "attested",
+      "verifier": {
+        "name": "relay.example",
+        "checked_at_ms": 1782864000002
+      }
+    }
+  },
+  "expected": {
+    "relay_violation": true,
+    "violation_reason": "verifier identity differs while tier, checked_at_ms, facts, and result are unchanged"
+  }
+}

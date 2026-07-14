@@ -155,7 +155,7 @@ export interface ReceivedPacket {
 }
 
 /**
- * D138 receiver rule: consumers compute their own verdict; packet-embedded
+ * D152 receiver rule: consumers compute their own verdict; packet-embedded
  * verification claims are untrusted input.
  */
 export async function receivePacket(packet: HandoffEvidencePacket, render: PacketRender = 'full'): Promise<ReceivedPacket> {

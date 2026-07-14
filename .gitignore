@@ -8,10 +8,16 @@ coverage/
 .turbo/
 .DS_Store
 .remember/
-.claude/
+.claude/*
+!.claude/agents/
 supertool
 
 docs/superpowers/
 thoughts/
 atrib-design-conversation.md
 atrib-*.html
+__pycache__/
+*.pyc
+python/.venv/
+*.egg-info/
+.impeccable/

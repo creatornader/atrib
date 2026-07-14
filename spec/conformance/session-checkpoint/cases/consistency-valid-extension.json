@@ -1,0 +1,64 @@
+{
+  "name": "consistency-valid-extension",
+  "spec_section": "1.2.10",
+  "description": "Consecutive checkpoints K1 (tree_size 2) and K2 (tree_size 5) on one context_id: K2.checkpoint.prior_checkpoint is K1's record hash, K2.first_index == K1.tree_size, and the leaf sequence 0..1 is identical, so the RFC 6962 §2.1.4 consistency proof from (K1.session_root, 2) to (K2.session_root, 5) verifies. This is the same append-only check the log's witness protocol applies between successive log checkpoints (§2.9).",
+  "input": {
+    "first_checkpoint": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:1d846b48b1b0f1436da798c2c1779e77d52c40fe231bc1771129cec29976cb9f",
+      "checkpoint": {
+        "first_index": 0,
+        "session_root": "sha256:559c71219a9e2bf272b8c6054a6fb0e216b892a9d48def93a7db5c5df6d89c79",
+        "tree_size": 2
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1782864010000,
+      "args_hash": "sha256:83d30e776f86335341ac9a6dd25ea1e1a599af32816b356db169ecb2c2ae09d5",
+      "signature": "EosLRjgsk4QZNcuIMnL6TevbUKyUwS-FSnr545ff44OYYbVwc8_HNkhr8Ffnr6gwEvVcJ0OlaUN51SFwQrz2BA"
+    },
+    "second_checkpoint": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:89601eeb0b82436563c295c61359be112f8cabdfe00b52302f3af8bfa6827b3b",
+      "creator_key": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+      "chain_root": "sha256:0d12ff963483ddb41626549efddae406552ac9544f3a0602ab17d387eb4e7ee2",
+      "checkpoint": {
+        "first_index": 2,
+        "prior_checkpoint": "sha256:100fb76914744a6eaaee131873c5ddd8b78af2add3c5b0270d879b0a74f48aea",
+        "session_root": "sha256:e7eea58194aa467d27fcd627cf87181f898aa9ad8fba4bb6a8755618b8bd0a57",
+        "tree_size": 5
+      },
+      "event_type": "https://atrib.dev/v1/types/session_checkpoint",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1782864030000,
+      "args_hash": "sha256:1606e02f9257826a0e8a12b01ab4efbb8826e4a1a34600d7a2e436fca03d2f6a",
+      "signature": "8gUC5zcTI-VoxWqcLrFfOujZhcWTAx7XmPM9K85DnIM5Pjjxsmas_xaVv5AaGfxtoHXyjYYBBC3jAV3MMDRoBg"
+    },
+    "first_leaves": [
+      "sha256:0594b777f7855ff1d6fbcb6acc595ef4438c1f041d5d944eb9db93b805d95112",
+      "sha256:1d846b48b1b0f1436da798c2c1779e77d52c40fe231bc1771129cec29976cb9f"
+    ],
+    "second_leaves": [
+      "sha256:0594b777f7855ff1d6fbcb6acc595ef4438c1f041d5d944eb9db93b805d95112",
+      "sha256:1d846b48b1b0f1436da798c2c1779e77d52c40fe231bc1771129cec29976cb9f",
+      "sha256:100fb76914744a6eaaee131873c5ddd8b78af2add3c5b0270d879b0a74f48aea",
+      "sha256:1fa1cab4bc9cfcf983b4f0bc0ab0b7c793213023b5f9b0adef0abac0d7146cde",
+      "sha256:0d12ff963483ddb41626549efddae406552ac9544f3a0602ab17d387eb4e7ee2"
+    ],
+    "consistency_proof_hex": [
+      "51e3dab7931559d03d8004fb14a437ecfc1aa12a0393f2380423a092cb0dcf98",
+      "f6269fad05ff688cdcf6ba0e5bd4779508a3b80a82e428001979cf671edfbcb3"
+    ],
+    "signer_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+  },
+  "expected": {
+    "first_record_hash": "sha256:100fb76914744a6eaaee131873c5ddd8b78af2add3c5b0270d879b0a74f48aea",
+    "prior_checkpoint_matches": true,
+    "first_index_equals_prior_tree_size": true,
+    "consistency_proof_verifies": true,
+    "append_only": true,
+    "validator_should_accept": true
+  }
+}

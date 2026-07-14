@@ -56,8 +56,8 @@ export function chainRoot(parentRecord: AtribRecord): string {
  *      `sha256:<64-hex>` string; malformed values fall through.
  *   4. Cross-producer mirror-file inheritance, `mirrorTailHex`.
  *      File-as-IPC fallback: caller pre-reads the most recent record from
- *      a shared on-disk mirror (filtered to the same context_id; see
- *      `readMirrorTail` in `./mirror.ts`) and passes its canonical hash
+ *      the local mirror corpus (filtered to the same context_id; see
+ *      `inheritChainContext` in `./mirror.ts`) and passes its canonical hash
  *      here. Lower priority than env-var because env-var is set
  *      explicitly by the spawning process and reflects the freshest tail
  *      the spawner knows about, while the mirror may lag (file write

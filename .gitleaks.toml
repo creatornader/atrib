@@ -30,6 +30,13 @@ paths = [
   '''skills/atrib/SKILL\.md$''',
   '''DECISIONS\.md$''',
   '''ARCHITECTURE\.md$''',
+  '''docs/adr-draft-.*\.md$''',
+]
+
+[[allowlists]]
+description = "Conformance corpus generators (produce the fixture values the corpus allowlist covers)"
+paths = [
+  '''packages/log-dev/scripts/.*\.ts$''',
 ]
 
 [[allowlists]]

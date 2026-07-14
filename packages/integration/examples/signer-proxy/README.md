@@ -10,10 +10,12 @@ The host signer owns these fields:
 
 It also runs host policy before signing. A prompt-injected sandbox can still ask for a bad record to be signed, but it cannot directly reach key material or forge a record without going through the host boundary.
 
+The proxy's capability advert includes `creator_key`, so a client can pin the public key before asking the host to sign. The signed response remains the evidence; the advert is advisory.
+
 Run the demo:
 
 ```bash
 pnpm --filter @atrib/integration signer-proxy-demo
 ```
 
-The demo signs one tool-call record through the host signer proxy and prints the resulting `record_hash`.
+The demo prints the advertised key, signs one tool-call record through the host signer proxy, and prints the resulting `record_hash`.

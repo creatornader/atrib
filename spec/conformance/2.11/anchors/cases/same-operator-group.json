@@ -1,0 +1,148 @@
+{
+  "name": "same-operator-group",
+  "spec_section": "2.11",
+  "description": "Independence is counted over operator groups, not elements. Two atrib-log proofs from logs declared to share an operator group collapse to independent_count 1 (single_anchor true); the default grouping (one group per distinct (anchor_type, anchor_id) pair) counts them as 2.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "chain_root": "sha256:d2f9fa9d99bb30b2b67fc6b0ea2694f345c0961596e0fd82561010b4f7570c2d",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "abababababababababababababababab",
+      "timestamp": 1782864001000,
+      "signature": "gZpzxEt_HU3z3ayWrVnvBW8BcXzdHvD569YYhyzAiAi4yHfSelWegRdc-EEG84wQn8CPufGNq1LlrIjzB800DQ"
+    },
+    "bundle": {
+      "record_hash": "sha256:c09397f49d090eab97ab27fee627abbcbf6148fba1fd6a0f947558f692952934",
+      "log_proofs": [
+        {
+          "log_id": "log-a.conformance.atrib.test",
+          "log_index": 0,
+          "checkpoint": "log-a.conformance.atrib.test/v1\n3\nEgAJl9+zFghvMxoxbQlD+atiMO7u4erg13oGcySgICQ=\n\n— log-a.conformance.atrib.test/v1 kmTjQcVVBPyrdSaW0KHbme5cJbYbIP3ivJM6Vcnupyi38POqnbxBfdgrjC3EGJX0ZQiXWh0voFl8qWjXBsNA9ZOxwgU=\n",
+          "inclusion_proof": [
+            "P8mq66PW2NMzd9DwG30sGONwehi0EIZjrMp/YAWPmeY=",
+            "FSGXJV61xj1N7eil6bSyKm0qp3i45mdPD2HMjM2BKro="
+          ],
+          "entry_bytes_b64": "AcCTl/SdCQ6rl6sn/uYnq7y/YUj7of1qD5R1WPaSlSk0wFDFY3pE+oYp//PMzOIwDLNipj2Z2V/FQUUmb0MyRFqrq6urq6urq6urq6urq6urAAABnxr5t+gD"
+        },
+        {
+          "log_id": "log-b.conformance.atrib.test",
+          "log_index": 1,
+          "checkpoint": "log-b.conformance.atrib.test/v1\n2\npM2yzKgklghzcXiErZLFv7eWDu5ibSF8LZKHBtiToLs=\n\n— log-b.conformance.atrib.test/v1 tNXR55c+DnqKjWOH6WYTpRbOmgtrIg/1agoTkZP1HsjcG9dZ7UEyFg6hF8pSwQUgL/B/AGqV7eW7gpxCMb6KOfLHvAw=\n",
+          "inclusion_proof": [
+            "P8mq66PW2NMzd9DwG30sGONwehi0EIZjrMp/YAWPmeY="
+          ],
+          "entry_bytes_b64": "AcCTl/SdCQ6rl6sn/uYnq7y/YUj7of1qD5R1WPaSlSk0wFDFY3pE+oYp//PMzOIwDLNipj2Z2V/FQUUmb0MyRFqrq6urq6urq6urq6urq6urAAABnxr5t+gD"
+        }
+      ]
+    },
+    "trust_default_grouping": {
+      "trust_material": {
+        "logs": {
+          "log-a.conformance.atrib.test": {
+            "origin": "log-a.conformance.atrib.test/v1",
+            "pubkey_b64": "rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne+B1R/KJODNB0="
+          },
+          "log-b.conformance.atrib.test": {
+            "origin": "log-b.conformance.atrib.test/v1",
+            "pubkey_b64": "LfBBJfABWvtHzoU674dyCU/5SYwUyxueEpc8KSfaD6Y="
+          },
+          "log-e.conformance.atrib.test": {
+            "origin": "log-e.conformance.atrib.test/v1",
+            "pubkey_b64": "p/bfr484uJuozmSbWU+R5NAf3Ff5yUk99DteUKmYc2c="
+          }
+        },
+        "rekor": {
+          "rekor.conformance.atrib.test": {
+            "origin": "rekor.conformance.atrib.test/v1",
+            "pubkey_b64": "K8KACzMW4Akgn/11fasZzPCuhLx66QZU4egXEtJw9lM="
+          }
+        }
+      },
+      "trusted_logs": [
+        "log-a.conformance.atrib.test",
+        "log-b.conformance.atrib.test"
+      ],
+      "threshold_m": 1,
+      "required_anchors": 2
+    },
+    "trust_declared_group": {
+      "trust_material": {
+        "logs": {
+          "log-a.conformance.atrib.test": {
+            "origin": "log-a.conformance.atrib.test/v1",
+            "pubkey_b64": "rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne+B1R/KJODNB0="
+          },
+          "log-b.conformance.atrib.test": {
+            "origin": "log-b.conformance.atrib.test/v1",
+            "pubkey_b64": "LfBBJfABWvtHzoU674dyCU/5SYwUyxueEpc8KSfaD6Y="
+          },
+          "log-e.conformance.atrib.test": {
+            "origin": "log-e.conformance.atrib.test/v1",
+            "pubkey_b64": "p/bfr484uJuozmSbWU+R5NAf3Ff5yUk99DteUKmYc2c="
+          }
+        },
+        "rekor": {
+          "rekor.conformance.atrib.test": {
+            "origin": "rekor.conformance.atrib.test/v1",
+            "pubkey_b64": "K8KACzMW4Akgn/11fasZzPCuhLx66QZU4egXEtJw9lM="
+          }
+        }
+      },
+      "trusted_logs": [
+        "log-a.conformance.atrib.test",
+        "log-b.conformance.atrib.test"
+      ],
+      "threshold_m": 1,
+      "required_anchors": 2,
+      "operator_groups": [
+        {
+          "group": "conformance-operator",
+          "members": [
+            {
+              "anchor_type": "atrib-log",
+              "anchor_id": "log-a.conformance.atrib.test"
+            },
+            {
+              "anchor_type": "atrib-log",
+              "anchor_id": "log-b.conformance.atrib.test"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expected": {
+    "default_grouping": {
+      "anchor_plurality": {
+        "proof_count": 2,
+        "verified_count": 2,
+        "pending_count": 0,
+        "malformed_count": 0,
+        "unknown_types": [],
+        "independent_count": 2,
+        "plurality_met": true,
+        "single_anchor": false,
+        "equivocation_detected": false,
+        "anchored_at_range_ms": null
+      }
+    },
+    "declared_group": {
+      "anchor_plurality": {
+        "proof_count": 2,
+        "verified_count": 2,
+        "pending_count": 0,
+        "malformed_count": 0,
+        "unknown_types": [],
+        "independent_count": 1,
+        "plurality_met": false,
+        "single_anchor": true,
+        "equivocation_detected": false,
+        "anchored_at_range_ms": null
+      }
+    },
+    "record_signature_ok": true,
+    "hard_reject": false
+  }
+}

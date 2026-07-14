@@ -1,5 +1,69 @@
 # @atrib/integration
 
+## 0.0.41
+
+### Patch Changes
+
+- Updated dependencies [f4a5ebd]
+  - @atrib/agent@0.3.3
+  - @atrib/mcp@0.20.0
+  - @atrib/action-gate@0.0.6
+  - @atrib/log-dev@0.1.35
+  - @atrib/mcp-wrap@0.10.2
+  - @atrib/sdk@0.1.3
+  - @atrib/verify@0.8.3
+  - @atrib/archive-node@0.1.37
+  - @atrib/graph-node@0.1.37
+  - @atrib/log-node@0.1.35
+
+## 0.0.40
+
+### Patch Changes
+
+- Updated dependencies [6f6ca5f]
+  - @atrib/verify@0.8.2
+  - @atrib/agent@0.3.2
+  - @atrib/sdk@0.1.2
+  - @atrib/archive-node@0.1.36
+  - @atrib/graph-node@0.1.36
+
+## 0.0.39
+
+### Patch Changes
+
+- Updated dependencies [1378d4f]
+  - @atrib/mcp@0.19.1
+  - @atrib/agent@0.3.1
+  - @atrib/action-gate@0.0.5
+  - @atrib/verify@0.8.1
+  - @atrib/mcp-wrap@0.10.1
+  - @atrib/directory@0.2.1
+  - @atrib/runtime-log@0.2.2
+  - @atrib/sdk@0.1.1
+  - @atrib/log-dev@0.1.34
+  - @atrib/archive-node@0.1.35
+  - @atrib/graph-node@0.1.35
+  - @atrib/log-node@0.1.34
+
+## 0.0.38
+
+### Patch Changes
+
+- Updated dependencies [3c8e63d]
+- Updated dependencies [3c8e63d]
+- Updated dependencies [3c8e63d]
+- Updated dependencies [3c8e63d]
+  - @atrib/agent@0.3.0
+  - @atrib/mcp@0.19.0
+  - @atrib/mcp-wrap@0.10.0
+  - @atrib/verify@0.8.0
+  - @atrib/sdk@0.1.0
+  - @atrib/action-gate@0.0.4
+  - @atrib/log-dev@0.1.33
+  - @atrib/archive-node@0.1.34
+  - @atrib/graph-node@0.1.34
+  - @atrib/log-node@0.1.33
+
 ## 0.0.37
 
 ### Patch Changes

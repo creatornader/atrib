@@ -1,6 +1,6 @@
 {
   "name": "@atrib/verify",
-  "version": "0.7.10",
+  "version": "0.8.3",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,10 +13,13 @@
   "files": [
     "dist"
   ],
-  "description": "Verifier library for Atrib's verifiable action layer. Checks records, evidence, handoffs, graph derivation, and settlement documents.",
+  "description": "Verifier library for atrib's verifiable action layer. Checks records, evidence, handoffs, graph derivation, and settlement documents.",
   "author": "atrib <hello@atrib.dev>",
   "license": "Apache-2.0",
   "homepage": "https://atrib.dev",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "mcp",
     "model-context-protocol",

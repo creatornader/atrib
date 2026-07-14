@@ -207,7 +207,7 @@ async def main() -> None:
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     mcp_tool_executor.MCPManager = FakeMCPManager
 
-    actor = User(name="Atrib Operator")
+    actor = User(name="atrib Operator")
     agent_state = build_agent_state()
     agent_manager = FakeAgentManager()
     passage_manager = FakePassageManager()

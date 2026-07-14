@@ -1,0 +1,19 @@
+{
+  "name": "capability--missing-version-rejected",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "A settings object missing `version` (or whose version is not a non-empty string) is malformed. The peer MUST be treated as NOT having declared the extension; this MUST NOT produce a protocol error (extension spec §4.1).",
+  "input": {
+    "settings": {
+      "signs": [
+        "tool_call"
+      ]
+    }
+  },
+  "expected": {
+    "valid": false,
+    "declared": false,
+    "error_raised": false,
+    "reason": "version is the only REQUIRED settings field and it is absent"
+  }
+}

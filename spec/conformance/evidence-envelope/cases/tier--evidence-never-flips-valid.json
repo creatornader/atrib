@@ -1,0 +1,51 @@
+{
+  "name": "evidence-never-flips-valid",
+  "spec_section": "5.5.7",
+  "family": "tier",
+  "description": "The load-bearing invariant: evidence never flips verifyRecord().valid. A correctly signed record is verified alongside failing OAuth authorization evidence (scope attenuation failure under caller-verified claims). The evidence block and its mapped envelope MUST carry valid: false while the record itself stays valid: true. A signed action is real even when its external evidence is missing, expired, over-scoped, or forged; consumers apply their own policy over tiers.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:78448967db32a6374f7a22c4af394f2487916bf0acfd661f454a097a9c551cd9",
+      "creator_key": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo",
+      "chain_root": "sha256:dfb417454d7432715ecfaa33d89abdaba4457c3b2cbd85a4a20620d0cd806da6",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "timestamp": 1782864002000,
+      "signature": "RVl3HMylpbN3bnZq8LLWKCwWKz6DjkaV6qLePIIBgbMMRnBaQiXUmGq2rZCpHuWFMOwDS6mULYWtaKrHjUzrCA"
+    },
+    "signer_seed_hex": "5151515151515151515151515151515151515151515151515151515151515151",
+    "authorization_evidence": [
+      {
+        "oauth": {
+          "protocol": "oauth2",
+          "claimsVerified": true,
+          "claims": {
+            "iss": "https://as.example",
+            "sub": "agent-7",
+            "aud": "https://mcp.example.com/mcp",
+            "scope": "files:read"
+          },
+          "issuer": "https://as.example",
+          "audience": "https://mcp.example.com/mcp",
+          "requiredScopes": [
+            "files:write"
+          ],
+          "nowSeconds": 1782864000
+        }
+      }
+    ],
+    "record_hash": "sha256:0bf61955b84863c1ea9ebcf18b35d4d1840b85d7ece27ddaf42810d5df588ee0"
+  },
+  "expected": {
+    "record_valid": true,
+    "signature_ok": true,
+    "evidence_count": 1,
+    "evidence_valid": [
+      false
+    ],
+    "mapped_envelope_result_valid": false,
+    "mapped_envelope_tier": "attested",
+    "mapped_envelope_profile": "https://atrib.dev/v1/evidence/oauth2"
+  }
+}

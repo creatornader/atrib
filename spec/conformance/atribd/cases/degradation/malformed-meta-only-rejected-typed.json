@@ -1,0 +1,29 @@
+{
+  "name": "malformed-meta-only-rejected-typed",
+  "spec_section": "D148",
+  "description": "Malformed carriers with no explicit argument fall through the whole ladder: the write gets the typed missing-context tool error, never an HTTP 500 or a crash.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "content": {
+            "what": "lenient"
+          }
+        },
+        "_meta": {
+          "atrib": "not-a-token",
+          "traceparent": "zz-not-a-traceparent"
+        }
+      }
+    }
+  },
+  "expected": {
+    "http_status": 200,
+    "rejected": true,
+    "error_text": "atrib: context_id required on stateless transport"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "replay-fresh-instance-equivalent",
+  "spec_section": "D148",
+  "description": "An identical read request replayed against a different instance (fresh backend, fresh host) MUST return an equivalent result. No transport state survives a response, so any request can land on any instance.",
+  "input": {
+    "headers": {},
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 9,
+      "method": "tools/call",
+      "params": {
+        "name": "fake_read",
+        "arguments": {}
+      }
+    },
+    "replay_against_fresh_instance": true
+  },
+  "expected": {
+    "http_status": 200,
+    "equivalent_results_across_instances": true
+  }
+}

@@ -310,7 +310,7 @@ The crawl step is capped to \`maxDepth: ${CRAWL_CAP.maxDepth}\` and \`limit: ${C
 ## What ran
 
 - Upstream surface: ${upstreamLine}
-- Atrib path: \`@atrib/mcp-wrap\` around an MCP stdio server.
+- atrib path: \`@atrib/mcp-wrap\` around an MCP stdio server.
 - Record policy: public records keep selected tool names plus \`args_hash\` and \`result_hash\`.
 - Verification: \`@atrib/mcp\` verifies each Ed25519 record signature after the wrapper writes its mirror.
 - Log proof: ${result.log.mode === 'public' ? `accepted records were submitted to \`${result.log.endpoint}\` after full-flow verification; inclusion was verified.` : 'local fixture log only.'}

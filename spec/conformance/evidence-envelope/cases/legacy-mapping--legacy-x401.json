@@ -1,0 +1,122 @@
+{
+  "name": "legacy-x401",
+  "spec_section": "5.5.7",
+  "family": "legacy-mapping",
+  "description": "Deterministic mapping of a legacy §5.5.6 'x401' evidence block to envelope form. Two independent implementations of fromLegacyEvidenceBlock MUST produce this exact envelope: profile via the frozen five-row table, profile_version '1.0.0', tier 'attested', payload.hash = sha256(JCS(legacy block)) with ref.kind 'withheld', issuer/subject/scope/attenuation_ok/delegation_ok copied into facts, details committed as facts.details_hash = sha256(JCS(details)), valid/constraints/errors/warnings copied into result, and NO verifier block (the mapping is mechanical, not a re-verification).",
+  "input": {
+    "legacy_block": {
+      "protocol": "x401",
+      "valid": true,
+      "issuer": null,
+      "subject": "agent-7",
+      "scope": [],
+      "attenuation_ok": null,
+      "delegation_ok": null,
+      "constraints": [
+        {
+          "type": "x401.version",
+          "status": "passed",
+          "expected": "0.2.0",
+          "actual": "0.2.0"
+        },
+        {
+          "type": "x401.proof_gate",
+          "status": "passed"
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "details": {
+        "version": "0.2.0",
+        "request_id": "req-1",
+        "header_names": [
+          "PROOF-REQUEST",
+          "PROOF-RESPONSE",
+          "PROOF-RESULT"
+        ],
+        "legacy_headers_used": [],
+        "legacy_fields_used": [],
+        "proof_request_hash": "sha256:7b1d70d44f5ecb9ca986a8e88ca5a83ff071cff55f95d71af6ed7815fcf063c8",
+        "proof_response_hash": "sha256:1a0f6b08f5f06340eb60f832b6c51cea0913489a8f97b5491deb43e77cad3e06",
+        "proof_result_hash": "sha256:ad7119c66873af610265ae70c5e2b6885422f383fadb3ac14ff44742a2b0617d",
+        "credential_protocol": "openid4vp",
+        "nonce": "nonce-1",
+        "agent_id": "agent-7",
+        "response_kind": "result",
+        "result_verified": true,
+        "token_verified": null,
+        "proof_gate": {
+          "kind": "result",
+          "status": "passed"
+        },
+        "satisfied_requirements": [
+          "req-1"
+        ],
+        "payment_separation": {
+          "present": false,
+          "required": null,
+          "scheme_hint": null
+        },
+        "agent_origin": {
+          "expected_hash": null,
+          "actual_hash": null,
+          "verified": null
+        },
+        "issuer_trust": {
+          "verified": null,
+          "root_type": null,
+          "root_ref_hash": null
+        },
+        "proof_payment_binding": {
+          "verified": null,
+          "reference_hash": null
+        },
+        "verifier_client_id": null,
+        "credential_result_uri_present": false,
+        "credential_result_uri_hash": null
+      }
+    }
+  },
+  "expected": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/x401",
+      "profile_version": "1.0.0",
+      "tier": "attested",
+      "payload": {
+        "hash": "sha256:f4276c29414ed517b0e2a4c4bf9f0a610eb4d67800d7ea492b2b5a027607e2c5",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "facts": {
+        "issuer": null,
+        "subject": "agent-7",
+        "scope": [],
+        "attenuation_ok": null,
+        "delegation_ok": null,
+        "details_hash": "sha256:4d235d8ec33fd2af5aa31245e7cd79f3cc82d42302e8586830c3cab2d95cff58"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [
+          {
+            "type": "x401.version",
+            "status": "passed",
+            "expected": "0.2.0",
+            "actual": "0.2.0"
+          },
+          {
+            "type": "x401.proof_gate",
+            "status": "passed"
+          }
+        ],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "payload_hash": "sha256:f4276c29414ed517b0e2a4c4bf9f0a610eb4d67800d7ea492b2b5a027607e2c5",
+    "details_hash": "sha256:4d235d8ec33fd2af5aa31245e7cd79f3cc82d42302e8586830c3cab2d95cff58"
+  }
+}

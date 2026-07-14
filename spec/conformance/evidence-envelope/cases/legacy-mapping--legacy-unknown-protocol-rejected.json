@@ -1,0 +1,30 @@
+{
+  "name": "legacy-unknown-protocol-rejected",
+  "spec_section": "5.5.7",
+  "family": "legacy-mapping",
+  "description": "The executable form of the legacy-string freeze: the legacy protocol set is closed at exactly five values ('oauth2', 'mcp_oauth', 'aauth', 'x401', 'ap2_vi'). A mapping implementation handed any other protocol string (here the hypothetical 'atrib_delegation') MUST reject rather than silently inventing a profile URI. New evidence types register as envelope profiles; they never extend the mapping table.",
+  "input": {
+    "legacy_block": {
+      "protocol": "atrib_delegation",
+      "valid": true,
+      "issuer": "https://delegator.example",
+      "subject": "agent-7",
+      "scope": [],
+      "attenuation_ok": null,
+      "delegation_ok": true,
+      "constraints": [],
+      "errors": [],
+      "warnings": []
+    }
+  },
+  "expected": {
+    "mapping_must_reject": true,
+    "frozen_protocols": [
+      "oauth2",
+      "mcp_oauth",
+      "aauth",
+      "x401",
+      "ap2_vi"
+    ]
+  }
+}

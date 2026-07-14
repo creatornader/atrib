@@ -1,0 +1,69 @@
+{
+  "name": "mixed-producer-linear",
+  "spec_section": "D148",
+  "description": "Mixed-producer concurrent writes (emit, atrib-annotate, atrib-revise) through the same daemon against one context_id stay linear: the write handler serializes per resolved context across all three write primitives, and all three share one mirror tail authority.",
+  "input": {
+    "context_id": "3151ab3151ab3151ab3151ab3151ab31",
+    "private_key_seed_base64url": "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio",
+    "writes": [
+      {
+        "tool": "emit",
+        "arguments": {
+          "event_type": "observation",
+          "content": {
+            "what": "mixed 1"
+          }
+        }
+      },
+      {
+        "tool": "atrib-annotate",
+        "arguments": {
+          "annotates": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "importance": "low",
+          "summary": "mixed 2"
+        }
+      },
+      {
+        "tool": "atrib-revise",
+        "arguments": {
+          "revises": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "prior_position": "p",
+          "new_position": "n",
+          "reason": "mixed 3"
+        }
+      },
+      {
+        "tool": "emit",
+        "arguments": {
+          "event_type": "observation",
+          "content": {
+            "what": "mixed 4"
+          }
+        }
+      },
+      {
+        "tool": "atrib-annotate",
+        "arguments": {
+          "annotates": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "importance": "low",
+          "summary": "mixed 5"
+        }
+      },
+      {
+        "tool": "atrib-revise",
+        "arguments": {
+          "revises": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "prior_position": "p2",
+          "new_position": "n2",
+          "reason": "mixed 6"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "records": 6,
+    "forks": 0,
+    "first_chain_root": "genesis",
+    "chain_linear": true
+  }
+}

@@ -1,8 +1,16 @@
 # @atrib/annotate
 
-MCP server exposing the `atrib-annotate` tool for Atrib's verifiable action layer. Marks a past signed record with importance, a one-line summary, and topics, so future recall can surface what mattered without re-scanning every record flat.
+MCP server exposing the `atrib-annotate` tool for atrib's verifiable action layer. Marks a past signed record with importance, a one-line summary, and topics, so future recall can surface what mattered without re-scanning every record flat.
 
 Closes the producer-side recall-fidelity gap: an agent reading back its own past loses enormous nuance compared to the agent that signed it. An annotation lets the agent at signing time say "future-self: this one is critical, and here's why in one line", and the graph carries that judgment forward.
+
+## Install
+
+```bash
+pnpm add @atrib/annotate
+```
+
+Verify a local build with `pnpm --filter @atrib/annotate test`.
 
 ## Tool
 
@@ -24,6 +32,8 @@ mcp__atrib-annotate__atrib-annotate({
 }
 ```
 
+The `annotates` target is the `record_hash` of a prior record, for example one returned by a previous `atrib-emit` call or an `@atrib/recall` result.
+
 ## Writes
 
 Signs an `annotation` record per spec [§1.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#124-event_type-values) (event_type `0x05`, promoted via [D058](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d058-promote-annotation-to-atrib-normative-event_type-byte-0x05)) and persists it through the same pipeline `@atrib/emit` uses: same key resolution, same chain composition, same JSONL mirror at `ATRIB_MIRROR_FILE`. A verifier cannot distinguish annotation records signed via this tool from annotation records signed via `@atrib/emit`'s polymorphic surface; the wire format is identical.
@@ -42,6 +52,17 @@ The graph layer derives an ANNOTATES edge from the new record to the `annotates`
 ## Wire-up
 
 Add to your MCP host config (e.g. `~/.claude.json` `mcpServers`):
+
+```json
+{
+  "atrib-annotate": {
+    "command": "npx",
+    "args": ["-y", "@atrib/annotate"]
+  }
+}
+```
+
+For a monorepo checkout or local development, point at the built binary directly:
 
 ```json
 {
@@ -70,8 +91,12 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/annotate start`.
 
 ## Status
 
-Initial scaffold (v0.2.0). Cognitive primitive #2 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/revise` covers the contradiction-handling primitive (revision event_type).
+Published and maintained. Cognitive primitive #2 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/revise` covers the contradiction-handling primitive (revision event_type).
 
 ## License
 
 Apache-2.0.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

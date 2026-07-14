@@ -1,0 +1,20 @@
+{
+  "name": "degradation--missing-meta-never-blocks",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "A request with no _meta at all (total _meta loss at an intermediary). The tool call MUST proceed; both ladders resolve to nothing; the next record is a genesis record per §1.2.3. Missing _meta never blocks, delays, or alters the call.",
+  "input": {
+    "request_params": {
+      "name": "search_web",
+      "arguments": {
+        "query": "no meta here"
+      }
+    }
+  },
+  "expected": {
+    "inbound_token_resolved": false,
+    "resolved_context_id": null,
+    "tool_call_proceeds": true,
+    "error_raised": false
+  }
+}

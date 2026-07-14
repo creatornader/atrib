@@ -60,7 +60,12 @@ function readMirrorPath(): string {
   return (
     process.env['ATRIB_AUTOCHAIN_SOURCE'] ??
     process.env['ATRIB_MIRROR_FILE'] ??
-    join(homedir(), '.atrib', 'records', `${process.env['ATRIB_AGENT'] ?? 'claude-code'}.jsonl`)
+    join(
+      homedir(),
+      '.atrib',
+      'records',
+      `atrib-emit-${process.env['ATRIB_AGENT'] ?? 'claude-code'}.jsonl`,
+    )
   )
 }
 
@@ -1297,3 +1302,14 @@ export { handleEmit, EmitInput }
 export type { EmitOutput }
 export { resolveKey } from './keys.js'
 export type { ResolvedKey } from './keys.js'
+
+// Session-checkpoint emission (§1.2.10 / D139): reads the ordered record
+// hashes for a context from the local mirror per §5.9 and emits the
+// checkpoint through the existing emit pipeline (no new signing path).
+// §5.8: failures are silent and atrib:-logged; a missed checkpoint just
+// widens the next interval.
+export { emitSessionCheckpoint } from './session-checkpoint.js'
+export type {
+  EmitSessionCheckpointOptions,
+  EmitSessionCheckpointResult,
+} from './session-checkpoint.js'

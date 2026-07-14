@@ -13,7 +13,9 @@
         "context_id": "33333333333333333333333333333333",
         "timestamp": 1767225600000,
         "signature": "IvVJ1s62O0LIdeM2V3rAyX6G-8t8RDLDnGdYrEVrBdgNAqw0mLtfABx9hx_lL8vUK_abomiGEysXXXt1nuxXCQ",
-        "informed_by": ["sha256:d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1"]
+        "informed_by": [
+          "sha256:d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1"
+        ]
       },
       {
         "spec_version": "atrib/1.0",

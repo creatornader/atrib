@@ -1,5 +1,23 @@
 # @atrib/mcp
 
+## 0.20.0
+
+### Minor Changes
+
+- f4a5ebd: Add delegation-certificate producer conveniences. The CLI can issue scoped certificates for ephemeral run keys, and MCP middleware carries a configured certificate in the local mirror sidecar. Agent receipt parsing now uses the shared MCP verifier.
+
+## 0.19.1
+
+### Patch Changes
+
+- 1378d4f: Docs: bring every public package README and description to standalone-completeness parity. Lowercase the brand to `atrib` throughout, add a uniform Install section and a Part of atrib orientation block, and fix standalone gaps found in review: missing imports and undefined variables in quick-starts, the published npx wire-up form for the MCP servers, an off-machine privacy note for summarize, a worked handoff example for verify-mcp, and a rewrite of the directory README against its real class-based API. No code or public API changes.
+
+## 0.19.0
+
+### Minor Changes
+
+- 3c8e63d: Add four opt-in protocol surfaces: the anchors module per [D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture) (anchor-set posture resolution, anchoring-claim builder with fresh Ed25519 signatures, non-blocking multi-anchor fan-out with the atrib-log transport live and rekor/rfc3161/ots transports stubbed behind `AnchorTransport`), session checkpoints per [D139](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d139-session_checkpoint-event-type-the-session-stream-formalized) (RFC 6962 session roots, checkpoint record assembly under the extension URI, inclusion and consistency proofs, equivocation detection), delegation-certificate issuance per [D140](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys) (`issueDelegationCertificate`, `withDelegationCertHash`, run-key revocation builder), and the `dev.atrib/attribution` extension surface per [D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133) (capability negotiation including legacy-initialize gating, attestation receipt building and application, middleware `extensionAttribution` flag). Middleware and proxy behavior is byte-identical when none of these are configured.
+
 ## 0.18.1
 
 ### Patch Changes
@@ -300,7 +318,7 @@ query_shape, result_count, elapsed_ms, sample_result_hashes[], errored}`.
   `@noble/hashes` 1 → 2 (where applicable), `canonicalize` 2 → 3, and
   `@opentelemetry/sdk-trace-base` 1 → 2 (peer dep on `@atrib/openinference`).
 
-  Atrib's own public APIs are unchanged, and signing-output, hash-output, and
+  atrib's own public APIs are unchanged, and signing-output, hash-output, and
   JCS-canonicalization-output remain byte-identical — verified by the signing
   corpus (spec [§1.4](../atrib-spec.md#14-signing-and-verification)) and the Wycheproof Ed25519 test vectors.
 
@@ -528,7 +546,7 @@ query_shape, result_count, elapsed_ms, sample_result_hashes[], errored}`.
   - All 6 descriptions now follow the consistent shape `<noun> for atrib. <specific value>.`
   - Removed em dashes per the writing rules
   - `@atrib/mcp-wrap` description no longer mentions an arbitrary "~30 MCPs" cap (it works for any MCP)
-  - Lowercased "Atrib" to "atrib" across author + description fields per the brand convention
+  - Lowercased "atrib" to "atrib" across author + description fields per the brand convention
   - Wrote READMEs for `@atrib/cli` and `@atrib/directory` (previously had none)
   - Rewrote 115 broken relative links across mcp/agent/verify READMEs to absolute github URLs that auto-heal at public-flip
   - Stripped temporary `repository` field from package.jsons (404s while repo is private; restored at public-flip)

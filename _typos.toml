@@ -40,6 +40,10 @@ ist = "ist"  # appears in legitimate contexts, not "is"
 # Vendor proper nouns; typos's lowercased substring matcher gets
 # confused by HashiCorp (sees "Hashi" as a typo of "Hash").
 HashiCorp = "HashiCorp"
+# Illustrative truncated Ed25519 key in the delegation-certificates ADR
+# draft ("L7pnH1...43chars..."); too short for the base64url ignore-re,
+# and typos reads its "pn" as a typo of "on".
+L7pnH1 = "L7pnH1"
 
 [files]
 # Skip generated artifacts and gitignored content.

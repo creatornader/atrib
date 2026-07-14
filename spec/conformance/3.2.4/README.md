@@ -12,6 +12,7 @@ The compact intra-session corpus at [`../3.4.1/`](../3.4.1/) covers the reduced 
 | `cases/full-pairwise-session-precedes.json`     | Four isolated records in one context with increasing timestamps produce every pairwise SESSION_PRECEDES edge.                                              |
 | `cases/equal-timestamp-parallel-all-pairs.json` | Four isolated records in one context with equal timestamps produce every pairwise SESSION_PARALLEL edge.                                                   |
 | `cases/dangling-claim-edges.json`               | Missing producer-declared references still produce dangling INFORMED_BY, PROVENANCE_OF, ANNOTATES, and REVISES edges.                                      |
+| `cases/session-checkpoint-chain-spine.json`      | A session checkpoint preserves CHAIN_PRECEDES continuity but receives no CONVERGES_ON edge and stays out of the calculation input projection.              |
 
 ## Generator
 

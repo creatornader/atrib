@@ -66,7 +66,7 @@ async function attestation(signerSeed: Uint8Array, content: AttestationContent):
   return { record, content }
 }
 
-describe('requireCorroborated (D133 + D136 fail-closed policy)', () => {
+describe('requireCorroborated (D133 + D150 fail-closed policy)', () => {
   it('allows when the target is corroborated by two trusted attestors', async () => {
     const target = await observation(PRODUCER)
     const th = recordHash(target)

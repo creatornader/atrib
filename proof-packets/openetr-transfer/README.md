@@ -9,7 +9,7 @@ This proof signs an OpenETR-shaped transfer-control flow through `@atrib/mcp-wra
 ## What ran
 
 - Upstream surface: OpenETR Python source at the pinned commit, executed against a local WebSocket Nostr relay and surfaced through MCP-shaped tools.
-- Atrib path: `@atrib/mcp-wrap` around an MCP stdio server.
+- atrib path: `@atrib/mcp-wrap` around an MCP stdio server.
 - Record policy: public records keep selected tool names plus `args_hash` and `result_hash`.
 - Verification: `@atrib/mcp` verifies each Ed25519 record signature after the wrapper writes its mirror.
 - Log proof: public atrib log.

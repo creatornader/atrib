@@ -1,0 +1,34 @@
+{
+  "name": "minimal-valid",
+  "spec_section": "5.5.7",
+  "family": "shape",
+  "description": "The smallest well-formed envelope: envelope version, profile URI, profile_version, tier, payload (hash + ref.kind), and result. facts, verifier, payload.media_type, payload.inline, ref.uri, and ref.record_hash are all OPTIONAL. Consumers MUST accept. payload.hash is a real commitment: sha256 over the JCS bytes of the payload material carried in input.payload_material.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/oauth2",
+      "profile_version": "1.0.0",
+      "tier": "declared",
+      "payload": {
+        "hash": "sha256:330e4f8e81f32f4e8a7e876f26a5ecbe0fdfeb48220cee10670738da32dba01d",
+        "ref": {
+          "kind": "withheld"
+        }
+      },
+      "result": {
+        "valid": true,
+        "constraints": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "payload_material": {
+      "note": "minimal evidence envelope fixture payload"
+    },
+    "payload_hash_rule": "jcs"
+  },
+  "expected": {
+    "accept": true,
+    "payload_hash": "sha256:330e4f8e81f32f4e8a7e876f26a5ecbe0fdfeb48220cee10670738da32dba01d"
+  }
+}

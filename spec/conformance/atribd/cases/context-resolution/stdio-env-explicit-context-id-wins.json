@@ -1,0 +1,15 @@
+{
+  "name": "stdio-env-explicit-context-id-wins",
+  "spec_section": "D148",
+  "check": "stdio-env",
+  "description": "stdio shim ladder (unchanged per D078/D083): ATRIB_CONTEXT_ID beats a registered harness env var.",
+  "input": {
+    "env": {
+      "ATRIB_CONTEXT_ID": "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0",
+      "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129"
+    }
+  },
+  "expected": {
+    "context_id": "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0"
+  }
+}

@@ -1,8 +1,16 @@
 # @atrib/revise
 
-MCP server exposing the `atrib-revise` tool for Atrib's verifiable action layer. Supersedes a prior signed position with a stated reason, so the contradiction lands as a first-class graph node rather than a silent edit.
+MCP server exposing the `atrib-revise` tool for atrib's verifiable action layer. Supersedes a prior signed position with a stated reason, so the contradiction lands as a first-class graph node rather than a silent edit.
 
 Records are immutable per spec [§1.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#16-immutability): once signed, the bytes are fixed forever. When the agent now holds a position incompatible with a prior claim, the only honest move is to sign a revision that points at the prior record, names the prior position, names the new one, and gives the reason. The prior record stays in the graph; the revision adds a REVISES edge that supersedes it. A reader walking the graph sees both, and any policy or recall pipeline that respects revision can prefer the latest.
+
+## Install
+
+```bash
+pnpm add @atrib/revise
+```
+
+Verify a local build with `pnpm --filter @atrib/revise test`.
 
 ## Tool
 
@@ -25,6 +33,8 @@ mcp__atrib-revise__atrib-revise({
 }
 ```
 
+The `revises` target is the `record_hash` of the prior position being superseded, for example one returned by a previous `atrib-emit` call or an `@atrib/recall` result.
+
 ## Writes
 
 Signs a `revision` record per spec [§1.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#124-event_type-values) (event_type `0x06`, promoted via [D059](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d059-promote-revision-to-atrib-normative-event_type-byte-0x06)) and persists it through the same pipeline `@atrib/emit` uses: same key resolution, same chain composition, same JSONL mirror at `ATRIB_MIRROR_FILE`. A verifier cannot distinguish revision records signed via this tool from revision records signed via `@atrib/emit`'s polymorphic surface; the wire format is identical.
@@ -44,6 +54,17 @@ The graph layer derives a REVISES edge from the new record to the `revises` targ
 ## Wire-up
 
 Add to your MCP host config (e.g. `~/.claude.json` `mcpServers`):
+
+```json
+{
+  "atrib-revise": {
+    "command": "npx",
+    "args": ["-y", "@atrib/revise"]
+  }
+}
+```
+
+For a monorepo checkout or local development, point at the built binary directly:
 
 ```json
 {
@@ -72,8 +93,12 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/revise start`.
 
 ## Status
 
-Initial scaffold (v0.2.0). Cognitive primitive #3 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/annotate` covers the importance-and-meaning primitive (annotation event_type).
+Published and maintained. Cognitive primitive #3 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/annotate` covers the importance-and-meaning primitive (annotation event_type).
 
 ## License
 
 Apache-2.0.
+
+## Part of atrib
+
+atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).
