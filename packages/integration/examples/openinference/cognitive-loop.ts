@@ -136,8 +136,8 @@ async function main(): Promise<void> {
     ] = await Promise.all([
       import('../../../../services/atrib-recall/src/aggregations.js'),
       import('../../../../services/atrib-recall/src/scoring.js'),
-      import('../../../../services/atrib-trace/src/storage.js'),
-      import('../../../../services/atrib-trace/src/trace.js'),
+      import('../../../../services/atrib-recall/src/trace-storage.js'),
+      import('../../../../services/atrib-recall/src/trace-walk.js'),
       import('../../../../services/atrib-summarize/src/storage.js'),
       import('../../../../services/atrib-summarize/src/prompt.js'),
     ])
