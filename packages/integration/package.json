@@ -121,7 +121,7 @@
     "@proof.com/proof-vc-common": "0.3.0",
     "@proof.com/proof-vc-server": "0.3.0",
     "@proof.com/x401-node": "^0.3.0",
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.1.1",
     "ai": "^6.0.205",
     "browser-use": "0.7.3",
     "jose": "6.2.3",
@@ -131,7 +131,7 @@
     "playwright": "1.60.0",
     "tslib": "^2.8.1",
     "tsx": "^4.22.4",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.8",
     "zod": "^4.4.3"
   }
