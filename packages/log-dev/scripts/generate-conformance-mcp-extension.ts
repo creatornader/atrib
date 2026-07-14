@@ -386,6 +386,24 @@ async function main(): Promise<void> {
     },
   })
 
+  writeCase('gating', 'legacy-initialize-declaration', {
+    name: 'gating--legacy-initialize-declaration',
+    spec_section: '1.5.4',
+    extension: EXT_ID,
+    description:
+      'A legacy MCP session declared dev.atrib/attribution in initialize.capabilities rather than request _meta. The declaration applies to later requests and emits the same prefixed receipt alongside unchanged legacy keys.',
+    input: {
+      request_meta: {},
+      initialize_capabilities: declaredClientCapabilities,
+      signed_record: toolCallRecord,
+    },
+    expected: {
+      extension_block_present: true,
+      result_meta: declaredResultMeta,
+      legacy_initialize_gating: true,
+    },
+  })
+
   writeCase('gating', 'undeclared-legacy-only', {
     name: 'gating--undeclared-legacy-only',
     spec_section: '1.5.4',

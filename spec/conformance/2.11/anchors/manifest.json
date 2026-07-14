@@ -23,6 +23,18 @@
       "name": "plurality-atrib-log-plus-rfc3161"
     },
     {
+      "file": "cases/rfc3161-binding-mismatch.json",
+      "name": "rfc3161-binding-mismatch"
+    },
+    {
+      "file": "cases/opentimestamps-binding-mismatch.json",
+      "name": "opentimestamps-binding-mismatch"
+    },
+    {
+      "file": "cases/malformed-unknown-precedence.json",
+      "name": "malformed-unknown-precedence"
+    },
+    {
       "file": "cases/rekor-anchor-claim.json",
       "name": "rekor-anchor-claim"
     },
@@ -67,5 +79,5 @@
     "log_e_pubkey_b64": "p/bfr484uJuozmSbWU+R5NAf3Ff5yUk99DteUKmYc2c=",
     "rekor_pubkey_b64": "K8KACzMW4Akgn/11fasZzPCuhLx66QZU4egXEtJw9lM="
   },
-  "note": "The thirteen cases collectively exercise the anchor-interface contract: legacy absent-discriminator compatibility (1), discriminator malformation rules (2), unknown-type forward compatibility (3), structural rfc3161/opentimestamps variants with real binding fields (4, 8), the fresh anchoring-signature claim artifact with real Ed25519 crypto (5, 6), the digest-path impossibility proof (7), operator-group independence (9), §2.11.4 threshold/equivocation/censorship hard conditions unchanged (10, 11, 12), and the producer-side allow_single_anchor posture (13). Verifier determinism (two runs, identical annotation) is asserted by the reference test over every case."
+  "note": "The cases exercise legacy absent-discriminator compatibility, discriminator malformation and unknown-type precedence, structural rfc3161/opentimestamps bindings with per-type negative vectors, fresh Rekor anchoring claims, operator-group independence, §2.11.4 threshold/equivocation/censorship conditions, and the producer-side allow_single_anchor posture. Verifier determinism is asserted by the reference test over every case."
 }

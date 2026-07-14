@@ -191,6 +191,25 @@ describe('spec §5.5.7 conformance: shape/', () => {
     expect((envelope.payload as { hash: string }).hash).toBe(c.expected.payload_hash)
   })
 
+  it('payload-hash-mismatch: shape validity does not erase a failed material binding', () => {
+    const c = loadCase('shape', 'payload-hash-mismatch')
+    const envelope = c.input.envelope as EnvelopeLike
+    expect(checkEnvelopeShape(envelope)).toEqual([])
+    expect(jcsSha256(c.input.payload_material)).not.toBe((envelope.payload as { hash: string }).hash)
+    expect(c.expected.payload_hash_matches_material).toBe(false)
+  })
+
+  it('withheld-sanitized: public facts remain hash-only and body is unavailable', () => {
+    const c = loadCase('shape', 'withheld-sanitized')
+    const envelope = c.input.envelope as EnvelopeLike
+    expect(checkEnvelopeShape(envelope)).toEqual([])
+    expect((envelope.payload as { ref: { kind: string } }).ref.kind).toBe('withheld')
+    expect(Object.keys(envelope.facts as Record<string, unknown>).sort()).toEqual(
+      [...(c.expected.public_facts as string[])].sort(),
+    )
+    expect(c.expected.body_retrievable).toBe(false)
+  })
+
   it('maximal-valid: every optional field accepted; inline payload matches its hash commitment', () => {
     const c = loadCase('shape', 'maximal-valid')
     const envelope = c.input.envelope as EnvelopeLike

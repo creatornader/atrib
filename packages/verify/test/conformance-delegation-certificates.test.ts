@@ -224,6 +224,38 @@ describe('spec §1.11 conformance: delegation certificates', () => {
     expect(record.delegation_cert_hash).toBe(delegationCertHash(cert!))
   })
 
+  it('cert-malformed-run-key: rejects the malformed key before signature interpretation', async () => {
+    const c = loadCase('cert-malformed-run-key')
+    const expected = c.expected as { errors: string[] }
+    expect(await delegationCertErrors(c.input.certificate as DelegationCertificate)).toEqual(expected.errors)
+  })
+
+  it('walk-ambiguous-principals: surfaces overlapping candidates without selecting one', async () => {
+    const c = loadCase('walk-ambiguous-principals')
+    const expected = c.expected as { delegation_ambiguous: boolean; candidate_count: number; depth: 0 | 1 }
+    const outcome = await evaluateDelegation(
+      c.input.record as DelegatedRecord,
+      c.input.genesis_record as DelegatedRecord,
+      c.input.certificates as DelegationCertificate[],
+    )
+    expect(outcome.depth).toBe(expected.depth)
+    expect(outcome.delegation_ambiguous).toBe(expected.delegation_ambiguous)
+    expect(outcome.candidates).toHaveLength(expected.candidate_count)
+  })
+
+  it('walk-depth-limit: rejects a second delegation hop', async () => {
+    const c = loadCase('walk-depth-limit')
+    const expected = c.expected as { depth: 0 | 1; cert_valid: boolean; errors: string[] }
+    const outcome = await evaluateDelegation(
+      c.input.record as DelegatedRecord,
+      c.input.genesis_record as DelegatedRecord,
+      c.input.certificates as DelegationCertificate[],
+    )
+    expect(outcome.depth).toBe(expected.depth)
+    expect(outcome.cert_valid).toBe(expected.cert_valid)
+    expect(outcome.errors).toEqual(expected.errors)
+  })
+
   it('depth0-identity: byte-identical to the §1.4 corpus, delegation depth 0', async () => {
     const c = loadCase('depth0-identity')
     const record = c.input.record as AtribRecord

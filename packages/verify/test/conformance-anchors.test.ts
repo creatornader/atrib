@@ -190,6 +190,30 @@ describe('spec §2.11 anchors conformance', () => {
     expect(verdict.hard_reject).toBe(expected.hard_reject)
   })
 
+  it.each(['rfc3161-binding-mismatch', 'opentimestamps-binding-mismatch'])(
+    '%s: a per-type commitment mismatch is invalid and excluded from plurality',
+    async (name) => {
+      const c = loadCase(name)
+      const expected = c.expected as { invalid_indices: number[]; hard_reject: boolean }
+      const verdict = await runCaseVerdict(c)
+      expect(verdict.invalid_indices).toEqual(expected.invalid_indices)
+      expect(verdict.hard_reject).toBe(expected.hard_reject)
+    },
+  )
+
+  it('malformed-unknown-precedence: malformed elements do not become unknown types', async () => {
+    const c = loadCase('malformed-unknown-precedence')
+    const expected = c.expected as {
+      malformed_indices: number[]
+      unknown_types: string[]
+      hard_reject: boolean
+    }
+    const verdict = await runCaseVerdict(c)
+    expect(verdict.malformed_indices).toEqual(expected.malformed_indices)
+    expect(verdict.anchor_plurality.unknown_types).toEqual(expected.unknown_types)
+    expect(verdict.hard_reject).toBe(expected.hard_reject)
+  })
+
   it('rekor-anchor-claim: fresh anchoring signature over the reconstructible claim artifact verifies end to end', async () => {
     const c = loadCase('rekor-anchor-claim')
     const record = c.input['record'] as AtribRecord

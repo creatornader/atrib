@@ -636,6 +636,63 @@ async function main(): Promise<void> {
     },
   })
 
+  const tamperedProof = proof.map(hex)
+  tamperedProof[0] = `${tamperedProof[0]!.slice(0, -1)}${tamperedProof[0]!.endsWith('0') ? '1' : '0'}`
+  writeCase('consistency-proof-invalid', {
+    name: 'consistency-proof-invalid',
+    spec_section: '1.2.10',
+    description:
+      'The same consecutive checkpoints and disclosed leaves as the valid extension, with one consistency-proof nibble changed. Linkage and leaf prefix still hold, but the RFC 6962 proof fails and the pair is not consistent.',
+    input: {
+      first_checkpoint: k1,
+      second_checkpoint: k2,
+      first_leaves: k1Leaves,
+      second_leaves: k2Leaves,
+      consistency_proof_hex: tamperedProof,
+      signer_seed_hex: hex(AGENT_SEED),
+    },
+    expected: {
+      prior_checkpoint_matches: true,
+      first_index_equals_prior_tree_size: true,
+      consistency_proof_verifies: false,
+      append_only: true,
+      consistent: false,
+    },
+  })
+
+  const foreignLeaf = await signObservation(
+    SINGLE_LEAF_CONTEXT,
+    genesisChainRoot(SINGLE_LEAF_CONTEXT),
+    REFERENCE_TIME_MS + 9_000,
+    'foreign_context_leaf',
+  )
+  const foreignLeaves = [prefixedRecordHash(r1), prefixedRecordHash(foreignLeaf)]
+  const foreignCheckpoint = await signCheckpoint({
+    contextId: MAIN_CONTEXT,
+    chainRoot: chainRoot(r1),
+    timestamp: REFERENCE_TIME_MS + 10_000,
+    leafRefs: foreignLeaves,
+    firstIndex: 0,
+  })
+  writeCase('foreign-context-id-leaf', {
+    name: 'foreign-context-id-leaf',
+    spec_section: '1.2.10',
+    description:
+      'A checkpoint whose root and args_hash correctly commit to disclosed hashes, but one disclosed record belongs to a different context_id. Hash-only evidence cannot expose this; when records are supplied, a verifier must reject the cross-context leaf set.',
+    input: {
+      record: foreignCheckpoint,
+      leaves: foreignLeaves,
+      leaf_records: [r1, foreignLeaf],
+      signer_seed_hex: hex(AGENT_SEED),
+    },
+    expected: {
+      root_matches_leaves: true,
+      args_hash_matches_leaves: true,
+      leaf_contexts_match: false,
+      validator_should_accept: false,
+    },
+  })
+
   // Equivocating divergent-root pair: same creator_key, same
   // prior_checkpoint, same first_index and tree_size, different leaf at
   // index 4 → divergent session_root. Both signatures are genuine; the
@@ -873,6 +930,8 @@ async function main(): Promise<void> {
     'tree-5-leaves',
     'tree-empty-rejected',
     'consistency-valid-extension',
+    'consistency-proof-invalid',
+    'foreign-context-id-leaf',
     'consistency-equivocation-pair',
     'retroactive-declared',
     'retroactive-false-rejected',
@@ -890,7 +949,7 @@ async function main(): Promise<void> {
     generator: 'packages/log-dev/scripts/generate-conformance-session-checkpoint.ts',
     cases: caseNames.map((name) => ({ file: `cases/${name}.json`, name })),
     keys: { agent_pubkey: agentKey },
-    note: 'The seventeen cases collectively exercise the §1.2.10 contract: checkpoint object schema and presence rules (schema-*), real RFC 6962 roots over ordered record-hash leaves with the raw-32-byte-leaf trap (tree-*), append-only consistency with an RFC 6962 §2.1.4 proof plus an equivocating divergent-root pair (consistency-*), the present-only-when-true retroactive flag and categorical freshness facts (retroactive-* / freshness-*), and the 0xFF/0x08 log-entry duality over byte-identical signed records (byte-uri-duality).',
+    note: 'The cases exercise the §1.2.10 checkpoint object schema and presence rules, real RFC 6962 roots over ordered record-hash leaves, valid and invalid append-only consistency proofs, foreign-context disclosed leaves, equivocation, retroactive and freshness facts, and the 0xFF/0x08 log-entry duality over byte-identical signed records.',
   }
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
 

@@ -61,6 +61,16 @@
       "family": "shape"
     },
     {
+      "file": "cases/shape--payload-hash-mismatch.json",
+      "name": "payload-hash-mismatch",
+      "family": "shape"
+    },
+    {
+      "file": "cases/shape--withheld-sanitized.json",
+      "name": "withheld-sanitized",
+      "family": "shape"
+    },
+    {
       "file": "cases/shape--maximal-valid.json",
       "name": "maximal-valid",
       "family": "shape"
