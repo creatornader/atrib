@@ -17,12 +17,12 @@ The defining constraint: **no third signing implementation**. Every `@atrib/sdk`
 
 ## The two verbs
 
-The seven cognitive primitives ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)) were originally the *agent-facing* surface: monomorphic MCP tools a model calls one at a time. This SDK proposal's naming target became the actual MCP tool surface with the attest/recall rename ([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)): the two verbs below are now `attest` and `recall`, real MCP tools mounted alongside the seven legacy names, not an SDK-only abstraction:
+The seven cognitive primitives ([D079](../../DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface)) were originally the *agent-facing* surface: monomorphic MCP tools a model calls one at a time. This SDK proposal's naming target became the actual MCP tool surface with the attest/recall rename ([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)): the two verbs below are now `attest` and `recall`, real MCP tools mounted alongside the seven legacy names, not an SDK-only abstraction:
 
 - **`attest()`** collapses the three writes. An optional `ref` discriminator selects the kind: no ref signs an observation (emit), `ref.kind: 'annotates'` signs an annotation, `ref.kind: 'revises'` signs a revision. The record bytes are identical to what the dedicated primitives would have signed.
 - **`recall()`** collapses the reads under one shape-discriminated query: history, walks, annotations, revisions, content search, session chains, orphans, signers, trace in both directions, and handoff verification ([D106](../../DECISIONS.md#d106-verify-is-promoted-to-cognitive-primitive-7)).
 
-The collapse is surface, not semantics: each ref/shape still maps 1:1 to what a dedicated primitive tool would have signed or returned. The seven legacy tool names stay mounted as permanent aliases over the same handlers per [D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse).
+The collapse is surface, not semantics: each ref/shape still maps 1:1 to what a dedicated primitive tool would have signed or returned. The seven legacy tool names stay mounted as permanent aliases over the same handlers per [D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse).
 
 ## Daemon-first, in-process fallback
 

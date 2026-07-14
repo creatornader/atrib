@@ -3669,7 +3669,7 @@ Per-server effect:
 
 **Date:** 2026-05-13
 
-**Surface enumeration superseded by [D163](#d163-attestrecall-verb-rename-and-primitive-surface-collapse) (2026-07-14).** The agent-facing surface is now two verbs, `attest` (write) and `recall` (read), with the primitive names this ADR defines kept as permanent aliases over the same handlers; records are byte-identical either way. This ADR's monomorphic bar (no polymorphic event_type dispatch) and the [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion) lifecycle gate stand unchanged; only the surface count is superseded. Immutable historical record per the [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape) precedent.
+**Surface enumeration superseded by [D164](#d164-attestrecall-verb-rename-and-primitive-surface-collapse) (2026-07-14).** The agent-facing surface is now two verbs, `attest` (write) and `recall` (read), with the primitive names this ADR defines kept as permanent aliases over the same handlers; records are byte-identical either way. This ADR's monomorphic bar (no polymorphic event_type dispatch) and the [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion) lifecycle gate stand unchanged; only the surface count is superseded. Immutable historical record per the [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape) precedent.
 
 **Context.** The atrib spec defines six normative `event_type` URIs ([§1.2.4](atrib-spec.md#124-event_type-values)): `tool_call`, `transaction`, `observation`, `directory_anchor`, `annotation`, `revision`. The first two are wrapper/middleware-emitted; the fourth is atrib-system-emitted; only `observation`, `annotation`, and `revision` are emittable by agents at decision time. Until this ADR, the agent-facing API was un-locked: `@atrib/emit` accepted any of those three event_types behind one polymorphic tool whose `content` field changed shape based on a string enum; the `@atrib/recall` family shipped five sibling tools; `@atrib/trace` and `@atrib/summarize` each shipped one tool. The surface totalled eight MCP tools with mixed semantic granularity.
 
@@ -5119,7 +5119,7 @@ This is a verifier helper, not a new record type. It does not add graph edge typ
 
 **Status:** Accepted
 
-**Surface enumeration superseded by [D163](#d163-attestrecall-verb-rename-and-primitive-surface-collapse) (2026-07-14).** Handoff verification now ships as the `recall` verb's `verification` parameter, with the `atrib-verify` tool name kept as a permanent alias over the same handler. The promotion reasoning and the Pattern 3 acceptance semantics this ADR establishes stand unchanged. Immutable historical record per the [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape) precedent.
+**Surface enumeration superseded by [D164](#d164-attestrecall-verb-rename-and-primitive-surface-collapse) (2026-07-14).** Handoff verification now ships as the `recall` verb's `verification` parameter, with the `atrib-verify` tool name kept as a permanent alias over the same handler. The promotion reasoning and the Pattern 3 acceptance semantics this ADR establishes stand unchanged. Immutable historical record per the [D082](#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape) precedent.
 
 **Amends:** [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface), [D080](#d080-primitive-lifecycle--extensions-first-dedicated-mcps-upon-promotion), and [D105](#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance).
 
@@ -8149,7 +8149,7 @@ are the current coverage.
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
 
-## D163: attest/recall verb rename and primitive-surface collapse
+## D164: attest/recall verb rename and primitive-surface collapse
 
 **Date:** 2026-07-14
 

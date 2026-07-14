@@ -1,9 +1,9 @@
 # The cognitive primitives: two verbs, seven permanent aliases
 
-> atrib's agent-facing surface is two cognitive verbs, `attest` (write) and `recall` (read), per the attest/recall rename ([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)). The seven original primitives (three writes, four reads) stay mounted as permanent aliases over the same handlers, so nothing that already calls them by name breaks.
+> atrib's agent-facing surface is two cognitive verbs, `attest` (write) and `recall` (read), per the attest/recall rename ([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)). The seven original primitives (three writes, four reads) stay mounted as permanent aliases over the same handlers, so nothing that already calls them by name breaks.
 
 **Status**: STUB
-**Spec anchors**: [D079](../../DECISIONS.md) · [D106](../../DECISIONS.md) · [D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse) · `skills/atrib/SKILL.md`
+**Spec anchors**: [D079](../../DECISIONS.md) · [D106](../../DECISIONS.md) · [D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse) · `skills/atrib/SKILL.md`
 **Builds on**: every prior concept (this is the surface where agents interact with all of them)
 **Enables**: agent-facing reasoning over signed history; "agents that reason from a past they can prove"
 
@@ -46,7 +46,7 @@ To cover:
 
 ## See also
 
-- Decisions: [D079 The six core cognitive primitives](../../DECISIONS.md), [D106 Verify is promoted to cognitive primitive 7](../../DECISIONS.md), [D163 attest/recall verb rename and primitive surface collapse](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse), [D036 Bar for promoting event_type](../../DECISIONS.md), [D058 ANNOTATES edge](../../DECISIONS.md), [D059 REVISES edge](../../DECISIONS.md), [D081 In-process emit for hook-class producers](../../DECISIONS.md), [D082 atrib-emit-cli binary distribution](../../DECISIONS.md)
+- Decisions: [D079 The six core cognitive primitives](../../DECISIONS.md), [D106 Verify is promoted to cognitive primitive 7](../../DECISIONS.md), [D164 attest/recall verb rename and primitive surface collapse](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse), [D036 Bar for promoting event_type](../../DECISIONS.md), [D058 ANNOTATES edge](../../DECISIONS.md), [D059 REVISES edge](../../DECISIONS.md), [D081 In-process emit for hook-class producers](../../DECISIONS.md), [D082 atrib-emit-cli binary distribution](../../DECISIONS.md)
 - Concepts: [Graph derivation](05-graph-derivation.md) (the read primitives traverse the graph), [The chain](04-the-chain.md) (the write primitives extend it)
 - Services: `services/atrib-attest` (write verb; ships `atrib-attest` MCP server + `atrib-attest-cli` per [D082](../../DECISIONS.md)), `services/atrib-recall` (read verb, absorbs trace and verify), `services/atrib-summarize`, plus the legacy re-export shims `services/atrib-emit`, `services/atrib-annotate`, `services/atrib-revise`, `services/atrib-trace`, `services/atrib-verify`, and `services/atrib-primitives`
 - Skill: `skills/atrib/SKILL.md` (canonical agent-facing teaching doc)

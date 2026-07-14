@@ -95,7 +95,7 @@ From a monorepo checkout, use `"command": "node"` with
 live in the host env or in the cache file above. Do not write secret values
 into shared MCP config.
 
-## Relationship to the attest/recall rename ([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse))
+## Relationship to the attest/recall rename ([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse))
 
 `summarize` has no successor shape in the `recall` verb. `recall` returns
 verified material; the caller synthesizes. `@atrib/summarize` stays

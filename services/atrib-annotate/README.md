@@ -2,7 +2,7 @@
 
 **Legacy home.** The write-verb implementation moved to
 [`@atrib/attest`](../atrib-attest/README.md) per the attest/recall rename
-([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)).
+([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)).
 Annotation folds into `attest` with `ref: { kind: "annotates", target }`.
 This package re-exports the same surface and forwards the `atrib-annotate`
 binary to `@atrib/attest`'s handlers. Records are byte-identical. The

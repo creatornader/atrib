@@ -2,7 +2,7 @@
 
 **Legacy home.** The read-verb implementation moved to
 [`@atrib/recall`](../atrib-recall/README.md) per the attest/recall rename
-([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)).
+([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)).
 `trace` and `trace_forward` fold into `recall` with `shape: "walk"` and
 `direction: "backward"` or `"forward"`. This package re-exports the same
 surface and forwards the `atrib-trace` binary to `@atrib/recall`'s

@@ -5,7 +5,7 @@ and revisions under the agent's own atrib identity. The legacy `emit`,
 `atrib-annotate`, and `atrib-revise` tool names stay mounted as permanent
 aliases over the same handler, so records are byte-identical in canonical
 form regardless of which name signed them. This is the attest/recall rename
-([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)).
+([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)).
 
 ## Install
 
@@ -76,7 +76,7 @@ before the record goes through the shared sign-and-mirror pipeline.
 
 `emit`, `atrib-annotate`, and `atrib-revise` remain mounted as permanent
 aliases during the alias window described in the attest/recall rename
-([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)).
+([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)).
 Calling `atrib-annotate` and calling `attest` with `ref.kind: "annotates"`
 against the same target produce byte-identical annotation records: same key,
 same chain state, same `handleEmit` funnel. Only the `_local.producer`

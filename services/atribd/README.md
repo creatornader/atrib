@@ -5,7 +5,7 @@ legacy alias tools from one stateless-native process over Streamable HTTP
 or stdio.
 
 Per the attest/recall rename
-([D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse)),
+([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)),
 atribd mounts three primitives in process: the `attest` write home
 (`@atrib/attest`), the `recall` read home (`@atrib/recall`), and
 `@atrib/summarize`. Together they serve the seventeen-tool union: the

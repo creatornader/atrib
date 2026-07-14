@@ -4,7 +4,7 @@ MCP server for atrib's verifiable action layer. Lets agents query their own prov
 
 The consumer-side counterpart to `@atrib/attest`: attest produces signed records, recall reads them back and exposes them to the agent. Each returned record carries a `signature_verified` boolean so a poorly-written agent treats tampered records as such.
 
-## The `recall` verb and the absorb (attest/recall rename, [D163](../../DECISIONS.md#d163-attestrecall-verb-rename-and-primitive-surface-collapse))
+## The `recall` verb and the absorb (attest/recall rename, [D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse))
 
 `@atrib/recall` now exposes a `recall` tool that absorbs the eight legacy
 `recall_*` tools under a `shape` argument, absorbs `trace`/`trace_forward`
