@@ -277,7 +277,11 @@ unification and search.
 
 Proposals for discussion, ordered by fit. None is accepted by this document.
 
-**O2 (recommended): session-transcript runtime-log source adapter.** A
+**O2 (recommended, shipped 2026-07-14 as
+[D163](../DECISIONS.md#d163-session-transcript-runtime-log-source-binds-harness-transcripts-to-signed-records)
+with O3's refs included; see
+[packages/integration/examples/session-transcript-runtime-log/](../packages/integration/examples/session-transcript-runtime-log/)):
+session-transcript runtime-log source adapter.** A
 `RuntimeLogSource` for Claude-Code-style session JSONL (which covers Claude
 Code and Codex directly and the Session Traces Format by construction), plus
 an integration example that manifests a real session window, binds the signed

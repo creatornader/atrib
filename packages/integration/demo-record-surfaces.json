@@ -241,6 +241,13 @@
       "commands": ["reference-runtime-log-smoke"]
     },
     {
+      "id": "session-transcript-runtime-log",
+      "path": "examples/session-transcript-runtime-log",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["session-transcript-runtime-log-smoke"]
+    },
+    {
       "id": "dogfood-runtime-log",
       "path": "examples/dogfood-runtime-log",
       "record_class": "offline-local",
