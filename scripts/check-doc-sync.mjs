@@ -415,8 +415,8 @@ function checkDashboardViewCount() {
     }
   }
 
-  // Check the README claims.
-  const targets = ['README.md', 'apps/dashboard/README.md']
+  // Check the README + STATUS claims.
+  const targets = ['README.md', 'STATUS.md', 'apps/dashboard/README.md']
   const numberWordPattern = NUMBER_WORDS.slice(1, 16).join('|')
   const re = new RegExp(`\\b(${numberWordPattern})(\\s+|-)views?\\b`, 'gi')
   let mismatchCount = 0
@@ -542,17 +542,18 @@ function checkPublishedPackageCount() {
         if (!e.isDirectory()) continue
         try {
           const pkg = JSON.parse(read(`${dir}/${e.name}/package.json`))
-          allPkgs.push({ name: pkg.name, private: !!pkg.private })
+          allPkgs.push({ name: pkg.name, private: !!pkg.private, description: pkg.description || '' })
         } catch (_) {}
       }
     } else {
       try {
         const pkg = JSON.parse(read(`${pattern}/package.json`))
-        allPkgs.push({ name: pkg.name, private: !!pkg.private })
+        allPkgs.push({ name: pkg.name, private: !!pkg.private, description: pkg.description || '' })
       } catch (_) {}
     }
   }
-  const publicCount = allPkgs.filter((p) => !p.private).length
+  const publicPkgs = allPkgs.filter((p) => !p.private)
+  const publicCount = publicPkgs.length
   const expectedWord = NUMBER_WORDS[publicCount]
 
   const readme = read('README.md')
@@ -570,6 +571,28 @@ function checkPublishedPackageCount() {
     )
   } else {
     ok(check, `${publicCount} public packages, README agrees`)
+  }
+
+  // Current/deprecated split. Ground truth: a public package is deprecated
+  // when its package.json description leads with "Legacy home" (the D164
+  // re-export shims) or "Deprecated" (summarize). Any doc claiming
+  // "<word> current ... and <word> deprecated" must match both counts.
+  const deprecatedCount = publicPkgs.filter((p) => /^(Legacy home|Deprecated)/.test(p.description)).length
+  const currentCount = publicCount - deprecatedCount
+  const splitRe = /\b([a-z]+)\s+current(?:\s+packages)?\s+and\s+([a-z]+)\s+deprecated\b/gi
+  for (const t of ['README.md', 'STATUS.md']) {
+    const matches = findLineMatches(t, splitRe)
+    for (const sm of matches) {
+      const foundCurrent = sm.match[1].toLowerCase()
+      const foundDeprecated = sm.match[2].toLowerCase()
+      if (foundCurrent !== NUMBER_WORDS[currentCount] || foundDeprecated !== NUMBER_WORDS[deprecatedCount]) {
+        fail(
+          check,
+          `${t}:${sm.lineNo} says "${sm.match[0]}", expected "${NUMBER_WORDS[currentCount]} current and ${NUMBER_WORDS[deprecatedCount]} deprecated" (split from package.json descriptions)`,
+          { file: t, line: sm.lineNo, expectedCurrent: currentCount, expectedDeprecated: deprecatedCount },
+        )
+      }
+    }
   }
 }
 

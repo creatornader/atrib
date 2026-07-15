@@ -43,6 +43,7 @@ atrib/
   .github/
     scripts/check-log-smoke.mjs # Shared public log smoke checker for deploy and scheduled workflows. Checks response shape plus TTFB/total latency budgets for pubkey, stats, recent, feed, explorer shell, and public website/explorer asset parity.
   README.md                    # Public-facing project description (developer entry point)
+  STATUS.md                    # Implementation status: deployed services, published/deprecated package census, protocol surface implemented vs spec-defined-only. README carries the summary; this file is the enumeration.
   CLAUDE.md                    # THIS FILE: hub doc, conventions, invariants
   DESIGN.md                    # Product design system source of truth: current state, target state, tokens, components, surface backlog
   atrib-spec.md                # The single source of truth for the protocol
@@ -197,6 +198,7 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 | Doc                                  | Responsible for                                                                                                                      |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `atrib-spec.md`                      | Complete protocol specification: record format, Merkle log, graph model, policy format, SDK contract                                 |
+| `STATUS.md`                          | Implementation status: deployed services, published and deprecated package census, protocol surface implemented vs spec-defined-only |
 | `CLAUDE.md`                          | Project conventions, invariants, implementation guidance                                                                             |
 | `ARCHITECTURE.md`                    | Technical architecture overview: trust model, protocol layers, payment integration, design decisions                                 |
 | `DESIGN.md`                          | Product design system: current surface inventory, north-star direction, tokens, components, UI writing rules, design backlog         |
@@ -209,7 +211,7 @@ CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authorit
 
 ## Sync triggers
 
-The full event-to-doc mapping lives at [`DOC-SYNC-TRIGGERS.md`](DOC-SYNC-TRIGGERS.md) (68 rows; the `doc-sync-triggers-row-count` check keeps this claim honest). It was extracted from this file so the hub doc stays under the 40k-char SessionStart performance threshold. Both files are authoritative; this section is the quick reference, the linked file is the canonical source.
+The full event-to-doc mapping lives at [`DOC-SYNC-TRIGGERS.md`](DOC-SYNC-TRIGGERS.md) (69 rows; the `doc-sync-triggers-row-count` check keeps this claim honest). It was extracted from this file so the hub doc stays under the 40k-char SessionStart performance threshold. Both files are authoritative; this section is the quick reference, the linked file is the canonical source.
 A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (run via `pnpm doc-sync` and integrated into CI). It detects number-word drift between canonical sources and target documents (edge type count, node type count, dashboard view count, public package count, workspace package list completeness, payment protocol count, evidence profile count, DOC-SYNC-TRIGGERS row count). When adding a new "<word> <thing>" claim that should remain synchronized with an enumeration, extend the script with a new check to avoid reliance on manual review.
 
 ### Quick reference (most-frequent triggers)
@@ -219,6 +221,7 @@ A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (r
 | Architectural decision made    | `DECISIONS.md`: new entry with date, context, decision, alternatives                                                                                                                                             |
 | New package created            | This file (repository structure), `README.md` (packages table), and `ARCHITECTURE.md` if the public package-family summary changes; public npm packages also follow `docs/publishing-new-npm-package.md`         |
 | Product design surface changed | `DESIGN.md` first, then the surface README if a view/component contract changed                                                                                                                                  |
+| Feature ships, service deploys, package publishes or is deprecated | `STATUS.md` in the same change; `README.md` `Status` summary only if the one-paragraph summary is affected                                                                                    |
 | New framework adapter shipped  | `packages/agent/README.md` (adapter table + side-by-side quick-starts) AND `README.md` (top-level adapter table) AND `DECISIONS.md` (a Dxxx entry with the integration shape decision and rejected alternatives) |
 
 ## Critical invariants (never violate)
