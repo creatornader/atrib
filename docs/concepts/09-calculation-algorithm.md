@@ -3,7 +3,7 @@
 > A pure function from (graph, policy) to a creator → share distribution summing to 1.0. Any party with the inputs gets bit-identical output. This is what turns "we have evidence of what happened" into "and here's the math for who gets what."
 
 **Status**: DRAFT (v1, 2026-05-22; not promoted to REVIEW)
-**Spec anchors**: [§4.6](../../atrib-spec.md#46-the-calculation-algorithm) · [§4.7 Settlement Recommendation Document](../../atrib-spec.md#47-settlement-recommendation-document)
+**Spec anchors**: [payments profile §8](../../docs/payments-profile.md#8-the-calculation-algorithm) · [payments profile §9 Settlement Recommendation Document](../../docs/payments-profile.md#9-settlement-recommendation-document) (relocated from spec [§4.6](../../atrib-spec.md#46-the-calculation-algorithm) / [§4.7](../../atrib-spec.md#47-settlement-recommendation-document) per [D147](../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core))
 **Builds on**: [Records & signing](01-records-and-signing.md), [The chain](04-the-chain.md), [Graph derivation](05-graph-derivation.md), [Payments integration](08-payments-integration.md)
 **Enables**: settlement adjudication, multi-creator value distribution, dispute resolution
 
@@ -90,7 +90,7 @@ C (most recent) now gets the biggest share. The merchant configured the policy t
 Steps 10-12 of the end-to-end transaction flow (the rest is in [Payments integration](08-payments-integration.md)):
 
 - Step 10: calculation runs on (graph, policy) → distribution map
-- Step 11: settlement recommendation document constructed from the distribution ([§4.7](../../atrib-spec.md#47-settlement-recommendation-document)); optionally signed
+- Step 11: settlement recommendation document constructed from the distribution ([payments profile §9](../../docs/payments-profile.md#9-settlement-recommendation-document)); optionally signed
 - Step 12: merchant (or settlement service) actually pays out using whatever rail/treasury they prefer. atrib's job ends at step 11
 
 ## Why this structure matters
@@ -105,6 +105,6 @@ Steps 10-12 of the end-to-end transaction flow (the rest is in [Payments integra
 
 ## See also
 
-- Spec: [§4.6](../../atrib-spec.md#46-the-calculation-algorithm), [§4.7](../../atrib-spec.md#47-settlement-recommendation-document), [§4.2](../../atrib-spec.md#42-policy-document-format) (policy format), [§4.5](../../atrib-spec.md#45-session-negotiation)
+- Spec: [payments profile §8](../../docs/payments-profile.md#8-the-calculation-algorithm), [payments profile §9](../../docs/payments-profile.md#9-settlement-recommendation-document), [§4.2](../../atrib-spec.md#42-policy-document-format) (policy format), [§4.5](../../atrib-spec.md#45-session-negotiation)
 - Decisions: [D009 Fact/policy separation](../../DECISIONS.md), [D010 Default policy](../../DECISIONS.md)
 - Concepts: [Graph derivation](05-graph-derivation.md), [Payments integration](08-payments-integration.md)

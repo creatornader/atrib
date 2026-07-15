@@ -70,7 +70,7 @@ file no producer writes.
 
 - Serializing concurrent writers. The genesis race (read-tail, sign, append
   with no locking) is real and measured, and it belongs to the local daemon
-  track (P046), not this change.
+  track (P046, landed as [D148](../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime)), not this change.
 - Cross-harness chain-signal threading (the
   [D115](../DECISIONS.md#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)
   env bundle). Separate package.

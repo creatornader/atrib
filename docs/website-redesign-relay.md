@@ -68,7 +68,7 @@ where this brief and the ADR drafts conflict, the drafts win.
    the private relay supplement.
 6. **attest/recall rename sequencing** (P047): new names become primary in
    docs *inside* the alias window; legacy tool names stay documented for
-   migration. npm package pages: `@atrib/attest` will be published fresh;
+   migration. npm package pages: `@atrib/attest` was published fresh (0.1.0 live);
    `@atrib/recall` keeps its name.
 7. **Payments move from core to a profile** (P048). The website must stop
    presenting six-protocol payment detection as protocol core. Core keeps
