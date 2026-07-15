@@ -43,7 +43,9 @@ function readWorkspacePackages() {
 }
 
 async function npmLastWeek(name) {
-  const url = `https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(name).replace('%40', '@')}`
+  // Scoped names go on the path as @scope%2Fname: keep the leading @, encode the rest.
+  const encoded = name.startsWith('@') ? `@${encodeURIComponent(name.slice(1))}` : encodeURIComponent(name)
+  const url = `https://api.npmjs.org/downloads/point/last-week/${encoded}`
   const res = await fetch(url)
   if (res.status === 404) return { downloads: null, note: 'no download data (404)' }
   if (!res.ok) return { downloads: null, note: `npm API ${res.status}` }
