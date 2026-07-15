@@ -38,9 +38,9 @@
     "@noble/hashes": "^2.2.0",
     "@types/node": "^25.9.3",
     "canonicalize": "^3.0.0",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.10"
   },
   "files": [
     "dist"
