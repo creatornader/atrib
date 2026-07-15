@@ -1,6 +1,6 @@
 {
   "name": "@atrib/graph-node",
-  "version": "0.1.38",
+  "version": "0.1.39",
   "description": "Graph query service for atrib's verifiable action layer. Derives deterministic record relationships.",
   "private": true,
   "type": "module",
