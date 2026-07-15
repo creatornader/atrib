@@ -8170,6 +8170,8 @@ No new `event_type` byte ([D036](#d036-bar-for-promoting-an-extension-uri-to-atr
 
 **Alternatives considered.** (a) Sign each transcript event under the agent's key: rejected here; transcripts are bulk host-owned bodies, the [D121](#d121-runtime-log-proof-manifests-verify-host-owned-run-windows) window commitment is the boundary, and per-event signing remains [P013](#p013-new-runtime-integration-pattern---hosted-runtime-adapter-sign-events-stored-by-hosted-runtimes-like-anthropic-managed-agents)'s hosted-runtime question. (b) A public `@atrib/session-transcript` package: rejected per [D122](#d122-host-runtime-adapters-stay-distinct-from-agent-framework-adapters) until repeated implementations prove the boundary. (c) Per-harness adapters (one for Claude Code, one for Codex, one for Pi): rejected; the lenient mapping covers the interchange shape directly and degrades cleanly, and harness-specific parsing can layer on later without changing any manifest bytes. (d) Indexing transcript content into recall in the same change: deferred to its own decision per the research doc; it crosses the [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) unit-of-indexing boundary and the signed-scope boundary, and it should not ride in on a manifest adapter.
 
+**v2 (2026-07-14): Codex rollout profile.** The example gains a second line profile, `codex-rollout-jsonl/v1`, selected explicitly via the source `format` option or auto-detected by `manifestSessionTranscriptFile` when a file's first line is a `session_meta` object. The profile maps Codex rollout lines at full fidelity: event ids from `payload.id`, kinds as `<type>.<payload.type>` (for example `response_item.function_call`), session identity and CLI version from the `session_meta` payload. The claude-code profile, its fixtures, and all v1 manifest bytes are unchanged; per alternative (c) the profile layers on the same adapter without touching manifest structure. Verified against a real 208-event rollout during development.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -8714,5 +8716,25 @@ Proposal: a dogfood integration layer whose routing plane is the operator's exis
 - [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args), orchestrator-injected context, generalized here.
 - [D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys), the scope object the cost-policy vocabulary extends.
 - [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), the instrumentation-pillar pattern the accounting sidecars follow.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+
+## P052: transcript recall corpus stays composition-first until attributed paraphrase-gap misses exist
+
+**Source:** The 2026-07-14 traces deep-dive ([docs/traces-integration-research.md](docs/traces-integration-research.md), option O4) and its follow-up analysis. [D163](#d163-session-transcript-runtime-log-source-binds-harness-transcripts-to-signed-records) closed the binding half (transcript windows commit to manifests; manifests bind signed records). Host-side, the operator's machine now runs continuous manifests (SessionEnd, PreCompact, two-harness sweep) and signed memory-extraction receipts that link claude-mem observation batches to manifest records through `informed_by`. The remaining question is retrieval.
+
+**The decision in question:** should content recall (the `recall` verb's content shape per [D164](#d164-attestrecall-verb-rename-and-primitive-surface-collapse); legacy `recall_by_content`) gain a second, explicitly advisory corpus of raw transcript content, chunked per event and keyed by `(manifest_hash, event_hash)` so every retrieved chunk carries a pointer into a committed window?
+
+**Considerations.**
+
+- The [D108](#d108-observability-span-trees-are-intake-local-sidecars-are-cognitive-payload) boundary logic applies verbatim: a memory tool with FTS plus vectors already retrieves over the same transcript bytes on the operator's machine, with no verifiability. With extraction receipts in place, its derived layer now cites committed windows. Owning transcript retrieval would rebuild that tool with fewer features; owning the anchors composes with it.
+- The corpus would cross the [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) unit-of-indexing boundary and force a corpus dimension into the [D123](#d123-critical-path-content-recall-requires-complete-evidence-or-explicit-fallback)-[D126](#d126-content-recall-uses-a-durable-index-behind-complete-evidence-coverage) coverage contracts. The cache-never-evidence invariant from [docs/recall-vector-layer-research.md](docs/recall-vector-layer-research.md) applies in full.
+- Measured baseline ([D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement) instrumentation, 2,455 content-recall calls): 10% return zero results. Nothing attributes those misses to paraphrase gaps over transcript-resident content versus true absence; that attribution is the missing evidence. Instrumentation note: the read-primitives jsonl stopped recording after the primitive runtime migrated to the daemon; the pillar needs re-wiring before a postmortem can run.
+- Privacy: transcripts hold secrets, keys, and personal data (the ecosystem's own docs carry first-class warnings). An index-only corpus still moves that content into a queryable surface with its own leak profile.
+
+**Triggers for taking this up** (either suffices): (1) a recall-miss postmortem attributing real dogfood misses to paraphrase gaps over content that lives in transcripts but not in signed sidecars; (2) a cross-harness continuation flow that needs to search, not merely verify, a foreign session's transcript window. If triggered, the build shares the embedding-provider and sidecar work sketched in the vector-layer research doc.
+
+**Likely outcome (not committed):** hold indefinitely; the manifest hash stays the interface between the substrate (anchors, verification) and memory tools (retrieval).
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
