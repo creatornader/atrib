@@ -133,9 +133,8 @@ and mirror stay on the host.
   `node scripts/update-primitives-runtime.mjs --runtime atribd`. It discovers
   `com.nader.atribd.*` LaunchAgents running this package's `dist/index.js`,
   builds the dependency closure, restarts, probes health and the direct MCP
-  surface, and gates on the daemon health shape. The topology gate reports
-  skipped until the operator cutover, because the topology scripts still
-  read the legacy shape.
+  surface, and gates on the daemon health shape. All operator profiles now
+  run `@atrib/daemon`; the topology gate validates the daemon shape.
 - **Deprecated session flags.** `--session-idle-ms` and
   `ATRIB_PRIMITIVES_SESSION_IDLE_MS` are accepted and ignored with a
   one-line stderr notice, never a fatal error. The stateless daemon has no

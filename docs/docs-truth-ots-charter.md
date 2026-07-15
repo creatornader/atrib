@@ -7,13 +7,13 @@ Executor boundary: local only; no pushes, no network beyond local pnpm; no
 
 ## Deliverable A: docs-truth sweep
 
-The repo shipped D143-D164 in five days and the docs lag reality. Verify
+The repo shipped [D143](../DECISIONS.md#d143-authority-propagation-is-verifier-side-policy-over-informed_by)-[D164](../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse) in five days and the docs lag reality. Verify
 every checkable claim in the doc tree against the current state and fix
 drift. The reality anchors, all verifiable in-repo or via `npm view`:
 
-- Ledger tail is D164; the redesign plan is fully executed. In
-  `docs/redesign-upgrade-path.md`, every step now has a landed D-number
-  (D137-D141, D142, D146-D148 renamed daemon, D147 payments, D164 rename):
+- Ledger tail is [D164](../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse); the redesign plan is fully executed. In
+  `docs/redesign-upgrade-path.md`, every step now has a landed decision
+  ([D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)-[D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133), [D142](../DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions), [D146](../DECISIONS.md#d146-mirror-inheritance-is-corpus-scoped-with-a-deletable-advisory-tail-index)-[D148](../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime), [D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core), and [D164](../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)):
   mark the plan executed with per-step pointers; same for the status lines
   of any other docs/ plan or relay document that still reads future tense.
 - `docs/website-redesign-relay.md`: the atribd embargo condition (daemon
@@ -29,7 +29,7 @@ drift. The reality anchors, all verifiable in-repo or via `npm view`:
   cutover" (CLAUDE.md services tree, atribd README migration section,
   ARCHITECTURE).
 - Alias window is OPEN: fifteen legacy tool names plus the two verbs, per
-  D164. Docs must describe aliases as permanent for tool names and the
+  [D164](../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse). Docs must describe aliases as permanent for tool names and the
   window as governing package/mount retirement only.
 
 Sweep scope: README.md, CLAUDE.md, ARCHITECTURE.md, DESIGN.md,
@@ -41,16 +41,16 @@ every edited line (no em dashes, banned-vocabulary list).
 
 ## Deliverable B: OTS pending-receipt upgrade worker
 
-Decision (signed, operator-approved): a host-owned local worker owns
+Decision (signed and approved): a host-owned local worker owns
 persistence and upgrade of OpenTimestamps pending receipts; producers
 record pending receipts in `_local` sidecars at anchor time; the transport
 stays stateless. Build the reference worker:
 
-- `scripts/upgrade-ots-receipts.mjs` (host-side, like the other D128-class
+- `scripts/upgrade-ots-receipts.mjs` (host-side, like the other [D128](../DECISIONS.md#d128-host-owned-primitive-runtime-updates-are-build-restart-direct-probe)-class
   scripts): scan a mirror directory's sidecars for pending OTS receipts,
   attempt upgrade through the existing OTS transport in @atrib/verify,
   write upgraded proofs back to the sidecar (envelope-level, never inside
-  the signed record), idempotent, §5.8 silent-fail with `atrib:` logging.
+  the signed record), idempotent, [§5.8](../atrib-spec.md#58-degradation-contract) silent-fail with `atrib:` logging.
 - Offline-fixture tests (pending receipt, upgradeable receipt, malformed
   sidecar skipped, already-upgraded no-op). No live network in tests.
 - A short README section or docs/ note documenting the worker and a

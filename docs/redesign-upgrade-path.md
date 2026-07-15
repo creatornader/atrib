@@ -1,17 +1,6 @@
 # Redesign upgrade path: clean-room findings → ordered, compatible spec changes
 
-Status: executing. The first tranche of drafts was accepted and landed as
-[D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)-[D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133)
-on 2026-07-06 (from P042-P045 and P049; full drafts remain in
-`docs/adr-draft-p04x-*.md`). Step 7, the payments profile spin-out
-([D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)),
-executed on 2026-07-10: [`docs/payments-profile.md`](payments-profile.md),
-the core tombstones, the two evidence-profile registrations, and the
-conformance corpora landed; the step-one package subpath split follows as a
-coordinated change. Steps 5 ([P046](../DECISIONS.md#p046-atribd-a-public-stateless-native-local-daemon-as-the-default-primitive-topology)
-daemon consolidation) and 6 ([P047](../DECISIONS.md#p047-attestrecall-verb-rename-and-primitive-surface-collapse)
-attest/recall rename) remain pending. Source: the 2026-07-06 clean-room
-redesign analysis session. The governing constraint for every item: **no
+Status: executed. Step 1 landed as [D138](../DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture), step 2 as [D139](../DECISIONS.md#d139-session_checkpoint-event-type-the-session-stream-formalized), step 3 as [D140](../DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys), and step 4 as [D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model) on 2026-07-06. Step 5 landed as [D148](../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime) and step 7 as [D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core) on 2026-07-10. Step 6 landed as [D164](../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse) on 2026-07-14. The candidate drafts remain as historical design records. Source: the 2026-07-06 clean-room redesign analysis session. The governing constraint for every item: **no
 signed byte of any existing record, log entry, or checkpoint changes.**
 Every step is additive except step 7 (a subtraction of scope, not of bytes).
 
@@ -172,14 +161,12 @@ health gates carry over as the daemon's own probes.
 
 ## 6. Verb rename: `attest` / `recall`
 
-Tentatively agreed verbs for the consolidated surface: **`attest`** (write:
-emit/annotate/revise collapse to one handler with `ref.kind`) and **`recall`**
-(read: recall/trace/verify collapse to one handler with `shape` and
-`verification` parameters; summarize relocates to the harness). The full
-upstream/downstream impact catalog (npm packages, tool names, persisted
-producer labels, signed-bytes analysis, docs/spec/skill surfaces) lives in
-[`attest-recall-rename-impact.md`](attest-recall-rename-impact.md). No rename
-lands until that catalog's sequencing is accepted as an ADR.
+Implemented as [D164](../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse) on 2026-07-14. `attest` is the write verb for
+emit, annotate, and revise through `ref.kind`. `recall` is the read verb for
+recall, trace, and verification shapes. Summarize has no successor shape and
+stays mounted during the package and mount retirement window. The impact
+catalog lives in
+[`attest-recall-rename-impact.md`](attest-recall-rename-impact.md).
 
 ## 7. Payments profile spin-out
 

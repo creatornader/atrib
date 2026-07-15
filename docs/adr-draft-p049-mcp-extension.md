@@ -1,6 +1,6 @@
 # P049 candidate ADR draft: dev.atrib/attribution: atrib's propagation and attestation surface as a first-class MCP extension (SEP-2133)
 
-Status: candidate ADR draft, not accepted. Compact pending entry: [DECISIONS.md P049](../DECISIONS.md). Generated 2026-07-06 by the redesign-overhaul workflow (research -> draft -> adversarial judge -> revise); source plan: [redesign-upgrade-path.md](redesign-upgrade-path.md).
+Status: historical candidate draft. Implemented as [D141](../DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133). Generated 2026-07-06 by the redesign-overhaul workflow; source plan: [redesign-upgrade-path.md](redesign-upgrade-path.md).
 
 Candidate set (cross-references between drafts resolve via this table):
 
