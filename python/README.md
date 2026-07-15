@@ -16,7 +16,8 @@ cross-implementation determinism harness.
 ## Install
 
 ```bash
-pip install atrib          # once published; unpublished today, install from source:
+pip install atrib
+# or, for development, install from source:
 pip install -e python/
 ```
 

@@ -345,7 +345,7 @@ Fixtures, test harnesses, and superseded local runtimes. Marked `private: true`;
 | [`@atrib/log-dev`](packages/log-dev/README.md)                     | Dev-only in-memory log stub. Not for production.                                                                                                                                                         |
 | [`@atrib/integration`](packages/integration/README.md)             | Cross-package tests + runnable examples.                                                                                                                                                                 |
 
-The twenty designed-public packages split fourteen current and six deprecated; the tables above are the canonical list. The [`python/`](python/README.md) directory ships the `atrib` Python SDK (unpublished; PyPI name verified available 2026-07-06), the first non-TypeScript implementation of the [§1](atrib-spec.md#1-attribution-record-format) record layer, held byte-identical to the TypeScript implementation by the shared conformance corpora and a cross-implementation determinism harness.
+The twenty designed-public packages split fourteen current and six deprecated; the tables above are the canonical list. The [`python/`](python/README.md) directory ships the `atrib` Python SDK (published on PyPI), the first non-TypeScript implementation of the [§1](atrib-spec.md#1-attribution-record-format) record layer, held byte-identical to the TypeScript implementation by the shared conformance corpora and a cross-implementation determinism harness.
 
 ## Status
 
