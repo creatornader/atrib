@@ -17,7 +17,7 @@ A reproducible end-to-end verifier with 13 gate assertions across 8 named catego
 
 ## Published packages
 
-The package inventory, grouped current / deprecated / private, lives in the [README packages tables](README.md#packages). Fourteen current packages and six deprecated legacy packages are published on npm; the deprecated six stay installable as re-export shims (or, for `@atrib/summarize`, a standalone server) whose tool names remain permanent aliases per [D164](DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse). The [`python/`](python/README.md) directory ships the `atrib` Python SDK (unpublished; PyPI name verified available 2026-07-06), the first non-TypeScript implementation of the [§1](atrib-spec.md#1-attribution-record-format) record layer, held byte-identical to the TypeScript implementation by the shared conformance corpora and a cross-implementation determinism harness.
+The package inventory, grouped current / deprecated / private, lives in the [README packages tables](README.md#packages). Fourteen current packages and six deprecated legacy packages are published on npm; the deprecated six stay installable as re-export shims (or, for `@atrib/summarize`, a standalone server) whose tool names remain permanent aliases per [D164](DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse). The [`python/`](python/README.md) directory ships the `atrib` Python SDK (published on PyPI), the first non-TypeScript implementation of the [§1](atrib-spec.md#1-attribution-record-format) record layer, held byte-identical to the TypeScript implementation by the shared conformance corpora and a cross-implementation determinism harness.
 
 ## Protocol surface: implemented
 
