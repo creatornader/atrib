@@ -114,7 +114,7 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/trace start`.
 
 Published and maintained. 8 tests covering: empty-mirror, single-record, one-hop walk, multi-hop chain, depth truncation, diamond fan-in, dangling references, max_nodes cap. Full workspace tests green.
 
-The companion consumer-side primitive `atrib-summarize` (synthesizes narrative across N records) is the next ship.
+The companion consumer-side package `@atrib/summarize` (synthesizes narrative across N records) shipped and is now deprecated on npm; its tool stays mounted through the alias window.
 
 ## Part of atrib
 
