@@ -312,6 +312,18 @@ traceable to a verified window. That design deserves its own decision with
 privacy analysis (transcripts hold secrets, per the Hugging Face docs'
 first-class warning), and should not ride in on O2.
 
+**O4 resolution (2026-07-14, analyzed and parked as
+[P052](../DECISIONS.md#p052-transcript-recall-corpus-stays-composition-first-until-attributed-paraphrase-gap-misses-exist)):**
+composition stays the posture. The operator's dogfood machine now runs the
+two cheap rungs host-side (continuous transcript-window manifests on
+SessionEnd, PreCompact, and a two-harness sweep; signed memory-extraction
+receipts linking claude-mem batches to manifest records), which delivers the
+verifiable-citation property without atrib owning transcript retrieval. The
+measured baseline from read-primitive instrumentation: 10% of content-recall
+calls return zero results (253 of 2,455), but nothing yet attributes those to
+paraphrase gaps over transcript-resident content, which is the evidence the
+decision needs. P052 carries the trigger conditions.
+
 **O5 (defer, unchanged): semantic/vector layer.** Already deferred as the
 recall "Layer 2" sidecar. The traces question adds demand evidence (the
 operator runs claude-mem's vector store today) but no new reason to change

@@ -4,12 +4,14 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { canonicalRecord, hexEncode, sha256, verifyRecord } from '@atrib/mcp'
-import { verifyLogWindowManifest } from '@atrib/runtime-log'
+import { hashLogWindowManifest, verifyLogWindowManifest } from '@atrib/runtime-log'
 import { describe, expect, it } from 'vitest'
 import {
   SESSION_TRANSCRIPT_RECEIPT_PROTOCOL,
   SessionTranscriptRuntimeLogJsonlSource,
   buildSessionTranscriptProof,
+  manifestSessionTranscriptFile,
+  writeCodexRolloutFixture,
   writeSessionTranscriptFixture,
 } from '../src/session-transcript-runtime-log.js'
 
@@ -148,6 +150,78 @@ describe('session transcript runtime-log source', () => {
         signed.record_hash,
       )
     }
+  })
+
+  it('manifests a Codex rollout with full event fidelity', async () => {
+    const written = await writeCodexRolloutFixture(await tempDir('codex-rollout'))
+    const source = new SessionTranscriptRuntimeLogJsonlSource({
+      path: written.path,
+      session_id: written.session_id,
+      format: 'codex-rollout-jsonl/v1',
+    })
+    const bundle = await source.exportWindow(written.window)
+
+    expect(bundle.verification.valid).toBe(true)
+    expect(Object.values(bundle.verification.checks).every((check) => check === true)).toBe(true)
+    expect(bundle.manifest.session.format).toBe('codex-rollout-jsonl/v1')
+    expect(bundle.session_definition.format).toBe('codex-rollout-jsonl/v1')
+    expect(bundle.session_definition.runtime).toEqual({ name: 'Codex', version: '0.94.0' })
+    expect(bundle.events.map((event) => event.kind)).toContain('response_item.function_call')
+    expect(bundle.events.map((event) => event.kind)).toContain('response_item.function_call_output')
+    expect(bundle.events.map((event) => event.event_id)).toContain('item-call-001')
+    expect(bundle.events.map((event) => event.event_id)).toContain('item-output-001')
+    expect(bundle.events.find((event) => event.event_id === 'line-6')?.kind).toBe(
+      'event_msg.token_count',
+    )
+    expect(bundle.events.every((event) => event.parent_event_hashes === undefined)).toBe(true)
+  })
+
+  it('auto-detects Codex rollouts and keeps Claude Code transcripts on their profile', async () => {
+    const codex = await writeCodexRolloutFixture(await tempDir('codex-detection'))
+    const claude = await writeSessionTranscriptFixture(await tempDir('claude-detection'))
+
+    const codexBundle = await manifestSessionTranscriptFile(codex.path)
+    const claudeBundle = await manifestSessionTranscriptFile(claude.paths.main)
+
+    expect(codexBundle.manifest.session.format).toBe('codex-rollout-jsonl/v1')
+    expect(codexBundle.manifest.session.id).toBe(codex.session_id)
+    expect(claudeBundle.manifest.session.format).toBe('claude-code-session-jsonl/v1')
+    expect(claudeBundle.manifest.session.id).toBe(claude.fixture.session_id)
+  })
+
+  it('rejects a Codex rollout whose JSONL event body changes', async () => {
+    const written = await writeCodexRolloutFixture(await tempDir('codex-event-tamper'))
+    const source = new SessionTranscriptRuntimeLogJsonlSource({
+      path: written.path,
+      session_id: written.session_id,
+      format: 'codex-rollout-jsonl/v1',
+    })
+    const original = await source.exportWindow(written.window)
+    const lines = (await readFile(written.path, 'utf8')).trimEnd().split('\n')
+    const changed = JSON.parse(lines[3]!) as { payload: { name: string } }
+    changed.payload.name = 'tampered_tool'
+    lines[3] = JSON.stringify(changed)
+    await writeFile(written.path, `${lines.join('\n')}\n`)
+    const tampered = await source.exportWindow(written.window)
+    const result = verifyLogWindowManifest(original.manifest, {
+      session_definition: original.session_definition,
+      events: tampered.events,
+      projections: original.projections,
+      side_effect_receipts: original.side_effect_receipts,
+    })
+
+    expect(result.issues.map((issue) => issue.code)).toContain('event_root_mismatch')
+  })
+
+  it('produces byte-stable Codex rollout manifest hashes across fixture builds', async () => {
+    const first = await writeCodexRolloutFixture(await tempDir('codex-first'))
+    const second = await writeCodexRolloutFixture(await tempDir('codex-second'))
+    const firstBundle = await manifestSessionTranscriptFile(first.path)
+    const secondBundle = await manifestSessionTranscriptFile(second.path)
+
+    expect(hashLogWindowManifest(firstBundle.manifest)).toBe(
+      hashLogWindowManifest(secondBundle.manifest),
+    )
   })
 })
 
