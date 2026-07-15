@@ -24,7 +24,7 @@
 // and stay easy to filter in recall.
 
 import { execFileSync, spawn } from 'node:child_process'
-import { lstatSync, existsSync } from 'node:fs'
+import { lstatSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 
@@ -82,7 +82,12 @@ if (!existsSync(cliJs)) fail(`${cliJs} missing from the installed package`)
 // Gate 3: signed smoke through the installed CLI, invoked the same way the
 // hook helper's primary strategy does (this node binary + cli.js path).
 const contextId = createHash('sha256').update('atrib:refresh-global-emit-cli').digest('hex').slice(0, 32)
-const installedVersion = JSON.parse(execFileSync('node', ['-p', `JSON.stringify(require(${JSON.stringify(join(pkgDir, 'package.json'))}).version)`], { encoding: 'utf8' }))
+let installedVersion
+try {
+  installedVersion = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')).version
+} catch (e) {
+  fail(`could not read installed package.json: ${e.message}`)
+}
 const envelope = JSON.stringify({
   event_type: 'observation',
   context_id: contextId,
