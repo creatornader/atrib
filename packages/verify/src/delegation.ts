@@ -46,6 +46,27 @@ export interface DelegationScope {
   max_amount?: { currency: string; value: number }
   counterparties?: string[]
   expires_at?: number
+  cost_policy?: DelegationCostPolicy
+}
+
+/**
+ * §6.7.1 `cost_policy` sub-field (D165): the compute-spend scope of a
+ * delegated run. `model_tiers` is an allowlist of host-defined tier labels
+ * (free-form strings, same idiom as `tool_names`); `max_tokens` caps the
+ * certified run's total token spend. Both sub-fields are individually
+ * optional; absence means no constraint. Like every §6.7 constraint the
+ * outputs are signals, never invalidation (§6.7.3), and enforcement stays
+ * host-side: the protocol records the grant, the orchestrator enforces it.
+ */
+export interface DelegationCostPolicy {
+  model_tiers?: string[]
+  max_tokens?: number
+}
+
+/** Caller-supplied usage facts for {@link checkCostPolicy}. */
+export interface CostPolicyUsage {
+  model_tier?: string
+  tokens_spent?: number
 }
 
 /**
@@ -246,10 +267,12 @@ export async function delegationCertErrors(cert: DelegationCertificate): Promise
  *
  * Checks the constraints resolvable from the record alone: `tool_names`
  * (when the record discloses §8.2 `tool_name`) and `event_types`.
- * `max_amount` / `counterparties` require protocol-event facts the
- * compact signed record does not carry; they produce no mismatch here
- * (same posture the conformance corpus pins). `attenuation_ok` is `null`
- * until a caller supplies the principal's directory envelope.
+ * `max_amount` / `counterparties` / `cost_policy` require facts the
+ * compact signed record does not carry (transaction amounts, counterparty
+ * identity, model tier and token spend); they produce no mismatch here
+ * (same posture the conformance corpus pins). Callers holding usage facts
+ * evaluate `cost_policy` with {@link checkCostPolicy}. `attenuation_ok`
+ * is `null` until a caller supplies the principal's directory envelope.
  */
 export function checkDelegationScope(
   record: DelegatedRecord,
@@ -267,6 +290,43 @@ export function checkDelegationScope(
     mismatches.push('event_types')
   }
   return { in_scope: mismatches.length === 0, attenuation_ok: null, mismatches }
+}
+
+/**
+ * §6.7.2 cost-policy check (D165). Evaluable only when the caller holds
+ * usage facts: signed records do not carry model tier or token spend
+ * (accounting lives in local sidecar and join-record content per the
+ * orchestration conventions), so this never runs inside the record-only
+ * §1.11.4 walk. A host verifying a join, or a receiver deciding whether a
+ * leg stayed inside its certified grant, supplies the claimed usage and
+ * reads the mismatch list. Signals only, never invalidation (§6.7.3):
+ * an over-budget leg's records remain valid; the mismatch is a fact for
+ * the accepting party to weigh.
+ *
+ * Absent constraints and absent usage facts both produce no mismatch:
+ * a policy without `max_tokens` caps nothing, and usage without
+ * `tokens_spent` claims nothing checkable.
+ */
+export function checkCostPolicy(
+  policy: DelegationCostPolicy,
+  usage: CostPolicyUsage,
+): { in_scope: boolean; mismatches: string[] } {
+  const mismatches: string[] = []
+  if (
+    policy.model_tiers &&
+    usage.model_tier !== undefined &&
+    !policy.model_tiers.includes(usage.model_tier)
+  ) {
+    mismatches.push('cost_policy.model_tiers')
+  }
+  if (
+    policy.max_tokens !== undefined &&
+    usage.tokens_spent !== undefined &&
+    usage.tokens_spent > policy.max_tokens
+  ) {
+    mismatches.push('cost_policy.max_tokens')
+  }
+  return { in_scope: mismatches.length === 0, mismatches }
 }
 
 function certWindow(cert: DelegationCertificate): { from: number; to: number } {

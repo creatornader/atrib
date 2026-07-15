@@ -29,6 +29,7 @@ import { sha512 } from '@noble/hashes/sha2.js'
 import { base64urlEncode, genesisChainRoot } from '@atrib/mcp'
 import {
   checkDelegationScope,
+  checkCostPolicy,
   delegationCertErrors,
   delegationCertHash,
   delegationCertSignatureVerifies,
@@ -503,5 +504,56 @@ describe('degradation: the walk never throws', () => {
     expect(checkDelegationScope(record, { tool_names: ['other'] }).mismatches).toEqual([
       'tool_names',
     ])
+  })
+
+  it('cost_policy in a cert scope produces no mismatch from the record alone (D165)', async () => {
+    const record = runRecord(await pub(R1_SEED), T0 + 1_000)
+    const check = checkDelegationScope(record, {
+      cost_policy: { model_tiers: ['economy'], max_tokens: 1 },
+    })
+    expect(check).toEqual({ in_scope: true, attenuation_ok: null, mismatches: [] })
+  })
+})
+
+describe('checkCostPolicy (§6.7.2 / D165)', () => {
+  it('passes usage inside the grant', () => {
+    expect(
+      checkCostPolicy(
+        { model_tiers: ['economy', 'standard'], max_tokens: 500_000 },
+        { model_tier: 'standard', tokens_spent: 120_000 },
+      ),
+    ).toEqual({ in_scope: true, mismatches: [] })
+  })
+
+  it('flags a tier outside the allowlist', () => {
+    expect(
+      checkCostPolicy({ model_tiers: ['economy'] }, { model_tier: 'premium' }).mismatches,
+    ).toEqual(['cost_policy.model_tiers'])
+  })
+
+  it('flags spend over the token budget', () => {
+    expect(
+      checkCostPolicy({ max_tokens: 100_000 }, { tokens_spent: 100_001 }).mismatches,
+    ).toEqual(['cost_policy.max_tokens'])
+  })
+
+  it('spend equal to the budget is inside the grant', () => {
+    expect(checkCostPolicy({ max_tokens: 100_000 }, { tokens_spent: 100_000 }).in_scope).toBe(true)
+  })
+
+  it('absent constraints and absent usage facts produce no mismatch', () => {
+    expect(checkCostPolicy({}, { model_tier: 'premium', tokens_spent: 9e9 }).in_scope).toBe(true)
+    expect(
+      checkCostPolicy({ model_tiers: ['economy'], max_tokens: 1 }, {}).in_scope,
+    ).toBe(true)
+  })
+
+  it('reports both mismatches together, signals only', () => {
+    const check = checkCostPolicy(
+      { model_tiers: ['economy'], max_tokens: 10 },
+      { model_tier: 'premium', tokens_spent: 11 },
+    )
+    expect(check.in_scope).toBe(false)
+    expect(check.mismatches).toEqual(['cost_policy.model_tiers', 'cost_policy.max_tokens'])
   })
 })

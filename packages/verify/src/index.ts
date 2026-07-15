@@ -293,6 +293,7 @@ export { graphLabelFromEventTypeUri } from './types.js'
 // never affects record validity.
 export {
   checkDelegationScope,
+  checkCostPolicy,
   delegationCertErrors,
   delegationCertHash,
   delegationCertSignatureVerifies,
@@ -306,6 +307,8 @@ export type {
   DelegationCertificate,
   DelegationOutcome,
   DelegationScope,
+  DelegationCostPolicy,
+  CostPolicyUsage,
   DelegationScopeCheck,
   EvaluateDelegationOptions,
   KeyRevocationRecordLike,
