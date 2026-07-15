@@ -16,8 +16,7 @@ cryptographic primitive is the existing `@atrib/mcp` one.
 pnpm add @atrib/sdk
 ```
 
-Version 0.1.0 is first-published manually. Later releases use npm Trusted
-Publisher through `release.yml`. `@atrib/recall`, `@atrib/verify`, and
+Releases publish through npm Trusted Publisher via `release.yml`. `@atrib/recall`, `@atrib/verify`, and
 `@atrib/verify-mcp` are optional peers. Install them alongside for the
 in-process recall and verify fallbacks. Without them, those paths degrade to
 a typed unavailable outcome per the degradation contract below.
@@ -522,8 +521,8 @@ discovery, not something to route around.
 
 ## Status
 
-v0.1.0, unpublished (first-publish pending; see
-`docs/publishing-new-npm-package.md` and the Changesets ignore list).
+Published on npm and maintained. Releases flow through Changesets and npm
+Trusted Publisher.
 
 ## Part of atrib
 

@@ -64,7 +64,7 @@ Is anyone outside the operator interacting with atrib at all?
 
 | Metric | Source | Direction | Notes |
 |---|---|---|---|
-| `@atrib/mcp` weekly downloads | npm registry (once published) | growing | Currently not published; first publish enables this metric |
+| `@atrib/mcp` weekly downloads | npm registry | growing | Published; collectible from the npm downloads API |
 | `@atrib/agent` weekly downloads | npm registry | growing | Same |
 | `@atrib/verify` weekly downloads | npm registry | growing | The merchant verifier is the ecosystem-shaped audience |
 | GitHub stars / forks | `creatornader/atrib` | trend | Soft signal; matters less than downloads |
@@ -114,7 +114,7 @@ Cadence: re-read at the same review meetings as the higher tiers. The point is t
 
 2. Tier 1 needs a `scripts/metrics.mjs` that runs against `log.atrib.dev` and emits weekly JSON: tree size delta, cumulative and active creator_keys, chain depth distribution, tx ratio. Estimate: 1-2 hours. Output committed to `metrics/` directory weekly.
 
-3. Tier 2 starts when the first npm package gets published. Until then, the cell is "n/a, packages not published."
+3. Tier 2 started with the first npm publishes; the download cells are collectible from the npm registry API.
 
 4. Tier 3 starts when the first non-operator party touches atrib. Until then, the cell is "0, no external interaction."
 

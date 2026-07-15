@@ -4,7 +4,7 @@ Private local MCP runtime for atrib's verifiable action layer dogfood.
 
 Per the attest/recall rename ([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)), `atrib-primitives` mounts three primitives in process: the `attest` write home (`@atrib/attest`), the `recall` read home (`@atrib/recall`), and `@atrib/summarize`. Together they serve the seventeen-tool union (fifteen legacy tool names plus `attest` plus `recall`) through one local runtime. It supports direct stdio for compatibility, Streamable HTTP for host-owned dogfood configs that should share one primitive backend across active threads for the same agent profile, and stdio-to-HTTP proxy mode for clients that only support stdio MCP.
 
-It does not replace the public packages. `@atrib/attest`, `@atrib/recall`, and `@atrib/summarize` remain the published surfaces; `@atrib/emit`, `@atrib/annotate`, `@atrib/revise`, `@atrib/trace`, and `@atrib/verify-mcp` remain published as legacy re-export shims. This package is private and exists to reduce local process bloat in dogfood configs.
+It does not replace the public packages. `@atrib/attest`, `@atrib/recall`, and `@atrib/summarize` remain the published surfaces; `@atrib/emit`, `@atrib/annotate`, `@atrib/revise`, `@atrib/trace`, and `@atrib/verify-mcp` remain published as legacy re-export shims. This package is private and exists to reduce local process bloat in dogfood configs. It is superseded as the recommended local topology by `@atrib/daemon` (`services/atribd/`, binary `atribd`) per [D148](../../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime); it is retained for compatibility and test coverage.
 
 ## Build
 

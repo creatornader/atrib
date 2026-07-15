@@ -2,6 +2,8 @@
 
 MCP server exposing the `summarize` tool for atrib's verifiable action layer. It synthesizes a narrative across N records using an OpenAI-compatible LLM.
 
+**Deprecated on npm.** `summarize` has no successor shape in the `recall` verb ([D164](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)): the read surface returns verified material and the caller synthesizes. The tool stays mounted through the alias window.
+
 Closes the consumer-side cognitive-loop primitive companion to `atrib-trace`: trace returns the declared-relationship path; summarize returns the synthesized meaning across the selected records. Both read the same local mirror including the optional `_local` sidecar.
 
 ## Install
@@ -98,9 +100,8 @@ into shared MCP config.
 ## Relationship to the attest/recall rename ([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse))
 
 `summarize` has no successor shape in the `recall` verb. `recall` returns
-verified material; the caller synthesizes. `@atrib/summarize` stays
-mounted through the alias window. When the window closes, the npm package
-is deprecated without a replacement pointer.
+verified material; the caller synthesizes. The npm package is deprecated without a
+replacement pointer; the tool stays mounted through the alias window.
 
 ## Status
 

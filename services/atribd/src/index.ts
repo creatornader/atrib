@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * atribd: the local daemon for atrib's seven cognitive primitives.
+ * atribd: the local daemon for atrib's cognitive surface.
  *
- * One host-owned process mounts the seven primitive MCP servers in process
- * and serves their fifteen physical tools as thin aliases over two internal
- * handlers (write, read). Transports: stateless Streamable HTTP (the
+ * One host-owned process mounts the attest write home, the recall read
+ * home, and summarize in process and serves the seventeen-tool alias-window
+ * union (fifteen legacy names plus the attest and recall verbs) as thin
+ * aliases over two internal handlers (write, read). Transports: stateless Streamable HTTP (the
  * recommended daemon topology), direct stdio (in-process), and a
  * stdio-to-HTTP proxy shim for startup-spawn harnesses.
  *

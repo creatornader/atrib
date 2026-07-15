@@ -102,7 +102,7 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/revise start`.
 
 ## Status
 
-Published and maintained. Cognitive primitive #3 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/annotate` covers the importance-and-meaning primitive (annotation event_type).
+Deprecated on npm; superseded by `@atrib/attest` (`ref.kind: "revises"`), with the `atrib-revise` tool name mounted as a permanent alias. Historically cognitive primitive #3 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/annotate` covers the importance-and-meaning primitive (annotation event_type).
 
 ## License
 

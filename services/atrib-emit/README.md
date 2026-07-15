@@ -231,7 +231,7 @@ Broad default dogfood configs should wait for the process-health rollout gate in
 
 The package ships three binaries:
 
-- **`atrib-emit`**: the MCP server. Long-lived in an agent's MCP host (Claude Code, Claude Desktop). Surfaces the seven [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface) cognitive primitives to the agent at tool-discovery time. Use this for interactive in-session signing.
+- **`atrib-emit`**: the MCP server. Long-lived in an agent's MCP host (Claude Code, Claude Desktop). Surfaces the write surface at tool-discovery time: `emit` plus the `attest` verb it aliases per [D164](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse). Use this for interactive in-session signing.
 - **`atrib-emit-cli`**: a thin command-line wrapper around `emitInProcess` per [D082](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d082-cli-binary-distribution-of-emitinprocess-supersedes-d081s-integration-shape). Reads one JSON envelope on stdin, signs the record in-process, writes the `EmitOutput` JSON to stdout. Use this for hook-class producers (Claude Code PostToolUse + lifecycle hooks, watchers, batch jobs) that spawn a short-lived signer rather than holding an MCP server warm.
 - **`atrib-local-substrate`**: a host-owned loopback HTTP coordinator process for opt-in P042 trials. Use this under a supervisor when several harnesses should target one local substrate boundary.
 
