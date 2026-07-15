@@ -1,6 +1,6 @@
 # P048 candidate ADR draft: Payments profile spin-out from protocol core
 
-Status: candidate ADR draft, not accepted. Compact pending entry: [DECISIONS.md P048](../DECISIONS.md). Generated 2026-07-06 by the redesign-overhaul workflow (research -> draft -> adversarial judge -> revise); source plan: [redesign-upgrade-path.md](redesign-upgrade-path.md).
+Status: historical candidate draft. Implemented as [D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). Generated 2026-07-06 by the redesign-overhaul workflow; source plan: [redesign-upgrade-path.md](redesign-upgrade-path.md).
 
 Candidate set (cross-references between drafts resolve via this table):
 
