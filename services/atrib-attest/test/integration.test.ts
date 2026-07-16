@@ -55,7 +55,8 @@ async function startLogStub(): Promise<LogStub> {
           )
         } catch (e) {
           res.writeHead(400, { 'content-type': 'application/json' })
-          res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }))
+          console.error('stub log server rejected entry:', e)
+          res.end(JSON.stringify({ error: 'invalid entry' }))
         }
       })
     } else {
