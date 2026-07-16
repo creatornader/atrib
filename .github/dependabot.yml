@@ -55,6 +55,14 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    ignore:
+      # Held at 0.19.0: 0.20.0 enforces SD-JWT digest uniqueness and rejects
+      # the pinned AP2 / VI reference artifacts, whose L2 payloads carry the
+      # same disclosure digest in both _sd and delegate_payload. Taking the
+      # bump needs the upstream duplicate-reference question resolved and the
+      # reference artifacts regenerated first (tracked follow-up, 2026-07-15).
+      - dependency-name: "@sd-jwt/core"
+      - dependency-name: "@sd-jwt/sd-jwt-vc"
     groups:
       npm-minor-patch:
         update-types:

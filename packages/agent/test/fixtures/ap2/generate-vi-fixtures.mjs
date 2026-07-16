@@ -51,6 +51,11 @@ const keys = {
   agent: keyFromSeed('agt-fixture-1', 'agent'),
 }
 
+const immediateKeys = {
+  issuer: keyFromSeed('iss-1', 'immediate-issuer-2026-07'),
+  user: keyFromSeed('usr-1', 'immediate-user-2026-07'),
+}
+
 function jsonBase64url(value) {
   return base64url(JSON.stringify(value))
 }
@@ -195,7 +200,9 @@ const l2 = signJwt(
     exp: expiresSeconds,
     sd_hash: hashAscii(l1),
     _sd_alg: 'sha-256',
-    _sd: [openCheckoutDisclosure.digest, openPaymentDisclosure.digest],
+    // SD-JWT digest uniqueness: each disclosure digest appears exactly once
+    // in the payload (enforced by @sd-jwt/core >= 0.20.0), so the mandate
+    // digests live only in the delegate_payload array-element refs.
     delegate_payload: [
       { '...': openCheckoutDisclosure.digest },
       { '...': openPaymentDisclosure.digest },
@@ -218,7 +225,6 @@ const l3Checkout = signJwt(
     exp: expiresSeconds,
     sd_hash: hashAscii(l2Presentation),
     _sd_alg: 'sha-256',
-    _sd: [closedCheckoutDisclosure.digest],
     delegate_payload: [{ '...': closedCheckoutDisclosure.digest }],
   },
   keys.agent,
@@ -233,7 +239,6 @@ const l3Payment = signJwt(
     exp: expiresSeconds,
     sd_hash: hashAscii(l2Presentation),
     _sd_alg: 'sha-256',
-    _sd: [closedPaymentDisclosure.digest],
     delegate_payload: [{ '...': closedPaymentDisclosure.digest }],
   },
   keys.agent,
@@ -358,4 +363,86 @@ await writeJson('vi_autonomous_negative_matrix.json', {
       expectedErrors: ['vi_signature_key_missing'],
     },
   ],
+})
+
+// ── vi_immediate_evidence.json ────────────────────────────────────────
+// Regenerated here 2026-07-15 (originally hand-signed in PR #145, keys not
+// recoverable). Every literal value matches the original fixture; only the
+// signing keys rotated to deterministic seeds and the L2 payload dropped
+// its duplicate `_sd` digest listing: SD-JWT digest uniqueness (enforced by
+// @sd-jwt/core >= 0.20.0) allows each disclosure digest exactly once, so
+// the mandate digests live only in the delegate_payload array-element refs.
+// Disclosures are byte-identical to the original, so the receipt
+// references and closed-mandate encodings are reproduced verbatim.
+
+const immCheckoutDisclosure = disclosure('c', {
+  vct: 'mandate.checkout.1',
+  checkout_jwt: 'checkout.jwt.sig',
+  checkout_hash: 'sC6pCJS01hDsD4kcqTFzpYUr-gc9f4K8k7SM6ho9BCY',
+})
+const immPaymentDisclosure = disclosure('p', {
+  vct: 'mandate.payment.1',
+  payment_amount: { currency: 'USD', amount: 123 },
+  payee: { name: 'M' },
+  transaction_id: 'sC6pCJS01hDsD4kcqTFzpYUr-gc9f4K8k7SM6ho9BCY',
+})
+
+const immL1 = signJwt(
+  {
+    iss: 'iss',
+    sub: 'u',
+    iat: 1,
+    exp: 9_999_999_999,
+    vct: 'credential.provider.1',
+    cnf: { jwk: publicJwk(immediateKeys.user) },
+  },
+  immediateKeys.issuer,
+  'sd+jwt',
+)
+
+const immL2 = signJwt(
+  {
+    nonce: 'n',
+    aud: 'net',
+    iat: 2,
+    exp: 9_999_999_999,
+    sd_hash: hashAscii(immL1),
+    _sd_alg: 'sha-256',
+    delegate_payload: [
+      { '...': immCheckoutDisclosure.digest },
+      { '...': immPaymentDisclosure.digest },
+    ],
+  },
+  immediateKeys.user,
+  'kb-sd-jwt',
+)
+
+await writeJson('vi_immediate_evidence.json', {
+  trustedIssuerKeys: [publicJwk(immediateKeys.issuer)],
+  ap2: {
+    paymentReceipt: {
+      status: 'Success',
+      iss: 'pisp',
+      iat: 3,
+      reference: immPaymentDisclosure.digest,
+      payment_id: 'pay',
+      psp_confirmation_id: 'psp',
+      network_confirmation_id: 'net',
+    },
+    checkoutReceipt: {
+      status: 'Success',
+      iss: 'm',
+      iat: 3,
+      reference: immCheckoutDisclosure.digest,
+      order_id: 'ord',
+    },
+    closedPaymentMandate: immPaymentDisclosure.encoded,
+    closedCheckoutMandate: immCheckoutDisclosure.encoded,
+  },
+  vi: {
+    credentials: [
+      { layer: 'L1', sdJwt: immL1 },
+      { layer: 'L2', sdJwt: `${immL2}~${immCheckoutDisclosure.encoded}~${immPaymentDisclosure.encoded}~` },
+    ],
+  },
 })

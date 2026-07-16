@@ -23,7 +23,7 @@ describe('Google ADK TypeScript decision ledger proof', () => {
     expect(result.strategy).toBe('atrib-google-adk-typescript-decision-ledger-proof-v1')
     expect(result.adk).toMatchObject({
       package: '@google/adk',
-      version: '1.2.0',
+      version: '1.3.0',
       runner: 'InMemoryRunner',
       plugin: 'BasePlugin',
       tool: 'FunctionTool',
