@@ -49,9 +49,9 @@
     "jose": "6.2.3"
   },
   "devDependencies": {
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.1.1",
     "fast-check": "^4.9.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "repository": {
