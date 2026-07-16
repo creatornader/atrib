@@ -91,6 +91,7 @@ interface CapabilityScope {
   counterparties?: string[]
   event_types?: string[]
   expires_at?: number
+  cost_policy?: { model_tiers?: string[]; max_tokens?: number }
 }
 
 /** Delegation certificate per §1.11.1. Optional fields omitted (not null) when absent. */
@@ -487,6 +488,76 @@ async function main(): Promise<void> {
         context_bound: true,
         cert_bound: true,
         scope_check: { in_scope: false, attenuation_ok: null, mismatches: ['tool_names'] },
+        revoked: false,
+        errors: [],
+      },
+    },
+  })
+
+  // ── Case: walk-scope-cost-policy ──────────────────────────────────
+  const ctxC9 = 'c9'.repeat(16)
+  const certC9 = await signCertificate(
+    {
+      cert_type: 'atrib/delegation-cert/v1',
+      context_id: ctxC9,
+      not_after: CERT_NOT_AFTER,
+      not_before: CERT_NOT_BEFORE,
+      principal_key: principalKey,
+      run_pubkey: runKey,
+      scope: {
+        tool_names: ['search', 'read_email'],
+        cost_policy: { model_tiers: ['economy', 'standard'], max_tokens: 500_000 },
+      },
+    },
+    PRINCIPAL_SEED,
+  )
+  const walkCostPolicyRecord = await runKeyGenesis(
+    ctxC9,
+    'c9',
+    REFERENCE_TIME_MS + 60_000,
+    'search',
+    certC9,
+    RUN_SEED,
+    runKey,
+  )
+  writeCase('walk-scope-cost-policy', {
+    name: 'walk-scope-cost-policy',
+    spec_section: '1.11',
+    description:
+      'A certificate whose scope carries the D165 cost_policy sub-field (model_tiers allowlist, max_tokens budget). From the record alone the walk reports no cost_policy mismatch: signed records carry neither model tier nor token spend, so cost_policy is evaluable only against caller-supplied usage facts (checkCostPolicy, §6.7.2). The usage_vectors pin that evaluation: within-grant usage is in scope; a tier outside the allowlist plus spend over the budget produce both mismatches. Signals, never invalidation (§6.7.3): the record signature and depth-1 resolution are unaffected.',
+    input: {
+      record: walkCostPolicyRecord,
+      genesis_record: walkCostPolicyRecord,
+      certificates: [certC9],
+      usage_vectors: [
+        {
+          name: 'within-grant',
+          usage: { model_tier: 'standard', tokens_spent: 120_000 },
+          expected: { in_scope: true, mismatches: [] },
+        },
+        {
+          name: 'tier-and-budget-exceeded',
+          usage: { model_tier: 'premium', tokens_spent: 500_001 },
+          expected: {
+            in_scope: false,
+            mismatches: ['cost_policy.model_tiers', 'cost_policy.max_tokens'],
+          },
+        },
+      ],
+    },
+    expected: {
+      record_signature_valid: true,
+      record_hash: recordHash(walkCostPolicyRecord),
+      signal_not_block: true,
+      delegation: {
+        depth: 1,
+        principal_key: principalKey,
+        cert_hash: certHash(certC9),
+        cert_valid: true,
+        in_window: true,
+        context_bound: true,
+        cert_bound: true,
+        scope_check: { in_scope: true, attenuation_ok: null, mismatches: [] },
         revoked: false,
         errors: [],
       },
@@ -1059,6 +1130,7 @@ async function main(): Promise<void> {
     'walk-valid',
     'walk-expired',
     'walk-scope-mismatch',
+    'walk-scope-cost-policy',
     'walk-wrong-principal-signature',
     'walk-run-key-mismatch',
     'depth0-identity',
@@ -1085,7 +1157,7 @@ async function main(): Promise<void> {
       rogue_pubkey: rogueKey,
     },
     note:
-      'Six case families: certificate canonical form + signing (4), verifier walk (5), ' +
+      'Six case families: certificate canonical form + signing (4), verifier walk (6), ' +
       'depth-0 byte-identity against spec/conformance/1.4/signing-vectors.json (1), ' +
       'delegation_cert_hash genesis lex-slotting (1), run-key revocation extending ' +
       'spec/conformance/1.9/ (2), D067 multi-producer cert_bound: null posture (1). ' +

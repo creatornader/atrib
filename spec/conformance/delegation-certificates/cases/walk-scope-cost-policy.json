@@ -1,0 +1,103 @@
+{
+  "name": "walk-scope-cost-policy",
+  "spec_section": "1.11",
+  "description": "A certificate whose scope carries the D165 cost_policy sub-field (model_tiers allowlist, max_tokens budget). From the record alone the walk reports no cost_policy mismatch: signed records carry neither model tier nor token spend, so cost_policy is evaluable only against caller-supplied usage facts (checkCostPolicy, §6.7.2). The usage_vectors pin that evaluation: within-grant usage is in scope; a tier outside the allowlist plus spend over the budget produce both mismatches. Signals, never invalidation (§6.7.3): the record signature and depth-1 resolution are unaffected.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:f68aa2dbeac17e81c6fc8a96138128731465ac20d7a296ee7f17b43983ce6e51",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "EB103fMYnKH3khtwpKR572zQtKuv4DRo28jpBgjFYFpKJYjWvG_uHKVXDUU3eBqz1p4zcPB3R2jFKBAE6c9kAw",
+      "delegation_cert_hash": "sha256:48435d55996b9451da2a2ad19d81490babb9d5f586fd0ab6e8e25a021ccfd3f6"
+    },
+    "genesis_record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9",
+      "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "chain_root": "sha256:f68aa2dbeac17e81c6fc8a96138128731465ac20d7a296ee7f17b43983ce6e51",
+      "event_type": "https://atrib.dev/v1/types/tool_call",
+      "context_id": "c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9",
+      "timestamp": 1767225660000,
+      "tool_name": "search",
+      "signature": "EB103fMYnKH3khtwpKR572zQtKuv4DRo28jpBgjFYFpKJYjWvG_uHKVXDUU3eBqz1p4zcPB3R2jFKBAE6c9kAw",
+      "delegation_cert_hash": "sha256:48435d55996b9451da2a2ad19d81490babb9d5f586fd0ab6e8e25a021ccfd3f6"
+    },
+    "certificates": [
+      {
+        "cert_type": "atrib/delegation-cert/v1",
+        "context_id": "c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9",
+        "not_after": 1767229200000,
+        "not_before": 1767225600000,
+        "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "run_pubkey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "scope": {
+          "tool_names": [
+            "search",
+            "read_email"
+          ],
+          "cost_policy": {
+            "model_tiers": [
+              "economy",
+              "standard"
+            ],
+            "max_tokens": 500000
+          }
+        },
+        "signature": "ZXqClVv_uBTB-XNUC_BL_BcqgL9yzPC4Y3TwZZuVTnnvH28sezixTNSUVf521KcPAJy9K5zSMwdLVYXt1M87Cg"
+      }
+    ],
+    "usage_vectors": [
+      {
+        "name": "within-grant",
+        "usage": {
+          "model_tier": "standard",
+          "tokens_spent": 120000
+        },
+        "expected": {
+          "in_scope": true,
+          "mismatches": []
+        }
+      },
+      {
+        "name": "tier-and-budget-exceeded",
+        "usage": {
+          "model_tier": "premium",
+          "tokens_spent": 500001
+        },
+        "expected": {
+          "in_scope": false,
+          "mismatches": [
+            "cost_policy.model_tiers",
+            "cost_policy.max_tokens"
+          ]
+        }
+      }
+    ]
+  },
+  "expected": {
+    "record_signature_valid": true,
+    "record_hash": "sha256:877a2bee6535d6c398283f89f6c907ef1f1ead92a326a1f3fec8fd75c7b9bc42",
+    "signal_not_block": true,
+    "delegation": {
+      "depth": 1,
+      "principal_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "cert_hash": "sha256:48435d55996b9451da2a2ad19d81490babb9d5f586fd0ab6e8e25a021ccfd3f6",
+      "cert_valid": true,
+      "in_window": true,
+      "context_bound": true,
+      "cert_bound": true,
+      "scope_check": {
+        "in_scope": true,
+        "attenuation_ok": null,
+        "mismatches": []
+      },
+      "revoked": false,
+      "errors": []
+    }
+  }
+}

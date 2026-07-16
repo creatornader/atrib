@@ -47,6 +47,10 @@ export const SESSION_TRANSCRIPT_RECEIPT_SCHEMA =
 export const SESSION_TRANSCRIPT_TOOL_USE_PROJECTION = 'session-transcript.tool_use' as const
 export const SESSION_TRANSCRIPT_RECEIPT_PROTOCOL = 'session-transcript.atrib-record' as const
 
+export type SessionTranscriptJsonlFormat =
+  | 'claude-code-session-jsonl/v1'
+  | 'codex-rollout-jsonl/v1'
+
 export interface SessionTranscriptRow {
   readonly line: number
   readonly value: Record<string, unknown>
@@ -68,7 +72,7 @@ export interface SessionTranscriptSessionDefinition {
     readonly version: string
   }
   readonly runtime: RuntimeLogRuntimeRef
-  readonly format: 'claude-code-session-jsonl/v1'
+  readonly format: SessionTranscriptJsonlFormat
   readonly storage: {
     readonly kind: 'append-only-jsonl'
     readonly raw_bodies: 'local-only'
@@ -103,6 +107,11 @@ export interface SessionTranscriptRuntimeLogJsonlSourceOptions {
   readonly session_id?: string
   readonly source_version?: string
   readonly runtime?: RuntimeLogRuntimeRef
+  readonly format?: SessionTranscriptJsonlFormat
+}
+
+export interface ManifestSessionTranscriptFileOptions {
+  readonly format?: SessionTranscriptJsonlFormat
 }
 
 export interface SessionTranscriptFixture {
@@ -138,19 +147,103 @@ export interface SessionTranscriptRuntimeLogProof {
   }
 }
 
+interface SessionTranscriptLineProfile {
+  readonly format: SessionTranscriptJsonlFormat
+  row(
+    value: Record<string, unknown>,
+    line: number,
+    sessionId: string | undefined,
+  ): SessionTranscriptRow
+  sessionId(lines: readonly { readonly line: number; readonly value: Record<string, unknown> }[]): string | undefined
+  runtime(rows: readonly SessionTranscriptRow[]): RuntimeLogRuntimeRef
+}
+
+const CLAUDE_CODE_SESSION_JSONL_PROFILE: SessionTranscriptLineProfile = {
+  format: 'claude-code-session-jsonl/v1',
+  row(value, line) {
+    const uuid = readOptionalString(value, 'uuid')
+    const sessionId = readOptionalString(value, 'sessionId')
+    const timestamp = readOptionalString(value, 'timestamp')
+    const parentUuid = readOptionalString(value, 'parentUuid')
+    return {
+      line,
+      value,
+      event_id: uuid ?? `line-${line}`,
+      ...(sessionId ? { session_id: sessionId } : {}),
+      type: readOptionalString(value, 'type') ?? 'unknown',
+      ...(timestamp ? { timestamp } : {}),
+      ...(parentUuid ? { parent_uuid: parentUuid } : {}),
+      ...(typeof value.isSidechain === 'boolean' ? { is_sidechain: value.isSidechain } : {}),
+      event_hash: hashRuntimeLogEvent(value),
+    }
+  },
+  sessionId() {
+    return undefined
+  },
+  runtime() {
+    return { name: 'Claude Code', version: 'unknown' }
+  },
+}
+
+const CODEX_ROLLOUT_JSONL_PROFILE: SessionTranscriptLineProfile = {
+  format: 'codex-rollout-jsonl/v1',
+  row(value, line, sessionId) {
+    const payload = isRecord(value.payload) ? value.payload : undefined
+    const type = readOptionalString(value, 'type') ?? 'unknown'
+    const payloadType = payload ? readOptionalString(payload, 'type') : undefined
+    const eventId = payload ? readNonEmptyString(payload, 'id') : undefined
+    const timestamp = readOptionalString(value, 'timestamp')
+    return {
+      line,
+      value,
+      event_id: eventId ?? `line-${line}`,
+      ...(sessionId ? { session_id: sessionId } : {}),
+      type: payloadType ? `${type}.${payloadType}` : type,
+      ...(timestamp ? { timestamp } : {}),
+      event_hash: hashRuntimeLogEvent(value),
+    }
+  },
+  sessionId(lines) {
+    const metadata = lines.find(({ value }) => (
+      value.type === 'session_meta' && isRecord(value.payload)
+    ))?.value.payload
+    if (!isRecord(metadata)) return undefined
+    return readOptionalString(metadata, 'session_id') ?? readOptionalString(metadata, 'id')
+  },
+  runtime(rows) {
+    const metadata = rows.find(({ value }) => (
+      value.type === 'session_meta' && isRecord(value.payload)
+    ))?.value.payload
+    return {
+      name: 'Codex',
+      version: isRecord(metadata) ? readOptionalString(metadata, 'cli_version') ?? 'unknown' : 'unknown',
+    }
+  },
+}
+
+function lineProfileForFormat(
+  format: SessionTranscriptJsonlFormat | undefined,
+): SessionTranscriptLineProfile {
+  return format === 'codex-rollout-jsonl/v1'
+    ? CODEX_ROLLOUT_JSONL_PROFILE
+    : CLAUDE_CODE_SESSION_JSONL_PROFILE
+}
+
 export class SessionTranscriptRuntimeLogJsonlSource implements RuntimeLogSource {
   readonly path: string
   readonly source: RuntimeLogSourceRef
 
   private readonly sessionId: string | undefined
   private readonly sourceVersion: string
-  private readonly runtime: RuntimeLogRuntimeRef
+  private readonly runtimeOverride: RuntimeLogRuntimeRef | undefined
+  private readonly profile: SessionTranscriptLineProfile
 
   constructor(options: SessionTranscriptRuntimeLogJsonlSourceOptions) {
     this.path = options.path
     this.sessionId = options.session_id
     this.sourceVersion = options.source_version ?? 'v1'
-    this.runtime = options.runtime ?? { name: 'Claude Code', version: 'unknown' }
+    this.runtimeOverride = options.runtime
+    this.profile = lineProfileForFormat(options.format)
     this.source = {
       id: 'session-transcript-jsonl',
       kind: 'session-transcript-jsonl',
@@ -173,27 +266,14 @@ export class SessionTranscriptRuntimeLogJsonlSource implements RuntimeLogSource 
       throw error
     }
 
-    const rows: SessionTranscriptRow[] = []
+    const parsedLines: Array<{ line: number; value: Record<string, unknown> }> = []
     for (const [index, line] of text.split(/\r?\n/).entries()) {
       if (line.trim().length === 0) continue
       const value = parseTranscriptLine(line, `${this.path}:${index + 1}`)
-      const uuid = readOptionalString(value, 'uuid')
-      const sessionId = readOptionalString(value, 'sessionId')
-      const timestamp = readOptionalString(value, 'timestamp')
-      const parentUuid = readOptionalString(value, 'parentUuid')
-      rows.push({
-        line: index + 1,
-        value,
-        event_id: uuid ?? `line-${index + 1}`,
-        ...(sessionId ? { session_id: sessionId } : {}),
-        type: readOptionalString(value, 'type') ?? 'unknown',
-        ...(timestamp ? { timestamp } : {}),
-        ...(parentUuid ? { parent_uuid: parentUuid } : {}),
-        ...(typeof value.isSidechain === 'boolean' ? { is_sidechain: value.isSidechain } : {}),
-        event_hash: hashRuntimeLogEvent(value),
-      })
+      parsedLines.push({ line: index + 1, value })
     }
-    return rows
+    const sessionId = this.profile.sessionId(parsedLines)
+    return parsedLines.map(({ line, value }) => this.profile.row(value, line, sessionId))
   }
 
   private async readWindowRows(
@@ -230,11 +310,12 @@ export class SessionTranscriptRuntimeLogJsonlSource implements RuntimeLogSource 
   ): SessionTranscriptWindowBundle {
     const events = transcriptRowsToEventRefs(rows)
     const projections = input.include_projection === false ? [] : [toolUseProjection(events, rows)]
-    const sessionDefinition = this.createSessionDefinition(request.session_id)
+    const runtime = this.runtimeForRows(rows)
+    const sessionDefinition = this.createSessionDefinition(request.session_id, runtime)
     const session: SessionDefinitionRef = {
       id: request.session_id,
       digest: hashSessionDefinition(sessionDefinition),
-      format: 'claude-code-session-jsonl/v1',
+      format: this.profile.format,
     }
     const receipts = input.receipts ?? []
     const fork = input.fork
@@ -256,7 +337,7 @@ export class SessionTranscriptRuntimeLogJsonlSource implements RuntimeLogSource 
         ...this.source,
         uri: transcriptUri(request.session_id),
       },
-      runtime: this.runtime,
+      runtime,
       session,
       window: { start: request.start, end: request.end },
       events,
@@ -302,7 +383,10 @@ export class SessionTranscriptRuntimeLogJsonlSource implements RuntimeLogSource 
     }
   }
 
-  createSessionDefinition(sessionId: string): SessionTranscriptSessionDefinition {
+  createSessionDefinition(
+    sessionId: string,
+    runtime = this.runtimeForRows([]),
+  ): SessionTranscriptSessionDefinition {
     return {
       schema: SESSION_TRANSCRIPT_SESSION_SCHEMA,
       id: sessionId,
@@ -311,8 +395,8 @@ export class SessionTranscriptRuntimeLogJsonlSource implements RuntimeLogSource 
         kind: 'session-transcript-jsonl',
         version: this.sourceVersion,
       },
-      runtime: this.runtime,
-      format: 'claude-code-session-jsonl/v1',
+      runtime,
+      format: this.profile.format,
       storage: {
         kind: 'append-only-jsonl',
         raw_bodies: 'local-only',
@@ -327,6 +411,10 @@ export class SessionTranscriptRuntimeLogJsonlSource implements RuntimeLogSource 
     input: Parameters<SessionTranscriptRuntimeLogJsonlSource['buildWindowBundle']>[2],
   ): SessionTranscriptWindowBundle {
     return this.buildWindowBundle(request, rows, input)
+  }
+
+  private runtimeForRows(rows: readonly SessionTranscriptRow[]): RuntimeLogRuntimeRef {
+    return this.runtimeOverride ?? this.profile.runtime(rows)
   }
 }
 
@@ -403,6 +491,77 @@ export async function writeSessionTranscriptFixture(dir: string): Promise<{
       fork_event_hash: mainEventRefs[1]!.event_hash,
       compaction_summary_hash: mainEventRefs[6]!.event_hash,
     },
+  }
+}
+
+export async function writeCodexRolloutFixture(dir: string): Promise<{
+  readonly path: string
+  readonly session_id: string
+  readonly window: LogWindowRequest
+}> {
+  const sessionId = '019f6d3f-4f3a-7d72-8c3a-2cfc4f144001'
+  const path = join(dir, 'rollout-2026-07-15T12-00-00-codex-fixture.jsonl')
+  const rows: readonly Record<string, unknown>[] = [
+    {
+      timestamp: '2026-07-15T12:00:00.000Z',
+      type: 'session_meta',
+      payload: {
+        id: 'meta-001',
+        session_id: sessionId,
+        cli_version: '0.94.0',
+        cwd: '/workspaces/atrib',
+        git: { branch: 'main' },
+        model_provider: 'openai',
+      },
+    },
+    {
+      timestamp: '2026-07-15T12:00:01.000Z',
+      type: 'response_item',
+      payload: { id: 'item-user-001', type: 'message', role: 'user', content: 'Inspect the session.' },
+    },
+    {
+      timestamp: '2026-07-15T12:00:02.000Z',
+      type: 'response_item',
+      payload: { id: 'item-reasoning-001', type: 'reasoning', summary: [] },
+    },
+    {
+      timestamp: '2026-07-15T12:00:03.000Z',
+      type: 'response_item',
+      payload: { id: 'item-call-001', type: 'function_call', name: 'read_file', arguments: '{"path":"README.md"}' },
+    },
+    {
+      timestamp: '2026-07-15T12:00:04.000Z',
+      type: 'response_item',
+      payload: { id: 'item-output-001', type: 'function_call_output', call_id: 'item-call-001', output: 'ok' },
+    },
+    {
+      timestamp: '2026-07-15T12:00:05.000Z',
+      type: 'event_msg',
+      payload: { type: 'token_count', total_token_usage: { input_tokens: 123, output_tokens: 45 } },
+    },
+    {
+      timestamp: '2026-07-15T12:00:06.000Z',
+      type: 'turn_context',
+      payload: { cwd: '/workspaces/atrib', turn_id: 'turn-001' },
+    },
+    {
+      timestamp: '2026-07-15T12:00:07.000Z',
+      type: 'inter_agent_communication_metadata',
+      payload: { thread_id: 'thread-001' },
+    },
+    {
+      timestamp: '2026-07-15T12:00:08.000Z',
+      type: 'response_item',
+      payload: { id: 'item-agent-001', type: 'agent_message', role: 'assistant', content: 'The session is ready.' },
+    },
+  ]
+
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(path, `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`)
+  return {
+    path,
+    session_id: sessionId,
+    window: { session_id: sessionId, start: 1, end: rows.length },
   }
 }
 
@@ -499,13 +658,15 @@ export async function buildSessionTranscriptProof(
 
 export async function manifestSessionTranscriptFile(
   path: string,
+  options: ManifestSessionTranscriptFileOptions = {},
 ): Promise<SessionTranscriptWindowBundle> {
-  const rows = await readSessionTranscriptRows(path)
+  const format = options.format ?? await detectSessionTranscriptFormat(path)
+  const source = new SessionTranscriptRuntimeLogJsonlSource({ path, format })
+  const rows = await source.readRows()
   if (rows.length === 0) {
     throw new Error(`session transcript is missing or has no JSONL events: ${path}`)
   }
   const sessionId = rows.find((row) => row.session_id)?.session_id ?? basename(path)
-  const source = new SessionTranscriptRuntimeLogJsonlSource({ path, session_id: sessionId })
   return source.exportWindow({ session_id: sessionId, start: rows[0]!.line, end: rows[rows.length - 1]!.line })
 }
 
@@ -533,6 +694,29 @@ export function transcriptRowsToEventRefs(
       ? { parent_event_hashes: [hashesByUuid.get(row.parent_uuid)!] }
       : {}),
   }))
+}
+
+async function detectSessionTranscriptFormat(path: string): Promise<SessionTranscriptJsonlFormat> {
+  let text: string
+  try {
+    text = await readFile(path, 'utf8')
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') return 'claude-code-session-jsonl/v1'
+    throw error
+  }
+  for (const line of text.split(/\r?\n/)) {
+    if (line.trim().length === 0) continue
+    try {
+      const value = JSON.parse(line) as unknown
+      if (isRecord(value) && value.type === 'session_meta' && isRecord(value.payload)) {
+        return 'codex-rollout-jsonl/v1'
+      }
+      return 'claude-code-session-jsonl/v1'
+    } catch {
+      continue
+    }
+  }
+  return 'claude-code-session-jsonl/v1'
 }
 
 function toolUseProjection(
@@ -630,6 +814,11 @@ function transcriptUri(sessionId: string): string {
 
 function readOptionalString(value: Record<string, unknown>, key: string): string | undefined {
   return typeof value[key] === 'string' ? value[key] : undefined
+}
+
+function readNonEmptyString(value: Record<string, unknown>, key: string): string | undefined {
+  const candidate = readOptionalString(value, key)
+  return candidate && candidate.trim().length > 0 ? candidate : undefined
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

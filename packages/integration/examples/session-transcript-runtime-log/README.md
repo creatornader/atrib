@@ -17,6 +17,18 @@ Pass a transcript path to manifest its full window without creating records.
 pnpm --filter @atrib/integration session-transcript-runtime-log-smoke -- path/to/session.jsonl
 ```
 
+## Codex rollouts
+
+```bash
+pnpm --filter @atrib/integration session-transcript-runtime-log-smoke -- \
+  ~/.codex/sessions/**/rollout-*.jsonl
+```
+
+The example detects the `session_meta` first line and selects the Codex rollout
+profile. That profile preserves Codex event ids, fine-grained kinds, timestamps,
+session identity, and the CLI version. It avoids the lenient Claude Code
+fallback for Codex files.
+
 ## What it proves
 
 - Each valid JSON object line becomes a runtime-log event reference.

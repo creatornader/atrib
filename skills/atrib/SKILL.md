@@ -1,6 +1,6 @@
 ---
 name: atrib
-version: 0.5.0
+version: 0.6.0
 description: |
   Use atrib as the verifiable substrate for memory, reasoning, and getting
   sharper over time, not as instrumentation that observes you from the
@@ -478,9 +478,9 @@ await attest({
 Discipline for both shapes:
 
 - **Verify before you join.** Results from other signers pass through the `verification` parameter first (previous section); only accepted hashes enter `join.accepted` and `informed_by`. Rejected results are routing facts in content, never influence claims in `informed_by`.
-- **Role terms in `baton` facts.** `target_harness_role` uses role vocabulary (`successor-session`, `relay-executor`, `loop-layer`); local tool names belong in the packet body, not in signed content or envelope facts.
+- **Role terms in `baton` facts.** `target_harness_role` uses role vocabulary (`successor-session`, `relay-executor`, `loop-layer`, `subagent`); local tool names belong in the packet body, not in signed content or envelope facts. `subagent` is the in-harness fleet leg: a worker the orchestrating session spawns and joins inside one harness, as opposed to `relay-executor` (a separate harness on its own budget pool) and `successor-session` (a later session of the same agent).
 - **Authority, when it matters.** For cross-harness or sandboxed receivers, pair the baton with a [§1.11](../../atrib-spec.md#111-delegation-certificates) delegation certificate; the profile's `verified` tier binds `target_principal` to the certificate walk.
-- Per-agent model/effort/token-spend accounting on these records is [P051](../../DECISIONS.md#p051-orchestration-infrastructure-dogfood-wiring-with-cost-and-routing-accounting)'s scope, pending, not yet convention.
+- **Spend accounting rides content and sidecar; budget grants ride certificates** ([D165](../../DECISIONS.md#d165-orchestration-wiring-with-routing-and-cost-accounting)). Baton and join content carries per-leg routing facts (`routing: { model, effort, tokens_spent, spend_source }`) so which agent, on which tier, spent what, and was it accepted is a recall query instead of transcript archaeology; detailed accounting stays in the local sidecar. The budget a leg was granted belongs in its [§1.11](../../atrib-spec.md#111-delegation-certificates) certificate scope `cost_policy` (`model_tiers`, `max_tokens`), a signed offline-verifiable grant; verifiers surface claimed-spend-versus-grant mismatch as a signal, never invalidation.
 
 ## Multi-producer composition (the density picture)
 
@@ -613,4 +613,4 @@ These are honest gaps in the verification stack and producer-side cognitive surf
 - **Warning-only**: [§6.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#63-verifier-consultation-algorithm) verifier-consultation steps 1, 3, 4, 5, 7 surface explicit `IMPLEMENTATION-GAP` warnings rather than silently passing. These cover anchor freshness, witness coverage, directory checkpoint signature, append-only consistency, and AKD lookup proof validation.
 - **Not yet implemented**: cross-log replication / equivocation detection ([D050](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d050-cross-log-replication-for-equivocation-defense) / [§2.11](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#211-cross-log-replication)), HKDF sub-agent identity derivation, periodic directory anchoring, emergency-key compromise path, and archive retrieval inside the verification path. The `log.atrib.dev` SSE / JSON Feed subscription surface is implemented per [D103](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields); an embedded spec viewer at `atrib.dev` is queued at [P024](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#p024-embedded-spec-viewer-at-atribdev-auto-updated-from-spec-source).
 
-The skill is the practice; the substrate is the mechanism. Both evolve. When this skill version (v0.5.0) feels stale, rewrite it again.
+The skill is the practice; the substrate is the mechanism. Both evolve. When this skill version (v0.6.0) feels stale, rewrite it again.

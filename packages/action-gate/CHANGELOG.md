@@ -1,5 +1,12 @@
 # @atrib/action-gate
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [4c2510d]
+  - @atrib/verify@0.10.0
+
 ## 0.0.7
 
 ### Patch Changes
