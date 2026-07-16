@@ -278,9 +278,22 @@ function applyViMutation(bundle: Ap2ViEvidenceBundle, mutation: ViMutation): voi
       keyForLayer(mutation.layer),
       (payload) => {
         const sd = Array.isArray(payload['_sd']) ? [...payload['_sd']] : []
-        const digest = sd[mutation.digestIndex]
+        const sdDigest = sd[mutation.digestIndex]
+        if (typeof sdDigest === 'string') return { ...payload, _sd: [...sd, sdDigest] }
+        // The base fixtures reference mandate digests only from the
+        // delegate_payload array-element refs (SD-JWT digest uniqueness,
+        // enforced by @sd-jwt/core >= 0.20.0), so duplicate the reference
+        // there; the pinned vi_disclosure_digest_duplicate error is the same.
+        const delegate = Array.isArray(payload['delegate_payload'])
+          ? [...payload['delegate_payload']]
+          : []
+        const entry = delegate[mutation.digestIndex]
+        const digest =
+          entry !== null && typeof entry === 'object'
+            ? (entry as Record<string, unknown>)['...']
+            : undefined
         if (typeof digest !== 'string') throw new Error('missing digest')
-        return { ...payload, _sd: [...sd, digest] }
+        return { ...payload, delegate_payload: [...delegate, { '...': digest }] }
       },
     )
     return
