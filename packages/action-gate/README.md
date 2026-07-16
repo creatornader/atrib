@@ -61,14 +61,89 @@ The package has four gate states:
 | `escalated`    | Does not run until the host approval path resolves. | Signs the escalation decision and outcome.                                           |
 | `policy_error` | Does not run the action body.                       | Signs that the policy evaluator failed closed.                                       |
 
-`verifyActionGateRun()` checks signatures, record hashes, decision-to-outcome
-binding, action id consistency, and the rule that blocked, escalated, and
-policy-error states did not execute.
+`verifyActionGateRun()` checks signatures, record hashes, canonical entry IDs,
+event types, tool names, argument and result commitments, host identity,
+context continuity, decision-to-outcome binding, action id consistency, and the
+rule that blocked, escalated, and policy-error states did not execute.
 
 `runGatedAction()` returns both signed records and local sidecars. If `onRecord`
 throws while delivering a signed record to a mirror, log sink, or proof-packet
 writer, the action result still returns a complete decision/outcome pair and
 adds the callback failure to `record_delivery_errors`.
+
+## Split-phase and hash-only hosts
+
+Some hosts decide first and receive an execution report later. They can build
+and sign the decision and outcome separately:
+
+```ts
+import {
+  buildActionGateDecisionEntry,
+  buildActionGateOutcomeEntry,
+  hashCanonical,
+  signActionGateDecision,
+  signActionGateOutcome,
+  type ActionGateActionEnvelope,
+} from '@atrib/action-gate'
+
+const action = {
+  run_id: 'refund-run-1042',
+  action_id: 'refund-order',
+  agent_id: 'support-agent',
+  surface: 'support',
+  tool_name: 'refund.order',
+  args_digest: hashCanonical({
+    orderId: '1042',
+    amount: '284.00',
+    currency: 'USD',
+  }),
+} satisfies ActionGateActionEnvelope
+
+const decisionEntry = buildActionGateDecisionEntry({
+  action,
+  policy,
+  timestamp: new Date().toISOString(),
+})
+const decision = await signActionGateDecision({
+  entry: decisionEntry,
+  action,
+  privateKey,
+  contextId,
+  timestampMs: Date.now(),
+})
+
+const outcomeEntry = buildActionGateOutcomeEntry({
+  status: 'executed',
+  run_id: action.run_id,
+  action_id: action.action_id,
+  decision_id: decision.entry.decision_id,
+  decision_record_hash: decision.record_hash,
+  executed: true,
+  result_digest: hashCanonical({
+    executionState: 'executed',
+    resultHash: hashCanonical({ status: 'accepted' }),
+    outcomeHash: hashCanonical({ refundId: 're_1042' }),
+  }),
+  timestamp: new Date().toISOString(),
+})
+const outcome = await signActionGateOutcome({
+  entry: outcomeEntry,
+  action,
+  privateKey,
+  contextId,
+  decisionRecordHash: decision.record_hash,
+  chainTailHex: decision.record_hash.slice('sha256:'.length),
+  timestampMs: Date.now(),
+})
+```
+
+Use `args_digest` or `result_digest` when the signing process has the canonical
+SHA-256 commitment but must not receive the raw payload. Each value must use the
+`sha256:<64 lowercase hex>` form.
+
+An allowed action that never ran can use `status: 'not_executed'` with
+`executed: false`. This records the difference between policy permission and
+runtime execution without treating the runtime decision as an error.
 
 ## Trusted-transaction policy
 

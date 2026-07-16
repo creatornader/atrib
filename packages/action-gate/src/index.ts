@@ -67,6 +67,7 @@ export type ActionGatePolicyOutcome = 'allow' | 'block' | 'escalate' | 'error'
 export type ActionGateDecisionState = 'allowed' | 'blocked' | 'escalated' | 'policy_error'
 export type ActionGateOutcomeStatus =
   | 'executed'
+  | 'not_executed'
   | 'blocked'
   | 'escalated'
   | 'policy_error'
@@ -79,6 +80,7 @@ export interface ActionGateActionEnvelope {
   readonly surface: string
   readonly tool_name: string
   readonly args?: unknown
+  readonly args_digest?: Sha256Uri
   readonly risk?: readonly string[]
   readonly parent_record_hashes?: readonly Sha256Uri[]
   readonly refs?: Record<string, string>
@@ -210,6 +212,36 @@ export type ActionGateVerificationIssueCode =
   | 'outcome_missing_decision_parent'
   | 'decision_record_hash_mismatch'
   | 'decision_id_mismatch'
+  | 'decision_entry_id_mismatch'
+  | 'outcome_entry_id_mismatch'
+  | 'decision_event_type_mismatch'
+  | 'outcome_event_type_mismatch'
+  | 'decision_tool_name_mismatch'
+  | 'outcome_tool_name_mismatch'
+  | 'decision_args_commitment_mismatch'
+  | 'decision_result_commitment_mismatch'
+  | 'outcome_args_commitment_mismatch'
+  | 'outcome_result_commitment_mismatch'
+  | 'decision_schema_mismatch'
+  | 'outcome_schema_mismatch'
+  | 'decision_policy_outcome_invalid'
+  | 'decision_state_policy_mismatch'
+  | 'outcome_result_digest_invalid'
+  | 'outcome_status_invalid'
+  | 'outcome_executed_invalid'
+  | 'outcome_status_execution_mismatch'
+  | 'outcome_status_payload_mismatch'
+  | 'decision_sidecar_record_hash_mismatch'
+  | 'outcome_sidecar_record_hash_mismatch'
+  | 'decision_sidecar_entry_mismatch'
+  | 'outcome_sidecar_entry_mismatch'
+  | 'decision_sidecar_action_mismatch'
+  | 'outcome_sidecar_action_mismatch'
+  | 'decision_sidecar_args_mismatch'
+  | 'outcome_sidecar_result_mismatch'
+  | 'context_id_mismatch'
+  | 'creator_key_mismatch'
+  | 'outcome_chain_root_mismatch'
   | 'run_id_mismatch'
   | 'action_id_mismatch'
   | 'blocked_action_executed'
@@ -338,7 +370,7 @@ export function buildActionGateDecisionEntry({
     agent_id: action.agent_id,
     surface: action.surface,
     tool_name: action.tool_name,
-    args_digest: digestCanonical(action.args ?? {}),
+    args_digest: actionArgsDigest(action),
     risk: [...(action.risk ?? [])].sort(),
     policy: {
       policy_id: policy.policy_id,
@@ -369,6 +401,7 @@ export function buildActionGateOutcomeEntry({
   executed,
   timestamp,
   result,
+  result_digest,
   error,
 }: {
   readonly status: ActionGateOutcomeStatus
@@ -379,8 +412,11 @@ export function buildActionGateOutcomeEntry({
   readonly executed: boolean
   readonly timestamp: string
   readonly result?: unknown
+  readonly result_digest?: Sha256Uri
   readonly error?: { readonly name: string; readonly message: string }
 }): ActionGateOutcomeEntry {
+  assertActionGateOutcomeStatus(status)
+  assertExecutedFlag(executed)
   const entryWithoutId = {
     schema: ACTION_GATE_OUTCOME_SCHEMA,
     status,
@@ -389,7 +425,14 @@ export function buildActionGateOutcomeEntry({
     decision_id,
     decision_record_hash,
     executed,
-    ...(result !== undefined ? { result_digest: digestCanonical(result) } : {}),
+    ...((result_digest !== undefined || result !== undefined)
+      ? {
+          result_digest: outcomeResultDigest({
+            result,
+            ...(result_digest !== undefined ? { result_digest } : {}),
+          }),
+        }
+      : {}),
     ...(error ? { error } : {}),
     timestamp,
   } satisfies Omit<ActionGateOutcomeEntry, 'outcome_id'>
@@ -417,6 +460,10 @@ export async function signActionGateDecision({
   readonly chainTailHex?: string
   readonly timestampMs: number
 }): Promise<SignedActionGateDecision> {
+  assertDecisionEntry(entry)
+  if (!actionMatchesDecisionEntry(action, entry)) {
+    throw new Error('action does not match decision entry')
+  }
   const creatorKey = base64urlEncode(await getPublicKey(privateKey))
   const record: AtribRecord = {
     spec_version: 'atrib/1.0',
@@ -446,7 +493,7 @@ export async function signActionGateDecision({
       record_hash: recordHash,
       action,
       decision: entry,
-      args: snapshotCanonical(action.args ?? {}),
+      ...(action.args !== undefined ? { args: snapshotCanonical(action.args) } : {}),
       informed_by: entry.parent_record_hashes,
     },
   }
@@ -473,12 +520,39 @@ export async function signActionGateOutcome({
   readonly timestampMs: number
   readonly result?: unknown
 }): Promise<SignedActionGateOutcome> {
+  assertOutcomeEntry(entry)
+  if (action.run_id !== entry.run_id || action.action_id !== entry.action_id) {
+    throw new Error('action does not match outcome entry')
+  }
+  const normalizedDecisionRecordHash = normalizeSha256Uri(
+    decisionRecordHash,
+    'decisionRecordHash',
+  )
+  const entryDecisionRecordHash = normalizeSha256Uri(
+    entry.decision_record_hash,
+    'decision_record_hash',
+  )
+  if (normalizedDecisionRecordHash !== entryDecisionRecordHash) {
+    throw new Error(
+      'decisionRecordHash does not match outcome entry decision_record_hash',
+    )
+  }
+  if (
+    result !== undefined &&
+    entry.result_digest !== digestCanonical(result)
+  ) {
+    throw new Error('result does not match outcome entry result_digest')
+  }
   const creatorKey = base64urlEncode(await getPublicKey(privateKey))
   const record: AtribRecord = {
     spec_version: 'atrib/1.0',
     content_id: computeContentId(serverUrl, `${OUTCOME_TOOL_NAME}.${entry.status}`),
     creator_key: creatorKey,
-    chain_root: resolveChainRoot({ contextId, autoChainTailHex: chainTailHex }),
+    chain_root: resolveChainRoot({
+      contextId,
+      autoChainTailHex:
+        chainTailHex ?? decisionRecordHash.slice('sha256:'.length),
+    }),
     event_type: ACTION_GATE_OUTCOME_EVENT_TYPE_URI,
     context_id: contextId,
     timestamp: timestampMs,
@@ -567,12 +641,219 @@ export async function verifyActionGateRun({
       message: 'action id drifted between records',
     })
   }
+  if (outcome.record.context_id !== decision.record.context_id) {
+    issues.push({
+      code: 'context_id_mismatch',
+      message: 'outcome record uses a different context id than the decision',
+    })
+  }
+  if (outcome.record.creator_key !== decision.record.creator_key) {
+    issues.push({
+      code: 'creator_key_mismatch',
+      message: 'outcome record uses a different host identity than the decision',
+    })
+  }
+  if (outcome.record.chain_root !== decision.record_hash) {
+    issues.push({
+      code: 'outcome_chain_root_mismatch',
+      message: 'outcome record does not extend the decision chronology chain',
+    })
+  }
+  if (decision.entry.schema !== ACTION_GATE_DECISION_SCHEMA) {
+    issues.push({
+      code: 'decision_schema_mismatch',
+      message: 'decision entry uses the wrong schema',
+    })
+  }
+  if (outcome.entry.schema !== ACTION_GATE_OUTCOME_SCHEMA) {
+    issues.push({
+      code: 'outcome_schema_mismatch',
+      message: 'outcome entry uses the wrong schema',
+    })
+  }
+  const policyOutcome = decision.entry.policy.outcome as unknown
+  if (!isActionGatePolicyOutcome(policyOutcome)) {
+    issues.push({
+      code: 'decision_policy_outcome_invalid',
+      message: 'decision policy outcome is outside the action-gate schema',
+    })
+  } else if (decision.entry.decision_state !== decisionStateFromPolicy(policyOutcome)) {
+    issues.push({
+      code: 'decision_state_policy_mismatch',
+      message: 'decision state does not match its policy outcome',
+    })
+  }
+  if (
+    outcome.entry.result_digest !== undefined &&
+    !isSha256Uri(outcome.entry.result_digest)
+  ) {
+    issues.push({
+      code: 'outcome_result_digest_invalid',
+      message: 'outcome result digest is not a canonical SHA-256 URI',
+    })
+  }
+  const outcomeStatus = outcome.entry.status as unknown
+  const outcomeExecuted = outcome.entry.executed as unknown
+  const outcomeStatusValid = isActionGateOutcomeStatus(outcomeStatus)
+  const outcomeExecutedValid = typeof outcomeExecuted === 'boolean'
+  if (!outcomeStatusValid) {
+    issues.push({
+      code: 'outcome_status_invalid',
+      message: 'outcome status is outside the action-gate schema',
+    })
+  }
+  if (!outcomeExecutedValid) {
+    issues.push({
+      code: 'outcome_executed_invalid',
+      message: 'outcome executed flag is not a boolean',
+    })
+  }
+  if (
+    outcomeStatusValid &&
+    outcomeExecutedValid &&
+    !outcomeStatusMatchesExecution(outcomeStatus, outcomeExecuted)
+  ) {
+    issues.push({
+      code: 'outcome_status_execution_mismatch',
+      message: 'outcome status contradicts whether the action executed',
+    })
+  }
+  if (outcomeStatusValid && !outcomeStatusPayloadValid(outcome.entry)) {
+    issues.push({
+      code: 'outcome_status_payload_mismatch',
+      message: 'outcome status contradicts its result or error material',
+    })
+  }
+
+  if (decision.entry.decision_id !== decisionEntryIdFor(decision.entry)) {
+    issues.push({
+      code: 'decision_entry_id_mismatch',
+      message: 'decision entry id does not match its canonical entry fields',
+    })
+  }
+  if (outcome.entry.outcome_id !== outcomeEntryIdFor(outcome.entry)) {
+    issues.push({
+      code: 'outcome_entry_id_mismatch',
+      message: 'outcome entry id does not match its canonical entry fields',
+    })
+  }
+  if (decision.record.event_type !== ACTION_GATE_DECISION_EVENT_TYPE_URI) {
+    issues.push({
+      code: 'decision_event_type_mismatch',
+      message: 'decision record uses the wrong event type',
+    })
+  }
+  if (outcome.record.event_type !== ACTION_GATE_OUTCOME_EVENT_TYPE_URI) {
+    issues.push({
+      code: 'outcome_event_type_mismatch',
+      message: 'outcome record uses the wrong event type',
+    })
+  }
+  if (decision.record.tool_name !== `${DECISION_TOOL_NAME}.${decision.entry.decision_state}`) {
+    issues.push({
+      code: 'decision_tool_name_mismatch',
+      message: 'decision record tool name does not match its decision state',
+    })
+  }
+  if (outcome.record.tool_name !== `${OUTCOME_TOOL_NAME}.${outcome.entry.status}`) {
+    issues.push({
+      code: 'outcome_tool_name_mismatch',
+      message: 'outcome record tool name does not match its outcome status',
+    })
+  }
+  if (decision.record.args_hash !== hashCanonical(decisionSubject(decision.entry))) {
+    issues.push({
+      code: 'decision_args_commitment_mismatch',
+      message: 'decision record args commitment does not match its entry',
+    })
+  }
+  if (decision.record.result_hash !== hashCanonical(decisionResult(decision.entry))) {
+    issues.push({
+      code: 'decision_result_commitment_mismatch',
+      message: 'decision record result commitment does not match its entry',
+    })
+  }
+  if (outcome.record.args_hash !== hashCanonical(outcomeSubject(outcome.entry))) {
+    issues.push({
+      code: 'outcome_args_commitment_mismatch',
+      message: 'outcome record args commitment does not match its entry',
+    })
+  }
+  if (outcome.record.result_hash !== hashCanonical(outcomeResult(outcome.entry))) {
+    issues.push({
+      code: 'outcome_result_commitment_mismatch',
+      message: 'outcome record result commitment does not match its entry',
+    })
+  }
+  if (decision.sidecar.record_hash !== decision.record_hash) {
+    issues.push({
+      code: 'decision_sidecar_record_hash_mismatch',
+      message: 'decision sidecar record hash does not match the signed artifact',
+    })
+  }
+  if (outcome.sidecar.record_hash !== outcome.record_hash) {
+    issues.push({
+      code: 'outcome_sidecar_record_hash_mismatch',
+      message: 'outcome sidecar record hash does not match the signed artifact',
+    })
+  }
+  if (!canonicalEqual(decision.sidecar.decision, decision.entry)) {
+    issues.push({
+      code: 'decision_sidecar_entry_mismatch',
+      message: 'decision sidecar entry does not match the signed artifact entry',
+    })
+  }
+  if (!canonicalEqual(outcome.sidecar.outcome, outcome.entry)) {
+    issues.push({
+      code: 'outcome_sidecar_entry_mismatch',
+      message: 'outcome sidecar entry does not match the signed artifact entry',
+    })
+  }
+  if (!actionMatchesDecisionEntry(decision.sidecar.action, decision.entry)) {
+    issues.push({
+      code: 'decision_sidecar_action_mismatch',
+      message: 'decision sidecar action does not match the committed decision',
+    })
+  }
+  if (!actionMatchesDecisionEntry(outcome.sidecar.action, decision.entry)) {
+    issues.push({
+      code: 'outcome_sidecar_action_mismatch',
+      message: 'outcome sidecar action does not match the committed decision',
+    })
+  }
+  if (
+    decision.sidecar.args !== undefined &&
+    digestCanonical(decision.sidecar.args) !== decision.entry.args_digest
+  ) {
+    issues.push({
+      code: 'decision_sidecar_args_mismatch',
+      message: 'decision sidecar args do not match the committed args digest',
+    })
+  }
+  if (
+    outcome.sidecar.result !== undefined &&
+    outcome.entry.result_digest !== digestCanonical(outcome.sidecar.result)
+  ) {
+    issues.push({
+      code: 'outcome_sidecar_result_mismatch',
+      message: 'outcome sidecar result does not match the committed result digest',
+    })
+  }
 
   const state = decision.entry.decision_state
-  if (state === 'allowed' && !['executed', 'execution_error'].includes(outcome.entry.status)) {
+  if (
+    state === 'allowed' &&
+    !['executed', 'not_executed', 'execution_error'].includes(outcome.entry.status)
+  ) {
     issues.push({
       code: 'allowed_action_missing_execution_status',
-      message: 'allowed decisions must end in executed or execution_error',
+      message: 'allowed decisions must end in executed, not_executed, or execution_error',
+    })
+  }
+  if (state === 'allowed' && outcome.entry.status === 'not_executed' && outcome.entry.executed) {
+    issues.push({
+      code: 'allowed_action_missing_execution_status',
+      message: 'not_executed outcomes cannot report executed=true',
     })
   }
   if (state === 'blocked') {
@@ -816,7 +1097,8 @@ function decisionStateFromPolicy(outcome: ActionGatePolicyOutcome): ActionGateDe
   if (outcome === 'allow') return 'allowed'
   if (outcome === 'block') return 'blocked'
   if (outcome === 'escalate') return 'escalated'
-  return 'policy_error'
+  if (outcome === 'error') return 'policy_error'
+  throw new Error('policy outcome has an invalid value')
 }
 
 async function resolveOutcomeInput<TResult>({
@@ -851,7 +1133,11 @@ async function resolvePolicyDecision({
   readonly timestamp: string
 }): Promise<ActionGatePolicyDecision> {
   try {
-    return await evaluate({ action, timestamp })
+    const decision = await evaluate({ action, timestamp })
+    if (!isActionGatePolicyOutcome(decision.outcome)) {
+      throw new Error('policy outcome has an invalid value')
+    }
+    return decision
   } catch (error) {
     const normalized = normalizeError(error)
     return {
@@ -940,6 +1226,177 @@ function sortedRecord(input: Record<string, string>): Record<string, string> {
   return Object.fromEntries(
     Object.entries(input).sort(([left], [right]) => left.localeCompare(right)),
   )
+}
+
+function decisionEntryIdFor(entry: ActionGateDecisionEntry): Sha256Uri {
+  const { decision_id: _, ...entryWithoutId } = entry
+  return hashCanonical(entryWithoutId)
+}
+
+function outcomeEntryIdFor(entry: ActionGateOutcomeEntry): Sha256Uri {
+  const { outcome_id: _, ...entryWithoutId } = entry
+  return hashCanonical(entryWithoutId)
+}
+
+function actionArgsDigest(action: ActionGateActionEnvelope): Sha256Uri {
+  const supplied =
+    action.args_digest === undefined
+      ? undefined
+      : normalizeSha256Uri(action.args_digest, 'args_digest')
+  if (action.args !== undefined) {
+    const computed = digestCanonical(action.args)
+    if (supplied !== undefined && supplied !== computed) {
+      throw new Error('args_digest does not match action args')
+    }
+    return supplied ?? computed
+  }
+  return supplied ?? digestCanonical({})
+}
+
+function outcomeResultDigest({
+  result,
+  result_digest,
+}: {
+  readonly result?: unknown
+  readonly result_digest?: Sha256Uri
+}): Sha256Uri {
+  const supplied =
+    result_digest === undefined
+      ? undefined
+      : normalizeSha256Uri(result_digest, 'result_digest')
+  if (result !== undefined) {
+    const computed = digestCanonical(result)
+    if (supplied !== undefined && supplied !== computed) {
+      throw new Error('result_digest does not match result')
+    }
+    return supplied ?? computed
+  }
+  if (supplied === undefined) {
+    throw new Error('result or result_digest is required')
+  }
+  return supplied
+}
+
+function actionMatchesDecisionEntry(
+  action: ActionGateActionEnvelope,
+  entry: ActionGateDecisionEntry,
+): boolean {
+  try {
+    return (
+      action.run_id === entry.run_id &&
+      action.action_id === entry.action_id &&
+      action.agent_id === entry.agent_id &&
+      action.surface === entry.surface &&
+      action.tool_name === entry.tool_name &&
+      actionArgsDigest(action) === entry.args_digest &&
+      canonicalEqual([...(action.risk ?? [])].sort(), entry.risk) &&
+      canonicalEqual(action.refs ? sortedRecord(action.refs) : undefined, entry.refs)
+    )
+  } catch {
+    return false
+  }
+}
+
+function outcomeStatusMatchesExecution(
+  status: ActionGateOutcomeStatus,
+  executed: boolean,
+): boolean {
+  if (!isActionGateOutcomeStatus(status) || typeof executed !== 'boolean') {
+    return false
+  }
+  if (status === 'executed' || status === 'execution_error') return executed
+  return !executed
+}
+
+function outcomeStatusPayloadValid(entry: ActionGateOutcomeEntry): boolean {
+  if (entry.status === 'execution_error') {
+    return entry.error !== undefined && entry.result_digest === undefined
+  }
+  return entry.error === undefined
+}
+
+function assertDecisionEntry(entry: ActionGateDecisionEntry): void {
+  if (entry.schema !== ACTION_GATE_DECISION_SCHEMA) {
+    throw new Error('decision entry uses the wrong schema')
+  }
+  if (entry.decision_id !== decisionEntryIdFor(entry)) {
+    throw new Error('decision entry id does not match canonical fields')
+  }
+  if (!isActionGatePolicyOutcome(entry.policy.outcome)) {
+    throw new Error('policy outcome has an invalid value')
+  }
+  if (entry.decision_state !== decisionStateFromPolicy(entry.policy.outcome)) {
+    throw new Error('decision state does not match policy outcome')
+  }
+}
+
+function assertOutcomeEntry(entry: ActionGateOutcomeEntry): void {
+  if (entry.schema !== ACTION_GATE_OUTCOME_SCHEMA) {
+    throw new Error('outcome entry uses the wrong schema')
+  }
+  if (entry.outcome_id !== outcomeEntryIdFor(entry)) {
+    throw new Error('outcome entry id does not match canonical fields')
+  }
+  assertActionGateOutcomeStatus(entry.status)
+  assertExecutedFlag(entry.executed)
+  if (entry.result_digest !== undefined) {
+    normalizeSha256Uri(entry.result_digest, 'result_digest')
+  }
+  if (!outcomeStatusMatchesExecution(entry.status, entry.executed)) {
+    throw new Error('outcome status contradicts executed')
+  }
+  if (!outcomeStatusPayloadValid(entry)) {
+    throw new Error('outcome status contradicts result or error material')
+  }
+}
+
+function canonicalEqual(left: unknown, right: unknown): boolean {
+  return canonicalize(left) === canonicalize(right)
+}
+
+function normalizeSha256Uri(value: string, field: string): Sha256Uri {
+  if (!isSha256Uri(value)) {
+    throw new Error(`${field} must be sha256:<64 lowercase hex>`)
+  }
+  return value as Sha256Uri
+}
+
+function isSha256Uri(value: unknown): value is Sha256Uri {
+  return typeof value === 'string' && /^sha256:[0-9a-f]{64}$/u.test(value)
+}
+
+function isActionGatePolicyOutcome(value: unknown): value is ActionGatePolicyOutcome {
+  return (
+    value === 'allow' ||
+    value === 'block' ||
+    value === 'escalate' ||
+    value === 'error'
+  )
+}
+
+function isActionGateOutcomeStatus(value: unknown): value is ActionGateOutcomeStatus {
+  return (
+    value === 'executed' ||
+    value === 'not_executed' ||
+    value === 'blocked' ||
+    value === 'escalated' ||
+    value === 'policy_error' ||
+    value === 'execution_error'
+  )
+}
+
+function assertActionGateOutcomeStatus(
+  value: unknown,
+): asserts value is ActionGateOutcomeStatus {
+  if (!isActionGateOutcomeStatus(value)) {
+    throw new Error('outcome status has an invalid value')
+  }
+}
+
+function assertExecutedFlag(value: unknown): asserts value is boolean {
+  if (typeof value !== 'boolean') {
+    throw new Error('executed must be a boolean')
+  }
 }
 
 function normalizeRecordHashes(values: readonly string[]): Sha256Uri[] {
