@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * atribd: the local daemon for atrib's seven cognitive primitives.
+ * atribd: the local daemon for atrib's cognitive surface.
  *
- * One host-owned process mounts the seven primitive MCP servers in process
- * and serves their fifteen physical tools as thin aliases over two internal
- * handlers (write, read). Transports: stateless Streamable HTTP (the
+ * One host-owned process mounts the attest write home, the recall read
+ * home, and summarize in process and serves the seventeen-tool alias-window
+ * union (fifteen legacy names plus the attest and recall verbs) as thin
+ * aliases over two internal handlers (write, read). Transports: stateless Streamable HTTP (the
  * recommended daemon topology), direct stdio (in-process), and a
  * stdio-to-HTTP proxy shim for startup-spawn harnesses.
  *
@@ -261,7 +262,7 @@ Options:
   --port <port>                  HTTP bind port. Defaults to 8796. Use 0 for ephemeral.
   --path <path>                  HTTP MCP path. Defaults to /mcp.
   --tool-timeout-ms <ms>         Bound each primitive tool call. Defaults to 45000.
-  --tools-list-ttl-ms <ms>       SEP-2549 freshness hint on tools/list. Defaults to 24 hours.
+  --tools-list-ttl-ms <ms>       SEP-2549 freshness hint on tools/list. Defaults to 5 minutes (alias-window W2).
   --ambient-context              Opt the HTTP surface back into ambient context discovery
                                  (D078/D083). Default is explicit-required.
   --session-idle-ms <ms>         Deprecated; ignored (the stateless daemon has no sessions).

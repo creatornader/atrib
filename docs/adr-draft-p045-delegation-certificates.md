@@ -1,6 +1,6 @@
 # P045 candidate ADR draft: Delegation certificates: principal keys certify ephemeral run keys
 
-Status: candidate ADR draft, not accepted. Compact pending entry: [DECISIONS.md P045](../DECISIONS.md). Generated 2026-07-06 by the redesign-overhaul workflow (research -> draft -> adversarial judge -> revise); source plan: [redesign-upgrade-path.md](redesign-upgrade-path.md).
+Status: historical candidate draft. Implemented as [D140](../DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys). Generated 2026-07-06 by the redesign-overhaul workflow; source plan: [redesign-upgrade-path.md](redesign-upgrade-path.md).
 
 Candidate set (cross-references between drafts resolve via this table):
 

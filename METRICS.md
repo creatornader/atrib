@@ -64,15 +64,27 @@ Is anyone outside the operator interacting with atrib at all?
 
 | Metric | Source | Direction | Notes |
 |---|---|---|---|
-| `@atrib/mcp` weekly downloads | npm registry (once published) | growing | Currently not published; first publish enables this metric |
+| `@atrib/mcp` weekly downloads | npm registry | growing | Collected by `pnpm metrics:npm-downloads` into `metrics/npm-downloads-<date>.json` |
 | `@atrib/agent` weekly downloads | npm registry | growing | Same |
 | `@atrib/verify` weekly downloads | npm registry | growing | The merchant verifier is the ecosystem-shaped audience |
+| `atrib` (PyPI) weekly downloads | pypistats | growing | Same collector, `pypi` row of the snapshot |
 | GitHub stars / forks | `creatornader/atrib` | trend | Soft signal; matters less than downloads |
 | Open issues from non-operator contributors | GitHub | non-zero | Someone external cares enough to file |
 | Spec citations / external references | manual web search | trend | Are people writing about atrib? |
 | Distinct deployments of `log-node` running real traffic | manual; survey known operators | toward >1 | One log = single point of trust. >1 logs = federated possibility |
 
-Cadence: first of every month. Pull npm and GH numbers; look for new issues, citations, and forks.
+Reading the download rows honestly: npm counts carry a bot noise floor of
+hundreds of downloads per week per package (registry mirrors, security
+scanners, CDN tarball fetchers, version crawlers), and every publish spikes
+it. A near-uniform spread across packages, including deprecated ones, is
+noise, not adoption. Read cross-package divergence and sustained
+post-publish-decay trend, never absolute counts. These rows also say nothing
+about legacy-alias retirement: that is measured by the
+[D084](DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement)
+instrumentation counting actual legacy-name tool calls locally, not by npm
+downloads of the shim packages.
+
+Cadence: first of every month. Run `pnpm metrics:npm-downloads`, commit the snapshot, and pull GH numbers; look for new issues, citations, and forks.
 
 A Tier 2 alarm is *"the ecosystem isn't picking this up."* If after 6 months of Tier 1 health we have zero Tier 2 signal, the thesis isn't reaching anyone.
 
@@ -114,7 +126,7 @@ Cadence: re-read at the same review meetings as the higher tiers. The point is t
 
 2. Tier 1 needs a `scripts/metrics.mjs` that runs against `log.atrib.dev` and emits weekly JSON: tree size delta, cumulative and active creator_keys, chain depth distribution, tx ratio. Estimate: 1-2 hours. Output committed to `metrics/` directory weekly.
 
-3. Tier 2 starts when the first npm package gets published. Until then, the cell is "n/a, packages not published."
+3. Tier 2 started with the first npm publishes. `pnpm metrics:npm-downloads` collects the download cells (npm + PyPI) into dated `metrics/npm-downloads-*.json` snapshots.
 
 4. Tier 3 starts when the first non-operator party touches atrib. Until then, the cell is "0, no external interaction."
 

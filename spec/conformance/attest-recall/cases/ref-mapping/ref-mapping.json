@@ -1,0 +1,52 @@
+{
+  "name": "ref-mapping",
+  "spec_section": "attest-recall rename (P047 promotion)",
+  "description": "Adversarial vectors for the attest ref -> record mapping. Anything outside the exhaustive mapping (absent ref -> observation; annotates -> annotation; revises -> revision) is a typed tool error and nothing is signed. Composition with informed_by is allowed; provenance_token keeps its genesis-only rule.",
+  "cases": [
+    {
+      "name": "unknown-ref-kind-refused",
+      "arguments": { "content": { "what": "x" }, "ref": { "kind": "cites", "target": "sha256:3333333333333333333333333333333333333333333333333333333333333333" } },
+      "expected": { "outcome": "error" }
+    },
+    {
+      "name": "missing-target-refused",
+      "arguments": { "content": { "importance": "high", "summary": "x" }, "ref": { "kind": "annotates" } },
+      "expected": { "outcome": "error" }
+    },
+    {
+      "name": "malformed-target-refused",
+      "arguments": { "content": { "importance": "high", "summary": "x" }, "ref": { "kind": "annotates", "target": "sha256:nothex" } },
+      "expected": { "outcome": "error" }
+    },
+    {
+      "name": "missing-reason-on-revises-refused",
+      "arguments": { "content": { "prior_position": "a", "new_position": "b" }, "ref": { "kind": "revises", "target": "sha256:3333333333333333333333333333333333333333333333333333333333333333" } },
+      "expected": { "outcome": "error", "message_contains": "ref.reason is required" }
+    },
+    {
+      "name": "relationship-in-content-without-ref-refused",
+      "arguments": { "content": { "annotates": "sha256:3333333333333333333333333333333333333333333333333333333333333333", "importance": "high", "summary": "x" } },
+      "expected": { "outcome": "error", "message_contains": "declare ref" }
+    },
+    {
+      "name": "content-target-contradicts-ref-refused",
+      "arguments": { "content": { "annotates": "sha256:4444444444444444444444444444444444444444444444444444444444444444", "importance": "high", "summary": "x" }, "ref": { "kind": "annotates", "target": "sha256:3333333333333333333333333333333333333333333333333333333333333333" } },
+      "expected": { "outcome": "error", "message_contains": "contradicts" }
+    },
+    {
+      "name": "ref-composes-with-informed-by",
+      "arguments": { "content": { "importance": "high", "summary": "composes" }, "ref": { "kind": "annotates", "target": "sha256:3333333333333333333333333333333333333333333333333333333333333333" }, "informed_by": ["sha256:5555555555555555555555555555555555555555555555555555555555555555"], "allow_unresolved_informed_by": true, "context_id": "cccccccccccccccccccccccccccccccc" },
+      "expected": { "outcome": "signed", "event_type": "https://atrib.dev/v1/types/annotation" }
+    },
+    {
+      "name": "provenance-token-genesis-signs",
+      "arguments": { "content": { "what": "genesis anchor" }, "provenance_token": "AAAAAAAAAAAAAAAAAAAAAA", "context_id": "dddddddddddddddddddddddddddddddd" },
+      "expected": { "outcome": "signed", "event_type": "https://atrib.dev/v1/types/observation" }
+    },
+    {
+      "name": "provenance-token-non-genesis-refused",
+      "arguments": { "content": { "what": "stale anchor" }, "provenance_token": "AAAAAAAAAAAAAAAAAAAAAA", "context_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "chain_root": "sha256:3333333333333333333333333333333333333333333333333333333333333333" },
+      "expected": { "outcome": "error", "message_contains": "genesis" }
+    }
+  ]
+}

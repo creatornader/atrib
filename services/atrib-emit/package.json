@@ -1,7 +1,7 @@
 {
   "name": "@atrib/emit",
-  "version": "0.17.3",
-  "description": "MCP server for atrib's verifiable action layer. Lets agents sign explicit observations, annotations, and revisions.",
+  "version": "1.0.0",
+  "description": "Legacy home of atrib's emit write primitive. Superseded by @atrib/attest (the write verb); this package re-exports the same surface and forwards the atrib-emit, atrib-emit-cli, and atrib-local-substrate binaries. Signed records are byte-identical.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
     "atrib",
@@ -31,12 +31,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@atrib/mcp": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@noble/ed25519": "^3.1.0",
-    "@noble/hashes": "^2.2.0",
-    "canonicalize": "^3.0.0",
-    "zod": "^3.25.76"
+    "@atrib/attest": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

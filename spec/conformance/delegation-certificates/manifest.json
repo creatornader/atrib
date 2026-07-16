@@ -34,6 +34,10 @@
       "name": "walk-scope-mismatch"
     },
     {
+      "file": "cases/walk-scope-cost-policy.json",
+      "name": "walk-scope-cost-policy"
+    },
+    {
       "file": "cases/walk-wrong-principal-signature.json",
       "name": "walk-wrong-principal-signature"
     },
@@ -81,5 +85,5 @@
     "other_producer_pubkey": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
     "rogue_pubkey": "ypOsFwUYcHHWe4PH_w7-gQjo7EUwV113JoeTM9vavnw"
   },
-  "note": "Six case families: certificate canonical form + signing (4), verifier walk (5), depth-0 byte-identity against spec/conformance/1.4/signing-vectors.json (1), delegation_cert_hash genesis lex-slotting (1), run-key revocation extending spec/conformance/1.9/ (2), D067 multi-producer cert_bound: null posture (1). The principal seed (0x01 fill) deliberately matches the §1.4 corpus signer, so the depth-0 case is literally a principal signing directly. Edge cases pin malformed keys, multiple principal candidates, and the one-hop depth limit."
+  "note": "Six case families: certificate canonical form + signing (4), verifier walk (6), depth-0 byte-identity against spec/conformance/1.4/signing-vectors.json (1), delegation_cert_hash genesis lex-slotting (1), run-key revocation extending spec/conformance/1.9/ (2), D067 multi-producer cert_bound: null posture (1). The principal seed (0x01 fill) deliberately matches the §1.4 corpus signer, so the depth-0 case is literally a principal signing directly. Edge cases pin malformed keys, multiple principal candidates, and the one-hop depth limit."
 }

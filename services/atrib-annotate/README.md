@@ -1,5 +1,14 @@
 # @atrib/annotate
 
+**Legacy home.** The write-verb implementation moved to
+[`@atrib/attest`](../atrib-attest/README.md) per the attest/recall rename
+([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)).
+Annotation folds into `attest` with `ref: { kind: "annotates", target }`.
+This package re-exports the same surface and forwards the `atrib-annotate`
+binary to `@atrib/attest`'s handlers. Records are byte-identical. The
+`atrib-annotate` tool name stays mounted as a permanent alias during the
+alias window, alongside the new `attest` tool.
+
 MCP server exposing the `atrib-annotate` tool for atrib's verifiable action layer. Marks a past signed record with importance, a one-line summary, and topics, so future recall can surface what mattered without re-scanning every record flat.
 
 Closes the producer-side recall-fidelity gap: an agent reading back its own past loses enormous nuance compared to the agent that signed it. An annotation lets the agent at signing time say "future-self: this one is critical, and here's why in one line", and the graph carries that judgment forward.
@@ -91,7 +100,7 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/annotate start`.
 
 ## Status
 
-Published and maintained. Cognitive primitive #2 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/revise` covers the contradiction-handling primitive (revision event_type).
+Deprecated on npm; superseded by `@atrib/attest` (`ref.kind: "annotates"`), with the `atrib-annotate` tool name mounted as a permanent alias. Historically cognitive primitive #2 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/revise` covers the contradiction-handling primitive (revision event_type).
 
 ## License
 

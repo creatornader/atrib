@@ -7,9 +7,9 @@ philosophy (first publish is manual and creates the project, later releases
 run through CI trusted publishing) with the PyPI-specific mechanics spelled
 out.
 
-Nothing in this runsheet has been executed yet: `atrib` is intentionally
-unpublished (verified unclaimed on PyPI 2026-07-06, along with the `atrib-sdk`
-fallback name). Per the SDK session brief, do not publish until the
+This runsheet has been executed once: the `atrib` distribution was seeded on
+PyPI and is published (0.1.x). The steps below remain the template for any
+future PyPI distribution; the gate still applies: do not publish until the
 conformance suites, the cross-implementation determinism harness, and this
 runsheet's preflight all pass.
 

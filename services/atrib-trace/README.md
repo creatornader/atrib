@@ -1,5 +1,15 @@
 # @atrib/trace
 
+**Legacy home.** The read-verb implementation moved to
+[`@atrib/recall`](../atrib-recall/README.md) per the attest/recall rename
+([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)).
+`trace` and `trace_forward` fold into `recall` with `shape: "walk"` and
+`direction: "backward"` or `"forward"`. This package re-exports the same
+surface and forwards the `atrib-trace` binary to `@atrib/recall`'s
+handlers. Results are JSON-identical. The `trace` and `trace_forward`
+tool names stay mounted as permanent aliases during the alias window,
+alongside the new `recall` tool.
+
 MCP server exposing the `trace` tool for atrib's verifiable action layer. It walks a record's `informed_by` chain backward to surface the signed relationship path that led to it.
 
 Closes the consumer-side cognitive-loop primitive: recall returns raw records; trace returns the declared-relationship trace, so an agent asking "why did I do X?" can see "X was claimed to be informed by Y, which was claimed to be informed by Z" without manually walking `informed_by` hash-by-hash.
@@ -104,7 +114,7 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/trace start`.
 
 Published and maintained. 8 tests covering: empty-mirror, single-record, one-hop walk, multi-hop chain, depth truncation, diamond fan-in, dangling references, max_nodes cap. Full workspace tests green.
 
-The companion consumer-side primitive `atrib-summarize` (synthesizes narrative across N records) is the next ship.
+The companion consumer-side package `@atrib/summarize` (synthesizes narrative across N records) shipped and is now deprecated on npm; its tool stays mounted through the alias window.
 
 ## Part of atrib
 

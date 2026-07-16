@@ -1,6 +1,6 @@
 {
   "name": "@atrib/integration",
-  "version": "0.0.42",
+  "version": "0.0.45",
   "description": "Cross-package integration tests and runnable framework examples for atrib's verifiable action layer.",
   "license": "Apache-2.0",
   "repository": {
@@ -63,6 +63,7 @@
     "openetr-transfer-source-packet": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/mcp-wrap build && ATRIB_OPENETR_SOURCE_E2E=1 tsx examples/openetr-transfer/openetr-transfer-packet-smoke.ts",
     "activegraph-runtime-log-smoke": "tsx examples/activegraph-runtime-log/activegraph-runtime-log-smoke.ts",
     "reference-runtime-log-smoke": "tsx examples/reference-runtime-log/reference-runtime-log-smoke.ts",
+    "session-transcript-runtime-log-smoke": "node --import tsx examples/session-transcript-runtime-log/session-transcript-runtime-log-smoke.ts",
     "dogfood-runtime-log-smoke": "tsx examples/dogfood-runtime-log/dogfood-runtime-log-smoke.ts",
     "secondary-runtime-log-smoke": "tsx examples/secondary-runtime-log/secondary-runtime-log-smoke.ts",
     "runtime-log-verifier-ux-smoke": "tsx examples/runtime-log-verifier-ux/runtime-log-verifier-ux-smoke.ts",

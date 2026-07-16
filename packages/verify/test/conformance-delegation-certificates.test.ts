@@ -40,14 +40,17 @@ import {
   type AtribRecord,
 } from '@atrib/mcp'
 import {
+  checkCostPolicy,
   delegationCertErrors,
   delegationCertHash,
   delegationCertSignatureVerifies,
   delegationCertSigningInput,
   evaluateDelegation,
   evaluateRevokerAuthorization,
+  type CostPolicyUsage,
   type DelegatedRecord,
   type DelegationCertificate,
+  type DelegationCostPolicy,
   type DelegationOutcome,
   type KeyRevocationRecordLike,
 } from '../src/delegation.js'
@@ -208,6 +211,28 @@ describe('spec §1.11 conformance: delegation certificates', () => {
     expect((c.expected as { record_signature_valid: boolean }).record_signature_valid).toBe(true)
     const delegation = (c.expected as { delegation: DelegationOutcome }).delegation
     expect(delegation.scope_check?.in_scope).toBe(false)
+  })
+
+  it('walk-scope-cost-policy: cost_policy scope is usage-fact-evaluable, signal-only (D165)', async () => {
+    await assertWalkCase('walk-scope-cost-policy')
+    const c = loadCase('walk-scope-cost-policy')
+    expect((c.expected as { signal_not_block: boolean }).signal_not_block).toBe(true)
+    // From the record alone the walk reports no cost_policy mismatch.
+    const delegation = (c.expected as { delegation: DelegationOutcome }).delegation
+    expect(delegation.scope_check).toEqual({ in_scope: true, attenuation_ok: null, mismatches: [] })
+    // The pinned usage vectors evaluate through checkCostPolicy.
+    const cert = (c.input.certificates as DelegationCertificate[])[0]!
+    const costPolicy = (cert.scope as { cost_policy?: DelegationCostPolicy }).cost_policy
+    expect(costPolicy).toBeDefined()
+    const vectors = c.input.usage_vectors as Array<{
+      name: string
+      usage: CostPolicyUsage
+      expected: { in_scope: boolean; mismatches: string[] }
+    }>
+    expect(vectors.length).toBeGreaterThan(0)
+    for (const v of vectors) {
+      expect(checkCostPolicy(costPolicy!, v.usage), v.name).toEqual(v.expected)
+    }
   })
 
   it('walk-wrong-principal-signature: invalid cert falls back to depth 0', async () => {

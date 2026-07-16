@@ -1,6 +1,6 @@
 # P042 candidate ADR draft: Universal evidence envelope: one tiered attachment model for all externally verifiable material
 
-Status: candidate ADR draft, not accepted. Compact pending entry: [DECISIONS.md P042](../DECISIONS.md). Generated 2026-07-06 by the redesign-overhaul workflow (research -> draft -> adversarial judge -> revise); source plan: [redesign-upgrade-path.md](redesign-upgrade-path.md).
+Status: historical candidate draft. Implemented as [D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model). Generated 2026-07-06 by the redesign-overhaul workflow; source plan: [redesign-upgrade-path.md](redesign-upgrade-path.md).
 
 Candidate set (cross-references between drafts resolve via this table):
 

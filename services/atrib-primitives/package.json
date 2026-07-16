@@ -1,6 +1,6 @@
 {
   "name": "@atrib/primitives-runtime",
-  "version": "0.1.24",
+  "version": "0.2.1",
   "description": "Private local MCP runtime for atrib's verifiable action layer. Exposes all cognitive primitives from one process.",
   "private": true,
   "license": "Apache-2.0",
@@ -17,13 +17,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@atrib/annotate": "workspace:*",
-    "@atrib/emit": "workspace:*",
+    "@atrib/attest": "workspace:*",
     "@atrib/recall": "workspace:*",
-    "@atrib/revise": "workspace:*",
     "@atrib/summarize": "workspace:*",
-    "@atrib/trace": "workspace:*",
-    "@atrib/verify-mcp": "workspace:*",
+    "@atrib/verify": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {

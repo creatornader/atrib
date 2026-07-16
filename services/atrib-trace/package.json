@@ -1,7 +1,7 @@
 {
   "name": "@atrib/trace",
-  "version": "0.5.21",
-  "description": "MCP server for atrib's verifiable action layer. Walks informed_by chains to show the signed relationship path.",
+  "version": "1.0.1",
+  "description": "Legacy home of atrib's trace read primitive. Superseded by @atrib/recall (the read verb, shape=walk with a direction); this package re-exports the same surface and forwards the atrib-trace binary.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
     "atrib",
@@ -29,9 +29,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@atrib/mcp": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^3.25.76"
+    "@atrib/recall": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

@@ -1,6 +1,6 @@
 # P046 candidate ADR draft: atribd: public stateless-native local daemon consolidating the primitive runtime
 
-Status: candidate ADR draft, not accepted. Compact pending entry: [DECISIONS.md P046](../DECISIONS.md). Generated 2026-07-06 by the redesign-overhaul workflow (research -> draft -> adversarial judge -> revise); source plan: [redesign-upgrade-path.md](redesign-upgrade-path.md).
+Status: historical candidate draft. Implemented as [D148](../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime). Generated 2026-07-06 by the redesign-overhaul workflow; source plan: [redesign-upgrade-path.md](redesign-upgrade-path.md).
 
 Candidate set (cross-references between drafts resolve via this table):
 

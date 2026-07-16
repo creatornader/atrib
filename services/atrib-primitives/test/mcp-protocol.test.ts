@@ -17,11 +17,15 @@ import {
 } from '../src/index.js'
 
 const BINARY = resolve(__dirname, '..', 'dist', 'index.js')
+// The alias-window union: the fifteen legacy tool names plus the attest
+// (write) and recall (read) verbs, served by three mounts.
 const EXPECTED_TOOL_NAMES = [
   'atrib-annotate',
   'atrib-revise',
   'atrib-verify',
+  'attest',
   'emit',
+  'recall',
   'recall_annotations',
   'recall_by_content',
   'recall_by_signer',
@@ -35,11 +39,16 @@ const EXPECTED_TOOL_NAMES = [
   'trace_forward',
 ]
 const EXPECTED_PRIMITIVE_CONTRACTS = {
-  annotate: { package: '@atrib/annotate', tools: ['atrib-annotate'], mutates: true },
-  emit: { package: '@atrib/emit', tools: ['emit'], mutates: true },
+  attest: {
+    package: '@atrib/attest',
+    tools: ['atrib-annotate', 'atrib-revise', 'attest', 'emit'],
+    mutates: true,
+  },
   recall: {
     package: '@atrib/recall',
     tools: [
+      'atrib-verify',
+      'recall',
       'recall_annotations',
       'recall_by_content',
       'recall_by_signer',
@@ -48,13 +57,12 @@ const EXPECTED_PRIMITIVE_CONTRACTS = {
       'recall_revisions',
       'recall_session_chain',
       'recall_walk',
+      'trace',
+      'trace_forward',
     ],
     mutates: false,
   },
-  revise: { package: '@atrib/revise', tools: ['atrib-revise'], mutates: true },
   summarize: { package: '@atrib/summarize', tools: ['summarize'], mutates: false },
-  trace: { package: '@atrib/trace', tools: ['trace', 'trace_forward'], mutates: false },
-  verify: { package: '@atrib/verify-mcp', tools: ['atrib-verify'], mutates: false },
 }
 
 interface HttpHost {
@@ -247,7 +255,9 @@ function startHttpHost(env: NodeJS.ProcessEnv, path = '/mcp'): Promise<HttpHost>
       settled = true
       child.kill('SIGTERM')
       rejectHost(new Error(`HTTP host did not become ready. stderr=${stderr}`))
-    }, 5000)
+      // The mount path runs the union behavioral probes (including the lazy
+      // @atrib/verify closure load), ~6s cold; 5s was too tight.
+    }, 30_000)
 
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString('utf8')
@@ -328,7 +338,7 @@ afterEach(() => {
 })
 
 describe('atrib-primitives MCP runtime', () => {
-  it('lists every cognitive primitive tool from one stdio process', async () => {
+  it('lists every cognitive primitive tool from one stdio process', { timeout: 30_000 }, async () => {
     const client = await connectStdioClient({ ATRIB_RECORD_FILE: recordFile })
     try {
       const listed = await client.listTools()
@@ -339,7 +349,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('routes a child primitive tool call through the combined server', async () => {
+  it('routes a child primitive tool call through the combined server', { timeout: 30_000 }, async () => {
     const client = await connectStdioClient({ ATRIB_RECORD_FILE: recordFile })
     try {
       const result = await client.callTool({
@@ -354,7 +364,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('surfaces write-primitive refusals as MCP tool errors through the combined server', async () => {
+  it('surfaces write-primitive refusals as MCP tool errors through the combined server', { timeout: 30_000 }, async () => {
     const refusalEnv = {
       HOME: tmp,
       ATRIB_RECORD_FILE: recordFile,
@@ -410,7 +420,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('proxies stdio clients into a host-owned Streamable HTTP runtime', async () => {
+  it('proxies stdio clients into a host-owned Streamable HTTP runtime', { timeout: 30_000 }, async () => {
     const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
     try {
       const client = await connectProxyClient(host.endpoint, {
@@ -437,7 +447,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('answers health while the shared HTTP backend is still mounting', async () => {
+  it('answers health while the shared HTTP backend is still mounting', { timeout: 30_000 }, async () => {
     let releaseBackend!: () => void
     const backendGate = new Promise<void>((resolveBackend) => {
       releaseBackend = resolveBackend
@@ -480,7 +490,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('degrades health when mounted recall lacks the content-index contract', async () => {
+  it('degrades health when mounted recall lacks the content-index contract', { timeout: 30_000 }, async () => {
     const backend = {
       ...fakeBackend(),
       runtimeContracts: () => ({
@@ -598,7 +608,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('serves the same tools from one host-owned Streamable HTTP process', async () => {
+  it('serves the same tools from one host-owned Streamable HTTP process', { timeout: 30_000 }, async () => {
     const host = await startHttpHost({
       ATRIB_AGENT: 'test-agent',
       ATRIB_RECORD_FILE: recordFile,
@@ -648,7 +658,7 @@ describe('atrib-primitives MCP runtime', () => {
       expect(health.report?.primitive_runtime?.session_model).toBe(
         'per-session-transport-shared-backend',
       )
-      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(7)
+      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(3)
       expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
       expect(health.report?.primitive_runtime?.recall_contract?.status).toBe('pass')
       expect(health.report?.primitive_runtime?.recall_contract?.content_index_version).toBe(
@@ -668,13 +678,11 @@ describe('atrib-primitives MCP runtime', () => {
       expect(Object.keys(behavioralProbes).sort()).toEqual(
         Object.keys(EXPECTED_PRIMITIVE_CONTRACTS).sort(),
       )
-      for (const primitive of ['recall', 'trace', 'summarize', 'verify']) {
+      for (const primitive of ['recall', 'summarize']) {
         expect(behavioralProbes[primitive]?.status).toBe('pass')
       }
-      for (const primitive of ['emit', 'annotate', 'revise']) {
-        expect(behavioralProbes[primitive]?.status).toBe('skipped')
-        expect(behavioralProbes[primitive]?.reason).toContain('validate-only')
-      }
+      expect(behavioralProbes['attest']?.status).toBe('skipped')
+      expect(behavioralProbes['attest']?.reason).toContain('validate-only')
       expect(health.report?.profile?.agent).toBe('test-agent')
       expect(health.report?.profile?.context_id_policy).toBe('explicit-required')
       expect(health.report?.profile?.requires_explicit_context_id).toBe(true)
@@ -703,7 +711,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('shares one mounted primitive backend across HTTP sessions', async () => {
+  it('shares one mounted primitive backend across HTTP sessions', { timeout: 30_000 }, async () => {
     const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
     let first: Client | undefined
     let second: Client | undefined
@@ -727,7 +735,7 @@ describe('atrib-primitives MCP runtime', () => {
         }
       }
       expect(health.report?.primitive_runtime?.backend).toBe('shared')
-      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(7)
+      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(3)
       expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
       expect(health.report?.sessions?.active).toBe(2)
       expect(health.report?.sessions?.opened).toBe(2)
@@ -758,7 +766,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('normalizes repeated trailing slashes in the HTTP path', async () => {
+  it('normalizes repeated trailing slashes in the HTTP path', { timeout: 30_000 }, async () => {
     const host = await startHttpHost({ ATRIB_RECORD_FILE: recordFile }, 'nested/mcp////')
     try {
       expect(new URL(host.endpoint).pathname).toBe('/nested/mcp')

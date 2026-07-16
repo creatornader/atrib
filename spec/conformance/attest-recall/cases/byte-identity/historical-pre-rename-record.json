@@ -1,0 +1,22 @@
+{
+  "name": "historical-pre-rename-record",
+  "spec_section": "attest-recall rename (P047 promotion)",
+  "description": "A record signed through the pre-rename emit surface (pinned in the D148 atribd corpus before the attest/recall rename landed). Post-rename verifiers MUST verify it unchanged: the rename touches tool names, package names, exports, and docs; zero signed bytes.",
+  "input": {
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e75fd1dea166274504c5300f7cb46476d218abb3526c1d7658ff218ab173f6e3",
+      "creator_key": "GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE",
+      "chain_root": "sha256:23e0bf16a8233d47b230a49057b3cb566175ab84135cd5574e55f092b77775db",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "c0ffee00c0ffee00c0ffee00c0ffee00",
+      "timestamp": 1781136000000,
+      "signature": "EkyjbC71aHejQJlfZQucWLJOKzQYe4fUqSM-Q6ZbvxOu6iFBsBDIiyLBa00A7M6AKsINYkRt8AKMllb3JM10Bg",
+      "args_hash": "sha256:a307b9085556195c6efc844894dc0868d769ed120effe2eb29b0b5ff8dfb3d87"
+    }
+  },
+  "expected": {
+    "record_hash": "sha256:9d59ecd1c7dcd1188b883b5a2e4b054af496b87e3f05dcf3aa520506fec638da",
+    "signature_valid": true
+  }
+}

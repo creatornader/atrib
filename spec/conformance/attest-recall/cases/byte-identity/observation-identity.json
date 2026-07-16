@@ -1,0 +1,54 @@
+{
+  "name": "observation-identity",
+  "spec_section": "attest-recall rename (P047 promotion)",
+  "description": "The same statement signed through the legacy emit tool and through `attest` MUST produce byte-identical canonical records and signatures given identical key, timestamp, and chain inputs. Only the `_local.producer` sidecar label differs (persisted-label rule L1). Fixed fill-42 test seed and frozen timestamp make the signed bytes reproducible.",
+  "input": {
+    "legacy": {
+      "tool": "emit",
+      "arguments": {
+        "event_type": "observation",
+        "context_id": "a77e57a77e57a77e57a77e57a77e57a0",
+        "content": {
+          "what": "attest-recall byte-identity conformance vector",
+          "topics": [
+            "P047",
+            "byte-identity"
+          ]
+        }
+      }
+    },
+    "attest": {
+      "tool": "attest",
+      "arguments": {
+        "context_id": "a77e57a77e57a77e57a77e57a77e57a0",
+        "content": {
+          "what": "attest-recall byte-identity conformance vector",
+          "topics": [
+            "P047",
+            "byte-identity"
+          ]
+        }
+      }
+    },
+    "private_key_seed_base64url": "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio",
+    "timestamp_ms": 1783641600000
+  },
+  "expected": {
+    "event_type": "https://atrib.dev/v1/types/observation",
+    "record": {
+      "spec_version": "atrib/1.0",
+      "content_id": "sha256:e75fd1dea166274504c5300f7cb46476d218abb3526c1d7658ff218ab173f6e3",
+      "creator_key": "GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE",
+      "chain_root": "sha256:f1cfd123349e45db8fcca23876d8ebb3a732755843cce6e9fa4916e7ff5a411b",
+      "event_type": "https://atrib.dev/v1/types/observation",
+      "context_id": "a77e57a77e57a77e57a77e57a77e57a0",
+      "timestamp": 1783641600000,
+      "signature": "Tm0J_JN_MWbgVmfMnUDZ2ulw_stGRrflI91ZWvENZAqBkfqAwIyV3WA3AmxOAb49C6EbML1Qe4bk2F39gR7hDQ",
+      "args_hash": "sha256:dab045f87738632213689023f48ef473efd96a789a565514c6b68269823b5849"
+    },
+    "record_hash": "sha256:529d4e9e923e1ecbce32b3da52ccb42628d1220f694b1eb1fa573bae6113062c",
+    "canonical_record_sha256": "529d4e9e923e1ecbce32b3da52ccb42628d1220f694b1eb1fa573bae6113062c",
+    "legacy_producer_label": "atrib-emit",
+    "attest_producer_label": "atrib-attest"
+  }
+}

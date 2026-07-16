@@ -1,5 +1,12 @@
 # @atrib/agent
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [4c2510d]
+  - @atrib/verify@0.10.0
+
 ## 0.4.0
 
 ### Minor Changes

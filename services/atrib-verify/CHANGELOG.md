@@ -1,5 +1,30 @@
 # @atrib/verify-mcp
 
+## 1.0.2
+
+### Patch Changes
+
+- Updated dependencies [4c2510d]
+  - @atrib/verify@0.10.0
+  - @atrib/recall@2.0.0
+
+## 1.0.1
+
+### Patch Changes
+
+- 1f50763: Shorten the package description under the npm registry's 255-character limit; the 1.0.0 description was stored truncated mid-word on the registry.
+
+## 1.0.0
+
+### Major Changes
+
+- b40f207: The attest/recall rename ([D164](DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)). `@atrib/attest` is the new write-verb home: one `attest` tool signs observations, annotations (`ref.kind: "annotates"`), and revisions (`ref.kind: "revises"`), with the legacy `emit` / `atrib-annotate` / `atrib-revise` tool names mounted as permanent aliases over the same handler; records are byte-identical in canonical form. `@atrib/recall` absorbs the trace and handoff-verification implementations and adds the `recall` read verb (shape dispatch, walk directions, and a `verification` parameter with a typed `verifier_unavailable` degradation; `@atrib/verify` becomes an optional peer). `@atrib/emit`, `@atrib/annotate`, `@atrib/revise`, `@atrib/trace`, and `@atrib/verify-mcp` become re-export shims over the new homes; every legacy binary forwards and every legacy import keeps working. The primitives runtime mounts the seventeen-tool alias-window union. Zero signed bytes change; existing mirrors and records stay valid.
+
+### Patch Changes
+
+- Updated dependencies [b40f207]
+  - @atrib/recall@1.0.0
+
 ## 0.2.22
 
 ### Patch Changes

@@ -2,7 +2,41 @@
 
 MCP server for atrib's verifiable action layer. Lets agents query their own provable past from the local signed-record mirror with per-record signature verification.
 
-The consumer-side counterpart to `@atrib/emit`: emit produces signed records, recall reads them back and exposes them to the agent through eight MCP tools. Each returned record carries a `signature_verified` boolean so a poorly-written agent treats tampered records as such.
+The consumer-side counterpart to `@atrib/attest`: attest produces signed records, recall reads them back and exposes them to the agent. Each returned record carries a `signature_verified` boolean so a poorly-written agent treats tampered records as such.
+
+## The `recall` verb and the absorb (attest/recall rename, [D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse))
+
+`@atrib/recall` now exposes a `recall` tool that absorbs the eight legacy
+`recall_*` tools under a `shape` argument, absorbs `trace`/`trace_forward`
+as `shape: "walk"` with a `direction`, and absorbs `atrib-verify` as a
+`verification` parameter. Results are JSON-identical to the legacy tools:
+this is the read-equivalence conformance family in
+[`spec/conformance/attest-recall/`](../../spec/conformance/attest-recall/).
+
+| `shape` | Legacy tool | Notes |
+| --- | --- | --- |
+| `history` | `recall_my_attribution_history` | base filter-rank-page query |
+| `walk` | `recall_walk` | when `direction` omitted or `"backward"`; also absorbs `trace` |
+| `walk` + `direction: "forward"` | `trace_forward` | forward walk over the same graph |
+| `content` | `recall_by_content` | BM25 free-form retrieval |
+| `chain` | `recall_session_chain` | ordered chronological session walk |
+| `annotations` | `recall_annotations` | aggregated annotation summary for a target |
+| `revisions` | `recall_revisions` | forward revision chain for a target |
+| `orphans` | `recall_orphans` | records not cited by any other record |
+| `by_signer` | `recall_by_signer` | per-creator aggregation |
+
+The `verification` parameter absorbs `atrib-verify`: pass the same
+`packet`/`records`/`claims` evidence shapes as `@atrib/verify` and the
+`recall` result carries a verification block instead of a separate tool
+call. `@atrib/verify` (the verifier library) is an OPTIONAL peer
+dependency, lazily imported. When it is absent, `verification` returns a
+typed `{ status: "verifier_unavailable" }` block and the read still
+succeeds; the degradation is explicit and typed, not a silent drop.
+
+`createAtribRecallServer` now mounts the full twelve-tool read union:
+`recall` plus the eight `recall_*` tools plus `trace`, `trace_forward`,
+and `atrib-verify`. All twelve tool names stay mounted as permanent
+aliases during the alias window.
 
 ## Install
 
@@ -14,7 +48,9 @@ Verify a local build with `pnpm --filter @atrib/recall test`.
 
 ## Tool surface
 
-Eight MCP tools cover the cognitive surface of the local mirror.
+The eight legacy `recall_*` tools below cover the cognitive surface of the
+local mirror. They stay mounted as permanent aliases; see the absorb
+section above for the `recall` verb that unifies them under one tool.
 
 ### `recall_my_attribution_history`
 
@@ -187,8 +223,8 @@ Or run via `npx`:
 ## What this does NOT do
 
 - **No log-inclusion verification.** Local signature verification ≠ log commitment proof. Use the log API for inclusion proofs.
-- **No graph derivation.** Returns records, not the [§3.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#324-edge-derivation-rules) graph. For declared-relationship walks, use `@atrib/trace`; for graph projections, query graph-node directly.
-- **No write surface.** Read-only. Use `@atrib/emit` to sign new records.
+- **No graph derivation.** Returns records, not the [§3.2.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#324-edge-derivation-rules) graph. For declared-relationship walks, use `recall` with `shape: "walk"` (the legacy `trace`/`trace_forward` tool names still work); for graph projections, query graph-node directly.
+- **No write surface.** Read-only. Use `@atrib/attest` to sign new records.
 
 ## Part of atrib
 

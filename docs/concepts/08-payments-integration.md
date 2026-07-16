@@ -119,12 +119,12 @@ Steps 9 and 10 in the flow above answer different questions, even though they ru
 
 You can run #9 without #10 (just want to verify what happened). You can't run #10 without #9: calculating on unverified records means calculating on potentially-forged data. The [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) cross-attestation gate is the bouncer for #10; see the next section.
 
-## §4.6 gating
+## Calculation gating
 
-[§4.6](../../atrib-spec.md#46-the-calculation-algorithm)'s calculation algorithm only runs when the graph contains a transaction node. And the transaction MUST carry ≥2 distinct verified signer keys. Strict consumers MAY reject the calculation entirely when `cross_attestation_missing: true`. The default is to compute, return, and surface the flag.
+The [payments profile §8](../../docs/payments-profile.md#8-the-calculation-algorithm) calculation algorithm (relocated from [§4.6](../../atrib-spec.md#46-the-calculation-algorithm) per [D147](../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)) only runs when the graph contains a transaction node. And the transaction MUST carry ≥2 distinct verified signer keys. Strict consumers MAY reject the calculation entirely when `cross_attestation_missing: true`. The default is to compute, return, and surface the flag.
 
 ## See also
 
-- Spec: [§1.7](../../atrib-spec.md#17-transaction-event-hooks), [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records), [§4.6](../../atrib-spec.md#46-the-calculation-algorithm), [§5.8](../../atrib-spec.md#58-degradation-contract)
+- Spec: [§1.7](../../atrib-spec.md#17-transaction-event-hooks), [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records), [payments profile §8](../../docs/payments-profile.md#8-the-calculation-algorithm), [§5.8](../../atrib-spec.md#58-degradation-contract)
 - Decisions: [D052 Cross-attestation requirement](../../DECISIONS.md)
 - Concepts: [The calculation algorithm](09-calculation-algorithm.md) (what runs in step 10)

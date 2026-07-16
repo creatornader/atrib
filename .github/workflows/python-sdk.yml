@@ -9,6 +9,7 @@ name: Python SDK conformance and cross-impl determinism
 # (D136). Path-scoped to the byte-identity surface.
 
 on:
+  merge_group:
   push:
     paths:
       - 'python/**'

@@ -1,7 +1,6 @@
 # attest / recall verb rename: upstream and downstream impact catalog
 
-Status: catalog complete (repo sweep + npm registry check, 2026-07-06). The
-rename does not land until this catalog's sequencing is accepted as an ADR.
+Status: implemented by [D164](../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse) on 2026-07-14. This catalog records the pre-implementation sweep.
 See [`redesign-upgrade-path.md`](redesign-upgrade-path.md) step 6 for the
 decision context: write tools (`atrib-emit`, `atrib-annotate`, `atrib-revise`)
 collapse under **`attest`**; read tools (`atrib-recall`, `atrib-trace`,
@@ -53,14 +52,14 @@ deprecation messages + forwarding shims are the only lever.
 
 | Package | Latest | Rename disposition |
 |---|---|---|
-| `@atrib/emit` | 0.16.2 | superseded by the write verb; deprecate → point at new package |
-| `@atrib/annotate` | 0.2.37 | folds into write verb (`ref.kind: annotates`); deprecate |
-| `@atrib/revise` | 0.2.37 | folds into write verb (`ref.kind: revises`); deprecate |
-| `@atrib/recall` | 0.14.3 | name survives; absorbs trace + verify read shapes |
-| `@atrib/trace` | 0.5.17 | folds into recall (`shape: walk`); deprecate |
-| `@atrib/summarize` | 0.4.19 | relocates to harness; deprecate without replacement pointer |
-| `@atrib/verify-mcp` | 0.2.17 | folds into recall (`verification` param); deprecate. `@atrib/verify` (library, 0.7.10) is NOT renamed: verifier library, not the primitive |
-| `@atrib/attest` | n/a | **unclaimed; available as the target name** |
+| `@atrib/emit` | 1.0.0 | re-export shim for the write verb; older range deprecated |
+| `@atrib/annotate` | 1.0.0 | re-export shim for `attest` with `ref.kind: annotates`; older range deprecated |
+| `@atrib/revise` | 1.0.0 | re-export shim for `attest` with `ref.kind: revises`; older range deprecated |
+| `@atrib/recall` | 1.0.0 | read-verb home; absorbs trace and verify shapes |
+| `@atrib/trace` | 1.0.0 | re-export shim for `recall` shape `walk`; older range deprecated |
+| `@atrib/summarize` | 0.4.23 | deprecated; no successor shape |
+| `@atrib/verify-mcp` | 1.0.1 | re-export shim for the `recall` verification parameter; older range deprecated. `@atrib/verify` (library, 0.9.0) is not renamed |
+| `@atrib/attest` | 0.1.0 | write-verb home |
 | `@atrib/mcp` | 0.18.1 | keeps name; new verb-named helpers exported alongside `handleEmit`/`emitInProcess`, old kept as aliases |
 
 Also class (b):

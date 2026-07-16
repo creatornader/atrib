@@ -1,5 +1,14 @@
 # @atrib/revise
 
+**Legacy home.** The write-verb implementation moved to
+[`@atrib/attest`](../atrib-attest/README.md) per the attest/recall rename
+([D164](../../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)).
+Revision folds into `attest` with `ref: { kind: "revises", target, reason }`.
+This package re-exports the same surface and forwards the `atrib-revise`
+binary to `@atrib/attest`'s handlers. Records are byte-identical. The
+`atrib-revise` tool name stays mounted as a permanent alias during the
+alias window, alongside the new `attest` tool.
+
 MCP server exposing the `atrib-revise` tool for atrib's verifiable action layer. Supersedes a prior signed position with a stated reason, so the contradiction lands as a first-class graph node rather than a silent edit.
 
 Records are immutable per spec [§1.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#16-immutability): once signed, the bytes are fixed forever. When the agent now holds a position incompatible with a prior claim, the only honest move is to sign a revision that points at the prior record, names the prior position, names the new one, and gives the reason. The prior record stays in the graph; the revision adds a REVISES edge that supersedes it. A reader walking the graph sees both, and any policy or recall pipeline that respects revision can prefer the latest.
@@ -93,7 +102,7 @@ Or run as a one-off subprocess via `pnpm --filter @atrib/revise start`.
 
 ## Status
 
-Published and maintained. Cognitive primitive #3 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/annotate` covers the importance-and-meaning primitive (annotation event_type).
+Deprecated on npm; superseded by `@atrib/attest` (`ref.kind: "revises"`), with the `atrib-revise` tool name mounted as a permanent alias. Historically cognitive primitive #3 per [D079](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface). Builds clean against `@atrib/mcp` and `@atrib/emit`'s public exports introduced in `@atrib/emit@0.8.0`. The companion specialized writer `@atrib/annotate` covers the importance-and-meaning primitive (annotation event_type).
 
 ## License
 

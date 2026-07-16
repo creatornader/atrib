@@ -26,6 +26,8 @@
     "measure:local-substrate": "node scripts/measure-local-substrate-default-trial.mjs",
     "prove:local-substrate": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/emit build && node scripts/prove-local-substrate-process-health.mjs",
     "update:primitives-runtime": "node scripts/update-primitives-runtime.mjs",
+    "metrics:npm-downloads": "node scripts/collect-npm-downloads.mjs",
+    "refresh:global-emit-cli": "node scripts/refresh-global-emit-cli.mjs",
     "typos": "typos .",
     "clean": "turbo clean",
     "version-packages": "changeset version",

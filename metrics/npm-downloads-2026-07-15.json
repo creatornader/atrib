@@ -1,0 +1,163 @@
+{
+  "collected_at": "2026-07-15T01:38:24.695Z",
+  "packages": [
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/action-gate",
+      "status": "current",
+      "downloads": 491
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/agent",
+      "status": "current",
+      "downloads": 722
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/cli",
+      "status": "current",
+      "downloads": 537
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/directory",
+      "status": "current",
+      "downloads": 179
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/mcp",
+      "status": "current",
+      "downloads": 922
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/mcp-wrap",
+      "status": "current",
+      "downloads": 571
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/memory-tool",
+      "status": "current",
+      "downloads": 487
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/openinference",
+      "status": "current",
+      "downloads": 572
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/runtime-log",
+      "status": "current",
+      "downloads": 173
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/sdk",
+      "status": "current",
+      "downloads": 557
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/verify",
+      "status": "current",
+      "downloads": 794
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/attest",
+      "status": "current",
+      "downloads": null,
+      "note": "no download data (404)"
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/emit",
+      "status": "deprecated",
+      "downloads": 699
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/annotate",
+      "status": "deprecated",
+      "downloads": 534
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/revise",
+      "status": "deprecated",
+      "downloads": 591
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/recall",
+      "status": "current",
+      "downloads": 569
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/daemon",
+      "status": "current",
+      "downloads": null,
+      "note": "no download data (404)"
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/trace",
+      "status": "deprecated",
+      "downloads": 587
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/summarize",
+      "status": "deprecated",
+      "downloads": 601
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "@atrib/verify-mcp",
+      "status": "deprecated",
+      "downloads": 711
+    },
+    {
+      "registry": "npm",
+      "period": "last-week",
+      "name": "atribd",
+      "status": "deprecated",
+      "downloads": null,
+      "note": "no download data (404)"
+    },
+    {
+      "registry": "pypi",
+      "period": "last-week",
+      "name": "atrib",
+      "status": "current",
+      "downloads": null,
+      "note": "pypistats API 429"
+    }
+  ]
+}

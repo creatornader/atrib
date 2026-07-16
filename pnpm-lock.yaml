@@ -731,18 +731,12 @@ importers:
 
   services/atrib-annotate:
     dependencies:
-      '@atrib/emit':
+      '@atrib/attest':
         specifier: workspace:*
-        version: link:../atrib-emit
-      '@atrib/mcp':
-        specifier: workspace:*
-        version: link:../../packages/mcp
+        version: link:../atrib-attest
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^25.9.3
@@ -757,7 +751,7 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))
 
-  services/atrib-emit:
+  services/atrib-attest:
     dependencies:
       '@atrib/mcp':
         specifier: workspace:*
@@ -791,29 +785,42 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))
 
+  services/atrib-emit:
+    dependencies:
+      '@atrib/attest':
+        specifier: workspace:*
+        version: link:../atrib-attest
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.3
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))
+
   services/atrib-primitives:
     dependencies:
-      '@atrib/annotate':
+      '@atrib/attest':
         specifier: workspace:*
-        version: link:../atrib-annotate
-      '@atrib/emit':
-        specifier: workspace:*
-        version: link:../atrib-emit
+        version: link:../atrib-attest
       '@atrib/recall':
         specifier: workspace:*
         version: link:../atrib-recall
-      '@atrib/revise':
-        specifier: workspace:*
-        version: link:../atrib-revise
       '@atrib/summarize':
         specifier: workspace:*
         version: link:../atrib-summarize
-      '@atrib/trace':
+      '@atrib/verify':
         specifier: workspace:*
-        version: link:../atrib-trace
-      '@atrib/verify-mcp':
-        specifier: workspace:*
-        version: link:../atrib-verify
+        version: link:../../packages/verify
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
@@ -843,9 +850,21 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@atrib/verify':
+        specifier: workspace:*
+        version: link:../../packages/verify
+      '@noble/ed25519':
+        specifier: ^3.1.0
+        version: 3.1.0
+      '@noble/hashes':
+        specifier: ^2.2.0
+        version: 2.2.0
       '@types/node':
         specifier: ^25.9.3
         version: 25.9.3
+      canonicalize:
+        specifier: ^3.0.0
+        version: 3.0.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -855,18 +874,12 @@ importers:
 
   services/atrib-revise:
     dependencies:
-      '@atrib/emit':
+      '@atrib/attest':
         specifier: workspace:*
-        version: link:../atrib-emit
-      '@atrib/mcp':
-        specifier: workspace:*
-        version: link:../../packages/mcp
+        version: link:../atrib-attest
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^25.9.3
@@ -908,15 +921,12 @@ importers:
 
   services/atrib-trace:
     dependencies:
-      '@atrib/mcp':
+      '@atrib/recall':
         specifier: workspace:*
-        version: link:../../packages/mcp
+        version: link:../atrib-recall
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^25.9.3
@@ -933,18 +943,15 @@ importers:
 
   services/atrib-verify:
     dependencies:
-      '@atrib/mcp':
+      '@atrib/recall':
         specifier: workspace:*
-        version: link:../../packages/mcp
+        version: link:../atrib-recall
       '@atrib/verify':
         specifier: workspace:*
         version: link:../../packages/verify
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
     devDependencies:
       '@noble/ed25519':
         specifier: ^3.1.0
@@ -970,30 +977,21 @@ importers:
 
   services/atribd:
     dependencies:
-      '@atrib/annotate':
+      '@atrib/attest':
         specifier: workspace:*
-        version: link:../atrib-annotate
-      '@atrib/emit':
-        specifier: workspace:*
-        version: link:../atrib-emit
+        version: link:../atrib-attest
       '@atrib/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
       '@atrib/recall':
         specifier: workspace:*
         version: link:../atrib-recall
-      '@atrib/revise':
-        specifier: workspace:*
-        version: link:../atrib-revise
       '@atrib/summarize':
         specifier: workspace:*
         version: link:../atrib-summarize
-      '@atrib/trace':
+      '@atrib/verify':
         specifier: workspace:*
-        version: link:../atrib-trace
-      '@atrib/verify-mcp':
-        specifier: workspace:*
-        version: link:../atrib-verify
+        version: link:../../packages/verify
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
@@ -4348,10 +4346,6 @@ packages:
   events@3.3.0:
     resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
     engines: {node: '>=0.8.x'}
-
-  eventsource-parser@3.0.8:
-    resolution: {integrity: sha512-70QWGkr4snxr0OXLRWsFLeRBIRPuQOvt4s8QYjmUlmlkyTZkRqS7EDVRZtzU3TiyDbXSzaOeF0XUKy8PchzukQ==}
-    engines: {node: '>=18.0.0'}
 
   eventsource-parser@3.1.0:
     resolution: {integrity: sha512-kJezFj9YFAMLeORyi7aCLxLbD5/qWMQnoMVlVPyHIll7lgRJCc3JVln9Vgl9nwQi0YkMnhdGTMNn7CkRRAptMg==}
@@ -9234,7 +9228,7 @@ snapshots:
       cors: 2.8.6
       cross-spawn: 7.0.6
       eventsource: 3.0.7
-      eventsource-parser: 3.0.8
+      eventsource-parser: 3.1.0
       express: 5.2.1
       express-rate-limit: 8.4.1(express@5.2.1)
       hono: 4.12.26
@@ -11149,8 +11143,6 @@ snapshots:
   eventemitter3@5.0.4: {}
 
   events@3.3.0: {}
-
-  eventsource-parser@3.0.8: {}
 
   eventsource-parser@3.1.0: {}
 

@@ -1,5 +1,29 @@
 # @atrib/integration
 
+## 0.0.45
+
+### Patch Changes
+
+- Updated dependencies [4c2510d]
+  - @atrib/verify@0.10.0
+  - @atrib/action-gate@0.0.8
+  - @atrib/agent@0.4.1
+  - @atrib/sdk@3.0.0
+  - @atrib/archive-node@0.1.39
+  - @atrib/graph-node@0.1.39
+
+## 0.0.44
+
+### Patch Changes
+
+- @atrib/sdk@2.0.1
+
+## 0.0.43
+
+### Patch Changes
+
+- @atrib/sdk@2.0.0
+
 ## 0.0.42
 
 ### Patch Changes

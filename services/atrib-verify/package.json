@@ -1,7 +1,7 @@
 {
   "name": "@atrib/verify-mcp",
-  "version": "0.2.22",
-  "description": "MCP server for atrib's verifiable action layer. Verifies handoff evidence before agents link follow-up work.",
+  "version": "1.0.2",
+  "description": "Legacy home of atrib's handoff-verification read primitive. Superseded by @atrib/recall (the read verb, verification parameter); re-exports the same surface, forwards the atrib-verify binary, and keeps a hard dependency on the @atrib/verify library.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
     "atrib",
@@ -29,10 +29,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@atrib/mcp": "workspace:*",
+    "@atrib/recall": "workspace:*",
     "@atrib/verify": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^4.4.3"
+    "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {
     "@noble/ed25519": "^3.1.0",

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// atrib-revise standalone binary. Wires the McpServer to a stdio transport
-// so it can be launched as a subprocess by an MCP host (Claude Code,
-// Claude Desktop, etc.).
+// atrib-revise standalone binary (forwarding shim). Serves the legacy
+// atrib-revise server, which mounts `atrib-revise` plus `attest` per the
+// alias-window rule W1.
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { createAtribReviseServer } from './index.js'
+import { createAtribReviseServer } from '@atrib/attest'
 
 async function main() {
   const { mcp } = await createAtribReviseServer()

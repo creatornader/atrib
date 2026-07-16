@@ -68,7 +68,7 @@ when this is skipped).
 
 ## Non-goals
 
-- The P047 rename (own charter, gated on the atribd npm seed).
+- The P047 rename (own charter; landed as [D164](../DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse), and the atribd npm-seed gate has since lifted).
 - New decisions: everything here implements decided things ([D137](../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)-[D140](../DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys), [D143](../DECISIONS.md#d143-authority-propagation-is-verifier-side-policy-over-informed_by),
   [D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core), [D149](../DECISIONS.md#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance)-[D150](../DECISIONS.md#d150-attestation-is-corroboration-generalized-off-transactions-extension-first)). If you find yourself needing a new decision, stop and
   write it in the report as an open question.

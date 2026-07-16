@@ -1,7 +1,7 @@
 {
   "name": "@atrib/daemon",
-  "version": "0.1.0",
-  "description": "Local daemon for atrib. Serves the seven cognitive primitives from one stateless-native process over Streamable HTTP or stdio.",
+  "version": "0.2.1",
+  "description": "Local daemon for atrib. Serves the attest/recall verbs plus the legacy alias tools from one stateless-native process over Streamable HTTP or stdio.",
   "keywords": [
     "atrib",
     "mcp",
@@ -28,7 +28,8 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "bin": {
     "atribd": "./dist/index.js"
@@ -44,14 +45,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@atrib/annotate": "workspace:*",
-    "@atrib/emit": "workspace:*",
+    "@atrib/attest": "workspace:*",
     "@atrib/mcp": "workspace:*",
     "@atrib/recall": "workspace:*",
-    "@atrib/revise": "workspace:*",
     "@atrib/summarize": "workspace:*",
-    "@atrib/trace": "workspace:*",
-    "@atrib/verify-mcp": "workspace:*",
+    "@atrib/verify": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {

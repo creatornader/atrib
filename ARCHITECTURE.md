@@ -537,7 +537,7 @@ Versioned URL paths (`/v1/checkpoint`, `/v6/lookup/<key>`) are immutable: once a
   └── Builds and verifies log_window_manifest objects for host-owned run
       windows. It does not sign records or store raw runtime logs.
 
-@atrib/sdk            Consolidated client SDK (first-publish pending)
+@atrib/sdk            Consolidated client SDK
   └── attest() / recall() verbs, daemon-first over the local primitives
       runtime with in-process fallback; re-exports the §1 record layer.
       Byte-identical Python sibling lives at python/ (PyPI `atrib`).
@@ -555,24 +555,36 @@ Standalone services (under `services/`):
 services/log-node     Production tlog (Tessera-style, Node.js)
 services/graph-node   Production graph derivation service
 services/directory-node  Production AKD-backed identity directory (per §6.2)
-services/atrib-emit   Two binaries: MCP server `atrib-emit` (interactive)
-  │                   and CLI `atrib-emit-cli` (D082, for hook-class
-  │                   producers). Both route through the same handleEmit
-  │                   path so records are byte-identical.
+services/atrib-attest  Write-verb home. Two binaries: MCP server
+  │                   `atrib-attest` (interactive) and CLI
+  │                   `atrib-attest-cli` (D082, for hook-class producers).
+  │                   Both route through the same handleEmit path so
+  │                   records are byte-identical. The `attest` tool signs
+  │                   observations by default; `ref.kind: "annotates"` /
+  │                   `"revises"` sign annotations and revisions. The
+  │                   legacy `atrib-emit`, `atrib-emit-cli`,
+  │                   `atrib-annotate`, and `atrib-revise` names stay
+  │                   mounted as permanent aliases (D164).
   └── Producer-side cognitive primitive, agent invokes when it wants to
       sign observations / annotations / revisions the wrapper doesn't
       auto-capture (built-in tool calls, reasoning steps). Records are
       byte-identical to wrapper-signed records (verifier MUST NOT
       distinguish). Inherits the wrapper's session via local mirror
-      autoChain so explicit emits chain cleanly with mechanical tool
+      autoChain so explicit attests chain cleanly with mechanical tool
       calls in the same session.
 
-services/atrib-trace  MCP server for backward declared-relationship walking
+services/atrib-recall  Read-verb home. Absorbs backward/forward
+  │                   declared-relationship walking (legacy `atrib-trace` /
+  │                   `trace_forward`, now `recall` with `shape: "walk"`)
+  │                   and handoff verification (legacy `atrib-verify`, now
+  │                   the `verification` parameter, with `@atrib/verify`
+  │                   as an optional peer that degrades to a typed
+  │                   `verifier_unavailable` block when absent).
   └── Consumer-side cognitive primitive, reads the local mirror (per
-      §5.9), follows `informed_by` edges backward from a starting record
-      hash, surfaces sidecar_summary per visited record (tool name,
-      span kind/name, model, prompt version, topics, intent). Read-only;
-      does not sign. Lets an agent reconstruct
+      §5.9), follows `informed_by` edges backward or forward from a
+      starting record hash, surfaces sidecar_summary per visited record
+      (tool name, span kind/name, model, prompt version, topics, intent).
+      Read-only; does not sign. Lets an agent reconstruct
       "how did I arrive at this conclusion?" without round-tripping
       through the public log.
 
@@ -582,21 +594,16 @@ services/atrib-summarize  MCP server for narrative synthesis across N records
       LLM (defaults to NIM qwen3.5-397b) to synthesize a narrative. The
       prompt includes normalized sidecar content, including OpenInference
       prompt/output/usage/cost metadata when present. Closes the
-      consumer-side loop: agents read context, not raw records.
+      consumer-side loop: agents read context, not raw records. Has no
+      successor shape in `recall`; stays mounted through the alias window.
 
-services/atrib-verify  MCP server for counterparty handoff evidence checks
-  └── Consumer-side cognitive primitive, reads caller-supplied continuation
-      packets or mirror envelopes, verifies record signatures, body
-      commitments, inclusion proofs, trusted signers, context policy, and
-      freshness, then returns accepted hashes for `informed_by`. Read-only;
-      it does not fetch archives or sign records.
-
-services/atrib-primitives  Private local runtime for all cognitive primitives
-  └── Mounts the seven primitive packages in process and exposes their 15
-      physical MCP tools through one stdio server. This is a dogfood runtime
-      for startup-spawn harnesses that would otherwise launch one child
-      process per primitive. It does not replace the public primitive packages
-      or add a protocol event type.
+services/atrib-primitives  Private local runtime for the cognitive primitives
+  └── Mounts three primitives (attest write home, recall read home,
+      summarize) in process and exposes the seventeen-tool union (fifteen
+      legacy aliases plus `attest` plus `recall`) through one stdio
+      server. This is a dogfood runtime for startup-spawn harnesses that
+      would otherwise launch one child process per primitive. It does not
+      replace the public primitive packages or add a protocol event type.
 
 services/archive-node  Record Body Archive Layer (§2.12), deployed at https://archive.atrib.dev/v1
   └── Separate from log-node by design. Stores canonical record bodies
@@ -608,7 +615,7 @@ services/archive-node  Record Body Archive Layer (§2.12), deployed at https://a
       contract.
 ```
 
-The nineteen designed-public packages are in source: eleven SDK and integration packages (`mcp`, `agent`, `action-gate`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`, `runtime-log`, `sdk`), seven cognitive-primitive MCP servers (`emit`, `annotate`, `revise`, `recall`, `trace`, `summarize`, `verify-mcp`), and one local daemon (`atribd`, published as `@atrib/daemon`). `@atrib/action-gate` is published on npm with Trusted Publisher configured for later releases. `runtime-log` version 0.2.0 was first-published manually, with Trusted Publisher configured for later releases. The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The `atribd` daemon composes them into one stateless-native local process (Streamable HTTP, direct stdio, or a stdio-to-HTTP proxy shim) with per-context write serialization; it is the recommended local topology per [D148](DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime), and signed records stay byte-identical to the standalone binaries. The private `@atrib/primitives-runtime` binary keeps the legacy session-based host until the operator cutover; no separate deployment is needed for either. The `atrib` Python distribution (`python/`, outside the pnpm workspace) is the first non-TypeScript implementation of the [§1](atrib-spec.md#1-attribution-record-format) record layer, held byte-identical to the TypeScript one by the shared conformance corpora and a cross-implementation determinism harness ([D136](DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested)).
+The twenty designed-public packages are in source: eleven SDK and integration packages (`mcp`, `agent`, `action-gate`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`, `runtime-log`, `sdk`) and the eight cognitive-primitive MCP packages (`attest`, the write verb, and `recall`, the read verb, plus the legacy `emit`, `annotate`, `revise`, `trace`, `summarize`, `verify-mcp`, kept as re-export shims with their tool names mounted as permanent aliases per the attest/recall rename [D164](DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)). The `atribd` local daemon is published as `@atrib/daemon` and is the recommended local topology; the private `@atrib/primitives-runtime` package remains only for compatibility and test coverage. The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The `atribd` daemon mounts three primitives (attest write home, recall read home, summarize) into one stateless-native local process (Streamable HTTP, direct stdio, or a stdio-to-HTTP proxy shim) serving the seventeen-tool union, with per-context write serialization across every write-union tool name; it is the recommended local topology per [D148](DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime), and signed records stay byte-identical to the standalone binaries. The `atrib` Python distribution (`python/`, outside the pnpm workspace) is the first non-TypeScript implementation of the [§1](atrib-spec.md#1-attribution-record-format) record layer, held byte-identical to the TypeScript one by the shared conformance corpora and a cross-implementation determinism harness ([D136](DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested)).
 
 Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hashes` for SHA-256, `canonicalize` for JCS. Framework dependencies are structural-typed, never hard-imported.
 
