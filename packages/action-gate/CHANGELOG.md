@@ -1,5 +1,12 @@
 # @atrib/action-gate
 
+## 0.0.9
+
+### Patch Changes
+
+- 2a58186: Reject contradictory action-gate entries during signing and verification. Add
+  precomputed digests and truthful not-executed outcomes for split-phase hosts.
+
 ## 0.0.8
 
 ### Patch Changes
