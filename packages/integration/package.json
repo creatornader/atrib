@@ -1,6 +1,6 @@
 {
   "name": "@atrib/integration",
-  "version": "0.0.44",
+  "version": "0.0.45",
   "description": "Cross-package integration tests and runnable framework examples for atrib's verifiable action layer.",
   "license": "Apache-2.0",
   "repository": {
