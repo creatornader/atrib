@@ -60,7 +60,8 @@ updates:
       # the pinned AP2 / VI reference artifacts, whose L2 payloads carry the
       # same disclosure digest in both _sd and delegate_payload. Taking the
       # bump needs the upstream duplicate-reference question resolved and the
-      # reference artifacts regenerated first (tracked follow-up, 2026-07-15).
+      # reference artifacts regenerated first. Upstream report:
+      # https://github.com/agent-intent/verifiable-intent/issues/29
       - dependency-name: "@sd-jwt/core"
       - dependency-name: "@sd-jwt/sd-jwt-vc"
     groups:
