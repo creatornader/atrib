@@ -8,11 +8,14 @@ name: Dependabot auto-merge
 # Why this exists: per the operator's policy, security-patch PRs for
 # transitive deps should land continuously without per-PR review friction.
 # Manual review for these turns Dependabot into a backlog instead of a
-# safety net. The 10 required CI checks on `main` (test, scan / gitleaks,
-# scan / TruffleHog, scan / typos, pre-commit textleaks+oss-twin-check,
-# CodeQL, Analyze actions, Analyze javascript-typescript, Analyze python,
-# Analyze rust) already gate the merge; auto-merge just removes the human
-# in the loop for low-risk version bumps that pass those gates.
+# safety net. The 8 required CI checks on `main` (test, test 3.10,
+# test 3.12, scan / gitleaks, scan / TruffleHog, scan / typos,
+# pre-commit textleaks+oss-twin-check, CodeQL aggregator) already gate
+# the merge; auto-merge just removes the human in the loop for low-risk
+# version bumps that pass those gates. The per-language Analyze contexts
+# were dropped from required checks on 2026-07-16: default-setup CodeQL
+# skips them on lockfile-only diffs, which deadlocked deps-only PRs
+# (see the branch-protection posture runbook).
 #
 # Configuration:
 # - Only PRs authored by dependabot[bot] are considered
