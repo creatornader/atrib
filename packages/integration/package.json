@@ -73,6 +73,7 @@
     "graphiti-core-ollama-smoke": "tsx examples/graphiti/graphiti-core-ollama-smoke.ts",
     "mcp-oauth-evidence": "tsx scripts/mcp-oauth-evidence.ts",
     "mcp-oauth-live-archive": "tsx scripts/mcp-oauth-live-archive.ts",
+    "mcp-interceptor-audit": "tsx examples/mcp-interceptor-audit/mcp-interceptor-audit-smoke.ts",
     "x401-proof-sdk-compat": "tsx scripts/check-proof-x401-sdk-compat.ts",
     "open-x401-credential-e2e": "tsx scripts/open-x401-credential-e2e.ts",
     "open-x401-credential-packet": "tsx scripts/open-x401-credential-packet.ts",
