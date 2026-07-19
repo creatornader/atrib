@@ -28,6 +28,7 @@
     "mem0-oss-full-cycle-smoke": "tsx examples/mem0/mem0-oss-full-cycle-smoke.ts",
     "mem0-client-smoke": "tsx examples/mem0/mem0-client-smoke.ts",
     "mem0-python-oss-smoke": "tsx examples/mem0/mem0-python-oss-smoke.ts",
+    "mem0-mutation-assurance": "pnpm --filter @atrib/action-gate build && tsx examples/mem0/mem0-mutation-assurance-smoke.ts",
     "letta-memory-smoke": "tsx examples/letta-memory/letta-memory-smoke.ts",
     "langgraph-store-smoke": "tsx examples/langgraph-store/langgraph-store-smoke.ts",
     "langgraph-python-checkpointer-smoke": "tsx examples/langgraph-python-checkpointer/langgraph-python-checkpointer-smoke.ts",
