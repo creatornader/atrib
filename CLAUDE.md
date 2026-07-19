@@ -111,6 +111,7 @@ atrib/
           paid-x402-action-gate/ # Local Cloudflare x402 paid-agent proof with Action Gate policy and hash-only lifecycle facts.
           x402-path-b-reference/ # Local x402 v2 Path B reference: 402 challenge, paid retry context propagation, PAYMENT-RESPONSE detection, agent-side transaction emission, and counterparty attestation.
           oauth-evidence-infra/ # Cloudflare Worker + Durable Object reference for DPoP replay cache and OAuth introspection evidence.
+        mcp-interceptor-audit/ # Experimental MCP interceptor proof: exact request/response pairing, hash-only receipt, private sidecar.
         vercel-ai-sdk/         # createMCPClient + AI Gateway example
         langchain-js/          # MultiServerMCPClient + loadMcpTools example
         langgraph-store/       # LangGraph JS BaseStore memory proof with hash-only atrib records.

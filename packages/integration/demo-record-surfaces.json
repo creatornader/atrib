@@ -427,6 +427,13 @@
       "record_class": "public-proof",
       "endpoint_posture": "public-write",
       "commands": ["mcp-oauth-live-archive"]
+    },
+    {
+      "id": "mcp-interceptor-audit",
+      "path": "examples/mcp-interceptor-audit",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["mcp-interceptor-audit"]
     }
   ]
 }
