@@ -313,7 +313,8 @@
         "mem0-oss-compat-smoke",
         "mem0-oss-full-cycle-smoke",
         "mem0-client-smoke",
-        "mem0-python-oss-smoke"
+        "mem0-python-oss-smoke",
+        "mem0-mutation-assurance"
       ]
     },
     {
