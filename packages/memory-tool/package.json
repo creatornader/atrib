@@ -44,7 +44,7 @@
     "@anthropic-ai/sdk": ">=0.100.1"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.112.1",
+    "@anthropic-ai/sdk": "^0.112.3",
     "@types/node": "^26.1.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
