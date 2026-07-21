@@ -301,7 +301,18 @@
       "path": "examples/openinference",
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
-      "commands": ["openinference-cognitive-loop", "openinference-dual-export-smoke"]
+      "commands": [
+        "openinference-cognitive-loop",
+        "openinference-dual-export-smoke",
+        "openinference-phoenix-private-evidence"
+      ]
+    },
+    {
+      "id": "openinference-private-evidence-live",
+      "path": "examples/openinference",
+      "record_class": "public-proof",
+      "endpoint_posture": "public-write",
+      "commands": ["openinference-phoenix-private-evidence-live"]
     },
     {
       "id": "mem0",

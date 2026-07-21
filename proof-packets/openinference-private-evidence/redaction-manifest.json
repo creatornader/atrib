@@ -1,0 +1,36 @@
+{
+  "proof": "openinference-private-evidence",
+  "source_bodies": "synthetic",
+  "kept_local": [
+    "OpenInference input.value",
+    "OpenInference output.value",
+    "private mirror path",
+    "exact span ids"
+  ],
+  "sent_to_phoenix": [
+    "trace id",
+    "span id",
+    "span name",
+    "OpenInference span kind",
+    "tool name",
+    "tool call id",
+    "model name",
+    "safe run id"
+  ],
+  "published_to_atrib_log_and_archive": [
+    "signed record",
+    "salted input commitment",
+    "salted output commitment",
+    "trace id as context_id",
+    "record hash",
+    "Merkle inclusion proof",
+    "signed checkpoint"
+  ],
+  "not_claimed": [
+    "Phoenix reconstructs deleted traces",
+    "public atrib records contain exact span ids",
+    "witness cosignature",
+    "cross-log replication",
+    "customer demand or production deployment"
+  ]
+}
