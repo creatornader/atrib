@@ -1,0 +1,61 @@
+{
+  "status": "ok",
+  "run_id": "phoenix-retention-proof-1784636891001-3740e2a3",
+  "phoenix": {
+    "version": "19.3.0",
+    "project": "default",
+    "trace_received": true,
+    "private_input_exported": false,
+    "private_output_exported": false,
+    "trace_deleted": true
+  },
+  "atrib": {
+    "records": 2,
+    "record_hashes": [
+      "sha256:abd22d3ca458a995cd0f11bade33a7fc04b578ccdbb8472203b9de5b178c650f",
+      "sha256:e8816e3598192d0508aeb5c76d471c734e73c170ccb3446c1b5646856a46f130"
+    ],
+    "context_ids": ["58c438cdaf1207f63596d38419b2c906"],
+    "signed_trace_correlation": true,
+    "signatures_valid_after_phoenix_delete": true,
+    "private_args_match_commitments_after_phoenix_delete": true,
+    "private_results_match_commitments_after_phoenix_delete": true,
+    "private_mirror_written": true
+  },
+  "public_proof": {
+    "log_endpoint": "https://log.atrib.dev/v1",
+    "archive_endpoint": "https://archive.atrib.dev/v1",
+    "records": [
+      {
+        "record_hash": "sha256:abd22d3ca458a995cd0f11bade33a7fc04b578ccdbb8472203b9de5b178c650f",
+        "log_index": 91392,
+        "inclusion_valid": true,
+        "checkpoint_signature_valid": true,
+        "checkpoint_key_id_matches": true,
+        "archive_record_matches": true,
+        "private_body_published": false,
+        "log_lookup": "https://log.atrib.dev/v1/lookup/abd22d3ca458a995cd0f11bade33a7fc04b578ccdbb8472203b9de5b178c650f",
+        "archive_record": "https://archive.atrib.dev/v1/record/abd22d3ca458a995cd0f11bade33a7fc04b578ccdbb8472203b9de5b178c650f",
+        "explorer_action": "https://explore.atrib.dev/action/sha256:abd22d3ca458a995cd0f11bade33a7fc04b578ccdbb8472203b9de5b178c650f"
+      },
+      {
+        "record_hash": "sha256:e8816e3598192d0508aeb5c76d471c734e73c170ccb3446c1b5646856a46f130",
+        "log_index": 91393,
+        "inclusion_valid": true,
+        "checkpoint_signature_valid": true,
+        "checkpoint_key_id_matches": true,
+        "archive_record_matches": true,
+        "private_body_published": false,
+        "log_lookup": "https://log.atrib.dev/v1/lookup/e8816e3598192d0508aeb5c76d471c734e73c170ccb3446c1b5646856a46f130",
+        "archive_record": "https://archive.atrib.dev/v1/record/e8816e3598192d0508aeb5c76d471c734e73c170ccb3446c1b5646856a46f130",
+        "explorer_action": "https://explore.atrib.dev/action/sha256:e8816e3598192d0508aeb5c76d471c734e73c170ccb3446c1b5646856a46f130"
+      }
+    ]
+  },
+  "boundary": {
+    "public_record_contains_span_id": false,
+    "private_mirror_contains_span_id": true,
+    "public_log_inclusion_proved": true,
+    "independent_chronology_claim": "single signed log checkpoint; no witness cosignature or cross-log replication claimed"
+  }
+}

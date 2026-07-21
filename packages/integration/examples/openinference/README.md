@@ -62,6 +62,29 @@ PHOENIX_PROJECT_NAME=default \
 
 Backend verification checks that Phoenix returns the same trace id, span ids, and span names that atrib signed into local sidecars. The run marker is emitted as extra trace metadata and reported when the backend exposes it.
 
+## Private evidence across Phoenix retention
+
+The Phoenix lifecycle proof exercises a stricter privacy boundary than the dual-export smoke. The local span stream still contains synthetic private tool input and output. `AtribSpanProcessor` signs salted commitments to that material and writes the disclosure to a mode-0600 private mirror. A separate allowlist exporter removes user content, span events, links, and status messages before sending the trace to Phoenix.
+
+Start Phoenix, then run the proof:
+
+```bash
+docker run --rm -p 6006:6006 arizephoenix/phoenix:19.3.0
+pnpm --filter @atrib/integration openinference-phoenix-private-evidence
+```
+
+The script confirms that Phoenix received the expected trace and span ids without the private bodies. It deletes the trace through Phoenix's REST API, confirms the trace is gone, then verifies the atrib signatures and replays the private input and output commitments from the local mirror.
+
+The signed `context_id` carries the OpenTelemetry trace id. Exact span ids remain in the private mirror and are not part of the public atrib record. This local run does not prove public-log inclusion or independent chronology. It proves the redaction, deletion, signature, and private-disclosure lifecycle that a logged deployment can build on.
+
+To submit the synthetic hash-only records to the public atrib log and archive, set the explicit live-proof flag:
+
+```bash
+pnpm --filter @atrib/integration openinference-phoenix-private-evidence-live
+```
+
+The live path verifies that each Merkle leaf matches the signed record, verifies inclusion against the returned checkpoint, checks the checkpoint signature and log key id, and retrieves the archived record. It does not submit the private mirror or its span bodies.
+
 For Langfuse export, set `ATRIB_OPENINFERENCE_OTLP_ENDPOINT` to the full OTLP trace endpoint and pass auth through `ATRIB_OPENINFERENCE_OTLP_HEADERS` or `OTEL_EXPORTER_OTLP_HEADERS`. To prove Langfuse receipt, enable backend verification and provide Langfuse read credentials:
 
 ```bash
