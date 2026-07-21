@@ -403,6 +403,8 @@ export interface AnchorTransport {
   readonly anchorType: AnchorType
   readonly anchorId: string
   submit(request: AnchorSubmissionRequest): AnchorSubmissionOutcome | Promise<AnchorSubmissionOutcome>
+  /** Drain transport-owned work during tests and host shutdown. */
+  flush?(): Promise<void>
 }
 
 /** Injectable fetch surface for offline adapter tests and host-owned HTTP policy. */
@@ -467,6 +469,7 @@ export function createAtribLogAnchorTransport(
       queue.submit(request.record, request.priority)
       return { anchor_type: 'atrib-log', anchor_id: anchorId, status: 'queued' }
     },
+    flush: () => queue.flush(),
   }
 }
 
@@ -799,10 +802,15 @@ export function createAnchorFanout(options: CreateAnchorFanoutOptions = {}): Anc
     },
 
     async flush(): Promise<void> {
-      while (inFlight.length > 0) {
-        const batch = inFlight.splice(0)
-        await Promise.allSettled(batch)
-      }
+      do {
+        while (inFlight.length > 0) {
+          const batch = inFlight.splice(0)
+          await Promise.allSettled(batch)
+        }
+        await Promise.allSettled(
+          transports.map((transport) => transport.flush?.() ?? Promise.resolve()),
+        )
+      } while (inFlight.length > 0)
     },
   }
 }

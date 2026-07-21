@@ -569,6 +569,29 @@ describe('createAnchorFanout / submitToAnchors', () => {
     expect(settled).toBe(true)
   })
 
+  it('flush drains work owned by an atrib-log transport queue', async () => {
+    const record = await makeSignedRecord()
+    let queueFlushed = false
+    const queue = fakeQueue()
+    queue.flush = async () => {
+      queueFlushed = true
+    }
+    const transport = createAtribLogAnchorTransport(
+      { anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' },
+      { queue },
+    )
+    const fanout = createAnchorFanout({
+      config: {
+        anchors: [{ anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' }],
+        allow_single_anchor: true,
+      },
+      transports: [transport],
+    })
+    fanout.submitToAnchors(record)
+    await fanout.flush()
+    expect(queueFlushed).toBe(true)
+  })
+
   it('standalone submitToAnchors is a synchronous one-shot over the same fan-out', async () => {
     const record = await makeSignedRecord()
     const leg = recordingTransport('atrib-log', 'log-a')
