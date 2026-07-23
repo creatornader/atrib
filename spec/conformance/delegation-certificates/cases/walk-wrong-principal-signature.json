@@ -62,6 +62,8 @@
       "cert_hash": "sha256:7f912baaf4198cdb63499a0ef99e3f7bc85291ec4a0510e240b8c9164f58f3d4",
       "cert_valid": false,
       "in_window": null,
+      "time_basis": null,
+      "time_trusted": null,
       "context_bound": null,
       "cert_bound": null,
       "scope_check": null,

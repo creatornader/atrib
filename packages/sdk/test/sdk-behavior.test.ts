@@ -30,6 +30,8 @@ import {
   buildEmitArgs,
   createAtribClient,
   recordHashRef,
+  SHAPE_TO_TOOL,
+  toToolArgs,
   verifyRecord,
   type AtribRecord,
   type AttestInput,
@@ -147,6 +149,16 @@ describe('buildEmitArgs', () => {
   })
 })
 
+describe('recall shape routing', () => {
+  it('routes state through the modern recall tool and preserves its shape discriminator', () => {
+    expect(SHAPE_TO_TOOL.state).toBe('recall')
+    expect(toToolArgs({ shape: 'state', include_content: false })).toEqual({
+      shape: 'state',
+      include_content: false,
+    })
+  })
+})
+
 // ── 2. attest() in-process fallback ──────────────────────────────────────
 
 describe('attest() in-process fallback (daemon off)', () => {
@@ -221,7 +233,7 @@ describe('attest() in-process fallback (daemon off)', () => {
     const result = await client.attest({
       content: { what: 'sdk behavior test emit', topics: ['test'] },
     })
-    await client.flushAnchors()
+    const reports = await client.flushAnchors()
     await client.close()
 
     expect(result.via).toBe('in-process')
@@ -236,6 +248,16 @@ describe('attest() in-process fallback (daemon off)', () => {
       effective_anchor_count: 1,
       used_default_set: false,
       warned: true,
+      basis: 'configured_descriptors',
+      plurality_met: null,
+    })
+    expect(reports).toHaveLength(1)
+    expect(reports[0]).toMatchObject({
+      configured_anchor_count: 1,
+      attempted_anchor_count: 1,
+      successful_submission_count: 0,
+      proof_ready_anchor_count: 0,
+      queued_anchor_count: 1,
     })
 
     // The anchor received the bare signed record (§5.9: never the envelope).
@@ -299,18 +321,29 @@ describe('attest() in-process fallback (daemon off)', () => {
     try {
       const result = await client.attest({ content: { what: 'anchor fan-out test' } })
       expect(result.via).toBe('in-process')
-      // Two anchors ⇒ plurality met, no warning, no default set.
+      // Two configured descriptors avoid the configuration warning. Actual
+      // plurality remains a verifier decision over returned proof material.
       expect(result.anchor_posture).toEqual({
         effective_anchor_count: 2,
         used_default_set: false,
         warned: false,
+        basis: 'configured_descriptors',
+        plurality_met: null,
       })
       expect(result.warnings.some((w) => w.includes('anchor fan-out skipped'))).toBe(false)
 
       // flushAnchors drains the fan-out legs; the atrib-log transport's own
       // queue confirms asynchronously, so poll briefly for the second
       // anchor's POST.
-      await client.flushAnchors()
+      const reports = await client.flushAnchors()
+      expect(reports).toHaveLength(1)
+      expect(reports[0]).toMatchObject({
+        configured_anchor_count: 2,
+        attempted_anchor_count: 2,
+        successful_submission_count: 0,
+        proof_ready_anchor_count: 0,
+        queued_anchor_count: 2,
+      })
       const deadline = Date.now() + 3000
       while (posts2.length === 0 && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 25))
@@ -352,6 +385,8 @@ describe('attest() in-process fallback (daemon off)', () => {
         effective_anchor_count: 1,
         used_default_set: false,
         warned: false,
+        basis: 'configured_descriptors',
+        plurality_met: null,
       })
     } finally {
       if (saved === undefined) delete process.env['ATRIB_MIRROR_FILE']
@@ -390,6 +425,11 @@ const DAEMON_HISTORY_RESULT = {
   total: 1,
 }
 
+const DAEMON_STATE_RESULT = {
+  schema: 'atrib.state-projection.v1',
+  cells: [],
+}
+
 interface MockDaemon {
   endpoint: string
   close(): Promise<void>
@@ -412,6 +452,14 @@ async function startMockDaemon(): Promise<MockDaemon> {
       content: [{ type: 'text' as const, text: JSON.stringify(DAEMON_HISTORY_RESULT) }],
     }),
   )
+  mcp.registerTool('recall', { description: 'mock modern recall tool' }, async () => ({
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(DAEMON_STATE_RESULT),
+      },
+    ],
+  }))
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
   })
@@ -459,6 +507,15 @@ describe('daemon path over Streamable HTTP', () => {
       expect(recalled.via).toBe('daemon')
       expect(recalled.data).toEqual(DAEMON_HISTORY_RESULT)
       expect(recalled.warnings).toEqual([])
+
+      const state = await client.recall<typeof DAEMON_STATE_RESULT>({
+        shape: 'state',
+        include_content: false,
+      })
+      expect(state.via).toBe('daemon')
+      expect(state.data).toMatchObject({
+        schema: 'atrib.state-projection.v1',
+      })
     } finally {
       await client.close()
       await daemon.close()

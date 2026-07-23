@@ -52,3 +52,16 @@ describe('overview copy', () => {
     expect(html).toContain('External evidence blocks passed verifier checks.')
   })
 })
+
+describe('session revision state copy', () => {
+  it('keeps public commitments distinct from receiver-accepted state', () => {
+    expect(html).toContain('function renderPublicRevisionStatePanel(state)')
+    expect(html).toContain("el('h2', {}, 'current revision state')")
+    expect(html).toContain('Every visible head remains visible.')
+    expect(html).toContain(
+      'This browser view does not apply a receiver trust policy or independently verify inclusion proofs.',
+    )
+    expect(html).toContain('public commitment view')
+    expect(html).toContain('/graph-utils.mjs?v=2026-07-23-public-revision-state')
+  })
+})

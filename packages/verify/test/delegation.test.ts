@@ -26,7 +26,7 @@
 import { describe, it, expect } from 'vitest'
 import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
-import { base64urlEncode, genesisChainRoot } from '@atrib/mcp'
+import { base64urlEncode, computeContentId, genesisChainRoot, signRecord } from '@atrib/mcp'
 import {
   checkDelegationScope,
   checkCostPolicy,
@@ -36,10 +36,12 @@ import {
   delegationCertSigningInput,
   evaluateDelegation,
   evaluateRevokerAuthorization,
+  resolveDelegationRevocations,
   type DelegatedRecord,
   type DelegationCertificate,
   type KeyRevocationRecordLike,
 } from '../src/delegation.js'
+import { verifyRecord as verifyRecordAnnotated } from '../src/verify-record.js'
 
 // @noble/ed25519 v3 needs sha512 wired (idempotent).
 ed.hashes.sha512 = sha512
@@ -68,7 +70,11 @@ async function signCert(
   return { ...unsigned, signature: base64urlEncode(await ed.signAsync(input, seed)) }
 }
 
-function runRecord(creatorKey: string, timestamp: number, extra: Partial<DelegatedRecord> = {}): DelegatedRecord {
+function runRecord(
+  creatorKey: string,
+  timestamp: number,
+  extra: Partial<DelegatedRecord> = {},
+): DelegatedRecord {
   return {
     spec_version: 'atrib/1.0',
     content_id: `sha256:${'aa'.repeat(32)}`,
@@ -89,6 +95,8 @@ const DEPTH0 = {
   cert_hash: null,
   cert_valid: null,
   in_window: null,
+  time_basis: null,
+  time_trusted: null,
   context_bound: null,
   cert_bound: null,
   scope_check: null,
@@ -196,14 +204,10 @@ describe('ambiguity rule (§1.11.4)', () => {
     const principals = outcome.candidates!.map((c) => c.principal_key).sort()
     expect(principals).toEqual([await pub(P1_SEED), await pub(P2_SEED)].sort())
     // Each candidate surfaces its own facts rather than a chosen one.
-    const p1Candidate = outcome.candidates!.find(
-      (c) => c.cert_hash === delegationCertHash(certP1),
-    )!
+    const p1Candidate = outcome.candidates!.find((c) => c.cert_hash === delegationCertHash(certP1))!
     expect(p1Candidate.context_bound).toBe(true)
     expect(p1Candidate.scope_check?.in_scope).toBe(true)
-    const p2Candidate = outcome.candidates!.find(
-      (c) => c.cert_hash === delegationCertHash(certP2),
-    )!
+    const p2Candidate = outcome.candidates!.find((c) => c.cert_hash === delegationCertHash(certP2))!
     expect(p2Candidate.context_bound).toBeNull() // no context_id on certP2
     expect(p2Candidate.scope_check).toBeNull()
   })
@@ -376,8 +380,39 @@ describe('depth limit (§1.11.2: principal MUST NOT be a run key)', () => {
   })
 })
 
+describe('trusted-time delegation evaluation', () => {
+  it('uses verifier time for expiry and labels signer-time fallback', async () => {
+    const principal = await pub(P1_SEED)
+    const runKey = await pub(R1_SEED)
+    const cert = await signCert(
+      {
+        cert_type: 'atrib/delegation-cert/v1',
+        context_id: CTX,
+        not_after: T0 + HOUR,
+        not_before: T0,
+        principal_key: principal,
+        run_pubkey: runKey,
+      },
+      P1_SEED,
+    )
+    const record = runRecord(runKey, T0 + 1_000)
+
+    const fallback = await evaluateDelegation(record, null, [cert])
+    expect(fallback.in_window).toBe(true)
+    expect(fallback.time_basis).toBe('record_timestamp_claim')
+    expect(fallback.time_trusted).toBe(false)
+
+    const trusted = await evaluateDelegation(record, null, [cert], {
+      trustedTimeMs: T0 + 2 * HOUR,
+    })
+    expect(trusted.in_window).toBe(false)
+    expect(trusted.time_basis).toBe('trusted_verifier_time')
+    expect(trusted.time_trusted).toBe(true)
+  })
+})
+
 describe('signed-by qualifier and unresolved commitments (§1.11.4 step 2)', () => {
-  it('never surfaces delegation_unresolved off another producer\'s genesis commitment', async () => {
+  it("never surfaces delegation_unresolved off another producer's genesis commitment", async () => {
     const r1 = await pub(R1_SEED)
     const otherProducer = await pub(P2_SEED)
     // Genesis signed by ANOTHER producer, carrying a delegation_cert_hash
@@ -392,7 +427,7 @@ describe('signed-by qualifier and unresolved commitments (§1.11.4 step 2)', () 
     expect(outcome.delegation_unresolved).toBeUndefined()
   })
 
-  it('surfaces delegation_unresolved for the genesis signer\'s own unresolved commitment', async () => {
+  it("surfaces delegation_unresolved for the genesis signer's own unresolved commitment", async () => {
     const r1 = await pub(R1_SEED)
     const genesis = runRecord(r1, T0, { delegation_cert_hash: `sha256:${'ab'.repeat(32)}` })
     const outcome = await evaluateDelegation(genesis, genesis, [])
@@ -462,6 +497,81 @@ describe('revocation inputs and revoker authorization', () => {
       reason: 'no_authorization_path',
     })
   })
+
+  it('derives the revoked set only from signed, authorized, effective evidence', async () => {
+    const p1 = await pub(P1_SEED)
+    const r1 = await pub(R1_SEED)
+    const r2 = await pub(R2_SEED)
+    const cert = await signCert(
+      {
+        cert_type: 'atrib/delegation-cert/v1',
+        not_after: T0 + HOUR,
+        principal_key: p1,
+        run_pubkey: r1,
+      },
+      P1_SEED,
+    )
+    const signed = await signRecord(
+      {
+        ...runRecord(p1, T0 + 1_000),
+        content_id: computeContentId('atrib://identity', 'rotate_run'),
+        event_type: 'https://atrib.dev/v1/types/key_revocation',
+        delegation_cert_hash: delegationCertHash(cert),
+        revoked_key: r1,
+        revocation_reason: 'retirement',
+      },
+      P1_SEED,
+    )
+    const forged = {
+      ...signed,
+      revoked_key: r2,
+    }
+
+    const before = await resolveDelegationRevocations(
+      [{ record: signed as KeyRevocationRecordLike, log_index: 12 }],
+      [cert],
+      { atLogIndex: 11 },
+    )
+    expect([...before.revokedKeys]).toEqual([])
+    expect(before.rejected[0]?.reason).toBe('not_effective_yet')
+
+    const invalidTarget = await resolveDelegationRevocations(
+      [{ record: signed as KeyRevocationRecordLike, log_index: 12 }],
+      [cert],
+      { atLogIndex: Number.NaN },
+    )
+    expect([...invalidTarget.revokedKeys]).toEqual([])
+    expect(invalidTarget.rejected[0]?.reason).toBe('invalid_target_log_index')
+
+    const current = await resolveDelegationRevocations(
+      [
+        { record: signed as KeyRevocationRecordLike, log_index: 12 },
+        { record: forged as KeyRevocationRecordLike, log_index: 13 },
+      ],
+      [cert],
+    )
+    expect([...current.revokedKeys]).toEqual([r1])
+    expect(current.accepted).toEqual([
+      {
+        log_index: 12,
+        revoked_key: r1,
+        revocation_reason: 'retirement',
+        rule: 'principal_via_delegation_certificate',
+      },
+    ])
+    expect(current.rejected[0]?.reason).toBe('invalid_record_signature')
+
+    const signedRunRecord = await signRecord(runRecord(r1, T0 + 2_000), R1_SEED)
+    const verified = await verifyRecordAnnotated(signedRunRecord, {
+      delegationCertificates: [cert],
+      delegationRevocations: [{ record: signed as KeyRevocationRecordLike, log_index: 12 }],
+      delegationRecordLogIndex: 13,
+      delegationTrustedTimeMs: T0 + 2_000,
+    })
+    expect(verified.delegation?.revoked).toBe(true)
+    expect(verified.delegation?.revocation_evidence?.accepted).toHaveLength(1)
+    expect(verified.delegation?.revocation_evidence?.rejected).toEqual([])
+  })
 })
 
 describe('degradation: the walk never throws', () => {
@@ -484,34 +594,68 @@ describe('degradation: the walk never throws', () => {
     expect(outcome.cert_valid).toBe(false)
   })
 
-  it('scope checks only what the record can resolve', async () => {
+  it('marks missing scope facts as unverifiable instead of passing them', async () => {
     const record = runRecord(await pub(R1_SEED), T0 + 1_000)
-    // max_amount / counterparties need protocol-event facts; no mismatch
-    // from the compact record alone (corpus posture).
     const check = checkDelegationScope(record, {
       tool_names: ['search'],
       event_types: ['https://atrib.dev/v1/types/tool_call'],
       max_amount: { currency: 'USD', value: 1 },
       counterparties: ['merchant.example'],
     })
-    expect(check).toEqual({ in_scope: true, attenuation_ok: null, mismatches: [] })
+    expect(check).toEqual({
+      in_scope: true,
+      fully_evaluated: false,
+      attenuation_ok: null,
+      mismatches: [],
+      unverifiable: ['max_amount', 'counterparties'],
+    })
 
     const { tool_name: _dropped, ...noToolNameFields } = record
     const noToolName = noToolNameFields as DelegatedRecord
-    // Without a §8.2 tool_name disclosure the tool_names constraint is not
-    // resolvable from the record; no mismatch is asserted.
-    expect(checkDelegationScope(noToolName, { tool_names: ['other'] }).in_scope).toBe(true)
+    const missingTool = checkDelegationScope(noToolName, { tool_names: ['other'] })
+    expect(missingTool.in_scope).toBe(true)
+    expect(missingTool.fully_evaluated).toBe(false)
+    expect(missingTool.unverifiable).toEqual(['tool_names'])
     expect(checkDelegationScope(record, { tool_names: ['other'] }).mismatches).toEqual([
       'tool_names',
     ])
   })
 
-  it('cost_policy in a cert scope produces no mismatch from the record alone (D165)', async () => {
+  it('evaluates supplied scope facts and exposes absent cost facts', async () => {
     const record = runRecord(await pub(R1_SEED), T0 + 1_000)
-    const check = checkDelegationScope(record, {
+    const missing = checkDelegationScope(record, {
       cost_policy: { model_tiers: ['economy'], max_tokens: 1 },
     })
-    expect(check).toEqual({ in_scope: true, attenuation_ok: null, mismatches: [] })
+    expect(missing).toEqual({
+      in_scope: true,
+      fully_evaluated: false,
+      attenuation_ok: null,
+      mismatches: [],
+      unverifiable: ['cost_policy.model_tiers', 'cost_policy.max_tokens'],
+    })
+    const supplied = checkDelegationScope(
+      record,
+      {
+        max_amount: { currency: 'USD', value: 10 },
+        counterparties: ['merchant.example'],
+        expires_at: T0 + HOUR,
+        cost_policy: { model_tiers: ['economy'], max_tokens: 100 },
+      },
+      {
+        amount: { currency: 'USD', value: 9 },
+        counterparty_keys: ['merchant.example'],
+        trusted_time_ms: T0 + 1_000,
+        model_tier: 'economy',
+        tokens_spent: 99,
+      },
+    )
+    expect(supplied).toEqual({
+      in_scope: true,
+      fully_evaluated: true,
+      attenuation_ok: null,
+      mismatches: [],
+      unverifiable: [],
+    })
   })
 })
 
@@ -532,9 +676,9 @@ describe('checkCostPolicy (§6.7.2 / D165)', () => {
   })
 
   it('flags spend over the token budget', () => {
-    expect(
-      checkCostPolicy({ max_tokens: 100_000 }, { tokens_spent: 100_001 }).mismatches,
-    ).toEqual(['cost_policy.max_tokens'])
+    expect(checkCostPolicy({ max_tokens: 100_000 }, { tokens_spent: 100_001 }).mismatches).toEqual([
+      'cost_policy.max_tokens',
+    ])
   })
 
   it('spend equal to the budget is inside the grant', () => {
@@ -543,9 +687,7 @@ describe('checkCostPolicy (§6.7.2 / D165)', () => {
 
   it('absent constraints and absent usage facts produce no mismatch', () => {
     expect(checkCostPolicy({}, { model_tier: 'premium', tokens_spent: 9e9 }).in_scope).toBe(true)
-    expect(
-      checkCostPolicy({ model_tiers: ['economy'], max_tokens: 1 }, {}).in_scope,
-    ).toBe(true)
+    expect(checkCostPolicy({ model_tiers: ['economy'], max_tokens: 1 }, {}).in_scope).toBe(true)
   })
 
   it('reports both mismatches together, signals only', () => {

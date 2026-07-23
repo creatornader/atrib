@@ -32,7 +32,10 @@ describe('resolveIdentity', () => {
       signature: 'sig',
     }
     const fetchImpl = mockFetch({
-      [`/lookup/${KEY}`]: { status: 200, body: { found: true, claim, version: 1, proof: 'base64proof' } },
+      [`/lookup/${KEY}`]: {
+        status: 200,
+        body: { found: true, claim, version: 1, proof: 'base64proof' },
+      },
     })
     const result = await resolveIdentity(KEY, { fetchImpl })
     expect(result.identity_resolved).not.toBeNull()
@@ -89,9 +92,16 @@ describe('resolveIdentity', () => {
         successor_key: 'S'.repeat(43),
       },
     ])
-    const result = await resolveIdentity(KEY, { fetchImpl, revocations, recordLogIndex: 100 })
+    const result = await resolveIdentity(KEY, {
+      fetchImpl,
+      revocations,
+      revocationsVerified: true,
+      recordLogIndex: 100,
+    })
     expect(result.key_revocation_status).not.toBeNull()
     expect(result.key_revocation_status?.since_revocation).toBe(true)
+    expect(result.key_revocation_status?.order_verifiable).toBe(true)
+    expect(result.key_revocation_status?.registry_verified).toBe(true)
     expect(result.key_revocation_status?.reason).toBe('rotation')
   })
 
@@ -109,8 +119,68 @@ describe('resolveIdentity', () => {
         successor_key: 'S'.repeat(43),
       },
     ])
-    const result = await resolveIdentity(KEY, { fetchImpl, revocations, recordLogIndex: 25 })
+    const result = await resolveIdentity(KEY, {
+      fetchImpl,
+      revocations,
+      revocationsVerified: true,
+      recordLogIndex: 25,
+    })
     expect(result.key_revocation_status?.since_revocation).toBe(false)
+    expect(result.key_revocation_status?.order_verifiable).toBe(true)
+    expect(result.key_revocation_status?.registry_verified).toBe(true)
+  })
+
+  it('does not infer revocation order from timestamps when record log index is absent', async () => {
+    const fetchImpl = mockFetch({
+      [`/lookup/${KEY}`]: { status: 404, body: { found: false } },
+    })
+    const revocations = buildRevocationRegistry([
+      {
+        event_type: 'key_revocation',
+        creator_key: KEY,
+        log_index: 50,
+        revoked_key: KEY,
+        revocation_reason: 'retirement',
+      },
+    ])
+    const result = await resolveIdentity(KEY, {
+      fetchImpl,
+      revocations,
+      revocationsVerified: true,
+      recordTimestamp: Number.MAX_SAFE_INTEGER,
+    })
+    expect(result.key_revocation_status).toMatchObject({
+      since_revocation: null,
+      order_verifiable: false,
+      registry_verified: true,
+    })
+    expect(result.warnings).toContain(
+      'step-9-revocation-order-unverifiable: record log index was not supplied; timestamps were not used',
+    )
+  })
+
+  it('labels a shape-only revocation registry as unverified', async () => {
+    const fetchImpl = mockFetch({
+      [`/lookup/${KEY}`]: { status: 404, body: { found: false } },
+    })
+    const revocations = buildRevocationRegistry([
+      {
+        event_type: 'key_revocation',
+        creator_key: KEY,
+        log_index: 50,
+        revoked_key: KEY,
+        revocation_reason: 'retirement',
+      },
+    ])
+    const result = await resolveIdentity(KEY, {
+      fetchImpl,
+      revocations,
+      recordLogIndex: 100,
+    })
+    expect(result.key_revocation_status?.registry_verified).toBe(false)
+    expect(result.warnings).toContain(
+      'step-9-revocation-registry-unverified: registry shape was supplied without signature and revoker-authorization assurance',
+    )
   })
 
   it('flags step-9-revocation-not-checked when no registry supplied', async () => {
@@ -157,7 +227,7 @@ describe('resolveIdentity', () => {
   // ===========================================================================
 
   describe('step 7, lookup proof verification', () => {
-    const VRF_PUBKEY = new Uint8Array(32).fill(0xAB)
+    const VRF_PUBKEY = new Uint8Array(32).fill(0xab)
     const ROOT_HEX = 'cd'.repeat(32)
     const PROOF_B64U = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
 
@@ -184,15 +254,20 @@ describe('resolveIdentity', () => {
       const result = await resolveIdentity(KEY, {
         fetchImpl: happyFetch(),
         directoryVrfPublicKey: VRF_PUBKEY,
-        verifyLookupProof: (input) => { calls.push(input); return true },
+        verifyLookupProof: (input) => {
+          calls.push(input)
+          return true
+        },
       })
       expect(result.lookup_proof_valid).toBe(true)
       expect(result.identity_resolution_method).toBe('directory_lookup')
-      expect(result.warnings.some((w) => w.startsWith('step-7-akd-proof-not-validated'))).toBe(false)
+      expect(result.warnings.some((w) => w.startsWith('step-7-akd-proof-not-validated'))).toBe(
+        false,
+      )
       expect(calls).toHaveLength(1)
       expect(calls[0]?.label).toBe(KEY)
       expect(calls[0]?.currentEpoch).toBe(1)
-      expect(calls[0]?.rootHash).toEqual(new Uint8Array(32).fill(0xCD))
+      expect(calls[0]?.rootHash).toEqual(new Uint8Array(32).fill(0xcd))
       expect(calls[0]?.vrfPublicKey).toBe(VRF_PUBKEY)
     })
 
@@ -212,7 +287,9 @@ describe('resolveIdentity', () => {
       const result = await resolveIdentity(KEY, {
         fetchImpl: happyFetch(),
         directoryVrfPublicKey: VRF_PUBKEY,
-        verifyLookupProof: () => { throw new Error('malformed proof') },
+        verifyLookupProof: () => {
+          throw new Error('malformed proof')
+        },
       })
       expect(result.lookup_proof_valid).toBeNull()
       expect(result.identity_resolution_method).toBe('directory_lookup')
@@ -266,7 +343,10 @@ describe('resolveIdentity', () => {
       const result = await resolveIdentity(KEY, {
         fetchImpl,
         directoryVrfPublicKey: VRF_PUBKEY,
-        verifyLookupProof: () => { called = true; return true },
+        verifyLookupProof: () => {
+          called = true
+          return true
+        },
       })
       expect(result.lookup_proof_valid).toBeNull()
       expect(called).toBe(false) // step 7 short-circuited before the callback
@@ -287,7 +367,10 @@ describe('resolveIdentity', () => {
       let called = false
       const result = await resolveIdentity(KEY, {
         fetchImpl: happyFetch(),
-        verifyLookupProof: () => { called = true; return true },
+        verifyLookupProof: () => {
+          called = true
+          return true
+        },
       })
       expect(called).toBe(false)
       expect(result.lookup_proof_valid).toBeNull()
@@ -331,7 +414,7 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
   let CURRENT_HASH = ''
   let PRIOR_HASH = ''
   const T_NOW = 1_700_000_000_000
-  const PRIOR_TS = T_NOW - 60_000  // 1 minute before
+  const PRIOR_TS = T_NOW - 60_000 // 1 minute before
   const CURRENT_TS = T_NOW - 30_000 // 30s before
   let CURRENT_BODY: ReturnType<typeof makeBodyShape>
   let PRIOR_BODY: ReturnType<typeof makeBodyShape>
@@ -390,7 +473,9 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     // Same derivation as resolve-identity.ts (sha256(origin)[:16] hex)
     // computed locally here to keep tests independent of that helper.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { sha256 } = require('@noble/hashes/sha2.js') as { sha256: (data: Uint8Array) => Uint8Array }
+    const { sha256 } = require('@noble/hashes/sha2.js') as {
+      sha256: (data: Uint8Array) => Uint8Array
+    }
     const digest = sha256(new TextEncoder().encode(origin))
     return Array.from(digest.slice(0, 16))
       .map((b) => b.toString(16).padStart(2, '0'))
@@ -412,51 +497,90 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
    * Pass `overrides` to disable individual handlers (e.g. simulate log
    * unreachable) or change response payloads.
    */
-  function makeAnchorFetch(overrides: {
-    /** Replace the directory_anchor entries returned by /by-context. */
-    logEntries?: Array<{ record_hash: string; log_index: number; creator_key: string; context_id: string; timestamp_ms: number; event_type: string }>
-    /** Replace the /anchor self-report payload. */
-    directoryAnchor?: { epoch: number; root_hash: string; directory_origin: string }
-    /** When set, /by-context returns this status. */
-    logStatus?: number
-  } = {}): typeof fetch {
+  function makeAnchorFetch(
+    overrides: {
+      /** Replace the directory_anchor entries returned by /by-context. */
+      logEntries?: Array<{
+        record_hash: string
+        log_index: number
+        creator_key: string
+        context_id: string
+        timestamp_ms: number
+        event_type: string
+      }>
+      /** Replace the /anchor self-report payload. */
+      directoryAnchor?: { epoch: number; root_hash: string; directory_origin: string }
+      /** When set, /by-context returns this status. */
+      logStatus?: number
+    } = {},
+  ): typeof fetch {
     const defaultEntries = [
-      { record_hash: CURRENT_HASH, log_index: 5, creator_key: OPERATOR_KEY, context_id: CONTEXT_ID_HEX, timestamp_ms: CURRENT_TS, event_type: 'directory_anchor' },
-      { record_hash: PRIOR_HASH,   log_index: 3, creator_key: OPERATOR_KEY, context_id: CONTEXT_ID_HEX, timestamp_ms: PRIOR_TS,   event_type: 'directory_anchor' },
+      {
+        record_hash: CURRENT_HASH,
+        log_index: 5,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: CURRENT_TS,
+        event_type: 'directory_anchor',
+      },
+      {
+        record_hash: PRIOR_HASH,
+        log_index: 3,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: PRIOR_TS,
+        event_type: 'directory_anchor',
+      },
     ]
     const defaultAnchor = { epoch: 2, root_hash: CURRENT_ROOT_HEX, directory_origin: ORIGIN }
     return (async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.includes(`/lookup/${KEY}`)) {
-        return new Response(JSON.stringify({ found: true, claim: minimalClaim, version: 1, proof: 'p' }), {
-          status: 200, headers: { 'content-type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({ found: true, claim: minimalClaim, version: 1, proof: 'p' }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        )
       }
       if (url.includes('/anchor') && !url.includes('/anchors')) {
         return new Response(JSON.stringify(overrides.directoryAnchor ?? defaultAnchor), {
-          status: 200, headers: { 'content-type': 'application/json' },
+          status: 200,
+          headers: { 'content-type': 'application/json' },
         })
       }
       if (url.includes(`/by-context/${CONTEXT_ID_HEX}`)) {
         if (overrides.logStatus && overrides.logStatus !== 200) {
-          return new Response(JSON.stringify({ error: 'log error' }), { status: overrides.logStatus })
+          return new Response(JSON.stringify({ error: 'log error' }), {
+            status: overrides.logStatus,
+          })
         }
-        return new Response(JSON.stringify({
-          context_id: CONTEXT_ID_HEX,
-          count: (overrides.logEntries ?? defaultEntries).length,
-          entries: overrides.logEntries ?? defaultEntries,
-        }), { status: 200, headers: { 'content-type': 'application/json' } })
+        return new Response(
+          JSON.stringify({
+            context_id: CONTEXT_ID_HEX,
+            count: (overrides.logEntries ?? defaultEntries).length,
+            entries: overrides.logEntries ?? defaultEntries,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
       if (url.includes('/audit-proof')) {
-        return new Response(JSON.stringify({ from_epoch: 1, to_epoch: 2, proof: 'audit-proof-bytes' }), {
-          status: 200, headers: { 'content-type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({ from_epoch: 1, to_epoch: 2, proof: 'audit-proof-bytes' }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        )
       }
       return new Response(JSON.stringify({ error: 'not stubbed' }), { status: 404 })
     }) as typeof fetch
   }
 
-  function makeFetchAnchorBody(): (recordHash: string) => Promise<ReturnType<typeof makeAnchorBody> | null> {
+  function makeFetchAnchorBody(): (
+    recordHash: string,
+  ) => Promise<ReturnType<typeof makeAnchorBody> | null> {
     return async (recordHash) => {
       if (recordHash === CURRENT_HASH) return makeAnchorBody(CURRENT_ROOT_HEX, 2)
       if (recordHash === PRIOR_HASH) return makeAnchorBody(PRIOR_ROOT_HEX, 1)
@@ -524,10 +648,16 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
 
   it('step 1: filters out anchors after T (timestamp window)', async () => {
     // All anchors are AFTER T_NOW (i.e., produced in the future relative to record)
-    const futureEntries = [{
-      record_hash: CURRENT_HASH, log_index: 5, creator_key: OPERATOR_KEY,
-      context_id: CONTEXT_ID_HEX, timestamp_ms: T_NOW + 1000, event_type: 'directory_anchor',
-    }]
+    const futureEntries = [
+      {
+        record_hash: CURRENT_HASH,
+        log_index: 5,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: T_NOW + 1000,
+        event_type: 'directory_anchor',
+      },
+    ]
     const result = await resolveIdentity(KEY, {
       fetchImpl: makeAnchorFetch({ logEntries: futureEntries }),
       logEndpoint: 'http://log.test/v1',
@@ -609,7 +739,9 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
       logEndpoint: 'http://log.test/v1',
       directoryOperatorKey: OPERATOR_KEY,
       fetchAnchorBody: makeFetchAnchorBody(),
-      verifyAuditProof: async () => { throw new Error('bad bytes') },
+      verifyAuditProof: async () => {
+        throw new Error('bad bytes')
+      },
       recordTimestamp: T_NOW,
     })
     expect(result.append_only_consistent).toBeNull()
@@ -617,17 +749,26 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
   })
 
   it('step 5: not invoked when only one anchor exists (no prior body)', async () => {
-    const onlyOneEntry = [{
-      record_hash: CURRENT_HASH, log_index: 5, creator_key: OPERATOR_KEY,
-      context_id: CONTEXT_ID_HEX, timestamp_ms: CURRENT_TS, event_type: 'directory_anchor',
-    }]
+    const onlyOneEntry = [
+      {
+        record_hash: CURRENT_HASH,
+        log_index: 5,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: CURRENT_TS,
+        event_type: 'directory_anchor',
+      },
+    ]
     let called = false
     const result = await resolveIdentity(KEY, {
       fetchImpl: makeAnchorFetch({ logEntries: onlyOneEntry }),
       logEndpoint: 'http://log.test/v1',
       directoryOperatorKey: OPERATOR_KEY,
       fetchAnchorBody: makeFetchAnchorBody(),
-      verifyAuditProof: async () => { called = true; return true },
+      verifyAuditProof: async () => {
+        called = true
+        return true
+      },
       recordTimestamp: T_NOW,
     })
     expect(result.anchor).not.toBeNull()
@@ -651,7 +792,9 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
       recordTimestamp: T_NOW,
     })
     expect(result.directory_checkpoint_signature_valid).toBe(true)
-    expect(result.warnings.some((w) => w.startsWith('step-4-checkpoint-signature-not-checked'))).toBe(false)
+    expect(
+      result.warnings.some((w) => w.startsWith('step-4-checkpoint-signature-not-checked')),
+    ).toBe(false)
   })
 
   it('step 4: hard-rejection when body signature is tampered', async () => {
@@ -662,7 +805,10 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
       fetchAnchorBody: async () => {
         const body = { ...makeAnchorBody(CURRENT_ROOT_HEX, 2) }
         // Flip a bit in the signature.
-        const sigBytes = Buffer.from(body.signature + '='.repeat((4 - body.signature.length % 4) % 4), 'base64url')
+        const sigBytes = Buffer.from(
+          body.signature + '='.repeat((4 - (body.signature.length % 4)) % 4),
+          'base64url',
+        )
         sigBytes[0] = (sigBytes[0]! ^ 0x01) & 0xff
         body.signature = sigBytes.toString('base64url').replace(/=+$/, '')
         return body
@@ -706,7 +852,9 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     })
     expect(result.anchor).toBeNull()
     expect(result.directory_checkpoint_signature_valid).toBeNull()
-    expect(result.warnings.some((w) => w.startsWith('step-4-checkpoint-signature-not-checked'))).toBe(true)
+    expect(
+      result.warnings.some((w) => w.startsWith('step-4-checkpoint-signature-not-checked')),
+    ).toBe(true)
   })
 
   // =========================================================================
@@ -733,7 +881,8 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.endsWith('/checkpoint')) {
         return new Response(checkpointText, {
-          status: 200, headers: { 'content-type': 'text/plain' },
+          status: 200,
+          headers: { 'content-type': 'text/plain' },
         })
       }
       return base(input as RequestInfo)
@@ -749,7 +898,9 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
       recordTimestamp: T_NOW,
     })
     expect(result.anchor?.anchor_witness_count).toBe(0)
-    expect(result.warnings.some((w) => w.startsWith('step-3-witness-not-cryptographically-verified'))).toBe(true)
+    expect(
+      result.warnings.some((w) => w.startsWith('step-3-witness-not-cryptographically-verified')),
+    ).toBe(true)
     expect(result.warnings.some((w) => w.startsWith('step-3-witness-not-checked'))).toBe(false)
   })
 
@@ -815,7 +966,7 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     expect(result.warnings.some((w) => w.includes('step-3-checkpoint-fetch-error'))).toBe(true)
   })
 
-  it('step 3: not invoked when step 1 didn\'t surface an anchor', async () => {
+  it("step 3: not invoked when step 1 didn't surface an anchor", async () => {
     const result = await resolveIdentity(KEY, {
       fetchImpl: makeAnchorFetch({ logEntries: [] }),
       logEndpoint: 'http://log.test/v1',

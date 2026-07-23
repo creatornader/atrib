@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { leafHash as computeLeafHash, nodeHash } from '@atrib/mcp'
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  writeSync,
+} from 'node:fs'
 import { dirname } from 'node:path'
 
 import { ENTRY_SIZE } from './entry.js'
@@ -42,14 +50,9 @@ export interface MerkleTree {
  * The persistence format is a single append-only binary file containing the
  * concatenation of every 90-byte log entry in order. On startup the tree
  * reads the file and replays each entry via append(). On every subsequent
- * append the entry bytes are flushed to disk before the function returns,
- * so a successful submit is always durable.
- *
- * Note (durability): appendFileSync uses write(2) but does not call fsync.
- * On a hard kernel/host crash the most-recent entries may not have hit
- * platter. For the dogfood loop and Fly's managed volumes this is fine;
- * production-grade durability would add fs.fsyncSync at the cost of write
- * latency. The CheckpointSigner key is separately durable via Fly secrets.
+ * append the entry bytes are written and fsynced before the in-memory tree is
+ * advanced, so a successful append survives a hard kernel or host crash.
+ * The CheckpointSigner key is separately durable via Fly secrets.
  */
 export interface MerkleTreeOptions {
   /**
@@ -84,7 +87,9 @@ export function createMerkleTree(options?: MerkleTreeOptions): MerkleTree {
 
       const left = nodes[levelIndex - 1]
       if (!left) {
-        throw new Error(`MerkleTree.append: missing left sibling at level ${level}, index ${levelIndex - 1}`)
+        throw new Error(
+          `MerkleTree.append: missing left sibling at level ${level}, index ${levelIndex - 1}`,
+        )
       }
       hash = nodeHash(left, hash)
       level += 1
@@ -117,14 +122,16 @@ export function createMerkleTree(options?: MerkleTreeOptions): MerkleTree {
 
     append(entryBytes: Uint8Array): number {
       const index = rawEntries.length
-      appendInMemory(entryBytes)
-      // Persist before returning so a successful append always means the
-      // entry is on disk. Crash before this line: the entry was never
-      // accepted; after this line: the entry will replay on next startup.
       if (persistPath) {
-        appendFileSync(persistPath, entryBytes)
+        appendDurably(persistPath, entryBytes)
       }
-      return index
+      const appendedIndex = appendInMemory(entryBytes)
+      if (appendedIndex !== index) {
+        throw new Error(
+          `MerkleTree.append: in-memory index ${appendedIndex} did not match durable index ${index}`,
+        )
+      }
+      return appendedIndex
     },
 
     root(): Uint8Array {
@@ -164,6 +171,27 @@ export function createMerkleTree(options?: MerkleTreeOptions): MerkleTree {
       }
       return rawEntries[index] as Uint8Array
     },
+  }
+}
+
+/**
+ * Append one entry and force the file data and metadata to stable storage
+ * before returning. The write loop handles partial writes explicitly.
+ */
+function appendDurably(path: string, entryBytes: Uint8Array): void {
+  const fd = openSync(path, 'a')
+  try {
+    let offset = 0
+    while (offset < entryBytes.length) {
+      const written = writeSync(fd, entryBytes, offset, entryBytes.length - offset, null)
+      if (written <= 0) {
+        throw new Error(`MerkleTree.append: durable write made no progress at byte ${offset}`)
+      }
+      offset += written
+    }
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
   }
 }
 

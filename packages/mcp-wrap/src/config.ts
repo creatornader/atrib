@@ -160,6 +160,13 @@ export const WrapConfigSchema = z.object({
   extensionAttribution: z.boolean().default(false),
 
   /**
+   * Signed action-evidence posture. The wrapper defaults to
+   * `verifiable-action`; `minimal` is the explicit compatibility escape
+   * hatch for operators that need the §8.1 omission posture.
+   */
+  evidenceMode: z.enum(['minimal', 'verifiable-action']).optional(),
+
+  /**
    * Per-tool overrides keyed by tool name. Tools not listed get default
    * behavior (signed as tool_call records, no receipt injection).
    */
@@ -167,7 +174,7 @@ export const WrapConfigSchema = z.object({
 
   /**
    * Optional signed disclosure controls passed through to @atrib/mcp.
-   * Defaults preserve §8.1: no tool_name, args_hash, or result_hash.
+   * When present, these override the selected evidenceMode.
    *
    * `result` disclosure is incompatible with tools that use
    * `injectReceiptId`, because those records are signed before the upstream

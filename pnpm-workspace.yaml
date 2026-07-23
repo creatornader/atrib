@@ -5,6 +5,7 @@ packages:
   - 'packages/integration/examples/cloudflare-agents/approval-trace'
   - 'packages/integration/examples/cloudflare-agents/oauth-evidence-infra'
   - 'services/log-node'
+  - 'services/witness-node'
   - 'services/graph-node'
   - 'services/directory-node'
   - 'services/archive-node'

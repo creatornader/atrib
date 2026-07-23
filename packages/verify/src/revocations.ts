@@ -63,7 +63,7 @@ function isRevocationRecord(r: MinimalRecord): boolean {
 }
 
 /**
- * Scan a list of records for valid key_revocation entries and return a
+ * Scan a list of records for well-shaped key_revocation claims and return a
  * registry indexed by revoked_key. When the same key is revoked more
  * than once (which the spec doesn't strictly forbid but is unusual),
  * the EARLIEST revocation wins, once retired, a key cannot be
@@ -79,14 +79,15 @@ export function buildRevocationRegistry(records: MinimalRecord[]): Map<string, R
   for (const r of records) {
     if (!isRevocationRecord(r)) continue
     if (typeof r.revoked_key !== 'string' || r.revoked_key.length === 0) continue
-    if (typeof r.log_index !== 'number') continue
+    const logIndex = r.log_index
+    if (typeof logIndex !== 'number' || !Number.isSafeInteger(logIndex) || logIndex < 0) continue
     const reason = r.revocation_reason
     if (reason !== 'rotation' && reason !== 'retirement' && reason !== 'compromise') continue
     const existing = registry.get(r.revoked_key)
-    if (existing && existing.log_index <= r.log_index) continue // earlier revocation wins
+    if (existing && existing.log_index <= logIndex) continue // earlier revocation wins
     registry.set(r.revoked_key, {
       revoked_key: r.revoked_key,
-      log_index: r.log_index,
+      log_index: logIndex,
       revocation_reason: reason,
       ...(r.successor_key ? { successor_key: r.successor_key } : {}),
       ...(r.emergency_signed_by ? { emergency_signed_by: r.emergency_signed_by } : {}),
@@ -106,7 +107,11 @@ export function buildRevocationRegistry(records: MinimalRecord[]): Map<string, R
  * preserved for pre-revocation records, those remain valid.
  */
 export function applyRevocation(
-  node: { creator_key: string | null; log_index: number | null; verification_state: VerificationState },
+  node: {
+    creator_key: string | null
+    log_index: number | null
+    verification_state: VerificationState
+  },
   registry: Map<string, RevocationEntry>,
 ): VerificationState {
   if (!node.creator_key) return node.verification_state

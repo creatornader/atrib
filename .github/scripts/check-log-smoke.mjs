@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, createPublicKey, verify } from 'node:crypto'
 
 const maxTtfbMs = readPositiveInt('LOG_SMOKE_MAX_TTFB_MS', 3000)
 const maxTotalMs = readPositiveInt('LOG_SMOKE_MAX_TOTAL_MS', 5000)
@@ -89,11 +89,13 @@ const assetGroups = [
 ]
 
 const results = []
+let verificationResult
 
 if (scope !== 'assets') {
   for (const endpoint of endpoints) {
     results.push(await checkEndpoint(endpoint))
   }
+  verificationResult = await checkVerificationContract()
 }
 
 const assetResults = []
@@ -113,10 +115,203 @@ for (const result of results) {
     )}ms bytes=${result.bytes} attempt=${result.attempt}`,
   )
 }
+if (verificationResult) {
+  console.log(
+    `verification-contract: checkpoint_size=${verificationResult.checkpointTreeSize} ` +
+      `entry=${verificationResult.logIndex} tile=${verificationResult.tilePath} ` +
+      `width=${verificationResult.tileWidth} proof_nodes=${verificationResult.proofNodes}`,
+  )
+}
 for (const result of assetResults) {
   console.log(
     `${result.name}: hash=${result.hash} assets=${result.assets.map((asset) => `${asset.name}:${asset.status}`).join(',')}`,
   )
+}
+
+async function checkVerificationContract() {
+  const [pubkeyArtifact, checkpointArtifact, recentArtifact] = await Promise.all([
+    fetchContractArtifact('verification-pubkey', 'https://log.atrib.dev/v1/pubkey'),
+    fetchContractArtifact('verification-checkpoint', 'https://log.atrib.dev/v1/checkpoint'),
+    fetchContractArtifact('verification-recent', 'https://log.atrib.dev/v1/recent?limit=1'),
+  ])
+
+  const pubkey = JSON.parse(pubkeyArtifact.bytes.toString('utf8'))
+  const checkpoint = parseAndVerifyCheckpoint(checkpointArtifact.bytes.toString('utf8'), pubkey)
+  const recent = JSON.parse(recentArtifact.bytes.toString('utf8'))
+  const latest = recent.entries?.[0]
+  if (
+    !latest ||
+    !Number.isInteger(latest.index) ||
+    typeof latest.record_hash !== 'string' ||
+    !/^sha256:[0-9a-f]{64}$/.test(latest.record_hash)
+  ) {
+    throw new Error('verification-recent did not return a usable latest entry')
+  }
+
+  const recordHash = latest.record_hash.slice('sha256:'.length)
+  const proofArtifact = await fetchContractArtifact(
+    'verification-proof',
+    `https://log.atrib.dev/v1/proof/${recordHash}`,
+  )
+  const proof = JSON.parse(proofArtifact.bytes.toString('utf8'))
+  if (
+    proof.log_index !== latest.index ||
+    !Array.isArray(proof.inclusion_proof) ||
+    typeof proof.leaf_hash !== 'string'
+  ) {
+    throw new Error('verification-proof did not bind the latest entry to an inclusion proof')
+  }
+
+  const tileIndex = Math.floor(latest.index / 256)
+  const tileWidth = (latest.index % 256) + 1
+  const encodedIndex = encodeTileIndex(tileIndex)
+  const tilePath = tileWidth === 256 ? encodedIndex : `${encodedIndex}.p/${tileWidth}`
+  const [hashTileArtifact, entryTileArtifact] = await Promise.all([
+    fetchContractArtifact('verification-hash-tile', `https://log.atrib.dev/v1/tile/0/${tilePath}`),
+    fetchContractArtifact(
+      'verification-entry-tile',
+      `https://log.atrib.dev/v1/tile/entries/${tilePath}`,
+    ),
+  ])
+
+  if (hashTileArtifact.bytes.length !== tileWidth * 32) {
+    throw new Error(
+      `verification-hash-tile returned ${hashTileArtifact.bytes.length} bytes for width ${tileWidth}`,
+    )
+  }
+  if (entryTileArtifact.bytes.length !== tileWidth * 92) {
+    throw new Error(
+      `verification-entry-tile returned ${entryTileArtifact.bytes.length} bytes for width ${tileWidth}`,
+    )
+  }
+  requireImmutableCache('verification-hash-tile', hashTileArtifact.response)
+  requireImmutableCache('verification-entry-tile', entryTileArtifact.response)
+
+  const entryOffset = (tileWidth - 1) * 92
+  const entryLength = entryTileArtifact.bytes.readUInt16BE(entryOffset)
+  if (entryLength !== 90) {
+    throw new Error(`verification-entry-tile encoded an unexpected entry length ${entryLength}`)
+  }
+  const entryBytes = entryTileArtifact.bytes.subarray(
+    entryOffset + 2,
+    entryOffset + 2 + entryLength,
+  )
+  const computedLeafHash = createHash('sha256')
+    .update(Buffer.from([0]))
+    .update(entryBytes)
+    .digest()
+  const tileLeafHash = hashTileArtifact.bytes.subarray((tileWidth - 1) * 32, tileWidth * 32)
+  const proofLeafHash = Buffer.from(proof.leaf_hash, 'base64')
+  if (!computedLeafHash.equals(tileLeafHash) || !computedLeafHash.equals(proofLeafHash)) {
+    throw new Error('verification artifacts disagree on the latest entry leaf hash')
+  }
+
+  return {
+    checkpointTreeSize: checkpoint.treeSize,
+    logIndex: latest.index,
+    tilePath,
+    tileWidth,
+    proofNodes: proof.inclusion_proof.length,
+  }
+}
+
+function parseAndVerifyCheckpoint(note, pubkey) {
+  if (
+    pubkey.origin !== 'log.atrib.dev/v1' ||
+    pubkey.algorithm !== 'Ed25519' ||
+    typeof pubkey.public_key !== 'string' ||
+    !/^[0-9a-f]{8}$/.test(pubkey.key_id)
+  ) {
+    throw new Error('verification-pubkey returned an unsupported key description')
+  }
+
+  const separator = note.indexOf('\n\n')
+  if (separator < 0) {
+    throw new Error('verification-checkpoint omitted the signed-note separator')
+  }
+  const body = note.slice(0, separator + 1)
+  const signatureLine = note.slice(separator + 2).trim()
+  const signatureMatch = signatureLine.match(/^[—-] (\S+) (\S+)$/)
+  if (!signatureMatch) {
+    throw new Error('verification-checkpoint contained a malformed signature line')
+  }
+
+  const [origin, treeSizeText, rootHash] = body.trimEnd().split('\n')
+  if (
+    origin !== pubkey.origin ||
+    !/^[1-9]\d*$/.test(treeSizeText) ||
+    Buffer.from(rootHash, 'base64').length !== 32 ||
+    signatureMatch[1] !== pubkey.origin
+  ) {
+    throw new Error('verification-checkpoint body did not match the published log identity')
+  }
+
+  const signed = Buffer.from(signatureMatch[2], 'base64')
+  if (signed.length !== 68 || signed.subarray(0, 4).toString('hex') !== pubkey.key_id) {
+    throw new Error('verification-checkpoint key ID did not match /v1/pubkey')
+  }
+  const rawPublicKey = Buffer.from(pubkey.public_key, 'base64url')
+  if (rawPublicKey.length !== 32) {
+    throw new Error('verification-pubkey did not contain a 32-byte Ed25519 public key')
+  }
+  const spki = Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), rawPublicKey])
+  const publicKey = createPublicKey({ key: spki, format: 'der', type: 'spki' })
+  if (!verify(null, Buffer.from(body), publicKey, signed.subarray(4))) {
+    throw new Error('verification-checkpoint signature verification failed')
+  }
+
+  return { treeSize: Number(treeSizeText), rootHash }
+}
+
+function encodeTileIndex(index) {
+  const padded = String(index).padStart(Math.ceil(String(index).length / 3) * 3, '0')
+  const groups = padded.match(/.{3}/g)
+  if (groups.length === 1) return groups[0]
+  return groups
+    .map((group, position) => (position < groups.length - 1 ? `x${group}` : group))
+    .join('/')
+}
+
+function requireImmutableCache(name, response) {
+  const cacheControl = response.headers.get('cache-control') || ''
+  if (!cacheControl.includes('immutable')) {
+    throw new Error(`${name} did not return an immutable cache policy`)
+  }
+}
+
+async function fetchContractArtifact(name, url) {
+  let lastError
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    const started = performance.now()
+    try {
+      const response = await fetch(url, { signal: controller.signal })
+      const headersAt = performance.now()
+      const bytes = Buffer.from(await response.arrayBuffer())
+      const completed = performance.now()
+      if (!response.ok) {
+        throw new Error(`${name} returned HTTP ${response.status}`)
+      }
+      const ttfbMs = headersAt - started
+      const totalMs = completed - started
+      if (ttfbMs > maxTtfbMs) {
+        throw new Error(`${name} TTFB ${ttfbMs.toFixed(0)}ms exceeded ${maxTtfbMs}ms`)
+      }
+      if (totalMs > maxTotalMs) {
+        throw new Error(`${name} total ${totalMs.toFixed(0)}ms exceeded ${maxTotalMs}ms`)
+      }
+      return { bytes, response, attempt }
+    } catch (error) {
+      lastError = error
+      if (attempt === maxAttempts) break
+      console.warn(`${name} attempt ${attempt} failed: ${error.message}; retrying`)
+      await sleep(retryDelayMs)
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+  throw lastError
 }
 
 async function checkAssetParity(group) {

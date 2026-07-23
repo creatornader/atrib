@@ -1819,6 +1819,7 @@ import {
   computeGraphBBox,
   computeNeighborhood,
   normalizeGraphRecordHash,
+  projectPublicRevisionState,
   buildPrimaryTracePath,
   graphNodeActionHash,
   graphReferenceStatus,
@@ -1830,7 +1831,7 @@ import {
   buildReplayGraphFromEntries,
   computeDemoGraphSignature,
   computeDemoLaneOffset,
-} from '/graph-utils.mjs?v=2026-06-11-primary-trace-path'
+} from '/graph-utils.mjs?v=2026-07-23-public-revision-state'
 
 /*
  * atrib explorer, D054 option 1.
@@ -4088,6 +4089,102 @@ function renderClaimBody(lookup) {
 
 // ─── Session view ────────────────────────────────────────────────────────
 
+function renderPublicRevisionStatePanel(state) {
+  const metaParts = [
+    `${state.total_cells} ${state.total_cells === 1 ? 'lineage' : 'lineages'}`,
+    `${state.conflict_count} ${state.conflict_count === 1 ? 'conflict' : 'conflicts'}`,
+  ]
+  if (state.partial_count > 0) metaParts.push(`${state.partial_count} partial`)
+  if (state.cells_truncated) metaParts.push(`${state.returned_cells} shown`)
+
+  const header = el('div', { class: 'panel-head' },
+    el('h2', {}, 'current revision state'),
+    el('span', { class: 'meta' }, `${metaParts.join(' · ')} · public commitment view`),
+  )
+  const basis = el('div', {
+    style: 'padding: 14px 16px; border-bottom: 1px solid var(--border); color: var(--text-2); font-size: 13px; line-height: 1.55;',
+  },
+    'Derived from signature-checked graph nodes and signed ',
+    el('code', {}, 'REVISES'),
+    ' edges. Every visible head remains visible. This browser view does not apply a receiver trust policy or independently verify inclusion proofs.',
+  )
+
+  if (state.total_cells === 0) {
+    return el('section', { class: 'panel' },
+      header,
+      basis,
+      el('div', { class: 'panel-body' },
+        el('div', { class: 'empty', style: 'padding: 12px 0;' },
+          'No revision lineage is visible in this session graph.',
+        ),
+      ),
+    )
+  }
+
+  const renderHead = head => {
+    const when = head.timestamp ? timeAgo(head.timestamp) : 'time unavailable'
+    return el('div', { style: 'margin-bottom: 6px;' },
+      el('a', { href: `/action/${head.record_hash}` },
+        el('span', { class: 'mono' }, shorten(head.record_hash, 10, 4)),
+      ),
+      head.creator_key ? ' · ' : '',
+      head.creator_key ? renderIdentityLabel(head.creator_key) : null,
+      el('span', { class: 'meta', style: 'margin-left: 6px;' }, when),
+    )
+  }
+
+  const rows = state.cells.map(cell => {
+    const rootIsLinkable =
+      cell.root_reference_status === 'in_scope' ||
+      cell.root_reference_status === 'external'
+    const rootLabel = el('span', {
+      class: 'mono',
+      title: cell.root_record_hash,
+    }, shorten(cell.root_record_hash, 10, 4))
+    const root = rootIsLinkable
+      ? el('a', { href: `/action/${cell.root_record_hash}` }, rootLabel)
+      : rootLabel
+    const status = cell.status === 'conflict'
+      ? el('span', { class: 'badge warn' }, `${cell.total_active_heads} heads`)
+      : el('span', { class: 'badge ok' }, '1 head')
+    const scope = cell.partial
+      ? el('span', {
+          class: 'badge dim',
+          style: 'margin-left: 6px;',
+          title: 'At least one lineage record is outside this graph response or unresolved.',
+        }, 'partial')
+      : el('span', { class: 'badge dim', style: 'margin-left: 6px;' }, 'in graph')
+    const heads = cell.active_heads.map(renderHead)
+    if (cell.active_heads_truncated) {
+      heads.push(el('div', { class: 'meta' },
+        `${cell.total_active_heads - cell.active_heads.length} more heads not rendered`,
+      ))
+    }
+    return el('tr', {},
+      el('td', {}, root, scope),
+      el('td', {}, status),
+      el('td', {}, ...heads),
+      el('td', { class: 'shrink' }, String(cell.revision_count)),
+    )
+  })
+
+  return el('section', { class: 'panel flush', style: 'margin-top: 24px;' },
+    header,
+    basis,
+    el('div', {},
+      el('table', { class: 'feed' },
+        el('thead', {}, el('tr', {},
+          el('th', {}, 'lineage root'),
+          el('th', {}, 'status'),
+          el('th', {}, 'active heads'),
+          el('th', { class: 'shrink' }, 'revisions'),
+        )),
+        el('tbody', {}, ...rows),
+      ),
+    ),
+  )
+}
+
 async function renderSession(contextId) {
   setActiveNav(null)
   const ep = endpoints()
@@ -4106,13 +4203,15 @@ async function renderSession(contextId) {
       el('span', { class: 'term' }, 'session'),
       ' is one chunk of agent work. Every record sharing the same ',
       el('code', {}, 'context_id'),
-      ' (16-byte hex) belongs to it. The records form a graph: chained in order, sometimes converging on a transaction. The graph below is built only from what the records themselves contain (§3.2.4). No semantic interpretation, no operator policy.',
+      ' (16-byte hex) belongs to it. The records form a graph: chained in order, sometimes converging on a transaction. The structural graph is built only from what the records themselves contain (§3.2.4). The revision-state panel projects signed ',
+      el('code', {}, 'REVISES'),
+      ' edges but does not apply receiver policy.',
     ],
   }))
 
   root.append(el('section', { class: 'detail-path', 'aria-label': 'Session page path' },
     detailPathStep('01', 'Check readiness', 'Start with source, graph availability, transaction state, and references.'),
-    detailPathStep('02', 'Inspect structure', 'Use the graph to see chain, convergence, annotation, and revision edges.'),
+    detailPathStep('02', 'Inspect state and structure', 'Check revision heads, then use the graph to inspect chain, convergence, annotation, and revision edges.'),
     detailPathStep('03', 'Open records', 'Drop into individual receipts when a row needs proof or raw JSON.'),
   ))
 
@@ -4175,6 +4274,9 @@ async function renderSession(contextId) {
   const hasEdges = graph.edges && graph.edges.length > 0
   const referenceEdgeCounts = summarizeReferenceEdges(graph.edges)
   const referenceStatus = formatReferenceStatus(usingFallback, nodeSummary, referenceEdgeCounts)
+  const revisionState = usingFallback
+    ? null
+    : projectPublicRevisionState(graph, { cell_limit: 100, head_limit: 20 })
 
   // Composition breakdown across the session. Surfaces the event-type
   // diversity that the bare "transaction: none" stat hides. Signed record
@@ -4265,6 +4367,10 @@ async function renderSession(contextId) {
       )
     }
     root.append(banner)
+  }
+
+  if (revisionState !== null) {
+    root.append(renderPublicRevisionStatePanel(revisionState))
   }
 
   // Graph panel (only when graph-node returned edges; built but not rendered

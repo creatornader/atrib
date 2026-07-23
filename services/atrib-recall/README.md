@@ -13,17 +13,18 @@ as `shape: "walk"` with a `direction`, and absorbs `atrib-verify` as a
 this is the read-equivalence conformance family in
 [`spec/conformance/attest-recall/`](../../spec/conformance/attest-recall/).
 
-| `shape` | Legacy tool | Notes |
-| --- | --- | --- |
-| `history` | `recall_my_attribution_history` | base filter-rank-page query |
-| `walk` | `recall_walk` | when `direction` omitted or `"backward"`; also absorbs `trace` |
-| `walk` + `direction: "forward"` | `trace_forward` | forward walk over the same graph |
-| `content` | `recall_by_content` | BM25 free-form retrieval |
-| `chain` | `recall_session_chain` | ordered chronological session walk |
-| `annotations` | `recall_annotations` | aggregated annotation summary for a target |
-| `revisions` | `recall_revisions` | forward revision chain for a target |
-| `orphans` | `recall_orphans` | records not cited by any other record |
-| `by_signer` | `recall_by_signer` | per-creator aggregation |
+| `shape`                         | Legacy tool                     | Notes                                                          |
+| ------------------------------- | ------------------------------- | -------------------------------------------------------------- |
+| `history`                       | `recall_my_attribution_history` | base filter-rank-page query                                    |
+| `walk`                          | `recall_walk`                   | when `direction` omitted or `"backward"`; also absorbs `trace` |
+| `walk` + `direction: "forward"` | `trace_forward`                 | forward walk over the same graph                               |
+| `content`                       | `recall_by_content`             | BM25 free-form retrieval                                       |
+| `chain`                         | `recall_session_chain`          | ordered chronological session walk                             |
+| `annotations`                   | `recall_annotations`            | aggregated annotation summary for a target                     |
+| `revisions`                     | `recall_revisions`              | forward revision chain for a target                            |
+| `orphans`                       | `recall_orphans`                | records not cited by any other record                          |
+| `by_signer`                     | `recall_by_signer`              | per-creator aggregation                                        |
+| `state`                         | none                            | policy-bound current heads for revision lineages               |
 
 The `verification` parameter absorbs `atrib-verify`: pass the same
 `packet`/`records`/`claims` evidence shapes as `@atrib/verify` and the
@@ -37,6 +38,9 @@ succeeds; the degradation is explicit and typed, not a silent drop.
 `recall` plus the eight `recall_*` tools plus `trace`, `trace_forward`,
 and `atrib-verify`. All twelve tool names stay mounted as permanent
 aliases during the alias window.
+
+`state` is intentionally available only through the `recall` verb. It is a
+new read shape, not a new primitive or legacy alias.
 
 ## Install
 
@@ -116,6 +120,47 @@ Omitting `context_id` searches cross-context history by default. This keeps topi
 Returns `{ total, returned, filtered_out_by_verification, record_files, record_file, log_origin, pagination_caveat, records }`. Each record carries `record_hash` (always, per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), so the result is chainable into other primitives without a verbose-mode round-trip), `annotations` (when annotation records point at it), and `superseded_by` (when revision records point at it).
 
 Every call to this tool (and every sibling tool below) writes a per-call jsonl entry to `~/.atrib/state/read-primitives/calls.jsonl` for the unified loop-closure analyzer per [D084](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement). Silent-failure per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract); the tool response is unaffected by instrumentation failures. The `ATRIB_READ_PRIMITIVES_LOG` env var overrides the default path for tests.
+
+### Current state
+
+```typescript
+await recall({
+  shape: 'state',
+  trusted_creator_keys: ['<base64url Ed25519 key>'],
+  allowed_context_ids: ['<32-hex context id>'],
+  root_record_hashes: ['sha256:<64-hex>'],
+  include_content: true,
+  limit: 100,
+  head_limit: 100,
+})
+```
+
+The state projection verifies candidate signatures and applies the caller's
+creator and context policy. Each cell returns its lineage root and every
+active revision head. A single head is `resolved`; multiple heads are
+`conflict`. The projector never picks a winner from timestamp or signer
+identity. Excluded revisions remain visible with typed reasons.
+Cells, heads within each cell, and exclusion details are bounded separately.
+The response reports complete counts and truncation, so a large fork cannot
+inflate one nominally bounded result without detection. Repeated mirror
+records are deduplicated by canonical record hash.
+
+Omitting `trusted_creator_keys` accepts every locally verified signer and
+returns a warning. The response also reports `log_inclusion_verified: false`:
+local signature verification does not prove public-log inclusion. Verify
+inclusion separately when the state view crosses an operator boundary.
+
+The current revision format names one `revises` target. A fork cannot be
+merged by pretending that `informed_by` means supersession, so every active
+head remains visible until an application policy resolves it. See
+[D174](../../DECISIONS.md#d174-current-state-is-a-policy-bound-revision-projection)
+and
+[P053](../../DECISIONS.md#p053-multi-head-revision-merge-semantics-require-independent-application-proof).
+
+The open explorer session view renders the public revision commitments
+available from graph-node. That browser projection shows conflicts and partial
+external roots, but it is not the caller-policy state view above. It does not
+apply `trusted_creator_keys` or independently verify inclusion proofs.
 
 ### Sibling tools
 

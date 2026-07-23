@@ -1,7 +1,7 @@
 {
   "name": "walk-scope-cost-policy",
   "spec_section": "1.11",
-  "description": "A certificate whose scope carries the D165 cost_policy sub-field (model_tiers allowlist, max_tokens budget). From the record alone the walk reports no cost_policy mismatch: signed records carry neither model tier nor token spend, so cost_policy is evaluable only against caller-supplied usage facts (checkCostPolicy, §6.7.2). The usage_vectors pin that evaluation: within-grant usage is in scope; a tier outside the allowlist plus spend over the budget produce both mismatches. Signals, never invalidation (§6.7.3): the record signature and depth-1 resolution are unaffected.",
+  "description": "A certificate whose scope carries the D165 cost_policy sub-field (model_tiers allowlist, max_tokens budget). Signed records carry neither model tier nor token spend, so the record-only walk names both constraints as unverifiable instead of treating the empty mismatch list as completed evaluation. The usage_vectors pin caller-supplied evaluation: within-grant usage is in scope; a tier outside the allowlist plus spend over the budget produce both mismatches. Signals, never invalidation (§6.7.3): the record signature and depth-1 resolution are unaffected.",
   "input": {
     "record": {
       "spec_version": "atrib/1.0",
@@ -89,12 +89,19 @@
       "cert_hash": "sha256:48435d55996b9451da2a2ad19d81490babb9d5f586fd0ab6e8e25a021ccfd3f6",
       "cert_valid": true,
       "in_window": true,
+      "time_basis": "record_timestamp_claim",
+      "time_trusted": false,
       "context_bound": true,
       "cert_bound": true,
       "scope_check": {
         "in_scope": true,
+        "fully_evaluated": false,
         "attenuation_ok": null,
-        "mismatches": []
+        "mismatches": [],
+        "unverifiable": [
+          "cost_policy.model_tiers",
+          "cost_policy.max_tokens"
+        ]
       },
       "revoked": false,
       "errors": []

@@ -21,3 +21,4 @@ __pycache__/
 python/.venv/
 *.egg-info/
 .impeccable/
+.gstack/

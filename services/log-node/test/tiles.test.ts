@@ -62,6 +62,43 @@ describe('tile endpoints (§2.5.2)', () => {
     expect(res.headers.get('cache-control')).toBe('public, max-age=60')
   })
 
+  it('serves an immutable canonical partial tile at its exact width', async () => {
+    const res = await fetch(`${url}/v1/tile/0/000.p/3`)
+    expect(res.ok).toBe(true)
+
+    const data = new Uint8Array(await res.arrayBuffer())
+    expect(data.length).toBe(3 * 32)
+    expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+  })
+
+  it('reconstructs an earlier immutable partial tile version', async () => {
+    const fullEdge = await fetch(`${url}/v1/tile/0/0`)
+    const fullEdgeBytes = new Uint8Array(await fullEdge.arrayBuffer())
+    const partial = await fetch(`${url}/v1/tile/0/000.p/1`)
+    const partialBytes = new Uint8Array(await partial.arrayBuffer())
+
+    expect(partial.ok).toBe(true)
+    expect(partialBytes).toEqual(fullEdgeBytes.slice(0, 32))
+  })
+
+  it('requires a width for a canonical edge tile', async () => {
+    const res = await fetch(`${url}/v1/tile/0/000`)
+    expect(res.status).toBe(404)
+  })
+
+  it('rejects unavailable and malformed partial widths', async () => {
+    const unavailable = await fetch(`${url}/v1/tile/0/000.p/4`)
+    expect(unavailable.status).toBe(404)
+
+    const malformed = await fetch(`${url}/v1/tile/0/000.p/0`)
+    expect(malformed.status).toBe(400)
+  })
+
+  it('parses segmented canonical indexes', async () => {
+    const res = await fetch(`${url}/v1/tile/0/x001/x234/567`)
+    expect(res.status).toBe(404)
+  })
+
   it('returns 404 for out-of-range tile index', async () => {
     const res = await fetch(`${url}/v1/tile/0/999`)
     expect(res.status).toBe(404)
@@ -121,6 +158,20 @@ describe('entry bundle endpoint (§2.5.3)', () => {
     const dv = new DataView(data.buffer)
     const len1 = dv.getUint16(0, false) // big-endian
     expect(len1).toBe(ENTRY_SIZE)
+  })
+
+  it('serves immutable canonical partial entry bundles', async () => {
+    const res = await fetch(`${url}/v1/tile/entries/000.p/2`)
+    expect(res.ok).toBe(true)
+
+    const data = new Uint8Array(await res.arrayBuffer())
+    expect(data.length).toBe(2 * (2 + ENTRY_SIZE))
+    expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+  })
+
+  it('requires a width for a canonical edge entry bundle', async () => {
+    const res = await fetch(`${url}/v1/tile/entries/000`)
+    expect(res.status).toBe(404)
   })
 
   it('returns 404 for out-of-range bundle index', async () => {

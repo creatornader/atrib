@@ -133,8 +133,18 @@ interface CliResult {
 function runCli(args: string[], stdin: string, env: NodeJS.ProcessEnv = {}): Promise<CliResult> {
   return new Promise((resolve, reject) => {
     const cliPath = join(__dirname, '..', 'dist', 'cli.js')
+    const childEnv = { ...process.env, ...env }
+    for (const name of [
+      'ATRIB_ACTIVE_SESSION_PROFILE',
+      'ATRIB_AGENT',
+      'ATRIB_CONTEXT_ID',
+      'CLAUDE_CODE_SESSION_ID',
+      'CODEX_THREAD_ID',
+    ]) {
+      if (!Object.prototype.hasOwnProperty.call(env, name)) delete childEnv[name]
+    }
     const child: ChildProcess = spawn('node', [cliPath, ...args], {
-      env: { ...process.env, ...env },
+      env: childEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     let stdout = ''
@@ -259,6 +269,7 @@ describe('atrib-emit-cli wire contract', () => {
       ATRIB_MIRROR_FILE: mirrorPath,
       ATRIB_AUTOCHAIN_SOURCE: mirrorPath,
       ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID: '1',
+      HOME: tmpDir,
     })
 
     expect(r.code).toBe(3)
@@ -348,7 +359,11 @@ describe('atrib-emit-cli wire contract', () => {
       })
 
       expect(r.code).toBe(0)
-      const out = JSON.parse(r.stdout) as { signed: boolean; record_hash: string; warnings: string[] }
+      const out = JSON.parse(r.stdout) as {
+        signed: boolean
+        record_hash: string
+        warnings: string[]
+      }
       expect(out.signed).toBe(true)
       expect(out.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
       expect(

@@ -72,6 +72,12 @@ export interface DelegationScope {
   max_amount?: { currency: string; value: number }
   counterparties?: string[]
   expires_at?: number
+  cost_policy?: DelegationCostPolicy
+}
+
+export interface DelegationCostPolicy {
+  model_tiers?: string[]
+  max_tokens?: number
 }
 
 /**
@@ -307,7 +313,10 @@ export function withDelegationCertHash<T extends AtribRecord>(
       console.warn('atrib: withDelegationCertHash received a non-object record; skipping stamp')
       return record
     }
-    if (typeof record.context_id !== 'string' || record.chain_root !== genesisChainRoot(record.context_id)) {
+    if (
+      typeof record.context_id !== 'string' ||
+      record.chain_root !== genesisChainRoot(record.context_id)
+    ) {
       console.warn(
         'atrib: delegation_cert_hash is genesis-record-only (§1.11.3); record is not the context genesis, signing without the field',
       )
@@ -321,7 +330,7 @@ export function withDelegationCertHash<T extends AtribRecord>(
       // §1.11.3 role 1: the field commits the genesis signer's OWN run key.
       if (certificate.run_pubkey !== record.creator_key) {
         console.warn(
-          'atrib: delegation certificate does not cover this record\'s creator_key (§1.11.3), signing without the field',
+          "atrib: delegation certificate does not cover this record's creator_key (§1.11.3), signing without the field",
         )
         return record
       }
@@ -331,7 +340,7 @@ export function withDelegationCertHash<T extends AtribRecord>(
         record.timestamp > certificate.not_after
       ) {
         console.warn(
-          'atrib: delegation certificate is expired for this record\'s timestamp (§1.11.10), signing without the field',
+          "atrib: delegation certificate is expired for this record's timestamp (§1.11.10), signing without the field",
         )
         return record
       }
