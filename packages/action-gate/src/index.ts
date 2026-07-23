@@ -66,12 +66,7 @@ export type Sha256Uri = `sha256:${string}`
 export type ActionGatePolicyOutcome = 'allow' | 'block' | 'escalate' | 'error'
 export type ActionGateDecisionState = 'allowed' | 'blocked' | 'escalated' | 'policy_error'
 export type ActionGateOutcomeStatus =
-  | 'executed'
-  | 'not_executed'
-  | 'blocked'
-  | 'escalated'
-  | 'policy_error'
-  | 'execution_error'
+  'executed' | 'not_executed' | 'blocked' | 'escalated' | 'policy_error' | 'execution_error'
 
 export interface ActionGateActionEnvelope {
   readonly run_id: string
@@ -202,6 +197,114 @@ export interface ActionGateRunResult<TResult> {
   readonly record_delivery_errors: readonly ActionGateRecordDeliveryError[]
   readonly result?: TResult
   readonly error?: { readonly name: string; readonly message: string }
+}
+
+export interface ProtectedMcpToolCall {
+  readonly name: string
+  readonly arguments?: unknown
+}
+
+export interface ProtectedMcpActionContext {
+  readonly run_id: string
+  readonly action_id: string
+  readonly agent_id: string
+  readonly risk?: readonly string[]
+  readonly parent_record_hashes?: readonly Sha256Uri[]
+  readonly refs?: Record<string, string>
+  readonly credential?: {
+    readonly run_key: string
+    readonly principal_key?: string
+  }
+}
+
+export interface ProtectedMcpPermit {
+  readonly permit_id: string
+  readonly binding: Sha256Uri
+  readonly issued_at_ms: number
+  readonly expires_at_ms: number
+}
+
+export type ProtectedMcpAuthorizationReason =
+  | 'ok'
+  | 'authorization_missing'
+  | 'authorization_unknown'
+  | 'authorization_binding_mismatch'
+  | 'authorization_expired'
+  | 'authorization_consumed'
+  | 'authorization_credential_missing'
+  | 'authorization_credential_revoked'
+  | 'authorization_revocation_check_failed'
+
+export type ProtectedMcpAuthorizationResult =
+  | { readonly ok: true; readonly reason: 'ok' }
+  | {
+      readonly ok: false
+      readonly reason: Exclude<ProtectedMcpAuthorizationReason, 'ok'>
+    }
+
+export interface ProtectedMcpPermitStore {
+  readonly issue: (permit: ProtectedMcpPermit) => MaybePromise<void>
+  readonly consume: (input: {
+    readonly permit_id: string
+    readonly binding: Sha256Uri
+    readonly now_ms: number
+  }) => MaybePromise<ProtectedMcpAuthorizationResult>
+}
+
+export type ProtectedMcpDispatchResult<TResult> =
+  | {
+      readonly ok: true
+      readonly authorization: { readonly reason: 'ok' }
+      readonly result: TResult
+    }
+  | {
+      readonly ok: false
+      readonly authorization: {
+        readonly reason: Exclude<ProtectedMcpAuthorizationReason, 'ok'>
+      }
+      readonly bypass_evidence?: ActionGateRunResult<never>
+      readonly evidence_error?: { readonly name: string; readonly message: string }
+    }
+
+export interface ProtectedMcpExecutor<TResult> {
+  /**
+   * The public action path. It signs the policy decision before issuing a
+   * one-time permit and invokes the protected dispatch boundary only for an
+   * allowed action.
+   */
+  readonly authorizeAndExecute: (input: {
+    readonly action: ProtectedMcpActionContext
+    readonly request: ProtectedMcpToolCall
+  }) => Promise<ActionGateRunResult<TResult>>
+  /**
+   * The protected raw execution boundary. A host may mount this behind an
+   * internal MCP transport, but must not expose the unwrapped upstream
+   * handler. Calls without the one-time permit are rejected before execution.
+   */
+  readonly dispatch: (input: {
+    readonly action: ProtectedMcpActionContext
+    readonly request: ProtectedMcpToolCall
+    readonly permit_id?: string
+  }) => Promise<ProtectedMcpDispatchResult<TResult>>
+}
+
+export interface CreateProtectedMcpExecutorInput<TResult> {
+  readonly privateKey?: Uint8Array | string
+  readonly contextId?: string
+  readonly serverUrl?: string
+  readonly surface?: string
+  readonly evaluate: (input: ActionGatePolicyInput) => MaybePromise<ActionGatePolicyDecision>
+  readonly executeUpstream: (request: ProtectedMcpToolCall) => MaybePromise<TResult>
+  readonly permitStore?: ProtectedMcpPermitStore
+  readonly permitMaxAgeMs?: number
+  readonly now?: () => number
+  readonly createPermitId?: () => string
+  /**
+   * Current revocation view. Supplying this enables fail-closed credential
+   * checks before policy evaluation and again at the dispatch boundary.
+   */
+  readonly revokedKeys?: ReadonlySet<string> | (() => MaybePromise<ReadonlySet<string>>)
+  readonly onRecord?: (record: AtribRecord, sidecar: ActionGateLocalSidecar) => MaybePromise<void>
 }
 
 export type ActionGateVerificationIssueCode =
@@ -350,6 +453,284 @@ export async function runGatedAction<TResult>(
   return base
 }
 
+/**
+ * In-memory reference store for protected MCP permits. A production adapter
+ * spanning processes or replicas must supply a shared atomic store.
+ */
+export function createMemoryProtectedMcpPermitStore(): ProtectedMcpPermitStore {
+  const permits = new Map<string, ProtectedMcpPermit & { consumed: boolean }>()
+  return {
+    issue(permit) {
+      if (permits.has(permit.permit_id)) {
+        throw new Error('action-gate: protected MCP permit id already exists')
+      }
+      permits.set(permit.permit_id, { ...permit, consumed: false })
+    },
+    consume({ permit_id, binding, now_ms }) {
+      const permit = permits.get(permit_id)
+      if (permit === undefined) {
+        return { ok: false, reason: 'authorization_unknown' }
+      }
+      if (permit.binding !== binding) {
+        return { ok: false, reason: 'authorization_binding_mismatch' }
+      }
+      if (now_ms < permit.issued_at_ms || now_ms > permit.expires_at_ms) {
+        return { ok: false, reason: 'authorization_expired' }
+      }
+      if (permit.consumed) {
+        return { ok: false, reason: 'authorization_consumed' }
+      }
+      permit.consumed = true
+      return { ok: true, reason: 'ok' }
+    },
+  }
+}
+
+export function computeProtectedMcpBinding({
+  action,
+  request,
+}: {
+  readonly action: ProtectedMcpActionContext
+  readonly request: ProtectedMcpToolCall
+}): Sha256Uri {
+  return protectedMcpBinding({ action, request, surface: 'mcp' })
+}
+
+function protectedMcpBinding({
+  action,
+  request,
+  surface,
+}: {
+  readonly action: ProtectedMcpActionContext
+  readonly request: ProtectedMcpToolCall
+  readonly surface: string
+}): Sha256Uri {
+  return hashCanonical({
+    run_id: action.run_id,
+    action_id: action.action_id,
+    agent_id: action.agent_id,
+    ...(action.credential !== undefined ? { credential: action.credential } : {}),
+    surface,
+    tool_name: request.name,
+    args_digest: hashCanonical(request.arguments ?? {}),
+  })
+}
+
+/**
+ * Create an MCP execution boundary where policy evaluation, signed decision,
+ * and one-time authorization precede the upstream side effect.
+ *
+ * The raw upstream handler remains inside this closure. The returned
+ * `dispatch` method rejects missing, unknown, mismatched, expired, and replayed
+ * permits before invoking it.
+ */
+export function createProtectedMcpExecutor<TResult>(
+  input: CreateProtectedMcpExecutorInput<TResult>,
+): ProtectedMcpExecutor<TResult> {
+  const store = input.permitStore ?? createMemoryProtectedMcpPermitStore()
+  const now = input.now ?? Date.now
+  const surface = input.surface ?? 'mcp'
+  const permitMaxAgeMs = input.permitMaxAgeMs ?? 30_000
+  if (!Number.isSafeInteger(permitMaxAgeMs) || permitMaxAgeMs < 0) {
+    throw new TypeError('action-gate: permitMaxAgeMs must be a non-negative safe integer')
+  }
+  const createPermitId = input.createPermitId ?? (() => base64urlEncode(randomBytes(32)))
+
+  const actionEnvelopeFor = (
+    action: ProtectedMcpActionContext,
+    request: ProtectedMcpToolCall,
+    extra?: {
+      readonly risk?: readonly string[]
+      readonly refs?: Record<string, string>
+    },
+  ): ActionGateActionEnvelope => ({
+    run_id: action.run_id,
+    action_id: action.action_id,
+    agent_id: action.agent_id,
+    surface,
+    tool_name: request.name,
+    ...(request.arguments !== undefined ? { args: request.arguments } : {}),
+    ...((extra?.risk ?? action.risk) !== undefined ? { risk: extra?.risk ?? action.risk } : {}),
+    ...(action.parent_record_hashes !== undefined
+      ? { parent_record_hashes: action.parent_record_hashes }
+      : {}),
+    ...((extra?.refs ?? action.refs) !== undefined ? { refs: extra?.refs ?? action.refs } : {}),
+  })
+
+  const rejectBypass = async ({
+    action,
+    request,
+    reason,
+  }: {
+    readonly action: ProtectedMcpActionContext
+    readonly request: ProtectedMcpToolCall
+    readonly reason: Exclude<ProtectedMcpAuthorizationReason, 'ok'>
+  }): Promise<ProtectedMcpDispatchResult<TResult>> => {
+    try {
+      const bypassEvidence = await runGatedAction<never>({
+        ...(input.privateKey !== undefined ? { privateKey: input.privateKey } : {}),
+        ...(input.contextId !== undefined ? { contextId: input.contextId } : {}),
+        ...(input.serverUrl !== undefined ? { serverUrl: input.serverUrl } : {}),
+        action: actionEnvelopeFor(action, request, {
+          risk: [...new Set([...(action.risk ?? []), 'direct_bypass'])].sort(),
+          refs: {
+            ...(action.refs ?? {}),
+            authorization_reason: reason,
+          },
+        }),
+        evaluate: () => ({
+          outcome: 'block',
+          policy_id: 'atrib.protected-mcp.authorization',
+          policy_version: '1',
+          reason: `protected MCP dispatch rejected: ${reason}`,
+          evidence: { authorization_reason: reason },
+        }),
+        execute: () => {
+          throw new Error('action-gate: bypass rejection executed an unreachable action body')
+        },
+        now,
+        ...(input.onRecord !== undefined ? { onRecord: input.onRecord } : {}),
+      })
+      return {
+        ok: false,
+        authorization: { reason },
+        bypass_evidence: bypassEvidence,
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        authorization: { reason },
+        evidence_error: normalizeError(error),
+      }
+    }
+  }
+
+  const credentialAuthorization = async (
+    action: ProtectedMcpActionContext,
+  ): Promise<ProtectedMcpAuthorizationResult> => {
+    if (input.revokedKeys === undefined) return { ok: true, reason: 'ok' }
+    if (action.credential === undefined) {
+      return { ok: false, reason: 'authorization_credential_missing' }
+    }
+    let revokedKeys: ReadonlySet<string>
+    try {
+      revokedKeys =
+        typeof input.revokedKeys === 'function' ? await input.revokedKeys() : input.revokedKeys
+    } catch {
+      return { ok: false, reason: 'authorization_revocation_check_failed' }
+    }
+    if (
+      revokedKeys.has(action.credential.run_key) ||
+      (action.credential.principal_key !== undefined &&
+        revokedKeys.has(action.credential.principal_key))
+    ) {
+      return { ok: false, reason: 'authorization_credential_revoked' }
+    }
+    return { ok: true, reason: 'ok' }
+  }
+
+  const blockedCredentialResult = async (
+    action: ProtectedMcpActionContext,
+    request: ProtectedMcpToolCall,
+    reason: Exclude<ProtectedMcpAuthorizationReason, 'ok'>,
+  ): Promise<ActionGateRunResult<TResult>> =>
+    runGatedAction<TResult>({
+      ...(input.privateKey !== undefined ? { privateKey: input.privateKey } : {}),
+      ...(input.contextId !== undefined ? { contextId: input.contextId } : {}),
+      ...(input.serverUrl !== undefined ? { serverUrl: input.serverUrl } : {}),
+      action: actionEnvelopeFor(action, request, {
+        risk: [...new Set([...(action.risk ?? []), 'credential_rejected'])].sort(),
+        refs: {
+          ...(action.refs ?? {}),
+          authorization_reason: reason,
+          ...(action.credential?.run_key ? { credential_run_key: action.credential.run_key } : {}),
+        },
+      }),
+      evaluate: () => ({
+        outcome: 'block',
+        policy_id: 'atrib.protected-mcp.revocation',
+        policy_version: '1',
+        reason: `protected MCP credential rejected: ${reason}`,
+        evidence: { authorization_reason: reason },
+      }),
+      execute: () => {
+        throw new Error('action-gate: credential rejection executed an unreachable action body')
+      },
+      now,
+      ...(input.onRecord !== undefined ? { onRecord: input.onRecord } : {}),
+    })
+
+  const dispatch: ProtectedMcpExecutor<TResult>['dispatch'] = async ({
+    action,
+    request,
+    permit_id,
+  }) => {
+    const credential = await credentialAuthorization(action)
+    if (!credential.ok) {
+      return rejectBypass({ action, request, reason: credential.reason })
+    }
+    if (permit_id === undefined || permit_id.length === 0) {
+      return rejectBypass({ action, request, reason: 'authorization_missing' })
+    }
+    const authorization = await store.consume({
+      permit_id,
+      binding: protectedMcpBinding({ action, request, surface }),
+      now_ms: now(),
+    })
+    if (!authorization.ok) {
+      return rejectBypass({ action, request, reason: authorization.reason })
+    }
+    return {
+      ok: true,
+      authorization: { reason: 'ok' },
+      result: await input.executeUpstream(request),
+    }
+  }
+
+  return {
+    dispatch,
+    async authorizeAndExecute({ action, request }) {
+      const credential = await credentialAuthorization(action)
+      if (!credential.ok) {
+        return blockedCredentialResult(action, request, credential.reason)
+      }
+      return runGatedAction({
+        ...(input.privateKey !== undefined ? { privateKey: input.privateKey } : {}),
+        ...(input.contextId !== undefined ? { contextId: input.contextId } : {}),
+        ...(input.serverUrl !== undefined ? { serverUrl: input.serverUrl } : {}),
+        action: actionEnvelopeFor(action, request),
+        evaluate: input.evaluate,
+        execute: async () => {
+          const issuedAtMs = now()
+          const permitId = createPermitId()
+          if (permitId.length === 0) {
+            throw new Error('action-gate: createPermitId returned an empty id')
+          }
+          await store.issue({
+            permit_id: permitId,
+            binding: protectedMcpBinding({ action, request, surface }),
+            issued_at_ms: issuedAtMs,
+            expires_at_ms: issuedAtMs + permitMaxAgeMs,
+          })
+          const dispatched = await dispatch({
+            action,
+            request,
+            permit_id: permitId,
+          })
+          if (!dispatched.ok) {
+            throw new Error(
+              `action-gate: protected MCP dispatch rejected internal permit (${dispatched.authorization.reason})`,
+            )
+          }
+          return dispatched.result
+        },
+        now,
+        ...(input.onRecord !== undefined ? { onRecord: input.onRecord } : {}),
+      })
+    },
+  }
+}
+
 export function buildActionGateDecisionEntry({
   action,
   policy,
@@ -425,7 +806,7 @@ export function buildActionGateOutcomeEntry({
     decision_id,
     decision_record_hash,
     executed,
-    ...((result_digest !== undefined || result !== undefined)
+    ...(result_digest !== undefined || result !== undefined
       ? {
           result_digest: outcomeResultDigest({
             result,
@@ -524,23 +905,15 @@ export async function signActionGateOutcome({
   if (action.run_id !== entry.run_id || action.action_id !== entry.action_id) {
     throw new Error('action does not match outcome entry')
   }
-  const normalizedDecisionRecordHash = normalizeSha256Uri(
-    decisionRecordHash,
-    'decisionRecordHash',
-  )
+  const normalizedDecisionRecordHash = normalizeSha256Uri(decisionRecordHash, 'decisionRecordHash')
   const entryDecisionRecordHash = normalizeSha256Uri(
     entry.decision_record_hash,
     'decision_record_hash',
   )
   if (normalizedDecisionRecordHash !== entryDecisionRecordHash) {
-    throw new Error(
-      'decisionRecordHash does not match outcome entry decision_record_hash',
-    )
+    throw new Error('decisionRecordHash does not match outcome entry decision_record_hash')
   }
-  if (
-    result !== undefined &&
-    entry.result_digest !== digestCanonical(result)
-  ) {
+  if (result !== undefined && entry.result_digest !== digestCanonical(result)) {
     throw new Error('result does not match outcome entry result_digest')
   }
   const creatorKey = base64urlEncode(await getPublicKey(privateKey))
@@ -550,8 +923,7 @@ export async function signActionGateOutcome({
     creator_key: creatorKey,
     chain_root: resolveChainRoot({
       contextId,
-      autoChainTailHex:
-        chainTailHex ?? decisionRecordHash.slice('sha256:'.length),
+      autoChainTailHex: chainTailHex ?? decisionRecordHash.slice('sha256:'.length),
     }),
     event_type: ACTION_GATE_OUTCOME_EVENT_TYPE_URI,
     context_id: contextId,
@@ -683,10 +1055,7 @@ export async function verifyActionGateRun({
       message: 'decision state does not match its policy outcome',
     })
   }
-  if (
-    outcome.entry.result_digest !== undefined &&
-    !isSha256Uri(outcome.entry.result_digest)
-  ) {
+  if (outcome.entry.result_digest !== undefined && !isSha256Uri(outcome.entry.result_digest)) {
     issues.push({
       code: 'outcome_result_digest_invalid',
       message: 'outcome result digest is not a canonical SHA-256 URI',
@@ -1037,7 +1406,11 @@ export async function requireCorroborated(
   }
 
   if (!opts.trustedCreatorKeys || opts.trustedCreatorKeys.length === 0) {
-    return { ...base, outcome: uncorroborated, reason: 'no trust set supplied; cannot establish trusted corroboration' }
+    return {
+      ...base,
+      outcome: uncorroborated,
+      reason: 'no trust set supplied; cannot establish trusted corroboration',
+    }
   }
 
   const result = await resolveAttestationCorroboration({
@@ -1261,9 +1634,7 @@ function outcomeResultDigest({
   readonly result_digest?: Sha256Uri
 }): Sha256Uri {
   const supplied =
-    result_digest === undefined
-      ? undefined
-      : normalizeSha256Uri(result_digest, 'result_digest')
+    result_digest === undefined ? undefined : normalizeSha256Uri(result_digest, 'result_digest')
   if (result !== undefined) {
     const computed = digestCanonical(result)
     if (supplied !== undefined && supplied !== computed) {
@@ -1366,12 +1737,7 @@ function isSha256Uri(value: unknown): value is Sha256Uri {
 }
 
 function isActionGatePolicyOutcome(value: unknown): value is ActionGatePolicyOutcome {
-  return (
-    value === 'allow' ||
-    value === 'block' ||
-    value === 'escalate' ||
-    value === 'error'
-  )
+  return value === 'allow' || value === 'block' || value === 'escalate' || value === 'error'
 }
 
 function isActionGateOutcomeStatus(value: unknown): value is ActionGateOutcomeStatus {
@@ -1385,9 +1751,7 @@ function isActionGateOutcomeStatus(value: unknown): value is ActionGateOutcomeSt
   )
 }
 
-function assertActionGateOutcomeStatus(
-  value: unknown,
-): asserts value is ActionGateOutcomeStatus {
+function assertActionGateOutcomeStatus(value: unknown): asserts value is ActionGateOutcomeStatus {
   if (!isActionGateOutcomeStatus(value)) {
     throw new Error('outcome status has an invalid value')
   }

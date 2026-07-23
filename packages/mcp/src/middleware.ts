@@ -168,6 +168,24 @@ export interface LocalSubstrateCommitOptions {
   onWarning?: (message: string, detail?: unknown) => void
 }
 
+export interface DisclosureOptions {
+  tool_name?: 'omit' | 'verbatim' | 'hashed'
+  args?: 'omit' | 'plain-sha256' | 'salted-sha256'
+  result?: 'omit' | 'plain-sha256' | 'salted-sha256'
+}
+
+/**
+ * Recommended action-evidence preset. It commits to tool identity, arguments,
+ * and the pre-mutation result while keeping their raw values in the local
+ * sidecar. Low-level middleware remains byte-compatible unless callers select
+ * `evidenceMode: 'verifiable-action'`.
+ */
+export const VERIFIABLE_ACTION_DISCLOSURE: Readonly<DisclosureOptions> = Object.freeze({
+  tool_name: 'hashed',
+  args: 'salted-sha256',
+  result: 'salted-sha256',
+})
+
 /**
  * Pre-sign payload context passed to `onRecord` alongside the signed
  * AtribRecord. The signed record commits to this content (via content_id /
@@ -180,6 +198,8 @@ export interface LocalSubstrateCommitOptions {
  * for observers; the canonical record bytes remain the AtribRecord.
  */
 export interface OnRecordSidecar {
+  /** Request/outcome phase when verifiable-action mode emits a paired record. */
+  actionPhase?: 'request' | 'outcome'
   /** MCP tool name (params.name), e.g. "post_context". */
   toolName?: string
   /** Tool call arguments (params.arguments) at invocation time. */
@@ -390,6 +410,12 @@ export interface AtribOptions {
    */
   preCallTransform?: PreCallTransform
   /**
+   * Named evidence posture. `verifiable-action` applies
+   * `VERIFIABLE_ACTION_DISCLOSURE` unless `disclosure` is supplied.
+   * `minimal` preserves the §8.1 byte-compatible omission posture.
+   */
+  evidenceMode?: 'minimal' | 'verifiable-action'
+  /**
    * Optional disclosure controls per spec §8 / D061. Each dial picks how
    * much the signed record discloses about the underlying tool call. All
    * default to `'omit'`, preserving the §8.1 default posture (existing
@@ -414,11 +440,7 @@ export interface AtribOptions {
    * signs BEFORE the handler returns). When both are set, `result`
    * disclosure is silently ignored and a warning is logged.
    */
-  disclosure?: {
-    tool_name?: 'omit' | 'verbatim' | 'hashed'
-    args?: 'omit' | 'plain-sha256' | 'salted-sha256'
-    result?: 'omit' | 'plain-sha256' | 'salted-sha256'
-  }
+  disclosure?: DisclosureOptions
   /**
    * Opt-in local substrate shadow probe. The middleware sends the exact
    * unsigned record body to a coordinator in `shadow_probe` mode, then still
@@ -612,10 +634,15 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   // already silently skips result hashing on pre-call; this warning makes
   // the conflict visible at config time rather than letting it manifest as
   // silently-missing result_hash fields on emitted records.
+  const effectiveDisclosure =
+    options.disclosure ??
+    (options.evidenceMode === 'verifiable-action' ? VERIFIABLE_ACTION_DISCLOSURE : {})
+
   if (
     options.preCallTransform &&
-    options.disclosure?.result &&
-    options.disclosure.result !== 'omit'
+    options.disclosure !== undefined &&
+    effectiveDisclosure.result &&
+    effectiveDisclosure.result !== 'omit'
   ) {
     console.warn(
       'atrib: disclosure.result is incompatible with preCallTransform (the result is not available pre-call). result_hash / result_salt will not appear on records produced via the preCallTransform path.',
@@ -659,8 +686,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   // the body of this patch should be replaced with that API. The wrap()
   // function below stays unchanged.
   const underlyingServer = (server as { server?: unknown }).server as
-    | { setRequestHandler: unknown }
-    | undefined
+    { setRequestHandler: unknown } | undefined
 
   if (!underlyingServer || typeof underlyingServer.setRequestHandler !== 'function') {
     console.warn(
@@ -709,12 +735,15 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
    * because the handler hasn't returned yet; disclosure.result is
    * silently ignored on that path with a warning. The optional local
    * substrate shadow probe is fire-and-forget and never replaces local
-   * signing in this path. The optional commit path runs later after the tool
-   * succeeds, so failed tool calls never queue a local or coordinator record.
+   * signing in this path. The optional commit path normally runs after the
+   * tool succeeds. Verifiable-action pre-call mode commits its request before
+   * execution and signs a linked terminal outcome for success or failure.
    */
   const buildSignedRecord = async (
     request: Record<string, unknown>,
     resultForHash?: Record<string, unknown>,
+    priorRecordHashHex?: string,
+    eventTypeOverride?: string,
   ): Promise<BuiltRecord> => {
     // §5.3.2: Read inbound context
     const params = request.params as Record<string, unknown>
@@ -772,15 +801,16 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // env var (cross-producer handoff) > synthetic genesis.
     const chainRootValue = resolveChainRoot({
       contextId,
-      inboundRecordHashHex: inbound ? hexEncode(inbound.recordHash) : undefined,
+      inboundRecordHashHex:
+        priorRecordHashHex ?? (inbound ? hexEncode(inbound.recordHash) : undefined),
       autoChainTailHex: autoChain ? lastRecordHashByContext.get(contextId) : undefined,
     })
 
     // Determine event_type URI (spec 1.2.4)
     const toolName = (params.name as string) ?? ''
-    const eventType = transactionTools.has(toolName)
-      ? EVENT_TYPE_TRANSACTION_URI
-      : EVENT_TYPE_TOOL_CALL_URI
+    const eventType =
+      eventTypeOverride ??
+      (transactionTools.has(toolName) ? EVENT_TYPE_TRANSACTION_URI : EVENT_TYPE_TOOL_CALL_URI)
 
     // Construct the record
     const contentId = computeContentId(serverUrl, toolName)
@@ -791,6 +821,9 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // (presence affects the JCS canonical form, so omission is normal).
     let informedByList: string[] | undefined
     const merged = new Set<string>()
+    if (priorRecordHashHex !== undefined) {
+      merged.add(`sha256:${priorRecordHashHex}`)
+    }
     const candidates: RecordReferenceCandidate[] = []
     let parentRecordHashSeeded = false
     if (parentRecordHashSeed && !parentRecordHashSeedConsumed) {
@@ -852,7 +885,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     // §8 / D061 disclosure dials. Each defaults to 'omit' (preserves §8.1
     // default posture). Errors during disclosure synthesis fall through to
     // omission rather than throwing, degradation contract per §5.8.
-    const disclosure = options.disclosure ?? {}
+    const disclosure = effectiveDisclosure
     const toolNameDisclosure = disclosure.tool_name ?? 'omit'
     const argsDisclosure = disclosure.args ?? 'omit'
 
@@ -1137,8 +1170,9 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   /**
    * Commit a built record: run the onRecord observer, attach outbound
    * context to the result, queue for log submission, update autoChain
-   * bookkeeping. Called only on successful tool calls (after the upstream
-   * returned and isError is not true).
+   * bookkeeping. Ordinary calls reach this helper only after success.
+   * Verifiable-action request/outcome pairs also use it for the pre-execution
+   * request and for terminal error outcomes.
    *
    * `sidecar` is the optional pre-sign payload (toolName, args, result)
    * passed through to onRecord observers that want to persist a richer
@@ -1147,7 +1181,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
    */
   const commitRecord = (
     built: BuiltRecord,
-    resultObj: Record<string, unknown>,
+    resultObj: Record<string, unknown> | undefined,
     sidecar?: OnRecordSidecar,
   ): void => {
     // autoChain bookkeeping: remember this record's hash so the next
@@ -1171,11 +1205,13 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     }
 
     // §5.3.4: Write outbound context (includes traceparent, baggage, X-Atrib-Chain)
-    writeOutboundContext(resultObj, built.signed, {
-      traceparent:
-        typeof built.inboundTraceparent === 'string' ? built.inboundTraceparent : undefined,
-      sessionToken: built.sessionToken,
-    })
+    if (resultObj) {
+      writeOutboundContext(resultObj, built.signed, {
+        traceparent:
+          typeof built.inboundTraceparent === 'string' ? built.inboundTraceparent : undefined,
+        sessionToken: built.sessionToken,
+      })
+    }
 
     // 5.3.5: Non-blocking log submission. Transaction records (1.7 commerce hooks)
     // are admitted at high priority so they are not delayed behind tool_call backlog.
@@ -1205,29 +1241,79 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     handler: (request: Record<string, unknown>, extra: unknown) => Promise<unknown>,
   ) => {
     return async (request: Record<string, unknown>, extra: unknown) => {
+      const requestParams = request.params as Record<string, unknown>
+      const requestToolName = (requestParams.name as string) ?? ''
+
+      const buildSidecar = (
+        resultObj?: Record<string, unknown>,
+        actionPhase?: 'request' | 'outcome',
+        argsOverride?: Record<string, unknown>,
+      ): OnRecordSidecar => {
+        const sidecar: OnRecordSidecar = {}
+        if (resultObj !== undefined) sidecar.result = resultObj
+        if (actionPhase !== undefined) sidecar.actionPhase = actionPhase
+        if (options.delegationCert !== undefined) {
+          sidecar.delegation_cert = options.delegationCert
+        }
+        if (typeof requestParams.name === 'string') {
+          sidecar.toolName = requestParams.name
+          sidecar.resolvedFacts = { tool_name: requestParams.name }
+        }
+        const sideArgs =
+          argsOverride ?? (requestParams.arguments as Record<string, unknown> | undefined)
+        if (sideArgs) sidecar.args = sideArgs
+        const authorizationEvidence = buildMcpOAuthEvidenceFromExtra(
+          extra,
+          options.authorizationEvidence,
+          { serverUrl },
+        )
+        const x401Evidence = buildX401EvidenceFromExtra(extra, options.x401AuthorizationEvidence)
+        const sidecarEvidence = [authorizationEvidence, x401Evidence].filter(
+          (entry): entry is CapturedMcpOAuthEvidence | CapturedX401Evidence => entry !== undefined,
+        )
+        if (sidecarEvidence.length > 0) sidecar.authorizationEvidence = sidecarEvidence
+        return sidecar
+      }
+
       // Pre-call signing branch: only when host opted in via preCallTransform.
       // Signs the record BEFORE forwarding so the host can embed the
       // receipt_id into the upstream args (cross-tool causal embedding).
       // Errors here degrade silently to the standard post-call path.
       let preBuilt: BuiltRecord | undefined
+      let preCallArgs: Record<string, unknown> | undefined
       if (options.preCallTransform && !destroyed) {
         try {
           await publicKeyReady
-          const built = await buildSignedRecord(request)
-          const params = request.params as Record<string, unknown>
-          const args = (params.arguments as Record<string, unknown> | undefined) ?? {}
+          const pairedVerifiableMode =
+            options.evidenceMode === 'verifiable-action' && options.disclosure === undefined
+          const built = await buildSignedRecord(
+            request,
+            undefined,
+            undefined,
+            pairedVerifiableMode && transactionTools.has(requestToolName)
+              ? EVENT_TYPE_TOOL_CALL_URI
+              : undefined,
+          )
+          const args = (requestParams.arguments as Record<string, unknown> | undefined) ?? {}
+          preCallArgs = structuredClone(args)
           const receiptId = encodeToken(built.signed)
           const transformed = options.preCallTransform({
-            toolName: (params.name as string) ?? '',
+            toolName: requestToolName,
             args,
             receiptId,
             recordHash: `sha256:${built.recordHashHex}`,
             contextId: built.contextId,
           })
           if (transformed && transformed !== args) {
-            params.arguments = transformed
+            requestParams.arguments = transformed
           }
           preBuilt = built
+          if (pairedVerifiableMode) {
+            // The upstream is about to receive this exact receipt. Commit the
+            // request before execution so failures cannot leave an externally
+            // visible receipt pointing at an omitted record.
+            commitRecord(built, undefined, buildSidecar(undefined, 'request', preCallArgs))
+          }
         } catch (err) {
           // §5.8: pre-call signing must never block the tool call. Drop the
           // pre-built record (if any) and fall through to the standard path.
@@ -1237,8 +1323,43 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
       }
 
       // Call the upstream handler.
-      // §5.8: If the handler itself throws, that's the tool's error. let it propagate.
-      const result = await handler(request, extra)
+      // In paired verifiable mode, commit a terminal failure outcome before
+      // preserving the upstream exception. The signed result_hash commits to
+      // the bounded failure envelope; raw detail stays in the local sidecar.
+      let result: unknown
+      try {
+        result = await handler(request, extra)
+      } catch (error) {
+        if (
+          preBuilt !== undefined &&
+          options.evidenceMode === 'verifiable-action' &&
+          options.disclosure === undefined &&
+          !destroyed
+        ) {
+          try {
+            const failureResult: Record<string, unknown> = {
+              isError: true,
+              error: {
+                name: error instanceof Error ? error.name : 'Error',
+                message: error instanceof Error ? error.message : String(error),
+              },
+            }
+            await publicKeyReady
+            const failureOutcome = await buildSignedRecord(
+              request,
+              failureResult,
+              preBuilt.recordHashHex,
+            )
+            commitRecord(failureOutcome, undefined, buildSidecar(failureResult, 'outcome'))
+          } catch (attributionError) {
+            console.warn(
+              'atrib: failed to sign terminal outcome for thrown tool call',
+              attributionError,
+            )
+          }
+        }
+        throw error
+      }
 
       try {
         // §5.6.3: After destroy(), skip attribution entirely.
@@ -1246,54 +1367,59 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
           return result
         }
 
-        // §5.3.3: Only emit for successful calls (isError: false). On error,
-        // the pre-built record (if any) is discarded, its receipt_id may
-        // have been written into upstream args, but the row (or whatever the
-        // upstream did) is not represented by a logged record.
-        const resultObj = result as Record<string, unknown>
-        if (resultObj.isError === true) {
+        const pairedVerifiableMode =
+          preBuilt !== undefined &&
+          options.evidenceMode === 'verifiable-action' &&
+          options.disclosure === undefined
+        const resultIsObject =
+          result !== null && typeof result === 'object' && !Array.isArray(result)
+        const resultObj: Record<string, unknown> = resultIsObject
+          ? (result as Record<string, unknown>)
+          : {
+              isError: true,
+              error: {
+                name: 'InvalidToolResult',
+                message: 'Tool handler returned a non-object result',
+              },
+            }
+        // Minimal mode preserves §5.3.3: failed calls do not emit. Paired
+        // verifiable mode already committed the request before execution and
+        // therefore must commit a terminal error outcome as well.
+        if ((resultObj.isError === true || !resultIsObject) && !pairedVerifiableMode) {
           return result
         }
-
-        // Reuse the pre-built record from the preCallTransform branch when
-        // present; otherwise build + sign now (the standard post-call path).
-        // disclosure.result only fires on the post-call path: pre-call has
-        // no result yet, so commitment-form synthesis would have nothing
-        // to hash. The pre-call branch above silently skips it.
-        const built =
-          preBuilt ??
-          (await (async () => {
-            await publicKeyReady
-            return buildSignedRecord(request, resultObj)
-          })())
 
         // Construct the pre-sign sidecar for onRecord observers. Captures
         // toolName + raw args + raw result so a richer local mirror can
         // surface semantic context alongside the signed bytes. Public log
         // submission below is unchanged, it only sees `built.signed`.
-        const params = request.params as Record<string, unknown>
-        const sidecar: OnRecordSidecar = { result: resultObj }
-        if (options.delegationCert !== undefined) {
-          sidecar.delegation_cert = options.delegationCert
+        const params = requestParams
+        const sidecar = buildSidecar(resultObj)
+
+        let built: BuiltRecord
+        if (pairedVerifiableMode) {
+          // The receipt-bearing request record cannot commit to a result that
+          // does not exist yet. Emit a second result-bearing record, linked by
+          // both chain_root and informed_by to the exact request record.
+          // The request was committed before execution, so only the terminal
+          // outcome is committed here.
+          await publicKeyReady
+          built = await buildSignedRecord(request, resultObj, preBuilt!.recordHashHex)
+          commitRecord(built, resultIsObject ? resultObj : undefined, {
+            ...sidecar,
+            actionPhase: 'outcome',
+          })
+        } else {
+          // Reuse the pre-built record from the preCallTransform branch when
+          // present; otherwise build and sign on the standard post-call path.
+          built =
+            preBuilt ??
+            (await (async () => {
+              await publicKeyReady
+              return buildSignedRecord(request, resultObj)
+            })())
+          commitRecord(built, resultObj, sidecar)
         }
-        if (typeof params.name === 'string') {
-          sidecar.toolName = params.name
-          sidecar.resolvedFacts = { tool_name: params.name }
-        }
-        const sideArgs = params.arguments as Record<string, unknown> | undefined
-        if (sideArgs) sidecar.args = sideArgs
-        const authorizationEvidence = buildMcpOAuthEvidenceFromExtra(
-          extra,
-          options.authorizationEvidence,
-          { serverUrl },
-        )
-        const x401Evidence = buildX401EvidenceFromExtra(extra, options.x401AuthorizationEvidence)
-        const sidecarEvidence = [authorizationEvidence, x401Evidence].filter(
-          (entry): entry is CapturedMcpOAuthEvidence | CapturedX401Evidence =>
-            entry !== undefined,
-        )
-        if (sidecarEvidence.length > 0) sidecar.authorizationEvidence = sidecarEvidence
-        commitRecord(built, resultObj, sidecar)
 
         // D141 / §1.5.4.1: opt-in dev.atrib/attribution receipt, gated on the
         // client having declared the extension on THIS request. Runs after
@@ -1301,7 +1427,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
         // applyAttributionReceipt is §5.8-safe (never throws, never mutates
         // the result on failure) and reports log_submission as a queue
         // status — submission itself stays non-blocking per §5.3.5.
-        if (options.extensionAttribution === true) {
+        if (options.extensionAttribution === true && resultIsObject) {
           applyAttributionReceipt(resultObj, params._meta, built.signed, {
             logSubmission: options.logSubmission === 'disabled' ? 'disabled' : 'queued',
           })
@@ -1338,8 +1464,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     ._requestHandlers
   if (handlerMap instanceof Map) {
     const existing = handlerMap.get('tools/call') as
-      | ((request: Record<string, unknown>, extra: unknown) => Promise<unknown>)
-      | undefined
+      ((request: Record<string, unknown>, extra: unknown) => Promise<unknown>) | undefined
     if (typeof existing === 'function') {
       handlerMap.set('tools/call', makeWrappedHandler(existing))
     }

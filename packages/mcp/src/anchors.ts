@@ -130,11 +130,12 @@ export interface AnchorSetConfig {
 }
 
 /**
- * The SDK's built-in default anchor set (§2.11.12 rule 1): two independent
- * anchors so zero-config producers get plurality without opting in. The
- * non-atrib member is OpenTimestamps per the D138 candidate shape. Its
- * transport becomes active only when a producer explicitly configures the
- * anchor leg, so zero-config fan-out never creates outbound HTTP traffic.
+ * The SDK's built-in default anchor set (§2.11.12 rule 1): two independently
+ * identified anchor descriptors. The non-atrib member is OpenTimestamps per
+ * D138. Descriptor posture is not proof success: callers use the fan-out
+ * report and verifier result for those claims. The OTS transport becomes
+ * active only when a producer explicitly configures the anchor leg, so
+ * zero-config fan-out never creates outbound HTTP traffic.
  */
 export const BUILT_IN_DEFAULT_ANCHOR_SET: readonly AnchorDescriptor[] = [
   { anchor_type: 'atrib-log', anchor_id: 'log.atrib.dev', url: 'https://log.atrib.dev/v1' },
@@ -214,9 +215,7 @@ export function resolveAnchorPosture(config: AnchorSetConfig = {}): AnchorPostur
  * including deliberate or warned sub-plurality sets, which are used as
  * given (rules 3-4: warn, never block).
  */
-export function resolveEffectiveAnchors(
-  config: AnchorSetConfig = {},
-): readonly AnchorDescriptor[] {
+export function resolveEffectiveAnchors(config: AnchorSetConfig = {}): readonly AnchorDescriptor[] {
   return Array.isArray(config.anchors) ? config.anchors : BUILT_IN_DEFAULT_ANCHOR_SET
 }
 
@@ -381,6 +380,8 @@ export type AnchorSubmissionStatus =
   | 'queued'
   /** Accepted by the anchor but awaiting upstream attestation (e.g. OTS). */
   | 'pending'
+  /** The transport obtained an offline-verifiable proof for this commitment. */
+  | 'confirmed'
   /** No transport implementation for this anchor type yet (stub). */
   | 'unsupported'
   /** The transport threw or rejected; caught per §5.8, never rethrown. */
@@ -394,6 +395,53 @@ export interface AnchorSubmissionOutcome {
 }
 
 /**
+ * Outcome accounting for one fan-out. Configured descriptors never count as
+ * attempts or accepted submissions. `pending` and `confirmed` mean the
+ * upstream accepted the commitment. Only `confirmed` means the transport
+ * obtained an offline-verifiable proof. Independent plurality is still a
+ * verifier decision over proof bytes, trust roots, and operator groups.
+ */
+export interface AnchorSubmissionReport {
+  configured_anchor_count: number
+  attempted_anchor_count: number
+  successful_submission_count: number
+  proof_ready_anchor_count: number
+  queued_anchor_count: number
+  pending_anchor_count: number
+  unsupported_anchor_count: number
+  failed_anchor_count: number
+  proof_ready_anchors: Array<{ anchor_type: AnchorType; anchor_id: string }>
+  outcomes: AnchorSubmissionOutcome[]
+}
+
+export function summarizeAnchorOutcomes(
+  outcomes: AnchorSubmissionOutcome[],
+  configuredAnchorCount: number = outcomes.length,
+): AnchorSubmissionReport {
+  const proofReadyAnchors = outcomes
+    .filter((outcome) => outcome.status === 'confirmed')
+    .map((outcome) => ({
+      anchor_type: outcome.anchor_type,
+      anchor_id: outcome.anchor_id,
+    }))
+
+  return {
+    configured_anchor_count: configuredAnchorCount,
+    attempted_anchor_count: outcomes.length,
+    successful_submission_count: outcomes.filter(
+      (outcome) => outcome.status === 'pending' || outcome.status === 'confirmed',
+    ).length,
+    proof_ready_anchor_count: proofReadyAnchors.length,
+    queued_anchor_count: outcomes.filter((outcome) => outcome.status === 'queued').length,
+    pending_anchor_count: outcomes.filter((outcome) => outcome.status === 'pending').length,
+    unsupported_anchor_count: outcomes.filter((outcome) => outcome.status === 'unsupported').length,
+    failed_anchor_count: outcomes.filter((outcome) => outcome.status === 'failed').length,
+    proof_ready_anchors: proofReadyAnchors,
+    outcomes,
+  }
+}
+
+/**
  * One anchor submission client. Implementations MUST be non-blocking in
  * spirit: `submit` may return a promise, but the fan-out never awaits it
  * before returning to the caller (§5.3.5), so slow transports only delay
@@ -402,7 +450,9 @@ export interface AnchorSubmissionOutcome {
 export interface AnchorTransport {
   readonly anchorType: AnchorType
   readonly anchorId: string
-  submit(request: AnchorSubmissionRequest): AnchorSubmissionOutcome | Promise<AnchorSubmissionOutcome>
+  submit(
+    request: AnchorSubmissionRequest,
+  ): AnchorSubmissionOutcome | Promise<AnchorSubmissionOutcome>
   /** Drain transport-owned work during tests and host shutdown. */
   flush?(): Promise<void>
 }
@@ -530,9 +580,7 @@ function der(tag: number, value: number[]): number[] {
 export function rfc3161TimestampQuery(recordHash: string): Uint8Array {
   const digest = [...recordHashBytes(recordHash)]
   const sha256AlgorithmIdentifier = [
-    0x30, 0x0d,
-    0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01,
-    0x05, 0x00,
+    0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00,
   ]
   const messageImprint = der(0x30, [...sha256AlgorithmIdentifier, ...der(0x04, digest)])
   return new Uint8Array(der(0x30, [...der(0x02, [0x01]), ...messageImprint, 0x01, 0x01, 0xff]))
@@ -595,7 +643,8 @@ export function createRfc3161AnchorTransport(
       })
       if (!response.ok) throw new Error(`RFC 3161 submission failed: ${response.status}`)
       const responseBytes = new Uint8Array(await response.arrayBuffer())
-      if (responseBytes.length === 0) throw new Error('RFC 3161 submission returned an empty response')
+      if (responseBytes.length === 0)
+        throw new Error('RFC 3161 submission returned an empty response')
       return { anchor_type: 'rfc3161-tsa', anchor_id: anchorId, status: 'queued' }
     },
   }
@@ -608,8 +657,11 @@ export function createOpenTimestampsAnchorTransport(
 ): AnchorTransport {
   const anchorId = descriptorId(descriptor)
   const fetchImpl = httpFetch(options)
-  const calendars = descriptor.calendars ?? (descriptorEndpoint(descriptor) ? [descriptorEndpoint(descriptor)!] : [])
-  if (!fetchImpl || calendars.length === 0) return createStubAnchorTransport('opentimestamps', anchorId)
+  const calendars =
+    descriptor.calendars ??
+    (descriptorEndpoint(descriptor) ? [descriptorEndpoint(descriptor)!] : [])
+  if (!fetchImpl || calendars.length === 0)
+    return createStubAnchorTransport('opentimestamps', anchorId)
   return {
     anchorType: 'opentimestamps',
     anchorId,
@@ -620,7 +672,10 @@ export function createOpenTimestampsAnchorTransport(
         try {
           const response = await fetchImpl(`${calendar.replace(/\/$/, '')}/digest`, {
             method: 'POST',
-            headers: { 'content-type': 'application/octet-stream', accept: 'application/vnd.opentimestamps.ots' },
+            headers: {
+              'content-type': 'application/octet-stream',
+              accept: 'application/vnd.opentimestamps.ots',
+            },
             body: binaryBody(digest),
           })
           if (!response.ok) throw new Error(`${response.status}`)
@@ -657,6 +712,8 @@ export function createAnchorTransport(
  */
 export interface AnchorFanoutTicket {
   outcomes: Promise<AnchorSubmissionOutcome[]>
+  /** Successful-leg accounting derived from settled outcomes. */
+  report: Promise<AnchorSubmissionReport>
 }
 
 export interface CreateAnchorFanoutOptions {
@@ -723,9 +780,7 @@ export function createAnchorFanout(options: CreateAnchorFanoutOptions = {}): Anc
     try {
       const anchorType = descriptorType(descriptor)
       const anchorId = descriptorId(descriptor)
-      const override = injected.find(
-        (t) => t.anchorType === anchorType && t.anchorId === anchorId,
-      )
+      const override = injected.find((t) => t.anchorType === anchorType && t.anchorId === anchorId)
       transports.push(
         override ??
           createAnchorTransport(descriptor, {
@@ -760,7 +815,10 @@ export function createAnchorFanout(options: CreateAnchorFanoutOptions = {}): Anc
     sidecarMarker: posture.sidecar_anchor_config,
     transports,
 
-    submitToAnchors(record: AtribRecord, priority: 'high' | 'normal' = 'normal'): AnchorFanoutTicket {
+    submitToAnchors(
+      record: AtribRecord,
+      priority: 'high' | 'normal' = 'normal',
+    ): AnchorFanoutTicket {
       let recordHash: string
       try {
         recordHash = canonicalRecordHash(record)
@@ -768,7 +826,13 @@ export function createAnchorFanout(options: CreateAnchorFanoutOptions = {}): Anc
         // Canonicalization failure: no anchor leg can proceed, but the
         // primary path is unaffected (§5.8).
         console.warn('atrib: anchor fan-out could not hash record; skipping all legs', err)
-        return { outcomes: Promise.resolve([]) }
+        const outcomes = Promise.resolve<AnchorSubmissionOutcome[]>([])
+        return {
+          outcomes,
+          report: outcomes.then((settled) =>
+            summarizeAnchorOutcomes(settled, posture.effective_anchor_count),
+          ),
+        }
       }
       const request: AnchorSubmissionRequest = { record, recordHash, priority }
 
@@ -798,7 +862,12 @@ export function createAnchorFanout(options: CreateAnchorFanoutOptions = {}): Anc
         const idx = inFlight.indexOf(outcomes)
         if (idx !== -1) inFlight.splice(idx, 1)
       })
-      return { outcomes }
+      return {
+        outcomes,
+        report: outcomes.then((settled) =>
+          summarizeAnchorOutcomes(settled, posture.effective_anchor_count),
+        ),
+      }
     },
 
     async flush(): Promise<void> {
@@ -837,6 +906,7 @@ export function submitToAnchors(
     return fanout.submitToAnchors(record, priority ?? 'normal')
   } catch (err) {
     console.warn('atrib: anchor fan-out failed unexpectedly', err)
-    return { outcomes: Promise.resolve([]) }
+    const outcomes = Promise.resolve<AnchorSubmissionOutcome[]>([])
+    return { outcomes, report: outcomes.then(summarizeAnchorOutcomes) }
   }
 }

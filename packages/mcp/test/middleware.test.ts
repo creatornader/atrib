@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
+import canonicalize from 'canonicalize'
 import { atrib } from '../src/middleware.js'
-import { base64urlEncode } from '../src/base64url.js'
+import { base64urlDecode, base64urlEncode } from '../src/base64url.js'
 import { getPublicKey } from '../src/signing.js'
 import * as signingModule from '../src/signing.js'
 import { decodeToken, encodeToken } from '../src/token.js'
@@ -2077,6 +2078,128 @@ describe('atrib() middleware', () => {
       expect(rec.args_salt).toBeUndefined()
     })
 
+    it('keeps minimal mode byte-identical to the legacy omission default', async () => {
+      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_750_000_000_000)
+      try {
+        const captureWithMode = async (evidenceMode?: 'minimal'): Promise<AtribRecord> => {
+          const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+          const captured: AtribRecord[] = []
+          atrib(mockServer, {
+            creatorKey: TEST_PRIVATE_KEY_B64,
+            serverUrl: 'https://test.example.com',
+            ...(evidenceMode ? { evidenceMode } : {}),
+            onRecord: (record) => captured.push(record),
+          })
+          registerToolHandler(
+            vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'same result' }] }),
+          )
+          await getToolHandler()!(createToolCallRequest('same_tool'), {})
+          return captured[0]!
+        }
+
+        const legacyDefault = await captureWithMode()
+        const explicitMinimal = await captureWithMode('minimal')
+
+        expect(explicitMinimal).toEqual(legacyDefault)
+        expect([...canonicalRecord(explicitMinimal)]).toEqual([...canonicalRecord(legacyDefault)])
+      } finally {
+        nowSpy.mockRestore()
+      }
+    })
+
+    it('verifiable-action mode commits tool identity, arguments, and result', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        evidenceMode: 'verifiable-action',
+        onRecord: (record) => captured.push(record),
+      })
+      registerToolHandler(
+        vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'flight booked' }] }),
+      )
+
+      await getToolHandler()!(createToolCallRequest('book_flight', { destination: 'CAI' }), {})
+      expect(captured).toHaveLength(1)
+      expect(captured[0]).toMatchObject({
+        tool_name: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        args_hash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        args_salt: expect.any(String),
+        result_hash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        result_salt: expect.any(String),
+      })
+    })
+
+    it('keeps raw values out of signed bytes and opens salted commitments exactly', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      let capturedRecord: AtribRecord | undefined
+      let capturedSidecar: OnRecordSidecar | undefined
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        evidenceMode: 'verifiable-action',
+        onRecord: (record, sidecar) => {
+          capturedRecord = record
+          capturedSidecar = sidecar ? structuredClone(sidecar) : undefined
+        },
+      })
+      const toolResult = {
+        content: [{ type: 'text', text: 'booking-secret-7f92' }],
+      }
+      registerToolHandler(vi.fn().mockResolvedValue(toolResult))
+      const request = createToolCallRequest('book_private_flight')
+      request.params.arguments = {
+        destination: 'destination-secret-CAI',
+        passenger: 'passenger-secret-4d11',
+      }
+
+      await getToolHandler()!(request, {})
+
+      const record = capturedRecord!
+      const sidecar = capturedSidecar!
+      const signedJson = new TextDecoder().decode(canonicalRecord(record))
+      expect(signedJson).not.toContain('book_private_flight')
+      expect(signedJson).not.toContain('destination-secret-CAI')
+      expect(signedJson).not.toContain('passenger-secret-4d11')
+      expect(signedJson).not.toContain('booking-secret-7f92')
+
+      const saltedCommitment = (saltB64: string, value: unknown): string => {
+        const salt = base64urlDecode(saltB64)
+        const canonical = canonicalize(value)
+        expect(canonical).toBeTypeOf('string')
+        const body = new TextEncoder().encode(canonical!)
+        const bytes = new Uint8Array(salt.length + body.length)
+        bytes.set(salt)
+        bytes.set(body, salt.length)
+        return `sha256:${hexEncode(sha256(bytes))}`
+      }
+
+      expect(record.tool_name).toBe(
+        `sha256:${hexEncode(sha256(new TextEncoder().encode('book_private_flight')))}`,
+      )
+      expect(record.args_hash).toBe(saltedCommitment(record.args_salt!, sidecar.args))
+      expect(record.result_hash).toBe(saltedCommitment(record.result_salt!, sidecar.result))
+    })
+
+    it('explicit disclosure overrides verifiable-action mode', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        evidenceMode: 'verifiable-action',
+        disclosure: {},
+        onRecord: (record) => captured.push(record),
+      })
+      registerToolHandler(vi.fn().mockResolvedValue({ content: [] }))
+
+      await getToolHandler()!(createToolCallRequest('private_tool'), {})
+      expect(captured[0]?.tool_name).toBeUndefined()
+      expect(captured[0]?.args_hash).toBeUndefined()
+      expect(captured[0]?.result_hash).toBeUndefined()
+    })
+
     it('disclosure.tool_name: "verbatim" writes the verbatim tool name', async () => {
       const rec = await captureRecord({ tool_name: 'verbatim' }, 'book_flight')
       expect(rec.tool_name).toBe('book_flight')
@@ -2243,6 +2366,170 @@ describe('atrib() middleware', () => {
       } finally {
         warnSpy.mockRestore()
       }
+    })
+
+    it('verifiable-action mode pairs a pre-call request with a result-bearing outcome', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+      const phases: Array<string | undefined> = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        evidenceMode: 'verifiable-action',
+        preCallTransform: ({ args, receiptId }) => ({
+          ...args,
+          atrib_receipt_id: receiptId,
+        }),
+        onRecord: (record, sidecar) => {
+          captured.push(record)
+          phases.push(sidecar?.actionPhase)
+        },
+      })
+      registerToolHandler(
+        vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'durable row written' }] }),
+      )
+
+      await getToolHandler()!(createToolCallRequest('post_context'), {})
+
+      expect(captured).toHaveLength(2)
+      const [requestRecord, outcomeRecord] = captured as [AtribRecord, AtribRecord]
+      const requestHash = `sha256:${hexEncode(sha256(canonicalRecord(requestRecord)))}`
+      expect(requestRecord.args_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(requestRecord.result_hash).toBeUndefined()
+      expect(outcomeRecord.result_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(outcomeRecord.chain_root).toBe(requestHash)
+      expect(outcomeRecord.informed_by).toContain(requestHash)
+      expect(phases).toEqual(['request', 'outcome'])
+    })
+
+    it('commits the request before execution and records an isError outcome', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: Array<{ record: AtribRecord; sidecar?: OnRecordSidecar }> = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        evidenceMode: 'verifiable-action',
+        preCallTransform: ({ args, receiptId }) => ({
+          ...args,
+          atrib_receipt_id: receiptId,
+        }),
+        onRecord: (record, sidecar) => captured.push({ record, sidecar }),
+      })
+      const errorResult = {
+        isError: true,
+        content: [{ type: 'text', text: 'upstream rejected the action' }],
+      }
+      registerToolHandler(
+        vi.fn().mockImplementation(async () => {
+          expect(captured).toHaveLength(1)
+          expect(captured[0]!.sidecar?.actionPhase).toBe('request')
+          return errorResult
+        }),
+      )
+
+      const result = await getToolHandler()!(createToolCallRequest('post_context'), {})
+
+      expect(result).toBe(errorResult)
+      expect(captured).toHaveLength(2)
+      const requestHash = `sha256:${hexEncode(sha256(canonicalRecord(captured[0]!.record)))}`
+      expect(captured[1]!.record.chain_root).toBe(requestHash)
+      expect(captured[1]!.record.informed_by).toContain(requestHash)
+      expect(captured[1]!.record.result_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(captured.map(({ sidecar }) => sidecar?.actionPhase)).toEqual(['request', 'outcome'])
+      expect(captured[0]!.sidecar?.args).not.toHaveProperty('atrib_receipt_id')
+      expect(captured[1]!.sidecar?.args).toHaveProperty('atrib_receipt_id')
+    })
+
+    it.each([
+      ['cancellation', new DOMException('operator cancelled', 'AbortError'), 'AbortError'],
+      [
+        'timeout',
+        Object.assign(new Error('upstream deadline exceeded'), { name: 'TimeoutError' }),
+        'TimeoutError',
+      ],
+    ])('records a terminal outcome before preserving a thrown %s', async (_case, error, name) => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: Array<{ record: AtribRecord; sidecar?: OnRecordSidecar }> = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        evidenceMode: 'verifiable-action',
+        preCallTransform: ({ args, receiptId }) => ({
+          ...args,
+          atrib_receipt_id: receiptId,
+        }),
+        onRecord: (record, sidecar) => captured.push({ record, sidecar }),
+      })
+      registerToolHandler(vi.fn().mockRejectedValue(error))
+
+      await expect(getToolHandler()!(createToolCallRequest('post_context'), {})).rejects.toThrow(
+        error.message,
+      )
+
+      expect(captured).toHaveLength(2)
+      const requestHash = `sha256:${hexEncode(sha256(canonicalRecord(captured[0]!.record)))}`
+      expect(captured[1]!.record.chain_root).toBe(requestHash)
+      expect(captured[1]!.record.informed_by).toContain(requestHash)
+      expect(captured[1]!.record.result_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(captured[1]!.sidecar?.result).toEqual({
+        isError: true,
+        error: { name, message: error.message },
+      })
+    })
+
+    it('records a terminal outcome when the handler returns no result object', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: Array<{ record: AtribRecord; sidecar?: OnRecordSidecar }> = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        evidenceMode: 'verifiable-action',
+        preCallTransform: ({ args, receiptId }) => ({
+          ...args,
+          atrib_receipt_id: receiptId,
+        }),
+        onRecord: (record, sidecar) => captured.push({ record, sidecar }),
+      })
+      registerToolHandler(vi.fn().mockResolvedValue(undefined))
+
+      const result = await getToolHandler()!(createToolCallRequest('post_context'), {})
+
+      expect(result).toBeUndefined()
+      expect(captured).toHaveLength(2)
+      expect(captured[1]!.record.result_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(captured[1]!.sidecar?.result).toEqual({
+        isError: true,
+        error: {
+          name: 'InvalidToolResult',
+          message: 'Tool handler returned a non-object result',
+        },
+      })
+    })
+
+    it('uses tool_call for the request and transaction for the terminal outcome', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: Array<{ record: AtribRecord; sidecar?: OnRecordSidecar }> = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://merchant.example.com',
+        evidenceMode: 'verifiable-action',
+        transactionTools: ['checkout'],
+        preCallTransform: ({ args, receiptId }) => ({
+          ...args,
+          atrib_receipt_id: receiptId,
+        }),
+        onRecord: (record, sidecar) => captured.push({ record, sidecar }),
+      })
+      registerToolHandler(
+        vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'settled' }] }),
+      )
+
+      await getToolHandler()!(createToolCallRequest('checkout'), {})
+
+      expect(captured).toHaveLength(2)
+      expect(captured[0]!.record.event_type).toBe('https://atrib.dev/v1/types/tool_call')
+      expect(captured[1]!.record.event_type).toBe('https://atrib.dev/v1/types/transaction')
+      expect(captured.map(({ sidecar }) => sidecar?.actionPhase)).toEqual(['request', 'outcome'])
     })
   })
 })

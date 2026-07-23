@@ -166,6 +166,13 @@ describe('parseConfig', () => {
     })
   })
 
+  it('accepts explicit evidence modes', () => {
+    expect(parseConfig({ ...MINIMAL, evidenceMode: 'verifiable-action' }).evidenceMode).toBe(
+      'verifiable-action',
+    )
+    expect(parseConfig({ ...MINIMAL, evidenceMode: 'minimal' }).evidenceMode).toBe('minimal')
+  })
+
   it('rejects invalid disclosure controls', () => {
     expect(() =>
       parseConfig({

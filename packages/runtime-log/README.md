@@ -23,12 +23,12 @@ Use this package when a runtime already owns a run log and another agent,
 reviewer, evaluator, or auditor needs to verify a claim about a bounded window
 of that log.
 
-| Situation | Right surface |
-| --------- | ------------- |
-| You need to sign tool calls as they happen. | Use `@atrib/mcp`, `@atrib/mcp-wrap`, or `@atrib/agent`. |
-| You already emit OpenTelemetry or OpenInference spans. | Use `@atrib/openinference` beside your existing trace exporter. |
-| You need to prove a run window, fork, compaction, projection, or receipt root. | Use `@atrib/runtime-log`. |
-| You want a hosted trace dashboard, prompt analytics, cost charts, or eval UI. | Use Langfuse, Phoenix, LangSmith, Braintrust, or your existing observability stack. atrib can sign evidence that points back to those systems. |
+| Situation                                                                      | Right surface                                                                                                                                  |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| You need to sign tool calls as they happen.                                    | Use `@atrib/mcp`, `@atrib/mcp-wrap`, or `@atrib/agent`.                                                                                        |
+| You already emit OpenTelemetry or OpenInference spans.                         | Use `@atrib/openinference` beside your existing trace exporter.                                                                                |
+| You need to prove a run window, fork, compaction, projection, or receipt root. | Use `@atrib/runtime-log`.                                                                                                                      |
+| You want a hosted trace dashboard, prompt analytics, cost charts, or eval UI.  | Use Langfuse, Phoenix, LangSmith, Braintrust, or your existing observability stack. atrib can sign evidence that points back to those systems. |
 
 `@atrib/runtime-log` does not decide what a runtime should store. It gives the
 runtime a verifier object when the runtime wants to prove a specific slice of
@@ -121,6 +121,58 @@ projection roots, fork parent manifest hash, compaction source manifest hash,
 compaction event root, required receipt protocols, side-effect receipt roots,
 and manifest fields named by `redaction.fields`.
 
+## Expected-surface coverage
+
+A `coverage_manifest` states which capture boundaries a host expected for one
+runtime window and accounts for each expected action as `captured`, `skipped`,
+or `degraded`.
+
+```ts
+import {
+  buildCoverageAttestationContent,
+  createCoverageManifest,
+  hashCoverageAttestationContent,
+  verifyCoverageManifest,
+} from '@atrib/runtime-log'
+
+const coverage = createCoverageManifest({
+  log_window_manifest: manifest,
+  surfaces: [
+    {
+      id: 'mcp',
+      boundary: 'mcp-server-dispatch',
+      owner: '@atrib/mcp-wrap',
+      required: true,
+    },
+  ],
+  actions: [
+    {
+      action_id: 'runtime-event-2',
+      surface_id: 'mcp',
+      action_hash: events[0].event_hash,
+      state: 'captured',
+      record_hash: 'sha256:...',
+    },
+  ],
+})
+
+const content = buildCoverageAttestationContent(coverage)
+const argsHash = hashCoverageAttestationContent(coverage)
+```
+
+Pass `content` to `@atrib/sdk` `attest()`. Its normal
+[D099](../../DECISIONS.md#d099-explicit-emit-content-is-committed-and-direct-emits-have-a-default-mirror)
+path signs `args_hash = sha256(JCS(content))`, which commits the
+coverage-manifest hash and the bound runtime-window hash.
+`verifyCoverageManifest()` can then compare the record's `args_hash`, the full
+runtime-window manifest, runtime-owned expected action refs, and the captured
+signed record hashes.
+
+The verifier reports its basis as `manifest-claim` or `runtime-compared`.
+Omission detection is only relative to the supplied runtime evidence. A
+hostile host that removes an action from both its runtime log and coverage
+manifest remains outside this proof boundary.
+
 The shared conformance corpus lives at
 [`spec/conformance/runtime-log/`](../../spec/conformance/runtime-log/). Adapter
 authors can run their own verifier against those cases before publishing a new
@@ -178,11 +230,13 @@ codes. It never shows raw runtime-log bodies by default.
 
 ## Boundary
 
-This package implements the proof object accepted in
-[D121](../../DECISIONS.md#d121-runtime-log-proof-manifests-verify-host-owned-run-windows).
+This package implements the proof objects accepted in
+[D121](../../DECISIONS.md#d121-runtime-log-proof-manifests-verify-host-owned-run-windows)
+and
+[D168](../../DECISIONS.md#d168-coverage-manifests-make-capture-scope-verifiable).
 It does not sign atrib records, submit to the public log, store raw runtime
-events, or replace a host runtime. Adapters use it to produce the manifest that
-an atrib record can later commit to.
+events, or replace a host runtime. Adapters use it to produce manifests that an
+atrib record can commit to through the existing `attest()` path.
 
 Raw event bodies can stay in the runtime store, a local mirror, a continuation
 packet, a private evidence bundle, or the Record Body Archive Layer. The public

@@ -62,6 +62,8 @@ describe('buildRevocationRegistry', () => {
     const reg = buildRevocationRegistry([
       rev({ revoked_key: undefined }),
       rev({ log_index: undefined }),
+      rev({ log_index: Number.NaN }),
+      rev({ log_index: -1 }),
       rev({ revocation_reason: 'invalid-reason' }),
     ])
     expect(reg.size).toBe(0)
@@ -80,8 +82,11 @@ describe('buildRevocationRegistry', () => {
 })
 
 describe('applyRevocation', () => {
-  const node = (creator: string | null, idx: number | null, state: VerificationState = 'signature_valid') =>
-    ({ creator_key: creator, log_index: idx, verification_state: state })
+  const node = (
+    creator: string | null,
+    idx: number | null,
+    state: VerificationState = 'signature_valid',
+  ) => ({ creator_key: creator, log_index: idx, verification_state: state })
 
   it('flags post-revocation records as revoked_after_revocation', () => {
     const reg = buildRevocationRegistry([rev({ log_index: 5 })])

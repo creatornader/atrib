@@ -131,6 +131,187 @@ export function normalizeGraphRecordHash(value) {
   return ''
 }
 
+const PUBLIC_REVISION_VERIFICATION_STATES = new Set([
+  'signature_valid',
+  'log_committed',
+  'witnessed',
+])
+const DEFAULT_PUBLIC_STATE_CELL_LIMIT = 100
+const MAX_PUBLIC_STATE_CELL_LIMIT = 1000
+const DEFAULT_PUBLIC_STATE_HEAD_LIMIT = 20
+const MAX_PUBLIC_STATE_HEAD_LIMIT = 1000
+
+function boundedPublicStateLimit(value, defaultValue, maximum) {
+  if (value === undefined) return defaultValue
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new TypeError('revision state limits must be positive safe integers')
+  }
+  return Math.min(value, maximum)
+}
+
+function comparePublicStateHashes(leftHash, rightHash, nodesByHash) {
+  const leftTimestamp = nodesByHash.get(leftHash)?.timestamp
+  const rightTimestamp = nodesByHash.get(rightHash)?.timestamp
+  const leftTime = typeof leftTimestamp === 'number' ? leftTimestamp : 0
+  const rightTime = typeof rightTimestamp === 'number' ? rightTimestamp : 0
+  return leftTime - rightTime || leftHash.localeCompare(rightHash)
+}
+
+function publicStateRecordView(recordHash, nodesByHash) {
+  const node = nodesByHash.get(recordHash)
+  return {
+    record_hash: recordHash,
+    creator_key: node?.creator_key || null,
+    context_id: node?.context_id || null,
+    timestamp: typeof node?.timestamp === 'number' ? node.timestamp : null,
+    verification_state: node?.verification_state || null,
+  }
+}
+
+/**
+ * Project the revision heads visible in a public graph response.
+ *
+ * This is deliberately weaker than the policy-bound local state projector.
+ * Graph-node has checked the signatures on in-scope record nodes, but this
+ * browser view has no receiver trust set and does not verify inclusion proofs.
+ * It therefore exposes public revision commitments, every visible head, and
+ * partial roots without calling them receiver-accepted state.
+ */
+export function projectPublicRevisionState(graphData, options = {}) {
+  const cellLimit = boundedPublicStateLimit(
+    options.cell_limit,
+    DEFAULT_PUBLIC_STATE_CELL_LIMIT,
+    MAX_PUBLIC_STATE_CELL_LIMIT,
+  )
+  const headLimit = boundedPublicStateLimit(
+    options.head_limit,
+    DEFAULT_PUBLIC_STATE_HEAD_LIMIT,
+    MAX_PUBLIC_STATE_HEAD_LIMIT,
+  )
+  const nodes = Array.isArray(graphData?.nodes) ? graphData.nodes : []
+  const edges = Array.isArray(graphData?.edges) ? graphData.edges : []
+  const allNodesByHash = new Map()
+  const verifiedNodesByHash = new Map()
+
+  for (const node of nodes) {
+    if (!node || node.event_type === 'dangling_node') continue
+    const recordHash = normalizeGraphRecordHash(node.id)
+    if (!recordHash) continue
+    allNodesByHash.set(recordHash, node)
+    if (PUBLIC_REVISION_VERIFICATION_STATES.has(node.verification_state)) {
+      verifiedNodesByHash.set(recordHash, node)
+    }
+  }
+
+  const candidatesBySource = new Map()
+  let excludedRelationCount = 0
+  for (const edge of edges) {
+    if (edge?.type !== 'REVISES') continue
+    const sourceHash = normalizeGraphRecordHash(edge.source)
+    const sourceNode = verifiedNodesByHash.get(sourceHash)
+    if (!sourceHash || sourceNode?.event_type !== 'revision') {
+      excludedRelationCount += 1
+      continue
+    }
+    const targetHash = normalizeGraphRecordHash(edge.reference_hash || edge.target)
+    if (!targetHash) {
+      excludedRelationCount += 1
+      continue
+    }
+    if (allNodesByHash.has(targetHash) && !verifiedNodesByHash.has(targetHash)) {
+      excludedRelationCount += 1
+      continue
+    }
+    const candidates = candidatesBySource.get(sourceHash) ?? []
+    candidates.push({
+      target_hash: targetHash,
+      reference_status: verifiedNodesByHash.has(targetHash)
+        ? 'in_scope'
+        : edge.reference_status || 'unresolved',
+    })
+    candidatesBySource.set(sourceHash, candidates)
+  }
+
+  const parentByChild = new Map()
+  const childrenByParent = new Map()
+  const referenceStatusByHash = new Map()
+  let ambiguousRevisionCount = 0
+  for (const [sourceHash, candidates] of candidatesBySource) {
+    const byTarget = new Map(candidates.map((candidate) => [candidate.target_hash, candidate]))
+    if (byTarget.size !== 1) {
+      ambiguousRevisionCount += 1
+      excludedRelationCount += candidates.length
+      continue
+    }
+    const candidate = [...byTarget.values()][0]
+    parentByChild.set(sourceHash, candidate.target_hash)
+    const children = childrenByParent.get(candidate.target_hash) ?? []
+    children.push(sourceHash)
+    childrenByParent.set(candidate.target_hash, children)
+    if (!verifiedNodesByHash.has(candidate.target_hash)) {
+      referenceStatusByHash.set(candidate.target_hash, candidate.reference_status)
+    }
+  }
+  for (const children of childrenByParent.values()) {
+    children.sort((left, right) => comparePublicStateHashes(left, right, verifiedNodesByHash))
+  }
+
+  const participatingHashes = new Set([...parentByChild.keys(), ...parentByChild.values()])
+  const rootHashes = [...participatingHashes]
+    .filter((recordHash) => !parentByChild.has(recordHash))
+    .sort()
+  const cells = []
+  for (const rootHash of rootHashes) {
+    const component = new Set()
+    const stack = [rootHash]
+    while (stack.length > 0) {
+      const recordHash = stack.pop()
+      if (component.has(recordHash)) continue
+      component.add(recordHash)
+      for (const childHash of childrenByParent.get(recordHash) ?? []) {
+        stack.push(childHash)
+      }
+    }
+    const headHashes = [...component]
+      .filter((recordHash) => (childrenByParent.get(recordHash)?.length ?? 0) === 0)
+      .sort((left, right) => comparePublicStateHashes(left, right, verifiedNodesByHash))
+    const returnedHeadHashes = headHashes.slice(0, headLimit)
+    const partial = [...component].some((recordHash) => !verifiedNodesByHash.has(recordHash))
+    cells.push({
+      root_record_hash: rootHash,
+      root_reference_status: verifiedNodesByHash.has(rootHash)
+        ? 'in_scope'
+        : referenceStatusByHash.get(rootHash) || 'unresolved',
+      status: headHashes.length === 1 ? 'resolved' : 'conflict',
+      active_heads: returnedHeadHashes.map((recordHash) =>
+        publicStateRecordView(recordHash, verifiedNodesByHash),
+      ),
+      total_active_heads: headHashes.length,
+      active_heads_truncated: headHashes.length > returnedHeadHashes.length,
+      revision_count: [...component].filter((recordHash) => parentByChild.has(recordHash)).length,
+      partial,
+    })
+  }
+
+  const returnedCells = cells.slice(0, cellLimit)
+  return {
+    schema: 'atrib.public-revision-state.v1',
+    basis: {
+      graph_signature_states_required: [...PUBLIC_REVISION_VERIFICATION_STATES],
+      receiver_policy_applied: false,
+      inclusion_proof_verified: false,
+    },
+    total_cells: cells.length,
+    returned_cells: returnedCells.length,
+    cells_truncated: cells.length > returnedCells.length,
+    conflict_count: cells.filter((cell) => cell.status === 'conflict').length,
+    partial_count: cells.filter((cell) => cell.partial).length,
+    excluded_relation_count: excludedRelationCount,
+    ambiguous_revision_count: ambiguousRevisionCount,
+    cells: returnedCells,
+  }
+}
+
 export const PRIMARY_TRACE_EDGE_ORDER = [
   'INFORMED_BY',
   'REVISES',

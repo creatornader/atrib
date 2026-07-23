@@ -83,6 +83,7 @@ describe('wrap wiring', () => {
     expect(options?.atrib.autoChain).toBe(true)
     expect(options?.atrib.autoChainFallback).toBe('fresh')
     expect(options?.atrib.autoDetectInformedByFromArgs).toBe(false)
+    expect(options?.atrib.evidenceMode).toBe('verifiable-action')
     expect(typeof options?.atrib.contextIdResolver).toBe('function')
     expect(typeof options?.atrib.preCallTransform).toBe('function')
     expect(typeof options?.atrib.informedBy).toBe('function')

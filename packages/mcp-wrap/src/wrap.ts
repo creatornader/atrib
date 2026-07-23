@@ -77,8 +77,7 @@ type LocalSubstrateCommitAttemptHook = NonNullable<
   NonNullable<AtribOptions['localSubstrateCommit']>['onAttempt']
 >
 type LocalSubstrateAttemptLoggerInput =
-  | Parameters<LocalSubstrateAttemptHook>[0]
-  | Parameters<LocalSubstrateCommitAttemptHook>[0]
+  Parameters<LocalSubstrateAttemptHook>[0] | Parameters<LocalSubstrateCommitAttemptHook>[0]
 
 function valueAtPath(value: unknown, path: string): unknown {
   let current = value
@@ -295,6 +294,7 @@ export async function wrap(
       ...(config.extensionAttribution ? { extensionAttribution: true } : {}),
       ...(informedBy ? { informedBy } : {}),
       recordReferenceResolver,
+      evidenceMode: config.evidenceMode ?? 'verifiable-action',
       ...(config.disclosure ? { disclosure: config.disclosure } : {}),
       ...(config.localSubstrate && localSubstrateMode === 'shadow' && localSubstrateTransport
         ? {

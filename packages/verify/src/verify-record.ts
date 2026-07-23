@@ -52,8 +52,14 @@ import type {
   AuthorizationEvidenceInput,
   EvidenceVerificationBlock,
 } from './authorization-evidence.js'
-import { evaluateDelegation } from './delegation.js'
-import type { DelegatedRecord, DelegationCertificate, DelegationOutcome } from './delegation.js'
+import { evaluateDelegation, resolveDelegationRevocations } from './delegation.js'
+import type {
+  DelegatedRecord,
+  DelegationCertificate,
+  DelegationOutcome,
+  DelegationRevocationEvidence,
+  DelegationScopeFacts,
+} from './delegation.js'
 import { mapLegacyEvidenceBlock } from './evidence-envelope.js'
 import type { EvidenceEnvelope, LegacyEvidenceBlock } from './evidence-envelope.js'
 import { resolveIdentity } from './resolve-identity.js'
@@ -476,6 +482,25 @@ export interface VerifyRecordOptions {
    */
   delegationRevokedKeys?: ReadonlySet<string>
   /**
+   * Signed log records from which the verifier derives revoked delegation
+   * keys. Unlike `delegationRevokedKeys`, this path verifies each record and
+   * its revoker authorization before it affects the delegation result.
+   */
+  delegationRevocations?: readonly DelegationRevocationEvidence[]
+  /**
+   * Target log position for historical delegation-revocation evaluation.
+   * Omit to derive the current view from every supplied revocation.
+   */
+  delegationRecordLogIndex?: number
+  /**
+   * Host or verifier clock for delegation-certificate expiry. Consumers
+   * making an acceptance decision should supply this rather than relying on
+   * the signer's record timestamp.
+   */
+  delegationTrustedTimeMs?: number
+  /** Facts needed to evaluate certificate scope fields absent from the record. */
+  delegationScopeFacts?: DelegationScopeFacts
+  /**
    * Explicit directory options for §1.11.4 step 4. When supplied for a
    * resolved depth-one delegation, verifyRecord resolves the principal and
    * checks the run key's expected directory non-membership.
@@ -631,12 +656,45 @@ export async function verifyRecord(
     const genesis =
       options.contextGenesis ??
       (record.chain_root === genesisChainRoot(record.context_id) ? record : null)
-    result.delegation = await evaluateDelegation(
+    const revocationResolution =
+      options.delegationRevocations !== undefined
+        ? await resolveDelegationRevocations(
+            options.delegationRevocations,
+            options.delegationCertificates,
+            options.delegationRecordLogIndex !== undefined
+              ? { atLogIndex: options.delegationRecordLogIndex }
+              : {},
+          )
+        : undefined
+    const revokedKeys =
+      options.delegationRevokedKeys !== undefined || revocationResolution !== undefined
+        ? new Set([
+            ...(options.delegationRevokedKeys ?? []),
+            ...(revocationResolution?.revokedKeys ?? []),
+          ])
+        : undefined
+    const delegation = await evaluateDelegation(
       record as DelegatedRecord,
       genesis as DelegatedRecord | null,
       options.delegationCertificates,
-      options.delegationRevokedKeys ? { revokedKeys: options.delegationRevokedKeys } : {},
+      {
+        ...(revokedKeys ? { revokedKeys } : {}),
+        ...(options.delegationTrustedTimeMs !== undefined
+          ? { trustedTimeMs: options.delegationTrustedTimeMs }
+          : {}),
+        ...(options.delegationScopeFacts ? { scopeFacts: options.delegationScopeFacts } : {}),
+      },
     )
+    result.delegation =
+      revocationResolution === undefined
+        ? delegation
+        : {
+            ...delegation,
+            revocation_evidence: {
+              accepted: revocationResolution.accepted,
+              rejected: revocationResolution.rejected,
+            },
+          }
     if (
       result.delegation.depth === 1 &&
       result.delegation.principal_key !== null &&

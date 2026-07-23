@@ -29,7 +29,13 @@
 import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 import canonicalize from 'canonicalize'
-import { base64urlDecode, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
+import {
+  base64urlDecode,
+  hexEncode,
+  sha256,
+  verifyRecord as verifyRecordSignature,
+  type AtribRecord,
+} from '@atrib/mcp'
 import type { IdentityResolution } from './resolve-identity.js'
 
 // @noble/ed25519 v3 needs sha512 wired (idempotent; @atrib/mcp wires the
@@ -69,6 +75,14 @@ export interface CostPolicyUsage {
   tokens_spent?: number
 }
 
+/** Caller-owned facts for constraints absent from a compact signed record. */
+export interface DelegationScopeFacts extends CostPolicyUsage {
+  amount?: { currency: string; value: number }
+  counterparty_keys?: string[]
+  /** Host or verifier clock. Never infer this from the signer timestamp. */
+  trusted_time_ms?: number
+}
+
 /**
  * A delegation certificate per §1.11.1. Optional fields are omitted, not
  * null, when absent — presence/absence changes the JCS canonical form and
@@ -92,12 +106,15 @@ export type DelegatedRecord = AtribRecord & { delegation_cert_hash?: string }
 export type KeyRevocationRecordLike = AtribRecord & {
   revoked_key: string
   revocation_reason: string
+  successor_key?: string
   delegation_cert_hash?: string
 }
 
 /** §6.7.2-style scope check output. Signals only (§6.7.3). */
 export interface DelegationScopeCheck {
   in_scope: boolean
+  /** True only when every declared constraint had enough evidence to evaluate it. */
+  fully_evaluated: boolean
   /**
    * Whether the certificate scope is a subset of the principal's
    * directory-published envelope. `null` when no directory envelope was
@@ -106,6 +123,8 @@ export interface DelegationScopeCheck {
   attenuation_ok: boolean | null
   /** Failed constraint names, e.g. 'tool_names', 'event_types'. */
   mismatches: string[]
+  /** Declared constraints whose required facts were not supplied. */
+  unverifiable: string[]
 }
 
 /**
@@ -116,6 +135,8 @@ export interface DelegationCandidate {
   principal_key: string
   cert_hash: string
   in_window: boolean
+  time_basis: 'trusted_verifier_time' | 'record_timestamp_claim' | 'invalid_trusted_time'
+  time_trusted: boolean
   context_bound: boolean | null
   cert_bound: boolean | null
   scope_check: DelegationScopeCheck | null
@@ -135,6 +156,8 @@ export interface DelegationOutcome {
   cert_hash: string | null
   cert_valid: boolean | null
   in_window: boolean | null
+  time_basis: 'trusted_verifier_time' | 'record_timestamp_claim' | 'invalid_trusted_time' | null
+  time_trusted: boolean | null
   context_bound: boolean | null
   cert_bound: boolean | null
   scope_check: DelegationScopeCheck | null
@@ -164,6 +187,11 @@ export interface DelegationOutcome {
   principal_identity_resolution?: IdentityResolution
   /** §1.11.4 structural anomaly: a run key has a directory claim. */
   run_key_in_directory?: boolean | null
+  /** Verified log evidence used to derive `revoked`. */
+  revocation_evidence?: {
+    accepted: DelegationRevocationResolution['accepted']
+    rejected: DelegationRevocationResolution['rejected']
+  }
 }
 
 export interface EvaluateDelegationOptions {
@@ -176,6 +204,14 @@ export interface EvaluateDelegationOptions {
    * log) and `null` at depth 0.
    */
   revokedKeys?: ReadonlySet<string>
+  /**
+   * Host or verifier clock for the certificate window. When absent,
+   * `in_window` is evaluated against the signed record timestamp and
+   * `time_trusted` is false.
+   */
+  trustedTimeMs?: number
+  /** Facts used to evaluate scope fields absent from the compact record. */
+  scopeFacts?: DelegationScopeFacts
 }
 
 /** §1.9.2 revoker-authorization outcome (including §1.11.5 rule 3). */
@@ -189,6 +225,34 @@ export interface RevokerAuthorization {
    * 'signer_is_not_certificate_principal', 'no_authorization_path'.
    */
   reason?: string
+}
+
+export interface DelegationRevocationEvidence {
+  record: KeyRevocationRecordLike
+  log_index: number
+}
+
+export interface DelegationRevocationRejection {
+  log_index: number
+  revoked_key: string
+  reason:
+    | 'invalid_log_index'
+    | 'invalid_target_log_index'
+    | 'not_effective_yet'
+    | 'invalid_record_signature'
+    | 'invalid_record_shape'
+    | 'unauthorized_revoker'
+}
+
+export interface DelegationRevocationResolution {
+  revokedKeys: ReadonlySet<string>
+  accepted: ReadonlyArray<{
+    log_index: number
+    revoked_key: string
+    revocation_reason: string
+    rule: string
+  }>
+  rejected: ReadonlyArray<DelegationRevocationRejection>
 }
 
 /**
@@ -265,31 +329,72 @@ export async function delegationCertErrors(cert: DelegationCertificate): Promise
  * §6.7.1 envelope check against the certificate scope (§1.11.4 step 5).
  * Signals only, never invalidation (§6.7.3).
  *
- * Checks the constraints resolvable from the record alone: `tool_names`
- * (when the record discloses §8.2 `tool_name`) and `event_types`.
- * `max_amount` / `counterparties` / `cost_policy` require facts the
- * compact signed record does not carry (transaction amounts, counterparty
- * identity, model tier and token spend); they produce no mismatch here
- * (same posture the conformance corpus pins). Callers holding usage facts
- * evaluate `cost_policy` with {@link checkCostPolicy}. `attenuation_ok`
- * is `null` until a caller supplies the principal's directory envelope.
+ * Every declared constraint is either evaluated or listed in
+ * `unverifiable`. An absent fact never masquerades as a positive check.
+ * `attenuation_ok` stays null until a caller supplies the principal's
+ * directory envelope.
  */
 export function checkDelegationScope(
   record: DelegatedRecord,
   scope: DelegationScope,
+  facts: DelegationScopeFacts = {},
 ): DelegationScopeCheck {
   const mismatches: string[] = []
-  if (
-    scope.tool_names &&
-    record.tool_name !== undefined &&
-    !scope.tool_names.includes(record.tool_name)
-  ) {
-    mismatches.push('tool_names')
+  const unverifiable: string[] = []
+  if (scope.tool_names) {
+    if (record.tool_name === undefined) unverifiable.push('tool_names')
+    else if (!scope.tool_names.includes(record.tool_name)) mismatches.push('tool_names')
   }
   if (scope.event_types && !scope.event_types.includes(record.event_type)) {
     mismatches.push('event_types')
   }
-  return { in_scope: mismatches.length === 0, attenuation_ok: null, mismatches }
+  if (scope.max_amount) {
+    if (facts.amount === undefined) {
+      unverifiable.push('max_amount')
+    } else if (
+      facts.amount.currency !== scope.max_amount.currency ||
+      facts.amount.value > scope.max_amount.value
+    ) {
+      mismatches.push('max_amount')
+    }
+  }
+  if (scope.counterparties) {
+    if (facts.counterparty_keys === undefined) {
+      unverifiable.push('counterparties')
+    } else if (
+      facts.counterparty_keys.some((counterparty) => !scope.counterparties!.includes(counterparty))
+    ) {
+      mismatches.push('counterparties')
+    }
+  }
+  if (scope.expires_at !== undefined) {
+    if (facts.trusted_time_ms === undefined) {
+      unverifiable.push('expires_at')
+    } else if (facts.trusted_time_ms > scope.expires_at) {
+      mismatches.push('expires_at')
+    }
+  }
+  if (scope.cost_policy?.model_tiers) {
+    if (facts.model_tier === undefined) {
+      unverifiable.push('cost_policy.model_tiers')
+    } else if (!scope.cost_policy.model_tiers.includes(facts.model_tier)) {
+      mismatches.push('cost_policy.model_tiers')
+    }
+  }
+  if (scope.cost_policy?.max_tokens !== undefined) {
+    if (facts.tokens_spent === undefined) {
+      unverifiable.push('cost_policy.max_tokens')
+    } else if (facts.tokens_spent > scope.cost_policy.max_tokens) {
+      mismatches.push('cost_policy.max_tokens')
+    }
+  }
+  return {
+    in_scope: mismatches.length === 0,
+    fully_evaluated: unverifiable.length === 0,
+    attenuation_ok: null,
+    mismatches,
+    unverifiable,
+  }
 }
 
 /**
@@ -345,12 +450,30 @@ function candidateFacts(
   hash: string,
   genesisCommits: boolean,
   genesis: DelegatedRecord | null,
+  options: EvaluateDelegationOptions,
 ): DelegationCandidate {
   const { from, to } = certWindow(cert)
+  const trustedTimeValid =
+    options.trustedTimeMs !== undefined &&
+    Number.isSafeInteger(options.trustedTimeMs) &&
+    options.trustedTimeMs >= 0
+  const evaluationTime = trustedTimeValid ? options.trustedTimeMs! : record.timestamp
+  const timeBasis =
+    options.trustedTimeMs === undefined
+      ? 'record_timestamp_claim'
+      : trustedTimeValid
+        ? 'trusted_verifier_time'
+        : 'invalid_trusted_time'
+  const scopeFacts: DelegationScopeFacts = {
+    ...options.scopeFacts,
+    ...(trustedTimeValid ? { trusted_time_ms: options.trustedTimeMs } : {}),
+  }
   return {
     principal_key: cert.principal_key,
     cert_hash: hash,
-    in_window: from <= record.timestamp && record.timestamp <= to,
+    in_window: from <= evaluationTime && evaluationTime <= to,
+    time_basis: timeBasis,
+    time_trusted: trustedTimeValid,
     context_bound: cert.context_id === undefined ? null : cert.context_id === record.context_id,
     // Binding scope per §1.11.3: cert_bound is evaluable only when the
     // context genesis was signed by the record's OWN creator_key AND
@@ -358,7 +481,7 @@ function candidateFacts(
     // qualifier. Another producer's genesis commitment says nothing about
     // this record's signer (D067 / §1.11.6: cert_bound stays null).
     cert_bound: genesisCommits && genesis !== null ? genesis.delegation_cert_hash === hash : null,
-    scope_check: cert.scope ? checkDelegationScope(record, cert.scope) : null,
+    scope_check: cert.scope ? checkDelegationScope(record, cert.scope, scopeFacts) : null,
   }
 }
 
@@ -386,6 +509,8 @@ export async function evaluateDelegation(
     cert_hash: null,
     cert_valid: null,
     in_window: null,
+    time_basis: null,
+    time_trusted: null,
     context_bound: null,
     cert_bound: null,
     scope_check: null,
@@ -452,23 +577,34 @@ export async function evaluateDelegation(
             ...depth0,
             delegation_ambiguous: true,
             candidates: valid.map((e) =>
-              candidateFacts(record, e.cert, e.hash, genesisCommits, genesis),
+              candidateFacts(record, e.cert, e.hash, genesisCommits, genesis, options),
             ),
           }
         }
       }
     }
 
-    // Unambiguous selection: prefer the valid certificate whose window
-    // covers the record's timestamp; otherwise the first valid one in
-    // caller order (deterministic for a given ordered certificate set).
+    const trustedTimeValid =
+      options.trustedTimeMs !== undefined &&
+      Number.isSafeInteger(options.trustedTimeMs) &&
+      options.trustedTimeMs >= 0
+    const selectionTime = trustedTimeValid ? options.trustedTimeMs! : record.timestamp
+    // Prefer the certificate whose window covers trusted verifier time when
+    // supplied. The signed record timestamp is a visibly untrusted fallback.
     const selected =
       valid.find((e) => {
         const { from, to } = certWindow(e.cert)
-        return from <= record.timestamp && record.timestamp <= to
+        return from <= selectionTime && selectionTime <= to
       }) ?? valid[0]!
 
-    const facts = candidateFacts(record, selected.cert, selected.hash, genesisCommits, genesis)
+    const facts = candidateFacts(
+      record,
+      selected.cert,
+      selected.hash,
+      genesisCommits,
+      genesis,
+      options,
+    )
     const revoked = options.revokedKeys
       ? options.revokedKeys.has(record.creator_key) ||
         options.revokedKeys.has(selected.cert.principal_key)
@@ -480,6 +616,8 @@ export async function evaluateDelegation(
       cert_hash: facts.cert_hash,
       cert_valid: true,
       in_window: facts.in_window,
+      time_basis: facts.time_basis,
+      time_trusted: facts.time_trusted,
       context_bound: facts.context_bound,
       cert_bound: facts.cert_bound,
       scope_check: facts.scope_check,
@@ -518,7 +656,7 @@ function safeCertHash(cert: DelegationCertificate): string {
  */
 export async function evaluateRevokerAuthorization(
   revocation: KeyRevocationRecordLike,
-  certs: DelegationCertificate[],
+  certs: readonly DelegationCertificate[],
 ): Promise<RevokerAuthorization> {
   // Rule 1: signed by the key being retired.
   if (revocation.creator_key === revocation.revoked_key) {
@@ -542,4 +680,121 @@ export async function evaluateRevokerAuthorization(
     return { authorized: true, rule: 'principal_via_delegation_certificate' }
   }
   return { authorized: false, reason: 'no_authorization_path' }
+}
+
+/**
+ * Verify and resolve log-carried run/principal revocations into the key set
+ * consumed by the delegation walk and protected executors.
+ *
+ * The caller supplies log indexes because compact records do not contain
+ * them. `atLogIndex` preserves historical verification: a later revocation
+ * cannot affect an earlier record. Omit it for a current trust view.
+ */
+export async function resolveDelegationRevocations(
+  evidence: readonly DelegationRevocationEvidence[],
+  certificates: readonly DelegationCertificate[],
+  options: { atLogIndex?: number } = {},
+): Promise<DelegationRevocationResolution> {
+  const acceptedByKey = new Map<
+    string,
+    {
+      log_index: number
+      revoked_key: string
+      revocation_reason: string
+      rule: string
+    }
+  >()
+  const rejected: DelegationRevocationRejection[] = []
+  const targetLogIndexValid =
+    options.atLogIndex === undefined ||
+    (Number.isSafeInteger(options.atLogIndex) && options.atLogIndex >= 0)
+
+  for (const item of evidence) {
+    const revokedKey = typeof item.record?.revoked_key === 'string' ? item.record.revoked_key : ''
+    if (!targetLogIndexValid) {
+      rejected.push({
+        log_index: item.log_index,
+        revoked_key: revokedKey,
+        reason: 'invalid_target_log_index',
+      })
+      continue
+    }
+    if (!Number.isSafeInteger(item.log_index) || item.log_index < 0) {
+      rejected.push({
+        log_index: item.log_index,
+        revoked_key: revokedKey,
+        reason: 'invalid_log_index',
+      })
+      continue
+    }
+    if (options.atLogIndex !== undefined && item.log_index > options.atLogIndex) {
+      rejected.push({
+        log_index: item.log_index,
+        revoked_key: revokedKey,
+        reason: 'not_effective_yet',
+      })
+      continue
+    }
+    if (!(await verifyRecordSignature(item.record))) {
+      rejected.push({
+        log_index: item.log_index,
+        revoked_key: revokedKey,
+        reason: 'invalid_record_signature',
+      })
+      continue
+    }
+    if (
+      item.record.event_type !== 'key_revocation' &&
+      item.record.event_type !== 'https://atrib.dev/v1/types/key_revocation'
+    ) {
+      rejected.push({
+        log_index: item.log_index,
+        revoked_key: revokedKey,
+        reason: 'invalid_record_shape',
+      })
+      continue
+    }
+    if (
+      !/^[A-Za-z0-9_-]{43}$/.test(revokedKey) ||
+      !['rotation', 'retirement', 'compromise'].includes(item.record.revocation_reason) ||
+      (item.record.revocation_reason === 'rotation' &&
+        !/^[A-Za-z0-9_-]{43}$/.test(
+          typeof item.record.successor_key === 'string' ? item.record.successor_key : '',
+        ))
+    ) {
+      rejected.push({
+        log_index: item.log_index,
+        revoked_key: revokedKey,
+        reason: 'invalid_record_shape',
+      })
+      continue
+    }
+    const authorization = await evaluateRevokerAuthorization(item.record, certificates)
+    if (!authorization.authorized) {
+      rejected.push({
+        log_index: item.log_index,
+        revoked_key: revokedKey,
+        reason: 'unauthorized_revoker',
+      })
+      continue
+    }
+    const existing = acceptedByKey.get(revokedKey)
+    if (existing === undefined || item.log_index < existing.log_index) {
+      acceptedByKey.set(revokedKey, {
+        log_index: item.log_index,
+        revoked_key: revokedKey,
+        revocation_reason: item.record.revocation_reason,
+        rule: authorization.rule ?? 'unknown',
+      })
+    }
+  }
+
+  const accepted = [...acceptedByKey.values()].sort(
+    (a, b) => a.log_index - b.log_index || a.revoked_key.localeCompare(b.revoked_key),
+  )
+  return {
+    revokedKeys: new Set(accepted.map((entry) => entry.revoked_key)),
+    accepted,
+    rejected,
+  }
 }

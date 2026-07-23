@@ -33,6 +33,7 @@ import {
   computeGraphBBox,
   computeNeighborhood,
   normalizeGraphRecordHash,
+  projectPublicRevisionState,
   buildPrimaryTracePath,
   graphNodeActionHash,
   graphReferenceStatus,
@@ -88,6 +89,134 @@ describe('HIERARCHICAL_EDGE_TYPES', () => {
     expect(HIERARCHICAL_EDGE_TYPES.has('SESSION_PRECEDES')).toBe(false)
     expect(HIERARCHICAL_EDGE_TYPES.has('SESSION_PARALLEL')).toBe(false)
     expect(HIERARCHICAL_EDGE_TYPES.has('CROSS_SESSION')).toBe(false)
+  })
+})
+
+describe('projectPublicRevisionState', () => {
+  const verified = (id, eventType, timestamp, creatorKey = 'creator') => ({
+    id,
+    event_type: eventType,
+    timestamp,
+    creator_key: creatorKey,
+    context_id: 'a'.repeat(32),
+    verification_state: 'signature_valid',
+  })
+
+  it('projects a linear revision lineage to one public head', () => {
+    const root = h('a')
+    const revision = h('b')
+    const result = projectPublicRevisionState(
+      graph(
+        [verified(root, 'observation', 1), verified(revision, 'revision', 2)],
+        [e(revision, root, 'REVISES')],
+      ),
+    )
+
+    expect(result).toMatchObject({
+      total_cells: 1,
+      conflict_count: 0,
+      partial_count: 0,
+      basis: {
+        receiver_policy_applied: false,
+        inclusion_proof_verified: false,
+      },
+      cells: [
+        {
+          root_record_hash: root,
+          root_reference_status: 'in_scope',
+          status: 'resolved',
+          total_active_heads: 1,
+          revision_count: 1,
+          partial: false,
+          active_heads: [{ record_hash: revision }],
+        },
+      ],
+    })
+  })
+
+  it('surfaces every deterministic head instead of choosing a fork winner', () => {
+    const root = h('a')
+    const laterHash = h('c')
+    const earlierHash = h('b')
+    const input = graph(
+      [
+        verified(root, 'observation', 1),
+        verified(laterHash, 'revision', 2, 'creator-c'),
+        verified(earlierHash, 'revision', 2, 'creator-b'),
+      ],
+      [e(laterHash, root, 'REVISES'), e(earlierHash, root, 'REVISES')],
+    )
+
+    const forward = projectPublicRevisionState(input)
+    const reverse = projectPublicRevisionState({
+      nodes: [...input.nodes].reverse(),
+      edges: [...input.edges].reverse(),
+    })
+
+    expect(forward.conflict_count).toBe(1)
+    expect(forward.cells[0].active_heads.map((head) => head.record_hash)).toEqual([
+      earlierHash,
+      laterHash,
+    ])
+    expect(reverse.cells).toEqual(forward.cells)
+  })
+
+  it('keeps an out-of-scope root explicit and marks the state partial', () => {
+    const externalRoot = h('a')
+    const revision = h('b')
+    const result = projectPublicRevisionState(
+      graph(
+        [verified(revision, 'revision', 2)],
+        [
+          {
+            source: revision,
+            target: `dangling:${externalRoot}`,
+            type: 'REVISES',
+            dangling: true,
+            reference_hash: externalRoot,
+            reference_status: 'external',
+          },
+        ],
+      ),
+    )
+
+    expect(result.partial_count).toBe(1)
+    expect(result.cells[0]).toMatchObject({
+      root_record_hash: externalRoot,
+      root_reference_status: 'external',
+      partial: true,
+      active_heads: [{ record_hash: revision }],
+    })
+  })
+
+  it('excludes unsigned sources and bounds a large visible fork', () => {
+    const root = h('a')
+    const first = h('b')
+    const second = h('c')
+    const unsigned = {
+      ...verified(h('d'), 'revision', 4),
+      verification_state: 'unsigned',
+    }
+    const result = projectPublicRevisionState(
+      graph(
+        [
+          verified(root, 'observation', 1),
+          verified(first, 'revision', 2),
+          verified(second, 'revision', 3),
+          unsigned,
+        ],
+        [e(first, root, 'REVISES'), e(second, root, 'REVISES'), e(unsigned.id, root, 'REVISES')],
+      ),
+      { head_limit: 1 },
+    )
+
+    expect(result.excluded_relation_count).toBe(1)
+    expect(result.cells[0]).toMatchObject({
+      status: 'conflict',
+      total_active_heads: 2,
+      active_heads_truncated: true,
+    })
+    expect(result.cells[0].active_heads).toHaveLength(1)
   })
 })
 

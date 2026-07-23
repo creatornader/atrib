@@ -22,6 +22,7 @@ export {
 } from './attest.js'
 export {
   SHAPE_TO_TOOL,
+  toToolArgs,
   type AnnotationsQuery,
   type ByContentQuery,
   type BySignerQuery,
@@ -32,6 +33,7 @@ export {
   type RecallShape,
   type RevisionsQuery,
   type SessionChainQuery,
+  type StateQuery,
   type TraceQuery,
   type VerifyQuery,
   type WalkQuery,

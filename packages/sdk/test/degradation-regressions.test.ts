@@ -25,7 +25,10 @@ describe('daemon endpoint degradation', () => {
       const attested = await client.attest({ content: {} })
       expect(attested.via).toBe('none')
       // Repeat call must degrade identically (connecting state resets).
-      const again = await client.recall({ shape: 'history' })
+      const again = await client.recall({
+        shape: 'walk',
+        from_record_hash: `sha256:${'00'.repeat(32)}`,
+      })
       expect(again.via).not.toBe('daemon')
       await client.close()
     }
@@ -75,7 +78,7 @@ describe('anchor-set degradation', () => {
 
   it('flushAnchors resolves even when no fan-out was ever built', async () => {
     const client = createAtribClient({ daemon: { mode: 'off' }, key: null })
-    await expect(client.flushAnchors()).resolves.toBeUndefined()
+    await expect(client.flushAnchors()).resolves.toEqual([])
     await client.close()
   })
 })

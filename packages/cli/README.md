@@ -1,17 +1,89 @@
 # `@atrib/cli`
 
-**The operator CLI for atrib's verifiable action layer. Generate Ed25519 keypairs, manage them in macOS Keychain, and publish identity claims to the atrib directory (spec [§6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#6-key-directory)).**
+**The operator CLI for atrib's verifiable action layer. Create named principal, workspace, agent, and run identities; manage Ed25519 keys in macOS Keychain; and publish identity claims to the atrib directory (spec [§6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#6-key-directory)).**
 
 ```bash
-npx @atrib/cli keygen --keychain
-# Generates an Ed25519 keypair. Stores the seed in macOS Keychain
-# under service "atrib-creator" (or --service NAME). Prints only the
-# public key to stdout.
+npx @atrib/cli identity init \
+  --principal "Example Operations" \
+  --principal-kind organization \
+  --workspace "Incident Response" \
+  --agent "Triage Agent"
 ```
 
 The CLI is the companion tool to the SDK packages: producers (`@atrib/mcp`, `@atrib/agent`) read keys from environment variables or Keychain entries; this CLI is what creates and manages those entries. Those keys are the signer identities behind the action records that teams control, coordinate, and verify.
 
 ## Subcommands
+
+### `identity init`
+
+Create or recover the complete reference identity chain in one command:
+
+1. A durable human or organization principal stored in macOS Keychain.
+2. A named workspace and agent carried in a principal-signed identity claim.
+3. A fresh ephemeral run key with a context-bound [§1.11](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#111-delegation-certificates) certificate.
+
+```bash
+atrib identity init \
+  --profile support \
+  --principal "Example Operations" \
+  --principal-kind organization \
+  --workspace "Incident Response" \
+  --agent "Triage Agent" \
+  --scope ./run-scope.json \
+  --ttl 3600
+```
+
+The command is idempotent for the named profile. It recovers the existing
+principal from Keychain, verifies that it matches the signed profile, and
+issues a new run key. When the profile already has an active run, the command
+first submits a principal-signed `key_revocation` for that run to `--log`
+(default `https://log.atrib.dev/v1`). The revocation binds the old certificate,
+retires the old run, and must return a valid log index before the profile
+switches to the separately certified new run. Run keys do not inherit identity
+from one another; both resolve to the same durable principal. If submission
+fails, rotation fails and the previous active-run state stays intact. A
+per-profile lock prevents two local rotations from racing.
+
+A missing profile can be rebuilt from the same principal key and the same
+names. The workspace and agent IDs are deterministic within that principal
+namespace.
+
+The profile lives at `~/.atrib/identities/<profile>.json`, mode `0600`. It
+contains the public principal key, names, roles, key-source locator, and signed
+identity claim. It never contains the principal seed. The command prints:
+
+- `ATRIB_KEY`: ephemeral run seed;
+- `ATRIB_DELEGATION_CERT`: principal-to-run certificate;
+- `ATRIB_IDENTITY_CLAIM`: principal-signed names and roles;
+- `ATRIB_IDENTITY_PROFILE_PATH`: the reloadable local trust-view path;
+- `ATRIB_REVOKED_KEYS`: the profile's accepted run-key revocations;
+- `ATRIB_CONTEXT_ID`, `ATRIB_PRINCIPAL_KEY`, `ATRIB_WORKSPACE_ID`, and
+  `ATRIB_AGENT_ID`.
+
+Use `--publish` to make the signed principal claim discoverable through the
+directory. Without it, the carried claim remains independently verifiable but
+is not directory-discoverable. The current claim is self-attested. Its
+signature proves that the principal key committed to the names and roles. It
+does not prove a legal name, employment relationship, or organization control.
+
+On Linux or Windows, pass an existing principal seed through `--key-file`.
+That path supports profile recovery but does not create an operating-system
+keystore.
+
+### `identity show`
+
+Inspect the named role chain and verify both the signed claim and the local key
+source:
+
+```bash
+atrib identity show --profile support
+```
+
+The output separates claim-signature validity from local key availability and
+key-to-principal matching. It also reports the active public run certificate
+and the accepted revoked-run keys. Verifiers and protected executors should
+reload the profile path rather than treating one environment snapshot as a
+permanent revocation view.
 
 ### `keygen`
 

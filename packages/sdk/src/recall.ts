@@ -27,6 +27,7 @@ export type RecallShape =
   | 'by_signer'
   | 'trace'
   | 'trace_forward'
+  | 'state'
   | 'verify'
 
 export interface HistoryQuery {
@@ -106,6 +107,16 @@ export interface TraceQuery {
   include_content?: boolean
 }
 
+export interface StateQuery {
+  shape: 'state'
+  root_record_hashes?: string[]
+  trusted_creator_keys?: string[]
+  allowed_context_ids?: string[]
+  include_content?: boolean
+  limit?: number
+  head_limit?: number
+}
+
 /** Pattern 3 handoff-claim verification (D105/D106) via @atrib/verify-mcp. */
 export interface VerifyQuery {
   shape: 'verify'
@@ -133,6 +144,7 @@ export type RecallQuery =
   | OrphansQuery
   | BySignerQuery
   | TraceQuery
+  | StateQuery
   | VerifyQuery
 
 export interface RecallOutcome<T = unknown> {
@@ -163,6 +175,7 @@ export const SHAPE_TO_TOOL: Record<RecallShape, string> = {
   by_signer: 'recall_by_signer',
   trace: 'trace',
   trace_forward: 'trace_forward',
+  state: 'recall',
   verify: 'atrib-verify',
 }
 
@@ -172,8 +185,9 @@ export function shapeOf(query: RecallQuery): RecallShape {
 
 /** Strip the SDK-only `shape` discriminator; the rest passes through. */
 export function toToolArgs(query: RecallQuery): Record<string, unknown> {
-  const { shape: _shape, ...args } = query as { shape?: RecallShape } & Record<string, unknown>
+  const { shape, ...args } = query as { shape?: RecallShape } & Record<string, unknown>
   const out: Record<string, unknown> = {}
+  if (shape === 'state') out['shape'] = shape
   for (const [key, value] of Object.entries(args)) {
     if (value !== undefined) out[key] = value
   }

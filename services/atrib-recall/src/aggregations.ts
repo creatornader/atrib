@@ -99,6 +99,10 @@ function targetRef(lr: LoadedRecord, field: 'annotates' | 'revises'): string | u
   return isRecordRef(legacy) ? legacy : undefined
 }
 
+export function revisionTarget(lr: LoadedRecord): string | undefined {
+  return targetRef(lr, 'revises')
+}
+
 function contentStrings(
   content: Record<string, unknown>,
   primary: 'topics' | 'topic_tags',
@@ -441,8 +445,8 @@ export function aggregateAnnotationsByRecord(
  * handler walks the chain by recursing on each revision's own hash).
  *
  * The returned value array is ordered by revision timestamp ascending so
- * the caller sees revisions in the order they were issued. Ties resolve
- * to mirror-iteration order.
+ * the caller sees revisions in the order they were issued. Equal timestamps
+ * resolve by canonical record hash so every mirror projects the same order.
  *
  * Revision records WITHOUT a `_local.content` sidecar still carry their
  * target at signed top level, so they remain structurally traversable.
@@ -459,7 +463,7 @@ export function aggregateRevisionsByRecord(loaded: LoadedRecord[]): Map<string, 
 
   for (const lr of loaded) {
     if (lr.record.event_type !== EVENT_TYPE_REVISION_URI) continue
-    const target = targetRef(lr, 'revises')
+    const target = revisionTarget(lr)
     if (!target) continue
     const list = bins.get(target) ?? []
     list.push({ hash: lr.record_hash, ts: lr.record.timestamp })
@@ -468,7 +472,7 @@ export function aggregateRevisionsByRecord(loaded: LoadedRecord[]): Map<string, 
 
   const out = new Map<string, string[]>()
   for (const [target, entries] of bins) {
-    entries.sort((a, b) => a.ts - b.ts)
+    entries.sort((a, b) => a.ts - b.ts || a.hash.localeCompare(b.hash))
     out.set(
       target,
       entries.map((e) => e.hash),

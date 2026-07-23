@@ -41,17 +41,21 @@ export interface CapabilityEnvelope {
 }
 
 export type IdentityResolutionMethod =
-  | 'directory_lookup'        // step 6 succeeded
-  | 'no_anchor_available'     // step 1 surfaced no anchor; result still produced from current state
-  | 'no_claim_registered'     // step 6 returned non-membership
-  | 'rejected'                // a hard-failure step rejected the result
+  | 'directory_lookup' // step 6 succeeded
+  | 'no_anchor_available' // step 1 surfaced no anchor; result still produced from current state
+  | 'no_claim_registered' // step 6 returned non-membership
+  | 'rejected' // a hard-failure step rejected the result
 
 export interface KeyRevocationStatus {
   reason: 'rotation' | 'retirement' | 'compromise'
-  /** Log index of the revocation, used to derive timestamp ordering. */
+  /** Log index of the revocation, used to derive acceptance ordering. */
   revoked_at_log_index: number
-  /** True when the record being resolved was signed AFTER revocation (post-revocation). */
-  since_revocation: boolean
+  /** True at or after revocation, false before it, null when record position is absent. */
+  since_revocation: boolean | null
+  /** False means the verifier refused to infer order from signed timestamps. */
+  order_verifiable: boolean
+  /** True only when the caller attests it verified registry signatures and revoker authority. */
+  registry_verified: boolean
 }
 
 /**
@@ -194,6 +198,12 @@ export interface ResolveIdentityOptions {
   recordLogIndex?: number | null
   /** Pre-built revocation registry from a log scan (recommended). */
   revocations?: Map<string, RevocationEntry>
+  /**
+   * Set only after verifying every registry source record and its §1.9.2
+   * revoker authorization. The shape-only buildRevocationRegistry helper does
+   * not establish this property by itself.
+   */
+  revocationsVerified?: boolean
   /** AbortSignal for timeout / cancellation. */
   signal?: AbortSignal
   /** Override fetch (testing). */
@@ -299,9 +309,15 @@ export async function resolveIdentity(
   // this and it passed."
   warnings.push('step-1-anchor-not-checked: anchor freshness not verified by this implementation')
   warnings.push('step-3-witness-not-checked: witness coverage not verified by this implementation')
-  warnings.push('step-4-checkpoint-signature-not-checked: directory checkpoint signature not verified by this implementation')
-  warnings.push('step-5-append-only-not-checked: append-only consistency not verified by this implementation')
-  warnings.push('step-7-akd-proof-not-validated: AKD lookup proof returned but not cryptographically validated')
+  warnings.push(
+    'step-4-checkpoint-signature-not-checked: directory checkpoint signature not verified by this implementation',
+  )
+  warnings.push(
+    'step-5-append-only-not-checked: append-only consistency not verified by this implementation',
+  )
+  warnings.push(
+    'step-7-akd-proof-not-validated: AKD lookup proof returned but not cryptographically validated',
+  )
 
   // Step 6: directory lookup
   let lookupBody: { found?: boolean; claim?: IdentityClaim; version?: number; proof?: string } = {}
@@ -329,7 +345,7 @@ export async function resolveIdentity(
         warnings,
       }
     } else {
-      lookupBody = await res.json() as typeof lookupBody
+      lookupBody = (await res.json()) as typeof lookupBody
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -341,7 +357,7 @@ export async function resolveIdentity(
       capability_envelope: null,
       key_revocation_status: status,
       lookup_proof_valid: null,
-        directory_checkpoint_signature_valid: null,
+      directory_checkpoint_signature_valid: null,
       append_only_consistent: null,
       anchor: null,
       warnings,
@@ -356,7 +372,7 @@ export async function resolveIdentity(
       capability_envelope: null,
       key_revocation_status: applyRevocationOnly(creatorKey, opts, warnings),
       lookup_proof_valid: null,
-        directory_checkpoint_signature_valid: null,
+      directory_checkpoint_signature_valid: null,
       append_only_consistent: null,
       anchor: null,
       warnings,
@@ -368,14 +384,16 @@ export async function resolveIdentity(
   // already applied by the directory. We do a minimal sanity check.
   const claim = lookupBody.claim
   if (!claim || typeof claim !== 'object' || claim.creator_key !== creatorKey) {
-    warnings.push('step-8-claim-malformed: lookup returned but claim payload is missing or wrong creator_key')
+    warnings.push(
+      'step-8-claim-malformed: lookup returned but claim payload is missing or wrong creator_key',
+    )
     return {
       identity_resolved: null,
       identity_resolution_method: 'rejected',
       capability_envelope: null,
       key_revocation_status: applyRevocationOnly(creatorKey, opts, warnings),
       lookup_proof_valid: null,
-        directory_checkpoint_signature_valid: null,
+      directory_checkpoint_signature_valid: null,
       append_only_consistent: null,
       anchor: null,
       warnings,
@@ -562,7 +580,9 @@ function deriveDirectoryContextId(origin: string): string {
   // Synchronous SHA-256 via @noble/hashes is already a transitive dep
   // (through @atrib/mcp); use it to keep the call sync.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { sha256 } = require('@noble/hashes/sha2.js') as { sha256: (data: Uint8Array) => Uint8Array }
+  const { sha256 } = require('@noble/hashes/sha2.js') as {
+    sha256: (data: Uint8Array) => Uint8Array
+  }
   const digest = sha256(enc)
   return Array.from(digest.slice(0, 16))
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -616,7 +636,12 @@ interface StepOneSuccess {
  * re-verify is defense-in-depth, not required for step 1).
  */
 async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
-  const directoryOrigin = await fetchDirectoryOrigin(opts.directoryEndpoint, opts.fetchFn, opts.signal, opts.warnings)
+  const directoryOrigin = await fetchDirectoryOrigin(
+    opts.directoryEndpoint,
+    opts.fetchFn,
+    opts.signal,
+    opts.warnings,
+  )
   if (!directoryOrigin) return null
   const contextHex = deriveDirectoryContextId(directoryOrigin)
 
@@ -628,14 +653,16 @@ async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
       ...(opts.signal ? { signal: opts.signal } : {}),
     })
     if (res.status === 404) {
-      opts.warnings.push('step-1-anchor-not-found: no directory_anchor records in the directory\'s context_id on the log')
+      opts.warnings.push(
+        "step-1-anchor-not-found: no directory_anchor records in the directory's context_id on the log",
+      )
       return null
     }
     if (!res.ok) {
       opts.warnings.push(`step-1-log-fetch-error: ${res.status} ${res.statusText}`)
       return null
     }
-    const body = await res.json() as { entries?: AnchorCommitment[] }
+    const body = (await res.json()) as { entries?: AnchorCommitment[] }
     entries = body.entries ?? []
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -652,14 +679,18 @@ async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
       e.timestamp_ms <= opts.recordTimestamp,
   )
   if (matches.length === 0) {
-    opts.warnings.push('step-1-anchor-not-found: no directory_anchor on the log matches the operator key + timestamp window')
+    opts.warnings.push(
+      'step-1-anchor-not-found: no directory_anchor on the log matches the operator key + timestamp window',
+    )
     return null
   }
   const current = matches[0]! // newest-first → first match is the most recent
   const prior = matches[1] ?? null // second-most-recent, if any
 
   // Fetch the body for the current anchor (and predecessor when present).
-  const recordHashStr = current.record_hash.startsWith('sha256:') ? current.record_hash : `sha256:${current.record_hash}`
+  const recordHashStr = current.record_hash.startsWith('sha256:')
+    ? current.record_hash
+    : `sha256:${current.record_hash}`
   let currentBody: AnchorBody | null
   try {
     currentBody = await opts.fetchAnchorBody(recordHashStr)
@@ -668,7 +699,9 @@ async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
     return null
   }
   if (!currentBody) {
-    opts.warnings.push(`step-1-body-not-available: anchor ${recordHashStr} present on log but body not retrievable from directory or archive`)
+    opts.warnings.push(
+      `step-1-body-not-available: anchor ${recordHashStr} present on log but body not retrievable from directory or archive`,
+    )
     return null
   }
 
@@ -688,7 +721,9 @@ async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
     return null
   }
   if (currentBody.creator_key !== opts.directoryOperatorKey) {
-    opts.warnings.push('step-1-body-creator-mismatch: anchor body creator_key does not match directoryOperatorKey')
+    opts.warnings.push(
+      'step-1-body-creator-mismatch: anchor body creator_key does not match directoryOperatorKey',
+    )
     return null
   }
 
@@ -696,7 +731,9 @@ async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
   // can stay warning-only without it.
   let priorBody: AnchorBody | null = null
   if (prior) {
-    const priorHashStr = prior.record_hash.startsWith('sha256:') ? prior.record_hash : `sha256:${prior.record_hash}`
+    const priorHashStr = prior.record_hash.startsWith('sha256:')
+      ? prior.record_hash
+      : `sha256:${prior.record_hash}`
     try {
       priorBody = await opts.fetchAnchorBody(priorHashStr)
     } catch {
@@ -706,11 +743,11 @@ async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
 
   const anchorAgeMs = opts.recordTimestamp - current.timestamp_ms
   const freshnessOk =
-    typeof opts.freshnessThresholdMs === 'number'
-      ? anchorAgeMs <= opts.freshnessThresholdMs
-      : null
+    typeof opts.freshnessThresholdMs === 'number' ? anchorAgeMs <= opts.freshnessThresholdMs : null
   if (typeof opts.freshnessThresholdMs === 'number' && freshnessOk === false) {
-    opts.warnings.push(`step-2-anchor-stale: anchor_age_ms=${anchorAgeMs} > threshold=${opts.freshnessThresholdMs}`)
+    opts.warnings.push(
+      `step-2-anchor-stale: anchor_age_ms=${anchorAgeMs} > threshold=${opts.freshnessThresholdMs}`,
+    )
   }
 
   const surface: AnchorSurface = {
@@ -752,7 +789,7 @@ async function fetchDirectoryOrigin(
       warnings.push(`step-1-origin-fetch-error: ${res.status} ${res.statusText}`)
       return null
     }
-    const body = await res.json() as { directory_origin?: string }
+    const body = (await res.json()) as { directory_origin?: string }
     if (typeof body.directory_origin !== 'string' || body.directory_origin.length === 0) {
       warnings.push('step-1-origin-missing: directory /anchor response missing directory_origin')
       return null
@@ -807,14 +844,18 @@ async function runStepFive(opts: StepFiveInputs): Promise<true | null | 'rejecte
       opts.warnings.push(`step-5-audit-proof-fetch-error: ${res.status} ${res.statusText}`)
       return null
     }
-    const body = await res.json() as { proof?: string }
+    const body = (await res.json()) as { proof?: string }
     if (typeof body.proof !== 'string' || body.proof.length === 0) {
-      opts.warnings.push('step-5-audit-proof-missing: directory /audit-proof response missing proof field')
+      opts.warnings.push(
+        'step-5-audit-proof-missing: directory /audit-proof response missing proof field',
+      )
       return null
     }
     proofB64u = body.proof
   } catch (e) {
-    opts.warnings.push(`step-5-audit-proof-fetch-error: ${e instanceof Error ? e.message : String(e)}`)
+    opts.warnings.push(
+      `step-5-audit-proof-fetch-error: ${e instanceof Error ? e.message : String(e)}`,
+    )
     return null
   }
 
@@ -850,7 +891,9 @@ async function runStepFive(opts: StepFiveInputs): Promise<true | null | 'rejecte
     if (idx >= 0) opts.warnings.splice(idx, 1)
     return true
   }
-  opts.warnings.push('step-5-audit-proof-invalid: audit proof did not verify against the prior + current anchored roots')
+  opts.warnings.push(
+    'step-5-audit-proof-invalid: audit proof did not verify against the prior + current anchored roots',
+  )
   return 'rejected'
 }
 
@@ -916,7 +959,7 @@ async function runStepSeven(
         warnings.push(`step-7-anchor-fetch-error: ${res.status} ${res.statusText}`)
         return null
       }
-      anchorResp = await res.json() as typeof anchorResp
+      anchorResp = (await res.json()) as typeof anchorResp
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       warnings.push(`step-7-anchor-fetch-error: ${msg}`)
@@ -965,7 +1008,9 @@ async function runStepSeven(
     if (idx >= 0) warnings.splice(idx, 1)
     return true
   }
-  warnings.push('step-7-akd-proof-invalid: AKD lookup proof did not verify against the directory\'s anchored root')
+  warnings.push(
+    "step-7-akd-proof-invalid: AKD lookup proof did not verify against the directory's anchored root",
+  )
   return 'rejected'
 }
 
@@ -989,7 +1034,7 @@ function base64urlToBytes(s: string): Uint8Array {
 
 /**
  * Step 9 helper: cross-check the revocation registry. since_revocation
- * is true when the record's log_index is strictly greater than the
+ * is true when the record's log_index is greater than or equal to the
  * revocation's log_index.
  */
 function applyRevocationOnly(
@@ -1003,12 +1048,28 @@ function applyRevocationOnly(
   }
   const entry = opts.revocations.get(creatorKey)
   if (!entry) return null
-  const sinceRevocation =
-    typeof opts.recordLogIndex === 'number' && opts.recordLogIndex > entry.log_index
+  const orderVerifiable =
+    typeof opts.recordLogIndex === 'number' &&
+    Number.isSafeInteger(opts.recordLogIndex) &&
+    opts.recordLogIndex >= 0
+  const sinceRevocation = orderVerifiable ? opts.recordLogIndex! >= entry.log_index : null
+  if (!orderVerifiable) {
+    warnings.push(
+      'step-9-revocation-order-unverifiable: record log index was not supplied; timestamps were not used',
+    )
+  }
+  const registryVerified = opts.revocationsVerified === true
+  if (!registryVerified) {
+    warnings.push(
+      'step-9-revocation-registry-unverified: registry shape was supplied without signature and revoker-authorization assurance',
+    )
+  }
   return {
     reason: entry.revocation_reason,
     revoked_at_log_index: entry.log_index,
     since_revocation: sinceRevocation,
+    order_verifiable: orderVerifiable,
+    registry_verified: registryVerified,
   }
 }
 
@@ -1052,7 +1113,9 @@ async function verifyAnchorSignature(
     return false
   }
   if (sigBytes.length !== 64 || pubBytes.length !== 32) {
-    warnings.push(`step-4-decode-failed: signature must be 64 bytes (got ${sigBytes.length}), pubkey 32 bytes (got ${pubBytes.length})`)
+    warnings.push(
+      `step-4-decode-failed: signature must be 64 bytes (got ${sigBytes.length}), pubkey 32 bytes (got ${pubBytes.length})`,
+    )
     return false
   }
   let ok = false
@@ -1063,7 +1126,9 @@ async function verifyAnchorSignature(
     return false
   }
   if (!ok) {
-    warnings.push('step-4-signature-invalid: directory operator signature on anchor body did not verify')
+    warnings.push(
+      'step-4-signature-invalid: directory operator signature on anchor body did not verify',
+    )
   }
   return ok
 }
@@ -1135,7 +1200,9 @@ async function runStepThree(
     if (sigOrigin !== logOrigin) witnessCount += 1
   }
 
-  warnings.push('step-3-witness-not-cryptographically-verified: witness cosignature count is line-based, not cryptographically verified against a trusted-witness set')
+  warnings.push(
+    'step-3-witness-not-cryptographically-verified: witness cosignature count is line-based, not cryptographically verified against a trusted-witness set',
+  )
 
   if (typeof threshold === 'number' && witnessCount < threshold) {
     warnings.push(`step-3-witness-insufficient: actual=${witnessCount}, required=${threshold}`)

@@ -23,6 +23,7 @@ import {
   readMirrorTail,
   resolveEnvContextId,
   type AnchorFanout,
+  type AnchorSubmissionReport,
 } from '@atrib/mcp'
 import {
   attestResultFromEmitOutput,
@@ -52,7 +53,7 @@ export interface AtribClient {
    * Await all in-flight anchor fan-out legs (D138). For tests and shutdown
    * hooks only — the attest path itself never awaits anchoring (§5.3.5).
    */
-  flushAnchors(): Promise<void>
+  flushAnchors(): Promise<AnchorSubmissionReport[]>
   /** Close the daemon transport (if one was opened). */
   close(): Promise<void>
 }
@@ -62,6 +63,9 @@ export interface AtribClient {
 // packages — consumers without them installed still typecheck.
 interface RecallModule {
   recall: (args: Record<string, unknown>) => Promise<unknown>
+  runRecallVerb: (
+    args: Record<string, unknown>,
+  ) => Promise<{ payload: Record<string, unknown> } | { error: string }>
 }
 interface VerifyModule {
   handleAtribVerify: (input: Record<string, unknown>) => Promise<unknown>
@@ -102,6 +106,7 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
   // in-process attest. The daemon attest path never consults it: the
   // daemon owns its own anchors.
   let fanout: AnchorFanout | null = null
+  const anchorReports: Promise<AnchorSubmissionReport>[] = []
   const getFanout = (): AnchorFanout => {
     fanout ??= createAnchorFanout({ config: anchorSet.config })
     return fanout
@@ -121,8 +126,7 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
     return keyPromise
   }
 
-  const defaultContextId = (): string | undefined =>
-    config.contextId ?? resolveEnvContextId()
+  const defaultContextId = (): string | undefined => config.contextId ?? resolveEnvContextId()
 
   async function attest(input: AttestInput): Promise<AttestResult> {
     // Throws TypeError on contradictory input — the only throw path.
@@ -141,9 +145,7 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
       // the in-process path can still sign.
       if (emitOutput !== null && typeof emitOutput.record_hash === 'string') {
         const result = attestResultFromEmitOutput(emitOutput, 'daemon', warnings)
-        return attribution !== undefined
-          ? { ...result, attribution_receipt: attribution }
-          : result
+        return attribution !== undefined ? { ...result, attribution_receipt: attribution } : result
       }
       const reason = outcome.ok
         ? 'daemon returned an emit result without a record_hash'
@@ -211,6 +213,8 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
         effective_anchor_count: fan.posture.effective_anchor_count,
         used_default_set: fan.posture.used_default_set,
         warned: fan.posture.warn,
+        basis: 'configured_descriptors',
+        plurality_met: null,
       }
       result.anchor_posture = posture
 
@@ -230,7 +234,8 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
         )
         return
       }
-      fan.submitToAnchors(record)
+      const ticket = fan.submitToAnchors(record)
+      anchorReports.push(ticket.report)
     } catch (error) {
       result.warnings.push(`atrib: anchor fan-out failed: ${String(error)}`)
     }
@@ -271,16 +276,24 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
     }
 
     try {
-      if (shape === 'history') {
+      if (shape === 'history' || shape === 'state') {
         const mod = await loadRecallModule()
         if (mod === null) {
           warnings.push(
-            "atrib: in-process history fallback unavailable — install the optional peer '@atrib/recall'",
+            `atrib: in-process ${shape} fallback unavailable; install the optional peer '@atrib/recall'`,
           )
           return { shape, via: 'none', data: null, warnings }
         }
-        const data = await mod.recall(args)
-        return { shape, via: 'in-process', data: data as T, warnings }
+        const data = shape === 'history' ? await mod.recall(args) : await mod.runRecallVerb(args)
+        if (shape === 'state' && typeof data === 'object' && data !== null && 'error' in data) {
+          warnings.push(`atrib: in-process state projection failed: ${String(data.error)}`)
+          return { shape, via: 'none', data: null, warnings }
+        }
+        const resolvedData =
+          shape === 'state' && typeof data === 'object' && data !== null && 'payload' in data
+            ? data.payload
+            : data
+        return { shape, via: 'in-process', data: resolvedData as T, warnings }
       }
       if (shape === 'verify') {
         const mod = await loadVerifyModule()
@@ -309,6 +322,7 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
     recall,
     flushAnchors: async () => {
       if (fanout) await fanout.flush()
+      return Promise.all(anchorReports.splice(0))
     },
     close: async () => {
       if (daemon) await daemon.close()

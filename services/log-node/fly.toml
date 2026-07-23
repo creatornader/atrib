@@ -26,7 +26,11 @@ primary_region = 'iad'
 
 [[vm]]
   size = 'shared-cpu-1x'
-  memory = '256mb'
+  # The persisted log is replayed into the in-memory Merkle tree at startup.
+  # The production corpus no longer fits safely beside Node and Fly guest
+  # overhead in 256 MB; 512 MB prevents OOM restart loops while the storage
+  # engine remains memory-resident.
+  memory = '512mb'
 
 [checks]
   [checks.health]
