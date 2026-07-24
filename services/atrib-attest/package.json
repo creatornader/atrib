@@ -1,6 +1,6 @@
 {
   "name": "@atrib/attest",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for atrib's write verb. One attest tool signs observations, annotations, and revisions; the legacy emit, atrib-annotate, and atrib-revise tool names stay mounted as aliases over the same handler.",
   "keywords": [
     "atrib",
