@@ -1,5 +1,11 @@
 # @atrib/operating-graph
 
+## 0.1.2
+
+### Patch Changes
+
+- @atrib/sdk@5.0.0
+
 ## Unreleased
 
 - Add bearer-protected local and archive body retrieval with signature,

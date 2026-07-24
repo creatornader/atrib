@@ -1,5 +1,14 @@
 # @atrib/sdk
 
+## 5.0.0
+
+### Patch Changes
+
+- Updated dependencies [d3dfaf7]
+  - @atrib/verify@0.12.0
+  - @atrib/recall@4.0.0
+  - @atrib/verify-mcp@1.0.4
+
 ## 4.0.0
 
 ### Minor Changes

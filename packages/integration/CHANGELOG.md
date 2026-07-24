@@ -1,5 +1,17 @@
 # @atrib/integration
 
+## 0.0.48
+
+### Patch Changes
+
+- Updated dependencies [d3dfaf7]
+  - @atrib/verify@0.12.0
+  - @atrib/action-gate@0.1.1
+  - @atrib/agent@0.4.3
+  - @atrib/sdk@5.0.0
+  - @atrib/archive-node@0.1.41
+  - @atrib/graph-node@0.1.41
+
 ## 0.0.47
 
 ### Patch Changes

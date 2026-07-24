@@ -1,5 +1,12 @@
 # @atrib/action-gate
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [d3dfaf7]
+  - @atrib/verify@0.12.0
+
 ## 0.1.0
 
 ### Minor Changes
