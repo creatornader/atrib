@@ -912,6 +912,63 @@ describe('GET /v1/stream', () => {
     expect(event.entry.event_type).toBe('tool_call')
   })
 
+  it('resumes after an exact log-index cursor without replaying the cursor entry', async () => {
+    const before = (await fetch(`${server.url}/v1/recent?limit=1`).then((res) => res.json())) as {
+      tree_size: number
+    }
+    const first = await makeSignedRecord()
+    const second = await makeSignedRecord()
+    await post(server.url, first)
+    await post(server.url, second)
+
+    const res = await fetch(`${server.url}/v1/stream?after=${before.tree_size}`)
+    expect(res.status).toBe(200)
+    const event = (await readSseEvent(res, 'log_entry')) as {
+      entry: { index: number; record_hash: string }
+    }
+
+    expect(event.entry.index).toBe(before.tree_size + 1)
+    expect(event.entry.record_hash).toBe(`sha256:${hexEncode(sha256(canonicalRecord(second)))}`)
+  })
+
+  it('honors Last-Event-ID over the original query cursor on reconnect', async () => {
+    const before = (await fetch(`${server.url}/v1/recent?limit=1`).then((res) => res.json())) as {
+      tree_size: number
+    }
+    const first = await makeSignedRecord()
+    const second = await makeSignedRecord()
+    await post(server.url, first)
+    await post(server.url, second)
+
+    const res = await fetch(`${server.url}/v1/stream?after=-1`, {
+      headers: { 'last-event-id': String(before.tree_size) },
+    })
+    expect(res.status).toBe(200)
+    const event = (await readSseEvent(res, 'log_entry')) as {
+      entry: { index: number; record_hash: string }
+    }
+
+    expect(event.entry.index).toBe(before.tree_size + 1)
+    expect(event.entry.record_hash).toBe(`sha256:${hexEncode(sha256(canonicalRecord(second)))}`)
+  })
+
+  it('rejects malformed and rolled-back resume cursors', async () => {
+    const malformed = await fetch(`${server.url}/v1/stream`, {
+      headers: { 'last-event-id': 'not-an-index' },
+    })
+    expect(malformed.status).toBe(400)
+
+    const recent = (await fetch(`${server.url}/v1/recent?limit=1`).then((res) => res.json())) as {
+      tree_size: number
+    }
+    const beyondTail = await fetch(`${server.url}/v1/stream`, {
+      headers: { 'last-event-id': String(recent.tree_size + 10) },
+    })
+    expect(beyondTail.status).toBe(409)
+    const body = (await beyondTail.json()) as { error: string }
+    expect(body.error).toContain('beyond current log tail')
+  })
+
   it('rejects filters that require record bodies', async () => {
     const res = await fetch(`${server.url}/v1/stream?topic=ap2`)
     expect(res.status).toBe(400)
@@ -993,6 +1050,20 @@ describe('GET /dashboard', () => {
     const b = await fetch(`${server.url}/dashboard/`)
     expect(a.status).toBe(200)
     expect(b.status).toBe(200)
+  })
+
+  it('serves allowlisted detail routes on local and log hosts', async () => {
+    for (const path of [
+      '/identity/' + 'a'.repeat(43),
+      '/session/' + '0'.repeat(32),
+      '/action/sha256:' + '0'.repeat(64),
+      '/trace/sha256:' + '0'.repeat(64),
+    ]) {
+      const res = await fetch(`${server.url}${path}`)
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-type')).toContain('text/html')
+      expect(await res.text()).toMatch(/<!doctype html>/i)
+    }
   })
 
   it('serves /graph-utils.mjs (sibling ES module imported by index.html)', async () => {

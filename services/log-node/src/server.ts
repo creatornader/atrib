@@ -117,7 +117,7 @@ export async function bindServer(
     // per spec §0; browser cross-origin reads are explicitly permitted.
     res.setHeader('access-control-allow-origin', '*')
     res.setHeader('access-control-allow-methods', 'GET, HEAD, POST, OPTIONS')
-    res.setHeader('access-control-allow-headers', 'content-type, x-atrib-priority')
+    res.setHeader('access-control-allow-headers', 'content-type, last-event-id, x-atrib-priority')
     if (req.method === 'OPTIONS') {
       res.statusCode = 204
       res.end()
@@ -187,6 +187,7 @@ interface LogEntryFilters {
   contextId?: string
   eventType?: string
   sinceMs?: number
+  afterIndex?: number
 }
 
 interface LogStreamSubscriber {
@@ -235,8 +236,7 @@ async function handleRequest(
   const isHead = req.method === 'HEAD'
   if (
     isGetOrHead(req.method) &&
-    isExplorerHost &&
-    (urlPath === '/' || urlPath === '' || isDashboardRoutePath(urlPath))
+    ((isExplorerHost && (urlPath === '/' || urlPath === '')) || isDashboardRoutePath(urlPath))
   ) {
     return handleDashboard(res, isHead)
   }
@@ -353,7 +353,16 @@ async function handleRequest(
   if (req.method === 'GET' && urlPath === '/v1/stream') {
     const parsed = parseFilterParams(new URL(req.url ?? '', 'http://localhost').searchParams)
     if (!parsed.ok) return reject(res, 400, parsed.error)
-    return handleStream(req, res, tree, parsed.filters, subscribers)
+    const resumed = resolveStreamResumeCursor(req, parsed.filters)
+    if (!resumed.ok) return reject(res, 400, resumed.error)
+    if (resumed.filters.afterIndex !== undefined && resumed.filters.afterIndex >= tree.size) {
+      return reject(
+        res,
+        409,
+        `resume cursor ${resumed.filters.afterIndex} is beyond current log tail ${tree.size - 1}`,
+      )
+    }
+    return handleStream(req, res, tree, resumed.filters, subscribers)
   }
 
   if (req.method === 'GET' && urlPath === '/v1/feed.json') {
@@ -923,6 +932,7 @@ function handleStream(
   filters: LogEntryFilters,
   subscribers: Set<LogStreamSubscriber>,
 ): void {
+  const replayThrough = tree.size - 1
   res.statusCode = 200
   res.setHeader('content-type', 'text/event-stream; charset=utf-8')
   res.setHeader('cache-control', 'no-cache, no-transform')
@@ -946,11 +956,15 @@ function handleStream(
     `event: ready\ndata: ${JSON.stringify({
       tree_size: tree.size,
       filters: publicFilterShape(filters),
+      resume_after: filters.afterIndex ?? null,
+      replay_through:
+        filters.afterIndex !== undefined || filters.sinceMs !== undefined ? replayThrough : null,
     })}\n\n`,
   )
 
-  if (filters.sinceMs !== undefined) {
-    for (let i = 0; i < tree.size; i++) {
+  if (filters.afterIndex !== undefined || filters.sinceMs !== undefined) {
+    const start = filters.afterIndex === undefined ? 0 : filters.afterIndex + 1
+    for (let i = start; i <= replayThrough; i++) {
       const entry = decodeEntry(tree.entryBytes(i), i)
       if (matchesEntryFilters(entry, filters)) writeSseLogEntry(res, entry, tree.size)
     }
@@ -1041,6 +1055,7 @@ function matchesEntryFilters(entry: DecodedEntry, filters: LogEntryFilters): boo
   if (filters.contextId !== undefined && entry.context_id !== filters.contextId) return false
   if (filters.eventType !== undefined && entry.event_type !== filters.eventType) return false
   if (filters.sinceMs !== undefined && entry.timestamp_ms < filters.sinceMs) return false
+  if (filters.afterIndex !== undefined && entry.index <= filters.afterIndex) return false
   return true
 }
 
@@ -1117,7 +1132,35 @@ function parseFilterParams(
     filters.sinceMs = parsed
   }
 
+  const after = params.get('after')
+  if (after !== null) {
+    const parsed = parseResumeIndex(after, true)
+    if (parsed === undefined) {
+      return {
+        ok: false,
+        error: 'after must be -1 or a non-negative safe integer log index',
+      }
+    }
+    filters.afterIndex = parsed
+  }
+
   return { ok: true, filters }
+}
+
+function resolveStreamResumeCursor(
+  req: IncomingMessage,
+  filters: LogEntryFilters,
+): { ok: true; filters: LogEntryFilters } | { ok: false; error: string } {
+  const lastEventId = headerFirst(req.headers['last-event-id'])
+  if (lastEventId === undefined || lastEventId === '') return { ok: true, filters }
+  const parsed = parseResumeIndex(lastEventId, false)
+  if (parsed === undefined) {
+    return {
+      ok: false,
+      error: 'Last-Event-ID must be a non-negative safe integer log index',
+    }
+  }
+  return { ok: true, filters: { ...filters, afterIndex: parsed } }
 }
 
 function normalizeEventTypeFilter(value: string): string | undefined {
@@ -1149,12 +1192,21 @@ function parseSinceMs(value: string): number | undefined {
   return Number.isFinite(t) && t >= 0 ? t : undefined
 }
 
+function parseResumeIndex(value: string, allowBeforeGenesis: boolean): number | undefined {
+  if (!/^-?\d+$/.test(value)) return undefined
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) return undefined
+  if (allowBeforeGenesis && parsed === -1) return parsed
+  return parsed >= 0 ? parsed : undefined
+}
+
 function publicFilterShape(filters: LogEntryFilters): Record<string, string | number> {
   const out: Record<string, string | number> = {}
   if (filters.creatorKey !== undefined) out.creator_key = filters.creatorKey
   if (filters.contextId !== undefined) out.context_id = filters.contextId
   if (filters.eventType !== undefined) out.event_type = filters.eventType
   if (filters.sinceMs !== undefined) out.since = filters.sinceMs
+  if (filters.afterIndex !== undefined) out.after = filters.afterIndex
   return out
 }
 

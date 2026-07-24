@@ -4986,6 +4986,13 @@ The first implementation supports these filters on both surfaces:
 - `event_type`: decoded label (`tool_call`, `transaction`, `observation`, `directory_anchor`, `annotation`, `revision`, `extension`, `reserved`) or atrib normative event_type URI.
 - `since`: millisecond timestamp or ISO timestamp. Boundary is inclusive.
 
+**Reconnect update.** [D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor)
+adds the exact `after` log-index cursor, `Last-Event-ID` handling, and
+cursor-ahead-of-tail refusal. The filters above describe the original
+[D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields)
+surface; [D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor)
+controls reconnect behavior.
+
 The first implementation rejects `topic` and `importance` with `400 Bad Request` because those filters require record-body indexing. Rejecting is deliberate. Silent ignore would make downstream notification code believe server-side filtering happened when it did not.
 
 **Alternatives considered.**
@@ -8817,6 +8824,105 @@ linear, conflicting, partial, unsigned, and bounded lineages.
 [D124](#d124-base-recall-context-scope-is-explicit),
 [D152](#d152-handoff-verdicts-are-receiver-computed-not-sender-declared), and
 [D164](#d164-attestrecall-verb-rename-and-primitive-surface-collapse).
+
+## D175: Log subscriptions resume from an exclusive log-index cursor
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields)
+gave every SSE entry a log-index `id`, but the server ignored the
+`Last-Event-ID` header sent by native `EventSource` reconnects. A reconnect
+without `since` could miss entries accepted while the client was disconnected.
+A reconnect with inclusive `since` could replay duplicates. Timestamp equality
+also cannot identify one exact position when several records share a
+millisecond.
+
+**Decision.**
+
+1. The subscription filters add `after=<log-index>`, an exclusive cursor.
+   `after=-1` means before genesis.
+2. `/v1/stream` accepts the same cursor through `Last-Event-ID`. The header
+   overrides the query value because native `EventSource` keeps its original
+   URL while advancing the header after each delivered event.
+3. Replay begins at `after + 1` and stays in ascending log order. The `ready`
+   event reports the effective cursor and the log tail captured at request
+   start.
+4. A malformed cursor returns 400. A cursor at or beyond the current tree size
+   returns 409 instead of silently opening a live-only stream. That mismatch
+   can indicate the wrong log origin or a rolled-back view.
+5. `since` remains an inclusive discovery filter. It is not the exact reconnect
+   contract.
+6. The open explorer consumes `/v1/stream` through native `EventSource`, keeps
+   one log-index cursor, removes duplicate records by canonical hash, and falls
+   back to polling only when `EventSource` is unavailable.
+
+**Boundary.** This contract streams commitment-visible log entries. It does
+not turn log-node into a body index and does not compute receiver-accepted
+state. Body-aware revision, decision, outcome, and workspace projections
+belong in a consumer that composes the log cursor with mirror, archive, and
+verifier inputs.
+
+**Conformance.** Server tests cover query-cursor replay, header precedence,
+malformed cursors, and cursor-ahead-of-tail refusal. Explorer tests pin the
+EventSource path, duplicate suppression, reconnect status, and polling
+fallback.
+
+**Cross-references.**
+[D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields),
+[D121](#d121-runtime-log-proof-manifests-bind-host-owned-run-windows-without-making-raw-logs-protocol-state),
+and [D174](#d174-current-state-is-a-policy-bound-revision-projection).
+
+## D176: Explorer separates log commitments from signed record bodies
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** The action view labeled the compact `/v1/lookup` response as a
+"raw record." That response is a log-entry projection over the 90-byte
+commitment stored by log-node. It is not the canonical signed record body and
+does not contain enough material for a browser to recompute the record hash or
+verify the Ed25519 signature. The optional Record Body Archive Layer already
+exposed the full body, retention metadata, and typed 404 and 410 states, but the
+explorer did not fetch or explain them.
+
+**Decision.**
+
+1. The action view labels `/v1/lookup` output as a log-entry projection. It
+   never presents that projection as the raw or full record.
+2. The configured archive is queried through `/v1/record/<hash>`. The view
+   distinguishes body available, commitment only, retention expired, access
+   restricted, archive unavailable, and archive not configured.
+3. The archived signed body is rendered in a separate inspector only when the
+   archive returns it. The UI states that direct canonical-hash and signature
+   re-verification require that body.
+4. "Signature accepted" means the log reports that it accepted a record after
+   signature verification. The browser does not claim it repeated that check
+   when it only holds the compact entry.
+5. log-node serves the allowlisted identity, session, action, and trace SPA
+   paths on both the explorer host and the `/dashboard` fallback host. Direct
+   links and browser reloads must reach the same explorer view.
+
+**Boundary.** Body unavailability is not proof of deletion or censorship.
+A 404 applies to the archive that answered. A record may remain in a producer
+mirror or another archive. Access-restricted retrieval needs a host policy and
+authorization scheme; the public explorer only renders the state returned by
+the configured archive.
+
+**Conformance.** Dashboard copy tests pin the state vocabulary and the
+commitment-versus-body labels. A browser integration test starts log-node and
+archive-node, submits one signed record, observes it through the live stream,
+opens the direct action path, and checks that the commitment projection and
+archived body appear as separate panels. Server tests cover direct detail
+routes on local and log hosts.
+
+**Cross-references.**
+[D070](#d070-record-body-archive-layer),
+[D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields),
+[D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor), and
+[§2.12](atrib-spec.md#212-record-body-archive-layer).
 
 # Pending decisions
 

@@ -27,3 +27,11 @@ partial roots without claiming that browser projection applied receiver
 policy.
 The specification now contains one normative session-checkpoint section
 instead of two byte-identical copies.
+Log subscriptions now resume after an exact log-index cursor, honor native
+`EventSource` reconnect headers, and reject cursor rollback instead of losing
+or duplicating the disconnected interval. The open explorer uses that stream
+for live activity and keeps polling as a compatibility fallback.
+The explorer action view now distinguishes the log's compact commitment entry
+from the signed record body. It reports whether the configured archive returned
+the body, never labels a commitment projection as a raw record, and serves
+direct action, session, identity, and trace routes from the fallback log host.

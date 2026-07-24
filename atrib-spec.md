@@ -1764,6 +1764,8 @@ The common filters are:
 - `context_id=<32-hex>`: exact session anchor match.
 - `event_type=<label-or-uri>`: decoded event-type label or atrib normative event_type URI.
 - `since=<timestamp>`: inclusive millisecond timestamp or ISO timestamp.
+- `after=<log-index>`: entries whose log index is strictly greater than this
+  cursor. `-1` means before genesis. This is the exact replay cursor.
 
 Filters such as `topic` and `importance` require record-body or annotation-body indexing. A commitment-only log implementation SHOULD reject those filters with `400 Bad Request` rather than silently ignoring them.
 
@@ -1776,14 +1778,31 @@ Response 200 OK:
 Content-Type: text/event-stream
 
 event: ready
-data: {"tree_size":1882,"filters":{"creator_key":"haoZK4...","event_type":"annotation","since":1778112565186}}
+data: {"tree_size":1882,"filters":{"creator_key":"haoZK4...","event_type":"annotation","after":1880},"resume_after":1880,"replay_through":1881}
 
 id: 1883
 event: log_entry
 data: {"tree_size":1884,"entry":{"index":1883,"record_hash":"sha256:4797...","creator_key":"haoZK4...","context_id":"b5a2ebf81d43...","timestamp_ms":1778112567000,"event_type":"annotation","event_type_byte":5}}
 ```
 
-`id` is the log index of the entry. A client MAY use it as its local checkpoint, but timestamp resume uses the `since` filter. Implementations MAY send comment heartbeats to keep intermediaries from closing idle connections.
+`id` is the log index of the entry. For an exact reconnect, a client sends the
+last processed index through the SSE `Last-Event-ID` header or the `after`
+query parameter. When both are present, `Last-Event-ID` MUST win so a native
+`EventSource` can advance beyond the URL's initial cursor. Replay starts at the
+next log index and preserves log order. The `ready` event reports the effective
+`resume_after` cursor and the `replay_through` tail captured when the request
+began.
+
+An invalid cursor receives `400 Bad Request`. A non-negative cursor at or
+beyond the current tree size receives `409 Conflict`, because the claimed last
+processed entry is not present in the current log view. This can indicate a
+wrong origin or rollback and MUST NOT degrade into a live-only stream.
+
+`since` remains available for time-window discovery and compatibility. Its
+inclusive boundary can replay more than one previously processed entry, so
+clients that require exact reconnect behavior use the log-index cursor.
+Implementations MAY send comment heartbeats to keep intermediaries from
+closing idle connections.
 
 ##### JSON Feed Companion
 

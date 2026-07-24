@@ -27,6 +27,16 @@ describe('overview copy', () => {
     expect(html).not.toContain('Search by creator_key, context_id, or record_hash')
   })
 
+  it('uses the resumable log stream with a polling fallback', () => {
+    expect(html).toContain('function startLiveUpdates()')
+    expect(html).toContain("streamUrl.searchParams.set('after', String(lastFeedCursor))")
+    expect(html).toContain("stream.addEventListener('log_entry'")
+    expect(html).toContain("setFeedLiveStatus('reconnecting', 'warn')")
+    expect(html).toContain("setFeedLiveStatus('polling', 'fallback')")
+    expect(html).toContain('feedEntries.some((known) => known.record_hash === entry.record_hash)')
+    expect(html).toContain('new EventSource(streamUrl.href)')
+  })
+
   it('can render verifier evidence blocks on action receipts when returned', () => {
     expect(html).toContain('function renderEvidencePanel(blocks)')
     expect(html).toContain("archive:   'https://archive.atrib.dev/v1'")
@@ -47,9 +57,23 @@ describe('overview copy', () => {
     expect(html).toContain('issuer trust')
     expect(html).toContain('proof payment binding')
     expect(html).toContain('const entryWithEvidence = mergeArchiveEvidence(entry, archiveEvidence)')
-    expect(html).toContain("renderRawJsonPanel('raw record', 'as returned by /v1/lookup', entry)")
+    expect(html).toContain(
+      "renderRawJsonPanel('log entry projection', 'commitment-visible fields from /v1/lookup', entry)",
+    )
     expect(html).toContain('.panel.flush table.evidence-feed { min-width: 0; }')
     expect(html).toContain('External evidence blocks passed verifier checks.')
+  })
+
+  it('separates log commitments from archive body availability', () => {
+    expect(html).toContain('async function fetchArchiveRecordState(endpoint, hashHex')
+    expect(html).toContain("state: 'available'")
+    expect(html).toContain("state: 'commitment_only'")
+    expect(html).toContain("state: 'expired'")
+    expect(html).toContain("state: 'access_denied'")
+    expect(html).toContain("state: 'archive_unavailable'")
+    expect(html).toContain('function bodyAvailabilityStatus(archiveRecord)')
+    expect(html).toContain("'archived signed record body'")
+    expect(html).toContain('Direct browser re-verification requires the archived body.')
   })
 })
 
