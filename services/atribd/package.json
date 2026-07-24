@@ -1,6 +1,6 @@
 {
   "name": "@atrib/daemon",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Local daemon for atrib. Serves the attest/recall verbs plus the legacy alias tools from one stateless-native process over Streamable HTTP or stdio.",
   "keywords": [
     "atrib",
