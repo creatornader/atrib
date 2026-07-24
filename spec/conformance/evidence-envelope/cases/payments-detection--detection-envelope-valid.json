@@ -84,7 +84,9 @@
       "delegation-certificate",
       "continuation-packet",
       "payments-detection",
-      "payments-settlement"
+      "payments-settlement",
+      "nostr-event",
+      "buzz-event"
     ]
   },
   "expected": {

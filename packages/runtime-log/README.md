@@ -180,6 +180,8 @@ runtime-log source.
 
 The integration package includes a local reference source at
 [`packages/integration/examples/reference-runtime-log/`](../integration/examples/reference-runtime-log/)
+and a Buzz NIP-AO observer-frame source at
+[`packages/integration/examples/buzz-observer-runtime-log/`](../integration/examples/buzz-observer-runtime-log/),
 and a dogfood Agent Bridge source at
 [`packages/integration/examples/dogfood-runtime-log/`](../integration/examples/dogfood-runtime-log/).
 It also includes a secondary adapter-family proof at

@@ -1,0 +1,74 @@
+{
+  "name": "event-id-mismatch",
+  "spec_section": "5.5.7",
+  "family": "nostr-event",
+  "description": "A shape-valid Nostr event whose content changed after signing. The recomputed event ID differs and the retained signature does not rescue it. MUST reject at the profile layer without changing any attached atrib record verdict.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/nostr-event",
+      "profile_version": "1.0.0",
+      "tier": "verified",
+      "payload": {
+        "hash": "sha256:1eb5a0cb5cf9e33e1f63d41b65fe10fd073a5951d03b5f9a8682269bedb53dd3",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "inline"
+        },
+        "inline": {
+          "pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
+          "created_at": 1713956400,
+          "kind": 1,
+          "tags": [],
+          "content": "mutated after signing",
+          "id": "099904fe47bdc72d15e5cce0b631ea359e36ea3ca86acbce1ff522fde0ea1317",
+          "sig": "36c3d95c2bfaf321f4832f21eab0fc0f31dfae6d563aea770a24165e861c638a09965dbe9b3b79dc04302fed8049a68fcf48eed3e953c3a5c7e9427b2d03e6f9"
+        }
+      },
+      "facts": {
+        "event_id": "099904fe47bdc72d15e5cce0b631ea359e36ea3ca86acbce1ff522fde0ea1317",
+        "author_pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
+        "kind": 1,
+        "event_id_valid": true,
+        "signature_valid": true
+      },
+      "result": {
+        "valid": false,
+        "constraints": [
+          {
+            "type": "nostr_event_id",
+            "status": "failed"
+          },
+          {
+            "type": "nostr_signature",
+            "status": "failed"
+          }
+        ],
+        "errors": [
+          "event_id_mismatch",
+          "signature_invalid"
+        ],
+        "warnings": []
+      },
+      "verifier": {
+        "name": "@atrib/verify",
+        "version": "0.11.0",
+        "checked_at_ms": 1782864000000
+      }
+    },
+    "payload_material": {
+      "pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
+      "created_at": 1713956400,
+      "kind": 1,
+      "tags": [],
+      "content": "mutated after signing",
+      "id": "099904fe47bdc72d15e5cce0b631ea359e36ea3ca86acbce1ff522fde0ea1317",
+      "sig": "36c3d95c2bfaf321f4832f21eab0fc0f31dfae6d563aea770a24165e861c638a09965dbe9b3b79dc04302fed8049a68fcf48eed3e953c3a5c7e9427b2d03e6f9"
+    }
+  },
+  "expected": {
+    "accept": false,
+    "event_id_valid": false,
+    "signature_valid": false
+  }
+}

@@ -7,6 +7,7 @@ import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createAtribClient, type AttestInput } from '@atrib/sdk'
+import { canonicalRecord, hexEncode, sha256, verifyRecord, type AtribRecord } from '@atrib/mcp'
 import {
   OPERATING_EVENT_SCHEMA,
   parseOperatingEvent,
@@ -15,13 +16,16 @@ import {
   type OperatingEntry,
   type OperatingViewQuery,
 } from './model.js'
-import { loadOperatingEntries, mirrorFingerprint } from './store.js'
+import { buildArchiveBodyOpening, buildLocalBodyOpening } from './opening.js'
+import { loadLocalRecordMaterial, loadOperatingEntries, mirrorFingerprint } from './store.js'
+import { revisionRelation } from './stream.js'
 
 const SOURCE_DIR = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_MIRROR_PATH = join(homedir(), '.atrib', 'records')
 const DEFAULT_HOST = '127.0.0.1'
 const DEFAULT_PORT = 8797
 const MAX_BODY_BYTES = 1_000_000
+const MAX_OPENING_RESPONSE_BYTES = 2_000_000
 
 interface Snapshot {
   revision: number
@@ -36,6 +40,9 @@ export interface ServerConfig {
   port: number
   writesEnabled: boolean
   writeToken?: string
+  bodyReadToken?: string
+  archiveUrl?: string
+  archiveToken?: string
   trustedCreatorKeys?: string[]
   pollMs: number
 }
@@ -52,6 +59,15 @@ function configFromEnv(): ServerConfig {
     writesEnabled: process.env['ATRIB_OPERATING_WRITES'] === 'enabled',
     ...(process.env['ATRIB_OPERATING_WRITE_TOKEN']
       ? { writeToken: process.env['ATRIB_OPERATING_WRITE_TOKEN'] }
+      : {}),
+    ...(process.env['ATRIB_OPERATING_BODY_TOKEN']
+      ? { bodyReadToken: process.env['ATRIB_OPERATING_BODY_TOKEN'] }
+      : {}),
+    ...(process.env['ATRIB_OPERATING_ARCHIVE_URL']
+      ? { archiveUrl: process.env['ATRIB_OPERATING_ARCHIVE_URL'] }
+      : {}),
+    ...(process.env['ATRIB_OPERATING_ARCHIVE_TOKEN']
+      ? { archiveToken: process.env['ATRIB_OPERATING_ARCHIVE_TOKEN'] }
       : {}),
     ...(trusted.length > 0 ? { trustedCreatorKeys: trusted } : {}),
     pollMs: Math.max(250, Number(process.env['ATRIB_OPERATING_POLL_MS'] ?? 1_000)),
@@ -87,6 +103,35 @@ function hasWriteAuthorization(request: IncomingMessage, config: ServerConfig): 
   return (
     suppliedBytes.length === expectedBytes.length && timingSafeEqual(suppliedBytes, expectedBytes)
   )
+}
+
+function hasBearerAuthorization(request: IncomingMessage, expected: string): boolean {
+  const supplied = request.headers.authorization
+  if (!supplied?.startsWith('Bearer ')) return false
+  const suppliedBytes = Buffer.from(supplied.slice('Bearer '.length))
+  const expectedBytes = Buffer.from(expected)
+  return (
+    suppliedBytes.length === expectedBytes.length && timingSafeEqual(suppliedBytes, expectedBytes)
+  )
+}
+
+function requireBodyAuthorization(
+  request: IncomingMessage,
+  response: ServerResponse,
+  config: ServerConfig,
+): boolean {
+  if (!config.bodyReadToken) {
+    json(response, 403, { error: 'body retrieval is disabled' })
+    return false
+  }
+  if (hasBearerAuthorization(request, config.bodyReadToken)) return true
+  json(
+    response,
+    401,
+    { error: 'body retrieval authorization required' },
+    { 'WWW-Authenticate': 'Bearer realm="atrib-operating-body"' },
+  )
+  return false
 }
 
 function requireWriteAuthorization(
@@ -171,6 +216,7 @@ export async function startOperatingGraphServer(
   if (config.writesEnabled && !config.writeToken) {
     throw new Error('ATRIB_OPERATING_WRITE_TOKEN is required when writes are enabled')
   }
+  const archiveBaseUrl = config.archiveUrl ? parseArchiveBaseUrl(config.archiveUrl) : undefined
   let snapshot: Snapshot = {
     revision: 0,
     fingerprint: '',
@@ -230,6 +276,8 @@ export async function startOperatingGraphServer(
           records: snapshot.entries.length,
           writes_enabled: config.writesEnabled,
           write_auth: config.writesEnabled ? 'bearer' : 'disabled',
+          body_retrieval: config.bodyReadToken ? 'bearer' : 'disabled',
+          archive_retrieval: config.archiveUrl ? 'configured' : 'disabled',
           mirror_path: config.mirrorPath,
           trust_policy:
             config.trustedCreatorKeys === undefined
@@ -268,6 +316,43 @@ export async function startOperatingGraphServer(
         })
         return
       }
+      const bodyMatch = url.pathname.match(/^\/v1\/body\/([0-9a-f]{64})$/)
+      if (request.method === 'GET' && bodyMatch) {
+        if (!requireBodyAuthorization(request, response, config)) return
+        const recordHash = `sha256:${bodyMatch[1]!}`
+        const local = await loadLocalRecordMaterial(config.mirrorPath, recordHash)
+        if (local) {
+          const opening = await buildLocalBodyOpening(local)
+          if (Buffer.byteLength(JSON.stringify(opening)) > MAX_OPENING_RESPONSE_BYTES) {
+            json(response, 413, { error: 'opening material exceeds 2 MB' })
+            return
+          }
+          json(response, opening.integrity.signature_verified ? 200 : 409, opening)
+          return
+        }
+        if (archiveBaseUrl) {
+          let archived: Awaited<ReturnType<typeof fetchArchiveRecord>>
+          try {
+            archived = await fetchArchiveRecord(config, archiveBaseUrl, bodyMatch[1]!)
+          } catch {
+            json(response, 502, { error: 'archive retrieval failed' })
+            return
+          }
+          if (archived) {
+            const opening = await buildArchiveBodyOpening(archived)
+            json(
+              response,
+              opening.integrity.record_hash_verified && opening.integrity.signature_verified
+                ? 200
+                : 409,
+              opening,
+            )
+            return
+          }
+        }
+        json(response, 404, { error: 'record body not available' })
+        return
+      }
       if (request.method === 'GET' && url.pathname === '/v1/stream') {
         const lastEventId = Number(
           request.headers['last-event-id'] ?? url.searchParams.get('after') ?? 0,
@@ -276,7 +361,8 @@ export async function startOperatingGraphServer(
           json(response, 400, { error: 'invalid stream cursor' })
           return
         }
-        if (lastEventId > snapshot.revision) {
+        const cursorRelation = revisionRelation(lastEventId, snapshot.revision)
+        if (cursorRelation === 'out_of_order') {
           json(response, 409, {
             error: 'stream cursor is ahead of the current revision',
             current_revision: snapshot.revision,
@@ -288,8 +374,16 @@ export async function startOperatingGraphServer(
           'Cache-Control': 'no-cache, no-transform',
           Connection: 'keep-alive',
         })
+        if (cursorRelation !== 'duplicate') {
+          response.write(
+            `id: ${snapshot.revision}\nevent: gap\ndata: ${JSON.stringify({
+              after_revision: lastEventId,
+              current_revision: snapshot.revision,
+            })}\n\n`,
+          )
+        }
         response.write(
-          `event: ready\ndata: ${JSON.stringify({
+          `id: ${snapshot.revision}\nevent: ready\ndata: ${JSON.stringify({
             revision: snapshot.revision,
             record_count: snapshot.entries.length,
           })}\n\n`,
@@ -361,6 +455,91 @@ export async function startOperatingGraphServer(
   })
   await new Promise<void>((resolveListen) => server.listen(config.port, config.host, resolveListen))
   return server
+}
+
+async function fetchArchiveRecord(
+  config: ServerConfig,
+  archiveBaseUrl: URL,
+  hashHex: string,
+): Promise<{
+  record_hash: string
+  record: AtribRecord
+  log_proofs?: import('@atrib/mcp').ProofBundle[]
+  archived_at_ms?: number
+  retention_window_ms?: number
+} | null> {
+  const endpoint = new URL(`record/${hashHex}`, archiveBaseUrl)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 3_000)
+  try {
+    // The operator owns the validated base URL. Request input supplies only a 64-character lowercase hex path segment.
+
+    // codeql[js/request-forgery]
+    const response = await fetch(endpoint, {
+      signal: controller.signal,
+      redirect: 'error',
+      ...(config.archiveToken
+        ? { headers: { Authorization: `Bearer ${config.archiveToken}` } }
+        : {}),
+    })
+    if (response.status === 404 || response.status === 410) return null
+    if (!response.ok) throw new Error(`archive returned HTTP ${response.status}`)
+    const body = (await response.json()) as Record<string, unknown>
+    if (!isAtribRecord(body['record'])) throw new Error('archive response has no signed record')
+    const record = body['record']
+    const computed = `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+    const expected = `sha256:${hashHex}`
+    if (computed !== expected || body['record_hash'] !== expected) {
+      throw new Error('archive record hash mismatch')
+    }
+    if (!(await verifyRecord(record).catch(() => false))) {
+      throw new Error('archive record signature invalid')
+    }
+    return {
+      record_hash: expected,
+      record,
+      ...(Array.isArray(body['log_proofs'])
+        ? { log_proofs: body['log_proofs'] as import('@atrib/mcp').ProofBundle[] }
+        : {}),
+      ...(typeof body['archived_at_ms'] === 'number'
+        ? { archived_at_ms: body['archived_at_ms'] }
+        : {}),
+      ...(typeof body['retention_window_ms'] === 'number'
+        ? { retention_window_ms: body['retention_window_ms'] }
+        : {}),
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function parseArchiveBaseUrl(value: string): URL {
+  const base = new URL(value)
+  if (base.protocol !== 'https:' && base.protocol !== 'http:') {
+    throw new Error('archive URL must use HTTP or HTTPS')
+  }
+  if (base.username || base.password || base.search || base.hash) {
+    throw new Error('archive URL must not contain credentials, query parameters, or a fragment')
+  }
+  if (base.protocol === 'http:' && !isLoopbackHost(base.hostname)) {
+    throw new Error('unencrypted archive URLs are allowed only for loopback hosts')
+  }
+  if (!base.pathname.endsWith('/')) base.pathname = `${base.pathname}/`
+  return base
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]'
+}
+
+function isAtribRecord(value: unknown): value is AtribRecord {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>)['spec_version'] === 'atrib/1.0' &&
+    typeof (value as Record<string, unknown>)['signature'] === 'string'
+  )
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

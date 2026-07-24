@@ -1,0 +1,136 @@
+{
+  "name": "owner-attestation-valid",
+  "spec_section": "5.5.7",
+  "family": "buzz-event",
+  "description": "A Buzz event with a valid NIP-01 signature and valid NIP-OA owner attestation. Community, relay, audit, and runtime bindings remain explicit unresolved constraints because those facts are absent from the event.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/buzz-event",
+      "profile_version": "1.0.0",
+      "tier": "verified",
+      "payload": {
+        "hash": "sha256:8e7a714bd2e88ed49bd6bf7d452d69185e609cd1020a1ed366122ab790055948",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "inline"
+        },
+        "inline": {
+          "pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
+          "created_at": 1713956400,
+          "kind": 1,
+          "tags": [
+            [
+              "auth",
+              "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+              "kind=1&created_at<1713957000",
+              "37391a764aad1419b3c56b3a3a96f00f09190b37297ba1f83bb8a57d25c0265f79e22c295a1dcaa8e8c2a3ee092b5134d7f4da7e6f83c9d1110ba9ec2cb3a47d"
+            ]
+          ],
+          "content": "owner-attested Buzz agent event",
+          "id": "62d814e4810710b0f36aaa7d3e61d28148f41b404939fc4cddab8cee8a564007",
+          "sig": "d1f24b21c924a9080083ef753cc6a66fc2af3f553d439617d8cb2713c7d278cfb45405d4862b9538a6833dd819ea7046a7f384d2e638931768f4284e8641d4a4"
+        }
+      },
+      "facts": {
+        "event_id": "62d814e4810710b0f36aaa7d3e61d28148f41b404939fc4cddab8cee8a564007",
+        "agent_pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
+        "owner_pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+        "owner_conditions": "kind=1&created_at<1713957000",
+        "owner_attestation_valid": true,
+        "community_host": "workspace.example",
+        "relay_url": "wss://workspace.example"
+      },
+      "result": {
+        "valid": true,
+        "constraints": [
+          {
+            "type": "nostr_event_id",
+            "status": "passed"
+          },
+          {
+            "type": "nostr_signature",
+            "status": "passed"
+          },
+          {
+            "type": "buzz_owner_attestation",
+            "status": "passed"
+          },
+          {
+            "type": "buzz_community_binding",
+            "status": "unresolved",
+            "reason": "community tenancy is relay-resolved, not signed by the raw event"
+          },
+          {
+            "type": "buzz_relay_acceptance",
+            "status": "unresolved",
+            "reason": "raw NIP-01 OK is not a portable signed receipt"
+          },
+          {
+            "type": "buzz_audit_inclusion",
+            "status": "unresolved",
+            "reason": "the operator-local audit chain has no portable inclusion proof"
+          },
+          {
+            "type": "runtime_action_binding",
+            "status": "unresolved",
+            "reason": "a valid event does not prove a tool or runtime action occurred"
+          }
+        ],
+        "errors": [],
+        "warnings": [
+          "verified tier applies to the event and owner attestation, not relay or runtime claims"
+        ]
+      },
+      "verifier": {
+        "name": "@atrib/verify",
+        "version": "0.11.0",
+        "checked_at_ms": 1782864000000
+      }
+    },
+    "payload_material": {
+      "pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
+      "created_at": 1713956400,
+      "kind": 1,
+      "tags": [
+        [
+          "auth",
+          "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+          "kind=1&created_at<1713957000",
+          "37391a764aad1419b3c56b3a3a96f00f09190b37297ba1f83bb8a57d25c0265f79e22c295a1dcaa8e8c2a3ee092b5134d7f4da7e6f83c9d1110ba9ec2cb3a47d"
+        ]
+      ],
+      "content": "owner-attested Buzz agent event",
+      "id": "62d814e4810710b0f36aaa7d3e61d28148f41b404939fc4cddab8cee8a564007",
+      "sig": "d1f24b21c924a9080083ef753cc6a66fc2af3f553d439617d8cb2713c7d278cfb45405d4862b9538a6833dd819ea7046a7f384d2e638931768f4284e8641d4a4"
+    },
+    "atrib_profile_registry": [
+      "oauth2",
+      "mcp-oauth",
+      "aauth",
+      "x401",
+      "ap2-vi",
+      "human-approval",
+      "counterparty-attestation",
+      "delegation-certificate",
+      "continuation-packet",
+      "payments-detection",
+      "payments-settlement",
+      "nostr-event",
+      "buzz-event"
+    ]
+  },
+  "expected": {
+    "accept": true,
+    "registered": true,
+    "event_id_valid": true,
+    "signature_valid": true,
+    "owner_attestation_valid": true,
+    "unresolved_constraints": [
+      "buzz_community_binding",
+      "buzz_relay_acceptance",
+      "buzz_audit_inclusion",
+      "runtime_action_binding"
+    ]
+  }
+}

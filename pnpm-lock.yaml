@@ -518,6 +518,9 @@ importers:
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
+      '@noble/secp256k1':
+        specifier: ^3.1.0
+        version: 3.1.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.1
@@ -708,6 +711,9 @@ importers:
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
+      '@noble/secp256k1':
+        specifier: ^3.1.0
+        version: 3.1.0
       '@sd-jwt/core':
         specifier: 0.19.0
         version: 0.19.0

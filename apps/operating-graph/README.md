@@ -59,6 +59,9 @@ without the token.
 | `ATRIB_OPERATING_TRUSTED_CREATORS` | unset              | Comma-separated creator-key allowlist          |
 | `ATRIB_OPERATING_WRITES`           | disabled           | Set to `enabled` to expose signed write routes |
 | `ATRIB_OPERATING_WRITE_TOKEN`      | unset              | Bearer secret required by both POST routes     |
+| `ATRIB_OPERATING_BODY_TOKEN`       | unset              | Bearer secret that enables body opening        |
+| `ATRIB_OPERATING_ARCHIVE_URL`      | unset              | Optional archive fallback for signed bodies    |
+| `ATRIB_OPERATING_ARCHIVE_TOKEN`    | unset              | Optional bearer token for the archive fallback |
 | `ATRIB_OPERATING_CORS`             | `*`                | CORS origin for API clients                    |
 
 An omitted creator allowlist accepts every locally verified signer. That is
@@ -95,23 +98,34 @@ not reveal names, state values, or resolution choices.
 
 ## HTTP surface
 
-| Route                | Purpose                                           |
-| -------------------- | ------------------------------------------------- |
-| `GET /v1/health`     | Mirror, revision, write, and trust-policy status  |
-| `GET /v1/workspaces` | Named workspace index                             |
-| `GET /v1/view`       | Bounded operating view                            |
-| `GET /v1/search`     | Body-aware search inside the selected scope       |
-| `GET /v1/stream`     | SSE revision stream with exact reconnect cursors  |
-| `POST /v1/events`    | Sign an application event when writes are enabled |
-| `POST /v1/resolve`   | Sign an all-head application resolution           |
+| Route                 | Purpose                                           |
+| --------------------- | ------------------------------------------------- |
+| `GET /v1/health`      | Mirror, revision, write, and trust-policy status  |
+| `GET /v1/workspaces`  | Named workspace index                             |
+| `GET /v1/view`        | Bounded operating view                            |
+| `GET /v1/search`      | Body-aware search inside the selected scope       |
+| `GET /v1/stream`      | SSE revision stream with exact reconnect cursors  |
+| `GET /v1/body/<hash>` | Verify and disclose authorized opening material   |
+| `POST /v1/events`     | Sign an application event when writes are enabled |
+| `POST /v1/resolve`    | Sign an all-head application resolution           |
 
 `GET /v1/view` requires `workspace_id`. Optional `task_id`, `team_id`, and
 `agent_id` parameters narrow the view. A signed handoff includes the handed-off
 task's prior state in the receiving agent's view. `cell_limit`, `head_limit`,
 and `event_limit` are bounded server-side.
 
-The stream cursor is exclusive. A cursor ahead of the local revision returns
-409 instead of silently opening a live-only stream.
+The stream cursor is exclusive. Every event carries the resulting revision as
+its SSE event ID. A cursor ahead of the local revision returns 409. A cursor
+behind the current revision receives an explicit `gap` event so the client
+reloads its bounded view instead of assuming it saw every intermediate
+projection.
+
+Body retrieval is disabled until `ATRIB_OPERATING_BODY_TOKEN` is set.
+Authorized lookups rehash and verify the signed record. Local mirror lookups
+also test any available content, tool-name, argument, and result openings
+against the record commitments before returning them. An archive fallback can
+return and verify the signed record body, retention state, and proof bundle,
+but it cannot invent local opening material that the producer never archived.
 
 Both POST routes require `Authorization: Bearer <write token>`. The browser
 client asks for the token on the first resolution attempt and keeps it only in

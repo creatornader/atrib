@@ -201,6 +201,21 @@ export type {
   ProfileClassification,
 } from './evidence-envelope.js'
 
+export {
+  deriveNostrEventId,
+  verifyBuzzEvent,
+  verifyBuzzOwnerAttestation,
+  verifyNostrEvent,
+} from './nostr-evidence.js'
+export type {
+  BuzzEventVerification,
+  BuzzOwnerAttestationVerification,
+  NostrEvent,
+  NostrUnsignedEvent,
+  NostrEventVerification,
+  VerifyBuzzEventOptions,
+} from './nostr-evidence.js'
+
 // Calculation algorithm (§4.6). Deprecated at the root. Import from
 // `@atrib/verify/payments` for new code.
 /** @deprecated Import from '@atrib/verify/payments'. */

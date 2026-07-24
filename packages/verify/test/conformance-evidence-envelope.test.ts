@@ -39,6 +39,7 @@ import { verifyRecord } from '../src/verify-record.js'
 import type { AuthorizationEvidenceInput } from '../src/authorization-evidence.js'
 import {
   ATRIB_PROFILE_BASE,
+  ATRIB_PROFILE_REGISTRY,
   EVIDENCE_REF_KINDS,
   EVIDENCE_TIERS,
   LEGACY_PROTOCOL_TO_PROFILE,
@@ -55,6 +56,7 @@ import {
   type EvidenceTier as LibEvidenceTier,
   type LegacyEvidenceBlock,
 } from '../src/evidence-envelope.js'
+import { verifyBuzzEvent, verifyNostrEvent } from '../src/nostr-evidence.js'
 
 const CORPUS = join(__dirname, '../../../spec/conformance/evidence-envelope')
 const CASES = join(CORPUS, 'cases')
@@ -169,6 +171,7 @@ describe('spec §5.5.7 conformance: manifest', () => {
     expect(manifest.spec_section).toBe('5.5.7')
     expect(manifest.tier_enum).toEqual([...TIERS])
     expect(manifest.ref_kind_enum).toEqual([...REF_KINDS])
+    expect(manifest.atrib_profile_registry).toEqual([...ATRIB_PROFILE_REGISTRY])
     // The legacy protocol string set is frozen at exactly five rows.
     expect(manifest.frozen_legacy_protocols).toHaveLength(5)
     expect(manifest.legacy_protocol_to_profile).toEqual(LEGACY_PROTOCOL_TO_PROFILE)
@@ -195,7 +198,9 @@ describe('spec §5.5.7 conformance: shape/', () => {
     const c = loadCase('shape', 'payload-hash-mismatch')
     const envelope = c.input.envelope as EnvelopeLike
     expect(checkEnvelopeShape(envelope)).toEqual([])
-    expect(jcsSha256(c.input.payload_material)).not.toBe((envelope.payload as { hash: string }).hash)
+    expect(jcsSha256(c.input.payload_material)).not.toBe(
+      (envelope.payload as { hash: string }).hash,
+    )
     expect(c.expected.payload_hash_matches_material).toBe(false)
   })
 
@@ -261,23 +266,22 @@ describe('spec §5.5.7 conformance: shape/', () => {
 })
 
 describe('spec §5.5.7 conformance: registry/', () => {
-  it.each([
-    ['atrib-profile-registered'],
-    ['third-party-profile'],
-    ['foreign-domain-collision'],
-  ])('%s: classified by full URI against the atrib registry', (name) => {
-    const c = loadCase('registry', name)
-    const envelope = c.input.envelope as EnvelopeLike
-    expect(checkEnvelopeShape(envelope)).toEqual([])
-    const classification = classifyProfile(
-      envelope.profile as string,
-      c.input.atrib_profile_registry as string[],
-    )
-    expect(classification.uri_valid).toBe(c.expected.uri_valid)
-    expect(classification.atrib_maintained).toBe(c.expected.atrib_maintained)
-    expect(classification.registered).toBe(c.expected.registered)
-    expect(classification.treat_as).toBe(c.expected.treat_as)
-  })
+  it.each([['atrib-profile-registered'], ['third-party-profile'], ['foreign-domain-collision']])(
+    '%s: classified by full URI against the atrib registry',
+    (name) => {
+      const c = loadCase('registry', name)
+      const envelope = c.input.envelope as EnvelopeLike
+      expect(checkEnvelopeShape(envelope)).toEqual([])
+      const classification = classifyProfile(
+        envelope.profile as string,
+        c.input.atrib_profile_registry as string[],
+      )
+      expect(classification.uri_valid).toBe(c.expected.uri_valid)
+      expect(classification.atrib_maintained).toBe(c.expected.atrib_maintained)
+      expect(classification.registered).toBe(c.expected.registered)
+      expect(classification.treat_as).toBe(c.expected.treat_as)
+    },
+  )
 
   it.each([['non-https-profile-rejected'], ['bare-name-profile-rejected']])(
     '%s: rejected on profile_uri',
@@ -380,7 +384,9 @@ describe('spec §5.5.7 conformance: legacy-mapping/', () => {
     const c = loadCase('legacy-mapping', 'legacy-unknown-protocol-rejected')
     const block = c.input.legacy_block as unknown as LegacyBlockLike
     expect(c.expected.mapping_must_reject).toBe(true)
-    expect(() => referenceFromLegacyEvidenceBlock(block)).toThrow(/unknown legacy evidence protocol/)
+    expect(() => referenceFromLegacyEvidenceBlock(block)).toThrow(
+      /unknown legacy evidence protocol/,
+    )
     expect(c.expected.frozen_protocols).toEqual(Object.keys(LEGACY_PROTOCOL_TO_PROFILE))
     expect(Object.keys(LEGACY_PROTOCOL_TO_PROFILE)).toHaveLength(5)
   })
@@ -560,7 +566,72 @@ describe('spec §5.5.7 conformance: payments envelopes', () => {
     const c = loadCase(family, name)
     const envelope = c.input.envelope as EnvelopeLike
     expect(checkEnvelopeShape(envelope)).toEqual([])
-    expect(jcsSha256(c.input.payload_material)).not.toBe((envelope.payload as { hash: string }).hash)
+    expect(jcsSha256(c.input.payload_material)).not.toBe(
+      (envelope.payload as { hash: string }).hash,
+    )
     expect(c.expected.accept).toBe(false)
+  })
+})
+
+describe('spec §5.5.7 conformance: Nostr and Buzz evidence', () => {
+  it('nostr-event/signed-event-valid verifies the event ID and signature', async () => {
+    const c = loadCase('nostr-event', 'signed-event-valid')
+    const envelope = c.input.envelope as EnvelopeLike
+    expect(checkEnvelopeShape(envelope)).toEqual([])
+    expect(jcsSha256(c.input.payload_material)).toBe((envelope.payload as { hash: string }).hash)
+    await expect(verifyNostrEvent(c.input.payload_material)).resolves.toMatchObject({
+      valid: true,
+      event_id_valid: true,
+      signature_valid: true,
+    })
+    expect(
+      classifyProfile(envelope.profile as string, manifest.atrib_profile_registry).registered,
+    ).toBe(true)
+  })
+
+  it('nostr-event/event-id-mismatch detects post-signature mutation', async () => {
+    const c = loadCase('nostr-event', 'event-id-mismatch')
+    await expect(verifyNostrEvent(c.input.payload_material)).resolves.toMatchObject({
+      valid: false,
+      event_id_valid: false,
+      signature_valid: false,
+    })
+  })
+
+  it('buzz-event/owner-attestation-valid verifies only the event-carried claims', async () => {
+    const c = loadCase('buzz-event', 'owner-attestation-valid')
+    const envelope = c.input.envelope as EnvelopeLike
+    await expect(
+      verifyBuzzEvent(c.input.payload_material, { require_owner_attestation: true }),
+    ).resolves.toMatchObject({
+      valid: true,
+      event: { valid: true },
+      owner_attestation: { valid: true },
+    })
+    const constraints = (envelope.result?.constraints ?? []) as {
+      type: string
+      status: string
+    }[]
+    expect(
+      constraints
+        .filter((constraint) => constraint.status === 'unresolved')
+        .map(({ type }) => type),
+    ).toEqual(c.expected.unresolved_constraints)
+  })
+
+  it('buzz-event/owner-condition-unsatisfied rejects uncovered agent activity', async () => {
+    const c = loadCase('buzz-event', 'owner-condition-unsatisfied')
+    await expect(
+      verifyBuzzEvent(c.input.payload_material, { require_owner_attestation: true }),
+    ).resolves.toMatchObject({
+      valid: false,
+      event: { valid: true },
+      owner_attestation: {
+        valid: false,
+        signature_valid: true,
+        conditions_satisfied: false,
+      },
+      errors: expect.arrayContaining(['auth_conditions_unsatisfied']),
+    })
   })
 })

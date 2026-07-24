@@ -77,7 +77,7 @@ describe('evidence-envelope: exported constants', () => {
   })
 
   it('registry has nine entries and every URI is atrib-maintained and https', () => {
-    expect(ATRIB_PROFILE_REGISTRY).toHaveLength(9)
+    expect(ATRIB_PROFILE_REGISTRY).toHaveLength(13)
     for (const name of ATRIB_PROFILE_REGISTRY) {
       const uri = atribProfileUri(name)
       expect(uri).toBe(ATRIB_PROFILE_URIS[name])

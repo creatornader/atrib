@@ -79,6 +79,12 @@ Payment-specific APIs now also ship at `@atrib/verify/payments`:
 `verifySettlementRecommendation`, `calculate`, `verifyAp2ViEvidence`, and
 `verifyAp2ViEvidenceAsync`. Root exports remain during the deprecation cycle.
 
+Nostr and Buzz event evidence APIs ship at the package root:
+`deriveNostrEventId`, `verifyNostrEvent`, `verifyBuzzOwnerAttestation`, and
+`verifyBuzzEvent`. The Buzz verifier checks the event and optional NIP-OA
+owner authorization. It does not infer community admission, relay retention,
+audit inclusion, or runtime execution from a valid event.
+
 ### `new AtribVerifier(options)`
 
 | Field             | Type     | Default                        | Description                                                                                                                  |

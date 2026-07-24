@@ -28,6 +28,8 @@ re-pinned here; they remain authoritative in
 | `continuation-packet--*` | The ninth atrib-maintained profile ([D142](../../../DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions)): the continuation packet a baton-pass record hands to a successor. Raw-bytes hash rule for markdown packets, the `record_hash` sibling spelling for signed baton records, profile-level hash-mismatch rejection, and the private-body sanitization posture. |
 | `payments-detection--*` | The tenth atrib-maintained profile ([D147](../../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core), owned by the [payments profile §12](../../../docs/payments-profile.md#12-evidence-profiles)): rail detection facts on a transaction record. JCS hash rule for detection material, hash-mismatch rejection, the no-payments-profile degradation posture (`profile_unrecognized` at tier `declared` with record verdicts unchanged), and a [D052](../../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) duplicate-signer re-pin across the profile split. Hook re-verification semantics live in `spec/conformance/payments-profile/detection/`, not here. |
 | `payments-settlement--*` | The eleventh atrib-maintained profile ([D147](../../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core), owned by the [payments profile §12](../../../docs/payments-profile.md#12-evidence-profiles)): a settlement recommendation document attached as evidence by hash. JCS hash rule, tampered-document rejection, and the hash-only public posture for withheld documents. Recalculation semantics live in `spec/conformance/4.6/`, not here. |
+| `nostr-event--*` | The twelfth atrib-maintained profile ([D179](../../../DECISIONS.md#d179-nostr-and-buzz-events-are-separate-evidence-profiles)): exact NIP-01 event ID derivation and BIP-340 signature verification. Relay acceptance, persistence, membership, and runtime execution are outside the event-carried claim. |
+| `buzz-event--*` | The thirteenth atrib-maintained profile ([D179](../../../DECISIONS.md#d179-nostr-and-buzz-events-are-separate-evidence-profiles)): Nostr verification plus Buzz NIP-OA owner authorization. Community, relay, audit-chain, and runtime-action bindings remain unresolved unless separate evidence supplies them. |
 
 ## Cases
 
@@ -70,6 +72,10 @@ re-pinned here; they remain authoritative in
 | `cases/payments-settlement--recommendation-envelope-valid.json` | Settlement recommendation attached by JCS hash with session, calculator, policy-record, and tree-size facts. MUST accept; recalculation is profile-internal. |
 | `cases/payments-settlement--tampered-recommendation-rejected.json` | Recommendation with an altered distribution: recomputed hash mismatch. Profile verification fails; envelope stays shape-valid. |
 | `cases/payments-settlement--withheld-recommendation-declared.json` | Hash-only public posture: `ref.kind: "withheld"` with sanitized facts; distribution bodies stay private. MUST accept. |
+| `cases/nostr-event--signed-event-valid.json` | Complete Nostr event with a matching NIP-01 event ID and valid BIP-340 signature. MUST accept. |
+| `cases/nostr-event--event-id-mismatch.json` | Event content changed after signing. Profile verification detects the event ID mismatch and rejects the event-carried signature claim. |
+| `cases/buzz-event--owner-attestation-valid.json` | Buzz event with a valid agent signature and NIP-OA owner attestation. The envelope keeps community, relay, audit, and runtime bindings unresolved. |
+| `cases/buzz-event--owner-condition-unsatisfied.json` | Agent and owner signatures verify, but the event falls outside the owner's signed kind condition. MUST reject the owner-authorization claim. |
 
 ## Generator
 
@@ -108,12 +114,15 @@ load the same fixtures and assert the same invariants.
 
 ## Status
 
-**37 cases across eight families.** The initial 26-case corpus shipped
+**43 cases across ten families.** The initial 26-case corpus shipped
 across five families; the `continuation-packet--*` family landed with
 [D142](../../../DECISIONS.md#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions),
 and the `payments-detection--*` and `payments-settlement--*` families
 landed with the [D147](../../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)
-payments-profile registrations. Future per-profile families (`oauth2/`,
+payments-profile registrations. The `nostr-event--*` and `buzz-event--*`
+families landed with
+[D179](../../../DECISIONS.md#d179-nostr-and-buzz-events-are-separate-evidence-profiles).
+Future per-profile families (`oauth2/`,
 `mcp-oauth/`, `aauth/`, `x401/`, `ap2-vi/`, `human-approval/`,
 `counterparty-attestation/`) land in the same commit as each
 `docs/evidence-profiles/<name>.md` profile document, plus `hashing/` and

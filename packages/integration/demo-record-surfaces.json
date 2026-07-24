@@ -248,6 +248,13 @@
       "commands": ["session-transcript-runtime-log-smoke"]
     },
     {
+      "id": "buzz-observer-runtime-log",
+      "path": "examples/buzz-observer-runtime-log",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["buzz-observer-runtime-log-smoke"]
+    },
+    {
       "id": "dogfood-runtime-log",
       "path": "examples/dogfood-runtime-log",
       "record_class": "offline-local",
