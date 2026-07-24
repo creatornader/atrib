@@ -1,6 +1,6 @@
 {
   "name": "@atrib/recall",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "MCP server for atrib's verifiable action layer. Lets agents query their own provable past from the local mirror.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [

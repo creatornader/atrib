@@ -1,6 +1,6 @@
 {
   "name": "@atrib/summarize",
-  "version": "0.4.23",
+  "version": "0.4.24",
   "description": "Deprecated on npm; stays mounted through the D164 alias window. MCP server for atrib's verifiable action layer: summarizes signed records so agents read context, not raw bytes.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
