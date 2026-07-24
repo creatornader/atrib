@@ -62,6 +62,7 @@ describe('witness node end to end', () => {
     await witness.update()
     expect((await fetch(`${witness.url}/v1/update`, { method: 'POST' })).status).toBe(404)
     const firstCheckpoint = await (await fetch(`${log.url}/v1/checkpoint`)).text()
+    expect(await (await fetch(`${witness.url}/v1/checkpoint`)).text()).toBe(firstCheckpoint)
     const firstRoot = checkpointRootFromLeafHashes(log.hashes)
     const firstCosigUrl =
       `${witness.url}/v1/cosig/${encodeURIComponent(LOG_NAME)}/` +

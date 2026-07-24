@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>atrib operating graph</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: #0d0d0c;
+        --ledger: #151513;
+        --ledger-raised: #1b1b18;
+        --rule: rgba(255, 248, 230, 0.1);
+        --ink: #f1eee6;
+        --ink-secondary: #99968e;
+        --evidence: #f2b84b;
+        --warning: #e9c46a;
+        --conflict: #ef7474;
+        --identity: #79b8d8;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      button, input, select { font: inherit; }
+      a { color: inherit; }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 14px 24px;
+        border-bottom: 1px solid var(--rule);
+        background: color-mix(in srgb, var(--canvas) 92%, transparent);
+        backdrop-filter: blur(16px);
+      }
+      .brand { font-weight: 700; letter-spacing: -0.02em; }
+      .brand span { color: var(--evidence); }
+      .live {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--ink-secondary);
+        font-size: 12px;
+      }
+      .live::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: var(--evidence);
+        box-shadow: 0 0 12px color-mix(in srgb, var(--evidence) 70%, transparent);
+      }
+      main { max-width: 1480px; margin: 0 auto; padding: 24px; }
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 24px;
+        align-items: end;
+        margin-bottom: 20px;
+      }
+      h1 { margin: 0; font-size: clamp(28px, 4vw, 50px); letter-spacing: -0.05em; }
+      .sub { color: var(--ink-secondary); max-width: 720px; margin: 8px 0 0; text-wrap: pretty; }
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(140px, 1fr)) minmax(220px, 1.5fr);
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      input, select, button {
+        min-height: 40px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--canvas) 70%, black);
+        color: var(--ink);
+        padding: 8px 10px;
+      }
+      button { cursor: pointer; transition: border-color 140ms ease-out, transform 120ms ease-out; }
+      button:hover { border-color: var(--evidence); }
+      button:active { transform: scale(0.97); }
+      button:disabled { cursor: not-allowed; opacity: 0.62; }
+      button:focus-visible, input:focus-visible, select:focus-visible {
+        outline: 2px solid var(--evidence);
+        outline-offset: 2px;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .metric, .panel {
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        background: var(--ledger);
+      }
+      .metric { padding: 14px; }
+      .metric strong {
+        display: block;
+        font: 600 24px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: -0.03em;
+        font-variant-numeric: tabular-nums;
+      }
+      .metric span { color: var(--ink-secondary); font-size: 12px; }
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.8fr);
+        gap: 16px;
+      }
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 13px 15px;
+        border-bottom: 1px solid var(--rule);
+      }
+      .panel-head h2 { margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; }
+      .panel-body { padding: 10px; }
+      .cell {
+        display: grid;
+        grid-template-columns: 120px minmax(180px, 0.55fr) minmax(0, 1.45fr) 110px;
+        grid-template-areas: "kind subject heads state";
+        gap: 12px;
+        align-items: start;
+        padding: 12px 8px;
+        border-bottom: 1px solid var(--rule);
+      }
+      .cell > .kind { grid-area: kind; }
+      .cell-subject { grid-area: subject; }
+      .cell-heads { grid-area: heads; min-width: 0; }
+      .cell > .state { grid-area: state; justify-self: end; }
+      .cell:last-child { border-bottom: 0; }
+      .kind, .state {
+        display: inline-flex;
+        width: fit-content;
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        background: var(--ledger-raised);
+      }
+      .state.accepted { color: var(--evidence); }
+      .state.conflict { color: var(--conflict); }
+      .state.resolved { color: var(--identity); }
+      .subject { font-weight: 650; }
+      .value { color: var(--ink-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
+      .record { color: var(--ink-secondary); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .head {
+        margin: 2px 0 8px;
+        padding: 7px 0 7px 10px;
+        border-left: 2px solid var(--evidence);
+      }
+      .head.conflict { border-left-color: var(--conflict); }
+      .head.resolved { border-left-color: var(--identity); }
+      .resolve {
+        min-height: 28px;
+        margin-top: 6px;
+        padding: 3px 8px;
+        color: var(--identity);
+        font-size: 11px;
+      }
+      .activity {
+        padding: 11px 6px;
+        border-bottom: 1px solid var(--rule);
+      }
+      .activity:last-child { border-bottom: 0; }
+      .activity-top { display: flex; justify-content: space-between; gap: 12px; }
+      .identity { color: var(--identity); }
+      .source { color: var(--ink-secondary); font-size: 12px; }
+      .proof { color: var(--evidence); font-size: 11px; }
+      .proof.partial { color: var(--warning); }
+      .empty, .error { padding: 24px; color: var(--ink-secondary); text-align: center; }
+      .error { color: var(--conflict); }
+      .search-results { margin-bottom: 16px; }
+      .search-results[hidden] { display: none; }
+      .task-links { display: flex; flex-wrap: wrap; gap: 6px; }
+      .task-link { border: 1px solid var(--rule); border-radius: 999px; padding: 4px 9px; color: var(--identity); }
+      @media (prefers-reduced-motion: reduce) {
+        button { transition: none; }
+        button:active { transform: none; }
+      }
+      @media (max-width: 980px) {
+        .controls { grid-template-columns: 1fr 1fr; }
+        .metrics { grid-template-columns: 1fr 1fr; }
+        .grid { grid-template-columns: 1fr; }
+        .cell {
+          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-areas:
+            "kind state"
+            "subject subject"
+            "heads heads";
+        }
+      }
+      @media (max-width: 560px) {
+        header { padding-inline: 18px; }
+        main { padding: 24px; }
+        .hero { grid-template-columns: 1fr; gap: 14px; }
+        .hero .record { justify-self: end; }
+        .controls { grid-template-columns: 1fr; }
+        .activity-top { flex-wrap: wrap; }
+        .proof { width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand"><span>atrib</span> operating graph</div>
+      <div class="live" id="live-state">connecting</div>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <h1>Accepted work, in one bounded view.</h1>
+          <p class="sub">
+            Signed bodies become searchable workspace, task, team, and agent state.
+            Conflicts remain visible until an application resolution cites every head.
+          </p>
+        </div>
+        <div class="record" id="revision">revision 0</div>
+      </section>
+
+      <section class="controls" aria-label="view controls">
+        <select id="workspace" aria-label="workspace"></select>
+        <input id="task" aria-label="task id" placeholder="task id (optional)" />
+        <input id="team" aria-label="team id" placeholder="team id (optional)" />
+        <input id="agent" aria-label="agent id" placeholder="agent id (optional)" />
+        <input id="search" aria-label="search signed body content" type="search" placeholder="Search signed body content" />
+      </section>
+
+      <section class="metrics" id="metrics" aria-live="polite"></section>
+
+      <section class="panel search-results" id="search-panel" hidden>
+        <div class="panel-head"><h2>Search results</h2><span id="search-count"></span></div>
+        <div class="panel-body" id="search-results"></div>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Accepted state</h2>
+            <div class="task-links" id="visible-tasks"></div>
+          </div>
+          <div class="panel-body" id="cells"></div>
+        </div>
+        <aside class="panel">
+          <div class="panel-head"><h2>Live decisions and outcomes</h2><span id="activity-count"></span></div>
+          <div class="panel-body" id="activity"></div>
+        </aside>
+      </section>
+    </main>
+
+    <script type="module">
+      const state = { revision: 0, stream: null, view: null }
+      const $ = (id) => document.getElementById(id)
+      const escapeHtml = (value) =>
+        String(value ?? '').replace(/[&<>"']/g, (char) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        })[char])
+      const shortHash = (value) => value ? `${value.slice(0, 15)}…${value.slice(-6)}` : 'none'
+      const query = () => {
+        const params = new URLSearchParams()
+        params.set('workspace_id', $('workspace').value)
+        for (const [id, name] of [['task', 'task_id'], ['team', 'team_id'], ['agent', 'agent_id']]) {
+          if ($(id).value.trim()) params.set(name, $(id).value.trim())
+        }
+        return params
+      }
+      const displayValue = (value) => {
+        if (value === undefined) return 'No body value'
+        return typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+      }
+      const identity = (entry) =>
+        entry.event.agent?.name ||
+        entry.event.from_agent?.name ||
+        shortHash(entry.record.creator_key)
+
+      async function fetchJson(url) {
+        const response = await fetch(url)
+        const body = await response.json()
+        if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`)
+        return body
+      }
+
+      function renderMetrics(view) {
+        const items = [
+          ['signed records', view.counts.records_considered],
+          ['state cells', view.counts.cells_total],
+          ['open conflicts', view.counts.conflicts],
+          ['resolved conflicts', view.counts.resolutions],
+          ['handoffs', view.counts.handoffs],
+        ]
+        $('metrics').innerHTML = items.map(([label, value]) =>
+          `<div class="metric"><strong>${value}</strong><span>${label}</span></div>`
+        ).join('')
+      }
+
+      function renderCells(view) {
+        if (!view.cells.length) {
+          $('cells').innerHTML = '<div class="empty">No signed operating state in this view.</div>'
+          return
+        }
+        $('cells').innerHTML = view.cells.map((cell) => {
+          const heads = cell.heads.map((head) => `
+            <div class="head ${escapeHtml(cell.status)}">
+              <div class="value">${escapeHtml(displayValue(head.event.value))}</div>
+              <div class="record">${escapeHtml(shortHash(head.record_hash))} · ${escapeHtml(identity(head))}</div>
+              ${cell.status === 'conflict' ? `<button class="resolve" data-cell="${escapeHtml(cell.key)}" data-head="${escapeHtml(head.record_hash)}">Accept this head</button>` : ''}
+            </div>
+          `).join('')
+          return `
+            <article class="cell">
+              <span class="kind">${escapeHtml(cell.kind)}</span>
+              <div class="cell-subject">
+                <div class="subject">${escapeHtml(cell.subject)}</div>
+                <div class="source">${cell.total_heads} active head${cell.total_heads === 1 ? '' : 's'}</div>
+              </div>
+              <div class="cell-heads">${heads}</div>
+              <span class="state ${cell.status}">${cell.status}</span>
+            </article>
+          `
+        }).join('')
+        for (const button of $('cells').querySelectorAll('.resolve')) {
+          button.addEventListener('click', () =>
+            void resolveConflict(button.dataset.cell, button.dataset.head, button)
+          )
+        }
+      }
+
+      async function resolveConflict(cellKey, acceptedHead, button) {
+        const cell = state.view?.cells.find((candidate) => candidate.key === cellKey)
+        const head = cell?.heads.find((candidate) => candidate.record_hash === acceptedHead)
+        if (!cell || !head) return
+        button.disabled = true
+        button.textContent = 'Signing resolution'
+        const event = {
+          schema: 'atrib.operating-event.v1',
+          kind: 'resolution',
+          workspace: head.event.workspace,
+          ...(head.event.task ? { task: head.event.task } : {}),
+          ...(head.event.team ? { team: head.event.team } : {}),
+          ...(head.event.agent ? { agent: head.event.agent } : {}),
+          subject: cell.subject,
+          accepted_head: acceptedHead,
+          resolves: cell.heads.map((candidate) => candidate.record_hash),
+          source: 'atrib-operating-graph',
+        }
+        try {
+          let writeToken = sessionStorage.getItem('atrib-operating-write-token')
+          if (!writeToken) {
+            writeToken = window.prompt('Write token for signed operating-graph updates')
+            if (!writeToken) throw new Error('write authorization cancelled')
+            sessionStorage.setItem('atrib-operating-write-token', writeToken)
+          }
+          const response = await fetch('/v1/resolve', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${writeToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ event, context_id: head.record.context_id }),
+          })
+          const body = await response.json()
+          if (!response.ok) {
+            if (response.status === 401) {
+              sessionStorage.removeItem('atrib-operating-write-token')
+            }
+            throw new Error(body.error || `HTTP ${response.status}`)
+          }
+          button.textContent = 'Resolution signed'
+        } catch (error) {
+          button.disabled = false
+          button.textContent = error.message.includes('disabled')
+            ? 'Local writes are disabled'
+            : `Retry: ${error.message}`
+        }
+      }
+
+      function renderActivity(view) {
+        const items = view.activity.filter((entry) =>
+          ['decision', 'outcome', 'handoff', 'resolution'].includes(entry.event.kind)
+        )
+        $('activity-count').textContent = String(items.length)
+        $('activity').innerHTML = items.length ? items.map((entry) => `
+          <article class="activity">
+            <div class="activity-top">
+              <span class="kind">${escapeHtml(entry.event.kind)}</span>
+              <span class="proof ${entry.proof_supplied ? '' : 'partial'}">
+                ${entry.proof_supplied ? 'signature + supplied log proof' : 'signature verified; log proof not supplied'}
+              </span>
+            </div>
+            <div class="subject">${escapeHtml(entry.event.subject)}</div>
+            <div class="value">${escapeHtml(displayValue(entry.event.value))}</div>
+            <div class="source">
+              <span class="identity">${escapeHtml(identity(entry))}</span>
+              · ${escapeHtml(entry.event.source || entry.producer || 'unknown source')}
+            </div>
+          </article>
+        `).join('') : '<div class="empty">No decisions, outcomes, resolutions, or handoffs.</div>'
+      }
+
+      function renderTasks(view) {
+        $('visible-tasks').innerHTML = view.visible_task_ids.map((id) =>
+          `<button class="task-link" data-task="${escapeHtml(id)}">${escapeHtml(id)}</button>`
+        ).join('')
+        for (const button of $('visible-tasks').querySelectorAll('[data-task]')) {
+          button.addEventListener('click', () => {
+            $('task').value = button.dataset.task
+            void loadView()
+          })
+        }
+      }
+
+      async function loadView() {
+        const workspaceId = $('workspace').value
+        if (!workspaceId) return
+        try {
+          const body = await fetchJson(`/v1/view?${query()}`)
+          state.revision = body.revision
+          state.view = body.view
+          $('revision').textContent = `revision ${body.revision}`
+          renderMetrics(body.view)
+          renderCells(body.view)
+          renderActivity(body.view)
+          renderTasks(body.view)
+        } catch (error) {
+          $('cells').innerHTML = `<div class="error">${escapeHtml(error.message)}</div>`
+        }
+      }
+
+      let searchTimer
+      async function runSearch() {
+        const text = $('search').value.trim()
+        if (!text || !$('workspace').value) {
+          $('search-panel').hidden = true
+          return
+        }
+        try {
+          const params = query()
+          params.set('q', text)
+          const body = await fetchJson(`/v1/search?${params}`)
+          $('search-panel').hidden = false
+          $('search-count').textContent = `${body.results.length} result${body.results.length === 1 ? '' : 's'}`
+          $('search-results').innerHTML = body.results.map((entry) => `
+            <article class="activity">
+              <div class="activity-top">
+                <span class="kind">${escapeHtml(entry.event.kind)}</span>
+                <span class="record">${escapeHtml(shortHash(entry.record_hash))}</span>
+              </div>
+              <div class="subject">${escapeHtml(entry.event.subject)}</div>
+              <div class="value">${escapeHtml(displayValue(entry.event.value))}</div>
+            </article>
+          `).join('') || '<div class="empty">No body-aware matches.</div>'
+        } catch (error) {
+          $('search-results').innerHTML = `<div class="error">${escapeHtml(error.message)}</div>`
+        }
+      }
+
+      function connectStream() {
+        if (state.stream) state.stream.close()
+        const stream = new EventSource(`/v1/stream?after=${state.revision}`)
+        state.stream = stream
+        stream.addEventListener('open', () => { $('live-state').textContent = 'live' })
+        stream.addEventListener('changed', (event) => {
+          const update = JSON.parse(event.data)
+          state.revision = update.revision
+          void loadView()
+          if ($('search').value.trim()) void runSearch()
+        })
+        stream.addEventListener('error', () => { $('live-state').textContent = 'reconnecting' })
+      }
+
+      async function start() {
+        try {
+          const body = await fetchJson('/v1/workspaces')
+          $('workspace').innerHTML = body.workspaces.map((workspace) =>
+            `<option value="${escapeHtml(workspace.id)}">${escapeHtml(workspace.name)} · ${escapeHtml(workspace.id)}</option>`
+          ).join('')
+          if (!body.workspaces.length) {
+            $('workspace').innerHTML = '<option value="">No workspaces found</option>'
+          }
+          state.revision = body.revision
+          await loadView()
+          connectStream()
+        } catch (error) {
+          $('cells').innerHTML = `<div class="error">${escapeHtml(error.message)}</div>`
+          $('live-state').textContent = 'offline'
+        }
+      }
+
+      for (const id of ['workspace', 'task', 'team', 'agent']) {
+        $(id).addEventListener(id === 'workspace' ? 'change' : 'input', () => void loadView())
+      }
+      $('search').addEventListener('input', () => {
+        clearTimeout(searchTimer)
+        searchTimer = setTimeout(() => void runSearch(), 180)
+      })
+      void start()
+    </script>
+  </body>
+</html>

@@ -8924,6 +8924,138 @@ routes on local and log hosts.
 [D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor), and
 [§2.12](atrib-spec.md#212-record-body-archive-layer).
 
+## D177: The client SDK has an explicit paired action-evidence path
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** [D166](#d166-verifiable-action-mode-commits-request-and-outcome-by-default-in-the-wrapper)
+made the whole-server MCP wrapper produce strong request and outcome evidence
+by default. Application code with no wrapper could call `attest()`, but the
+generic cognitive write did not define an execution boundary. A caller could
+label an observation as a tool action without proving that the application
+routed execution through the same path. Direct writes also could not carry
+`args_salt` or `result_salt`, so they could not reproduce the recommended
+salted commitment posture.
+
+**Decision.**
+
+1. `@atrib/mcp` exports one shared JCS commitment implementation for plain and
+   salted argument or result material, plus hashed tool names and commitment
+   replay. Middleware and explicit application capture use the same helper.
+2. The direct attest surface carries `args_salt` and `result_salt`. A salt
+   without its matching explicit hash is rejected. No signed field is added;
+   the record format already defines both salt fields.
+3. `@atrib/sdk` exposes `action()`. It hashes the action name, commits to the
+   arguments with a fresh 16-byte salt, signs the request, executes the
+   caller-owned function, and signs a linked terminal outcome for success or
+   failure with a fresh salted result commitment.
+4. The request is signed before execution. The outcome binds to it through
+   `chain_root`, `informed_by`, the same name commitment, and the same argument
+   commitment.
+5. The API returns an explicit success or failure union containing the request
+   and outcome evidence. A thrown application error remains available as the
+   failure value. Attribution degradation never prevents the caller-owned
+   function from running.
+6. `action()` is not a third cognitive verb. `attest()` and `recall()` remain
+   the agent-facing reasoning surface. It is an application integration helper
+   over two ordinary attest writes.
+
+**Coverage boundary.** The helper proves the execution path routed through its
+`execute` function. It does not observe bypass calls and does not claim that
+every application action used it. Automatic middleware remains the preferred
+surface when a host exposes an interception boundary. Coverage manifests can
+compare the resulting records with runtime-owned expected actions.
+
+**Truth boundary.** A matching body proves consistency with the signed result
+commitment. It does not prove that the result reflects real-world truth.
+`@atrib/verify` classifies committed-only, evidence-inconsistent,
+body-consistent but uncorroborated, and corroborated result claims while
+keeping `truth_established: false` in every case.
+
+**Conformance.** Shared commitment tests cover plain and salted replay,
+canonical JSON, invalid salts, and deterministic random sources. SDK tests pin
+request-before-execute ordering, request/outcome linkage, success, application
+failure, and execution under attribution degradation. The direct attest tests
+pin salt/hash pairing and signed field carriage.
+
+**Cross-references.**
+[D061](#d061-add-tool_name-args_hash-result_hash-fields-to-§121),
+[D099](#d099-explicit-emit-records-commit-local-content-through-default-args_hash),
+[D150](#d150-attestation-is-corroboration-generalized-off-transactions-extension-first),
+[D166](#d166-verifiable-action-mode-commits-request-and-outcome-by-default-in-the-wrapper),
+and [D168](#d168-coverage-manifests-make-capture-scope-verifiable).
+
+## D178: The operating graph ships as an application profile and reference client
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** [D174](#d174-current-state-is-a-policy-bound-revision-projection)
+made verified state heads and conflicts queryable, but a generic state
+projector is not yet a usable shared workspace. Developers still lacked one
+inspectable application that joined named identities, body-aware search,
+bounded workspace views, live decisions and outcomes, handoffs, and conflict
+resolution.
+
+**Decision.**
+
+1. [`apps/operating-graph/`](apps/operating-graph/) is the complete open-source
+   application proof. It reads one local mirror file or directory, verifies
+   record signatures, and serves bounded workspace, task, team, and agent
+   views.
+2. Application bodies use `atrib.operating-event.v1` with five kinds:
+   `accepted_state`, `decision`, `outcome`, `handoff`, and `resolution`.
+   Names, values, roles, and application policy stay in private body content.
+3. Search operates on available private body material. Public commitments
+   alone do not become usable memory by implication.
+4. The HTTP surface publishes a workspace index, bounded view, body search,
+   health, and an exact-cursor SSE revision stream. It separates signature
+   verification from supplied log-proof state.
+5. Incoming handoffs expose the task and its prior scoped state in the
+   receiving agent's bounded view. Handoff is an application body convention
+   over existing `informed_by` relationships, not a new event type.
+6. An application resolution names the selected head and every active head in
+   its private body. The signed record must cite every active head through
+   `informed_by`. A resolution missing any head is ignored, and conflicts
+   remain visible.
+7. Local run, Docker deployment, fresh-machine proof, reset behavior, and
+   application-conformance participation ship with the client. Hosted
+   deployments default to read-only mirror access and require an explicit
+   creator allowlist for a closed trust set. Enabling signed POST routes also
+   requires a bearer secret; the process refuses write mode without one.
+
+**Protocol boundary.** This is an application profile, not a public protocol
+profile. It adds no record field, event type, graph edge, SDK cognitive verb,
+log behavior, or verifier acceptance rule. Different applications can use
+different body schemas and conflict policies.
+
+**P053 result.** This application creates a real multi-head conflict and
+resolves it with existing records. It therefore satisfies P053's first gate
+but provides evidence against the second: application-local resolution is
+representable without a plural revision field or merge event. P053 remains
+unpromoted until an independent application demonstrates a missing
+interoperability or verification primitive.
+
+**Conformance.** Application fixtures pin conflict preservation, all-head
+resolution, accepted-head projection, named identities, and receiving-agent
+handoff visibility, including prior task state. Unit and HTTP tests cover scope
+bounds, search, stream reconnect refusal, out-of-order arrival, write
+authentication, disabled writes, and live updates.
+The hostile integration suite composes the client with checkpoint rollback,
+result inconsistency, permit replay and revocation, withheld bodies, unresolved
+heads, and source actions omitted from projections.
+
+**Cross-references.**
+[D142](#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions),
+[D152](#d152-handoff-verdicts-are-receiver-computed-not-sender-declared),
+[D168](#d168-coverage-manifests-make-capture-scope-verifiable),
+[D174](#d174-current-state-is-a-policy-bound-revision-projection),
+[D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor), and
+[P053](#p053-multi-head-revision-merge-semantics-require-independent-application-proof).
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
@@ -9441,6 +9573,15 @@ contract remains application-local and does not satisfy this gate by itself.
 **Current posture:** expose all heads and require caller policy outside the
 protocol. Never pick a winner from timestamp, mirror order, or an undeclared
 signer preference.
+
+**Application evidence (2026-07-23).**
+[D178](#d178-the-operating-graph-ships-as-an-application-profile-and-reference-client)
+supplies the first application proof. It creates a two-head conflict and
+resolves it by signing an ordinary observation whose private body names the
+selected head and every active head while `informed_by` cites every head. The
+reference projector rejects incomplete resolution claims. This satisfies gate
+1 and shows that gate 2 is not satisfied for this application. P053 therefore
+remains pending rather than promoting a public merge primitive.
 
 **ADR number** will be assigned when the decision is acted on. Do not
 pre-allocate.

@@ -43,10 +43,21 @@ import {
   type RecallOutcome,
   type RecallQuery,
 } from './recall.js'
+import {
+  runVerifiableAction,
+  type ActionInput,
+  type ActionResult,
+  type JsonObject,
+  type JsonValue,
+} from './action.js'
 
 export interface AtribClient {
   /** Single write verb. Never throws on operational failure (§5.8). */
   attest(input: AttestInput): Promise<AttestResult>
+  /** Paired request/outcome action path using the recommended evidence preset. */
+  action<TArgs extends JsonObject, TResult extends JsonValue>(
+    input: ActionInput<TArgs, TResult>,
+  ): Promise<ActionResult<TResult>>
   /** Single read verb. Never throws on operational failure (§5.8). */
   recall<T = unknown>(query: RecallQuery): Promise<RecallOutcome<T>>
   /**
@@ -120,7 +131,7 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
       return Promise.resolve(config.key ?? null)
     }
     keyPromise ??= resolveKey().catch((error: unknown) => {
-      console.warn(`atrib: key resolution failed: ${String(error)}`)
+      process.stderr.write(`atrib: key resolution failed: ${String(error)}\n`)
       return null
     })
     return keyPromise
@@ -319,6 +330,7 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
 
   return {
     attest,
+    action: (input) => runVerifiableAction(attest, input),
     recall,
     flushAnchors: async () => {
       if (fanout) await fanout.flush()

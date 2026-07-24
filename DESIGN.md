@@ -2,7 +2,7 @@
 
 Version: 0.2
 Status: active working design contract
-Last updated: 2026-05-25
+Last updated: 2026-07-23
 
 ## Purpose
 
@@ -111,6 +111,10 @@ Working today:
 - The live log outage exposed and fixed a real production issue, and smoke checks now enforce latency budgets for public log routes.
 - The code examples and standards section make adoption feel concrete.
 - Mobile overflow and keyboard entry points have explicit guardrails.
+- The open operating-graph reference client turns signed private bodies into
+  one bounded workspace surface. Its visual signature is the evidence rail:
+  each active state head keeps a visible hash, signer, and semantic status
+  until an all-head resolution lands.
 
 Still underdesigned:
 
@@ -120,6 +124,9 @@ Still underdesigned:
 - Docs and package READMEs do not yet carry the same visual and writing system.
 - Open Graph and touch-icon assets now use the same amber seal, near-black canvas, and signed-graph language across `atrib.dev` and `explore.atrib.dev`.
 - CI smoke now catches slow endpoints, but the product does not yet keep historical latency trends or alert routes.
+- The operating-graph client is a reference application, not yet a hosted
+  public product. Authentication, organization-level trust policy, and
+  archive-backed body retrieval remain deployment-owned.
 
 ## North Star
 

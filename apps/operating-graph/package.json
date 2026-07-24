@@ -1,0 +1,39 @@
+{
+  "name": "@atrib/operating-graph",
+  "version": "0.1.0",
+  "description": "Open-source reference client for live, bounded atrib operating views.",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/server.js",
+  "exports": {
+    "./model": {
+      "types": "./dist/model.d.ts",
+      "import": "./dist/model.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts",
+    "demo": "tsx scripts/demo.ts",
+    "prove:fresh-machine": "node scripts/prove-fresh-machine.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@atrib/mcp": "workspace:*",
+    "@atrib/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/creatornader/atrib",
+    "directory": "apps/operating-graph"
+  }
+}

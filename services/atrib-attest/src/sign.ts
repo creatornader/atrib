@@ -76,20 +76,28 @@ export interface BuildEmitRecordInput {
    * replay-checkable without exposing the body to the public log.
    */
   argsHash?: string | undefined
+  /** Optional 16-byte base64url salt paired with argsHash. */
+  argsSalt?: string | undefined
   /**
    * Optional §8.3 result_hash commitment. Same posture semantics and wire
    * format as args_hash, but commits to the tool result bytes.
    */
   resultHash?: string | undefined
+  /** Optional 16-byte base64url salt paired with resultHash. */
+  resultSalt?: string | undefined
 }
 
 /**
  * Build, sign, and return a complete AtribRecord ready for submission.
  * Pure aside from the signing primitive itself; no network I/O here.
  */
-export async function buildAndSignEmitRecord(
-  input: BuildEmitRecordInput,
-): Promise<AtribRecord> {
+export async function buildAndSignEmitRecord(input: BuildEmitRecordInput): Promise<AtribRecord> {
+  if (input.argsSalt && !input.argsHash) {
+    throw new TypeError('args_salt requires an explicit args_hash')
+  }
+  if (input.resultSalt && !input.resultHash) {
+    throw new TypeError('result_salt requires result_hash')
+  }
   const publicKey = base64urlEncode(await getPublicKey(input.privateKey))
   const toolName = leafOfEventTypeUri(input.eventType)
   const contentId = computeContentId(SYNTHETIC_SERVER_URL, toolName)
@@ -99,9 +107,7 @@ export async function buildAndSignEmitRecord(
   // canonical form stable across emitters. Omitted entirely (not null,
   // not empty) when no references are given, presence affects JCS.
   const informedBySorted =
-    input.informedBy && input.informedBy.length > 0
-      ? [...input.informedBy].sort()
-      : undefined
+    input.informedBy && input.informedBy.length > 0 ? [...input.informedBy].sort() : undefined
 
   const record: AtribRecord = {
     spec_version: 'atrib/1.0',
@@ -115,8 +121,10 @@ export async function buildAndSignEmitRecord(
     ...(informedBySorted ? { informed_by: informedBySorted } : {}),
     ...(input.annotates ? { annotates: input.annotates } : {}),
     ...(argsHash ? { args_hash: argsHash } : {}),
+    ...(input.argsSalt ? { args_salt: input.argsSalt } : {}),
     ...(input.provenanceToken ? { provenance_token: input.provenanceToken } : {}),
     ...(input.resultHash ? { result_hash: input.resultHash } : {}),
+    ...(input.resultSalt ? { result_salt: input.resultSalt } : {}),
     ...(input.revises ? { revises: input.revises } : {}),
     ...(input.toolName ? { tool_name: input.toolName } : {}),
   } as AtribRecord

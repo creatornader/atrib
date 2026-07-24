@@ -18,11 +18,7 @@
 // D099 default args_hash commitment is byte-identical across both names.
 
 import { z } from 'zod'
-import {
-  EVENT_TYPE_ANNOTATION_URI,
-  EVENT_TYPE_REVISION_URI,
-  SHA256_REF_PATTERN,
-} from '@atrib/mcp'
+import { EVENT_TYPE_ANNOTATION_URI, EVENT_TYPE_REVISION_URI, SHA256_REF_PATTERN } from '@atrib/mcp'
 
 const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 // 16 bytes encoded as base64url with no padding = 22 chars per spec §1.2.6.
@@ -31,20 +27,30 @@ const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
 const OBSERVATION_URI = 'https://atrib.dev/v1/types/observation'
 
 export const AttestRef = z.object({
-  kind: z.enum(['annotates', 'revises']).describe(
-    "Declared-relationship kind. 'annotates' marks a past record's importance " +
-      "and meaning (spec §1.2.7 / D058); 'revises' supersedes a prior position " +
-      'with a stated reason (spec §1.2.9 / D059). Omit `ref` entirely for a ' +
-      'plain observation.',
-  ),
-  target: z.string().regex(SHA256_REF_PATTERN).describe(
-    "'sha256:<64-hex>' record_hash the relationship points at. The target can " +
-      "be any prior record (yours or another agent's).",
-  ),
-  reason: z.string().min(1).max(4096).optional().describe(
-    "Why the position changed. REQUIRED when kind is 'revises'; composed into " +
-      'the content body exactly as atrib-revise composes it today.',
-  ),
+  kind: z
+    .enum(['annotates', 'revises'])
+    .describe(
+      "Declared-relationship kind. 'annotates' marks a past record's importance " +
+        "and meaning (spec §1.2.7 / D058); 'revises' supersedes a prior position " +
+        'with a stated reason (spec §1.2.9 / D059). Omit `ref` entirely for a ' +
+        'plain observation.',
+    ),
+  target: z
+    .string()
+    .regex(SHA256_REF_PATTERN)
+    .describe(
+      "'sha256:<64-hex>' record_hash the relationship points at. The target can " +
+        "be any prior record (yours or another agent's).",
+    ),
+  reason: z
+    .string()
+    .min(1)
+    .max(4096)
+    .optional()
+    .describe(
+      "Why the position changed. REQUIRED when kind is 'revises'; composed into " +
+        'the content body exactly as atrib-revise composes it today.',
+    ),
 })
 
 export const AttestInput = z.object({
@@ -117,11 +123,21 @@ export const AttestInput = z.object({
       'Optional §8.3 args_hash commitment override. When omitted, attest signs ' +
         'sha256(JCS(content)) per D099, identical to the legacy write names.',
     ),
+  args_salt: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{22}$/)
+    .optional()
+    .describe('Optional base64url 16-byte salt paired with args_hash per §8.3.'),
   result_hash: z
     .string()
     .regex(SHA256_REF_PATTERN)
     .optional()
     .describe('Optional §8.3 result_hash commitment, unchanged from the legacy emit tool.'),
+  result_salt: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{22}$/)
+    .optional()
+    .describe('Optional base64url 16-byte salt paired with result_hash per §8.3.'),
   producer: z
     .string()
     .min(1)
@@ -153,7 +169,9 @@ export interface MappedAttestInput {
     revises?: string
     tool_name?: string
     args_hash?: string
+    args_salt?: string
     result_hash?: string
+    result_salt?: string
   }
 }
 
@@ -174,9 +192,7 @@ export interface AttestMappingRefusal {
  * A caller-supplied content.annotates / content.revises / content.reason
  * that contradicts `ref` is a refusal, not a silent overwrite.
  */
-export function mapAttestInput(
-  input: AttestInputT,
-): MappedAttestInput | AttestMappingRefusal {
+export function mapAttestInput(input: AttestInputT): MappedAttestInput | AttestMappingRefusal {
   const base = {
     ...(input.context_id ? { context_id: input.context_id } : {}),
     ...(input.informed_by ? { informed_by: input.informed_by } : {}),
@@ -187,7 +203,9 @@ export function mapAttestInput(
     ...(input.provenance_token ? { provenance_token: input.provenance_token } : {}),
     ...(input.tool_name ? { tool_name: input.tool_name } : {}),
     ...(input.args_hash ? { args_hash: input.args_hash } : {}),
+    ...(input.args_salt ? { args_salt: input.args_salt } : {}),
     ...(input.result_hash ? { result_hash: input.result_hash } : {}),
+    ...(input.result_salt ? { result_salt: input.result_salt } : {}),
   }
 
   if (!input.ref) {
@@ -259,7 +277,7 @@ function contentRefConflicts(
     if (contentAnnotates !== undefined || contentRevises !== undefined) {
       return (
         'content carries a relationship field (annotates/revises) but no ref was declared; ' +
-        "declare ref: { kind, target } instead of embedding the relationship in content"
+        'declare ref: { kind, target } instead of embedding the relationship in content'
       )
     }
     return null
@@ -282,11 +300,7 @@ function contentRefConflicts(
   if (contentRevises !== undefined && contentRevises !== ref.target) {
     return `content.revises (${String(contentRevises)}) contradicts ref.target (${ref.target})`
   }
-  if (
-    contentReason !== undefined &&
-    ref.reason !== undefined &&
-    contentReason !== ref.reason
-  ) {
+  if (contentReason !== undefined && ref.reason !== undefined && contentReason !== ref.reason) {
     return 'content.reason contradicts ref.reason'
   }
   return null

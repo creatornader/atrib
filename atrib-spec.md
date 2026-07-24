@@ -3238,9 +3238,17 @@ Contents
 
 _This section is informative._
 
-The fundamental design requirement for all atrib SDKs is that attribution must happen automatically as a consequence of agents and tools doing what they already do, not as something developers explicitly trigger. The moment a developer must decide when to call an attribution method, adoption fails. They will intend to add it later and never do.
+The fundamental design requirement for conforming automatic atrib middleware is
+that attribution happens as a consequence of agents and tools doing what they
+already do, not as a post-hoc call a developer can forget. The moment a
+developer must remember to attribute after execution, coverage becomes a
+caller claim rather than an interception property.
 
-This means the SDK specification defines a **middleware contract**, not an API. There are no methods for developers to call after init. There are no configuration options for when to emit. There is one function call at startup and zero ongoing surface area.
+This section therefore defines a **middleware contract**, not an application
+API. A conforming automatic integration has one initialization step and no
+ongoing attribution calls. Reference client helpers for application-owned
+boundaries are informative. They do not satisfy automatic coverage merely by
+existing.
 
 A conforming SDK implementation MUST satisfy all the automation triggers defined in [§5.7](#57-automation-triggers-normative). A conforming implementation MUST NEVER require the developer to call any attribution method explicitly after initialization. A conforming implementation MUST NEVER fail or throw an exception in a way that affects the primary tool call or agent response.
 
@@ -3262,7 +3270,23 @@ All three packages are open source under the Apache 2.0 license. The npm package
 
 Transaction detection, policy negotiation, session policy records, and settlement verification are payments-layer contracts defined by the [atrib Payments Profile](docs/payments-profile.md). The packages implement those contracts when a deployment uses the profile; a core-only deployment signs `tool_call` records and never classifies transactions, per the degradation contract ([§5.8](#58-degradation-contract)).
 
-Beyond the three spec-defined middleware packages, the reference distribution also ships consolidated client SDKs (informative): `@atrib/sdk` for TypeScript and the `atrib` distribution for Python expose `attest()` (write) and `recall()` (read) verbs over the same record layer, adding no new signing implementation. The Python distribution is the first non-TypeScript implementation of the [§1](#1-attribution-record-format) and [§5](#5-sdk-specification) contracts; both are held byte-identical through the shared conformance corpora. They are clients over this specification, not additional conformance surfaces. The reference implementations are maintained at `github.com/atrib-io`. Third-party implementations are permitted and encouraged, provided they satisfy the conformance requirements in this section.
+Beyond the three spec-defined middleware packages, the reference distribution
+also ships consolidated client SDKs (informative). `@atrib/sdk` for TypeScript
+and the `atrib` distribution for Python expose `attest()` (write) and
+`recall()` (read) over the same record layer. The TypeScript client also
+exposes `action()` for an application-owned execution boundary. It signs a
+request before execution and a linked terminal outcome after execution using
+the recommended hashed-name and salted argument/result posture. It uses the
+same `attest()` write path and adds no signing implementation. The helper
+proves only the boundary the caller actually routes through; it makes no
+automatic completeness claim. The Python distribution is the first
+non-TypeScript implementation of the [§1](#1-attribution-record-format) and
+[§5](#5-sdk-specification) contracts; both are held byte-identical through the
+shared conformance corpora. They are clients over this specification, not
+additional conformance surfaces. The reference implementations are maintained
+at `github.com/atrib-io`. Third-party implementations are permitted and
+encouraged, provided they satisfy the conformance requirements in this
+section.
 
 ---
 

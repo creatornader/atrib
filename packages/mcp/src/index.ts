@@ -20,6 +20,20 @@ export type {
   RecordReferenceSource,
 } from './middleware.js'
 
+// §8.3 JSON commitment helper shared by middleware and direct action SDKs.
+export {
+  createJsonCommitment,
+  createToolNameCommitment,
+  verifyJsonCommitment,
+} from './commitment.js'
+export type {
+  JsonCommitment,
+  JsonCommitmentFor,
+  JsonCommitmentScheme,
+  RandomBytes,
+  SaltedJsonCommitment,
+} from './commitment.js'
+
 // Proxy: in-process McpServer that forwards to an upstream MCP server with
 // attribution applied at the proxy layer. Use for hosts that accept an
 // in-process McpServer instance (Claude Agent SDK, Cloudflare Agents).

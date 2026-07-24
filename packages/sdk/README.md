@@ -1,8 +1,11 @@
 # @atrib/sdk
 
-Consolidated atrib client SDK. Two verbs over the substrate: **`attest()`**
-(write) and **`recall()`** (read), plus the complete [§1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#1-attribution-record-format) record layer
-re-exported from `@atrib/mcp`, so application code needs exactly one import.
+Consolidated atrib client SDK. Two cognitive verbs over the substrate:
+**`attest()`** (write) and **`recall()`** (read), plus an explicit
+**`action()`** helper for application-owned execution boundaries. The complete
+[§1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#1-attribution-record-format)
+record layer is re-exported from `@atrib/mcp`, so application code needs one
+import.
 
 This package is a consolidation, not a greenfield: it adds **no new
 canonicalization, hashing, or signing implementation**. Every write
@@ -33,6 +36,7 @@ and falls back to in-process engines when no daemon is reachable:
 | Verb                         | Daemon path                     | In-process fallback                                            |
 | ---------------------------- | ------------------------------- | -------------------------------------------------------------- |
 | `attest()`                   | `emit` tool (daemon-owned key)  | `emitInProcess()` from `@atrib/emit` (caller-owned key)        |
+| `action()`                   | Two linked `attest()` calls     | Same shared write path as `attest()`                           |
 | `recall({shape: 'history'})` | `recall_my_attribution_history` | `recall()` from `@atrib/recall` (optional peer)                |
 | `recall({shape: 'state'})`   | modern `recall` tool            | state projector from `@atrib/recall` (optional peer)           |
 | `recall({shape: 'verify'})`  | `atrib-verify`                  | `handleAtribVerify()` from `@atrib/verify-mcp` (optional peer) |
@@ -76,11 +80,57 @@ const state = await client.recall({
   head_limit: 100,
 })
 
+// Application action: sign request, execute, then sign the terminal outcome.
+const action = await client.action({
+  name: 'write_invoice',
+  args: { invoice_id: 'inv-7', cents: 1200 },
+  execute: async ({ request }) => {
+    return writeInvoice({ invoice_id: 'inv-7', cents: 1200 }, request.record_hash)
+  },
+})
+
 await client.close()
 ```
 
 `summarize` is deliberately **not** a recall shape: synthesis belongs to
 the calling harness/model; the SDK returns verified raw material.
+
+## Explicit action path
+
+`action()` is for application code that owns the actual execution boundary and
+cannot mount automatic MCP middleware. It is not a synonym for `attest()`.
+
+The helper:
+
+1. hashes the action name;
+2. makes a fresh salted JCS commitment to the arguments;
+3. signs the request before execution;
+4. runs the caller's `execute` function even if attribution degraded; and
+5. signs a linked success or failure outcome with a fresh salted result
+   commitment.
+
+```ts
+const result = await client.action({
+  name: 'payments.transfer',
+  args: { cents: 500, currency: 'USD' },
+  execute: () => payments.transfer({ cents: 500, currency: 'USD' }),
+})
+
+if (!result.ok) {
+  // result.error is the original application error.
+  throw result.error
+}
+console.log(result.request.record_hash, result.outcome.record_hash)
+```
+
+The result is an explicit success/failure union. The helper does not claim
+automatic coverage outside the supplied `execute` function. A caller that
+bypasses this function is outside its capture boundary. Automatic MCP or
+framework middleware remains the preferred path when the host exposes one.
+
+Matching a disclosed result to `result_hash` proves consistency with the
+signer's commitment. It does not prove that the result is true. Use tool-side
+or counterparty evidence when a verifier needs independent corroboration.
 
 ## Degradation contract ([§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract))
 
@@ -162,13 +212,16 @@ normalization collects warnings instead of erroring.
 ```ts
 interface AtribClient {
   attest(input: AttestInput): Promise<AttestResult>
+  action<TArgs extends JsonObject, TResult extends JsonValue>(
+    input: ActionInput<TArgs, TResult>,
+  ): Promise<ActionResult<TResult>>
   recall<T = unknown>(query: RecallQuery): Promise<RecallOutcome<T>>
   flushAnchors(): Promise<AnchorSubmissionReport[]> // settled leg accounting; never throws
   close(): Promise<void>
 }
 ```
 
-**Throw vs degrade.** Both verbs follow the
+**Throw vs degrade.** Both cognitive verbs and the action evidence path follow the
 [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)
 degradation contract: operational failures (daemon unreachable, tool
 error, missing key, missing optional peer, log unreachable) never throw.
@@ -208,6 +261,13 @@ then tries paths in order:
 Under `daemon.mode: 'require'`, a daemon failure returns the degraded
 `via: 'none'` result directly. It never falls back and never throws.
 
+**`action(input)` semantics.** Calls `attest()` for the request and terminal
+outcome. The action name uses the hashed-name posture. Arguments and results
+use independent 16-byte salted JCS commitments. A successful execution returns
+`{ ok: true, result, request, outcome }`. A thrown application error returns
+`{ ok: false, error, request, outcome }` after signing the failure envelope.
+Signing degradation does not suppress execution.
+
 **`recall(query)` semantics.** Resolves the shape (`query.shape`, default
 `'history'`), maps it to the physical tool name via `SHAPE_TO_TOOL`
 (exported), strips the SDK-only `shape` discriminator and `undefined`
@@ -246,7 +306,9 @@ interface AttestRef {
 | `provenance_token`             | `string`                  | no       | [§1.2.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#126-provenance_token) cross-session anchor (genesis-only, 22-char base64url).                                                                                                                                                                                                                                                   |
 | `tool_name`                    | `string`                  | no       | [§8.2](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#82-opaque-name-posture) tool-name disclosure.                                                                                                                                                                                                                                                                                     |
 | `args_hash`                    | `string`                  | no       | Explicit [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) args commitment (overrides the [D099](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d099-explicit-emit-records-commit-local-content-through-default-args_hash) default).                                                                                                    |
+| `args_salt`                    | `string`                  | no       | Canonical base64url 16-byte salt paired with an explicit `args_hash`. A salt without the hash is rejected.                                                                                                                                                                                                                                                                                             |
 | `result_hash`                  | `string`                  | no       | Explicit [§8.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#83-salted-commitment-posture) result commitment.                                                                                                                                                                                                                                                                         |
+| `result_salt`                  | `string`                  | no       | Canonical base64url 16-byte salt paired with an explicit `result_hash`. A salt without the hash is rejected.                                                                                                                                                                                                                                                                                           |
 
 ### `AttestResult`
 

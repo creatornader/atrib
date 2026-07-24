@@ -70,8 +70,12 @@ export interface AttestInput {
   tool_name?: string
   /** Explicit §8.3 args commitment (overrides the D099 default). */
   args_hash?: string
+  /** Optional base64url 16-byte salt paired with args_hash. */
+  args_salt?: string
   /** Explicit §8.3 result commitment. */
   result_hash?: string
+  /** Optional base64url 16-byte salt paired with result_hash. */
+  result_salt?: string
 }
 
 export interface AttestResult {
@@ -143,7 +147,9 @@ export function buildEmitArgs(
     ...(input.provenance_token !== undefined ? { provenance_token: input.provenance_token } : {}),
     ...(input.tool_name !== undefined ? { tool_name: input.tool_name } : {}),
     ...(input.args_hash !== undefined ? { args_hash: input.args_hash } : {}),
+    ...(input.args_salt !== undefined ? { args_salt: input.args_salt } : {}),
     ...(input.result_hash !== undefined ? { result_hash: input.result_hash } : {}),
+    ...(input.result_salt !== undefined ? { result_salt: input.result_salt } : {}),
   }
 }
 

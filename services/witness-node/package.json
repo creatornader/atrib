@@ -12,6 +12,7 @@
     "build": "rm -rf dist && tsc",
     "start": "node dist/main.js",
     "dev": "tsx src/main.ts",
+    "prove:deployment": "node scripts/prove-deployment.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

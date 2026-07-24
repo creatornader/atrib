@@ -3,16 +3,29 @@
 /**
  * @atrib/sdk — the consolidated atrib client SDK.
  *
- * Two verbs over the substrate: attest() (write) and recall() (read),
- * daemon-first with in-process fallback, plus the complete §1 record
- * layer re-exported from @atrib/mcp so application code needs exactly one
- * import. This package adds NO new canonicalization, hashing, or signing
- * implementation — every cryptographic path is the existing @atrib/mcp
- * one, and every write terminates in @atrib/emit's handleEmit pipeline.
+ * Two cognitive verbs over the substrate: attest() (write) and recall()
+ * (read), plus action() for a caller-owned execution boundary. The client
+ * is daemon-first with in-process fallback and re-exports the complete §1
+ * record layer from @atrib/mcp. It adds no canonicalization, hashing, or
+ * signing implementation. Every cryptographic path is the existing
+ * @atrib/mcp one, and every write terminates in @atrib/emit's handleEmit
+ * pipeline.
  */
 
-// ── The two verbs ────────────────────────────────────────────────────────
+// ── Cognitive verbs and application action path ─────────────────────────
 export { createAtribClient, type AtribClient } from './client.js'
+export {
+  runVerifiableAction,
+  type ActionExecutionContext,
+  type ActionFailure,
+  type ActionInput,
+  type ActionResult,
+  type ActionSuccess,
+  type AttestActionRecord,
+  type JsonObject,
+  type JsonPrimitive,
+  type JsonValue,
+} from './action.js'
 export {
   buildEmitArgs,
   type AttestAnchorPosture,
@@ -159,6 +172,9 @@ export {
   writeOutboundContext,
   // content identity (§1.2.2)
   computeContentId,
+  createJsonCommitment,
+  createToolNameCommitment,
+  verifyJsonCommitment,
   normalizeServerUrl,
   // log entry serialization (§2.3.1)
   eventTypeUriToByte,

@@ -96,6 +96,15 @@ export async function startWitnessServer(
       })
       return
     }
+    if (request.method === 'GET' && path === '/v1/checkpoint') {
+      const state = store.load(config.log.logKey.name)
+      if (!state) {
+        sendJson(response, 404, { error: 'checkpoint not witnessed' })
+        return
+      }
+      sendText(response, 200, state.checkpointNote)
+      return
+    }
     if (request.method === 'GET' && path === '/v1/incidents') {
       sendJson(response, 200, { incidents: store.listIncidents() })
       return

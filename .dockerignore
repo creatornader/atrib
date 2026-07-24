@@ -3,12 +3,17 @@
 
 .git
 node_modules
+**/node_modules
 dist
+**/dist
 .env
 .env.*
 *.tgz
 coverage
 .turbo
+.claude
+.mypy_cache
+.remember
 
 # Non-code directories
 services/log/

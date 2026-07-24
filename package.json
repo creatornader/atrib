@@ -16,7 +16,7 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "build": "turbo build",
-    "test": "turbo test",
+    "test": "turbo test --concurrency=1",
     "typecheck": "turbo typecheck",
     "lint": "eslint . --max-warnings 809",
     "format": "prettier --write .",

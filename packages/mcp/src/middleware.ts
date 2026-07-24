@@ -22,7 +22,7 @@ import { applyAttributionReceipt } from './extension-attribution.js'
 import { signRecord, getPublicKey } from './signing.js'
 import { hexEncode, sha256 } from './hash.js'
 import { canonicalRecord } from './canon.js'
-import canonicalize from 'canonicalize'
+import { createJsonCommitment, createToolNameCommitment } from './commitment.js'
 import { encodeToken } from './token.js'
 import { createSubmissionQueue } from './submission.js'
 import { createAnchorFanout } from './anchors.js'
@@ -703,12 +703,12 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
   }
 
   // We need to intercept setRequestHandler to wrap the tools/call handler.
-  // The MCP SDK uses complex Zod-based types internally, so we use `any` for
-  // the interop boundary.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const origSetHandler: any = (underlyingServer.setRequestHandler as Function).bind(
-    underlyingServer,
-  )
+  // Keep the MCP SDK's complex Zod-based generics behind a two-argument
+  // callable boundary.
+  const origSetHandler = underlyingServer.setRequestHandler.bind(underlyingServer) as (
+    schema: unknown,
+    handler: unknown,
+  ) => unknown
 
   /**
    * Result of building + signing a record from a tools/call request. Captured
@@ -893,28 +893,7 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     if (toolNameDisclosure === 'verbatim') {
       toolNameField = toolName
     } else if (toolNameDisclosure === 'hashed') {
-      toolNameField = `sha256:${hexEncode(sha256(new TextEncoder().encode(toolName)))}`
-    }
-
-    // Helper for §8.3 commitment-form synthesis. Returns { hash, salt? }
-    // where salt is present iff scheme === 'salted-sha256'.
-    const computeCommitment = (
-      schemeBytes: Uint8Array,
-      scheme: 'plain-sha256' | 'salted-sha256',
-    ): { hash: string; salt?: string } => {
-      if (scheme === 'plain-sha256') {
-        return { hash: `sha256:${hexEncode(sha256(schemeBytes))}` }
-      }
-      // salted-sha256 per §8.3: H = SHA-256(salt ‖ canonical_bytes)
-      const salt = new Uint8Array(16)
-      crypto.getRandomValues(salt)
-      const combined = new Uint8Array(salt.length + schemeBytes.length)
-      combined.set(salt, 0)
-      combined.set(schemeBytes, salt.length)
-      return {
-        hash: `sha256:${hexEncode(sha256(combined))}`,
-        salt: base64urlEncode(salt),
-      }
+      toolNameField = createToolNameCommitment(toolName)
     }
 
     let argsHashField: string | undefined
@@ -922,13 +901,9 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     if (argsDisclosure !== 'omit') {
       try {
         const argsValue = (params.arguments as Record<string, unknown> | undefined) ?? {}
-        const argsJcs = canonicalize(argsValue)
-        if (typeof argsJcs === 'string') {
-          const argsBytes = new TextEncoder().encode(argsJcs)
-          const c = computeCommitment(argsBytes, argsDisclosure)
-          argsHashField = c.hash
-          argsSaltField = c.salt
-        }
+        const commitment = createJsonCommitment(argsValue, argsDisclosure)
+        argsHashField = commitment.hash
+        argsSaltField = commitment.salt
       } catch (e) {
         console.warn('atrib: args disclosure synthesis failed, omitting', e)
       }
@@ -944,13 +919,9 @@ export function atrib(server: McpServer, options: AtribOptions = {}): AtribServe
     let resultSaltField: string | undefined
     if (resultDisclosure !== 'omit' && resultForHash) {
       try {
-        const resultJcs = canonicalize(resultForHash)
-        if (typeof resultJcs === 'string') {
-          const resultBytes = new TextEncoder().encode(resultJcs)
-          const c = computeCommitment(resultBytes, resultDisclosure)
-          resultHashField = c.hash
-          resultSaltField = c.salt
-        }
+        const commitment = createJsonCommitment(resultForHash, resultDisclosure)
+        resultHashField = commitment.hash
+        resultSaltField = commitment.salt
       } catch (e) {
         console.warn('atrib: result disclosure synthesis failed, omitting', e)
       }

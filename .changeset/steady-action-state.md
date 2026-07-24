@@ -1,5 +1,6 @@
 ---
 '@atrib/action-gate': minor
+'@atrib/attest': minor
 '@atrib/cli': minor
 '@atrib/mcp': minor
 '@atrib/mcp-wrap': minor
@@ -35,3 +36,9 @@ The explorer action view now distinguishes the log's compact commitment entry
 from the signed record body. It reports whether the configured archive returned
 the body, never labels a commitment projection as a raw record, and serves
 direct action, session, identity, and trace routes from the fallback log host.
+The TypeScript client adds an explicit application action helper that signs a
+salted request before execution and a linked salted terminal outcome. Direct
+attest calls now carry argument and result salts through the same record path
+as middleware. Verification classifies committed, inconsistent,
+uncorroborated, and corroborated result evidence without claiming that hashes
+prove real-world truth.

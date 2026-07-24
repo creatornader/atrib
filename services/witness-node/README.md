@@ -19,6 +19,27 @@ The service:
 Running this service under atrib's control proves the software path but does
 not create an independent witness. An independence claim requires a separate
 operator, key custody, infrastructure, and trust-root distribution path.
+The complete recruitment, deployment, backup, upgrade, incident, and
+acceptance contract is in the
+[independent operator guide](../../docs/independent-operator.md).
+
+## Container deployment
+
+From the repository root:
+
+```sh
+cp services/witness-node/deploy/.env.example \
+  services/witness-node/deploy/.env
+# Fill the operator-controlled secrets and pinned trust roots.
+docker compose \
+  -f services/witness-node/deploy/docker-compose.yml \
+  up --build -d
+```
+
+The compose service uses a persistent state volume and a read-only root
+filesystem. Prove the deployed endpoint from a separate machine with
+`scripts/prove-deployment.mjs`; the independent operator guide lists the
+required caller-pinned inputs.
 
 ## Configuration
 
@@ -51,12 +72,16 @@ The witness serves:
 - `GET /v1/pubkey`
 - `GET /v1/log-pubkey`
 - `GET /v1/status`
+- `GET /v1/checkpoint`
 - `GET /v1/incidents`
 - `GET /v1/incidents/<incident-id-without-sha256-prefix>`
 - `GET /v1/cosig/<percent-encoded-log-origin>/<root-hash-base64url>`
 
 The service performs one update during startup and then polls on its configured
 interval. It does not expose a public endpoint that triggers witness work.
+`/v1/checkpoint` returns the operator-signed checkpoint bytes the witness
+actually cosigned. Deployment verification uses those stored bytes and checks
+their bounded lag against the current live-log checkpoint.
 
 Leaf hashes use an append-only binary history. The service fsyncs new hashes
 and immutable cosignatures before atomically advancing checkpoint state. If a

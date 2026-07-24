@@ -1,8 +1,17 @@
 # `@atrib/verify`
 
-**Independent verification for atrib's verifiable action layer. Checks signed records, evidence blocks, handoff packets, and settlement documents. Re-runs the [payments profile §8](https://github.com/creatornader/atrib/blob/main/docs/payments-profile.md#8-the-calculation-algorithm) calculation algorithm (relocated from [spec §4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) per [D147](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)) locally and checks the result against what a recommendation document claims. No trust in any intermediary required.**
+**Independent verification for atrib's verifiable action layer. Checks signed records, evidence blocks, handoff packets, and settlement documents. Re-runs the [payments profile §8](https://github.com/creatornader/atrib/blob/main/docs/payments-profile.md#8-the-calculation-algorithm) calculation algorithm (relocated from [spec §4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) per [D147](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)) locally and checks the result against what a recommendation document claims. Verification uses caller-pinned keys and policy rather than an intermediary's verdict.**
 
-This is the **verifier half** of the atrib protocol, used by merchants closing transactions, auditors checking agent activity, teams accepting handoffs, policy systems reviewing high-impact actions, regulators querying historical state, and any party that needs to validate atrib data independently. The agent and tool servers produce signed attribution records. The Merkle log stores them. This package answers the questions any verifier has to answer: _given the graph and the policy, is this distribution actually correct? Was this record actually signed by the key it claims? Did this action actually happen at the time it claims?_
+This is the **verifier half** of the atrib protocol, used by merchants closing
+transactions, auditors checking agent activity, teams accepting handoffs,
+policy systems reviewing high-impact actions, regulators querying historical
+state, and any party that needs to validate atrib data independently. The agent
+and tool servers produce signed attribution records. The Merkle log stores
+commitments to them. This package answers the questions a verifier can decide
+from supplied evidence: _does the distribution recompute, did the claimed key
+sign these bytes, is the body consistent with its commitment, and which
+independent evidence corroborates the claim?_ It does not infer that a signed
+claim is true merely because its signature and hash verify.
 
 ## Install
 
@@ -137,6 +146,35 @@ const result = await verifyRecord(record, {
 - `resolveAttestationCorroboration(options)` / `isCorroborated(result, N)` ([D150](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d150-attestation-is-corroboration-generalized-off-transactions-extension-first) / [§8.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#876-attestation-corroboration-extension)): the general form of Layer 5 corroboration, lifted off transactions. An attestation is a separate signed extension-URI record (`https://atrib.dev/v1/extensions/attestation`) in which a signer that is NOT the target's producer vouches for a target record by reference, content `{ attests: 'reliable', target, reason? }` committed via `args_hash`. `resolveAttestationCorroboration` aggregates distinct verified attestors of a target and, reusing the [D149](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance) trust-set model, surfaces `attestors_valid` / `attestors_trusted` / `under_corroborated` / `trust_evaluated`. It counts ONLY `attests: 'reliable'` records (never annotation records) and rejects self-attestation, so recall-tagging cannot masquerade as trust. `isCorroborated(result, N)` (`attestors_trusted >= N`, default 2) is the guarded gate. Signal only: never flips `valid`; the fail-closed requirement lives in `@atrib/action-gate` `requireCorroborated`.
 - `evidence`: generic tiered external authorization evidence blocks ([D109](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) / [§5.5.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#556-generic-authorization-evidence-blocks)). Populated when the caller passes `authorizationEvidence` or when AP2 / VI evidence is mirrored into the generic shape. Each block has `{ valid, protocol, issuer, subject, scope, attenuation_ok, delegation_ok, constraints, errors, warnings }`. Current authorization adapters are MCP/OAuth, AAuth, and x401. These blocks do not alter `valid`, `signatureOk`, or `capability_check`.
 - `ap2_vi_evidence`: the async AP2 / VI verifier result ([D094](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block) / [§5.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#554-ap2--verifiable-intent-evidence-checks)). Populated only when the caller passes `ap2ViEvidence` for a transaction record. It does not alter `valid`, `signatureOk`, or `cross_attestation`; consumers inspect `ap2_vi_evidence.valid` for AP2 authorization evidence.
+
+### `evaluateResultClaim(record, options): ResultClaimEvaluation`
+
+Classifies what the supplied result evidence establishes:
+
+```typescript
+import { evaluateResultClaim } from '@atrib/verify'
+
+const result = evaluateResultClaim(record, {
+  result: disclosedResult,
+  corroborations: [{ signer_key: toolKey, result_hash: record.result_hash!, verified: true }],
+  trusted_signer_keys: new Set([toolKey]),
+  min_corroborations: 1,
+})
+```
+
+`status` is one of:
+
+- `uncommitted`;
+- `committed_only`;
+- `evidence_inconsistent`;
+- `body_consistent_uncorroborated`; or
+- `corroborated`.
+
+The helper deduplicates trusted verified corroborators by signer key. Every
+result carries `truth_established: false`. A signature proves who committed to
+bytes. Body replay proves those bytes match the commitment. Independent
+signers can corroborate the same bytes. None of those checks proves an
+arbitrary real-world claim.
 
 ### `verifyHandoffClaims(claims, options): Promise<HandoffVerificationResult>`
 

@@ -1,0 +1,38 @@
+services:
+  witness:
+    build:
+      context: ../../..
+      dockerfile: services/witness-node/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3200
+      ATRIB_WITNESS_STATE_DIR: /var/lib/atrib-witness
+      ATRIB_WITNESS_NAME: ${ATRIB_WITNESS_NAME:?set ATRIB_WITNESS_NAME}
+      ATRIB_WITNESS_KEY: ${ATRIB_WITNESS_KEY:?set ATRIB_WITNESS_KEY}
+      ATRIB_WITNESS_LOG_URL: ${ATRIB_WITNESS_LOG_URL:?set ATRIB_WITNESS_LOG_URL}
+      ATRIB_WITNESS_LOG_ORIGIN: ${ATRIB_WITNESS_LOG_ORIGIN:?set ATRIB_WITNESS_LOG_ORIGIN}
+      ATRIB_WITNESS_LOG_PUBLIC_KEY: ${ATRIB_WITNESS_LOG_PUBLIC_KEY:?set ATRIB_WITNESS_LOG_PUBLIC_KEY}
+      ATRIB_WITNESS_POLL_INTERVAL_MS: ${ATRIB_WITNESS_POLL_INTERVAL_MS:-30000}
+      ATRIB_WITNESS_GOSSIP_SOURCES: ${ATRIB_WITNESS_GOSSIP_SOURCES:-[]}
+    ports:
+      - '${PORT:-3200}:3200'
+    volumes:
+      - witness-state:/var/lib/atrib-witness
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3200/v1/status').then(async r=>{const s=await r.json();if(!r.ok||s.error||!s.tree_size)process.exit(1)})",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  witness-state:

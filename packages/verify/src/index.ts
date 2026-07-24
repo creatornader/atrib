@@ -37,6 +37,13 @@ export type {
   ResolvedCapabilityFacts,
   CrossAttestationAnnotation,
 } from './verify-record.js'
+export { evaluateResultClaim } from './result-claim.js'
+export type {
+  EvaluateResultClaimOptions,
+  ResultClaimEvaluation,
+  ResultClaimStatus,
+  ResultCorroboration,
+} from './result-claim.js'
 
 // Generic external authorization evidence checks. Off the atrib record-validity path.
 export {
