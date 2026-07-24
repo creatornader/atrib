@@ -23,14 +23,12 @@ describe('Google ADK TypeScript decision ledger proof', () => {
     expect(result.strategy).toBe('atrib-google-adk-typescript-decision-ledger-proof-v1')
     expect(result.adk).toMatchObject({
       package: '@google/adk',
-      version: '1.3.0',
+      version: '1.4.0',
       runner: 'InMemoryRunner',
       plugin: 'BasePlugin',
       tool: 'FunctionTool',
     })
-    expect(result.contract.event_type).toBe(
-      'https://google-adk-decision-ledger.example/v1',
-    )
+    expect(result.contract.event_type).toBe('https://google-adk-decision-ledger.example/v1')
     expect(result.contract.decision_states).toEqual([
       'allowed',
       'refused',
@@ -65,9 +63,7 @@ describe('Google ADK TypeScript decision ledger proof', () => {
       function_call_events: 1,
       function_response_events: 1,
     })
-    expect(result.live_adk.policy_error.decision_record_hash).toMatch(
-      /^sha256:[0-9a-f]{64}$/,
-    )
+    expect(result.live_adk.policy_error.decision_record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
 
     expect(result.proof).toMatchObject({
       allowed_execution_informed_by_decision: true,
@@ -81,9 +77,7 @@ describe('Google ADK TypeScript decision ledger proof', () => {
     })
     expect(result.confirmation.required.decision_state).toBe('confirmation_required')
     expect(result.confirmation.resolved.decision_state).toBe('confirmation_resolved')
-    expect(result.confirmation.stale_or_mismatched.decision_state).toBe(
-      'stale_or_mismatched',
-    )
+    expect(result.confirmation.stale_or_mismatched.decision_state).toBe('stale_or_mismatched')
     expect(result.privacy).toEqual({
       public_records_hash_only: true,
       local_sidecars_keep_payloads: true,
