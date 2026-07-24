@@ -113,20 +113,29 @@ Server-Sent Events subscription surface for new decoded log entries. The stream 
 
 ```text
 event: ready
-data: {"tree_size":42,"filters":{"event_type":"tool_call"}}
+data: {"tree_size":42,"filters":{"event_type":"tool_call","after":39},"resume_after":39,"replay_through":41}
 
 id: 42
 event: log_entry
 data: {"tree_size":43,"entry":{"index":42,"record_hash":"sha256:..."}}
 ```
 
-Supported filters: `creator_key`, `context_id`, `event_type`, and `since`. The log is commitment-only, so filters that require record bodies (`topic`, `importance`) return `400 Bad Request`.
+Supported filters: `creator_key`, `context_id`, `event_type`, inclusive
+`since`, and exclusive log-index cursor `after`. The log is commitment-only,
+so filters that require record bodies (`topic`, `importance`) return
+`400 Bad Request`.
+
+For exact reconnect, send the last processed log index as `Last-Event-ID` or
+`after`. The header wins when both are present, matching native `EventSource`
+reconnect behavior. A malformed cursor returns 400. A cursor beyond the current
+tail returns 409 instead of silently losing the disconnected interval.
 
 ### `GET /v1/feed.json`
 
 JSON Feed 1.1 companion for consumers that cannot hold a long-lived SSE connection. Items are newest-first and carry the decoded log entry in `_atrib`.
 
-Supported filters match `/v1/stream`: `creator_key`, `context_id`, `event_type`, and `since`. `limit` and `offset` paginate the feed.
+Supported filters match `/v1/stream`: `creator_key`, `context_id`,
+`event_type`, `since`, and `after`. `limit` and `offset` paginate the feed.
 
 ## Operator recovery
 

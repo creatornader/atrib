@@ -1,0 +1,32 @@
+services:
+  operating-graph:
+    build:
+      context: ../../..
+      dockerfile: apps/operating-graph/Dockerfile
+    environment:
+      ATRIB_OPERATING_HOST: 0.0.0.0
+      ATRIB_OPERATING_PORT: 8797
+      ATRIB_OPERATING_MIRROR: /data/records
+      ATRIB_OPERATING_WRITES: disabled
+      ATRIB_OPERATING_WRITE_TOKEN: ${ATRIB_OPERATING_WRITE_TOKEN:-}
+      ATRIB_OPERATING_TRUSTED_CREATORS: ${ATRIB_OPERATING_TRUSTED_CREATORS:-}
+      ATRIB_OPERATING_CORS: ${ATRIB_OPERATING_CORS:-*}
+    ports:
+      - '${ATRIB_OPERATING_PORT:-8797}:8797'
+    volumes:
+      - '${ATRIB_OPERATING_MIRROR:-${HOME}/.atrib/records}:/data/records:ro'
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8797/v1/health').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5

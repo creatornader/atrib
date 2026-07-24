@@ -101,7 +101,9 @@ describe('spec §1.11 conformance: delegation certificates', () => {
     expect(signedForm).toBe(expected.canonical_signed_form_utf8)
 
     // Declared JCS field order is the actual order in the canonical bytes.
-    const positions = expected.jcs_field_order.map((k) => keyIndex(expected.canonical_signed_form_utf8, k))
+    const positions = expected.jcs_field_order.map((k) =>
+      keyIndex(expected.canonical_signed_form_utf8, k),
+    )
     for (const p of positions) expect(p).toBeGreaterThanOrEqual(0)
     expect([...positions].sort((a, b) => a - b)).toEqual(positions)
 
@@ -217,9 +219,16 @@ describe('spec §1.11 conformance: delegation certificates', () => {
     await assertWalkCase('walk-scope-cost-policy')
     const c = loadCase('walk-scope-cost-policy')
     expect((c.expected as { signal_not_block: boolean }).signal_not_block).toBe(true)
-    // From the record alone the walk reports no cost_policy mismatch.
+    // From the record alone the walk names both cost constraints as
+    // unverifiable. Absence no longer looks like a positive evaluation.
     const delegation = (c.expected as { delegation: DelegationOutcome }).delegation
-    expect(delegation.scope_check).toEqual({ in_scope: true, attenuation_ok: null, mismatches: [] })
+    expect(delegation.scope_check).toEqual({
+      in_scope: true,
+      fully_evaluated: false,
+      attenuation_ok: null,
+      mismatches: [],
+      unverifiable: ['cost_policy.model_tiers', 'cost_policy.max_tokens'],
+    })
     // The pinned usage vectors evaluate through checkCostPolicy.
     const cert = (c.input.certificates as DelegationCertificate[])[0]!
     const costPolicy = (cert.scope as { cost_policy?: DelegationCostPolicy }).cost_policy
@@ -252,12 +261,18 @@ describe('spec §1.11 conformance: delegation certificates', () => {
   it('cert-malformed-run-key: rejects the malformed key before signature interpretation', async () => {
     const c = loadCase('cert-malformed-run-key')
     const expected = c.expected as { errors: string[] }
-    expect(await delegationCertErrors(c.input.certificate as DelegationCertificate)).toEqual(expected.errors)
+    expect(await delegationCertErrors(c.input.certificate as DelegationCertificate)).toEqual(
+      expected.errors,
+    )
   })
 
   it('walk-ambiguous-principals: surfaces overlapping candidates without selecting one', async () => {
     const c = loadCase('walk-ambiguous-principals')
-    const expected = c.expected as { delegation_ambiguous: boolean; candidate_count: number; depth: 0 | 1 }
+    const expected = c.expected as {
+      delegation_ambiguous: boolean
+      candidate_count: number
+      depth: 0 | 1
+    }
     const outcome = await evaluateDelegation(
       c.input.record as DelegatedRecord,
       c.input.genesis_record as DelegatedRecord,
@@ -363,7 +378,9 @@ describe('spec §1.11 conformance: delegation certificates', () => {
 
     // Presence/absence changes the canonical form: distinct signatures + hashes.
     expect(withField.signature === withoutField.signature).toBe(!expected.signatures_distinct)
-    expect('sha256:' + hexEncode(sha256(canonicalRecord(withField)))).toBe(expected.with_field_record_hash)
+    expect('sha256:' + hexEncode(sha256(canonicalRecord(withField)))).toBe(
+      expected.with_field_record_hash,
+    )
     expect('sha256:' + hexEncode(sha256(canonicalRecord(withoutField)))).toBe(
       expected.without_field_record_hash,
     )

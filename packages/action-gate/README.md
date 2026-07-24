@@ -71,6 +71,68 @@ throws while delivering a signed record to a mirror, log sink, or proof-packet
 writer, the action result still returns a complete decision/outcome pair and
 adds the callback failure to `record_delivery_errors`.
 
+## Protected MCP execution
+
+`createProtectedMcpExecutor()` puts permit enforcement at the MCP execution
+boundary. It signs the policy decision first, issues a short-lived opaque
+permit only for an allowed action, and atomically consumes that permit before
+calling the upstream handler.
+
+```ts
+import { createProtectedMcpExecutor } from '@atrib/action-gate'
+
+const executor = createProtectedMcpExecutor({
+  privateKey,
+  contextId,
+  revokedKeys: () => loadCurrentRevokedKeys(),
+  evaluate: ({ action }) => policy.evaluate(action),
+  executeUpstream: ({ name, arguments: args }) => internalMcp.callTool(name, args),
+})
+
+const result = await executor.authorizeAndExecute({
+  action: {
+    run_id: 'refund-run-1042',
+    action_id: 'refund-order',
+    agent_id: 'support-agent',
+    risk: ['external_write'],
+    credential: {
+      run_key: runCertificate.run_pubkey,
+      principal_key: runCertificate.principal_key,
+    },
+  },
+  request: {
+    name: 'refund.order',
+    arguments: { orderId: '1042', amount: '284.00' },
+  },
+})
+```
+
+The permit binds the run, action, agent, MCP surface, tool name, and canonical
+argument digest. When `revokedKeys` is configured, the binding also carries the
+declared run and principal credential. A missing credential, a revoked run or
+principal, or a failed revocation-view read fails closed before policy
+evaluation. The executor checks the view again at dispatch, closing a
+policy-to-use rotation race before the upstream side effect. Missing, unknown,
+mismatched, expired, and replayed permits also fail before that side effect. A
+mismatched probe does not consume the valid permit.
+
+The raw upstream handler must not remain separately reachable. Mount the
+returned protected boundary at any raw-shaped internal route. If a public route
+still reaches the original upstream server, that route remains a bypass outside
+the adapter's control. Distributed hosts must replace the in-memory permit
+store with a shared atomic `ProtectedMcpPermitStore`.
+
+The allowed path emits the normal signed decision and outcome pair. A rejected
+direct dispatch emits a separate blocked decision and outcome pair with
+`direct_bypass` risk and the authorization failure reason. If evidence signing
+fails, dispatch still rejects the action and returns `evidence_error`; proof
+failure never opens the executor.
+
+`revokedKeys` can be a current set or an async loader. Production hosts should
+use a loader backed by their accepted log or profile view so a revocation takes
+effect without restarting the executor. The adapter verifies enforcement over
+the supplied view. It does not fetch the public log by itself.
+
 ## Split-phase and hash-only hosts
 
 Some hosts decide first and receive an execution report later. They can build
@@ -165,7 +227,7 @@ default, or `escalate` when `onUntrusted: 'escalate'`. The signed decision's
 import { runGatedAction, requireTrustedTransaction } from '@atrib/action-gate'
 
 const result = await runGatedAction({
-  action: { /* ...transaction action envelope... */ },
+  action: {/* ...transaction action envelope... */},
   evaluate: () => requireTrustedTransaction({ record, trustedCreatorKeys }),
   execute: () => settlePayment(),
 })
@@ -192,7 +254,7 @@ signed decision's `evidence` carries `attestors_valid`, `attestors_trusted`, and
 import { runGatedAction, requireCorroborated } from '@atrib/action-gate'
 
 const result = await runGatedAction({
-  action: { /* ...action that depends on a corroborated target... */ },
+  action: {/* ...action that depends on a corroborated target... */},
   evaluate: () =>
     requireCorroborated({ targetRecordHash, targetCreatorKey, attestations, trustedCreatorKeys }),
   execute: () => actOnCorroboratedTarget(),

@@ -160,6 +160,20 @@ describe('attest-recall corpus: read-equivalence', () => {
     expect(result.isError).toBe(true)
     expect(String(result.payload['message'])).toContain('start')
   })
+
+  it('projects revision lineages through the state shape without adding a legacy tool', async () => {
+    const result = await callTool('recall', {
+      shape: 'state',
+      include_content: false,
+      limit: 20,
+    })
+    expect(result.isError).not.toBe(true)
+    expect(result.payload['schema']).toBe('atrib.state-projection.v1')
+    expect(result.payload['acceptance_basis']).toMatchObject({
+      signature_verification: 'local_ed25519',
+      log_inclusion_verified: false,
+    })
+  })
 })
 
 describe('attest-recall corpus: persisted-labels', () => {

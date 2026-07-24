@@ -54,12 +54,7 @@ import { resolveKey, type ResolvedKey } from './keys.js'
 import { filterResolvableInformedBy, type RecordReferenceResolver } from './reference-resolution.js'
 import { buildAndSignEmitRecord } from './sign.js'
 import { mirrorRecord } from './storage.js'
-import {
-  AttestInput,
-  isAttestMappingRefusal,
-  mapAttestInput,
-  type AttestInputT,
-} from './attest.js'
+import { AttestInput, isAttestMappingRefusal, mapAttestInput, type AttestInputT } from './attest.js'
 import { registerAnnotateTool } from './annotate.js'
 import { registerReviseTool } from './revise.js'
 
@@ -85,6 +80,7 @@ function readMirrorPath(): string {
 const HEX_32_PATTERN = /^[0-9a-f]{32}$/
 // 16 bytes encoded as base64url with no padding = 22 chars per spec §1.2.6.
 const PROVENANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/
+const COMMITMENT_SALT_PATTERN = /^[A-Za-z0-9_-]{22}$/
 const DEFAULT_KEY_RESOLVE_RETRY_MS = 30_000
 const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
 
@@ -205,10 +201,13 @@ const EmitInput = z.object({
     .describe(
       'Optional §8.3 args_hash commitment. Format: "sha256:" + 64 lowercase hex. Lets ' +
         'emit-signed records carry a commitment to canonical args bytes for downstream ' +
-        'consumers (e.g. recall filtering by args_hash, or replay detection). Salted vs ' +
-        'plain forms hash identically on the wire; the salt (when used) is carried in the ' +
-        'separate args_salt field, which this surface does not yet expose.',
+        'consumers (e.g. recall filtering by args_hash, or replay detection).',
     ),
+  args_salt: z
+    .string()
+    .regex(COMMITMENT_SALT_PATTERN)
+    .optional()
+    .describe('Optional base64url 16-byte salt paired with args_hash per §8.3.'),
   result_hash: z
     .string()
     .regex(SHA256_REF_PATTERN)
@@ -216,9 +215,13 @@ const EmitInput = z.object({
     .describe(
       'Optional §8.3 result_hash commitment. Format: "sha256:" + 64 lowercase hex. Lets ' +
         'emit-signed records carry a commitment to canonical result bytes for downstream ' +
-        'consumers. Salted vs plain forms hash identically on the wire; the salt (when used) ' +
-        'is carried in the separate result_salt field, which this surface does not yet expose.',
+        'consumers.',
     ),
+  result_salt: z
+    .string()
+    .regex(COMMITMENT_SALT_PATTERN)
+    .optional()
+    .describe('Optional base64url 16-byte salt paired with result_hash per §8.3.'),
 })
 
 type EmitSignedOutput = {
@@ -439,7 +442,7 @@ export function registerAttestTool(mcp: McpServer, deps: WriteToolDeps): void {
     'attest',
     {
       description:
-        'Make a signed statement now: atrib\'s write verb. Signs an observation by default; ' +
+        "Make a signed statement now: atrib's write verb. Signs an observation by default; " +
         'declare ref: { kind: "annotates", target } to mark a past record\'s importance, or ' +
         'ref: { kind: "revises", target, reason } to supersede a prior position. One handler ' +
         'behind the legacy emit / atrib-annotate / atrib-revise names; records are ' +
@@ -756,10 +759,14 @@ async function handleEmit({
       revises: input.revises,
       toolName: input.tool_name,
       argsHash: input.args_hash,
+      argsSalt: input.args_salt,
       resultHash: input.result_hash,
+      resultSalt: input.result_salt,
     })
   } catch (e) {
-    return refusalOutput(contextId, [`signing failed: ${e instanceof Error ? e.message : String(e)}`])
+    return refusalOutput(contextId, [
+      `signing failed: ${e instanceof Error ? e.message : String(e)}`,
+    ])
   }
 
   const recordHash = hashRecord(record)
@@ -1417,9 +1424,7 @@ export async function emitInProcess(
 // ---- the attest write verb: programmatic surface ----
 
 /** Signed attest output: the emit-family fields plus the mapped event_type. */
-export type AttestOutput =
-  | (EmitSignedOutput & { event_type: string })
-  | EmitRefusalOutput
+export type AttestOutput = (EmitSignedOutput & { event_type: string }) | EmitRefusalOutput
 
 export interface HandleAttestInput {
   input: AttestInputT
@@ -1474,10 +1479,7 @@ export async function attestInProcess(
   }
   const mapped = mapAttestInput(parsed.data)
   if (isAttestMappingRefusal(mapped)) {
-    return refusalOutput(
-      parsed.data.context_id ?? randomContextId(),
-      mapped.refusals,
-    )
+    return refusalOutput(parsed.data.context_id ?? randomContextId(), mapped.refusals)
   }
   const result = await emitInProcess(mapped.emitInput, {
     ...options,
@@ -1530,9 +1532,5 @@ export {
   registerAnnotateTool,
 } from './annotate.js'
 export type { AtribAnnotateServer, CreateAtribAnnotateServerOptions } from './annotate.js'
-export {
-  ReviseInput,
-  createAtribReviseServer,
-  registerReviseTool,
-} from './revise.js'
+export { ReviseInput, createAtribReviseServer, registerReviseTool } from './revise.js'
 export type { AtribReviseServer, CreateAtribReviseServerOptions } from './revise.js'

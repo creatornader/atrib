@@ -167,6 +167,7 @@ import {
   loadNewestLoadedFromDir,
 } from './aggregations.js'
 import type { AnnotationSummary as AggAnnotationSummary, LoadedRecord } from './aggregations.js'
+import { projectAcceptedState, type StateProjectionOptions } from './state-projection.js'
 import {
   recencyScore,
   importanceScore,
@@ -1387,8 +1388,6 @@ function fullify(bundles: VerifiedBundle[]): RecallRecordFull[] {
   })
 }
 
-
-
 /**
  * Discover and load records per the mirror-discovery contract:
  *   - If `recordFile` is provided, load just that file.
@@ -1718,6 +1717,13 @@ export async function runRecallRevisions(args: {
   return { record_hash: args.record_hash, revision_chain: chain }
 }
 
+export async function runRecallState(
+  options: StateProjectionOptions = {},
+): Promise<Record<string, unknown>> {
+  const { loaded } = getLoadedMirrorSnapshot()
+  return (await projectAcceptedState(loaded, options)) as unknown as Record<string, unknown>
+}
+
 /** Args for BM25 content retrieval (legacy recall_by_content). */
 export interface RecallByContentArgs {
   query: string
@@ -1927,9 +1933,7 @@ export interface RecallOrphansArgs {
   limit?: number | undefined
 }
 
-export async function runRecallOrphans(
-  args: RecallOrphansArgs,
-): Promise<Record<string, unknown>> {
+export async function runRecallOrphans(args: RecallOrphansArgs): Promise<Record<string, unknown>> {
   const { loaded, annotationsByRecord } = getLoadedMirrorSnapshot()
   // Build the set of all record_hashes that appear in any record's
   // informed_by field. Anything in `loaded` whose record_hash is
@@ -2219,7 +2223,7 @@ export function registerAtribRecallTools(server: McpServer): void {
     'recall_walk',
     {
       description:
-        'Walk the local derived graph from a starting record_hash. Returns records reachable via the requested edge types up to the given hop depth, ordered by ascending weighted distance. Layer 1 covers four edge types: CHAIN_PRECEDES (weight 1), INFORMED_BY (weight 1), ANNOTATES (weight 2), REVISES (weight 2). SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, and PROVENANCE_OF are deferred to subsequent releases. Useful for tracing the local causal neighborhood of a record before re-attempting a similar action. Legacy alias: new callers should prefer the `recall` tool with shape=\'walk\' (no direction).',
+        "Walk the local derived graph from a starting record_hash. Returns records reachable via the requested edge types up to the given hop depth, ordered by ascending weighted distance. Layer 1 covers four edge types: CHAIN_PRECEDES (weight 1), INFORMED_BY (weight 1), ANNOTATES (weight 2), REVISES (weight 2). SESSION_PRECEDES, SESSION_PARALLEL, CONVERGES_ON, CROSS_SESSION, and PROVENANCE_OF are deferred to subsequent releases. Useful for tracing the local causal neighborhood of a record before re-attempting a similar action. Legacy alias: new callers should prefer the `recall` tool with shape='walk' (no direction).",
       inputSchema: {
         from_record_hash: z
           .string()
@@ -2481,7 +2485,20 @@ export type {
   AtribVerifyServer,
   RecallVerificationBlock,
 } from './verification.js'
-export { registerRecallVerbTool, RecallVerbInput, RECALL_SHAPES, runRecallVerb } from './recall-verb.js'
+export {
+  projectAcceptedState,
+  type StateCell,
+  type StateExcludedRevision,
+  type StateProjection,
+  type StateProjectionOptions,
+  type StateRecordView,
+} from './state-projection.js'
+export {
+  registerRecallVerbTool,
+  RecallVerbInput,
+  RECALL_SHAPES,
+  runRecallVerb,
+} from './recall-verb.js'
 export type { RecallShape, RecallVerbInputT } from './recall-verb.js'
 
 /**

@@ -2,7 +2,7 @@
 
 Version: 0.2
 Status: active working design contract
-Last updated: 2026-05-25
+Last updated: 2026-07-23
 
 ## Purpose
 
@@ -111,6 +111,10 @@ Working today:
 - The live log outage exposed and fixed a real production issue, and smoke checks now enforce latency budgets for public log routes.
 - The code examples and standards section make adoption feel concrete.
 - Mobile overflow and keyboard entry points have explicit guardrails.
+- The open operating-graph reference client turns signed private bodies into
+  one bounded workspace surface. Its visual signature is the evidence rail:
+  each active state head keeps a visible hash, signer, and semantic status
+  until an all-head resolution lands.
 
 Still underdesigned:
 
@@ -120,6 +124,9 @@ Still underdesigned:
 - Docs and package READMEs do not yet carry the same visual and writing system.
 - Open Graph and touch-icon assets now use the same amber seal, near-black canvas, and signed-graph language across `atrib.dev` and `explore.atrib.dev`.
 - CI smoke now catches slow endpoints, but the product does not yet keep historical latency trends or alert routes.
+- The operating-graph client is a reference application, not yet a hosted
+  public product. Authentication, organization-level trust policy, and
+  archive-backed body retrieval remain deployment-owned.
 
 ## North Star
 
@@ -196,18 +203,18 @@ Status and reliability surfaces:
 
 ## Explorer Surface Inventory
 
-This inventory is grounded in `apps/dashboard/index.html` as of 2026-05-25. Update it when routes, view hierarchy, proof language, or reliability states change.
+This inventory is grounded in `apps/dashboard/index.html` as of 2026-07-23. Update it when routes, view hierarchy, proof language, or reliability states change.
 
-| Surface                            | User job                                                                               | Current friction                                                                                                                                             | Target hierarchy                                                                                                                    | Next design action                                                                                                            |
-| ---------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Overview `/`                       | Understand live log health, search a known identifier, and scan recent signed records. | The page now says "proof status" and "log health", but it still mixes product health, proof state, recent activity, and onboarding in one first-screen band. | Live state, search, proof path, recent receipts, event key.                                                                         | Separate product health from proof status. Add stale/slow language when data is old or delayed.                               |
-| Action `/action/<record_hash>`     | Verify one signed record and decide where to inspect next.                             | The receipt panel now states what the log proof does and does not prove, but it still needs a fuller independent verifier path.                              | Subject, event summary, signer, inclusion/proof checks, session/identity/trace links, raw JSON.                                     | Clarify missing directory claim as optional, not a warning. Add inclusion-proof and checkpoint replay details when available. |
-| Identity `/identity/<creator_key>` | Understand who a key claims to be and inspect that signer's sessions.                  | The directory and activity-map concepts are useful but dense. A user can miss that a missing claim does not invalidate signatures.                           | Key, claim state, claim history, activity map, sessions, raw directory data when needed.                                            | Add a plain-language identity-state model: claimed, unclaimed, directory error, claim history available.                      |
-| Session `/session/<context_id>`    | Read one agent workflow as a sequence and graph.                                       | Fallback states are honest but too implementation-heavy, especially when graph-node errors or large sessions produce sparse views.                           | Readiness row (source, graph, transaction, references), structural stats, graph when useful, signed records table, fallback reason. | Rewrite graph fallback copy around user meaning: graph unavailable, log records still trustworthy.                            |
-| Trace `/trace/<record_hash>`       | Read one primary path first, then inspect trace and chain projections.                 | The primary path now helps first-time readers, but the view still needs to keep chronology and declared relationships visibly distinct.                      | Starting record, primary path, declared relationships, chronology chain, edge legend, direct action link.                           | Tune the labels around "claimed relationship" versus "observed order" and keep spec references secondary.                     |
-| Anchoring `/anchoring`             | Check signed checkpoint and directory anchor state.                                    | Anchoring is the most protocol-heavy view. It risks sounding like internal implementation unless it names what a checkpoint lets a verifier do.              | Protected history, checkpoint, directory anchor, endpoint state, raw proof material.                                                | Rename labels around verifier jobs: "history checkpoint", "directory state anchor", "latest protected tree".                  |
-| Live replay `/demo`                | See a live replay of recent signed agent activity.                                     | It is useful as motion, but it can read as spectacle unless the selected records map back to verification. It must not be confused with the stable YC demo.  | Selected session, timeline, replay graph, selected record inspector, action links.                                                  | Make the inspector more receipt-like. Add a clear link from replay state to the action receipt.                               |
-| About `/about`                     | Learn what each view means and how to verify records.                                  | It covers the basics, but it should become the glossary for the design language: receipt, signer, log, proof, trace, anchor.                                 | What this is, seven views, core vocabulary, manual verification steps.                                                              | Add a compact glossary and link terms back into view headers.                                                                 |
+| Surface                            | User job                                                                               | Current friction                                                                                                                                                                         | Target hierarchy                                                                                                                                                      | Next design action                                                                                                            |
+| ---------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Overview `/`                       | Understand live log health, search a known identifier, and scan recent signed records. | The page now says "proof status" and "log health", but it still mixes product health, proof state, recent activity, and onboarding in one first-screen band.                             | Live state, search, proof path, recent receipts, event key.                                                                                                           | Separate product health from proof status. Add stale/slow language when data is old or delayed.                               |
+| Action `/action/<record_hash>`     | Verify one signed record and decide where to inspect next.                             | The view now separates the compact log commitment from an archived signed body and names body availability, but it still needs a fuller independent verifier path.                       | Subject, event summary, signer, inclusion/proof checks, body availability, session/identity/trace links, commitment projection, archived body when available.         | Clarify missing directory claim as optional, not a warning. Add inclusion-proof and checkpoint replay details when available. |
+| Identity `/identity/<creator_key>` | Understand who a key claims to be and inspect that signer's sessions.                  | The directory and activity-map concepts are useful but dense. A user can miss that a missing claim does not invalidate signatures.                                                       | Key, claim state, claim history, activity map, sessions, raw directory data when needed.                                                                              | Add a plain-language identity-state model: claimed, unclaimed, directory error, claim history available.                      |
+| Session `/session/<context_id>`    | Read one agent workflow as a sequence, graph, and revision state.                      | The public revision projection now exposes every visible head and partial root, but the dense session still asks readers to distinguish public commitments from receiver-accepted state. | Readiness row (source, graph, transaction, references, revision state), structural stats, current revision state, graph when useful, signed records, fallback reason. | Keep the receiver-policy and proof-basis boundary visible while simplifying large-session fallback copy.                      |
+| Trace `/trace/<record_hash>`       | Read one primary path first, then inspect trace and chain projections.                 | The primary path now helps first-time readers, but the view still needs to keep chronology and declared relationships visibly distinct.                                                  | Starting record, primary path, declared relationships, chronology chain, edge legend, direct action link.                                                             | Tune the labels around "claimed relationship" versus "observed order" and keep spec references secondary.                     |
+| Anchoring `/anchoring`             | Check signed checkpoint and directory anchor state.                                    | Anchoring is the most protocol-heavy view. It risks sounding like internal implementation unless it names what a checkpoint lets a verifier do.                                          | Protected history, checkpoint, directory anchor, endpoint state, raw proof material.                                                                                  | Rename labels around verifier jobs: "history checkpoint", "directory state anchor", "latest protected tree".                  |
+| Live replay `/demo`                | See a live replay of recent signed agent activity.                                     | It is useful as motion, but it can read as spectacle unless the selected records map back to verification. It must not be confused with the stable YC demo.                              | Selected session, timeline, replay graph, selected record inspector, action links.                                                                                    | Make the inspector more receipt-like. Add a clear link from replay state to the action receipt.                               |
+| About `/about`                     | Learn what each view means and how to verify records.                                  | It covers the basics, but it should become the glossary for the design language: receipt, signer, log, proof, trace, anchor.                                                             | What this is, seven views, core vocabulary, manual verification steps.                                                                                                | Add a compact glossary and link terms back into view headers.                                                                 |
 
 ## Execution Backlog
 
@@ -224,6 +231,7 @@ This inventory is grounded in `apps/dashboard/index.html` as of 2026-05-25. Upda
 - [x] Define event-chip colors, labels, and density rules for every record type.
 - [x] Add explorer detail-view hierarchy rules: subject header, verification status, graph, raw JSON, related records.
 - [x] Bring explorer tokens closer to this document without losing dense product affordances.
+- [x] Add a bounded public revision-state component that preserves every visible conflict head and labels partial roots.
 
 ### Receipt chain system
 
@@ -568,11 +576,13 @@ Recommended slice:
 
 ## Design Decisions Log
 
-| Date       | Decision                                                      | Rationale                                                                                                                |
-| ---------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| 2026-05-25 | Use the receipt chain as atrib's signature design element     | It is specific to the product and maps directly to signed records, hashes, proof, and causality.                         |
-| 2026-05-25 | Keep this file as the repo design source of truth             | The explorer and protocol surfaces live in this repo, so design guidance must not live only in the sibling website repo. |
-| 2026-05-25 | Treat latency and stale data states as design-system concerns | A public verification surface fails users when it hides whether data is slow, stale, unreachable, or unverified.         |
+| Date       | Decision                                                          | Rationale                                                                                                                                                        |
+| ---------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-25 | Use the receipt chain as atrib's signature design element         | It is specific to the product and maps directly to signed records, hashes, proof, and causality.                                                                 |
+| 2026-05-25 | Keep this file as the repo design source of truth                 | The explorer and protocol surfaces live in this repo, so design guidance must not live only in the sibling website repo.                                         |
+| 2026-05-25 | Treat latency and stale data states as design-system concerns     | A public verification surface fails users when it hides whether data is slow, stale, unreachable, or unverified.                                                 |
+| 2026-07-23 | Separate public revision commitments from receiver-accepted state | The explorer can make live conflicts useful without implying that a browser view applied the receiver's trust policy or verified an inclusion proof.             |
+| 2026-07-23 | Separate compact log commitments from signed record bodies        | A log inclusion can stay inspectable when a body is unavailable, while the UI avoids claiming direct hash or signature verification from commitment-only fields. |
 
 ## Public References
 

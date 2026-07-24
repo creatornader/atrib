@@ -117,7 +117,7 @@ export async function bindServer(
     // per spec §0; browser cross-origin reads are explicitly permitted.
     res.setHeader('access-control-allow-origin', '*')
     res.setHeader('access-control-allow-methods', 'GET, HEAD, POST, OPTIONS')
-    res.setHeader('access-control-allow-headers', 'content-type, x-atrib-priority')
+    res.setHeader('access-control-allow-headers', 'content-type, last-event-id, x-atrib-priority')
     if (req.method === 'OPTIONS') {
       res.statusCode = 204
       res.end()
@@ -187,6 +187,7 @@ interface LogEntryFilters {
   contextId?: string
   eventType?: string
   sinceMs?: number
+  afterIndex?: number
 }
 
 interface LogStreamSubscriber {
@@ -235,8 +236,7 @@ async function handleRequest(
   const isHead = req.method === 'HEAD'
   if (
     isGetOrHead(req.method) &&
-    isExplorerHost &&
-    (urlPath === '/' || urlPath === '' || isDashboardRoutePath(urlPath))
+    ((isExplorerHost && (urlPath === '/' || urlPath === '')) || isDashboardRoutePath(urlPath))
   ) {
     return handleDashboard(res, isHead)
   }
@@ -279,8 +279,8 @@ async function handleRequest(
         by_creator: `GET /${v}/by-creator/<creator_key_b64url>`,
         stream: `GET /${v}/stream`,
         json_feed: `GET /${v}/feed.json`,
-        tile: `GET /${v}/tile/<level>/<index>`,
-        entry_bundle: `GET /${v}/tile/entries/<index>`,
+        tile: `GET /${v}/tile/<level>/<tile-path>[.p/<width>]`,
+        entry_bundle: `GET /${v}/tile/entries/<tile-path>[.p/<width>]`,
       },
       explorer: 'https://explore.atrib.dev/',
       note: 'This base URL has no browsable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes log + graph + directory reads into a unified surface.',
@@ -353,7 +353,16 @@ async function handleRequest(
   if (req.method === 'GET' && urlPath === '/v1/stream') {
     const parsed = parseFilterParams(new URL(req.url ?? '', 'http://localhost').searchParams)
     if (!parsed.ok) return reject(res, 400, parsed.error)
-    return handleStream(req, res, tree, parsed.filters, subscribers)
+    const resumed = resolveStreamResumeCursor(req, parsed.filters)
+    if (!resumed.ok) return reject(res, 400, resumed.error)
+    if (resumed.filters.afterIndex !== undefined && resumed.filters.afterIndex >= tree.size) {
+      return reject(
+        res,
+        409,
+        `resume cursor ${resumed.filters.afterIndex} is beyond current log tail ${tree.size - 1}`,
+      )
+    }
+    return handleStream(req, res, tree, resumed.filters, subscribers)
   }
 
   if (req.method === 'GET' && urlPath === '/v1/feed.json') {
@@ -414,19 +423,32 @@ async function handleRequest(
     return handleByCreator(res, tree, byCreatorMatch[1]!)
   }
 
-  // §2.5.2: Tile endpoints. GET /v1/tile/<level>/<index>
-  const tileMatch = req.url?.match(/^\/v1\/tile\/(\d+)\/(\d+)$/)
-  if (req.method === 'GET' && tileMatch) {
-    const level = parseInt(tileMatch[1]!, 10)
-    const index = parseInt(tileMatch[2]!, 10)
-    return handleTile(res, tree, level, index)
+  // §2.5.3: Entry bundle endpoint. Match this before the hash-tile route
+  // because both share the /v1/tile prefix.
+  const entryMatch = req.url?.match(/^\/v1\/tile\/entries\/(.+)$/)
+  if (req.method === 'GET' && entryMatch) {
+    const address = parseTileAddress(entryMatch[1]!)
+    if (!address) {
+      return reject(res, 400, 'malformed entry bundle path')
+    }
+    return handleEntryBundle(res, tree, address)
   }
 
-  // §2.5.3: Entry bundle endpoint. GET /v1/tile/entries/<index>
-  const entryMatch = req.url?.match(/^\/v1\/tile\/entries\/(\d+)$/)
-  if (req.method === 'GET' && entryMatch) {
-    const index = parseInt(entryMatch[1]!, 10)
-    return handleEntryBundle(res, tree, index)
+  // §2.5.2: Hash tile endpoint. Canonical tile indexes use three-digit path
+  // elements and an optional .p/<width> suffix. Pre-spec unpadded indexes
+  // shorter than three digits remain compatibility aliases.
+  const tileMatch = req.url?.match(/^\/v1\/tile\/(\d+)\/(.+)$/)
+  if (req.method === 'GET' && tileMatch) {
+    const level = parseCanonicalDecimal(tileMatch[1]!)
+    const address = parseTileAddress(tileMatch[2]!)
+    if (level === undefined || !address) {
+      return reject(res, 400, 'malformed tile path')
+    }
+    return handleTile(res, tree, level, address)
+  }
+
+  if (req.method === 'GET' && req.url?.startsWith('/v1/tile/')) {
+    return reject(res, 400, 'malformed tile path')
   }
 
   // D054: serve the public explorer (option 1) inline. The HTML lives at
@@ -493,7 +515,7 @@ async function handleRequest(
 
   sendJson(res, 404, {
     error: 'not found',
-    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/recent, GET /v1/stream, GET /v1/feed.json, GET /v1/lookup/<hex>, GET /v1/proof/<hex>, GET /v1/by-context/<hex>, GET /v1/by-creator/<base64url>, GET /v1/tile/<L>/<N>, GET /v1/tile/entries/<N>, GET /dashboard, GET /<name>.mjs (dashboard sibling modules), GET /static/<name>, GET /favicon.ico',
+    hint: 'Available endpoints: POST /v1/entries, GET /v1/checkpoint, GET /v1/pubkey, GET /v1/log-pubkey, GET /v1/stats, GET /v1/recent, GET /v1/stream, GET /v1/feed.json, GET /v1/lookup/<hex>, GET /v1/proof/<hex>, GET /v1/by-context/<hex>, GET /v1/by-creator/<base64url>, GET /v1/tile/<L>/<tile-path>[.p/<W>], GET /v1/tile/entries/<tile-path>[.p/<W>], GET /dashboard, GET /<name>.mjs (dashboard sibling modules), GET /static/<name>, GET /favicon.ico',
   })
 }
 
@@ -910,6 +932,7 @@ function handleStream(
   filters: LogEntryFilters,
   subscribers: Set<LogStreamSubscriber>,
 ): void {
+  const replayThrough = tree.size - 1
   res.statusCode = 200
   res.setHeader('content-type', 'text/event-stream; charset=utf-8')
   res.setHeader('cache-control', 'no-cache, no-transform')
@@ -933,11 +956,15 @@ function handleStream(
     `event: ready\ndata: ${JSON.stringify({
       tree_size: tree.size,
       filters: publicFilterShape(filters),
+      resume_after: filters.afterIndex ?? null,
+      replay_through:
+        filters.afterIndex !== undefined || filters.sinceMs !== undefined ? replayThrough : null,
     })}\n\n`,
   )
 
-  if (filters.sinceMs !== undefined) {
-    for (let i = 0; i < tree.size; i++) {
+  if (filters.afterIndex !== undefined || filters.sinceMs !== undefined) {
+    const start = filters.afterIndex === undefined ? 0 : filters.afterIndex + 1
+    for (let i = start; i <= replayThrough; i++) {
       const entry = decodeEntry(tree.entryBytes(i), i)
       if (matchesEntryFilters(entry, filters)) writeSseLogEntry(res, entry, tree.size)
     }
@@ -1028,6 +1055,7 @@ function matchesEntryFilters(entry: DecodedEntry, filters: LogEntryFilters): boo
   if (filters.contextId !== undefined && entry.context_id !== filters.contextId) return false
   if (filters.eventType !== undefined && entry.event_type !== filters.eventType) return false
   if (filters.sinceMs !== undefined && entry.timestamp_ms < filters.sinceMs) return false
+  if (filters.afterIndex !== undefined && entry.index <= filters.afterIndex) return false
   return true
 }
 
@@ -1104,7 +1132,35 @@ function parseFilterParams(
     filters.sinceMs = parsed
   }
 
+  const after = params.get('after')
+  if (after !== null) {
+    const parsed = parseResumeIndex(after, true)
+    if (parsed === undefined) {
+      return {
+        ok: false,
+        error: 'after must be -1 or a non-negative safe integer log index',
+      }
+    }
+    filters.afterIndex = parsed
+  }
+
   return { ok: true, filters }
+}
+
+function resolveStreamResumeCursor(
+  req: IncomingMessage,
+  filters: LogEntryFilters,
+): { ok: true; filters: LogEntryFilters } | { ok: false; error: string } {
+  const lastEventId = headerFirst(req.headers['last-event-id'])
+  if (lastEventId === undefined || lastEventId === '') return { ok: true, filters }
+  const parsed = parseResumeIndex(lastEventId, false)
+  if (parsed === undefined) {
+    return {
+      ok: false,
+      error: 'Last-Event-ID must be a non-negative safe integer log index',
+    }
+  }
+  return { ok: true, filters: { ...filters, afterIndex: parsed } }
 }
 
 function normalizeEventTypeFilter(value: string): string | undefined {
@@ -1136,12 +1192,21 @@ function parseSinceMs(value: string): number | undefined {
   return Number.isFinite(t) && t >= 0 ? t : undefined
 }
 
+function parseResumeIndex(value: string, allowBeforeGenesis: boolean): number | undefined {
+  if (!/^-?\d+$/.test(value)) return undefined
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) return undefined
+  if (allowBeforeGenesis && parsed === -1) return parsed
+  return parsed >= 0 ? parsed : undefined
+}
+
 function publicFilterShape(filters: LogEntryFilters): Record<string, string | number> {
   const out: Record<string, string | number> = {}
   if (filters.creatorKey !== undefined) out.creator_key = filters.creatorKey
   if (filters.contextId !== undefined) out.context_id = filters.contextId
   if (filters.eventType !== undefined) out.event_type = filters.eventType
   if (filters.sinceMs !== undefined) out.since = filters.sinceMs
+  if (filters.afterIndex !== undefined) out.after = filters.afterIndex
   return out
 }
 
@@ -1449,11 +1514,71 @@ async function handleCheckpoint(
  * Level 0 = leaf hashes, higher levels = internal node hashes.
  * Each tile contains up to TILE_SIZE (256) concatenated 32-byte hashes.
  */
-function handleTile(res: ServerResponse, tree: MerkleTree, level: number, index: number): void {
+interface TileAddress {
+  index: number
+  width?: number
+  canonical: boolean
+}
+
+function parseCanonicalDecimal(value: string): number | undefined {
+  if (!/^(0|[1-9]\d*)$/.test(value)) return undefined
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : undefined
+}
+
+/**
+ * Parse the §2.5 tile index encoding.
+ *
+ * Canonical indexes use one three-digit element for 0..999, then x-prefixed
+ * three-digit groups for larger indexes. Examples: 000, 999,
+ * x001/x234/567. A .p/W suffix selects an immutable partial-tile version.
+ *
+ * An unpadded decimal shorter than three digits remains accepted as a
+ * compatibility alias. Values from 100 through 999 collide with canonical
+ * paths and therefore use canonical semantics.
+ */
+function parseTileAddress(value: string): TileAddress | undefined {
+  const match = value.match(/^(.+?)(?:\.p\/([1-9]\d*))?$/)
+  if (!match) return undefined
+
+  const encodedIndex = match[1]!
+  let indexText: string
+  let canonical: boolean
+
+  if (/^\d{3}$/.test(encodedIndex)) {
+    indexText = encodedIndex
+    canonical = true
+  } else if (/^x\d{3}(?:\/x\d{3})*\/\d{3}$/.test(encodedIndex)) {
+    indexText = encodedIndex.replaceAll('x', '').replaceAll('/', '')
+    canonical = true
+  } else if (/^(0|[1-9]\d*)$/.test(encodedIndex)) {
+    indexText = encodedIndex
+    canonical = false
+  } else {
+    return undefined
+  }
+
+  const index = Number(indexText)
+  if (!Number.isSafeInteger(index)) return undefined
+
+  if (!match[2]) return { index, canonical }
+  const width = Number(match[2])
+  if (!Number.isSafeInteger(width) || width < 1 || width >= TILE_SIZE) return undefined
+  return { index, width, canonical: true }
+}
+
+function handleTile(
+  res: ServerResponse,
+  tree: MerkleTree,
+  level: number,
+  address: TileAddress,
+): void {
   if (tree.size === 0) {
     sendJson(res, 404, { error: 'no entries yet' })
     return
   }
+
+  const { index, width, canonical } = address
 
   if (level === 0) {
     // Level 0: leaf hashes
@@ -1463,13 +1588,15 @@ function handleTile(res: ServerResponse, tree: MerkleTree, level: number, index:
       sendJson(res, 404, { error: 'tile index out of range' })
       return
     }
+    const servedWidth = resolveServedTileWidth(res, end - start, width, canonical)
+    if (servedWidth === undefined) return
+
     const hashes: Uint8Array[] = []
-    for (let i = start; i < end; i++) {
+    for (let i = start; i < start + servedWidth; i++) {
       hashes.push(tree.leafHash(i))
     }
     const data = concatBytes(hashes)
-    const isFull = end - start === TILE_SIZE
-    sendBinary(res, data, isFull)
+    sendBinary(res, data, servedWidth === TILE_SIZE || width !== undefined)
     return
   }
 
@@ -1504,22 +1631,25 @@ function handleTile(res: ServerResponse, tree: MerkleTree, level: number, index:
     currentLevel = nextLevel
   }
 
-  const hashes = currentLevel.slice(start, end)
+  const servedWidth = resolveServedTileWidth(res, end - start, width, canonical)
+  if (servedWidth === undefined) return
+
+  const hashes = currentLevel.slice(start, start + servedWidth)
   const data = concatBytes(hashes)
-  const isFull = end - start === TILE_SIZE
-  sendBinary(res, data, isFull)
+  sendBinary(res, data, servedWidth === TILE_SIZE || width !== undefined)
 }
 
 /**
  * §2.5.3: Serve an entry bundle (raw entry bytes with uint16 length prefixes).
  * Bundle N contains entries at positions [N*256, (N+1)*256).
  */
-function handleEntryBundle(res: ServerResponse, tree: MerkleTree, index: number): void {
+function handleEntryBundle(res: ServerResponse, tree: MerkleTree, address: TileAddress): void {
   if (tree.size === 0) {
     sendJson(res, 404, { error: 'no entries yet' })
     return
   }
 
+  const { index, width, canonical } = address
   const start = index * TILE_SIZE
   const end = Math.min(start + TILE_SIZE, tree.size)
   if (start >= tree.size) {
@@ -1527,9 +1657,12 @@ function handleEntryBundle(res: ServerResponse, tree: MerkleTree, index: number)
     return
   }
 
+  const servedWidth = resolveServedTileWidth(res, end - start, width, canonical)
+  if (servedWidth === undefined) return
+
   // Build length-prefixed entry bundle
   const chunks: Uint8Array[] = []
-  for (let i = start; i < end; i++) {
+  for (let i = start; i < start + servedWidth; i++) {
     const entry = tree.entryBytes(i)
     // uint16 big-endian length prefix
     const lenBuf = new Uint8Array(2)
@@ -1540,8 +1673,32 @@ function handleEntryBundle(res: ServerResponse, tree: MerkleTree, index: number)
   }
 
   const data = concatBytes(chunks)
-  const isFull = end - start === TILE_SIZE
-  sendBinary(res, data, isFull)
+  sendBinary(res, data, servedWidth === TILE_SIZE || width !== undefined)
+}
+
+/**
+ * Canonical unversioned paths name complete 256-item tiles only. Partial
+ * versions name an exact immutable prefix. Distinct legacy aliases retain the
+ * old short-cache edge behavior while clients migrate.
+ */
+function resolveServedTileWidth(
+  res: ServerResponse,
+  available: number,
+  requestedWidth: number | undefined,
+  canonical: boolean,
+): number | undefined {
+  if (requestedWidth !== undefined) {
+    if (requestedWidth > available) {
+      sendJson(res, 404, { error: 'partial tile width is not available' })
+      return undefined
+    }
+    return requestedWidth
+  }
+  if (canonical && available < TILE_SIZE) {
+    sendJson(res, 404, { error: 'partial tile requires an explicit width' })
+    return undefined
+  }
+  return available
 }
 
 /** Concatenate Uint8Arrays into a single buffer. */
@@ -1558,12 +1715,13 @@ function concatBytes(arrays: Uint8Array[]): Uint8Array {
 }
 
 /** Send binary response with appropriate cache headers. */
-function sendBinary(res: ServerResponse, data: Uint8Array, isFull: boolean): void {
+function sendBinary(res: ServerResponse, data: Uint8Array, immutable: boolean): void {
   res.statusCode = 200
   res.setHeader('content-type', 'application/octet-stream')
   res.setHeader('content-length', data.length)
-  // Full tiles are immutable. partial tiles (at the edge) may grow.
-  if (isFull) {
+  // Full tiles and width-addressed partial tiles are immutable. Only a
+  // distinct legacy unversioned edge alias may grow.
+  if (immutable) {
     res.setHeader('cache-control', 'public, max-age=31536000, immutable')
   } else {
     res.setHeader('cache-control', 'public, max-age=60')

@@ -85,7 +85,9 @@ function fakeQueue(): SubmissionQueue & {
 function recordingTransport(
   anchorType: AnchorTransport['anchorType'],
   anchorId: string,
-  behavior?: (request: AnchorSubmissionRequest) => AnchorSubmissionOutcome | Promise<AnchorSubmissionOutcome>,
+  behavior?: (
+    request: AnchorSubmissionRequest,
+  ) => AnchorSubmissionOutcome | Promise<AnchorSubmissionOutcome>,
 ): AnchorTransport & { requests: AnchorSubmissionRequest[] } {
   const requests: AnchorSubmissionRequest[] = []
   return {
@@ -148,7 +150,9 @@ describe('resolveAnchorPosture (§2.11.12 precedence)', () => {
 
   it('rule 4: sub-plurality without the flag warns and carries the §5.9.3 sidecar marker', () => {
     expect(
-      resolveAnchorPosture({ anchors: [{ anchor_type: 'atrib-log', url: 'https://log.atrib.dev/v1' }] }),
+      resolveAnchorPosture({
+        anchors: [{ anchor_type: 'atrib-log', url: 'https://log.atrib.dev/v1' }],
+      }),
     ).toEqual({
       effective_anchor_count: 1,
       used_default_set: false,
@@ -164,9 +168,9 @@ describe('resolveAnchorPosture (§2.11.12 precedence)', () => {
   })
 
   it('never throws: a malformed config resolves as zero-config (§5.8)', () => {
-    expect(
-      resolveAnchorPosture({ anchors: 'nope' as unknown as [] }),
-    ).toEqual(resolveAnchorPosture())
+    expect(resolveAnchorPosture({ anchors: 'nope' as unknown as [] })).toEqual(
+      resolveAnchorPosture(),
+    )
   })
 
   it('resolveEffectiveAnchors returns the default set only when no anchors were configured', () => {
@@ -318,16 +322,28 @@ describe('anchor transports', () => {
       { anchor_type: 'sigstore-rekor', anchor_id: 'rekor.test', url: 'https://rekor.test' },
       { allowNetwork: true, fetchImpl },
     )
-    const outcome = await transport.submit({ record, recordHash: canonicalRecordHash(record), priority: 'normal' })
-    expect(outcome).toEqual({ anchor_type: 'sigstore-rekor', anchor_id: 'rekor.test', status: 'queued' })
+    const outcome = await transport.submit({
+      record,
+      recordHash: canonicalRecordHash(record),
+      priority: 'normal',
+    })
+    expect(outcome).toEqual({
+      anchor_type: 'sigstore-rekor',
+      anchor_id: 'rekor.test',
+      status: 'queued',
+    })
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     const [url, init] = fetchImpl.mock.calls[0]!
     expect(url).toBe('https://rekor.test/api/v1/log/entries')
-    const body = JSON.parse(init!.body as string) as { spec: { data: { hash: { value: string }, content: string } } }
+    const body = JSON.parse(init!.body as string) as {
+      spec: { data: { hash: { value: string }; content: string } }
+    }
     expect(body.spec.data.hash.value).toBe(canonicalRecordHash(record).slice('sha256:'.length))
-    expect(new TextDecoder().decode(Uint8Array.from(atob(body.spec.data.content), (char) => char.charCodeAt(0)))).toBe(
-      `atrib-anchor/v1:${canonicalRecordHash(record)}`,
-    )
+    expect(
+      new TextDecoder().decode(
+        Uint8Array.from(atob(body.spec.data.content), (char) => char.charCodeAt(0)),
+      ),
+    ).toBe(`atrib-anchor/v1:${canonicalRecordHash(record)}`)
   })
 
   it('RFC 3161 sends a DER timestamp query over explicit HTTP configuration', async () => {
@@ -339,14 +355,18 @@ describe('anchor transports', () => {
       { allowNetwork: true, fetchImpl },
     )
     await expect(transport.submit({ record, recordHash, priority: 'normal' })).resolves.toEqual({
-      anchor_type: 'rfc3161-tsa', anchor_id: 'tsa.test', status: 'queued',
+      anchor_type: 'rfc3161-tsa',
+      anchor_id: 'tsa.test',
+      status: 'queued',
     })
     const query = rfc3161TimestampQuery(recordHash)
     expect(query[0]).toBe(0x30)
     expect([...query].map((byte) => byte.toString(16).padStart(2, '0')).join('')).toContain(
       recordHash.slice('sha256:'.length),
     )
-    expect(fetchImpl.mock.calls[0]![1]!.headers).toMatchObject({ 'content-type': 'application/timestamp-query' })
+    expect(fetchImpl.mock.calls[0]![1]!.headers).toMatchObject({
+      'content-type': 'application/timestamp-query',
+    })
   })
 
   it('OpenTimestamps submits the raw digest and reports a pending receipt', async () => {
@@ -358,16 +378,16 @@ describe('anchor transports', () => {
       { allowNetwork: true, fetchImpl },
     )
     await expect(transport.submit({ record, recordHash, priority: 'normal' })).resolves.toEqual({
-      anchor_type: 'opentimestamps', anchor_id: 'ots.test', status: 'pending',
+      anchor_type: 'opentimestamps',
+      anchor_id: 'ots.test',
+      status: 'pending',
     })
     expect(fetchImpl.mock.calls[0]![0]).toBe('https://ots.test/digest')
     const body = fetchImpl.mock.calls[0]![1]!.body as Blob
     const bodyHex = [...new Uint8Array(await body.arrayBuffer())]
       .map((byte) => byte.toString(16).padStart(2, '0'))
       .join('')
-    expect(bodyHex).toBe(
-      recordHash.slice('sha256:'.length),
-    )
+    expect(bodyHex).toBe(recordHash.slice('sha256:'.length))
   })
 
   it('built-in default leaves the OpenTimestamps HTTP transport disabled', async () => {
@@ -376,8 +396,9 @@ describe('anchor transports', () => {
       { anchor_type: 'opentimestamps', calendars: ['https://ots.test'] },
       { fetchImpl: vi.fn() },
     )
-    expect(transport.submit({ record, recordHash: canonicalRecordHash(record), priority: 'normal' }))
-      .toMatchObject({ status: 'unsupported' })
+    expect(
+      transport.submit({ record, recordHash: canonicalRecordHash(record), priority: 'normal' }),
+    ).toMatchObject({ status: 'unsupported' })
   })
 })
 
@@ -423,6 +444,56 @@ describe('createAnchorFanout / submitToAnchors', () => {
       { anchor_type: 'atrib-log', anchor_id: 'log-a', status: 'queued' },
       { anchor_type: 'opentimestamps', anchor_id: 'ots-cal', status: 'pending' },
     ])
+    await expect(ticket.report).resolves.toEqual({
+      configured_anchor_count: 2,
+      attempted_anchor_count: 2,
+      successful_submission_count: 1,
+      proof_ready_anchor_count: 0,
+      queued_anchor_count: 1,
+      pending_anchor_count: 1,
+      unsupported_anchor_count: 0,
+      failed_anchor_count: 0,
+      proof_ready_anchors: [],
+      outcomes,
+    })
+  })
+
+  it('counts only proof-ready confirmed legs as successful', async () => {
+    const record = await makeSignedRecord()
+    const confirmed = recordingTransport('rfc3161-tsa', 'tsa-a', () => ({
+      anchor_type: 'rfc3161-tsa',
+      anchor_id: 'tsa-a',
+      status: 'confirmed',
+    }))
+    const queued = recordingTransport('atrib-log', 'log-a')
+    const unsupported = recordingTransport('opentimestamps', 'ots-a', () => ({
+      anchor_type: 'opentimestamps',
+      anchor_id: 'ots-a',
+      status: 'unsupported',
+    }))
+    const fanout = createAnchorFanout({
+      config: {
+        anchors: [
+          { anchor_type: 'rfc3161-tsa', anchor_id: 'tsa-a' },
+          { anchor_type: 'atrib-log', anchor_id: 'log-a' },
+          { anchor_type: 'opentimestamps', anchor_id: 'ots-a' },
+        ],
+      },
+      transports: [confirmed, queued, unsupported],
+    })
+
+    const report = await fanout.submitToAnchors(record).report
+    expect(report).toMatchObject({
+      configured_anchor_count: 3,
+      attempted_anchor_count: 3,
+      successful_submission_count: 1,
+      proof_ready_anchor_count: 1,
+      queued_anchor_count: 1,
+      pending_anchor_count: 0,
+      unsupported_anchor_count: 1,
+      failed_anchor_count: 0,
+      proof_ready_anchors: [{ anchor_type: 'rfc3161-tsa', anchor_id: 'tsa-a' }],
+    })
   })
 
   it('a throwing transport degrades to a failed outcome; other legs are unaffected (§5.8)', async () => {
@@ -452,7 +523,8 @@ describe('createAnchorFanout / submitToAnchors', () => {
     expect(outcomes[1]).toMatchObject({ anchor_type: 'atrib-log', status: 'queued' })
     expect(
       warn.mock.calls.some(
-        (call) => typeof call[0] === 'string' && call[0].startsWith('atrib: anchor submission failed'),
+        (call) =>
+          typeof call[0] === 'string' && call[0].startsWith('atrib: anchor submission failed'),
       ),
     ).toBe(true)
   })
@@ -463,7 +535,9 @@ describe('createAnchorFanout / submitToAnchors', () => {
     const only = recordingTransport('atrib-log', 'log-a')
     const fanout = createAnchorFanout({
       config: {
-        anchors: [{ anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' }],
+        anchors: [
+          { anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' },
+        ],
       },
       transports: [only],
     })
@@ -488,7 +562,9 @@ describe('createAnchorFanout / submitToAnchors', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const fanout = createAnchorFanout({
       config: {
-        anchors: [{ anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' }],
+        anchors: [
+          { anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' },
+        ],
         allow_single_anchor: true,
       },
       transports: [recordingTransport('atrib-log', 'log-a')],
@@ -532,7 +608,10 @@ describe('createAnchorFanout / submitToAnchors', () => {
           { anchor_type: 'atrib-log', anchor_id: 'log-b', url: 'https://log-b.example.test/v1' },
         ],
       },
-      transports: [recordingTransport('atrib-log', 'log-a'), recordingTransport('atrib-log', 'log-b')],
+      transports: [
+        recordingTransport('atrib-log', 'log-a'),
+        recordingTransport('atrib-log', 'log-b'),
+      ],
       onOutcome: (outcome) => {
         seen.push(outcome)
         throw new Error('observer bug')
@@ -543,7 +622,8 @@ describe('createAnchorFanout / submitToAnchors', () => {
     expect(seen).toHaveLength(2)
     expect(
       warn.mock.calls.some(
-        (call) => typeof call[0] === 'string' && call[0].startsWith('atrib: anchor outcome observer threw'),
+        (call) =>
+          typeof call[0] === 'string' && call[0].startsWith('atrib: anchor outcome observer threw'),
       ),
     ).toBe(true)
   })
@@ -558,7 +638,9 @@ describe('createAnchorFanout / submitToAnchors', () => {
     })
     const fanout = createAnchorFanout({
       config: {
-        anchors: [{ anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' }],
+        anchors: [
+          { anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' },
+        ],
         allow_single_anchor: true,
       },
       transports: [slow],
@@ -569,12 +651,39 @@ describe('createAnchorFanout / submitToAnchors', () => {
     expect(settled).toBe(true)
   })
 
+  it('flush drains work owned by an atrib-log transport queue', async () => {
+    const record = await makeSignedRecord()
+    let queueFlushed = false
+    const queue = fakeQueue()
+    queue.flush = async () => {
+      queueFlushed = true
+    }
+    const transport = createAtribLogAnchorTransport(
+      { anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' },
+      { queue },
+    )
+    const fanout = createAnchorFanout({
+      config: {
+        anchors: [
+          { anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' },
+        ],
+        allow_single_anchor: true,
+      },
+      transports: [transport],
+    })
+    fanout.submitToAnchors(record)
+    await fanout.flush()
+    expect(queueFlushed).toBe(true)
+  })
+
   it('standalone submitToAnchors is a synchronous one-shot over the same fan-out', async () => {
     const record = await makeSignedRecord()
     const leg = recordingTransport('atrib-log', 'log-a')
     const ticket = submitToAnchors(record, {
       config: {
-        anchors: [{ anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' }],
+        anchors: [
+          { anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' },
+        ],
         allow_single_anchor: true,
       },
       transports: [leg],
@@ -592,7 +701,9 @@ describe('createAnchorFanout / submitToAnchors', () => {
     circular['self'] = circular
     const fanout = createAnchorFanout({
       config: {
-        anchors: [{ anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' }],
+        anchors: [
+          { anchor_type: 'atrib-log', anchor_id: 'log-a', url: 'https://log-a.example.test/v1' },
+        ],
         allow_single_anchor: true,
       },
       transports: [recordingTransport('atrib-log', 'log-a')],
@@ -601,7 +712,9 @@ describe('createAnchorFanout / submitToAnchors', () => {
     expect(await ticket.outcomes).toEqual([])
     expect(
       warn.mock.calls.some(
-        (call) => typeof call[0] === 'string' && call[0].startsWith('atrib: anchor fan-out could not hash record'),
+        (call) =>
+          typeof call[0] === 'string' &&
+          call[0].startsWith('atrib: anchor fan-out could not hash record'),
       ),
     ).toBe(true)
   })

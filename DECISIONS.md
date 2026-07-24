@@ -1123,6 +1123,8 @@ The divergence was present from the initial commit of `checkpoint.ts`. A round-t
 **Date:** 2026-04-27
 **Status:** Accepted; spec [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) rewritten, no code work for V1
 
+**Implementation update.** [D167](#d167-witness-software-ships-before-external-operation) supersedes the implementation deferral in this decision. The threat model, witness-published delivery, verifier-local threshold, out-of-band trust roots, and external-operation requirement remain in force.
+
 **Context.** Spec [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) was a stub with conflicting prose: it gestured at C2SP tlog-witness, mentioned a SHOULD-require threshold, and described an operator-pushes-to-witnesses delivery model. Three of those choices contradicted invariants stated elsewhere in the spec or in CLAUDE.md. With the C2SP signed-note alignment in [D031](#d031-reconcile-243-signed-note-divergence-from-c2sp) finally landed (commit `096c8a5`), witnessing became approachable rather than aspirational, but it also became the next thing where contradictions would compound. Resolving [§2.9](atrib-spec.md#29-witnessing-and-cosignatures) needed concrete answers on five questions before any code could land.
 
 **Decision.** Five concrete choices, captured normatively where format interop demands it and informationally where verifier policy varies:
@@ -1466,7 +1468,7 @@ The `keystore: 'callback'` mode (designed and merged but not yet wired end-to-en
 1. **Three reference profiles.** atrib documents three operator profiles for HSM-backed signing, all using the same `keystore: 'callback'` middleware option:
    - **AWS KMS**: `Sign` API call against a `KEY_USAGE: SIGN_VERIFY` key with `KEY_SPEC: ECC_NIST_P256` initially (deferring Ed25519 KMS support, which AWS announced in 2023 but staged region-by-region; this profile lists Ed25519 as the long-term target). Latency: ~30-50ms per sign. Cost: ~$0.03 per 10K signs.
    - **HashiCorp Vault Transit**: `transit/sign/<key>` endpoint with `key_type: ed25519`. Latency: ~5-15ms when Vault is co-located. Cost: license-dependent; effectively free if Vault is already deployed.
-   - **YubiHSM 2**, local-network HSM with PKCS#11 binding via `pkcs11js`. Latency: ~10ms. Cost: hardware capex (~$650 per unit) + zero ongoing.
+   - **YubiHSM 2**, local-network HSM with PKCS#11 binding via `pkcs11js`. Latency: ~~10ms. Cost: hardware capex (~~$650 per unit) + zero ongoing.
 
 2. **Wrapper contract.** The `keystore: 'callback'` mode passes the canonical signing input (the bytes that would be signed by `signRecord`) and the public key (already known to the wrapper from prior bootstrapping) to the operator-supplied function:
 
@@ -2474,6 +2476,8 @@ Four of five indicators clear. Indicator 1 fails the literal cross-category read
 
 **Date:** 2026-05-04
 **Status:** Accepted
+
+**Update (2026-07-23):** [D166](#d166-verifiable-action-mode-commits-request-and-outcome-by-default-in-the-wrapper) supersedes the one-record and failure-discard rules below when `evidenceMode: "verifiable-action"` is active. The compatibility path described here remains the behavior for explicit disclosure configurations and minimal mode.
 
 **Context.** [§5.3](atrib-spec.md#53-atribmcp-mcp-server-middleware) describes the middleware as signing AFTER the upstream tool returns and adding the propagation token to the response `_meta`. This ordering is correct for the universal case: latency stays off the tool's critical path, and a failed tool call never produces an orphan signed record.
 
@@ -4982,6 +4986,13 @@ The first implementation supports these filters on both surfaces:
 - `event_type`: decoded label (`tool_call`, `transaction`, `observation`, `directory_anchor`, `annotation`, `revision`, `extension`, `reserved`) or atrib normative event_type URI.
 - `since`: millisecond timestamp or ISO timestamp. Boundary is inclusive.
 
+**Reconnect update.** [D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor)
+adds the exact `after` log-index cursor, `Last-Event-ID` handling, and
+cursor-ahead-of-tail refusal. The filters above describe the original
+[D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields)
+surface; [D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor)
+controls reconnect behavior.
+
 The first implementation rejects `topic` and `importance` with `400 Bad Request` because those filters require record-body indexing. Rejecting is deliberate. Silent ignore would make downstream notification code believe server-side filtering happened when it did not.
 
 **Alternatives considered.**
@@ -7431,7 +7442,7 @@ panel scoped to the `/v1/lookup` log response.
 
 **Extends:** [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default), [D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers), [D067](#d067-multi-producer-chain-composition-precedence-contract), [D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type), [D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)
 
-**Context.** An orchestrator agent routes work to a second agent running in a *different harness* with its own long-lived atrib runtime (concrete example: an interactive orchestrator harness delegating a build to an external builder harness through a cross-harness relay plugin). The goal is to keep the delegate's atrib records continuous with the orchestrator's session (joined to its `context_id`, or `informed_by`-linked to its record) instead of orphaned into a fresh random context. This boundary is categorically distinct from an in-process agent-to-subagent spawn ([D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)), where the child shares the parent's harness and env. Here the delegate runs a separate runtime the orchestrator does not share, so ambient env/discovery cannot carry the context; the discriminator for which mechanism applies is exactly "does the delegate share the orchestrator's atrib runtime."
+**Context.** An orchestrator agent routes work to a second agent running in a _different harness_ with its own long-lived atrib runtime (concrete example: an interactive orchestrator harness delegating a build to an external builder harness through a cross-harness relay plugin). The goal is to keep the delegate's atrib records continuous with the orchestrator's session (joined to its `context_id`, or `informed_by`-linked to its record) instead of orphaned into a fresh random context. This boundary is categorically distinct from an in-process agent-to-subagent spawn ([D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)), where the child shares the parent's harness and env. Here the delegate runs a separate runtime the orchestrator does not share, so ambient env/discovery cannot carry the context; the discriminator for which mechanism applies is exactly "does the delegate share the orchestrator's atrib runtime."
 
 **Rejected: ambient env propagation.** Passing `ATRIB_CONTEXT_ID` / `ATRIB_PARENT_RECORD_HASH` to the builder does not reach the signing path. The builder's atrib runtime is Codex's shared, persistent `atrib-primitives` process, whose env is fixed at launch; per-delegation values never arrive. Codex additionally restricts subprocess env by default (`shell_environment_policy` inherits only "core").
 
@@ -7442,6 +7453,7 @@ panel scoped to the `/v1/lookup` log response.
 **Model.** The builder joins the orchestrator `context_id` as a distinct producer ([D067](#d067-multi-producer-chain-composition-precedence-contract)) or signs its own context linked via `informed_by` ([D041](#d041-informed_by-linking-primitive-and-informed_by-edge-type)) to the spec record. Both are honest: `creator_key`/`signers` attribute who did the work (the builder's key), while `context_id`/`informed_by` capture that it was part of the orchestrator's session. This is the cross-harness sibling of [D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)'s in-process bundle: same goal (continuity), different mechanism (explicit injection, because the boundary is a shared external runtime, not an in-process spawn).
 
 **Consequences.**
+
 - The orchestrator implements this: it emits its plan record (capturing `context_id` + `record_hash`) and substitutes both into the delegated instructions before handing off. No atrib substrate change, no ambient env/file dependency, and no collision with the delegate harness's own standalone context.
 - Degradation ([§5.8](atrib-spec.md#58-degradation-contract)): if the builder omits the injected args its records fall back to a random context (orphaned) with no error; the orchestrator's own spec + verdict records still carry the session context.
 - The reference implementation lives in the host's orchestration layer, not in shipped atrib code; atrib's contribution is that the primitives already accept explicit `context_id` / `informed_by`.
@@ -7464,13 +7476,15 @@ panel scoped to the `/v1/lookup` log response.
 4. **Byte-identity is enforced, not asserted.** Both SDKs run the shared corpora unmodified (1.4 signing + adversarial, 1.2.6, 1.2.3/multi-producer, 2.6.1 client-side), plus a cross-implementation determinism harness (`python/tests/cross_impl/` + `packages/sdk/scripts/cross-impl-vectors.mjs`) that pushes seeded generated inputs — unicode sorting edges, float serialization, optional-field combinations — through both stacks and diffs canonical bytes, signatures, hashes, and tokens.
 
 **Rejected alternatives.**
-- *Separate repos now.* Creates a corpus-vendoring skew problem, forces `@atrib/sdk` onto published npm versions mid-redesign, and escapes the repo's governance gates — all cost, and the only benefit (independent release cadence) doesn't apply before first publish.
-- *One npm package per verb* (`@atrib/attest` + `@atrib/recall`). A single `@atrib/sdk` keeps one import surface; the rename-impact catalog's package plan remains open for the (separate, still-pending) primitive-surface rename ADR.
-- *Reimplementing signing or chain selection in the SDK layer.* Prohibited by [D067](#d067-multi-producer-chain-composition-precedence-contract) and the byte-identity requirement; the SDK is glue plus re-exports.
-- *pydantic for the Python record shape.* `TypedDict` + dataclasses + mypy strict give full typing without pulling a validation framework into a record layer whose canonical form is dict-shaped JSON by construction.
-- *Porting the macOS-Keychain/1Password key rungs to Python.* Platform-coupled subprocess shims; hosts needing them resolve the seed themselves. Env + key-file rungs are the portable [§5.6](atrib-spec.md#56-key-management) subset.
+
+- _Separate repos now._ This creates corpus-vendoring skew, forces `@atrib/sdk` onto published npm versions mid-redesign, and escapes the repo's governance gates. Independent release cadence offers no benefit before first publish.
+- _One npm package per verb_ (`@atrib/attest` + `@atrib/recall`). A single `@atrib/sdk` keeps one import surface; the rename-impact catalog's package plan remains open for the (separate, still-pending) primitive-surface rename ADR.
+- _Reimplementing signing or chain selection in the SDK layer._ Prohibited by [D067](#d067-multi-producer-chain-composition-precedence-contract) and the byte-identity requirement; the SDK is glue plus re-exports.
+- _pydantic for the Python record shape._ `TypedDict` + dataclasses + mypy strict give full typing without pulling a validation framework into a record layer whose canonical form is dict-shaped JSON by construction.
+- _Porting the macOS-Keychain/1Password key rungs to Python._ Platform-coupled subprocess shims; hosts needing them resolve the seed themselves. Env + key-file rungs are the portable [§5.6](atrib-spec.md#56-key-management) subset.
 
 **Consequences.**
+
 - `@atrib/sdk` sits in `.changeset/config.json` `ignore` (first-publish pending per `check-release-publish-readiness.mjs`); nothing publishes from this session on either registry. PyPI names `atrib` and `atrib-sdk` verified unclaimed 2026-07-06; `docs/publishing-new-pypi-package.md` is the new runsheet.
 - Workspace count becomes thirty (eleven public SDK/integration packages); README/CLAUDE.md counts updated in the same change.
 - Python v0 recall covers history/session_chain over the local mirror; remaining shapes arrive with the stateless daemon transport rather than a reimplementation of the initialize-handshake session protocol.
@@ -7490,7 +7504,7 @@ panel scoped to the `/v1/lookup` log response.
 
 - No signed byte changes. Envelopes live in sidecars ([§5.9.3](atrib-spec.md#593-the-_local-sidecar-shape)), archive evidence projections ([§2.12](atrib-spec.md#212-record-body-archive-layer)), and verifier results ([§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks)) — never in the record, log entry, or checkpoint.
 - Evidence validity stays tiered and never flips `verifyRecord().valid`, preserving the [D109](#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) boundary between record authenticity and external authorization posture.
-- [D052](#d052-cross-attestation-requirement-for-transaction-records)'s ≥2-distinct-signers rule and the `transaction` event type stay in core: they are trust semantics, not protocol plumbing. The envelope carries evidence *about* attestation, never a substitute for `signers[]`.
+- [D052](#d052-cross-attestation-requirement-for-transaction-records)'s ≥2-distinct-signers rule and the `transaction` event type stay in core: they are trust semantics, not protocol plumbing. The envelope carries evidence _about_ attestation, never a substitute for `signers[]`.
 - This lands first in the redesign dependency order: the payments profile spin-out (step 7) and delegation certificates (step 3) both need the envelope to attach to. Accepting it freezes the legacy `protocol` string set at today's five values — every new evidence type after this ADR registers as an envelope profile, never as a new legacy protocol string, so the compatibility mapping cannot silently go stale.
 - Unknown profiles must be preserved and rendered opaque, never dropped — same posture as extension event types.
 
@@ -7516,7 +7530,7 @@ Full design document: [docs/adr-draft-p042-evidence-envelope.md](docs/adr-draft-
 
 **Source:** 2026-07-06 clean-room redesign analysis ([`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), item 1). The clean-room exercise re-derived atrib's invariants but diverged on the trust root: today the protocol's trust claim in practice terminates at one operated log (log.atrib.dev), even though [D050](#d050-cross-log-replication-for-equivocation-defense) / [§2.11](atrib-spec.md#211-cross-log-replication) already ship the multi-proof bundle shape and verifier threshold machinery. Meanwhile the `cross_log_*` verifier surface stayed unimplemented ([P005](#p005-reconcile-atribverify-readme-per-record-annotations-with-actual-code-surface)) because it was blocked on "a second independent log node" — a blocker that dissolves once "log" generalizes to "anchor."
 
-**The decision in question:** should atrib define a normative *anchor interface* — any service that accepts a hash and returns an independently verifiable existence/inclusion proof — and make ≥2 independent anchors the SDK default posture?
+**The decision in question:** should atrib define a normative _anchor interface_ for any service that accepts a hash and returns an independently verifiable existence or inclusion proof, then make at least two independent anchors the SDK default posture?
 
 The candidate shape:
 
@@ -7530,12 +7544,22 @@ The candidate shape:
 
 - No signed record byte, log entry byte, or canonical form changes. Proof bundles are post-signing artifacts.
 - log.atrib.dev is not demoted in product terms: it remains the best-behaved anchor (explorer, APIs, SSE per [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields), fast inclusion proofs) but becomes one member of the anchor set, so the trust claim no longer terminates at the operator.
-- Rekor/TSA/OTS anchoring is producer-side; no log-node change is required to start. Note the Rekor mapping is *not* a reuse of the record's own `signature`: `record_hash` covers the complete record including `signature` ([§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records)) while the signature verifies over the signature-less form ([§1.4.2](atrib-spec.md#142-signing-procedure)), and Pure Ed25519 cannot be verified from a digest — so Rekor anchoring uses a fresh anchoring signature over a reconstructible anchor-claim artifact (draft ADR, Mechanism).
+- Rekor/TSA/OTS anchoring is producer-side; no log-node change is required to start. The Rekor mapping does not reuse the record's own `signature`. `record_hash` covers the complete record including `signature` ([§1.2.3](atrib-spec.md#123-chain_root-for-genesis-records)), while the signature verifies over the signature-less form ([§1.4.2](atrib-spec.md#142-signing-procedure)). Pure Ed25519 cannot be verified from a digest, so Rekor anchoring uses a fresh anchoring signature over a reconstructible anchor-claim artifact (draft ADR, Mechanism).
 - Session checkpoints (redesign item 2) make one-anchor-call-per-interval affordable, but per-record anchoring works today; the two ADRs are independent.
 
 **Outcome (as accepted):** accept. Land the spec anchor-interface section and the `anchor_plurality` verifier annotation with a `spec/conformance/2.11/anchors/` corpus first; flip the SDK default anchor set in the same release the second default anchor (OTS or Rekor) is chosen.
 
 **Implementation (2026-07-06):** spec/conformance/2.11/anchors/ (real anchoring-claim signatures, 13-test suite), spec [§2.11.7](atrib-spec.md#2117-anchors-generalizing-the-replication-target)-[§2.11.13](atrib-spec.md#21113-conformance). Adversarially verified by the tranche-1 verifier pass; open coverage gaps tracked in the [`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md) punch list.
+
+**Implementation correction (2026-07-23):** producer posture now identifies
+its basis as configured descriptors and never reports a plurality verdict.
+Fan-out tickets and `@atrib/sdk.flushAnchors()` expose settled submission
+reports that separate configured, attempted, accepted, and proof-ready counts.
+Pending and confirmed outcomes count as accepted upstream submissions. Only a
+transport outcome with status `confirmed`, meaning an offline-verifiable proof
+is available, counts as proof-ready. Queued, unsupported, and failed legs do
+not. Independent plurality remains the verifier's result over proof bytes,
+pinned trust roots, and operator groups.
 
 **Cross-references.**
 
@@ -7594,11 +7618,11 @@ Full design document: [docs/adr-draft-p044-session-checkpoint.md](docs/adr-draft
 
 **Status:** Accepted (implemented same day; promoted from P045)
 
-**Source:** The 2026-07-06 clean-room redesign analysis ([`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 3). The redesign diverged from atrib's flat-key identity model by making the trust root a *principal* that certifies short-lived *run* keys. Every divergence in that exercise was reachable by promoting something atrib already has; here the promotion target is the existing `creator_key` slot plus the [D051](#d051-capability-scoped-records-via-directory-published-envelopes) capability-envelope schema.
+**Source:** The 2026-07-06 clean-room redesign analysis ([`docs/redesign-upgrade-path.md`](docs/redesign-upgrade-path.md), step 3). The redesign diverged from atrib's flat-key identity model by making the trust root a _principal_ that certifies short-lived _run_ keys. Every divergence in that exercise was reachable by promoting something atrib already has; here the promotion target is the existing `creator_key` slot plus the [D051](#d051-capability-scoped-records-via-directory-published-envelopes) capability-envelope schema.
 
 **The decision in question:** should atrib add a delegation-certificate object — the principal key signs `{run_pubkey, scope, not_after, context_id?}` over JCS — so that run records are signed by an ephemeral run key occupying the existing `creator_key` slot in both the record and the 90-byte log entry, with no format change and no signed byte of any existing record altered?
 
-This is deliberately certification, not the per-conversation key *derivation* deferred by [D038](#d038-per-conversation-key-derivation): explicit, scoped, expiring, with no deterministic linkage from a parent secret.
+This is deliberately certification, not the per-conversation key _derivation_ deferred by [D038](#d038-per-conversation-key-derivation): explicit, scoped, expiring, with no deterministic linkage from a parent secret.
 
 **Considerations.**
 
@@ -7748,6 +7772,7 @@ Full design document: [docs/adr-draft-p049-mcp-extension.md](docs/adr-draft-p049
 **Decision.** The mirror-inheritance step of the [D067](#d067-multi-producer-chain-composition-precedence-contract) precedence widens from the effective mirror file to the mirror corpus: every `*.jsonl` file in the effective file's directory, filtered by `context_id`. Append order selects the tail within one file; across files the greatest signed `timestamp` wins, and equal timestamps break to the lexicographically greater canonical record hash, so resolution is deterministic. The precedence order itself is unchanged, and every producer that uses `resolveChainRoot` inherits the fix. The `atrib-emit` autochain read default now names the file the storage layer actually writes. Implementations MAY keep a deletable advisory tail index; the reference implementation writes `.atrib-mirror-tail-index-v1.json` in the mirror directory with atomic temp-plus-rename updates, validates file identity and size metadata on every read, and falls back to a full corpus scan on any conflict. The index is required in practice, not just permitted: on a synthetic 100-file, 100k-line corpus the plain filtered scan missed the 50 ms budget (p50 139 ms) while validated index hits hold near 34 ms. Two new conformance vectors (`mirror-corpus-cross-file-tail`, `mirror-corpus-single-file-tail`) pin the behavior, and [§1.2.3.1](atrib-spec.md#1231-multi-producer-chain-composition) step 4 carries the normative text.
 
 **Alternatives considered.** (a) Plain corpus scan with no index. Rejected by measurement: it fails the latency budget at realistic corpus size. (b) Serialize writers instead. That is the daemon track ([P046](#p046-atribd-a-public-stateless-native-local-daemon-as-the-default-primitive-topology)); serialization removes write races among daemon-routed callers, while this fix removes the zero-concurrency cross-file fork class for every producer, daemon-routed or not. The two compose and neither substitutes for the other. (c) Pick the newest file by filesystem mtime instead of signed timestamp. Rejected: mtime is unsigned host state, differs across replicas of the same corpus, and would make two implementations disagree on identical signed inputs.
+
 ## D147: Payments profile spin-out from protocol core
 
 **Date:** 2026-07-10
@@ -7769,7 +7794,6 @@ Full design document: [docs/adr-draft-p049-mcp-extension.md](docs/adr-draft-p049
 **Alternatives considered.** (a) Delete [§4](atrib-spec.md#4-attribution-policy-format) and settlement outright. Rejected: it forecloses settlement instead of relocating it and discards a working, conformance-tested pure function; subtraction of scope must stay reversible. (b) Keep everything in core, downgraded to informative. Rejected: every rail rename would still edit the core document, with no profile version to pin against. (c) Spin out the `transaction` event type and cross-attestation too. Rejected: 0x02 is burned into every existing log entry's meaning, and the two-distinct-signers rule is rail-agnostic trust semantics; moving them would change what existing commitments mean. (d) Six per-rail profiles immediately. Rejected as premature release-surface multiplication; per-rail splitting stays a cheap later refactor inside the profile. (e) Pull the authorization profiles in for symmetry. Rejected: they gate whether an action was authorized, not whether a payment completed, and grouping them under payments would re-couple authorization semantics to rail churn. (f) Nested payments URIs and a payments-owned corpus tree. Rejected: the flat registry is the envelope's discoverability guarantee. (g) Fold runtime detection into the [D027](#d027-protocol-adapters-as-a-parallel-integration-surface-to-framework-adapters) protocol adapters. Rejected: those layers are retrospective ecosystem observability; runtime detection sits on the hot path under the [§5.8](atrib-spec.md#58-degradation-contract) budget. (h) Separate repo and governance now. Rejected for sequencing; hosting belongs to [P024](#p024-embedded-spec-viewer-at-atribdev-auto-updated-from-spec-source).
 
 Full draft: [docs/adr-draft-p048-payments-spinout.md](docs/adr-draft-p048-payments-spinout.md).
-
 
 ## D148: atribd is the public stateless-native local daemon for the primitive runtime
 
@@ -8146,7 +8170,6 @@ are the current coverage.
 
 **Alternatives considered.** (a) Chain-tail completion at retrieval, rendering a chain's latest member whenever any member is retrieved: rejected because the autopsy found zero instances of the mechanism it fixes (no case where a chain member was retrieved and its tail was absent), and it re-imposes newest-wins at the retrieval layer, which the [D160](#d160-rendered-memory-lines-carry-temporal-provenance) debate settled in favor of consensus plus path. (b) Cross-slot linking to join fragmented update chains (magazineReading versus readingHabit): rejected per [D161](#d161-cross-topic-revision-linking-under-a-stricter-content-bar). (c) Harness-level prompt instruction instead of a substrate legend: superseded by the legend rejection above; the measured failure mode applies to both placements.
 
-
 ## D163: Session-transcript runtime-log source binds harness transcripts to signed records
 
 **Date:** 2026-07-14
@@ -8171,6 +8194,7 @@ No new `event_type` byte ([D036](#d036-bar-for-promoting-an-extension-uri-to-atr
 **Alternatives considered.** (a) Sign each transcript event under the agent's key: rejected here; transcripts are bulk host-owned bodies, the [D121](#d121-runtime-log-proof-manifests-verify-host-owned-run-windows) window commitment is the boundary, and per-event signing remains [P013](#p013-new-runtime-integration-pattern---hosted-runtime-adapter-sign-events-stored-by-hosted-runtimes-like-anthropic-managed-agents)'s hosted-runtime question. (b) A public `@atrib/session-transcript` package: rejected per [D122](#d122-host-runtime-adapters-stay-distinct-from-agent-framework-adapters) until repeated implementations prove the boundary. (c) Per-harness adapters (one for Claude Code, one for Codex, one for Pi): rejected; the lenient mapping covers the interchange shape directly and degrades cleanly, and harness-specific parsing can layer on later without changing any manifest bytes. (d) Indexing transcript content into recall in the same change: deferred to its own decision per the research doc; it crosses the [D086](#d086-bm25-corpus-extended-from-annotations-to-per-event_type-record-content) unit-of-indexing boundary and the signed-scope boundary, and it should not ride in on a manifest adapter.
 
 **v2 (2026-07-14): Codex rollout profile.** The example gains a second line profile, `codex-rollout-jsonl/v1`, selected explicitly via the source `format` option or auto-detected by `manifestSessionTranscriptFile` when a file's first line is a `session_meta` object. The profile maps Codex rollout lines at full fidelity: event ids from `payload.id`, kinds as `<type>.<payload.type>` (for example `response_item.function_call`), session identity and CLI version from the `session_meta` payload. The claude-code profile, its fixtures, and all v1 manifest bytes are unchanged; per alternative (c) the profile layers on the same adapter without touching manifest structure. Verified against a real 208-event rollout during development.
+
 ## D164: attest/recall verb rename and primitive-surface collapse
 
 **Date:** 2026-07-14
@@ -8238,6 +8262,799 @@ No new `event_type` byte ([D036](#d036-bar-for-promoting-an-extension-uri-to-atr
 **Alternatives rejected.** Signing spend into record fields (violates the sidecar posture and bloats the canonical form for a host-variable fact). A parallel in-harness orchestration plane (duplicates the operator's relay; rejected by P051's own framing). Making `cost_policy` a certificate-only schema fork (breaks the one-schema-two-carriers rule [§1.11.1](atrib-spec.md#1111-certificate-format) pins). Verifier-side budget enforcement (a thumb on the scale; [§6.7.3](atrib-spec.md#673-out-of-envelope-is-a-signal-not-invalidation) signal posture instead).
 
 **Cross-references.** [D142](#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions), the record shapes wired in. [D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys), the certificate the cost grant rides. [D135](#d135-delegated-builder-atrib-context-threads-via-orchestrator-injected-explicit-args) / [D115](#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle), context injection. [D084](#d084-read-primitive-instrumentation-for-empirical-loop-closure-measurement), the accounting-sidecar pattern. [P036](#p036-cross-harness-continuation-packet-for-supportrca-investigations), the packet the baton carries.
+
+## D166: Verifiable action mode commits request and outcome by default in the wrapper
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** The middleware could commit to tool identity, arguments, and
+results, but every disclosure dial defaulted to omission. Most ordinary
+wrapper installations therefore produced a valid signature over structural
+activity without replay-checkable argument or result commitments. Pre-call
+receipt injection made the gap sharper: one record had to be signed before the
+result existed, so enabling `result_hash` could not fix that path.
+
+**Decision.**
+
+1. `@atrib/mcp` exports the named `verifiable-action` evidence mode and the
+   `VERIFIABLE_ACTION_DISCLOSURE` preset. It commits a hashed tool name plus
+   salted JCS argument and result hashes. Raw values stay in the local sidecar.
+2. Low-level middleware keeps `minimal` as its compatibility default. Existing
+   callers do not change signed bytes unless they select the named mode.
+3. `@atrib/mcp-wrap`, the recommended whole-server integration, defaults to
+   `verifiable-action`. Operators can select `minimal` or supply explicit
+   disclosure dials.
+4. A normal post-call tool emits one record with all three commitments.
+5. A pre-call receipt-injection tool commits its request before execution.
+   It then emits a terminal outcome for success, an MCP `isError` result, a
+   missing or invalid result object, or a thrown failure or cancellation. The outcome commits the result envelope
+   and binds to the request through both `chain_root` and `informed_by`. The
+   local sidecar labels the two records with `actionPhase: "request"` and
+   `actionPhase: "outcome"`.
+6. For a configured transaction tool, the request uses `tool_call`. Only the
+   terminal outcome uses `transaction`, so one execution cannot produce two
+   settlement-bearing records.
+
+**Why this shape.** Mutating the pre-call record after execution would
+invalidate its signature and receipt. Delaying request commitment until
+success would let a failed tool retain an externally visible receipt whose
+record was omitted. A linked terminal record preserves the pre-action
+identity, commits every observed terminal state, and avoids adding a signed
+field or event type.
+
+**Boundary.** These commitments prove what the signer committed to, not that
+the named tool ran or returned truthful bytes. Tool-side or counterparty
+attestation remains the corroboration path. Public salts prevent precomputed
+hash tables but do not make low-entropy values secret from targeted guessing.
+
+**Cross-references.** [D057](#d057-pre-call-signing-hook-precalltransform-for-cross-tool-causal-embedding),
+[D061](#d061-add-tool_name-args_hash-result_hash-fields-to-§121),
+[§5.3.1](atrib-spec.md#531-init-interface), and
+[§8.3](atrib-spec.md#83-salted-commitment-posture).
+
+## D167: Witness software ships before external operation
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented; external operation remains open
+
+**Context.** [D032](#d032-witnessing-posture-for-v1-spec-defined-no-implementation)
+deferred witness code until an independent operator existed. That ordering left
+the hardest integration work behind a social dependency. It also made it
+impossible to hand a prospective witness operator a tested service and exact
+operational contract. The protocol format was already complete in
+[§2.9](atrib-spec.md#29-witnessing-and-cosignatures), so software readiness and
+operator independence can be separated without confusing them.
+
+**Decision.**
+
+1. `@atrib/verify` owns strict checkpoint parsing, pinned operator-key
+   verification, normative C2SP witness cosignature creation and verification,
+   freshness checks, distinct-key counting, and verifier-selected thresholds.
+2. [`services/witness-node/`](services/witness-node/) is the reference witness
+   service. It fetches the operator checkpoint and canonical level-zero tiles,
+   reconstructs the RFC 6962 root, compares overlapping leaves with its prior
+   view, and refuses rollback, same-size split views, historical rewrites, and
+   root mismatches.
+3. The witness stores leaf hashes in a binary append-only history. It fsyncs
+   new hashes, immutable cosignatures, and checkpoint state before advancing
+   the durable witnessed view. A crash tail beyond the last committed state is
+   truncated before the next append.
+4. The log key is pinned through local configuration. The witness never treats
+   the operator's live `/v1/pubkey` response as its trust root. Verifiers also
+   receive operator and witness keys from caller-owned policy.
+5. Cosignatures remain witness-published at
+   `/v1/cosig/<log-origin>/<root-hash>`. The log operator does not control the
+   evidence delivery path.
+6. A local bootstrap against `log.atrib.dev` is an implementation proof only.
+   A witness run by atrib, on atrib-controlled infrastructure, does not count
+   toward an independent threshold.
+
+**Why this ordering.** An external operator should evaluate deployable code,
+tests, storage behavior, key custody, and an endpoint contract. Asking that
+operator to co-design an unimplemented service makes recruitment slower and
+leaves protocol mistakes undiscovered. Shipping the reference first removes
+the software dependency while retaining the stronger acceptance condition.
+
+**Boundary.** This decision does not claim that `log.atrib.dev` has an
+independent witness. It does not create cross-log replication, checkpoint
+gossip, a witness registry, independent key custody, or a default multi-party
+proof bundle. Those gates close only when another operator runs the service or
+an interoperable implementation from infrastructure and trust roots outside
+atrib's control.
+
+**Conformance.** `@atrib/verify` tests cover operator signatures, 76-byte
+cosignatures, stale and future timestamps, untrusted and duplicate
+cosignatures, distinct-key thresholds, and root consistency. The witness-node
+end-to-end test covers checkpoint extension, witness-published immutable
+cosignatures, verifier acceptance, and historical-leaf rewrite rejection.
+
+**Cross-references.** [D031](#d031-reconcile-243-signed-note-divergence-from-c2sp),
+[D032](#d032-witnessing-posture-for-v1-spec-defined-no-implementation),
+[D050](#d050-cross-log-replication-for-equivocation-defense), and
+[§2.9](atrib-spec.md#29-witnessing-and-cosignatures).
+
+## D168: Coverage manifests make capture scope verifiable
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** A signed action record proves what its signer committed to. It
+does not prove that a host captured every action it was expected to capture.
+The same gap affects a verifier-grade request and outcome pair: strong
+commitments on observed calls do not reveal calls that bypassed the wrapper or
+were silently dropped.
+
+[D121](#d121-runtime-log-proof-manifests-verify-host-owned-run-windows) already
+defines the bounded host-owned runtime window. It provides the right comparison
+boundary, but it does not state which capture surfaces were expected or account
+for each action's capture state.
+
+**Decision.**
+
+1. `@atrib/runtime-log` defines `coverage_manifest` v0. Each manifest binds to
+   one `log_window_manifest` hash and copies its source, runtime, session, and
+   window identity. Verifiers compare both the hash and copied identity fields.
+2. A manifest lists deterministic capture-surface definitions. Each surface
+   names its boundary, owner, and whether policy requires it.
+3. Every action in the manifest belongs to the expected set. Its state is
+   `captured`, `skipped`, or `degraded`. Captured actions require a signed
+   `record_hash`. Skipped and degraded actions require a reason code.
+4. Surface definitions and action entries have separate sorted JCS roots. The
+   manifest carries exact expected, captured, skipped, and degraded counts.
+5. `buildCoverageAttestationContent()` returns a compact content object with
+   the coverage-manifest hash, runtime-window hash, and counts. Passing that
+   content to the existing `attest()` path produces the normal
+   [D099](#d099-explicit-emit-content-is-committed-and-direct-emits-have-a-default-mirror)
+   `args_hash` commitment. No signing implementation is added to
+   `@atrib/runtime-log`.
+6. `verifyCoverageManifest()` can compare four objects: the signed
+   `args_hash`, the bound runtime-window manifest, runtime-owned expected action
+   refs, and captured atrib record hashes. Required surfaces fail closed on
+   skipped or degraded actions unless verifier policy explicitly allows them.
+7. Verifier output names its basis. `manifest-claim` means the host's manifest
+   was checked internally. `runtime-compared` means the action set was also
+   compared with supplied runtime evidence.
+
+**Honest boundary.** Omission detection is relative to the supplied runtime
+window and expected-action evidence. A hostile host can still remove an action
+from both its runtime log and its coverage manifest. Independent tool receipts,
+counterparty evidence, protected executors, and transcript or source-system
+evidence remain the paths for detecting that stronger attack.
+
+**Why this shape.** A boolean such as `complete: true` would hide the capture
+boundary and make degradation unauditable. Signing every raw runtime event
+would duplicate the runtime-log layer and expose private bodies. The manifest
+instead commits stable hashes and named states while leaving bodies with the
+host.
+
+**Conformance.** Unit tests cover a valid signed atrib commitment, deterministic
+surface and action roots, runtime-window binding, runtime-evidence omission
+detection, required-surface skip and degradation failures, missing captured
+records, tampered roots, duplicate identifiers, and duplicate expected-action
+evidence.
+
+**Boundary.** No signed record field, event-type byte, graph edge, or public-log
+format changes. Coverage manifests are proof objects composed through
+[D099](#d099-explicit-emit-content-is-committed-and-direct-emits-have-a-default-mirror)
+and
+[D121](#d121-runtime-log-proof-manifests-verify-host-owned-run-windows).
+
+**Cross-references.** [D099](#d099-explicit-emit-content-is-committed-and-direct-emits-have-a-default-mirror),
+[D121](#d121-runtime-log-proof-manifests-verify-host-owned-run-windows),
+[D163](#d163-session-transcript-runtime-log-source-binds-harness-transcripts-to-signed-records),
+and [D166](#d166-verifiable-action-mode-commits-request-and-outcome-by-default-in-the-wrapper).
+
+## D169: Protected MCP execution requires a one-time server-side permit
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** A signed Action Gate decision does not enforce itself. A host can
+evaluate policy, sign an allow or block result, and still leave the underlying
+MCP handler reachable through another route. In that topology, the proof says
+what the gate decided but the raw executor can still run without the decision.
+
+**Decision.**
+
+1. `@atrib/action-gate` ships `createProtectedMcpExecutor()` as the first
+   protected executor adapter.
+2. The normal path signs the Action Gate decision first. Only an allowed
+   decision issues an opaque, short-lived permit and calls the protected
+   dispatch boundary.
+3. The permit binds the run, action, agent, MCP surface, tool name, and
+   canonical argument digest. The server stores the binding. The caller cannot
+   satisfy the boundary by presenting a self-computed digest.
+4. Dispatch atomically consumes the permit before invoking the upstream
+   handler. Missing, unknown, mismatched, expired, and replayed permits are
+   rejected before the side effect.
+5. A mismatched probe does not consume the valid permit. This preserves the
+   denial-of-authorization protection from
+   [D145](#d145-action-bound-single-use-authorization-tokens).
+6. The in-memory store is a reference implementation. Multi-process and
+   replicated hosts must supply a shared atomic permit store.
+
+**Enforcement boundary.** The upstream handler must remain private to the
+adapter. A separately reachable raw MCP server is outside this boundary and can
+still bypass it. The reference integration exposes a raw-shaped MCP route that
+terminates at protected dispatch, not at the upstream handler, and proves a
+direct call is rejected without executing the side effect.
+
+**Bypass evidence.** The allowed path produces the existing signed Action Gate
+decision and outcome pair. A rejected direct dispatch produces its own blocked
+decision and outcome pair with `direct_bypass` risk and the authorization
+failure reason in the decision evidence. Evidence delivery or signing failure
+never opens the executor. The dispatch still returns rejection and reports the
+evidence error.
+
+**Conformance.** Unit tests cover allow, block, missing and unknown permits,
+argument-binding mismatch without permit burn, expiry, replay, and signed
+bypass rejection. A real MCP client and server test proves the signed path
+executes once and a direct call to the protected raw boundary returns an MCP
+tool error, emits a blocked decision and outcome pair, and causes no second
+side effect.
+
+**Boundary.** No signed record field, event-type byte, graph edge, or public-log
+format changes.
+
+**Cross-references.** [D133](#d133-action-gate-is-a-host-owned-controlproof-package),
+[D145](#d145-action-bound-single-use-authorization-tokens),
+[D166](#d166-verifiable-action-mode-commits-request-and-outcome-by-default-in-the-wrapper),
+and [D168](#d168-coverage-manifests-make-capture-scope-verifiable).
+
+## D170: Checkpoint gossip fails closed and publishes conflicts
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** A witness that checks only the log view delivered to itself can
+reject rollback and local history rewrites, but it cannot detect a log showing
+a different signed view to another observer. Comparing signed checkpoints at
+the same tree size detects one split-view class. Different tree sizes require
+proof that both views share the same leaf prefix.
+
+**Decision.**
+
+1. `@atrib/verify` exports `analyzeCheckpointGossip()`. Every observation names
+   its source and observation time and carries a checkpoint signed by the
+   caller-pinned operator key.
+2. Equal-size checkpoints compare roots directly. Different-size checkpoints
+   compare complete, root-verified level-zero leaf views through their shared
+   prefix. Without that prefix evidence, the result is `inconclusive`, not
+   `consistent`.
+3. The analyzer detects same-size split views, divergent prefixes, and a source
+   presenting a smaller tree after a larger one.
+4. Each conflict produces a deterministic
+   `atrib.checkpoint-gossip-incident.v1` object. Its identity binds the origin,
+   conflict kind, sources, checkpoint hashes, tree sizes, and roots. Observation
+   time remains evidence but does not create a new incident ID on every poll.
+5. `services/witness-node` can require configured gossip sources. It fetches
+   each signed checkpoint and complete level-zero view before cosigning. An
+   unavailable, invalid, inconclusive, or conflicting configured source stops
+   cosigning.
+6. The witness fsyncs the first incident artifact and publishes an immutable
+   incident list and lookup endpoint. Repeated observation of the same conflict
+   does not overwrite the first artifact.
+
+**Trust boundary.** Multiple URLs controlled by the log operator are redundant
+delivery paths, not independent gossip. An independent observation claim still
+requires another operator or party to control at least one source and its
+delivery path. No source is configured by default, so this decision does not
+claim an external observer is live.
+
+**Cost boundary.** A configured source supplies a complete level-zero leaf
+view. That makes prefix comparison independent of a log-provided consistency
+proof, but costs linear transfer for that source on each poll. A future compact
+consistency-proof route can replace this transport cost without changing the
+incident contract.
+
+**Conformance.** Verifier tests cover deterministic incident IDs, same-size
+conflicts, different-size prefix conflicts, valid extensions, inconclusive
+views, source rollback, and invalid leaf evidence. Witness end-to-end tests
+prove a gossiped split view prevents cosigning, survives repeated polls as one
+incident, appears in status, and is available from an immutable public
+endpoint.
+
+**Boundary.** No signed record field, event-type byte, graph edge, checkpoint
+format, or public-log format changes.
+
+**Cross-references.** [D031](#d031-reconcile-243-signed-note-divergence-from-c2sp),
+[D032](#d032-witnessing-posture-for-v1-spec-defined-no-implementation),
+[D050](#d050-cross-log-replication-for-equivocation-defense), and
+[D167](#d167-witness-software-ships-before-external-operation).
+
+## D171: One-command named identity preserves the principal-to-run chain
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** atrib already had durable principal keys, directory claims,
+capability envelopes, ephemeral run keys, delegation certificates, rotation,
+and revocation. The operator had to understand and compose each piece. That
+made the trust model stronger than a flat shared key but the setup story much
+harder to use. The same audit found two verifier ambiguities: a missing scope
+fact produced no mismatch and looked like a completed check, while certificate
+expiry defaulted to the signer-controlled record timestamp without naming that
+time basis.
+
+**Decision.**
+
+1. `@atrib/cli` exposes `atrib identity init` as the reference lifecycle for a
+   named principal, workspace, agent, and run.
+2. Each named profile has one durable human or organization principal. The
+   principal seed stays in macOS Keychain by default. A caller-managed key file
+   is the cross-platform recovery input.
+3. Workspace and agent IDs are deterministic inside the principal namespace.
+   Their names, IDs, and roles live in a principal-signed identity claim. The
+   local profile contains that claim, public fields, and a key-source locator.
+   It contains no seed.
+4. Every invocation verifies or reconstructs the profile and issues a fresh
+   context-bound run key and [D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys)
+   certificate. The output carries both the certificate and signed identity
+   claim, so an offline verifier can resolve
+   `run key → principal → named workspace and agent`.
+5. Directory publication remains explicit through `--publish`. A carried
+   claim is verifiable without publication but is not directory-discoverable.
+6. `identity show` reports the named roles, claim-signature result, key-source
+   availability, and whether the local key resolves to the declared principal.
+7. Delegation scope checks add `fully_evaluated` and `unverifiable[]`. Every
+   declared constraint is evaluated or named as unverifiable. Missing facts no
+   longer look like successful evaluation.
+8. Delegation window checks add `time_basis` and `time_trusted`. Callers can
+   supply `trustedTimeMs` directly or `delegationTrustedTimeMs` through
+   `verifyRecord()`. Without it, the record timestamp remains an available
+   signal but is labeled `record_timestamp_claim` with `time_trusted: false`.
+
+**Why this shape.** Flattening principal and run identity into one long-lived
+key would simplify the explanation by deleting expiry, scope, and run-level
+revocation. The profile instead hides setup mechanics while keeping the
+certificate chain inspectable. Putting names only in the local profile would
+make the interface friendly but leave external parties unable to verify the
+labels. The signed claim keeps the names portable without adding a record
+field or changing certificate bytes.
+
+**Trust boundary.** The default identity claim is self-attested. It proves that
+the principal key committed to a name and role. It does not prove legal
+identity, employment, membership, or organization control. Trusted-time and
+scope facts are caller-owned inputs. The verifier reports their presence and
+effect but cannot prove a hostile caller supplied truthful facts.
+
+**Open lifecycle work.** Named identity rendering outside the CLI remains open.
+Principal disaster recovery still depends on the operator's Keychain backup or
+caller-managed seed backup. Reconstructing a profile from an intact seed and
+the same names is supported; recovering a lost seed is not. Automatic run
+rotation and revocation propagation landed in
+[D172](#d172-run-rotation-publishes-revocation-before-successor-activation).
+
+**Conformance.** CLI tests cover signed role claims, deterministic recovery,
+secret-free profile persistence, context-bound run issuance, fresh run keys on
+repeat invocation, and `identity show` verification. Verifier tests cover
+missing and supplied scope facts, trusted-time expiry, and the explicitly
+untrusted signer-time fallback. The delegation corpus pins the new output
+fields.
+
+**Cross-references.** [D034](#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers),
+[D051](#d051-capability-scoped-records-via-directory-published-envelopes),
+[D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys),
+[D145](#d145-action-bound-single-use-authorization-tokens), and
+[D169](#d169-protected-mcp-execution-requires-a-one-time-server-side-permit).
+
+## D172: Run rotation publishes revocation before successor activation
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** [D171](#d171-one-command-named-identity-preserves-the-principal-to-run-chain)
+issued a fresh run key on every identity invocation but did not retire the
+prior run. Calling that behavior rotation would have been incorrect. The
+verifier accepted a caller-supplied revoked-key set without a path that
+validated the revocation records used to build it. The protected MCP executor
+did not consult revocation state at either authorization or dispatch.
+
+**Decision.**
+
+1. A named identity profile tracks its current public run certificate and
+   accepted run revocations. It still stores no private key.
+2. Reissuing a run under an existing profile is an atomic lifecycle. The CLI
+   locks the profile, creates the successor, signs a principal-authorized
+   [§1.11.5](atrib-spec.md#1115-run-key-revocation) `key_revocation` for the
+   previous run, and submits it to the configured log.
+3. The profile switches to the successor only after the log returns a valid
+   `log_index`. Submission failure leaves the previous active-run state
+   unchanged. A concurrent local rotation cannot acquire the same profile
+   lock.
+4. The accepted revocation binds the prior delegation-certificate hash,
+   retired run key, principal signature, record hash, log index, and log
+   endpoint. The profile records the separately certified active run. Run keys
+   do not inherit identity from each other; each resolves to the durable
+   principal. `identity show` verifies and renders that state.
+5. `@atrib/verify` accepts revocation records paired with log indexes. It
+   verifies the record signature, record shape, effective log position, and
+   revoker authorization before deriving the revoked-key set. Rejected
+   evidence remains visible in `delegation.revocation_evidence`.
+6. `createProtectedMcpExecutor()` accepts a current or reloadable revoked-key
+   view. When configured, a missing credential, revoked run or principal, or
+   failed view read blocks before policy evaluation. The executor checks again
+   at dispatch so a revocation between policy approval and permit consumption
+   still prevents the upstream side effect.
+7. Existing callers that configure no revocation view keep their prior
+   behavior. That compatibility path makes no revocation-enforcement claim.
+
+**Why this shape.** Certificate expiry limits a run but does not retire it
+early. Persisting a new local active key without a log-carried revocation would
+leave other verifiers and already-running executors unable to distinguish the
+old run from an active one. Requiring accepted publication before activation
+keeps the local state transition aligned with the public trust transition.
+
+**Trust boundary.** The CLI verifies that the configured log accepted the
+record shape and returned a log index. Independent durability still depends on
+the log, witness, and anchor posture. A protected executor enforces the
+revocation view its host supplies. The async loader supports live refresh, but
+the package does not silently fetch or choose a public log.
+
+**Conformance.** CLI tests run two identity invocations against a local log,
+verify the principal-signed retirement, and confirm the successor activates
+only with accepted revocation state. Verifier tests reject forged and
+not-yet-effective records and pass accepted evidence into `verifyRecord()`.
+Protected-executor tests prove pre-policy rejection, missing-credential
+rejection, and a policy-to-use race where the dispatch recheck prevents the
+upstream call.
+
+**Cross-references.** [D033](#d033-key-rotation-and-revocation),
+[D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys),
+[D169](#d169-protected-mcp-execution-requires-a-one-time-server-side-permit),
+and [D171](#d171-one-command-named-identity-preserves-the-principal-to-run-chain).
+
+## D173: Revocation order is log order, never signer time
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** The normative revocation rule in
+[§1.9.3](atrib-spec.md#193-verifier-semantics) used log indexes, but later
+key-storage and directory-consultation prose switched to signed timestamps.
+The directory step also reversed its before/after descriptions.
+`resolveIdentity()` used log indexes correctly when present, but silently
+reported `since_revocation: false` when the record log index was absent. A
+hostile signer can choose or backdate a record timestamp, so timestamp
+ordering cannot enforce revocation.
+
+**Decision.**
+
+1. `revocation.log_index` is the effective boundary. A record at a lower index
+   predates revocation. A record under the retired key at or above that index
+   is post-revocation.
+2. Record and revocation timestamps never decide that order.
+3. Emergency-key authorization requires directory registration in a state
+   anchored before the revocation log index. A backdated identity or revocation
+   claim does not satisfy pre-registration.
+4. When a verifier lacks the record log index, it reports
+   `since_revocation: null` and `order_verifiable: false`. It does not convert
+   missing order evidence into a pre-revocation result.
+5. A shape-only registry reports `registry_verified: false` unless the caller
+   confirms it checked source-record signatures and
+   [§1.9.2](atrib-spec.md#192-revocation-authority) revoker authority. Parsing
+   a claim is not verification.
+6. The directory may index revocations, but the public log remains the source
+   of truth.
+
+**Conformance.** Identity-resolution tests cover pre-revocation,
+post-revocation, missing-log-position, and unverified-registry cases. The
+missing case supplies an extreme signer timestamp and proves it does not affect
+the result.
+
+**Cross-references.** [D033](#d033-key-rotation-and-revocation),
+[D034](#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers),
+[D140](#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys),
+and [D172](#d172-run-rotation-publishes-revocation-before-successor-activation).
+
+## D174: Current state is a policy-bound revision projection
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** The revision graph made prior positions and their successors
+queryable, but callers still had to walk each lineage and decide which record
+was current. That was adequate for audit and targeted recall, not for a shared
+operating view used by multiple agents. The existing `recall_revisions`
+implementation also ordered equal-timestamp siblings by mirror iteration
+order, which could differ across machines.
+
+**Decision.**
+
+1. `recall` gains a `state` shape. It is a consumer read model over existing
+   signed observation and revision records. It adds no tool, event type, graph
+   edge, or signed field.
+2. A state view accepts records whose Ed25519 signatures verify and whose
+   creator and context satisfy the caller's policy. Omitting
+   `trusted_creator_keys` means every locally verified signer is accepted and
+   produces an explicit warning.
+3. Each state cell starts at a revision-lineage root and returns every active
+   head. One head is `resolved`; two or more heads are `conflict`. The
+   projector never chooses a winner.
+4. Excluded revisions remain visible with typed reasons such as invalid
+   signature, untrusted creator, disallowed context, missing target, or target
+   outside the accepted view.
+5. The response names its acceptance basis and reports
+   `log_inclusion_verified: false`. A local mirror projection cannot imply
+   public-log inclusion without separate proof verification.
+6. Revision ordering uses signed timestamp followed by canonical record hash.
+   Mirror iteration order is never a tie-break.
+7. The TypeScript SDK exposes the same `state` query. The daemon path calls the
+   modern `recall` tool, and the optional `@atrib/recall` peer supplies the
+   in-process fallback.
+8. Output bounds apply at every fan-out level. The response limits lineage
+   cells, active heads within each cell, and exclusion details. It reports the
+   complete counts and whether each returned collection was truncated. Mirror
+   duplicates are removed by canonical record hash before projection.
+9. The open explorer session view projects the public revision commitments
+   available from graph-node. It shows every visible head and marks
+   out-of-scope roots as partial. It does not call that view receiver-accepted
+   state because the browser has no caller trust policy and does not
+   independently verify inclusion proofs.
+
+**Boundary.** This projection is generic shared state, not a goal model. It
+does not add accepted-goal ids, versions, proposals, checker authority, or
+application-owned revision semantics. Those remain outside this tranche.
+
+**Known limit.** A revision has one `revises` target. When two accepted
+revisions target the same predecessor, a later revision can supersede one
+branch but cannot explicitly supersede both. The projector therefore keeps
+the fork unresolved. It does not reinterpret `informed_by` as supersession.
+Multi-head merge semantics remain pending in
+[P053](#p053-multi-head-revision-merge-semantics-require-independent-application-proof).
+
+**Conformance.** Tests cover linear state, trusted multi-signer forks,
+untrusted branches, context allowlists, invalid signatures, singleton roots,
+equal-timestamp determinism, duplicate mirror records, bounded fork heads, MCP
+`recall` routing, SDK state routing, and the public explorer projection for
+linear, conflicting, partial, unsigned, and bounded lineages.
+
+**Cross-references.**
+[D059](#d059-promote-revision-to-atrib-normative-event_type-byte-0x06),
+[D124](#d124-base-recall-context-scope-is-explicit),
+[D152](#d152-handoff-verdicts-are-receiver-computed-not-sender-declared), and
+[D164](#d164-attestrecall-verb-rename-and-primitive-surface-collapse).
+
+## D175: Log subscriptions resume from an exclusive log-index cursor
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** [D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields)
+gave every SSE entry a log-index `id`, but the server ignored the
+`Last-Event-ID` header sent by native `EventSource` reconnects. A reconnect
+without `since` could miss entries accepted while the client was disconnected.
+A reconnect with inclusive `since` could replay duplicates. Timestamp equality
+also cannot identify one exact position when several records share a
+millisecond.
+
+**Decision.**
+
+1. The subscription filters add `after=<log-index>`, an exclusive cursor.
+   `after=-1` means before genesis.
+2. `/v1/stream` accepts the same cursor through `Last-Event-ID`. The header
+   overrides the query value because native `EventSource` keeps its original
+   URL while advancing the header after each delivered event.
+3. Replay begins at `after + 1` and stays in ascending log order. The `ready`
+   event reports the effective cursor and the log tail captured at request
+   start.
+4. A malformed cursor returns 400. A cursor at or beyond the current tree size
+   returns 409 instead of silently opening a live-only stream. That mismatch
+   can indicate the wrong log origin or a rolled-back view.
+5. `since` remains an inclusive discovery filter. It is not the exact reconnect
+   contract.
+6. The open explorer consumes `/v1/stream` through native `EventSource`, keeps
+   one log-index cursor, removes duplicate records by canonical hash, and falls
+   back to polling only when `EventSource` is unavailable.
+
+**Boundary.** This contract streams commitment-visible log entries. It does
+not turn log-node into a body index and does not compute receiver-accepted
+state. Body-aware revision, decision, outcome, and workspace projections
+belong in a consumer that composes the log cursor with mirror, archive, and
+verifier inputs.
+
+**Conformance.** Server tests cover query-cursor replay, header precedence,
+malformed cursors, and cursor-ahead-of-tail refusal. Explorer tests pin the
+EventSource path, duplicate suppression, reconnect status, and polling
+fallback.
+
+**Cross-references.**
+[D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields),
+[D121](#d121-runtime-log-proof-manifests-bind-host-owned-run-windows-without-making-raw-logs-protocol-state),
+and [D174](#d174-current-state-is-a-policy-bound-revision-projection).
+
+## D176: Explorer separates log commitments from signed record bodies
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** The action view labeled the compact `/v1/lookup` response as a
+"raw record." That response is a log-entry projection over the 90-byte
+commitment stored by log-node. It is not the canonical signed record body and
+does not contain enough material for a browser to recompute the record hash or
+verify the Ed25519 signature. The optional Record Body Archive Layer already
+exposed the full body, retention metadata, and typed 404 and 410 states, but the
+explorer did not fetch or explain them.
+
+**Decision.**
+
+1. The action view labels `/v1/lookup` output as a log-entry projection. It
+   never presents that projection as the raw or full record.
+2. The configured archive is queried through `/v1/record/<hash>`. The view
+   distinguishes body available, commitment only, retention expired, access
+   restricted, archive unavailable, and archive not configured.
+3. The archived signed body is rendered in a separate inspector only when the
+   archive returns it. The UI states that direct canonical-hash and signature
+   re-verification require that body.
+4. "Signature accepted" means the log reports that it accepted a record after
+   signature verification. The browser does not claim it repeated that check
+   when it only holds the compact entry.
+5. log-node serves the allowlisted identity, session, action, and trace SPA
+   paths on both the explorer host and the `/dashboard` fallback host. Direct
+   links and browser reloads must reach the same explorer view.
+
+**Boundary.** Body unavailability is not proof of deletion or censorship.
+A 404 applies to the archive that answered. A record may remain in a producer
+mirror or another archive. Access-restricted retrieval needs a host policy and
+authorization scheme; the public explorer only renders the state returned by
+the configured archive.
+
+**Conformance.** Dashboard copy tests pin the state vocabulary and the
+commitment-versus-body labels. A browser integration test starts log-node and
+archive-node, submits one signed record, observes it through the live stream,
+opens the direct action path, and checks that the commitment projection and
+archived body appear as separate panels. Server tests cover direct detail
+routes on local and log hosts.
+
+**Cross-references.**
+[D070](#d070-record-body-archive-layer),
+[D103](#d103-log-subscriptions-use-sse-plus-json-feed-over-commitment-visible-fields),
+[D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor), and
+[§2.12](atrib-spec.md#212-record-body-archive-layer).
+
+## D177: The client SDK has an explicit paired action-evidence path
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** [D166](#d166-verifiable-action-mode-commits-request-and-outcome-by-default-in-the-wrapper)
+made the whole-server MCP wrapper produce strong request and outcome evidence
+by default. Application code with no wrapper could call `attest()`, but the
+generic cognitive write did not define an execution boundary. A caller could
+label an observation as a tool action without proving that the application
+routed execution through the same path. Direct writes also could not carry
+`args_salt` or `result_salt`, so they could not reproduce the recommended
+salted commitment posture.
+
+**Decision.**
+
+1. `@atrib/mcp` exports one shared JCS commitment implementation for plain and
+   salted argument or result material, plus hashed tool names and commitment
+   replay. Middleware and explicit application capture use the same helper.
+2. The direct attest surface carries `args_salt` and `result_salt`. A salt
+   without its matching explicit hash is rejected. No signed field is added;
+   the record format already defines both salt fields.
+3. `@atrib/sdk` exposes `action()`. It hashes the action name, commits to the
+   arguments with a fresh 16-byte salt, signs the request, executes the
+   caller-owned function, and signs a linked terminal outcome for success or
+   failure with a fresh salted result commitment.
+4. The request is signed before execution. The outcome binds to it through
+   `chain_root`, `informed_by`, the same name commitment, and the same argument
+   commitment.
+5. The API returns an explicit success or failure union containing the request
+   and outcome evidence. A thrown application error remains available as the
+   failure value. Attribution degradation never prevents the caller-owned
+   function from running.
+6. `action()` is not a third cognitive verb. `attest()` and `recall()` remain
+   the agent-facing reasoning surface. It is an application integration helper
+   over two ordinary attest writes.
+
+**Coverage boundary.** The helper proves the execution path routed through its
+`execute` function. It does not observe bypass calls and does not claim that
+every application action used it. Automatic middleware remains the preferred
+surface when a host exposes an interception boundary. Coverage manifests can
+compare the resulting records with runtime-owned expected actions.
+
+**Truth boundary.** A matching body proves consistency with the signed result
+commitment. It does not prove that the result reflects real-world truth.
+`@atrib/verify` classifies committed-only, evidence-inconsistent,
+body-consistent but uncorroborated, and corroborated result claims while
+keeping `truth_established: false` in every case.
+
+**Conformance.** Shared commitment tests cover plain and salted replay,
+canonical JSON, invalid salts, and deterministic random sources. SDK tests pin
+request-before-execute ordering, request/outcome linkage, success, application
+failure, and execution under attribution degradation. The direct attest tests
+pin salt/hash pairing and signed field carriage.
+
+**Cross-references.**
+[D061](#d061-add-tool_name-args_hash-result_hash-fields-to-§121),
+[D099](#d099-explicit-emit-records-commit-local-content-through-default-args_hash),
+[D150](#d150-attestation-is-corroboration-generalized-off-transactions-extension-first),
+[D166](#d166-verifiable-action-mode-commits-request-and-outcome-by-default-in-the-wrapper),
+and [D168](#d168-coverage-manifests-make-capture-scope-verifiable).
+
+## D178: The operating graph ships as an application profile and reference client
+
+**Date:** 2026-07-23
+
+**Status:** Accepted and implemented
+
+**Context.** [D174](#d174-current-state-is-a-policy-bound-revision-projection)
+made verified state heads and conflicts queryable, but a generic state
+projector is not yet a usable shared workspace. Developers still lacked one
+inspectable application that joined named identities, body-aware search,
+bounded workspace views, live decisions and outcomes, handoffs, and conflict
+resolution.
+
+**Decision.**
+
+1. [`apps/operating-graph/`](apps/operating-graph/) is the complete open-source
+   application proof. It reads one local mirror file or directory, verifies
+   record signatures, and serves bounded workspace, task, team, and agent
+   views.
+2. Application bodies use `atrib.operating-event.v1` with five kinds:
+   `accepted_state`, `decision`, `outcome`, `handoff`, and `resolution`.
+   Names, values, roles, and application policy stay in private body content.
+3. Search operates on available private body material. Public commitments
+   alone do not become usable memory by implication.
+4. The HTTP surface publishes a workspace index, bounded view, body search,
+   health, and an exact-cursor SSE revision stream. It separates signature
+   verification from supplied log-proof state.
+5. Incoming handoffs expose the task and its prior scoped state in the
+   receiving agent's bounded view. Handoff is an application body convention
+   over existing `informed_by` relationships, not a new event type.
+6. An application resolution names the selected head and every active head in
+   its private body. The signed record must cite every active head through
+   `informed_by`. A resolution missing any head is ignored, and conflicts
+   remain visible.
+7. Local run, Docker deployment, fresh-machine proof, reset behavior, and
+   application-conformance participation ship with the client. Hosted
+   deployments default to read-only mirror access and require an explicit
+   creator allowlist for a closed trust set. Enabling signed POST routes also
+   requires a bearer secret; the process refuses write mode without one.
+
+**Protocol boundary.** This is an application profile, not a public protocol
+profile. It adds no record field, event type, graph edge, SDK cognitive verb,
+log behavior, or verifier acceptance rule. Different applications can use
+different body schemas and conflict policies.
+
+**P053 result.** This application creates a real multi-head conflict and
+resolves it with existing records. It therefore satisfies P053's first gate
+but provides evidence against the second: application-local resolution is
+representable without a plural revision field or merge event. P053 remains
+unpromoted until an independent application demonstrates a missing
+interoperability or verification primitive.
+
+**Conformance.** Application fixtures pin conflict preservation, all-head
+resolution, accepted-head projection, named identities, and receiving-agent
+handoff visibility, including prior task state. Unit and HTTP tests cover scope
+bounds, search, stream reconnect refusal, out-of-order arrival, write
+authentication, disabled writes, and live updates.
+The hostile integration suite composes the client with checkpoint rollback,
+result inconsistency, permit replay and revocation, withheld bodies, unresolved
+heads, and source actions omitted from projections.
+
+**Cross-references.**
+[D142](#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions),
+[D152](#d152-handoff-verdicts-are-receiver-computed-not-sender-declared),
+[D168](#d168-coverage-manifests-make-capture-scope-verifiable),
+[D174](#d174-current-state-is-a-policy-bound-revision-projection),
+[D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor), and
+[P053](#p053-multi-head-revision-merge-semantics-require-independent-application-proof).
 
 # Pending decisions
 
@@ -8724,6 +9541,50 @@ Candidate demo:
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
 
+## P053: Multi-head revision merge semantics require independent application proof
+
+**Source:** [D174](#d174-current-state-is-a-policy-bound-revision-projection)
+made revision forks visible as current-state conflicts. The exercise proved a
+generic limit: `revises` is singular, so one later revision cannot explicitly
+supersede two active sibling heads.
+
+**The decision in question:** should atrib add a signed, interoperable way to
+accept one successor over multiple active revision heads?
+
+Candidate shapes include a new extension record that names every superseded
+head, a profile over an existing record plus committed merge evidence, or a
+future plural revision field. `informed_by` alone is not sufficient because it
+claims influence, not supersession.
+
+**Promotion gate.** Do not promote this into the public protocol, SDK
+contract, verifier, log, witness, or interop profiles until both conditions
+hold:
+
+1. the [D174](#d174-current-state-is-a-policy-bound-revision-projection)
+   projector or another concrete proof demonstrates a real unresolved fork;
+   and
+2. at least one independent application demonstrates that application-local
+   resolution cannot be represented or verified with existing records and
+   evidence.
+
+The second condition is intentionally still open. The versioned-goals
+contract remains application-local and does not satisfy this gate by itself.
+
+**Current posture:** expose all heads and require caller policy outside the
+protocol. Never pick a winner from timestamp, mirror order, or an undeclared
+signer preference.
+
+**Application evidence (2026-07-23).**
+[D178](#d178-the-operating-graph-ships-as-an-application-profile-and-reference-client)
+supplies the first application proof. It creates a two-head conflict and
+resolves it by signing an ordinary observation whose private body names the
+selected head and every active head while `informed_by` cites every head. The
+reference projector rejects incomplete resolution claims. This satisfies gate
+1 and shows that gate 2 is not satisfied for this application. P053 therefore
+remains pending rather than promoting a public merge primitive.
+
+**ADR number** will be assigned when the decision is acted on. Do not
+pre-allocate.
 
 ## P052: transcript recall corpus stays composition-first until attributed paraphrase-gap misses exist
 

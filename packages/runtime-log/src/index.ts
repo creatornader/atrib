@@ -99,10 +99,7 @@ export interface RuntimeLogRedactionPolicy {
 }
 
 export type RuntimeLogPrivacyPosture =
-  | 'host-owned'
-  | 'local-mirror'
-  | 'archive-ref'
-  | 'public-fixture'
+  'host-owned' | 'local-mirror' | 'archive-ref' | 'public-fixture'
 
 export interface RuntimeLogVerifierPolicy {
   readonly require_event_root?: boolean
@@ -267,10 +264,7 @@ export interface RuntimeLogInspectionLink {
     | 'side-effect-receipt'
     | 'signed-record'
   readonly privacy_posture:
-    | RuntimeLogPrivacyPosture
-    | 'public-log'
-    | 'public-archive'
-    | 'caller-supplied'
+    RuntimeLogPrivacyPosture | 'public-log' | 'public-archive' | 'caller-supplied'
 }
 
 export interface RuntimeLogInspection {
@@ -1212,6 +1206,8 @@ function redactionPostureText(manifest: LogWindowManifest): string {
   const fieldText = fields.length > 0 ? fields.join(', ') : 'no named fields'
   return `Raw runtime bodies stay outside this proof packet; declared withheld fields: ${fieldText}.`
 }
+
+export * from './coverage.js'
 
 function sourceIdentityText(inspection: RuntimeLogInspection): string {
   const source = inspection.source_identity.source

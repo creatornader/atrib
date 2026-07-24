@@ -96,7 +96,9 @@ function unsignedBody(record: AtribRecord): Record<string, unknown> {
   return body as Record<string, unknown>
 }
 
-function expectSignedOutput(result: EmitOutput): asserts result is Extract<EmitOutput, { signed: true }> {
+function expectSignedOutput(
+  result: EmitOutput,
+): asserts result is Extract<EmitOutput, { signed: true }> {
   expect(result.signed).toBe(true)
 }
 
@@ -259,6 +261,39 @@ describe('buildAndSignEmitRecord', () => {
     const r = record as AtribRecord & { result_hash?: string }
     expect(r.result_hash).toBe(probeHash)
     expect(await verifyRecord(record)).toBe(true)
+  })
+
+  it('carries replayable salts when paired hashes are supplied (§8.3)', async () => {
+    const seed = await freshKey()
+    const record = await buildAndSignEmitRecord({
+      privateKey: seed,
+      eventType: 'https://atrib.dev/v1/types/tool_call',
+      contextId: 'c'.repeat(32),
+      chainRoot: 'sha256:' + 'd'.repeat(64),
+      content: { tool: 'Edit', target: 'src/foo.py' },
+      argsHash: 'sha256:' + 'e'.repeat(64),
+      argsSalt: 'A'.repeat(22),
+      resultHash: 'sha256:' + 'f'.repeat(64),
+      resultSalt: 'B'.repeat(22),
+    })
+
+    expect(record.args_salt).toBe('A'.repeat(22))
+    expect(record.result_salt).toBe('B'.repeat(22))
+    expect(await verifyRecord(record)).toBe(true)
+  })
+
+  it('refuses a salt without its matching explicit hash', async () => {
+    const seed = await freshKey()
+    await expect(
+      buildAndSignEmitRecord({
+        privateKey: seed,
+        eventType: 'https://atrib.dev/v1/types/tool_call',
+        contextId: 'c'.repeat(32),
+        chainRoot: 'sha256:' + 'd'.repeat(64),
+        content: { tool: 'Edit' },
+        argsSalt: 'A'.repeat(22),
+      }),
+    ).rejects.toThrow('args_salt requires an explicit args_hash')
   })
 
   it('commits local content with args_hash when caller omits args_hash', async () => {
@@ -444,9 +479,7 @@ describe('handleEmit validation paths', () => {
     expect(
       !result.signed &&
         result.refusals.some((r) => r.includes('provenance_token is genesis-record-only')),
-    ).toBe(
-      true,
-    )
+    ).toBe(true)
     await queue.flush()
   })
 

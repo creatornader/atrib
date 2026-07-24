@@ -62,12 +62,18 @@
       "cert_hash": "sha256:b8580f0c9171ebc0ee9f3ae8fa0157e2606ea084b3e878282c818084fdccda6b",
       "cert_valid": true,
       "in_window": false,
+      "time_basis": "record_timestamp_claim",
+      "time_trusted": false,
       "context_bound": true,
       "cert_bound": true,
       "scope_check": {
         "in_scope": true,
+        "fully_evaluated": false,
         "attenuation_ok": null,
-        "mismatches": []
+        "mismatches": [],
+        "unverifiable": [
+          "max_amount"
+        ]
       },
       "revoked": false,
       "errors": []

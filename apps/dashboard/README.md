@@ -4,7 +4,10 @@ Public read-only inspection surface over [`log.atrib.dev`](https://log.atrib.dev
 
 This is **option 1 of a three-stage build** per [D054](../../DECISIONS.md#d054-unified-public-explorer-vs-per-service-admin-uis): single HTML file, no build step, no framework, vanilla JavaScript with `fetch` against the public APIs.
 
-Option 2 (Vite/Next.js SPA) ships when dogfood metrics produce useful signal. Option 3 (block-explorer-grade with search indexing + real-time updates) ships after the broader implementation work completes.
+Option 2 (Vite/Next.js SPA) ships when dogfood metrics produce useful signal.
+Option 3 adds broader search indexing after the implementation work completes.
+The option 1 explorer already follows the log's SSE stream for real-time
+overview updates.
 
 The explorer follows the product design contract in [`../../DESIGN.md`](../../DESIGN.md). Update that file with any change to view hierarchy, proof-status language, event chips, graph treatment, empty/loading/error states, or user-facing reliability states.
 
@@ -25,13 +28,28 @@ Append URL params:
 http://localhost:8080/?log=http://localhost:3100/v1&graph=http://localhost:3200/v1&directory=http://localhost:3300/v6&archive=http://localhost:3400/v1
 ```
 
-The defaults point at the public endpoint names (`log.atrib.dev`, `graph.atrib.dev`, `directory.atrib.dev`, `archive.atrib.dev`). If the archive endpoint is unavailable, action views still render the log receipt and omit archive-backed evidence.
+The defaults point at the public endpoint names (`log.atrib.dev`,
+`graph.atrib.dev`, `directory.atrib.dev`, `archive.atrib.dev`). If the archive
+endpoint is unavailable, action views still render the log receipt and state
+that body retrieval was not checked. When the archive answers, the action view
+distinguishes available, commitment-only, retention-expired,
+access-restricted, and unavailable body states.
 
 ## Hosting
 
 Live at **https://explore.atrib.dev/**.
 
-log-node serves the dashboard inline. The Dockerfile copies `apps/dashboard/index.html` into the image at build time; the server reads it once at startup, caches in memory, and returns it with `Cache-Control: public, max-age=60`. When the request hostname is `explore.atrib.dev`, log-node returns the dashboard at `/`; for any other hostname (e.g. `log.atrib.dev`) it preserves API behavior at `/v1/*` and returns a JSON 404 hint at `/`. The dashboard is also accessible at `https://log.atrib.dev/dashboard` as a fallback.
+log-node serves the dashboard inline. The Dockerfile copies
+`apps/dashboard/index.html` into the image at build time; the server reads it
+once at startup, caches in memory, and returns it with
+`Cache-Control: public, max-age=60`. When the request hostname is
+`explore.atrib.dev`, log-node returns the dashboard at `/`; for any other
+hostname (e.g. `log.atrib.dev`) it preserves API behavior at `/v1/*` and
+returns a JSON 404 hint at `/`. The dashboard is also accessible at
+`https://log.atrib.dev/dashboard` as a fallback. Its canonical detail paths
+(`/identity`, `/session`, `/action`, and `/trace`) are served on that host too,
+so direct links and browser reloads do not fall through to the API 404
+response.
 
 The YC recording demo is hosted as a separate stable artifact at `https://explore.atrib.dev/yc-demo`. The older `/yc-demo.html` URL remains as a compatibility alias. It intentionally does not replace `/demo`, which is now labeled as the live recent-action replay.
 
@@ -50,7 +68,13 @@ CORS is configured on log-node, graph-node, directory-node, and archive-node (`A
 
 - **Not a personal dashboard.** This shows everybody's public data, not your account. There is no "logged-in user" concept. An authenticated personal dashboard would need a separate route and access model.
 - **Not a build artifact.** No transpilation, no bundling, no dependencies. The HTML file is the dashboard.
-- **Auto-refreshes.** The overview polls `/v1/recent` + `/v1/stats` + `/v1/checkpoint` every few seconds and prepends new entries without disrupting the user's loaded-older state. Detail views (identity, session, action, trace, anchoring) soft-refresh every 60s by re-running `route()`, long enough to avoid flicker, short enough that newly-arrived records become visible without a manual reload. Refresh pauses when the tab is backgrounded.
+- **Auto-refreshes.** The overview follows `/v1/stream` through native
+  `EventSource`, resumes from the last delivered log index, and prepends new
+  entries without disrupting the user's loaded-older state. It polls only when
+  `EventSource` is unavailable. Detail views (identity, session, action, trace,
+  anchoring) soft-refresh every 60 seconds by re-running `route()`, long enough
+  to avoid flicker and short enough that newly arrived records become visible
+  without a manual reload. Refresh pauses when the tab is backgrounded.
 
 ## Seven views
 
@@ -59,7 +83,7 @@ CORS is configured on log-node, graph-node, directory-node, and archive-node (`A
 | `/` or `/overview`        | (default)                            | `/v1/stats` + `/v1/checkpoint` + `/v1/recent` from log; search bar                                       | ❌                                                                                                                                                                                                                                   |
 | `/identity/<creator_key>` | base64url 43-char Ed25519 pubkey     | directory `/v6/lookup` + `/v6/history`; graph `/v1/creators/<key>/sessions` + `/v1/creators/<key>/graph` | ✅ activity-map DAG (cross-session edges) with time-window selector                                                                                                                                                                  |
 | `/session/<context_id>`   | 32-hex context_id                    | graph `/v1/graph/<id>` (fallback: log `/v1/by-context/<id>`)                                             | ✅ session DAG (dagre or circular layout per [D066](../../DECISIONS.md#d066-dashboard-graph-viz-library-set-sigmajs--dagre--graphology--cosmosgl-lazy-loaded-cdn-no-build-step) adaptive selector); records-only table when no edges |
-| `/action/<record_hash>`   | `sha256:<64-hex>` or just `<64-hex>` | log `/v1/lookup/<hex>` + archive `/v1/evidence/<hex>` when available                                     | ❌                                                                                                                                                                                                                                   |
+| `/action/<record_hash>`   | `sha256:<64-hex>` or just `<64-hex>` | log `/v1/lookup/<hex>` + archive `/v1/record/<hex>` and `/v1/evidence/<hex>` when available              | ❌                                                                                                                                                                                                                                   |
 | `/demo`                   | (none)                               | log `/v1/recent` + graph `/v1/graph/<context_id>` when available                                         | ✅ live recent-action replay graph paired with a concise agent-session timeline                                                                                                                                                      |
 | `/trace/<record_hash>`    | `sha256:<64-hex>` or just `<64-hex>` | graph `/v1/trace/<hex>` + `/v1/chain/<hex>` merged                                                       | ✅ provenance-ancestry DAG (all 9 edge types when present) + chain-timeline list                                                                                                                                                     |
 | `/anchoring`              | (none)                               | log `/v1/stats` + `/v1/checkpoint` + directory `/v6/anchor`                                              | ❌                                                                                                                                                                                                                                   |
@@ -68,7 +92,13 @@ CORS is configured on log-node, graph-node, directory-node, and archive-node (`A
 
 Detail views use two different summary patterns. A status row answers whether the view is ready to inspect and what caveats apply. A metric row answers what data shape was loaded. The session view uses both: source/graph/transaction/reference readiness first, then signed records, graph nodes, edges, participants, and composition.
 
-The action view keeps raw log lookup output separate from archive evidence projections. When the archive returns x401 evidence, the evidence table shows proof-gate status, payment separation, and optional origin, issuer-trust, or proof-payment binding verifier outcomes while the raw JSON panel remains the `/v1/lookup` response. Raw credential payloads and proof-response bodies are not rendered by default.
+The action view labels the log lookup as a compact entry projection, not a raw
+record. It reports record-body availability separately and renders the signed
+body only when `/v1/record` returns it. The body is required for direct
+canonical-hash and signature re-verification. When the archive returns x401
+evidence, the evidence table shows proof-gate status, payment separation, and
+optional origin, issuer-trust, or proof-payment binding verifier outcomes. Raw
+credential payloads and proof-response bodies are not rendered by default.
 
 ## Graph surfaces
 

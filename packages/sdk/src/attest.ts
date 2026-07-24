@@ -25,9 +25,14 @@ import type { VerifiedAttributionReceipt } from './attribution.js'
  * fan-out also produced the §5.9.3 sidecar degradation marker.
  */
 export interface AttestAnchorPosture {
+  /** Configured descriptors after defaulting. This is not a success count. */
   effective_anchor_count: number
   used_default_set: boolean
   warned: boolean
+  /** Prevents callers from interpreting descriptor count as proof success. */
+  basis: 'configured_descriptors'
+  /** Independent plurality requires verifier-checked proof bytes and trust. */
+  plurality_met: null
 }
 
 /** Reference discriminator collapsing the annotate/revise write kinds. */
@@ -65,8 +70,12 @@ export interface AttestInput {
   tool_name?: string
   /** Explicit §8.3 args commitment (overrides the D099 default). */
   args_hash?: string
+  /** Optional base64url 16-byte salt paired with args_hash. */
+  args_salt?: string
   /** Explicit §8.3 result commitment. */
   result_hash?: string
+  /** Optional base64url 16-byte salt paired with result_hash. */
+  result_salt?: string
 }
 
 export interface AttestResult {
@@ -135,12 +144,12 @@ export function buildEmitArgs(
       ? { allow_unresolved_informed_by: input.allow_unresolved_informed_by }
       : {}),
     ...(input.chain_root !== undefined ? { chain_root: input.chain_root } : {}),
-    ...(input.provenance_token !== undefined
-      ? { provenance_token: input.provenance_token }
-      : {}),
+    ...(input.provenance_token !== undefined ? { provenance_token: input.provenance_token } : {}),
     ...(input.tool_name !== undefined ? { tool_name: input.tool_name } : {}),
     ...(input.args_hash !== undefined ? { args_hash: input.args_hash } : {}),
+    ...(input.args_salt !== undefined ? { args_salt: input.args_salt } : {}),
     ...(input.result_hash !== undefined ? { result_hash: input.result_hash } : {}),
+    ...(input.result_salt !== undefined ? { result_salt: input.result_salt } : {}),
   }
 }
 
@@ -165,9 +174,10 @@ export function attestResultFromEmitOutput(
   ]
   const receiptId = typeof output.receipt_id === 'string' ? output.receipt_id : undefined
   return {
-    record_hash: typeof output.record_hash === 'string' && output.record_hash !== ''
-      ? output.record_hash
-      : null,
+    record_hash:
+      typeof output.record_hash === 'string' && output.record_hash !== ''
+        ? output.record_hash
+        : null,
     context_id: typeof output.context_id === 'string' ? output.context_id : null,
     log_index: typeof output.log_index === 'number' ? output.log_index : null,
     inclusion_proof: Array.isArray(output.inclusion_proof)

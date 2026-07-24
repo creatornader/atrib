@@ -16,7 +16,12 @@ Architectural decisions and rejected alternatives are logged in [DECISIONS.md](D
 
 ## System overview
 
-Three protocol layers, one SDK layer that automates them. The append-only flow is: action or host decision happens, record gets signed, record gets committed to the log, graph gets built, policy gets applied, settlement recommendation comes out. Product integrations can also place this flow before execution through pre-call hooks, approval gates, signer proxies, and verifier checks.
+Three protocol layers, one SDK layer that automates them. The append-only flow
+is: action or host decision happens, record gets signed, record gets committed
+to the log, graph gets built, policy gets applied, settlement recommendation
+comes out. Product integrations can also place this flow before execution
+through pre-call hooks, approval gates, signer proxies, verifier checks, or the
+explicit `@atrib/sdk` action helper for an application-owned boundary.
 
 ```
                           ┌──────────────────────────────────────────┐
@@ -147,6 +152,19 @@ The boundary is practical: record validity, deterministic edge derivation, and
 verifier behavior belong in the protocol. Task-specific usefulness belongs in an
 analyzer, harness, or product layer over signed records.
 
+### Operating graph application
+
+The open reference client in
+[`apps/operating-graph/`](apps/operating-graph/) demonstrates the product layer
+over those protocol facts. It verifies mirror signatures and projects named,
+bounded workspace, task, team, and agent views. Private bodies provide
+searchable state, decisions, outcomes, handoffs, and conflict policy.
+
+An application resolution cites every active state head through
+`informed_by`, then names one accepted head in its private body. That convention
+does not change deterministic graph derivation. Another client can apply a
+different application policy over the same signed records.
+
 ---
 
 ## Trust model
@@ -165,13 +183,29 @@ Graph edges: all nine edge types are deterministically derived from record field
 
 Settlement calculation: the algorithm ([payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm)) is a pure function. Graph + policy in, distribution out. No network calls, no randomness. Any party with the same inputs gets the same answer. `@atrib/verify` exists so merchants can run this locally and check.
 
-**Trusted (but auditable):**
+**Operator-dependent today:**
 
-The log operator's append-only behavior. The operator could theoretically refuse entries (censorship) or show different views to different parties (equivocation). Both are detectable: censorship is obvious to the submitter (no inclusion proof comes back), and equivocation is caught by consistency proofs and the witnessing protocol (Section 2.9). The trust assumption is that the operator doesn't equivocate, and the audit mechanism makes equivocation a bad bet.
+The public `log.atrib.dev` operator can refuse a submission, withhold a body
+from an operator-controlled archive, lose an unaccepted queued write, or show
+different valid checkpoints to clients that never compare observations. A
+submitter can observe its own missing receipt. A verifier can detect rollback
+against a previously retained checkpoint. Split-view detection requires
+checkpoint gossip, an independent observer, or an independent witness.
 
-**Not trusted at all:**
+The witness software, immutable incident path, deployment kit, and verifier
+threshold are implemented. No independently controlled witness is live yet.
+Default verification therefore cannot claim an independent witness threshold.
+The acceptance gate is documented in
+[`docs/independent-operator.md`](docs/independent-operator.md).
 
-atrib. The protocol is an open spec. The signing libraries are open source. The log format is a public standard. The calculation algorithm is published and locally executable. Nobody, including the team that wrote the spec, has privileged access or override capability.
+**No privileged protocol override:**
+
+The specification, signing libraries, log format, graph derivation, and
+calculation algorithm are public and locally executable. The project operator
+has no cryptographic override for another signer's record or a caller's
+verifier policy. That does not make project-operated services independent of
+the project. Consumers choose and pin the log, witness, archive, directory, and
+identity trust roots they accept.
 
 ---
 
@@ -183,7 +217,15 @@ Here is why, specifically:
 
 **Same math.** Both CT logs and blockchains use Merkle trees to provide tamper evidence. An entry committed to either structure cannot be altered without invalidating the root hash. Both support inclusion proofs (proving a specific entry exists) and consistency proofs (proving the tree only grew, never mutated).
 
-**Different economics.** A blockchain requires a consensus mechanism (proof-of-work or proof-of-stake) to determine who appends the next block. That consensus mechanism requires an incentive token, which requires a token economy. CT logs have a simpler trust model: a single operator appends entries, and anyone can audit the operator's behavior via consistency proofs and witnessing. The trust assumption is weaker (you trust one operator not to equivocate, rather than trusting a majority of stake), but equivocation is detectable and the operator is publicly identified -- the same trust model that secures the web's TLS certificate ecosystem.
+**Different economics.** A blockchain requires a consensus mechanism
+(proof-of-work or proof-of-stake) to determine who appends the next block. That
+consensus mechanism requires an incentive token, which requires a token
+economy. CT logs have a simpler trust model: a single operator appends entries,
+and clients audit growth through retained checkpoints, consistency evidence,
+gossip, and witnesses. Equivocation becomes detectable when at least two
+independently delivered views are compared. The operator is publicly
+identified, using the same family of mechanisms that secures the web's TLS
+certificate ecosystem.
 
 **Different performance.** CT log submission is an HTTP POST that returns an inclusion proof. There is no block time, no gas auction, no mempool. Latency is bounded by network round-trip time, not by consensus finality.
 
@@ -254,14 +296,14 @@ This keeps responsibilities clear. Langfuse-style systems remain the right place
 
 The integration target decides which atrib package belongs in the path.
 
-| Object                                   | Owner                                                     | atrib surface                                   | Boundary                                                                                              |
-| ---------------------------------------- | --------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Tool call or SDK callback                | Tool host or agent SDK                                    | `@atrib/mcp`, `@atrib/mcp-wrap`, `@atrib/agent` | Sign the action when it happens.                                                                      |
-| Pre-action policy gate                   | Host harness, approval layer, or policy engine            | `@atrib/action-gate`                            | Decide allow, block, or escalate before execution, then sign the decision and outcome.                |
-| OpenTelemetry or OpenInference span tree | Observability pipeline                                    | `@atrib/openinference`                          | Read spans as intake, then emit signed records plus local cognitive sidecars.                         |
-| Runtime log window                       | Runtime, workflow engine, checkpoint store, or job packet | `@atrib/runtime-log`                            | Verify roots, projections, receipts, forks, compactions, and redaction policy for one bounded window. |
-| Vendor-hosted session export             | Hosted runtime vendor                                     | Pattern 5 adapter, planned                      | Sign what the consumer observed from the vendor export. Do not claim vendor-internal truth.           |
-| atrib trace or chain                     | atrib graph services                                      | `/v1/trace`, `/v1/chain`, `@atrib/trace`        | Read signed chronology and declared relationships. This is not the runtime's own run log.             |
+| Object                                                    | Owner                                                     | atrib surface                                                            | Boundary                                                                                              |
+| --------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Tool call, SDK callback, or explicit application boundary | Tool host, agent SDK, or application                      | `@atrib/mcp`, `@atrib/mcp-wrap`, `@atrib/agent`, `@atrib/sdk` `action()` | Sign the request and terminal outcome at the execution boundary.                                      |
+| Pre-action policy gate                                    | Host harness, approval layer, or policy engine            | `@atrib/action-gate`                                                     | Decide allow, block, or escalate before execution, then sign the decision and outcome.                |
+| OpenTelemetry or OpenInference span tree                  | Observability pipeline                                    | `@atrib/openinference`                                                   | Read spans as intake, then emit signed records plus local cognitive sidecars.                         |
+| Runtime log window                                        | Runtime, workflow engine, checkpoint store, or job packet | `@atrib/runtime-log`                                                     | Verify roots, projections, receipts, forks, compactions, and redaction policy for one bounded window. |
+| Vendor-hosted session export                              | Hosted runtime vendor                                     | Pattern 5 adapter, planned                                               | Sign what the consumer observed from the vendor export. Do not claim vendor-internal truth.           |
+| atrib trace or chain                                      | atrib graph services                                      | `/v1/trace`, `/v1/chain`, `@atrib/trace`                                 | Read signed chronology and declared relationships. This is not the runtime's own run log.             |
 
 This map keeps the docs from using "trace" as a bucket for every execution
 record. A span tree can explain timing and nested operations, a runtime log can
@@ -538,6 +580,7 @@ Versioned URL paths (`/v1/checkpoint`, `/v6/lookup/<key>`) are immutable: once a
       windows. It does not sign records or store raw runtime logs.
 
 @atrib/sdk            Consolidated client SDK
+@atrib/operating-graph Open-source application reference
   └── attest() / recall() verbs, daemon-first over the local primitives
       runtime with in-process fallback; re-exports the §1 record layer.
       Byte-identical Python sibling lives at python/ (PyPI `atrib`).
@@ -615,7 +658,36 @@ services/archive-node  Record Body Archive Layer (§2.12), deployed at https://a
       contract.
 ```
 
-The twenty designed-public packages are in source: eleven SDK and integration packages (`mcp`, `agent`, `action-gate`, `verify`, `cli`, `mcp-wrap`, `directory`, `openinference`, `memory-tool`, `runtime-log`, `sdk`) and the eight cognitive-primitive MCP packages (`attest`, the write verb, and `recall`, the read verb, plus the legacy `emit`, `annotate`, `revise`, `trace`, `summarize`, `verify-mcp`, kept as re-export shims with their tool names mounted as permanent aliases per the attest/recall rename [D164](DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)). The `atribd` local daemon is published as `@atrib/daemon` and is the recommended local topology; the private `@atrib/primitives-runtime` package remains only for compatibility and test coverage. The private packages (`log-dev`, `integration`, Cloudflare examples, deployed services, local runtimes, and dashboard) are workspace fixtures, proof harnesses, deployed services, dogfood runtimes, or product surfaces. All TypeScript strict mode, no `any` types, with error handling following the degradation contract. The cognitive-primitive MCP services run in the agent's process and either sign explicit records or read local mirror and caller-supplied evidence. The `atribd` daemon mounts three primitives (attest write home, recall read home, summarize) into one stateless-native local process (Streamable HTTP, direct stdio, or a stdio-to-HTTP proxy shim) serving the seventeen-tool union, with per-context write serialization across every write-union tool name; it is the recommended local topology per [D148](DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime), and signed records stay byte-identical to the standalone binaries. The `atrib` Python distribution (`python/`, outside the pnpm workspace) is the first non-TypeScript implementation of the [§1](atrib-spec.md#1-attribution-record-format) record layer, held byte-identical to the TypeScript one by the shared conformance corpora and a cross-implementation determinism harness ([D136](DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested)).
+The twenty designed-public packages are in source: eleven SDK and integration
+packages (`mcp`, `agent`, `action-gate`, `verify`, `cli`, `mcp-wrap`,
+`directory`, `openinference`, `memory-tool`, `runtime-log`, `sdk`) and the
+eight cognitive-primitive MCP packages (`attest`, the write verb, and `recall`,
+the read verb, plus the legacy `emit`, `annotate`, `revise`, `trace`,
+`summarize`, `verify-mcp`, kept as re-export shims with their tool names
+mounted as permanent aliases per the attest/recall rename
+[D164](DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse)).
+The `atribd` local daemon is published as `@atrib/daemon` and is the
+recommended local topology; the private `@atrib/primitives-runtime` package
+remains only for compatibility and test coverage. The private packages
+(`log-dev`, `integration`, Cloudflare examples, deployed services, local
+runtimes, dashboard, and operating graph) are workspace fixtures, proof
+harnesses, deployed services, dogfood runtimes, or product surfaces. All
+TypeScript uses strict mode, with error handling following the degradation
+contract. The cognitive-primitive MCP services run in the agent's process and
+either sign explicit records or read local mirror and caller-supplied evidence.
+The `atribd` daemon mounts three primitives (attest write home, recall read
+home, summarize) into one stateless-native local process (Streamable HTTP,
+direct stdio, or a stdio-to-HTTP proxy shim) serving the seventeen-tool union,
+with per-context write serialization across every write-union tool name. It is
+the recommended local topology per
+[D148](DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime),
+and signed records stay byte-identical to the standalone binaries. The `atrib`
+Python distribution (`python/`, outside the pnpm workspace) is the first
+non-TypeScript implementation of the
+[§1](atrib-spec.md#1-attribution-record-format) record layer, held
+byte-identical to the TypeScript one by the shared conformance corpora and a
+cross-implementation determinism harness
+([D136](DECISIONS.md#d136-consolidated-client-sdks-atribsdk--python-atrib-in-repo-byte-identical-corpus-tested)).
 
 Dependencies are minimal and audited: `@noble/ed25519` for signing, `@noble/hashes` for SHA-256, `canonicalize` for JCS. Framework dependencies are structural-typed, never hard-imported.
 

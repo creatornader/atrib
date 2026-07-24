@@ -201,6 +201,16 @@ describe('MerkleTree persistence', () => {
     }
   })
 
+  it('does not advance the in-memory tree when durable persistence fails', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'atrib-log-persist-'))
+    const path = join(dir, 'entries.bin')
+    const tree = createMerkleTree({ persistencePath: path })
+    rmSync(dir, { recursive: true, force: true })
+
+    expect(() => tree.append(makeRealEntry(1))).toThrow()
+    expect(tree.size).toBe(0)
+  })
+
   it('rejects a persistence file whose length is not a multiple of ENTRY_SIZE', () => {
     const dir = mkdtempSync(join(tmpdir(), 'atrib-log-persist-'))
     const path = join(dir, 'entries.bin')

@@ -54,18 +54,20 @@ attest({
   provenance_token?: string,
   tool_name?: string,
   args_hash?: string,
+  args_salt?: string,            // base64url 16-byte salt; requires args_hash
   result_hash?: string,
+  result_salt?: string,          // base64url 16-byte salt; requires result_hash
   producer?: string,              // sidecar label override; defaults to 'atrib-attest'
 })
 ```
 
 ### Ref mapping
 
-| `ref` argument | Signed record | Signed field carried |
-| --- | --- | --- |
-| absent | observation | none |
-| `{ kind: "annotates", target, ... }` | annotation | signed `annotates` field |
-| `{ kind: "revises", target, reason, ... }` (`reason` required) | revision | signed `revises` field |
+| `ref` argument                                                 | Signed record | Signed field carried     |
+| -------------------------------------------------------------- | ------------- | ------------------------ |
+| absent                                                         | observation   | none                     |
+| `{ kind: "annotates", target, ... }`                           | annotation    | signed `annotates` field |
+| `{ kind: "revises", target, reason, ... }` (`reason` required) | revision      | signed `revises` field   |
 
 The three shapes route through the same `handleEmit` funnel used by the
 legacy tools. There is no separate signing path for `attest`: the ref
@@ -110,10 +112,10 @@ re-export shims.
 
 ```typescript
 import {
-  createAtribAttestServer,       // mounts the four-tool write union
-  createAtribEmitServer,          // legacy factory; also mounts attest
-  createAtribAnnotateServer,      // legacy factory; also mounts attest
-  createAtribReviseServer,        // legacy factory; also mounts attest
+  createAtribAttestServer, // mounts the four-tool write union
+  createAtribEmitServer, // legacy factory; also mounts attest
+  createAtribAnnotateServer, // legacy factory; also mounts attest
+  createAtribReviseServer, // legacy factory; also mounts attest
   handleAttest,
   attestInProcess,
 
@@ -123,7 +125,7 @@ import {
   EmitInput,
   resolveKey,
   emitSessionCheckpoint,
-} from "@atrib/attest";
+} from '@atrib/attest'
 ```
 
 Each legacy factory (`createAtribEmitServer`, `createAtribAnnotateServer`,
@@ -160,6 +162,11 @@ verb that contract is the most important thing to know:
   carries only the replay-checkable `args_hash` commitment over it. The
   public log stores the 90-byte commitment entry (record hash, creator key,
   context_id, timestamp, event_type byte), never the content.
+- **Salted direct commitments.** `args_salt` and `result_salt` let direct
+  attest callers carry the same salted commitment posture as middleware.
+  Each salt must be canonical base64url for exactly 16 bytes and requires its
+  matching explicit hash. The shared `@atrib/mcp` commitment helper computes
+  and verifies the bytes used by both paths.
 - **Refused writes are loud, not silent.** A malformed call (unknown
   `ref.kind`, missing revises reason, a `ref`/content contradiction, a
   provenance_token off genesis, or no resolvable signing key) returns

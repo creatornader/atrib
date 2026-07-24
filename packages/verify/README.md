@@ -1,8 +1,17 @@
 # `@atrib/verify`
 
-**Independent verification for atrib's verifiable action layer. Checks signed records, evidence blocks, handoff packets, and settlement documents. Re-runs the [payments profile §8](https://github.com/creatornader/atrib/blob/main/docs/payments-profile.md#8-the-calculation-algorithm) calculation algorithm (relocated from [spec §4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) per [D147](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)) locally and checks the result against what a recommendation document claims. No trust in any intermediary required.**
+**Independent verification for atrib's verifiable action layer. Checks signed records, evidence blocks, handoff packets, and settlement documents. Re-runs the [payments profile §8](https://github.com/creatornader/atrib/blob/main/docs/payments-profile.md#8-the-calculation-algorithm) calculation algorithm (relocated from [spec §4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) per [D147](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)) locally and checks the result against what a recommendation document claims. Verification uses caller-pinned keys and policy rather than an intermediary's verdict.**
 
-This is the **verifier half** of the atrib protocol, used by merchants closing transactions, auditors checking agent activity, teams accepting handoffs, policy systems reviewing high-impact actions, regulators querying historical state, and any party that needs to validate atrib data independently. The agent and tool servers produce signed attribution records. The Merkle log stores them. This package answers the questions any verifier has to answer: _given the graph and the policy, is this distribution actually correct? Was this record actually signed by the key it claims? Did this action actually happen at the time it claims?_
+This is the **verifier half** of the atrib protocol, used by merchants closing
+transactions, auditors checking agent activity, teams accepting handoffs,
+policy systems reviewing high-impact actions, regulators querying historical
+state, and any party that needs to validate atrib data independently. The agent
+and tool servers produce signed attribution records. The Merkle log stores
+commitments to them. This package answers the questions a verifier can decide
+from supplied evidence: _does the distribution recompute, did the claimed key
+sign these bytes, is the body consistent with its commitment, and which
+independent evidence corroborates the claim?_ It does not infer that a signed
+claim is true merely because its signature and hash verify.
 
 ## Install
 
@@ -102,6 +111,8 @@ const result = await verifyRecord(record, {
   ap2ViEvidenceOptions, // optional, passed to verifyAp2ViEvidenceAsync()
   trustedCreatorKeys, // optional, trusted transaction signer keys
   delegationCertificates, // optional, certificates for the §1.11 walk
+  delegationTrustedTimeMs: Date.now(), // host/verifier clock for expiry
+  delegationScopeFacts, // optional amount, counterparty, and usage facts
   proofBundle, // optional, post-signing anchor proofs for this record
   anchorTrust, // required with proofBundle; caller-owned anchor trust policy
 })
@@ -129,12 +140,41 @@ const result = await verifyRecord(record, {
 - `capability_check`: `{ envelope, in_envelope, mismatches, unresolvable }` ([D051](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes) / [§6.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#67-capability-declarations)). Populated only when the caller passes a resolved `identityClaim` in options. Checks the record's `event_type` against the envelope's `event_types` allowlist and the record's `timestamp` against `expires_at`. `tool_names`, `max_amount`, and `counterparties` are checked when the caller supplies `resolvedFacts` from the local body or protocol event. Missing facts flag `unresolvable: true` rather than passing silently. Per [§6.7.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#673-out-of-envelope-records) out-of-envelope is a signal, not invalidation: mismatches do not flip `valid` to false. The caller is responsible for fetching the active envelope at the record's timestamp via `@atrib/directory`'s `lookup()` (or a cached equivalent); `@atrib/verify` intentionally has no `@atrib/directory` dependency.
 - `cross_attestation`: `{ signers_count, signers_valid, missing }` ([D052](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records) / [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). Populated only on transaction records (`event_type = transaction`). Each entry in `signers[]` is verified against the cross-attestation canonical bytes (JCS form with `signers: []` and the top-level `signature` field omitted, per [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)). `signatureOk` requires a valid signer entry whose `creator_key` matches the record's top-level `creator_key`; unrelated counterparty signers do not validate the record on behalf of its creator. `missing: true` when fewer than 2 distinct signer keys verify, atrib's normative minimum. Duplicate entries from one key do not inflate `signers_valid`. Per [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) missing is a signal, not invalidation: `valid` stays true if the underlying signature path holds. Agent-side Path 2 fallback records usually surface as `signers_count: 1, missing: true` until a counterparty signs the same bytes. Legacy single-signer transaction records (no `signers[]` array, only top-level `signature`) surface as `signers_count: 0, missing: true` so consumers can flag them while accepting the cryptographic validity.
   - Trusted signer composition ([D149](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance) / [§1.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)): pass `trustedCreatorKeys` to `verifyRecord` and the annotation additionally carries `signers_trusted` (distinct verified keys that are in the trust set) and `sybil_suspected` (`signers_valid >= 2` but `signers_trusted < 2`, e.g. two untrusted keys signing the same bytes). `signers_valid` counts verified keys, not trusted ones, so a consumer requiring non-malleable authority MUST gate on the exported `isTrustedCrossAttested(annotation)` (i.e. `signers_trusted >= 2`), not on `signers_valid >= 2` alone. `trust_evaluated` is always present on transaction cross_attestation: `false` is a loud signal that no trust set was supplied and only the trust-blind count was computed, so a consumer gating an action can tell the trust check was skipped. `signers_trusted` / `sybil_suspected` are omitted until a trust set is passed, and, like `missing`, are a signal that never flips `valid`.
-- `delegation`: the [§1.11.4 certificate walk](../../atrib-spec.md#1114-verifier-walk). Pass `delegationCertificates` and, when available, the context genesis record and revoked-key set. The result identifies a principal at depth one, certificate validity, window and context facts, scope facts, revocation, ambiguity, and unresolved commitments. It never changes signature validity.
+- `delegation`: the [§1.11.4 certificate walk](../../atrib-spec.md#1114-verifier-walk). Pass `delegationCertificates` and, when available, the context genesis record. Prefer `delegationRevocations: [{ record, log_index }]` over a precomputed key set: `verifyRecord()` checks each revocation signature, record shape, log position, and revoker authorization before deriving `revoked`. `delegationRecordLogIndex` preserves historical views; omitting it computes the current view. Rejected evidence appears under `delegation.revocation_evidence`, not as an accepted revocation. `delegationRevokedKeys` remains available for callers that already maintain a verified registry. Pass `delegationTrustedTimeMs` when the result gates acceptance. Without it, `in_window` uses the signed record timestamp and reports `time_basis: "record_timestamp_claim"` with `time_trusted: false`. Scope checks list absent amount, counterparty, trusted-time, tool, or cost facts under `unverifiable` and set `fully_evaluated: false`; missing facts no longer look like a positive scope evaluation. The result never changes signature validity.
 - `anchor_plurality`: the [D138 §2.11 result](../../DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture). Pass both `proofBundle` and `anchorTrust`. The result reports verified, pending, malformed, and independent anchor counts, plurality and single-anchor tier facts, and cross-log hard-rejection facts. The bundle must commit to the record's canonical hash. A missing paired option, a mismatched bundle, or a hard anchor rejection adds a warning.
 
 - `resolveAttestationCorroboration(options)` / `isCorroborated(result, N)` ([D150](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d150-attestation-is-corroboration-generalized-off-transactions-extension-first) / [§8.7.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#876-attestation-corroboration-extension)): the general form of Layer 5 corroboration, lifted off transactions. An attestation is a separate signed extension-URI record (`https://atrib.dev/v1/extensions/attestation`) in which a signer that is NOT the target's producer vouches for a target record by reference, content `{ attests: 'reliable', target, reason? }` committed via `args_hash`. `resolveAttestationCorroboration` aggregates distinct verified attestors of a target and, reusing the [D149](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d149-cross-attestation-composes-with-a-trust-set-for-sybil-resistance) trust-set model, surfaces `attestors_valid` / `attestors_trusted` / `under_corroborated` / `trust_evaluated`. It counts ONLY `attests: 'reliable'` records (never annotation records) and rejects self-attestation, so recall-tagging cannot masquerade as trust. `isCorroborated(result, N)` (`attestors_trusted >= N`, default 2) is the guarded gate. Signal only: never flips `valid`; the fail-closed requirement lives in `@atrib/action-gate` `requireCorroborated`.
 - `evidence`: generic tiered external authorization evidence blocks ([D109](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d109-mcpoauth-authorization-evidence-uses-generic-tiered-evidence-blocks) / [§5.5.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#556-generic-authorization-evidence-blocks)). Populated when the caller passes `authorizationEvidence` or when AP2 / VI evidence is mirrored into the generic shape. Each block has `{ valid, protocol, issuer, subject, scope, attenuation_ok, delegation_ok, constraints, errors, warnings }`. Current authorization adapters are MCP/OAuth, AAuth, and x401. These blocks do not alter `valid`, `signatureOk`, or `capability_check`.
 - `ap2_vi_evidence`: the async AP2 / VI verifier result ([D094](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d094-ap2--vi-evidence-attaches-to-verifier-results-as-a-tiered-block) / [§5.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#554-ap2--verifiable-intent-evidence-checks)). Populated only when the caller passes `ap2ViEvidence` for a transaction record. It does not alter `valid`, `signatureOk`, or `cross_attestation`; consumers inspect `ap2_vi_evidence.valid` for AP2 authorization evidence.
+
+### `evaluateResultClaim(record, options): ResultClaimEvaluation`
+
+Classifies what the supplied result evidence establishes:
+
+```typescript
+import { evaluateResultClaim } from '@atrib/verify'
+
+const result = evaluateResultClaim(record, {
+  result: disclosedResult,
+  corroborations: [{ signer_key: toolKey, result_hash: record.result_hash!, verified: true }],
+  trusted_signer_keys: new Set([toolKey]),
+  min_corroborations: 1,
+})
+```
+
+`status` is one of:
+
+- `uncommitted`;
+- `committed_only`;
+- `evidence_inconsistent`;
+- `body_consistent_uncorroborated`; or
+- `corroborated`.
+
+The helper deduplicates trusted verified corroborators by signer key. Every
+result carries `truth_established: false`. A signature proves who committed to
+bytes. Body replay proves those bytes match the commitment. Independent
+signers can corroborate the same bytes. None of those checks proves an
+arbitrary real-world claim.
 
 ### `verifyHandoffClaims(claims, options): Promise<HandoffVerificationResult>`
 
@@ -473,6 +513,11 @@ For advanced use (custom calculators, alternative signing flows), the package al
 - `createFetchDpopReplayCache(options)`: HTTP-backed DPoP replay-cache adapter for fleet-shared replay checks
 - `MemoryDpopReplayCache`: in-process implementation of the `DpopReplayCache` contract for tests and single-worker deployments
 - `verifyHandoffClaims(claims, options?)`: Pattern 3 handoff claim acceptance before a receiving agent signs an `informed_by` follow-up
+- `verifyOperatorCheckpoint(note, trustedKey)`: parse and verify one C2SP checkpoint against an operator key pinned by the caller
+- `createWitnessCosignature(options)`: create the normative timestamped 76-byte C2SP witness cosignature
+- `verifyCheckpointWitnessThreshold(note, policy)`: verify the operator signature, trusted witness cosignatures, freshness, distinct-key count, and caller-selected threshold
+- `verifyCheckpointConsistencyFromLeafHashes(previous, current, leafHashes)`: recompute prior and current RFC 6962 roots from a witness-held leaf history before accepting an extension
+- `analyzeCheckpointGossip(observations, operatorKey)`: verify independently observed checkpoints, compare equal-size roots or complete leaf-hash prefixes, detect source rollback, and return deterministic split-view incident objects. Different-size checkpoints without prefix evidence are `inconclusive`, never silently consistent
 - `recommendationSigningInput(doc)`: the canonical bytes that get signed
 - `distributionsMatch(a, b)`: float-tolerant equality (within `1e-9` per recipient)
 - `fetchGraph(endpoint, contextId, treeSize?)`, `fetchSessionPolicyRecord`, `fetchPolicyDocument`
@@ -500,21 +545,22 @@ The merchant's payment pipeline never crashes because of an atrib problem. It ju
 
 ## Test coverage
 
-The test suite covers the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, AP2 / VI evidence checking, AP2 / VI crypto conformance, x401 proof evidence checking, x401 authorization evidence conformance, tiered AP2 / VI verifier attachment, and full `verify()` / `calculate()` paths including [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation.
+The test suite covers the [§4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm) calculation algorithm, graph endpoint client, JCS canonicalization, Ed25519 signing, settlement recommendations, policy templates, policy builder, calculation edge cases, property-based testing with fast-check, AP2 / VI evidence checking, AP2 / VI crypto conformance, x401 proof evidence checking, x401 authorization evidence conformance, tiered AP2 / VI verifier attachment, checkpoint and witness signature verification, witness thresholds and freshness, and full `verify()` / `calculate()` paths including [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) degradation.
 
 Run them with `pnpm --filter @atrib/verify test`.
 
 ## Spec references
 
-| Spec section                                                                                                       | What this package implements                        |
-| ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| [§3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#3-graph-query-interface)                        | Graph query interface (client side)                 |
-| [Payments profile §5](https://github.com/creatornader/atrib/blob/main/docs/payments-profile.md#5-the-default-policy)             | Default policy document (relocated from [spec §4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#43-the-default-policy) per [D147](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)) |
-| [Payments profile §8](https://github.com/creatornader/atrib/blob/main/docs/payments-profile.md#8-the-calculation-algorithm)      | Pure calculation algorithm (relocated from [spec §4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm))       |
-| [Payments profile §9](https://github.com/creatornader/atrib/blob/main/docs/payments-profile.md#9-settlement-recommendation-document) | Recommendation document signing/verification (relocated from [spec §4.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#47-settlement-recommendation-document)) |
-| [§5.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#55-atribverify-merchant-verification-library) | `AtribVerifier` class. `verify()` and `calculate()` |
-| [§5.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#554-ap2--verifiable-intent-evidence-checks) | AP2 / VI evidence checks                            |
-| [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)                      | Degradation contract; failures never break the host |
+| Spec section                                                                                                                         | What this package implements                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [§3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#3-graph-query-interface)                                          | Graph query interface (client side)                                                                                                                                                                                                                                  |
+| [Payments profile §5](https://github.com/creatornader/atrib/blob/main/docs/payments-profile.md#5-the-default-policy)                 | Default policy document (relocated from [spec §4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#43-the-default-policy) per [D147](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)) |
+| [Payments profile §8](https://github.com/creatornader/atrib/blob/main/docs/payments-profile.md#8-the-calculation-algorithm)          | Pure calculation algorithm (relocated from [spec §4.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#46-the-calculation-algorithm))                                                                                                                  |
+| [Payments profile §9](https://github.com/creatornader/atrib/blob/main/docs/payments-profile.md#9-settlement-recommendation-document) | Recommendation document signing/verification (relocated from [spec §4.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#47-settlement-recommendation-document))                                                                                       |
+| [§5.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#55-atribverify-merchant-verification-library)                   | `AtribVerifier` class. `verify()` and `calculate()`                                                                                                                                                                                                                  |
+| [§5.5.4](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#554-ap2--verifiable-intent-evidence-checks)                   | AP2 / VI evidence checks                                                                                                                                                                                                                                             |
+| [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract)                                        | Degradation contract; failures never break the host                                                                                                                                                                                                                  |
+| [§2.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#29-witnessing-and-cosignatures)                                 | Pinned-key checkpoint and witness cosignature verification                                                                                                                                                                                                           |
 
 The full protocol spec is at [`atrib-spec.md`](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).
 
@@ -523,6 +569,7 @@ The full protocol spec is at [`atrib-spec.md`](https://github.com/creatornader/a
 - [`@atrib/mcp`](https://github.com/creatornader/atrib/blob/main/packages/mcp/README.md), server-side middleware that produces the signed records `verify()` ultimately validates
 - [`@atrib/agent`](https://github.com/creatornader/atrib/blob/main/packages/agent/README.md), agent-side interceptor + framework adapters
 - [`@atrib/log-dev`](https://github.com/creatornader/atrib/blob/main/packages/log-dev/README.md), development-mode Merkle log stub. Returns placeholder Merkle hashes that **will not pass** strict cryptographic verification, fine for end-to-end shape testing, not for production verification.
+- [`services/witness-node`](https://github.com/creatornader/atrib/blob/main/services/witness-node/README.md), the external-operator-ready checkpoint witness reference service
 - [`packages/integration/examples/end-to-end/`](https://github.com/creatornader/atrib/blob/main/packages/integration/examples/end-to-end/), runnable demo wiring everything together
 - [`DECISIONS.md`](https://github.com/creatornader/atrib/blob/main/DECISIONS.md), architectural decision log
 

@@ -37,6 +37,13 @@ export type {
   ResolvedCapabilityFacts,
   CrossAttestationAnnotation,
 } from './verify-record.js'
+export { evaluateResultClaim } from './result-claim.js'
+export type {
+  EvaluateResultClaimOptions,
+  ResultClaimEvaluation,
+  ResultClaimStatus,
+  ResultCorroboration,
+} from './result-claim.js'
 
 // Generic external authorization evidence checks. Off the atrib record-validity path.
 export {
@@ -300,6 +307,7 @@ export {
   delegationCertSigningInput,
   evaluateDelegation,
   evaluateRevokerAuthorization,
+  resolveDelegationRevocations,
 } from './delegation.js'
 export type {
   DelegatedRecord,
@@ -308,7 +316,11 @@ export type {
   DelegationOutcome,
   DelegationScope,
   DelegationCostPolicy,
+  DelegationRevocationEvidence,
+  DelegationRevocationRejection,
+  DelegationRevocationResolution,
   CostPolicyUsage,
+  DelegationScopeFacts,
   DelegationScopeCheck,
   EvaluateDelegationOptions,
   KeyRevocationRecordLike,
@@ -318,13 +330,24 @@ export type {
 // Anchor plurality (D138, §2.11.7-§2.11.13): anchor_plurality annotation over
 // §2.11.3 log_proofs plus the unchanged §2.11.4 hard conditions.
 export {
-  ANCHOR_CLAIM_PREFIX, REGISTERED_NON_LOG_ANCHOR_TYPES,
-  anchorOperatorGroup, verifyAnchorPlurality, verifyAnchorProofElement,
+  ANCHOR_CLAIM_PREFIX,
+  REGISTERED_NON_LOG_ANCHOR_TYPES,
+  anchorOperatorGroup,
+  verifyAnchorPlurality,
+  verifyAnchorProofElement,
 } from './anchor-plurality.js'
 export type {
-  AnchorDisagreeingPair, AnchorElementResult, AnchorElementStatus, AnchorNotFoundResponse,
-  AnchorOperatorGroup, AnchorPluralityAnnotation, AnchorPluralityVerdict, AnchorProofBundle,
-  AnchorProofElement, AnchorTrustConfig, AnchorTrustEntry,
+  AnchorDisagreeingPair,
+  AnchorElementResult,
+  AnchorElementStatus,
+  AnchorNotFoundResponse,
+  AnchorOperatorGroup,
+  AnchorPluralityAnnotation,
+  AnchorPluralityVerdict,
+  AnchorProofBundle,
+  AnchorProofElement,
+  AnchorTrustConfig,
+  AnchorTrustEntry,
 } from './anchor-plurality.js'
 
 // Session-checkpoint verification (§1.2.10 / D139): structural validation,
@@ -358,3 +381,39 @@ export type {
   VerifySessionConsistencyProofOptions,
   VerifySessionInclusionProofOptions,
 } from './session-checkpoint.js'
+
+// Checkpoint witnessing (§2.9): pinned operator verification, C2SP
+// cosignatures, verifier-local thresholds, and tile-prefix consistency.
+export {
+  checkpointKeyId,
+  checkpointRootFromLeafHashes,
+  createWitnessCosignature,
+  parseCheckpointNote,
+  verifyCheckpointConsistencyFromLeafHashes,
+  verifyCheckpointWitnessThreshold,
+  verifyOperatorCheckpoint,
+  witnessCosignatureInput,
+} from './witness.js'
+export type {
+  CheckpointView,
+  CreateWitnessCosignatureOptions,
+  OperatorCheckpointVerification,
+  ParsedCheckpointNote,
+  TrustedCheckpointKey,
+  VerifyWitnessThresholdOptions,
+  WitnessCosignatureVerification,
+  WitnessThresholdVerification,
+} from './witness.js'
+
+// Checkpoint gossip: compare independently observed signed checkpoints,
+// detect split views and rollbacks, and produce deterministic incident objects.
+export { analyzeCheckpointGossip } from './checkpoint-gossip.js'
+export type {
+  CheckpointGossipIncident,
+  CheckpointGossipIncidentKind,
+  CheckpointGossipIssue,
+  CheckpointGossipIssueCode,
+  CheckpointGossipObservation,
+  CheckpointGossipReport,
+  VerifiedCheckpointGossipObservation,
+} from './checkpoint-gossip.js'

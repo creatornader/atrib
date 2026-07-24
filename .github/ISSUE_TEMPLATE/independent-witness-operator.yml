@@ -1,0 +1,50 @@
+name: Independent witness operator
+description: Volunteer to operate an atrib checkpoint witness outside atrib's control.
+title: 'Independent witness operator: '
+labels:
+  - witness
+  - infrastructure
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form if you can operate the reference witness with independent key custody, infrastructure, hostname, and trust-root publication. Do not post private keys or credentials.
+  - type: input
+    id: operator
+    attributes:
+      label: Operator identity
+      description: Organization, project, or public operator name.
+    validations:
+      required: true
+  - type: textarea
+    id: independence
+    attributes:
+      label: Independence boundary
+      description: State who controls the host, billing, domain, state volume, signing key, and public-key publication.
+    validations:
+      required: true
+  - type: input
+    id: endpoint
+    attributes:
+      label: Proposed endpoint
+      description: Public HTTPS origin for the witness, if already chosen.
+  - type: textarea
+    id: operations
+    attributes:
+      label: Operations plan
+      description: Monitoring, backup, upgrade, and incident-response plan.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I will keep the Ed25519 seed outside atrib-controlled systems.
+          required: true
+        - label: I will pin the log key through an authenticated out-of-band channel.
+          required: true
+        - label: I will publish the witness public key through an operator-controlled channel.
+          required: true
+        - label: I will preserve and disclose split-view or rollback incidents.
+          required: true

@@ -49,8 +49,9 @@
     "canonicalize": "^3.0.0"
   },
   "devDependencies": {
+    "@atrib/mcp": "workspace:*",
     "@types/node": "^26.1.1",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   }
 }

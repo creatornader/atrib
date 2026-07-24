@@ -1,0 +1,85 @@
+{
+  "schema": "atrib.operating-view-conformance/v1",
+  "workspace_id": "workspace-1",
+  "receiving_agent_id": "agent-bob",
+  "entries": [
+    {
+      "id": "head-a",
+      "hash_character": "a",
+      "timestamp": 100,
+      "event": {
+        "schema": "atrib.operating-event.v1",
+        "kind": "accepted_state",
+        "workspace": { "id": "workspace-1", "name": "Apollo" },
+        "task": { "id": "task-1", "name": "Ship reference client" },
+        "team": { "id": "team-1", "name": "Protocol" },
+        "agent": { "id": "agent-alice", "name": "Alice", "role": "builder" },
+        "subject": "release-status",
+        "value": "ready"
+      }
+    },
+    {
+      "id": "head-b",
+      "hash_character": "b",
+      "timestamp": 101,
+      "event": {
+        "schema": "atrib.operating-event.v1",
+        "kind": "accepted_state",
+        "workspace": { "id": "workspace-1", "name": "Apollo" },
+        "task": { "id": "task-1", "name": "Ship reference client" },
+        "team": { "id": "team-1", "name": "Protocol" },
+        "agent": { "id": "agent-bob", "name": "Bob", "role": "reviewer" },
+        "subject": "release-status",
+        "value": "blocked"
+      }
+    },
+    {
+      "id": "resolution",
+      "hash_character": "c",
+      "timestamp": 102,
+      "informed_by": ["head-a", "head-b"],
+      "event": {
+        "schema": "atrib.operating-event.v1",
+        "kind": "resolution",
+        "workspace": { "id": "workspace-1", "name": "Apollo" },
+        "task": { "id": "task-1", "name": "Ship reference client" },
+        "team": { "id": "team-1", "name": "Protocol" },
+        "agent": { "id": "agent-bob", "name": "Bob", "role": "reviewer" },
+        "subject": "release-status",
+        "accepted_head": "head-b",
+        "resolves": ["head-a", "head-b"]
+      }
+    },
+    {
+      "id": "handoff",
+      "hash_character": "d",
+      "timestamp": 103,
+      "informed_by": ["resolution"],
+      "event": {
+        "schema": "atrib.operating-event.v1",
+        "kind": "handoff",
+        "workspace": { "id": "workspace-1", "name": "Apollo" },
+        "task": { "id": "task-1", "name": "Ship reference client" },
+        "team": { "id": "team-1", "name": "Protocol" },
+        "agent": { "id": "agent-alice", "name": "Alice", "role": "builder" },
+        "from_agent": { "id": "agent-alice", "name": "Alice", "role": "builder" },
+        "to_agent": { "id": "agent-bob", "name": "Bob", "role": "reviewer" },
+        "subject": "verify-release"
+      }
+    }
+  ],
+  "checkpoints": [
+    {
+      "after_entries": 2,
+      "cell_status": "conflict",
+      "accepted_entry_id": null
+    },
+    {
+      "after_entries": 3,
+      "cell_status": "resolved",
+      "accepted_entry_id": "head-b"
+    }
+  ],
+  "expected_receiving_agent_task_ids": ["task-1"],
+  "expected_receiving_agent_entry_ids": ["handoff", "resolution", "head-b", "head-a"]
+}

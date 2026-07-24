@@ -19,6 +19,7 @@
  *   revisions (+start)            recall_revisions
  *   orphans                       recall_orphans
  *   by_signer                     recall_by_signer
+ *   state                         deterministic accepted-state projection
  *
  * The `verification` parameter runs the Pattern 3 handoff-acceptance logic
  * (legacy atrib-verify) and attaches its tiered result to the response;
@@ -39,6 +40,7 @@ import {
   runRecallOrphans,
   runRecallRevisions,
   runRecallSessionChain,
+  runRecallState,
   runRecallWalk,
   type RecallArgs,
 } from './index.js'
@@ -61,6 +63,7 @@ export const RECALL_SHAPES = [
   'revisions',
   'orphans',
   'by_signer',
+  'state',
 ] as const
 
 export type RecallShape = (typeof RECALL_SHAPES)[number]
@@ -77,10 +80,7 @@ const RecallFilters = z.object({
       "History only. How to treat an omitted context_id: 'all' (default) searches cross-context; " +
         "'env' applies the D078/D083 env-derived current context.",
     ),
-  creator_key: z
-    .string()
-    .optional()
-    .describe('Exact creator_key match (history, orphans).'),
+  creator_key: z.string().optional().describe('Exact creator_key match (history, orphans).'),
   event_type: EventTypeFilterSchema.optional().describe(
     'Event-kind filter: shorthand alias or full URI (history, orphans).',
   ),
@@ -99,10 +99,7 @@ const RecallFilters = z.object({
     .boolean()
     .optional()
     .describe('History only. Hide records superseded by a revision when true.'),
-  min_signers: z
-    .number()
-    .optional()
-    .describe('History only. Minimum count of distinct signers.'),
+  min_signers: z.number().optional().describe('History only. Minimum count of distinct signers.'),
 })
 
 export const RecallVerbInput = z.object({
@@ -114,7 +111,8 @@ export const RecallVerbInput = z.object({
         'call). history = filter-and-page over the local mirror; walk = graph/causal walk from ' +
         '`start`; content = BM25 free-form retrieval over `query`; chain = chronological ' +
         'session chain; annotations / revisions = per-record aggregations from `start`; ' +
-        'orphans = loose-end discovery; by_signer = per-creator aggregation.',
+        'orphans = loose-end discovery; by_signer = per-creator aggregation; state = ' +
+        'current heads of signed revision lineages without arbitrary conflict resolution.',
     ),
   direction: z
     .enum(['backward', 'forward'])
@@ -165,10 +163,7 @@ export const RecallVerbInput = z.object({
     .boolean()
     .optional()
     .describe('History only. Include records that failed local signature verification.'),
-  toc: z
-    .boolean()
-    .optional()
-    .describe('History only. Table-of-contents entry shape per record.'),
+  toc: z.boolean().optional().describe('History only. Table-of-contents entry shape per record.'),
   edge_types: z
     .array(z.enum(['CHAIN_PRECEDES', 'INFORMED_BY', 'ANNOTATES', 'REVISES']))
     .optional()
@@ -186,9 +181,7 @@ export const RecallVerbInput = z.object({
   include_content: z
     .boolean()
     .optional()
-    .describe(
-      'chain and walk-with-direction: include the D062 local mirror body per record.',
-    ),
+    .describe('chain and walk-with-direction: include the D062 local mirror body per record.'),
   max_records: z
     .number()
     .optional()
@@ -205,6 +198,28 @@ export const RecallVerbInput = z.object({
     .number()
     .optional()
     .describe('by_signer only. Minimum record count to include a creator.'),
+  root_record_hashes: z
+    .array(z.string().regex(SHA256_REF_PATTERN))
+    .optional()
+    .describe(
+      'State only. Project these lineage roots. Omit to discover every verified revision root.',
+    ),
+  trusted_creator_keys: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'State only. Accept records from these creator keys. Omit only for a local all-signers view.',
+    ),
+  allowed_context_ids: z
+    .array(z.string().regex(/^[0-9a-f]{32}$/))
+    .optional()
+    .describe('State only. Accept records from these contexts. Omit for a cross-context view.'),
+  head_limit: z
+    .number()
+    .optional()
+    .describe(
+      'State only. Maximum active heads returned per lineage cell. The projector reports truncation and the total head count.',
+    ),
   verification: VerifyInput.extend({
     mode: z
       .literal('handoff')
@@ -340,6 +355,25 @@ export async function runRecallVerb(
         })
         break
       }
+      case 'state': {
+        payload = await runRecallState({
+          ...(input.root_record_hashes !== undefined
+            ? { root_record_hashes: input.root_record_hashes }
+            : {}),
+          ...(input.trusted_creator_keys !== undefined
+            ? { trusted_creator_keys: input.trusted_creator_keys }
+            : {}),
+          ...(input.allowed_context_ids !== undefined
+            ? { allowed_context_ids: input.allowed_context_ids }
+            : {}),
+          ...(input.include_content !== undefined
+            ? { include_content: input.include_content }
+            : {}),
+          ...(input.limit !== undefined ? { limit: input.limit } : {}),
+          ...(input.head_limit !== undefined ? { head_limit: input.head_limit } : {}),
+        })
+        break
+      }
     }
   }
 
@@ -374,9 +408,7 @@ export function registerRecallVerbTool(mcp: McpServer): void {
           const outcome = await runRecallVerb(input)
           if ('error' in outcome) return refusal(outcome.error)
           return {
-            content: [
-              { type: 'text' as const, text: JSON.stringify(outcome.payload, null, 2) },
-            ],
+            content: [{ type: 'text' as const, text: JSON.stringify(outcome.payload, null, 2) }],
           }
         },
         extractRecordHashFieldsFromMcpResult,

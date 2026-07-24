@@ -1819,6 +1819,7 @@ import {
   computeGraphBBox,
   computeNeighborhood,
   normalizeGraphRecordHash,
+  projectPublicRevisionState,
   buildPrimaryTracePath,
   graphNodeActionHash,
   graphReferenceStatus,
@@ -1830,7 +1831,7 @@ import {
   buildReplayGraphFromEntries,
   computeDemoGraphSignature,
   computeDemoLaneOffset,
-} from '/graph-utils.mjs?v=2026-06-11-primary-trace-path'
+} from '/graph-utils.mjs?v=2026-07-23-public-revision-state'
 
 /*
  * atrib explorer, D054 option 1.
@@ -1978,6 +1979,38 @@ async function fetchJson(url, opts = {}) {
 async function fetchMaybe(url, opts = {}) {
   try { return await fetchJson(url, opts) }
   catch (e) { return { _error: e.message } }
+}
+
+async function fetchArchiveRecordState(endpoint, hashHex, timeoutMs = 1200) {
+  if (!endpoint) return { state: 'not_configured' }
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const response = await fetch(`${endpoint}/record/${hashHex}`, {
+      headers: { accept: 'application/json' },
+      signal: ctrl.signal,
+    })
+    let body = null
+    try { body = await response.json() } catch {}
+    if (response.ok && body?.record) return { state: 'available', body }
+    if (response.status === 404) return { state: 'commitment_only', body }
+    if (response.status === 410) return { state: 'expired', body }
+    if (response.status === 401 || response.status === 403) {
+      return { state: 'access_denied', body }
+    }
+    return {
+      state: 'archive_unavailable',
+      status: response.status,
+      error: body?.detail || body?.error || response.statusText,
+    }
+  } catch (error) {
+    return {
+      state: 'archive_unavailable',
+      error: error?.name === 'AbortError' ? 'request timed out' : error?.message || String(error),
+    }
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function fetchTextMaybe(url) {
@@ -2373,9 +2406,17 @@ function doSearch() {
 // ─── Overview: hero, pulse strip, search, activity feed ──────────────────
 
 let pollHandle = null
+let liveStream = null
+let liveApplyQueue = Promise.resolve()
+let lastFeedCursor = null
 let lastFeedTopHash = null
 
 async function renderOverview() {
+  stopLiveUpdates()
+  feedEntries = []
+  feedTreeSize = 0
+  lastFeedCursor = null
+  lastFeedTopHash = null
   setActiveNav('overview')
   const ep = endpoints()
   const root = el('div')
@@ -2439,9 +2480,9 @@ async function renderOverview() {
     el('div', { class: 'feed-head' },
       el('h2', {},
         'recent signed records',
-        el('span', { class: 'live-tag' },
+        el('span', { class: 'live-tag', id: 'feed-live-status' },
           el('span', { class: 'dot' }),
-          'polling',
+          'connecting',
         ),
       ),
       el('span', { class: 'meta', id: 'feed-meta' }, 'loading…'),
@@ -2483,10 +2524,14 @@ async function renderOverview() {
   } else {
     await resolveIdentities(recent.entries.map(e => e.creator_key))
     renderFeed(recent.entries, false, recent.tree_size ?? null)
+    lastFeedCursor = recent.entries.reduce(
+      (max, entry) => Number.isInteger(entry.index) ? Math.max(max, entry.index) : max,
+      -1,
+    )
     populateQuickLinks(recent.entries)
   }
 
-  startPolling()
+  startLiveUpdates()
 }
 
 function verificationPathStep(num, title, body) {
@@ -2580,6 +2625,68 @@ function evidenceStatus(blocks) {
       ? 'External evidence blocks passed verifier checks.'
       : 'One or more external evidence blocks need verifier review.',
     tone: invalid === 0 ? 'ok' : 'warn',
+  }
+}
+
+function bodyAvailabilityStatus(archiveRecord) {
+  const body = archiveRecord?.body
+  if (archiveRecord?.state === 'available') {
+    const archivedAt = body?.archived_at_ms
+    const retentionWindow = body?.retention_window_ms
+    const expiresAt =
+      Number.isFinite(archivedAt) && Number.isFinite(retentionWindow)
+        ? archivedAt + retentionWindow
+        : null
+    return {
+      label: 'record body',
+      value: 'available',
+      note: expiresAt
+        ? `The archive returned the signed record body. Its stated retention window ends ${isoTime(expiresAt)}.`
+        : 'The archive returned the signed record body. No expiry could be derived from its response.',
+      tone: 'ok',
+    }
+  }
+  if (archiveRecord?.state === 'expired') {
+    return {
+      label: 'record body',
+      value: 'retention expired',
+      note: body?.expired_at_ms
+        ? `The archive reports that retention ended ${isoTime(body.expired_at_ms)}.`
+        : 'The archive reports that its retention window has ended.',
+      tone: 'warn',
+    }
+  }
+  if (archiveRecord?.state === 'access_denied') {
+    return {
+      label: 'record body',
+      value: 'access restricted',
+      note: 'The archive requires authorization before it will return the signed record body.',
+      tone: 'warn',
+    }
+  }
+  if (archiveRecord?.state === 'commitment_only') {
+    return {
+      label: 'record body',
+      value: 'commitment only',
+      note: 'No body is available from this archive. The log projection alone cannot be rehashed or signature-checked as a full record.',
+      tone: 'info',
+    }
+  }
+  if (archiveRecord?.state === 'not_configured') {
+    return {
+      label: 'record body',
+      value: 'not checked',
+      note: 'No archive endpoint is configured for this explorer.',
+      tone: 'info',
+    }
+  }
+  return {
+    label: 'record body',
+    value: 'archive unavailable',
+    note: archiveRecord?.error
+      ? `The archive could not answer: ${archiveRecord.error}.`
+      : 'The archive could not answer the body lookup.',
+    tone: 'warn',
   }
 }
 
@@ -2858,20 +2965,20 @@ async function loadOlder() {
   const wrap = document.getElementById('feed-loadmore')
   if (wrap) wrap.replaceChildren(el('span', { class: 'meta' }, 'loading…'))
   const ep = endpoints()
-  // Pause polling while we paginate so the live tail doesn't race with our offset window.
-  stopPolling()
+  // Pause live updates while paginating so the tail cannot move the offset window.
+  stopLiveUpdates()
   const offset = feedEntries.length
   const more = await fetchMaybe(`${ep.log}/recent?limit=50&offset=${offset}`)
   if (more._error || !more.entries || more.entries.length === 0) {
     if (wrap) wrap.replaceChildren(
       el('span', { class: 'meta' }, more._error || 'no more entries'),
     )
-    if (isOverviewRoute()) startPolling()
+    if (isOverviewRoute()) startLiveUpdates()
     return
   }
   await resolveIdentities(more.entries.map(e => e.creator_key))
   renderFeed([...feedEntries, ...more.entries], false, more.tree_size ?? feedTreeSize)
-  if (isOverviewRoute()) startPolling()
+  if (isOverviewRoute()) startLiveUpdates()
 }
 window.loadOlder = loadOlder
 
@@ -3278,7 +3385,7 @@ async function renderDemo() {
   }, DEMO_LIVE_REFRESH_MS)
 }
 
-// ─── Polling ─────────────────────────────────────────────────────────────
+// ─── Live updates with polling fallback ──────────────────────────────────
 
 function isOverviewRoute() {
   const h = currentRoutePath()
@@ -3303,10 +3410,85 @@ function isUserStatefulRoute() {
   return h.startsWith('/identity/') || h.startsWith('/session/') || h === '/demo'
 }
 
+function setFeedLiveStatus(label, tone = '') {
+  const status = document.getElementById('feed-live-status')
+  if (!status) return
+  status.replaceChildren(el('span', { class: 'dot' }), label)
+  status.dataset.tone = tone
+}
+
+function startLiveUpdates() {
+  stopLiveUpdates()
+  if (typeof EventSource !== 'function') {
+    setFeedLiveStatus('polling', 'fallback')
+    startPolling()
+    return
+  }
+
+  const ep = endpoints()
+  const streamUrl = new URL(`${ep.log}/stream`)
+  if (Number.isInteger(lastFeedCursor)) {
+    streamUrl.searchParams.set('after', String(lastFeedCursor))
+  }
+
+  setFeedLiveStatus('connecting')
+  const stream = new EventSource(streamUrl.href)
+  liveStream = stream
+
+  stream.addEventListener('ready', () => {
+    if (liveStream !== stream) return
+    setFeedLiveStatus('live', 'ok')
+  })
+
+  stream.addEventListener('log_entry', (event) => {
+    if (liveStream !== stream) return
+    liveApplyQueue = liveApplyQueue.then(async () => {
+      if (!isOverviewRoute() || liveStream !== stream) return
+      let payload
+      try {
+        payload = JSON.parse(event.data)
+      } catch {
+        setFeedLiveStatus('invalid event', 'error')
+        return
+      }
+      const entry = payload?.entry
+      if (!entry || !Number.isInteger(entry.index) || !entry.record_hash) return
+      if (feedEntries.some((known) => known.record_hash === entry.record_hash)) {
+        lastFeedCursor = Math.max(lastFeedCursor ?? -1, entry.index)
+        return
+      }
+      await resolveIdentity(entry.creator_key)
+      lastFeedCursor = Math.max(lastFeedCursor ?? -1, entry.index)
+      const nextEntries = [entry, ...feedEntries]
+        .sort((a, b) => (b.index ?? -1) - (a.index ?? -1))
+      renderFeed(nextEntries, true, payload.tree_size ?? feedTreeSize)
+      populateQuickLinks(nextEntries)
+    }).catch(() => {
+      setFeedLiveStatus('update error', 'error')
+    })
+  })
+
+  stream.addEventListener('error', () => {
+    if (liveStream !== stream) return
+    setFeedLiveStatus('reconnecting', 'warn')
+  })
+}
+
+function stopLiveStream() {
+  if (!liveStream) return
+  liveStream.close()
+  liveStream = null
+}
+
+function stopLiveUpdates() {
+  stopLiveStream()
+  stopPolling()
+}
+
 // Per-view soft refresh: every active view (action, trace, anchoring)
 // re-runs route() on a long interval so newly-arrived records become
 // visible without a manual reload. The overview route uses the
-// dedicated fast feed polling above; this is a coarser fallback for
+// dedicated live feed above; this is a coarser fallback for
 // views that don't have incremental update logic. Identity + session
 // are excluded because they maintain user state that silent-refresh
 // would wipe (see isUserStatefulRoute). Pause when the tab is hidden
@@ -3318,7 +3500,7 @@ function startViewRefresh() {
   stopViewRefresh()
   viewRefreshHandle = setInterval(() => {
     if (document.hidden) return
-    if (isOverviewRoute()) return  // overview has its own faster polling
+    if (isOverviewRoute()) return  // overview has its own live stream
     if (isUserStatefulRoute()) return  // identity + session maintain user state
     // Pass silent: true so route() skips the "loading…" blank state.
     // Each render function builds its `root` off-screen and atomic-swaps
@@ -3379,7 +3561,7 @@ function tickRelativeTimes() {
 setInterval(tickRelativeTimes, 10000)
 
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && isOverviewRoute() && !pollHandle) startPolling()
+  if (!document.hidden && isOverviewRoute() && !pollHandle && !liveStream) startLiveUpdates()
   // Also tick immediately when the tab becomes visible so the first
   // glance shows fresh times rather than "5s ago" from minutes prior.
   if (!document.hidden) tickRelativeTimes()
@@ -4088,6 +4270,102 @@ function renderClaimBody(lookup) {
 
 // ─── Session view ────────────────────────────────────────────────────────
 
+function renderPublicRevisionStatePanel(state) {
+  const metaParts = [
+    `${state.total_cells} ${state.total_cells === 1 ? 'lineage' : 'lineages'}`,
+    `${state.conflict_count} ${state.conflict_count === 1 ? 'conflict' : 'conflicts'}`,
+  ]
+  if (state.partial_count > 0) metaParts.push(`${state.partial_count} partial`)
+  if (state.cells_truncated) metaParts.push(`${state.returned_cells} shown`)
+
+  const header = el('div', { class: 'panel-head' },
+    el('h2', {}, 'current revision state'),
+    el('span', { class: 'meta' }, `${metaParts.join(' · ')} · public commitment view`),
+  )
+  const basis = el('div', {
+    style: 'padding: 14px 16px; border-bottom: 1px solid var(--border); color: var(--text-2); font-size: 13px; line-height: 1.55;',
+  },
+    'Derived from signature-checked graph nodes and signed ',
+    el('code', {}, 'REVISES'),
+    ' edges. Every visible head remains visible. This browser view does not apply a receiver trust policy or independently verify inclusion proofs.',
+  )
+
+  if (state.total_cells === 0) {
+    return el('section', { class: 'panel' },
+      header,
+      basis,
+      el('div', { class: 'panel-body' },
+        el('div', { class: 'empty', style: 'padding: 12px 0;' },
+          'No revision lineage is visible in this session graph.',
+        ),
+      ),
+    )
+  }
+
+  const renderHead = head => {
+    const when = head.timestamp ? timeAgo(head.timestamp) : 'time unavailable'
+    return el('div', { style: 'margin-bottom: 6px;' },
+      el('a', { href: `/action/${head.record_hash}` },
+        el('span', { class: 'mono' }, shorten(head.record_hash, 10, 4)),
+      ),
+      head.creator_key ? ' · ' : '',
+      head.creator_key ? renderIdentityLabel(head.creator_key) : null,
+      el('span', { class: 'meta', style: 'margin-left: 6px;' }, when),
+    )
+  }
+
+  const rows = state.cells.map(cell => {
+    const rootIsLinkable =
+      cell.root_reference_status === 'in_scope' ||
+      cell.root_reference_status === 'external'
+    const rootLabel = el('span', {
+      class: 'mono',
+      title: cell.root_record_hash,
+    }, shorten(cell.root_record_hash, 10, 4))
+    const root = rootIsLinkable
+      ? el('a', { href: `/action/${cell.root_record_hash}` }, rootLabel)
+      : rootLabel
+    const status = cell.status === 'conflict'
+      ? el('span', { class: 'badge warn' }, `${cell.total_active_heads} heads`)
+      : el('span', { class: 'badge ok' }, '1 head')
+    const scope = cell.partial
+      ? el('span', {
+          class: 'badge dim',
+          style: 'margin-left: 6px;',
+          title: 'At least one lineage record is outside this graph response or unresolved.',
+        }, 'partial')
+      : el('span', { class: 'badge dim', style: 'margin-left: 6px;' }, 'in graph')
+    const heads = cell.active_heads.map(renderHead)
+    if (cell.active_heads_truncated) {
+      heads.push(el('div', { class: 'meta' },
+        `${cell.total_active_heads - cell.active_heads.length} more heads not rendered`,
+      ))
+    }
+    return el('tr', {},
+      el('td', {}, root, scope),
+      el('td', {}, status),
+      el('td', {}, ...heads),
+      el('td', { class: 'shrink' }, String(cell.revision_count)),
+    )
+  })
+
+  return el('section', { class: 'panel flush', style: 'margin-top: 24px;' },
+    header,
+    basis,
+    el('div', {},
+      el('table', { class: 'feed' },
+        el('thead', {}, el('tr', {},
+          el('th', {}, 'lineage root'),
+          el('th', {}, 'status'),
+          el('th', {}, 'active heads'),
+          el('th', { class: 'shrink' }, 'revisions'),
+        )),
+        el('tbody', {}, ...rows),
+      ),
+    ),
+  )
+}
+
 async function renderSession(contextId) {
   setActiveNav(null)
   const ep = endpoints()
@@ -4106,13 +4384,15 @@ async function renderSession(contextId) {
       el('span', { class: 'term' }, 'session'),
       ' is one chunk of agent work. Every record sharing the same ',
       el('code', {}, 'context_id'),
-      ' (16-byte hex) belongs to it. The records form a graph: chained in order, sometimes converging on a transaction. The graph below is built only from what the records themselves contain (§3.2.4). No semantic interpretation, no operator policy.',
+      ' (16-byte hex) belongs to it. The records form a graph: chained in order, sometimes converging on a transaction. The structural graph is built only from what the records themselves contain (§3.2.4). The revision-state panel projects signed ',
+      el('code', {}, 'REVISES'),
+      ' edges but does not apply receiver policy.',
     ],
   }))
 
   root.append(el('section', { class: 'detail-path', 'aria-label': 'Session page path' },
     detailPathStep('01', 'Check readiness', 'Start with source, graph availability, transaction state, and references.'),
-    detailPathStep('02', 'Inspect structure', 'Use the graph to see chain, convergence, annotation, and revision edges.'),
+    detailPathStep('02', 'Inspect state and structure', 'Check revision heads, then use the graph to inspect chain, convergence, annotation, and revision edges.'),
     detailPathStep('03', 'Open records', 'Drop into individual receipts when a row needs proof or raw JSON.'),
   ))
 
@@ -4175,6 +4455,9 @@ async function renderSession(contextId) {
   const hasEdges = graph.edges && graph.edges.length > 0
   const referenceEdgeCounts = summarizeReferenceEdges(graph.edges)
   const referenceStatus = formatReferenceStatus(usingFallback, nodeSummary, referenceEdgeCounts)
+  const revisionState = usingFallback
+    ? null
+    : projectPublicRevisionState(graph, { cell_limit: 100, head_limit: 20 })
 
   // Composition breakdown across the session. Surfaces the event-type
   // diversity that the bare "transaction: none" stat hides. Signed record
@@ -4265,6 +4548,10 @@ async function renderSession(contextId) {
       )
     }
     root.append(banner)
+  }
+
+  if (revisionState !== null) {
+    root.append(renderPublicRevisionStatePanel(revisionState))
   }
 
   // Graph panel (only when graph-node returned edges; built but not rendered
@@ -4524,7 +4811,7 @@ async function renderAction(recordHash) {
       el('span', { class: 'term' }, 'action'),
       ' is one signed record in the log. The ',
       el('code', {}, 'record_hash'),
-      ' is the SHA-256 of the canonical-JSON form (RFC 8785). Below: the record, the identity that signed it, the session it belongs to, and proof that it\'s actually in the log.',
+      ' is the SHA-256 of the canonical-JSON form (RFC 8785). The log lookup below exposes the compact commitment entry. When the archive has the signed body, this page shows it separately.',
     ],
   }))
 
@@ -4543,9 +4830,12 @@ async function renderAction(recordHash) {
     return
   }
 
-  const archiveEvidence = ep.archive
-    ? await fetchMaybe(`${ep.archive}/evidence/${hashHex}`, { timeoutMs: 1200 })
-    : null
+  const [archiveEvidence, archiveRecord] = await Promise.all([
+    ep.archive
+      ? fetchMaybe(`${ep.archive}/evidence/${hashHex}`, { timeoutMs: 1200 })
+      : null,
+    fetchArchiveRecordState(ep.archive, hashHex),
+  ])
   if (!routeGenerationStillCurrent(myGen)) return
   const entryWithEvidence = mergeArchiveEvidence(entry, archiveEvidence)
 
@@ -4557,8 +4847,8 @@ async function renderAction(recordHash) {
   root.append(renderDetailStatus([
     {
       label: 'signature',
-      value: 'accepted',
-      note: 'The log accepted this entry after Ed25519 verification.',
+      value: 'accepted by log',
+      note: 'The log reports that it accepted the signed record. Direct browser re-verification requires the archived body.',
       tone: 'ok',
     },
     {
@@ -4579,6 +4869,7 @@ async function renderAction(recordHash) {
       note: entry.context_id ? 'Open the session or ancestry view for context.' : 'No context id was returned for this lookup.',
       tone: entry.context_id ? 'ok' : 'warn',
     },
+    bodyAvailabilityStatus(archiveRecord),
     evidenceStatus(evidence),
   ]))
 
@@ -4617,7 +4908,7 @@ async function renderAction(recordHash) {
     el('aside', { class: 'receipt-proof', 'aria-label': 'Proof checks' },
       el('span', { class: 'receipt-kicker' }, 'proof checks'),
       el('div', { class: 'proof-list' },
-        proofStep('Signature accepted', 'The log accepted this entry only after Ed25519 verification.'),
+        proofStep('Signature accepted by log', 'The log reports that it accepted this entry after Ed25519 verification.'),
         proofStep(
           identityOk ? 'Identity claim found' : 'Identity claim optional',
           identityOk
@@ -4627,6 +4918,11 @@ async function renderAction(recordHash) {
         ),
         proofStep('Committed to log', `Entry index ${entry.log_index ?? entry.index ?? 'unknown'} is in the public Merkle log.`),
         proofStep('Traceable context', entry.context_id ? 'The context id links this record to its workflow.' : 'No context id was returned for this lookup.', Boolean(entry.context_id)),
+        proofStep(
+          archiveRecord.state === 'available' ? 'Record body retrievable' : 'Record body not retrievable',
+          bodyAvailabilityStatus(archiveRecord).note,
+          archiveRecord.state === 'available',
+        ),
       ),
       el('div', { class: 'proof-note' },
         el('div', {},
@@ -4644,7 +4940,14 @@ async function renderAction(recordHash) {
   const evidencePanel = renderEvidencePanel(evidence)
   if (evidencePanel) root.append(evidencePanel)
 
-  root.append(renderRawJsonPanel('raw record', 'as returned by /v1/lookup', entry))
+  root.append(renderRawJsonPanel('log entry projection', 'commitment-visible fields from /v1/lookup', entry))
+  if (archiveRecord.state === 'available') {
+    root.append(renderRawJsonPanel(
+      'archived signed record body',
+      'retrieved from the configured Record Body Archive Layer',
+      archiveRecord.body,
+    ))
+  }
 
   clearAndRender(root)
 }
@@ -6456,7 +6759,7 @@ function renderAbout() {
 
       el('h2', {}, 'Seven views'),
       el('h3', {}, 'Overview (this page)'),
-      el('p', {}, 'A live feed of the most recent signed actions, updating every 5 seconds. Every row is a real record from a real atrib-instrumented agent.'),
+      el('p', {}, 'A live feed of the most recent signed actions. It follows the log stream in real time and falls back to polling when EventSource is unavailable. Every row is a real record from a real atrib-instrumented agent.'),
 
       el('h3', {}, 'Identity'),
       el('p', {},
@@ -6555,6 +6858,7 @@ async function route(opts = {}) {
   _routeGeneration += 1
   const myGen = _routeGeneration
   const routePath = currentRoutePath()
+  if (routePath !== '/' && routePath !== '/overview') stopLiveUpdates()
   const isDemoRoute = routePath === '/demo'
   document.body.classList.toggle('demo-route', isDemoRoute)
   if (!isDemoRoute) stopDemoReplay()

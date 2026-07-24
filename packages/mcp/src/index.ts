@@ -3,10 +3,11 @@
 // @atrib/mcp. Public API
 
 // Middleware (primary export)
-export { atrib } from './middleware.js'
+export { atrib, VERIFIABLE_ACTION_DISCLOSURE } from './middleware.js'
 export type {
   AtribOptions,
   AtribServer,
+  DisclosureOptions,
   LocalSubstrateCommitAttempt,
   LocalSubstrateCommitOptions,
   LocalSubstrateShadowAttempt,
@@ -18,6 +19,20 @@ export type {
   RecordReferenceResolver,
   RecordReferenceSource,
 } from './middleware.js'
+
+// §8.3 JSON commitment helper shared by middleware and direct action SDKs.
+export {
+  createJsonCommitment,
+  createToolNameCommitment,
+  verifyJsonCommitment,
+} from './commitment.js'
+export type {
+  JsonCommitment,
+  JsonCommitmentFor,
+  JsonCommitmentScheme,
+  RandomBytes,
+  SaltedJsonCommitment,
+} from './commitment.js'
 
 // Proxy: in-process McpServer that forwards to an upstream MCP server with
 // attribution applied at the proxy layer. Use for hosts that accept an
@@ -267,10 +282,7 @@ export type {
 // x401 sidecar evidence capture. Producer-side helper for HTTP proof-gate
 // headers carried through host request metadata.
 export { buildX401EvidenceFromExtra } from './x401-evidence.js'
-export type {
-  CapturedX401Evidence,
-  X401EvidenceCaptureOptions,
-} from './x401-evidence.js'
+export type { CapturedX401Evidence, X401EvidenceCaptureOptions } from './x401-evidence.js'
 
 // AAuth sidecar evidence capture. Producer-side helper for AAuth
 // callback-shaped events from clients, middleware, or audit sinks.
@@ -311,19 +323,45 @@ export type {
 // Anchor plurality (D138, §2.11.7-§2.11.13): producer-side anchor-set config,
 // the §2.11.10 anchoring-claim builder, and non-blocking fan-out submission.
 export {
-  ANCHOR_CLAIM_KIND, ANCHOR_CLAIM_PREFIX, ANCHOR_TYPES, BUILT_IN_DEFAULT_ANCHOR_SET,
-  anchorClaimArtifact, buildAnchoringClaim, canonicalRecordHash, createAnchorFanout,
-  createAnchorTransport, createAtribLogAnchorTransport, createOpenTimestampsAnchorTransport,
-  createRekorAnchorTransport, createRfc3161AnchorTransport, createStubAnchorTransport,
+  ANCHOR_CLAIM_KIND,
+  ANCHOR_CLAIM_PREFIX,
+  ANCHOR_TYPES,
+  BUILT_IN_DEFAULT_ANCHOR_SET,
+  anchorClaimArtifact,
+  buildAnchoringClaim,
+  canonicalRecordHash,
+  createAnchorFanout,
+  createAnchorTransport,
+  createAtribLogAnchorTransport,
+  createOpenTimestampsAnchorTransport,
+  createRekorAnchorTransport,
+  createRfc3161AnchorTransport,
+  createStubAnchorTransport,
   rfc3161TimestampQuery,
-  resolveAnchorPosture, resolveEffectiveAnchors, submitToAnchors, verifyAnchoringClaim,
+  resolveAnchorPosture,
+  resolveEffectiveAnchors,
+  submitToAnchors,
+  summarizeAnchorOutcomes,
+  verifyAnchoringClaim,
 } from './anchors.js'
 export type {
-  AnchorConfigSidecarMarker, AnchorDescriptor, AnchorFanout, AnchorFanoutTicket,
-  AnchoringClaim, AnchorPostureResolution, AnchorSetConfig, AnchorSubmissionOutcome,
-  AnchorFetch, AnchorSubmissionRequest, AnchorSubmissionStatus, AnchorTransport,
-  AnchorTransportOptions, AnchorType,
-  CreateAnchorFanoutOptions, SubmitToAnchorsOptions,
+  AnchorConfigSidecarMarker,
+  AnchorDescriptor,
+  AnchorFanout,
+  AnchorFanoutTicket,
+  AnchoringClaim,
+  AnchorPostureResolution,
+  AnchorSetConfig,
+  AnchorSubmissionOutcome,
+  AnchorFetch,
+  AnchorSubmissionReport,
+  AnchorSubmissionRequest,
+  AnchorSubmissionStatus,
+  AnchorTransport,
+  AnchorTransportOptions,
+  AnchorType,
+  CreateAnchorFanoutOptions,
+  SubmitToAnchorsOptions,
 } from './anchors.js'
 
 // RFC 6962 Merkle tree (for log service and @atrib/verify)
@@ -377,6 +415,7 @@ export type {
   BuildRunKeyRevocationRecordOptions,
   DelegatedAtribRecord,
   DelegationCertificate,
+  DelegationCostPolicy,
   DelegationScope,
   IssueDelegationCertificateOptions,
   RunKeyRevocationRecord,

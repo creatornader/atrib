@@ -30,6 +30,8 @@
       "cert_hash": null,
       "cert_valid": null,
       "in_window": null,
+      "time_basis": null,
+      "time_trusted": null,
       "context_bound": null,
       "cert_bound": null,
       "scope_check": null,
