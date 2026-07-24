@@ -1,5 +1,12 @@
 # @atrib/log-node
 
+## 0.1.37
+
+### Patch Changes
+
+- Updated dependencies [5da8f9b]
+  - @atrib/mcp@0.22.0
+
 ## 0.1.36
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@atrib/witness-node",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Independent checkpoint witness service for atrib logs.",
   "private": true,
   "type": "module",
