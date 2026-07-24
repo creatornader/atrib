@@ -9604,3 +9604,85 @@ pre-allocate.
 **Likely outcome (not committed):** hold indefinitely; the manifest hash stays the interface between the substrate (anchors, verification) and memory tools (retrieval).
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P054: hide-superseded recall must cover supersession metadata (`prior_position` projection leak)
+
+**Ported 2026-07-24** from commit `86f83611` (2026-07-17), originally filed as P043. Renumbered because P043-P047 were promoted to accepted decisions in the interim, so the original numbers are no longer free. Content is unchanged apart from numbering.
+
+**Source:** Offline bridge measurement 2026-07-17 while building a benchmark memory adapter. With superseded-hiding recall active, the superseded observation was correctly hidden, but the revision record itself was returned, and its `prior_position` field quotes the superseded claim verbatim. The superseded content re-enters the consumer's context through its own supersession metadata. The immediate workaround was an `event_type` filter on the recall query; the contract question is substrate-level.
+
+**The decision in question:** when a recall consumer requests superseded-hidden results, should revision records project `new_position` and `reason` only, eliding `prior_position` from rendered and local-content projections? The signed record is unchanged either way; this is a read-side projection rule, consistent with the commitment-only posture.
+
+**Considerations.**
+
+- The value of hide-superseded semantics is that outdated content stays out of agent context. A projection that re-quotes the outdated position defeats the semantic exactly where it matters (stale preferences, corrected facts).
+- Excluding revision records entirely is the blunt alternative; it loses the change-of-mind signal, which is often the most valuable context a consumer can receive.
+- A conformance case should pin the contract: under hidden-superseded queries, a superseded claim string appears in NO recall projection field.
+
+**Likely outcome (not committed):** accept; elide `prior_position` in hidden-superseded projections and ship the conformance case with the change.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P055: question-form recall calibration (silent zero-result under the relevance floor)
+
+**Ported 2026-07-24** from commit `86f83611` (2026-07-17), originally filed as P044. Renumbered for the reason given in [P054](#p054-hide-superseded-recall-must-cover-supersession-metadata-prior_position-projection-leak).
+
+**Source:** Offline measurement 2026-07-17 against the local SDK: over three short attested claims about the same topic, a question-form query ("What does Mia prefer to drink at lunch?") returned zero records at the shipped relevance floor, while a near-verbatim claim query returned two. Additional query terms dilute BM25 overlap below the floor; a query whose terms are a superset of a matching claim's terms can score lower than the claim-only query.
+
+**The decision in question:** should the recall conformance corpus gain a question-form calibration case set, and should below-floor empty results carry an explicit warning instead of silence? Candidate cases: (a) question-form query over matching short claims returns at least one record OR the response carries an explicit below-floor warning; (b) recency-shape recall (rank by recency, no anchor) is the documented fallback and is reachable without relevance gating; (c) a term-dilution vector pinning that superset queries do not score below their subset query.
+
+**Considerations.**
+
+- Agents ask their substrate questions. A silent zero-result recall is a degradation the contract should name per the spirit of [§5.8](atrib-spec.md#58-degradation-contract), even though nothing failed.
+- The floor's original calibration (instruction-length queries vs record content) was validated in one host shape; question-form retrieval is a different, common shape.
+- The fallback pattern (relevance-ranked primary, recency-ranked secondary on zero results) worked in practice and is composable from shipped primitives; documenting it beats every consumer rediscovering it.
+
+**Likely outcome (not committed):** accept the corpus additions; treat the warning-vs-silence question as part of the same change.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P056: `attest` should warn when content carries no indexable fields
+
+**Ported 2026-07-24** from commit `86f83611` (2026-07-17), originally filed as P045. Renumbered for the reason given in [P054](#p054-hide-superseded-recall-must-cover-supersession-metadata-prior_position-projection-leak).
+
+**Source:** Benchmark integration root-cause 2026-07: an adapter attested content without the observation convention's indexable fields (`what`/`why_noted`/topics), the content indexer had zero tokens per record, BM25 contributed nothing, and relevance ranking silently degraded to recency. The producing session had no signal anything was wrong.
+
+**The decision in question:** should `attest`/`emit` return a warning when the content envelope carries no indexable fields, or should the indexer fall back to a generic string-walk over observation content?
+
+**Considerations.**
+
+- Silent forfeiture of content-based recall is a trap for every new producer; the failure is invisible until a consumer measures retrieval quality.
+- A warning is cheap and non-breaking (the warnings channel already exists in responses). An indexer string-walk fallback is more forgiving but changes ranking behavior for existing mirrors.
+
+**Likely outcome (not committed):** accept the warning; consider the indexer fallback separately.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P057: supersession triggers must not rely solely on the agent's own errors
+
+**Ported 2026-07-24** from commit `86f83611` (2026-07-17), originally filed as P046. Renumbered for the reason given in [P054](#p054-hide-superseded-recall-must-cover-supersession-metadata-prior_position-projection-leak).
+
+**Source:** A controlled continual-learning benchmark measurement (2026-07-17, CL-Bench database-exploration schedule with a mid-stream schema migration). An error-triggered revision rule was tightened from text matching to claim-scoped matching (records attest the schema identifiers they used; revision requires membership). The tightening worked mechanically (false-positive revisions dropped to zero) and still failed to improve post-drift outcomes, because in hosts where each task is a fresh conversation the agent re-explores rather than acting on remembered identifiers, so the errors that would trigger supersession rarely occur. Stale records lose value silently without generating their own purge signal.
+
+**The decision in question:** what supersession triggers should the practice guidance (SKILL.md, host integrations) recommend beyond agent-error reactions? Candidates: host-provided epoch markers (session, config, or environment change events), burst detection across records (multiple related claims failing in a window), and freshness-window annotations at attest time for claim kinds known to decay.
+
+**Considerations.**
+
+- This is host-integration and practice guidance more than spec change; the revision primitive itself is sufficient, the trigger policy is what failed.
+- Error-triggered revision remains correct for hosts with persistent conversations where remembered identifiers are actually exercised.
+
+**Likely outcome (not committed):** fold into SKILL.md guidance plus a host-integration pattern note; no spec change.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P058: local-mirror-only SDK mode ADR at benchmark-substrate PR time
+
+**Ported 2026-07-24** from commit `86f83611` (2026-07-17), originally filed as P047. Renumbered for the reason given in [P054](#p054-hide-superseded-recall-must-cover-supersession-metadata-prior_position-projection-leak); the P047 number now belongs to the redesign upgrade-path candidate set.
+
+**Source:** The `benchmark/sdk-local-only` branch (`logSubmission: 'disabled'`) has powered controlled measurement work: local-only signing, run-local mirrors, deterministic run-scoped keys, and inherited-env isolation so a run can never write to operator defaults or the public log.
+
+**The decision in question:** when that branch lands, the ADR should codify local-only signing as a first-class SDK mode: the `logSubmission` configuration surface, the env-isolation contract, and the run-scoped key-derivation convention.
+
+**Likely outcome (not committed):** accept at PR time; this entry exists so the ADR obligation is findable.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
