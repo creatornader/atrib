@@ -1,15 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { appendFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer as createNodeServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   base64urlEncode,
+  canonicalRecord,
+  createJsonCommitment,
+  createToolNameCommitment,
   computeContentId,
   genesisChainRoot,
   getPublicKey,
+  hexEncode,
+  sha256,
   signRecord,
   type AtribRecord,
 } from '@atrib/mcp'
@@ -54,6 +60,56 @@ async function appendOperatingRecord(
       _local: { content: event, producer: 'operating-test' },
     })}\n`,
   )
+}
+
+async function appendActionRecord(
+  mirrorFile: string,
+  character: string,
+): Promise<{
+  recordHash: string
+  record: AtribRecord
+  args: Record<string, unknown>
+  result: Record<string, unknown>
+}> {
+  const seed = new Uint8Array(32).fill(character.charCodeAt(0))
+  const contextId = character.repeat(32)
+  const args = { issue: 42, private_note: 'local only' }
+  const result = { status: 'updated' }
+  const argsCommitment = createJsonCommitment(args, 'salted-sha256', () =>
+    new Uint8Array(16).fill(3),
+  )
+  const resultCommitment = createJsonCommitment(result, 'salted-sha256', () =>
+    new Uint8Array(16).fill(4),
+  )
+  const record = await signRecord(
+    {
+      spec_version: 'atrib/1.0',
+      content_id: computeContentId('mcp://operating-test', 'update_issue'),
+      creator_key: base64urlEncode(await getPublicKey(seed)),
+      chain_root: genesisChainRoot(contextId),
+      event_type: 'https://atrib.dev/v1/types/tool_call',
+      context_id: contextId,
+      timestamp: 300,
+      tool_name: createToolNameCommitment('update_issue'),
+      args_hash: argsCommitment.hash,
+      args_salt: argsCommitment.salt,
+      result_hash: resultCommitment.hash,
+      result_salt: resultCommitment.salt,
+      signature: '',
+    } as AtribRecord,
+    seed,
+  )
+  const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+  appendFileSync(
+    mirrorFile,
+    `${JSON.stringify({
+      record,
+      proof: null,
+      written_at: 300,
+      _local: { toolName: 'update_issue', args, result, producer: 'operating-test' },
+    })}\n`,
+  )
+  return { recordHash, record, args, result }
 }
 
 describe('operating graph HTTP contract', () => {
@@ -203,6 +259,18 @@ describe('operating graph HTTP contract', () => {
       }
       controller.abort()
       expect(received).toContain('event: changed')
+      expect(received).toContain('id: 2')
+
+      const gapController = new AbortController()
+      const gapStream = await fetch(`${base}/v1/stream?after=0`, {
+        signal: gapController.signal,
+      })
+      const gapReader = gapStream.body!.getReader()
+      const gapPayload = decoder.decode((await gapReader.read()).value)
+      gapController.abort()
+      expect(gapPayload).toContain('event: gap')
+      expect(gapPayload).toContain('"after_revision":0')
+      expect(gapPayload).toContain('"current_revision":2')
 
       const updated = await fetch(`${base}/v1/view?workspace_id=${workspace.id}`).then((response) =>
         response.json(),
@@ -223,4 +291,122 @@ describe('operating graph HTTP contract', () => {
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }
   }, 10_000)
+
+  it('keeps body openings authorization-protected and verifies disclosed values', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'atrib-operating-body-'))
+    tempDirectories.push(directory)
+    const mirrorFile = join(directory, 'records.jsonl')
+    const { recordHash, args, result } = await appendActionRecord(mirrorFile, 'c')
+    const server = await startOperatingGraphServer({
+      mirrorPath: mirrorFile,
+      host: '127.0.0.1',
+      port: 0,
+      writesEnabled: false,
+      bodyReadToken: 'read-secret',
+      pollMs: 50,
+    })
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    const hashHex = recordHash.slice('sha256:'.length)
+
+    try {
+      const unauthenticated = await fetch(`${base}/v1/body/${hashHex}`)
+      expect(unauthenticated.status).toBe(401)
+
+      const authorized = await fetch(`${base}/v1/body/${hashHex}`, {
+        headers: { Authorization: 'Bearer read-secret' },
+      })
+      expect(authorized.status).toBe(200)
+      const body = await authorized.json()
+      expect(body).toMatchObject({
+        schema: 'atrib.body-opening.v1',
+        source: 'local-mirror',
+        integrity: { record_hash_verified: true, signature_verified: true },
+        openings: {
+          tool_name: { present: true, verified: true, value: 'update_issue' },
+          args: { present: true, verified: true, value: args },
+          result: { present: true, verified: true, value: result },
+        },
+      })
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  const credentialedArchive = new URL('https://archive.example/v1')
+  credentialedArchive.username = 'operator'
+
+  it.each([
+    ['ftp://archive.example/v1', 'HTTP or HTTPS'],
+    ['http://169.254.169.254/v1', 'loopback hosts'],
+    [credentialedArchive.toString(), 'must not contain credentials'],
+    ['https://archive.example/v1?tenant=one', 'must not contain credentials'],
+  ])('rejects unsafe archive configuration %s', async (archiveUrl, message) => {
+    await expect(
+      startOperatingGraphServer({
+        mirrorPath: '/unused',
+        host: '127.0.0.1',
+        port: 0,
+        writesEnabled: false,
+        archiveUrl,
+        pollMs: 50,
+      }),
+    ).rejects.toThrow(message)
+  })
+
+  it('falls back to an archive and re-verifies the returned signed body', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'atrib-operating-archive-'))
+    tempDirectories.push(directory)
+    const sourceMirror = join(directory, 'source.jsonl')
+    const emptyMirror = join(directory, 'empty.jsonl')
+    const { recordHash, record } = await appendActionRecord(sourceMirror, 'd')
+    writeFileSync(emptyMirror, '')
+
+    const archive = createNodeServer((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'application/json' })
+      response.end(
+        JSON.stringify({
+          record_hash: recordHash,
+          record,
+          log_proofs: [],
+          archived_at_ms: 100,
+          retention_window_ms: 1_000,
+        }),
+      )
+    })
+    await new Promise<void>((resolve) => archive.listen(0, '127.0.0.1', resolve))
+    const archiveBase = `http://127.0.0.1:${(archive.address() as AddressInfo).port}/v1`
+    const server = await startOperatingGraphServer({
+      mirrorPath: emptyMirror,
+      host: '127.0.0.1',
+      port: 0,
+      writesEnabled: false,
+      bodyReadToken: 'read-secret',
+      archiveUrl: archiveBase,
+      pollMs: 50,
+    })
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+
+    try {
+      const response = await fetch(`${base}/v1/body/${recordHash.slice('sha256:'.length)}`, {
+        headers: { Authorization: 'Bearer read-secret' },
+      })
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({
+        source: 'archive',
+        record_hash: recordHash,
+        integrity: { record_hash_verified: true, signature_verified: true },
+        archive: { archived_at_ms: 100, retention_window_ms: 1_000 },
+        openings: {
+          content: { present: false, verified: null },
+          args: { present: false, verified: null },
+          result: { present: false, verified: null },
+        },
+      })
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+      await new Promise<void>((resolve) => archive.close(() => resolve()))
+    }
+  })
 })

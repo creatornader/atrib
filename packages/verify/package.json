@@ -43,6 +43,7 @@
     "@atrib/mcp": "workspace:*",
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
+    "@noble/secp256k1": "^3.1.0",
     "@sd-jwt/core": "0.19.0",
     "@sd-jwt/sd-jwt-vc": "0.19.0",
     "canonicalize": "^3.0.0",

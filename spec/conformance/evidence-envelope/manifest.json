@@ -28,7 +28,9 @@
     "delegation-certificate",
     "continuation-packet",
     "payments-detection",
-    "payments-settlement"
+    "payments-settlement",
+    "nostr-event",
+    "buzz-event"
   ],
   "frozen_legacy_protocols": [
     "oauth2",
@@ -52,7 +54,9 @@
     "tier",
     "continuation-packet",
     "payments-detection",
-    "payments-settlement"
+    "payments-settlement",
+    "nostr-event",
+    "buzz-event"
   ],
   "cases": [
     {
@@ -249,10 +253,30 @@
       "file": "cases/payments-settlement--withheld-recommendation-declared.json",
       "name": "withheld-recommendation-declared",
       "family": "payments-settlement"
+    },
+    {
+      "file": "cases/nostr-event--signed-event-valid.json",
+      "name": "signed-event-valid",
+      "family": "nostr-event"
+    },
+    {
+      "file": "cases/nostr-event--event-id-mismatch.json",
+      "name": "event-id-mismatch",
+      "family": "nostr-event"
+    },
+    {
+      "file": "cases/buzz-event--owner-attestation-valid.json",
+      "name": "owner-attestation-valid",
+      "family": "buzz-event"
+    },
+    {
+      "file": "cases/buzz-event--owner-condition-unsatisfied.json",
+      "name": "owner-condition-unsatisfied",
+      "family": "buzz-event"
     }
   ],
   "keys": {
     "alice_pubkey": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo"
   },
-  "note": "The eight families collectively pin the §5.5.7 contract: schema validity with the closed tier and ref.kind enums (shape/), the HTTPS type-URI registration rule with full-URI profile identity (registry/), unknown-profile preservation (unknown-profile/), the frozen five-row legacy mapping with sixth-string rejection (legacy-mapping/), instance-scoped tier semantics where evidence never flips verifyRecord().valid (tier/), the D142 continuation-packet profile registration (continuation-packet/), and the P048 payments profile registrations with their degradation family and D052 duplicate-signer re-pin (payments-detection/, payments-settlement/)."
+  "note": "The ten families pin the §5.5.7 contract: the shared envelope rules, the continuation and payments registrations, generic Nostr event verification, and Buzz-specific owner-attestation verification with community, relay, audit, and runtime claims kept unresolved unless separate evidence supplies them."
 }

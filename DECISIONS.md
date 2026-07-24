@@ -9026,6 +9026,16 @@ resolution.
    deployments default to read-only mirror access and require an explicit
    creator allowlist for a closed trust set. Enabling signed POST routes also
    requires a bearer secret; the process refuses write mode without one.
+8. Full signed-body and commitment-opening retrieval is a separate,
+   opt-in route. It stays disabled until the operator configures a bearer
+   secret. Local mirror responses re-verify the record signature and test
+   available content, tool-name, argument, and result openings. An optional
+   archive fallback rehashes and re-verifies the returned signed body, reports
+   retention state, and does not imply that local opening material exists.
+9. Every SSE projection event carries its revision as the event ID. A
+   reconnecting client behind the current revision receives an explicit gap
+   event and reloads the bounded view. Duplicate and out-of-order revisions
+   never move client state backward.
 
 **Protocol boundary.** This is an application profile, not a public protocol
 profile. It adds no record field, event type, graph edge, SDK cognitive verb,
@@ -9042,8 +9052,10 @@ interoperability or verification primitive.
 **Conformance.** Application fixtures pin conflict preservation, all-head
 resolution, accepted-head projection, named identities, and receiving-agent
 handoff visibility, including prior task state. Unit and HTTP tests cover scope
-bounds, search, stream reconnect refusal, out-of-order arrival, write
-authentication, disabled writes, and live updates.
+bounds, search, stream reconnect refusal, explicit gap detection, duplicate
+and out-of-order revision classification, event IDs, write authentication,
+disabled writes, body-read authorization, local commitment openings, archive
+fallback verification, and live updates.
 The hostile integration suite composes the client with checkpoint rollback,
 result inconsistency, permit replay and revocation, withheld bodies, unresolved
 heads, and source actions omitted from projections.
@@ -9055,6 +9067,67 @@ heads, and source actions omitted from projections.
 [D174](#d174-current-state-is-a-policy-bound-revision-projection),
 [D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor), and
 [P053](#p053-multi-head-revision-merge-semantics-require-independent-application-proof).
+
+## D179: Nostr and Buzz events are separate evidence profiles
+
+**Date:** 2026-07-24
+
+**Status:** Accepted and implemented
+
+**Context.** A Nostr signature, a Buzz owner authorization, Buzz relay
+admission, operator audit insertion, and runtime execution are different
+claims. Treating them as one signed-event verdict would hide the exact trust
+boundary atrib needs to expose when Buzz is a source runtime.
+
+The shipped `@atrib/verify` registry also drifted behind
+[D147](#d147-payments-profile-spin-out-from-protocol-core). The spec, profile
+documents, corpus generator, and manifest registered `payments-detection` and
+`payments-settlement`, while the library default and its unit test still pinned
+nine profiles.
+
+**Decision.**
+
+1. `nostr-event` verifies the NIP-01 event shape, exact six-field event ID, and
+   BIP-340 Schnorr signature.
+2. `buzz-event` composes that result with Buzz NIP-OA owner attestation. The
+   verifier checks the owner signature, exact condition string, condition
+   grammar, distinct owner and agent keys, and every condition against the
+   event.
+3. The agent key remains the event author. An owner attestation is
+   authorization evidence and never rewrites authorship.
+4. NIP-OA `created_at` conditions constrain an agent-declared timestamp. They
+   do not establish wall-clock expiry.
+5. Community admission, relay acceptance and retention, operator audit
+   inclusion, and runtime or tool execution remain separate constraints. A
+   raw event leaves them unresolved.
+6. The `@atrib/verify` default registry includes the two
+   [D147](#d147-payments-profile-spin-out-from-protocol-core) payments
+   profiles and the two new profiles. The generator, committed manifest, and
+   library registry must match.
+
+**Runtime boundary.** Buzz can run its own provider-neutral `buzz-agent` or
+bridge ACP agents such as Goose, Codex, and Claude through `buzz-acp`. An agent
+can receive Buzz keys and Buzz CLI or MCP tools, but that does not
+automatically capture every action inside the external harness. The evidence
+profiles accept Buzz as a signed external event source. Runtime-window and
+action-completeness claims still require runtime-log and coverage evidence.
+
+**Conformance.** `nostr-event--*` pins a valid event and post-signature
+mutation. `buzz-event--*` pins valid owner authorization, an uncovered event
+kind, and unresolved community, relay, audit, and runtime constraints. The
+private integration package includes a Buzz NIP-AO runtime-log source that
+verifies each signed observer frame, calls a host-owned decrypt function,
+commits ciphertext and plaintext hashes, and fails closed on gaps, duplicates,
+or out-of-order capture by default. The source audits the process-wide sequence
+implemented by `buzz-acp`; ACP sessions remain projections over that window.
+It does not promote observer telemetry into tool-execution or relay-admission
+evidence.
+
+**Cross-references.**
+[D121](#d121-runtime-log-proof-manifests-verify-host-owned-run-windows),
+[D137](#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model),
+[D147](#d147-payments-profile-spin-out-from-protocol-core), and
+[D168](#d168-coverage-manifests-make-capture-scope-verifiable).
 
 # Pending decisions
 

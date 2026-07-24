@@ -470,7 +470,19 @@
         stream.addEventListener('open', () => { $('live-state').textContent = 'live' })
         stream.addEventListener('changed', (event) => {
           const update = JSON.parse(event.data)
+          if (update.revision <= state.revision) return
+          if (update.revision > state.revision + 1) {
+            $('live-state').textContent = 'resyncing gap'
+          }
           state.revision = update.revision
+          void loadView()
+          if ($('search').value.trim()) void runSearch()
+        })
+        stream.addEventListener('gap', (event) => {
+          const update = JSON.parse(event.data)
+          if (update.current_revision <= state.revision) return
+          $('live-state').textContent = 'resyncing gap'
+          state.revision = update.current_revision
           void loadView()
           if ($('search').value.trim()) void runSearch()
         })

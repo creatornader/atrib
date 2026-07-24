@@ -2,7 +2,14 @@
 
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { extname, join, resolve } from 'node:path'
-import { canonicalRecord, hexEncode, sha256, verifyRecord, type AtribRecord } from '@atrib/mcp'
+import {
+  canonicalRecord,
+  hexEncode,
+  sha256,
+  verifyRecord,
+  type AtribRecord,
+  type ProofBundle,
+} from '@atrib/mcp'
 import { parseOperatingEvent, type OperatingEntry, type OperatingEnvelope } from './model.js'
 
 function recordHash(record: AtribRecord): string {
@@ -70,4 +77,113 @@ export async function loadOperatingEntries(
     }
   }
   return [...deduped.values()]
+}
+
+export interface LocalRecordMaterial {
+  record_hash: string
+  record: AtribRecord
+  proof: ProofBundle | null
+  local: Record<string, unknown> | null
+  signature_verified: boolean
+}
+
+export async function loadLocalRecordMaterial(
+  path: string,
+  targetHash: string,
+  maxRecords = 100_000,
+): Promise<LocalRecordMaterial | null> {
+  const files = await mirrorFiles(path)
+  let recordsRead = 0
+  let matched: LocalRecordMaterial | null = null
+
+  for (const file of files) {
+    const lines = (await readFile(file, 'utf8')).split('\n')
+    for (const line of lines) {
+      if (!line.trim()) continue
+      recordsRead += 1
+      if (recordsRead > maxRecords) {
+        throw new Error(`mirror record limit exceeded (${maxRecords})`)
+      }
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(line) as unknown
+      } catch {
+        continue
+      }
+      const envelope = normalizeMirrorEnvelope(parsed)
+      if (!envelope) continue
+      const hash = recordHash(envelope.record)
+      if (hash !== targetHash) continue
+      const signatureVerified = await verifyRecord(envelope.record).catch(() => false)
+      const candidate: LocalRecordMaterial = {
+        record_hash: hash,
+        record: envelope.record,
+        proof: envelope.proof,
+        local: envelope.local,
+        signature_verified: signatureVerified,
+      }
+      if (!matched) {
+        matched = candidate
+        continue
+      }
+      matched = {
+        ...candidate,
+        proof: candidate.proof ?? matched.proof,
+        local: mergeLocalMaterial(matched.local, candidate.local),
+        signature_verified: matched.signature_verified && candidate.signature_verified,
+      }
+    }
+  }
+  return matched
+}
+
+function normalizeMirrorEnvelope(value: unknown): {
+  record: AtribRecord
+  proof: ProofBundle | null
+  local: Record<string, unknown> | null
+} | null {
+  if (!isObject(value)) return null
+  const record = isAtribRecord(value['record'])
+    ? value['record']
+    : isAtribRecord(value)
+      ? value
+      : null
+  if (!record) return null
+  const proof = isProofBundle(value['proof']) ? value['proof'] : null
+  const local = isObject(value['_local']) ? value['_local'] : null
+  return { record, proof, local }
+}
+
+function mergeLocalMaterial(
+  left: Record<string, unknown> | null,
+  right: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!left) return right
+  if (!right) return left
+  return { ...left, ...right }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isAtribRecord(value: unknown): value is AtribRecord {
+  return (
+    isObject(value) &&
+    value['spec_version'] === 'atrib/1.0' &&
+    typeof value['event_type'] === 'string' &&
+    typeof value['context_id'] === 'string' &&
+    typeof value['creator_key'] === 'string' &&
+    typeof value['signature'] === 'string'
+  )
+}
+
+function isProofBundle(value: unknown): value is ProofBundle {
+  return (
+    isObject(value) &&
+    typeof value['log_index'] === 'number' &&
+    typeof value['checkpoint'] === 'string' &&
+    Array.isArray(value['inclusion_proof']) &&
+    typeof value['leaf_hash'] === 'string'
+  )
 }

@@ -10,7 +10,7 @@
  * AP2 / VI, human approvals, counterparty attestations, and future
  * profiles). Envelopes live only outside signed record bytes: in the local
  * mirror sidecar (§5.9.3), the archive evidence projection (§2.12),
- * verifier results, and host-owned packets. The corpus pins six contract
+ * verifier results, and host-owned packets. The corpus pins ten contract
  * families:
  *
  *   1. shape/           Envelope schema validity: required fields, the
@@ -58,6 +58,12 @@
  *                       evidence by hash. JCS hash rule, tampered-document
  *                       rejection, and the hash-only public posture for
  *                       withheld documents.
+ *   9. nostr-event/      Generic NIP-01 event ID and BIP-340 signature
+ *                       verification without inferring relay or runtime
+ *                       claims.
+ *  10. buzz-event/       Buzz NIP-OA owner authorization layered on the
+ *                       Nostr checks. Community, relay, audit, and runtime
+ *                       bindings stay unresolved without separate evidence.
  *
  * Seeds and timestamps are hardcoded so successive regenerations produce
  * byte-identical files. Re-run when:
@@ -81,6 +87,8 @@ import {
   type AtribRecord,
 } from '@atrib/mcp'
 import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
+import * as secp from '@noble/secp256k1'
 
 // ─── Envelope schema (mirrors the §5.5.7 normative shape) ─────────────
 
@@ -167,6 +175,8 @@ const ATRIB_PROFILE_REGISTRY = [
   'continuation-packet',
   'payments-detection',
   'payments-settlement',
+  'nostr-event',
+  'buzz-event',
 ] as const
 
 /**
@@ -226,6 +236,53 @@ function jcsSha256(value: unknown): string {
 /** §5.5.7 hash rule for non-JSON media types: sha256 over the raw bytes. */
 function rawSha256(text: string): string {
   return 'sha256:' + hex(sha256(utf8.encode(text)))
+}
+
+interface NostrEvent {
+  id: string
+  pubkey: string
+  created_at: number
+  kind: number
+  tags: string[][]
+  content: string
+  sig: string
+}
+
+const NOSTR_FIXTURE_AUX_RAND = new Uint8Array(32).fill(0x42)
+
+function deriveNostrEventId(event: Omit<NostrEvent, 'id' | 'sig'>): string {
+  return bytesToHex(
+    sha256(
+      utf8.encode(
+        JSON.stringify([0, event.pubkey, event.created_at, event.kind, event.tags, event.content]),
+      ),
+    ),
+  )
+}
+
+async function signNostrEvent(
+  event: Omit<NostrEvent, 'id' | 'sig'>,
+  secret: Uint8Array,
+): Promise<NostrEvent> {
+  const id = deriveNostrEventId(event)
+  const sig = bytesToHex(
+    await secp.schnorr.signAsync(hexToBytes(id), secret, NOSTR_FIXTURE_AUX_RAND),
+  )
+  return { ...event, id, sig }
+}
+
+async function buzzOwnerAuthTag(
+  agentPubkey: string,
+  conditions: string,
+  ownerSecret: Uint8Array,
+): Promise<string[]> {
+  const message = sha256(utf8.encode(`nostr:agent-auth:${agentPubkey}:${conditions}`))
+  return [
+    'auth',
+    bytesToHex(secp.schnorr.getPublicKey(ownerSecret)),
+    conditions,
+    bytesToHex(await secp.schnorr.signAsync(message, ownerSecret, NOSTR_FIXTURE_AUX_RAND)),
+  ]
 }
 
 /**
@@ -388,7 +445,11 @@ async function main(): Promise<void> {
       envelope: minimalEnvelope() as unknown as Record<string, unknown>,
       payload_material: { note: 'substituted evidence material' },
     },
-    { accept: true, payload_hash_matches_material: false, reject_reasons: ['payload_hash_mismatch'] },
+    {
+      accept: true,
+      payload_hash_matches_material: false,
+      reject_reasons: ['payload_hash_mismatch'],
+    },
   )
 
   const sanitizedWithheld = minimalEnvelope()
@@ -1025,7 +1086,8 @@ async function main(): Promise<void> {
     },
     {
       relay_violation: true,
-      violation_reason: 'verifier identity differs while tier, checked_at_ms, facts, and result are unchanged',
+      violation_reason:
+        'verifier identity differs while tier, checked_at_ms, facts, and result are unchanged',
     },
   )
 
@@ -1515,6 +1577,256 @@ async function main(): Promise<void> {
     },
   )
 
+  // ═══════════════════ families: Nostr and Buzz ══════════════════════
+
+  const nostrAgentSecret = new Uint8Array(32).fill(0x02)
+  const buzzOwnerSecret = new Uint8Array(32).fill(0x01)
+  const nostrAgentPubkey = bytesToHex(secp.schnorr.getPublicKey(nostrAgentSecret))
+  const buzzOwnerPubkey = bytesToHex(secp.schnorr.getPublicKey(buzzOwnerSecret))
+  const plainNostrEvent = await signNostrEvent(
+    {
+      pubkey: nostrAgentPubkey,
+      created_at: 1_713_956_400,
+      kind: 1,
+      tags: [],
+      content: 'signed Nostr event evidence',
+    },
+    nostrAgentSecret,
+  )
+  const nostrEnvelope: EvidenceEnvelope = {
+    envelope: 1,
+    profile: `${ATRIB_PROFILE_BASE}nostr-event`,
+    profile_version: '1.0.0',
+    tier: 'verified',
+    payload: {
+      hash: jcsSha256(plainNostrEvent),
+      media_type: 'application/json',
+      ref: { kind: 'inline' },
+      inline: plainNostrEvent,
+    },
+    facts: {
+      event_id: plainNostrEvent.id,
+      author_pubkey: plainNostrEvent.pubkey,
+      kind: plainNostrEvent.kind,
+      event_id_valid: true,
+      signature_valid: true,
+    },
+    result: {
+      valid: true,
+      constraints: [
+        { type: 'nostr_event_id', status: 'passed' },
+        { type: 'nostr_signature', status: 'passed' },
+      ],
+      errors: [],
+      warnings: [],
+    },
+    verifier: {
+      name: '@atrib/verify',
+      version: '0.11.0',
+      checked_at_ms: REFERENCE_TIME_MS,
+    },
+  }
+  emitCase(
+    'nostr-event',
+    'signed-event-valid',
+    'A NIP-01 event whose six-field event ID serialization and BIP-340 signature both verify. The envelope payload hash commits to the complete event object under JCS. MUST accept.',
+    {
+      envelope: nostrEnvelope as unknown as Record<string, unknown>,
+      payload_material: plainNostrEvent,
+      atrib_profile_registry: [...ATRIB_PROFILE_REGISTRY],
+    },
+    {
+      accept: true,
+      registered: true,
+      event_id_valid: true,
+      signature_valid: true,
+    },
+  )
+
+  const tamperedNostrEvent = {
+    ...plainNostrEvent,
+    content: 'mutated after signing',
+  }
+  emitCase(
+    'nostr-event',
+    'event-id-mismatch',
+    'A shape-valid Nostr event whose content changed after signing. The recomputed event ID differs and the retained signature does not rescue it. MUST reject at the profile layer without changing any attached atrib record verdict.',
+    {
+      envelope: {
+        ...nostrEnvelope,
+        payload: {
+          hash: jcsSha256(tamperedNostrEvent),
+          media_type: 'application/json',
+          ref: { kind: 'inline' },
+          inline: tamperedNostrEvent,
+        },
+        result: {
+          valid: false,
+          constraints: [
+            { type: 'nostr_event_id', status: 'failed' },
+            { type: 'nostr_signature', status: 'failed' },
+          ],
+          errors: ['event_id_mismatch', 'signature_invalid'],
+          warnings: [],
+        },
+      },
+      payload_material: tamperedNostrEvent,
+    },
+    {
+      accept: false,
+      event_id_valid: false,
+      signature_valid: false,
+    },
+  )
+
+  const buzzConditions = 'kind=1&created_at<1713957000'
+  const buzzEvent = await signNostrEvent(
+    {
+      pubkey: nostrAgentPubkey,
+      created_at: 1_713_956_400,
+      kind: 1,
+      tags: [await buzzOwnerAuthTag(nostrAgentPubkey, buzzConditions, buzzOwnerSecret)],
+      content: 'owner-attested Buzz agent event',
+    },
+    nostrAgentSecret,
+  )
+  const buzzEnvelope: EvidenceEnvelope = {
+    envelope: 1,
+    profile: `${ATRIB_PROFILE_BASE}buzz-event`,
+    profile_version: '1.0.0',
+    tier: 'verified',
+    payload: {
+      hash: jcsSha256(buzzEvent),
+      media_type: 'application/json',
+      ref: { kind: 'inline' },
+      inline: buzzEvent,
+    },
+    facts: {
+      event_id: buzzEvent.id,
+      agent_pubkey: nostrAgentPubkey,
+      owner_pubkey: buzzOwnerPubkey,
+      owner_conditions: buzzConditions,
+      owner_attestation_valid: true,
+      community_host: 'workspace.example',
+      relay_url: 'wss://workspace.example',
+    },
+    result: {
+      valid: true,
+      constraints: [
+        { type: 'nostr_event_id', status: 'passed' },
+        { type: 'nostr_signature', status: 'passed' },
+        { type: 'buzz_owner_attestation', status: 'passed' },
+        {
+          type: 'buzz_community_binding',
+          status: 'unresolved',
+          reason: 'community tenancy is relay-resolved, not signed by the raw event',
+        },
+        {
+          type: 'buzz_relay_acceptance',
+          status: 'unresolved',
+          reason: 'raw NIP-01 OK is not a portable signed receipt',
+        },
+        {
+          type: 'buzz_audit_inclusion',
+          status: 'unresolved',
+          reason: 'the operator-local audit chain has no portable inclusion proof',
+        },
+        {
+          type: 'runtime_action_binding',
+          status: 'unresolved',
+          reason: 'a valid event does not prove a tool or runtime action occurred',
+        },
+      ],
+      errors: [],
+      warnings: [
+        'verified tier applies to the event and owner attestation, not relay or runtime claims',
+      ],
+    },
+    verifier: {
+      name: '@atrib/verify',
+      version: '0.11.0',
+      checked_at_ms: REFERENCE_TIME_MS,
+    },
+  }
+  emitCase(
+    'buzz-event',
+    'owner-attestation-valid',
+    'A Buzz event with a valid NIP-01 signature and valid NIP-OA owner attestation. Community, relay, audit, and runtime bindings remain explicit unresolved constraints because those facts are absent from the event.',
+    {
+      envelope: buzzEnvelope as unknown as Record<string, unknown>,
+      payload_material: buzzEvent,
+      atrib_profile_registry: [...ATRIB_PROFILE_REGISTRY],
+    },
+    {
+      accept: true,
+      registered: true,
+      event_id_valid: true,
+      signature_valid: true,
+      owner_attestation_valid: true,
+      unresolved_constraints: [
+        'buzz_community_binding',
+        'buzz_relay_acceptance',
+        'buzz_audit_inclusion',
+        'runtime_action_binding',
+      ],
+    },
+  )
+
+  const uncoveredConditions = 'kind=7'
+  const uncoveredBuzzEvent = await signNostrEvent(
+    {
+      pubkey: nostrAgentPubkey,
+      created_at: 1_713_956_400,
+      kind: 1,
+      tags: [await buzzOwnerAuthTag(nostrAgentPubkey, uncoveredConditions, buzzOwnerSecret)],
+      content: 'event outside the owner condition',
+    },
+    nostrAgentSecret,
+  )
+  emitCase(
+    'buzz-event',
+    'owner-condition-unsatisfied',
+    'Both signatures are valid, but the owner credential authorizes kind 7 while the event is kind 1. The profile MUST reject the owner-authorization claim.',
+    {
+      envelope: {
+        ...buzzEnvelope,
+        payload: {
+          hash: jcsSha256(uncoveredBuzzEvent),
+          media_type: 'application/json',
+          ref: { kind: 'inline' },
+          inline: uncoveredBuzzEvent,
+        },
+        facts: {
+          event_id: uncoveredBuzzEvent.id,
+          agent_pubkey: nostrAgentPubkey,
+          owner_pubkey: buzzOwnerPubkey,
+          owner_conditions: uncoveredConditions,
+        },
+        result: {
+          valid: false,
+          constraints: [
+            { type: 'nostr_event_id', status: 'passed' },
+            { type: 'nostr_signature', status: 'passed' },
+            {
+              type: 'buzz_owner_attestation',
+              status: 'failed',
+              reason: 'kind condition does not cover the event',
+            },
+          ],
+          errors: ['auth_conditions_unsatisfied'],
+          warnings: [],
+        },
+      },
+      payload_material: uncoveredBuzzEvent,
+    },
+    {
+      accept: false,
+      event_id_valid: true,
+      signature_valid: true,
+      owner_attestation_valid: false,
+    },
+  )
+
   // ═══════════════════════════ Manifest ═══════════════════════════════
 
   const manifest = {
@@ -1537,10 +1849,12 @@ async function main(): Promise<void> {
       'continuation-packet',
       'payments-detection',
       'payments-settlement',
+      'nostr-event',
+      'buzz-event',
     ],
     cases: manifestCases,
     keys: { alice_pubkey: aliceKey },
-    note: 'The eight families collectively pin the §5.5.7 contract: schema validity with the closed tier and ref.kind enums (shape/), the HTTPS type-URI registration rule with full-URI profile identity (registry/), unknown-profile preservation (unknown-profile/), the frozen five-row legacy mapping with sixth-string rejection (legacy-mapping/), instance-scoped tier semantics where evidence never flips verifyRecord().valid (tier/), the D142 continuation-packet profile registration (continuation-packet/), and the P048 payments profile registrations with their degradation family and D052 duplicate-signer re-pin (payments-detection/, payments-settlement/).',
+    note: 'The ten families pin the §5.5.7 contract: the shared envelope rules, the continuation and payments registrations, generic Nostr event verification, and Buzz-specific owner-attestation verification with community, relay, audit, and runtime claims kept unresolved unless separate evidence supplies them.',
   }
 
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')

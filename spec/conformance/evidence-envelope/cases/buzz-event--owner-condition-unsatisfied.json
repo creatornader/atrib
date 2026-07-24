@@ -1,0 +1,92 @@
+{
+  "name": "owner-condition-unsatisfied",
+  "spec_section": "5.5.7",
+  "family": "buzz-event",
+  "description": "Both signatures are valid, but the owner credential authorizes kind 7 while the event is kind 1. The profile MUST reject the owner-authorization claim.",
+  "input": {
+    "envelope": {
+      "envelope": 1,
+      "profile": "https://atrib.dev/v1/evidence/buzz-event",
+      "profile_version": "1.0.0",
+      "tier": "verified",
+      "payload": {
+        "hash": "sha256:7c0ae8acc8d8e8a9998111137d11d580a9e47f7d68546ab90be6fc826a1eb7ba",
+        "media_type": "application/json",
+        "ref": {
+          "kind": "inline"
+        },
+        "inline": {
+          "pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
+          "created_at": 1713956400,
+          "kind": 1,
+          "tags": [
+            [
+              "auth",
+              "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+              "kind=7",
+              "66cea0c7a6a644419df83bc17a095f224649556126cfb51662d2c5e3c4fbd8f899fef2bb1ac7da22ad2e63b42bb0a46e965e3ae1fb0d624b10e5b950f317f98c"
+            ]
+          ],
+          "content": "event outside the owner condition",
+          "id": "34b9dabff3eb10fc083a1e651fe84f1849cbcc68bb554aec03f7a7cd5bcadcdc",
+          "sig": "ee7270c11d7486543a2cb56922c96c185f792063fa4f6461359efca00b02e1a8edf6295f2ccddec1715749426a266b827aa0a18661a3ca5abb1f33ef6492f544"
+        }
+      },
+      "facts": {
+        "event_id": "34b9dabff3eb10fc083a1e651fe84f1849cbcc68bb554aec03f7a7cd5bcadcdc",
+        "agent_pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
+        "owner_pubkey": "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+        "owner_conditions": "kind=7"
+      },
+      "result": {
+        "valid": false,
+        "constraints": [
+          {
+            "type": "nostr_event_id",
+            "status": "passed"
+          },
+          {
+            "type": "nostr_signature",
+            "status": "passed"
+          },
+          {
+            "type": "buzz_owner_attestation",
+            "status": "failed",
+            "reason": "kind condition does not cover the event"
+          }
+        ],
+        "errors": [
+          "auth_conditions_unsatisfied"
+        ],
+        "warnings": []
+      },
+      "verifier": {
+        "name": "@atrib/verify",
+        "version": "0.11.0",
+        "checked_at_ms": 1782864000000
+      }
+    },
+    "payload_material": {
+      "pubkey": "4d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
+      "created_at": 1713956400,
+      "kind": 1,
+      "tags": [
+        [
+          "auth",
+          "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+          "kind=7",
+          "66cea0c7a6a644419df83bc17a095f224649556126cfb51662d2c5e3c4fbd8f899fef2bb1ac7da22ad2e63b42bb0a46e965e3ae1fb0d624b10e5b950f317f98c"
+        ]
+      ],
+      "content": "event outside the owner condition",
+      "id": "34b9dabff3eb10fc083a1e651fe84f1849cbcc68bb554aec03f7a7cd5bcadcdc",
+      "sig": "ee7270c11d7486543a2cb56922c96c185f792063fa4f6461359efca00b02e1a8edf6295f2ccddec1715749426a266b827aa0a18661a3ca5abb1f33ef6492f544"
+    }
+  },
+  "expected": {
+    "accept": false,
+    "event_id_valid": true,
+    "signature_valid": true,
+    "owner_attestation_valid": false
+  }
+}
