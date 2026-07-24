@@ -1,5 +1,12 @@
 # @atrib/verify
 
+## 0.12.0
+
+### Minor Changes
+
+- d3dfaf7: Add Nostr event and Buzz owner-attestation verification. Keep relay, community,
+  audit, and runtime claims separate from event-carried cryptographic evidence.
+
 ## 0.11.0
 
 ### Minor Changes
