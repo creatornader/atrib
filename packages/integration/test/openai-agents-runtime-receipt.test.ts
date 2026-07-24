@@ -77,7 +77,7 @@ describe('OpenAI Agents runtime receipt example', () => {
     expect(result.ok).toBe(true)
     expect(result.openai_agents).toMatchObject({
       package: '@openai/agents',
-      version: '0.13.4',
+      version: '0.13.5',
       runner: 'run',
       agent: 'Agent',
       model: 'scripted',
