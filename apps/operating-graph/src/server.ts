@@ -349,7 +349,8 @@ export async function startOperatingGraphServer(
       }
       json(response, 404, { error: 'not found' })
     } catch (error) {
-      json(response, 400, { error: error instanceof Error ? error.message : String(error) })
+      process.stderr.write(`atrib operating graph request failed: ${String(error)}\n`)
+      json(response, 400, { error: 'invalid request' })
     }
   })
 

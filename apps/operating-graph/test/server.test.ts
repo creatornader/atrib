@@ -110,6 +110,7 @@ describe('operating graph HTTP contract', () => {
         body: '{}',
       })
       expect(authorized.status).toBe(400)
+      expect(await authorized.json()).toEqual({ error: 'invalid request' })
     } finally {
       server.closeAllConnections()
       await new Promise<void>((resolve) => server.close(() => resolve()))
