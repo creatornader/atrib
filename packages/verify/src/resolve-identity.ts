@@ -5,12 +5,12 @@
  * algorithm. The verifier consults the directory for a record's
  * creator_key and surfaces an `identity_resolution` object.
  *
- * This implementation is the LEGIBLE PARTIAL: steps 6 (directory
- * lookup), 8 (parse claim), and 9 (revocation cross-check) are wired
- * end-to-end. Steps 1-5 (anchor freshness, witness coverage, directory
- * checkpoint signature, append-only consistency) and step 7 (AKD proof
- * validation) require heavier cryptographic infrastructure and are
- * surfaced as explicit warnings rather than falsely claimed as passing.
+ * Steps 6 (directory lookup), 8 (parse claim), and 9 (revocation
+ * cross-check) run by default. Caller-supplied trust roots and verification
+ * callbacks enable steps 1, 2, 4, 5, and 7. Step 3 currently counts
+ * checkpoint cosignature lines but does not verify them against a trusted
+ * witness-key set. Every check that lacks its required input remains explicit
+ * in the returned warnings.
  *
  * Per §5.8 degradation contract: this function never throws. Network
  * failures, malformed responses, and timeout conditions all produce
@@ -304,9 +304,9 @@ export async function resolveIdentity(
   const directoryEndpoint = opts.directoryEndpoint ?? DEFAULT_DIRECTORY
   const fetchFn = opts.fetchImpl ?? fetch
 
-  // Steps not yet implemented, flag once, up front, so consumers can
-  // distinguish "verifier didn't check this" from "verifier checked
-  // this and it passed."
+  // Start with explicit unchecked warnings. Each caller-enabled verification
+  // step removes its warning after it completes so consumers can distinguish
+  // "not checked" from "checked and passed."
   warnings.push('step-1-anchor-not-checked: anchor freshness not verified by this implementation')
   warnings.push('step-3-witness-not-checked: witness coverage not verified by this implementation')
   warnings.push(
