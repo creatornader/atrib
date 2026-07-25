@@ -497,6 +497,40 @@ The same evidence bundle can be passed to `verifyRecord(record, { ap2ViEvidence,
 
 Post-hoc calculation when no agent SDK was present. Always returns a fully-shaped document, unsigned with a warning if the merchant key is missing.
 
+### `resolveIdentity(creatorKey, options)`
+
+The [§6.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#63-verifier-consultation-algorithm) identity consultation accepts caller-pinned trust roots for the directory and the log. Step 3 reconstructs the selected `directory_anchor` leaf, verifies its inclusion proof against the log's signed C2SP checkpoint, and counts only fresh, valid, distinct cosignatures from `trustedWitnessKeys`.
+
+Witnesses publish their own cosignatures. The log does not aggregate them. A production caller supplies `fetchWitnessCosignatures`, fetches each trusted witness's `/v1/cosig/...` response for the verified checkpoint, and returns those C2SP lines:
+
+```ts
+const result = await resolveIdentity(record.creator_key, {
+  directoryEndpoint: 'https://directory.atrib.dev/v6',
+  directoryOperatorKey,
+  logEndpoint: 'https://log.atrib.dev/v1',
+  logCheckpointKey: { name: 'log.atrib.dev/v1', publicKey: logPublicKey },
+  trustedWitnessKeys: witnesses.map(({ name, publicKey }) => ({ name, publicKey })),
+  witnessThreshold: 2,
+  fetchWitnessCosignatures: async (checkpoint) => {
+    const root = Buffer.from(checkpoint.rootHash).toString('base64url')
+    const lines = await Promise.all(
+      witnesses.map(async ({ endpoint }) => {
+        const url = `${endpoint}/v1/cosig/${encodeURIComponent(checkpoint.origin)}/${root}`
+        const response = await fetch(url)
+        if (response.status === 404) return null
+        if (!response.ok) throw new Error(`witness returned ${response.status}`)
+        return response.text()
+      }),
+    )
+    return lines.filter((line): line is string => line !== null)
+  },
+})
+```
+
+`anchor_witness_count` is `null` when the caller omits the pinned log key, the operator checkpoint or anchor inclusion proof fails verification, or configured witness retrieval fails. A value of `0` means the checkpoint and anchor inclusion verified, but the evidence presented to the verifier contained no valid trusted witness signature. A threshold shortfall adds `step-3-witness-insufficient` as a soft signal.
+
+The reference directory currently returns a membership proof for its latest epoch and an unproved `404` for an absent key. `resolveIdentity()` rejects a membership response whose declared epoch differs from the selected anchor. Historical membership proofs and verified non-membership remain open service and AKD-bridge work.
+
 ### Lower-level primitives
 
 For advanced use (custom calculators, alternative signing flows), the package also exports:
