@@ -9129,6 +9129,70 @@ evidence.
 [D147](#d147-payments-profile-spin-out-from-protocol-core), and
 [D168](#d168-coverage-manifests-make-capture-scope-verifiable).
 
+## D180: Directory anchors use a durable linear commit journal
+
+**Date:** 2026-07-24
+
+**Status:** Accepted and implemented
+
+**Context.** The reference directory signed every anchor with the context
+genesis root. It also kept anchor bodies only in memory and added a body to its
+history even when log submission failed. A restart therefore lost the bodies
+needed by identity verifiers, and successive anchors did not form the
+chronology required by [§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log).
+Concurrent publishes could also choose the same predecessor.
+
+The spec carried two incompatible anchor examples. The canonical example used
+a `content` object and root-derived `content_id`;
+[§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log) used
+`directory_tree_size`; the implementation and verifier used an origin-derived
+`content_id` and `metadata.directory_epoch`.
+
+**Decision.**
+
+1. A directory anchor uses the full normative event URI, an origin-derived
+   `content_id`, and metadata containing `directory_origin`, `directory_root`,
+   and `directory_epoch`.
+2. Genesis uses the context genesis root. Every later anchor points to the
+   preceding log-committed anchor record hash.
+3. Directory-node serializes publishes. Before a new state change, it resolves
+   any pending anchor by exact hash lookup and exact-body retry. It refuses the
+   new write with 503 while the prior outcome remains unknown.
+4. The service writes and fsyncs a prepared journal entry before log
+   submission. It writes and fsyncs a committed entry only after submission
+   succeeds or log lookup rediscovers the record.
+5. Prepared bodies remain retrievable by record hash. Only committed records
+   appear in recent-anchor history or advance the chain head.
+6. Claim persistence becomes write-ahead and fsync-before-mutation. Restart
+   replay fails closed on corruption and preserves the directory operation
+   order that produced the anchor sequence.
+7. When claim persistence is configured, the anchor journal defaults to the
+   sibling `<claim-path>.anchors.jsonl` file. Operators may set a separate
+   path.
+8. On the first journal-backed deployment, the service discovers the newest
+   matching anchor commitment already in the log, persists that hash as its
+   bootstrap predecessor, and emits a fresh body for the replayed current
+   state. This starts the durable linear chain without pretending historical
+   in-memory bodies survived.
+
+**Failure boundary.** A directory state can exist with a pending anchor when
+the first submission fails. The response reports that state explicitly.
+Successor writes do not advance until the service proves whether the exact
+pending record reached the log. A persistent 4xx response therefore blocks
+writes and requires operator repair instead of allowing an unverifiable gap.
+
+**Conformance.** Service tests pin predecessor linkage, concurrent publish
+serialization, failed-submission retry, committed-body retrieval, and
+restart-preserved bodies and chain head. They also pin recovery from a claim
+write-ahead crash window, fail-closed claim-journal replay, and first-deployment
+bootstrap from an existing log anchor.
+
+**Cross-references.**
+[D034](#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers),
+[D056](#d056-promote-directory_anchor-to-atrib-normative-event_type-byte-0x04),
+[D070](#d070-record-body-archive-layer), and
+[§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log).
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

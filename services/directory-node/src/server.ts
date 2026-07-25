@@ -13,65 +13,16 @@
 // against the log's witness-cosigned checkpoints.
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { appendFile, mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { AtribDirectory } from '@atrib/directory'
 import type { IdentityClaim } from '@atrib/directory'
 import { verifyClaimSignature } from '@atrib/directory'
-import { emitDirectoryAnchor, type AnchorRecord } from './anchor.js'
-
-/**
- * In-memory anchor history. Each successful `emitDirectoryAnchor` adds
- * the signed body to this map keyed by record_hash, plus to a parallel
- * timestamp-ordered array for `/v6/anchors?since=&limit=` queries.
- *
- * Spec §6.3 step 1 verifiers need anchor BODIES (the body holds
- * directory_root + directory_epoch); the log retains only commitments
- * (90-byte hash + metadata). Until the §2.12 record-body archive layer
- * ships (D070 placeholder ADR), each producer hosts its own bodies.
- *
- * Transition plan when §2.12 ships: this in-memory map stays useful
- * for directory-specific queries (e.g., "all anchors from epoch N to
- * M") but the plain body retrieval path moves to the standard archive
- * endpoint. Verifier callers swap the body-fetch endpoint URL; the
- * record shape stays identical.
- *
- * Persistence: in-memory only. Lost on restart (same as the AKD state).
- * Production durability would store these alongside `persistencePath`
- * but that's not yet implemented.
- */
-class AnchorHistory {
-  private byHash = new Map<string, AnchorRecord>()
-  private chronological: AnchorRecord[] = []
-
-  add(record: AnchorRecord, recordHash: string): void {
-    if (this.byHash.has(recordHash)) return
-    this.byHash.set(recordHash, record)
-    this.chronological.push(record)
-  }
-
-  getByHash(recordHash: string): AnchorRecord | undefined {
-    return this.byHash.get(recordHash)
-  }
-
-  /**
-   * Return anchors in newest-first order. `since` filters to anchors
-   * whose timestamp is strictly greater than the cutoff. `limit` caps
-   * the response (default 100, max 1000).
-   */
-  recent(since?: number, limit = 100): AnchorRecord[] {
-    const cap = Math.min(Math.max(1, limit), 1000)
-    const filtered = typeof since === 'number'
-      ? this.chronological.filter(r => r.timestamp > since)
-      : this.chronological
-    return [...filtered].reverse().slice(0, cap)
-  }
-
-  size(): number {
-    return this.chronological.length
-  }
-}
+import * as ed25519 from '@noble/ed25519'
+import { buildDirectoryAnchor, directoryAnchorContextId, submitDirectoryAnchor } from './anchor.js'
+import { AnchorHistory } from './anchor-history.js'
+import { appendJsonLineDurably } from './durable-jsonl.js'
 
 export interface DirectoryServerConfig {
   /** Operator's Ed25519 32-byte seed for signing directory checkpoints. */
@@ -81,12 +32,12 @@ export interface DirectoryServerConfig {
   /** atrib log endpoint to anchor checkpoints into. When undefined, anchoring is skipped (dev only). */
   logEndpoint?: string
   /**
-   * Path to an append-only JSONL of every successful publish (one signed
-   * IdentityClaim per line). When set, on startup the server reads the file
-   * and replays each publish into a fresh in-memory AKD; the replay produces
-   * identical epoch numbers and root hashes because AKD publish is
-   * deterministic given the same input sequence. Without this, a restart
-   * loses all prior claims.
+   * Path to a write-ahead JSONL of validated publishes (one signed
+   * IdentityClaim per line). The server fsyncs each claim before changing the
+   * in-memory AKD. On startup it replays the file into a fresh AKD. The replay
+   * produces identical epochs and roots because publish order is serialized
+   * and AKD publication is deterministic. Without this file, a restart loses
+   * prior claims.
    *
    * For per-operation anchoring to remain coherent across restarts the file
    * MUST be on a persistent volume (e.g., a Fly mount). Without persistence,
@@ -94,6 +45,11 @@ export interface DirectoryServerConfig {
    * after restart.
    */
   persistencePath?: string
+  /**
+   * Durable prepared/committed directory-anchor journal. Defaults to
+   * `${persistencePath}.anchors.jsonl` when claim persistence is enabled.
+   */
+  anchorPersistencePath?: string
 }
 
 export interface DirectoryServerHandle {
@@ -102,7 +58,9 @@ export interface DirectoryServerHandle {
   close(): Promise<void>
 }
 
-const CREATOR_KEY_RE = /^[A-Za-z0-9_-]{43}$/  // base64url Ed25519 pubkey (no padding)
+const CREATOR_KEY_RE = /^[A-Za-z0-9_-]{43}$/ // base64url Ed25519 pubkey (no padding)
+
+type SerialExecutor = <T>(task: () => Promise<T>) => Promise<T>
 
 function jsonResponse(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status
@@ -110,7 +68,13 @@ function jsonResponse(res: ServerResponse, status: number, body: unknown): void 
   res.end(JSON.stringify(body))
 }
 
-function problemResponse(res: ServerResponse, status: number, type: string, title: string, detail: string): void {
+function problemResponse(
+  res: ServerResponse,
+  status: number,
+  type: string,
+  title: string,
+  detail: string,
+): void {
   res.statusCode = status
   res.setHeader('Content-Type', 'application/problem+json')
   res.end(JSON.stringify({ type: `https://atrib.dev/problems/${type}`, title, status, detail }))
@@ -126,29 +90,128 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
 async function replayPersistedClaims(directory: AtribDirectory, path: string): Promise<number> {
   if (!existsSync(path)) return 0
   const text = await readFile(path, 'utf-8')
+  const lines = text.split('\n')
+  const hasTornTail = text.length > 0 && !text.endsWith('\n')
   let count = 0
-  for (const line of text.split('\n')) {
-    const trimmed = line.trim()
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = lines[index]!.trim()
     if (!trimmed) continue
     let claim: IdentityClaim
     try {
       claim = JSON.parse(trimmed) as IdentityClaim
     } catch {
-      // eslint-disable-next-line no-console
-      console.warn(`directory-node: skipping unparsable persistence line`)
-      continue
+      if (hasTornTail && index === lines.length - 1) {
+        // appendJsonLineDurably fsyncs complete lines before mutation. A crash
+        // may leave one unacknowledged partial tail, which was never applied.
+        break
+      }
+      throw new Error(`directory claim journal line ${index + 1} is not valid JSON`)
     }
-    // Defensive: re-verify the signature on replay. A persistence-file tamper
-    // shouldn't be able to inject claims; the AKD root would diverge anyway.
     if (!(await verifyClaimSignature(claim))) {
-      // eslint-disable-next-line no-console
-      console.warn(`directory-node: skipping persisted claim with invalid signature for ${claim.creator_key}`)
-      continue
+      throw new Error(`directory claim journal line ${index + 1} has an invalid signature`)
     }
     await directory.publishSigned(claim)
     count += 1
   }
   return count
+}
+
+async function appendClaimDurably(path: string, claim: IdentityClaim): Promise<void> {
+  await appendJsonLineDurably(path, claim)
+}
+
+async function discoverLatestAnchorRecordHash(
+  logEndpoint: string,
+  directoryOrigin: string,
+  operatorCreatorKey: string,
+): Promise<string | null> {
+  const contextId = directoryAnchorContextId(directoryOrigin)
+  const response = await fetch(`${logEndpoint.replace(/\/$/, '')}/by-context/${contextId}`)
+  if (response.status === 404) return null
+  if (!response.ok) {
+    throw new Error(`directory anchor bootstrap lookup returned ${response.status}`)
+  }
+  const body = (await response.json()) as {
+    entries?: Array<{
+      record_hash?: unknown
+      creator_key?: unknown
+      event_type?: unknown
+    }>
+  }
+  const latest = body.entries?.find(
+    (entry) =>
+      entry.creator_key === operatorCreatorKey &&
+      entry.event_type === 'directory_anchor' &&
+      typeof entry.record_hash === 'string' &&
+      /^sha256:[0-9a-f]{64}$/.test(entry.record_hash),
+  )
+  return typeof latest?.record_hash === 'string' ? latest.record_hash : null
+}
+
+async function initializePersistedAnchorState(
+  directory: AtribDirectory,
+  config: DirectoryServerConfig,
+  anchorHistory: AnchorHistory,
+  operatorCreatorKey: string,
+): Promise<void> {
+  if (!config.logEndpoint) return
+  const snapshot = await directory.currentSnapshot()
+  const known = anchorHistory.latestKnownRecord()
+
+  if (known) {
+    if (
+      known.metadata.directory_epoch === snapshot.epoch &&
+      known.metadata.directory_root === snapshot.root_hash
+    ) {
+      return
+    }
+    if (!anchorHistory.pending() && snapshot.epoch === known.metadata.directory_epoch + 1) {
+      const recovered = await buildDirectoryAnchor({
+        directoryOrigin: config.origin,
+        operatorPrivateKey: config.operatorPrivateKey,
+        epoch: snapshot.epoch,
+        rootHash: snapshot.root_hash,
+        previousAnchorRecordHash: anchorHistory.latestCommittedHash(),
+      })
+      await anchorHistory.prepare(recovered.record, recovered.record_hash)
+      const submission = await submitDirectoryAnchor(config.logEndpoint, recovered.record)
+      if (submission.submitted) await anchorHistory.commit(recovered.record_hash)
+      return
+    }
+    throw new Error(
+      `persisted directory state at epoch ${snapshot.epoch} does not match ` +
+        `anchor journal epoch ${known.metadata.directory_epoch}`,
+    )
+  }
+
+  if (snapshot.epoch === 0) {
+    if (anchorHistory.hasBootstrap()) {
+      throw new Error('anchor journal has a bootstrap but the persisted directory is empty')
+    }
+    return
+  }
+
+  if (!anchorHistory.hasBootstrap()) {
+    const existingRecordHash = await discoverLatestAnchorRecordHash(
+      config.logEndpoint,
+      config.origin,
+      operatorCreatorKey,
+    )
+    if (existingRecordHash) {
+      await anchorHistory.setBootstrapRecordHash(existingRecordHash)
+    }
+  }
+
+  const recovered = await buildDirectoryAnchor({
+    directoryOrigin: config.origin,
+    operatorPrivateKey: config.operatorPrivateKey,
+    epoch: snapshot.epoch,
+    rootHash: snapshot.root_hash,
+    previousAnchorRecordHash: anchorHistory.latestCommittedHash(),
+  })
+  await anchorHistory.prepare(recovered.record, recovered.record_hash)
+  const submission = await submitDirectoryAnchor(config.logEndpoint, recovered.record)
+  if (submission.submitted) await anchorHistory.commit(recovered.record_hash)
 }
 
 export async function bindDirectoryServer(
@@ -157,16 +220,38 @@ export async function bindDirectoryServer(
   config: DirectoryServerConfig,
 ): Promise<DirectoryServerHandle> {
   const directory = await AtribDirectory.create(config.operatorPrivateKey)
-  const anchorHistory = new AnchorHistory()
+  const anchorPersistencePath =
+    config.anchorPersistencePath ??
+    (config.persistencePath ? `${config.persistencePath}.anchors.jsonl` : undefined)
+  const operatorCreatorKey = Buffer.from(
+    await ed25519.getPublicKeyAsync(config.operatorPrivateKey),
+  ).toString('base64url')
+  const anchorHistory = await AnchorHistory.create(
+    config.origin,
+    operatorCreatorKey,
+    anchorPersistencePath,
+  )
+  let publishTail: Promise<void> = Promise.resolve()
+  const serializePublish: SerialExecutor = <T>(task: () => Promise<T>): Promise<T> => {
+    const result = publishTail.then(task, task)
+    publishTail = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
+  }
 
   if (config.persistencePath) {
     await mkdir(dirname(config.persistencePath), { recursive: true })
     const replayed = await replayPersistedClaims(directory, config.persistencePath)
     if (replayed > 0) {
       // eslint-disable-next-line no-console
-      console.log(`directory-node: replayed ${replayed} persisted claim${replayed === 1 ? '' : 's'} from ${config.persistencePath}`)
+      console.log(
+        `directory-node: replayed ${replayed} persisted claim${replayed === 1 ? '' : 's'} from ${config.persistencePath}`,
+      )
     }
   }
+  await initializePersistedAnchorState(directory, config, anchorHistory, operatorCreatorKey)
 
   const server = createServer((req, res) => {
     // CORS for browser-based dashboards (D054). Read endpoints serve public data per spec §6;
@@ -181,7 +266,7 @@ export async function bindDirectoryServer(
       return
     }
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-    void handle(req, res, url, directory, config, anchorHistory).catch((e) => {
+    void handle(req, res, url, directory, config, anchorHistory, serializePublish).catch((e) => {
       problemResponse(res, 500, 'internal-error', 'Internal Server Error', String(e))
     })
   })
@@ -200,6 +285,79 @@ export async function bindDirectoryServer(
   }
 }
 
+async function reconcilePendingAnchor(
+  logEndpoint: string,
+  anchorHistory: AnchorHistory,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const pending = anchorHistory.pending()
+  if (!pending) return { ok: true }
+
+  const lookupUrl = `${logEndpoint.replace(/\/$/, '')}/lookup/${pending.recordHash.slice('sha256:'.length)}`
+  let lookup: Response
+  try {
+    lookup = await fetch(lookupUrl)
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        `cannot determine whether pending anchor ${pending.recordHash} reached the log: ` +
+        `${e instanceof Error ? e.message : String(e)}`,
+    }
+  }
+
+  if (lookup.ok) {
+    const found = (await lookup.json().catch(() => null)) as { record_hash?: unknown } | null
+    if (found?.record_hash !== pending.recordHash) {
+      return {
+        ok: false,
+        error: `log lookup returned the wrong commitment for pending anchor ${pending.recordHash}`,
+      }
+    }
+    try {
+      await anchorHistory.commit(pending.recordHash)
+      return { ok: true }
+    } catch (e) {
+      return {
+        ok: false,
+        error:
+          `pending anchor ${pending.recordHash} is in the log but its local commit failed: ` +
+          `${e instanceof Error ? e.message : String(e)}`,
+      }
+    }
+  }
+
+  if (lookup.status !== 404) {
+    return {
+      ok: false,
+      error:
+        `cannot reconcile pending anchor ${pending.recordHash}: ` +
+        `log lookup returned ${lookup.status}`,
+    }
+  }
+
+  const submission = await submitDirectoryAnchor(logEndpoint, pending.record)
+  if (!submission.submitted) {
+    return {
+      ok: false,
+      error:
+        `pending anchor ${pending.recordHash} remains unsubmitted: ` +
+        `${submission.error ?? 'unknown log error'}`,
+    }
+  }
+
+  try {
+    await anchorHistory.commit(pending.recordHash)
+    return { ok: true }
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        `pending anchor ${pending.recordHash} reached the log but its local commit failed: ` +
+        `${e instanceof Error ? e.message : String(e)}`,
+    }
+  }
+}
+
 async function handle(
   req: IncomingMessage,
   res: ServerResponse,
@@ -207,6 +365,7 @@ async function handle(
   directory: AtribDirectory,
   config: DirectoryServerConfig,
   anchorHistory: AnchorHistory,
+  serializePublish: SerialExecutor,
 ): Promise<void> {
   // Service-info index. Both the bare hostname (/) and the version-scoped
   // base (/v6) return the same discovery JSON. Without this handler, GET
@@ -218,8 +377,10 @@ async function handle(
   // constant change plus an append to SUPPORTED_VERSIONS.
   if (
     req.method === 'GET' &&
-    (url.pathname === '/' || url.pathname === '' ||
-     url.pathname === '/v6' || url.pathname === '/v6/')
+    (url.pathname === '/' ||
+      url.pathname === '' ||
+      url.pathname === '/v6' ||
+      url.pathname === '/v6/')
   ) {
     const CURRENT_VERSION = 'v6'
     const SUPPORTED_VERSIONS = ['v6']
@@ -260,51 +421,99 @@ async function handle(
       return
     }
     if (!CREATOR_KEY_RE.test(claim.creator_key)) {
-      problemResponse(res, 400, 'invalid-creator-key', 'Bad Request', 'creator_key must be base64url Ed25519 pubkey')
+      problemResponse(
+        res,
+        400,
+        'invalid-creator-key',
+        'Bad Request',
+        'creator_key must be base64url Ed25519 pubkey',
+      )
       return
     }
     if (!(await verifyClaimSignature(claim))) {
-      problemResponse(res, 400, 'invalid-claim-signature', 'Bad Request', 'claim signature does not verify')
+      problemResponse(
+        res,
+        400,
+        'invalid-claim-signature',
+        'Bad Request',
+        'claim signature does not verify',
+      )
       return
     }
 
-    const { epoch } = await directory.publishSigned(claim)
-    const snapshot = await directory.currentSnapshot()
-
-    // Append to persistence log AFTER successful publish. Order matters: AKD
-    // replay on restart depends on the persisted sequence matching the live
-    // sequence. If the append fails (disk full, etc.) we still respond 200,
-    // the in-memory state is correct, but a restart will lose this claim.
-    if (config.persistencePath) {
-      try {
-        await appendFile(config.persistencePath, JSON.stringify(claim) + '\n', { mode: 0o600 })
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error(`directory-node: persistence append failed for ${claim.creator_key}:`, e)
+    const result = await serializePublish(async () => {
+      if (config.logEndpoint) {
+        const reconciliation = await reconcilePendingAnchor(config.logEndpoint, anchorHistory)
+        if (!reconciliation.ok) return { blocked: reconciliation.error }
       }
-    }
 
-    // §6.2.4 per-operation anchoring: emit directory_anchor record after each publish.
-    let anchor: { record_hash?: string; submitted: boolean; error?: string } = { submitted: false }
-    if (config.logEndpoint) {
-      const result = await emitDirectoryAnchor({
-        logEndpoint: config.logEndpoint,
-        directoryOrigin: config.origin,
-        operatorPrivateKey: config.operatorPrivateKey,
-        epoch: snapshot.epoch,
-        rootHash: snapshot.root_hash,
-      })
-      if (result.record && result.record_hash) {
-        anchorHistory.add(result.record, result.record_hash)
+      // Write ahead and fsync before mutating the in-memory AKD. A process
+      // crash after this point replays the same claim on the next start.
+      if (config.persistencePath) {
+        await appendClaimDurably(config.persistencePath, claim)
       }
-      anchor = { record_hash: result.record_hash, submitted: result.submitted, ...(result.error ? { error: result.error } : {}) }
-    }
 
-    jsonResponse(res, 200, {
-      epoch,
-      root_hash: snapshot.root_hash,
-      anchor,
+      const { epoch } = await directory.publishSigned(claim)
+      const snapshot = await directory.currentSnapshot()
+
+      let anchor: {
+        record_hash?: string
+        submitted: boolean
+        pending?: boolean
+        error?: string
+      } = { submitted: false }
+
+      if (config.logEndpoint) {
+        const built = await buildDirectoryAnchor({
+          directoryOrigin: config.origin,
+          operatorPrivateKey: config.operatorPrivateKey,
+          epoch: snapshot.epoch,
+          rootHash: snapshot.root_hash,
+          previousAnchorRecordHash: anchorHistory.latestCommittedHash(),
+        })
+        await anchorHistory.prepare(built.record, built.record_hash)
+        const submission = await submitDirectoryAnchor(config.logEndpoint, built.record)
+        if (submission.submitted) {
+          try {
+            await anchorHistory.commit(built.record_hash)
+          } catch (e) {
+            anchor = {
+              record_hash: built.record_hash,
+              submitted: true,
+              pending: true,
+              error: `anchor commit journal failed: ${e instanceof Error ? e.message : String(e)}`,
+            }
+          }
+        }
+        if (!anchor.record_hash) {
+          anchor = {
+            record_hash: built.record_hash,
+            submitted: submission.submitted,
+            ...(!submission.submitted ? { pending: true } : {}),
+            ...(submission.error ? { error: submission.error } : {}),
+          }
+        }
+      }
+
+      return {
+        epoch,
+        root_hash: snapshot.root_hash,
+        anchor,
+      }
     })
+
+    if ('blocked' in result && typeof result.blocked === 'string') {
+      problemResponse(
+        res,
+        503,
+        'anchor-reconciliation-pending',
+        'Service Unavailable',
+        result.blocked,
+      )
+      return
+    }
+
+    jsonResponse(res, 200, result)
     return
   }
 
@@ -312,7 +521,13 @@ async function handle(
   if (req.method === 'GET' && url.pathname.startsWith('/v6/lookup/')) {
     const key = url.pathname.slice('/v6/lookup/'.length)
     if (!CREATOR_KEY_RE.test(key)) {
-      problemResponse(res, 400, 'invalid-creator-key', 'Bad Request', 'creator_key must be base64url Ed25519 pubkey')
+      problemResponse(
+        res,
+        400,
+        'invalid-creator-key',
+        'Bad Request',
+        'creator_key must be base64url Ed25519 pubkey',
+      )
       return
     }
     const result = await directory.lookup(key)
@@ -336,7 +551,13 @@ async function handle(
   if (req.method === 'GET' && url.pathname.startsWith('/v6/history/')) {
     const key = url.pathname.slice('/v6/history/'.length)
     if (!CREATOR_KEY_RE.test(key)) {
-      problemResponse(res, 400, 'invalid-creator-key', 'Bad Request', 'creator_key must be base64url Ed25519 pubkey')
+      problemResponse(
+        res,
+        400,
+        'invalid-creator-key',
+        'Bad Request',
+        'creator_key must be base64url Ed25519 pubkey',
+      )
       return
     }
     const history = await directory.history(key)
@@ -377,7 +598,13 @@ async function handle(
     const recordHash = anchorByHashMatch[1]!
     const record = anchorHistory.getByHash(recordHash)
     if (!record) {
-      problemResponse(res, 404, 'anchor-not-found', 'Not Found', `no anchor with record_hash ${recordHash}`)
+      problemResponse(
+        res,
+        404,
+        'anchor-not-found',
+        'Not Found',
+        `no anchor with record_hash ${recordHash}`,
+      )
       return
     }
     res.setHeader('cache-control', 'public, max-age=60')
@@ -396,7 +623,13 @@ async function handle(
     const since = sinceStr ? Number(sinceStr) : undefined
     const limit = limitStr ? Number(limitStr) : 100
     if (sinceStr !== null && (!Number.isFinite(since) || (since as number) < 0)) {
-      problemResponse(res, 400, 'invalid-since', 'Bad Request', 'since must be a non-negative integer (unix ms)')
+      problemResponse(
+        res,
+        400,
+        'invalid-since',
+        'Bad Request',
+        'since must be a non-negative integer (unix ms)',
+      )
       return
     }
     if (!Number.isFinite(limit) || limit <= 0) {
@@ -422,7 +655,13 @@ async function handle(
     const from = fromStr ? Number(fromStr) : NaN
     const to = toStr ? Number(toStr) : NaN
     if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < from) {
-      problemResponse(res, 400, 'invalid-epoch-range', 'Bad Request', 'from + to must be non-negative integers with to >= from')
+      problemResponse(
+        res,
+        400,
+        'invalid-epoch-range',
+        'Bad Request',
+        'from + to must be non-negative integers with to >= from',
+      )
       return
     }
     const proof = await directory.auditProof(from, to)

@@ -15,6 +15,8 @@ export interface AnchorEmissionInput {
   operatorPrivateKey: Uint8Array
   epoch: number
   rootHash: string
+  /** Previous log-committed directory anchor. Omit only for chain genesis. */
+  previousAnchorRecordHash?: string
 }
 
 export interface AnchorEmissionResult {
@@ -61,27 +63,40 @@ export interface AnchorRecord {
 
 const ENCODER = new TextEncoder()
 
+export function directoryAnchorContextId(directoryOrigin: string): string {
+  return Buffer.from(sha256(ENCODER.encode(directoryOrigin)))
+    .toString('hex')
+    .slice(0, 32)
+}
+
+export function directoryAnchorGenesisRoot(directoryOrigin: string): string {
+  const contextId = directoryAnchorContextId(directoryOrigin)
+  return `sha256:${Buffer.from(sha256(ENCODER.encode(contextId))).toString('hex')}`
+}
+
 /**
- * Build, sign, and submit a `directory_anchor` record per spec §6.2.4.
+ * Build and sign a `directory_anchor` record per spec §6.2.4.
  *
  * The record uses the atrib normative event_type URI for directory anchors,
  * carries the directory's epoch + root_hash in the metadata, and is signed
- * by the operator's Ed25519 key. Submission errors are caught and surfaced
- * (per §5.8 degradation contract: directory publish never blocks on
- * anchoring failure).
+ * by the operator's Ed25519 key. Successive records point to the last
+ * log-committed anchor; only the first record uses the context genesis root.
  */
-export async function emitDirectoryAnchor(input: AnchorEmissionInput): Promise<AnchorEmissionResult> {
+export async function buildDirectoryAnchor(
+  input: Omit<AnchorEmissionInput, 'logEndpoint'>,
+): Promise<{ record_hash: string; record: AnchorRecord }> {
   const operatorPubBytes = await ed25519.getPublicKeyAsync(input.operatorPrivateKey)
   const operatorPub = Buffer.from(operatorPubBytes).toString('base64url').replace(/=+$/, '')
 
   // Reserved context_id for the directory's own anchoring chain.
   // Derived deterministically from the directory origin so multiple replicas
   // produce the same chain.
-  const originHash = sha256(ENCODER.encode(input.directoryOrigin))
-  const contextId = Buffer.from(originHash).toString('hex').slice(0, 32)
+  const contextId = directoryAnchorContextId(input.directoryOrigin)
 
-  // chain_root for genesis: SHA-256(UTF-8(context_id)) per spec §1.2.3.
-  const chainRoot = `sha256:${Buffer.from(sha256(ENCODER.encode(contextId))).toString('hex')}`
+  // Only the first anchor uses the §1.2.3 genesis root. Later anchors point
+  // to the exact prior anchor record accepted by the transparency log.
+  const chainRoot =
+    input.previousAnchorRecordHash ?? directoryAnchorGenesisRoot(input.directoryOrigin)
 
   // content_id derives from the directory origin per §1.2.2 server-URL pattern.
   const contentInput = `${input.directoryOrigin}:directory_anchor`
@@ -104,15 +119,45 @@ export async function emitDirectoryAnchor(input: AnchorEmissionInput): Promise<A
   const canonical = canonicalize(unsigned) ?? JSON.stringify(unsigned)
   const sigBytes = await ed25519.signAsync(ENCODER.encode(canonical), input.operatorPrivateKey)
   const signature = Buffer.from(sigBytes).toString('base64url').replace(/=+$/, '')
-  const record = { ...unsigned, signature }
+  const record = { ...unsigned, signature } as AnchorRecord
 
-  // Compute record_hash for the response (callers may want to reference the anchor).
+  return { record_hash: hashDirectoryAnchor(record), record }
+}
+
+/** Return the canonical record hash covered by the log commitment. */
+export function hashDirectoryAnchor(record: AnchorRecord): string {
   const completeCanonical = canonicalize(record) ?? JSON.stringify(record)
-  const recordHash = `sha256:${Buffer.from(sha256(ENCODER.encode(completeCanonical))).toString('hex')}`
+  return `sha256:${Buffer.from(sha256(ENCODER.encode(completeCanonical))).toString('hex')}`
+}
 
-  // Submit to log. Failures are caught per §5.8 degradation contract.
+/** Verify the signature on a persisted anchor body before replaying it. */
+export async function verifyDirectoryAnchorSignature(record: AnchorRecord): Promise<boolean> {
+  const { signature, ...unsigned } = record
+  if (typeof signature !== 'string' || typeof record.creator_key !== 'string') return false
   try {
-    const submitUrl = `${input.logEndpoint.replace(/\/$/, '')}/entries`
+    const canonical = canonicalize(unsigned) ?? JSON.stringify(unsigned)
+    return await ed25519.verifyAsync(
+      Buffer.from(signature, 'base64url'),
+      ENCODER.encode(canonical),
+      Buffer.from(record.creator_key, 'base64url'),
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Submit an already-built anchor without changing its signed bytes.
+ *
+ * Callers persist the body before this call so an ambiguous response can be
+ * reconciled by record hash and retried without signing a replacement.
+ */
+export async function submitDirectoryAnchor(
+  logEndpoint: string,
+  record: AnchorRecord,
+): Promise<{ submitted: boolean; error?: string }> {
+  try {
+    const submitUrl = `${logEndpoint.replace(/\/$/, '')}/entries`
     const response = await fetch(submitUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -120,10 +165,28 @@ export async function emitDirectoryAnchor(input: AnchorEmissionInput): Promise<A
     })
     if (!response.ok) {
       const errBody = await response.text().catch(() => '')
-      return { record_hash: recordHash, submitted: false, error: `log returned ${response.status}: ${errBody.slice(0, 200)}`, record: record as AnchorRecord }
+      return {
+        submitted: false,
+        error: `log returned ${response.status}: ${errBody.slice(0, 200)}`,
+      }
     }
-    return { record_hash: recordHash, submitted: true, record: record as AnchorRecord }
+    return { submitted: true }
   } catch (e) {
-    return { record_hash: recordHash, submitted: false, error: e instanceof Error ? e.message : String(e), record: record as AnchorRecord }
+    return {
+      submitted: false,
+      error: e instanceof Error ? e.message : String(e),
+    }
   }
+}
+
+/**
+ * Convenience wrapper for callers that do not need crash reconciliation.
+ * Directory-node itself uses the split build/persist/submit path.
+ */
+export async function emitDirectoryAnchor(
+  input: AnchorEmissionInput,
+): Promise<AnchorEmissionResult> {
+  const built = await buildDirectoryAnchor(input)
+  const submitted = await submitDirectoryAnchor(input.logEndpoint, built.record)
+  return { ...built, ...submitted }
 }
