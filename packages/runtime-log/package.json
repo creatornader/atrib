@@ -15,6 +15,14 @@
     "./buzz": {
       "import": "./dist/buzz.js",
       "types": "./dist/buzz.d.ts"
+    },
+    "./observation": {
+      "import": "./dist/observation.js",
+      "types": "./dist/observation.d.ts"
+    },
+    "./codex-rollout": {
+      "import": "./dist/codex-rollout.js",
+      "types": "./dist/codex-rollout.d.ts"
     }
   },
   "files": [

@@ -9366,6 +9366,76 @@ transport and operator lifecycle rules.
 [D170](#d170-checkpoint-gossip-fails-closed-and-publishes-conflicts), and
 [§2.9](atrib-spec.md#29-witnessing-and-cosignatures).
 
+## D183: Runtime observation adapters separate reading from durable acceptance
+
+**Date:** 2026-07-25
+
+**Status:** Accepted and implemented
+
+**Context.** Runtime telemetry can make a shared operating graph useful during
+live work, but reading a transcript is not the same as intercepting an action.
+A first private Codex attachment proved the product value and exposed several
+portable-contract requirements: bounded reads, exact source-byte commitments,
+observer and subject separation, explicit gaps, atomic cursor acknowledgment,
+and no automatic promotion into accepted application state.
+
+**Decision.**
+
+1. `@atrib/runtime-log/observation` defines the public source-neutral
+   observation adapter contract. The host supplies source discovery and
+   binding. An adapter takes an expected cursor and returns observations,
+   coverage, gaps, and a proposed cursor.
+2. Reading is pure with respect to durable acceptance. The caller owns one
+   atomic operation that commits the portable batch and authoritative cursor.
+   A side cursor can be a rebuildable cache, but cannot acknowledge source
+   bytes first.
+3. Every batch fixes the claim boundary: host-observed runtime telemetry,
+   execution not established, completeness limited to reported coverage,
+   vendor provenance not established, accepted state not inferred, and effect
+   outcome not established.
+4. Source profiles can add typed cursor, gap, coverage, and projection fields.
+   Local paths, transcript bodies, raw source objects, device identifiers, and
+   inode identifiers stay out of portable batches.
+5. `@atrib/runtime-log/codex-rollout` is the first profile. It attaches to one
+   explicitly selected rollout JSONL file without launching, resuming, or
+   replacing Codex. It commits exact JSON event bytes and delimiter-aware
+   framed bytes, validates source generation and prior-frame anchors, withholds
+   partial tails, and reports malformed, oversized, truncated, replaced, and
+   anchor-mismatch gaps.
+6. The Codex profile separates the host observer from the observed runtime
+   subject and separates source occurrence time from host observation time.
+   It carries compaction markers across adjacent batches without treating them
+   as accepted state.
+7. Existing-file reads remain bounded backfill even when they begin at byte
+   zero. A profile can claim continuous history only when its source binding
+   and coverage rules establish continuous observation from source genesis.
+8. Observation adapters do not sign atrib records or map telemetry into
+   operating events. A host can separately sign the batch as an observation.
+   Semantic promotion requires its own signed application mapping and policy.
+
+**Alternatives rejected.**
+
+- Treat each transcript event as a signed tool action. The transcript does not
+  establish the protected execution boundary or complete action capture.
+- Copy the private attachment manager into the public package. Candidate
+  discovery, registry paths, scheduling, credentials, and UI are product-owned
+  concerns.
+- Let the adapter persist its own authoritative cursor. That permits
+  cursor-before-batch loss and prevents the host from composing observation
+  with its own journal transaction.
+- Generalize Codex event types and compaction markers as a universal runtime
+  schema. Source-specific profiles should implement the shared batch contract.
+
+**Protocol impact.** None. This adds no record field, event type, graph edge,
+verifier acceptance rule, or cognitive verb.
+
+**Cross-references.**
+[D121](#d121-runtime-log-proof-manifests-verify-host-owned-run-windows),
+[D122](#d122-host-runtime-adapters-are-distinct-from-agent-framework-adapters),
+[D163](#d163-session-transcript-runtime-log-source-binds-compaction-forks-and-signed-records),
+[D168](#d168-coverage-manifests-make-capture-scope-verifiable), and
+[D178](#d178-the-operating-graph-ships-as-an-application-profile-and-reference-client).
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

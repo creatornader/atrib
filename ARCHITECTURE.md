@@ -412,6 +412,25 @@ decrypted JSON object while the manifest stays hash-only. The source does not
 turn observer telemetry into proof of relay admission, audit inclusion, runtime
 execution, result truth, or capture completeness outside the supplied window.
 
+The public live-observation contract lives at
+[`@atrib/runtime-log/observation`](packages/runtime-log/README.md#live-observation-adapters).
+It separates source reading from durable acknowledgment. An adapter receives an
+expected cursor and returns one portable batch with observations, explicit
+coverage and gaps, and a proposed cursor. The caller must commit the batch and
+authoritative cursor atomically. The adapter does not sign records, decide
+application meaning, or advance a separate durable cursor.
+
+[`@atrib/runtime-log/codex-rollout`](packages/runtime-log/README.md#live-observation-adapters)
+is the first profile. It binds one host-selected rollout file and observes new
+complete frames without launching or resuming Codex. Exact event and framed
+line hashes preserve the source boundary. The profile separates the observing
+host from the observed runtime subject, keeps source time separate from host
+observation time, and reports partial tails, backfill, replacement, truncation,
+anchor mismatch, malformed frames, oversized frames, and compaction
+continuations. The resulting telemetry remains observation. It does not become
+execution evidence or operating-graph state without separate evidence and a
+signed application mapping.
+
 The dogfood proof lives at
 [`packages/integration/examples/dogfood-runtime-log/`](packages/integration/examples/dogfood-runtime-log/).
 It uses sanitized Agent Bridge entries from a real runtime-log proof-kit job
@@ -603,7 +622,8 @@ Versioned URL paths (`/v1/checkpoint`, `/v6/lookup/<key>`) are immutable: once a
 
 @atrib/runtime-log    Runtime-log proof helpers
   └── Builds and verifies log_window_manifest objects for host-owned run
-      windows. It does not sign records or store raw runtime logs.
+      windows. Observation subpaths read cursor-bound host telemetry without
+      signing records, storing raw runtime logs, or promoting semantic state.
 
 @atrib/sdk            Consolidated client SDK
 @atrib/operating-graph Open-source application reference
