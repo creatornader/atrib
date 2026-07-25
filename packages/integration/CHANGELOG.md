@@ -1,5 +1,18 @@
 # @atrib/integration
 
+## 0.0.53
+
+### Patch Changes
+
+- Updated dependencies [ffa7378]
+  - @atrib/verify@0.13.0
+  - @atrib/action-gate@0.1.6
+  - @atrib/agent@0.4.8
+  - @atrib/runtime-log@0.4.2
+  - @atrib/sdk@6.0.0
+  - @atrib/archive-node@0.1.46
+  - @atrib/graph-node@0.1.46
+
 ## 0.0.52
 
 ### Patch Changes

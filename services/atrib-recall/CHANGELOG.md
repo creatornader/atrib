@@ -1,5 +1,12 @@
 # @atrib/recall
 
+## 5.0.0
+
+### Patch Changes
+
+- Updated dependencies [ffa7378]
+  - @atrib/verify@0.13.0
+
 ## 4.0.1
 
 ### Patch Changes

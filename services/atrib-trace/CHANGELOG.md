@@ -1,5 +1,11 @@
 # @atrib/trace
 
+## 1.0.5
+
+### Patch Changes
+
+- @atrib/recall@5.0.0
+
 ## 1.0.4
 
 ### Patch Changes
