@@ -3,21 +3,14 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rmdir, rm, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import {
-  verifyJsonCommitment,
-  verifyRecord,
-  type AtribRecord,
-} from '@atrib/mcp'
+import { verifyJsonCommitment, verifyRecord, type AtribRecord } from '@atrib/mcp'
 import { hashCanonical } from '@atrib/runtime-log'
 import {
   RUNTIME_OBSERVATION_BATCH_SCHEMA,
   verifyRuntimeObservationBatchTransition,
 } from '@atrib/runtime-log/observation'
 import type { OperatingEnvelope } from './model.js'
-import {
-  parseRuntimeObservation,
-  type PortableObservationBatch,
-} from './observations.js'
+import { parseRuntimeObservation, type PortableObservationBatch } from './observations.js'
 
 export const OBSERVATION_JOURNAL_SCHEMA = 'atrib.operating-observation-journal.v1' as const
 
@@ -226,9 +219,7 @@ async function verifyObservationEnvelope(
   }
 }
 
-export async function verifyObservationJournalState(
-  state: ObservationJournalState,
-): Promise<void> {
+export async function verifyObservationJournalState(state: ObservationJournalState): Promise<void> {
   let cursor = state.initial_cursor
   const operations = new Set<string>()
   for (const commit of state.commits) {

@@ -12,10 +12,7 @@ import {
   type ProofBundle,
 } from '@atrib/mcp'
 import { parseOperatingEvent, type OperatingEntry, type OperatingEnvelope } from './model.js'
-import {
-  OBSERVATION_JOURNAL_SCHEMA,
-  observationJournalEnvelopes,
-} from './observation-journal.js'
+import { OBSERVATION_JOURNAL_SCHEMA, observationJournalEnvelopes } from './observation-journal.js'
 import { parseAnyRuntimeObservation, type RuntimeObservationEntry } from './observations.js'
 
 function recordHash(record: AtribRecord): string {

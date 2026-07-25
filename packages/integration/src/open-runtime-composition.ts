@@ -45,9 +45,7 @@ import {
   type OperatingEnvelope,
   type OperatingEvent,
 } from '@atrib/operating-graph/model'
-import {
-  commitObservationBatch,
-} from '@atrib/operating-graph/observation-journal'
+import { commitObservationBatch } from '@atrib/operating-graph/observation-journal'
 import {
   buildRuntimeObservation,
   buildRuntimeSemanticPromotion,
@@ -275,7 +273,12 @@ export async function runOpenRuntimeComposition(
       start: 1,
       end: 2,
     })
-    const coverage = createActionCoverage(window.manifest, observationHash, requestHash, outcomeHash)
+    const coverage = createActionCoverage(
+      window.manifest,
+      observationHash,
+      requestHash,
+      outcomeHash,
+    )
     const coverageBody = buildCoverageAttestationContent(coverage.manifest)
     const coverageAttestation = await producerClient.attest({
       event_type: 'observation',
@@ -525,9 +528,7 @@ async function verifyComposition(input: {
     readonly manifest: CoverageManifest
     readonly expectedActions: readonly ExpectedCoverageAction[]
   }
-  readonly window: Awaited<
-    ReturnType<SessionTranscriptRuntimeLogJsonlSource['exportWindow']>
-  >
+  readonly window: Awaited<ReturnType<SessionTranscriptRuntimeLogJsonlSource['exportWindow']>>
   readonly tamperCoverageMembership: boolean
 }): Promise<CompositionVerification> {
   const mapping = requireEnvelope(input.material, input.mappingHash)
@@ -687,8 +688,7 @@ async function runReceiverVerdict(
     effect_count: effectCount,
     decision_record_hash: result.decision.record_hash,
     outcome_record_hash: result.outcome.record_hash,
-    verification_valid:
-      result.verification.valid && decision.signatureOk && outcome.signatureOk,
+    verification_valid: result.verification.valid && decision.signatureOk && outcome.signatureOk,
   }
 }
 

@@ -394,10 +394,7 @@ export function parseAnyRuntimeObservation(
 
 function parseObservationPlacement(
   value: Record<string, unknown>,
-): Pick<
-  PortableRuntimeObservation,
-  'workspace' | 'task' | 'team' | 'mapped_agent'
-> | null {
+): Pick<PortableRuntimeObservation, 'workspace' | 'task' | 'team' | 'mapped_agent'> | null {
   const workspace = parseNamedRef(value['workspace'])
   if (!workspace || 'agent' in value) return null
   const task = parseOptionalNamedRef(value, 'task')
@@ -471,9 +468,7 @@ function parsePortableBatch(value: unknown): PortableRuntimeObservation['batch']
     history_completeness: value[
       'history_completeness'
     ] as RuntimeObservationCoverage['history_completeness'],
-    parsing_status: value[
-      'parsing_status'
-    ] as RuntimeObservationCoverage['parsing_status'],
+    parsing_status: value['parsing_status'] as RuntimeObservationCoverage['parsing_status'],
     complete_window_eligible: value['complete_window_eligible'],
     gap_kinds: gapKinds,
     observed_at: value['observed_at'],
