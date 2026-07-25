@@ -23,12 +23,18 @@ const logOrigin = process.env.ATRIB_WITNESS_LOG_ORIGIN
 const witnessPublicKey = process.env.ATRIB_WITNESS_PUBLIC_KEY
 const logPublicKey = process.env.ATRIB_WITNESS_LOG_PUBLIC_KEY
 const maxTreeLag = Number(process.env.ATRIB_WITNESS_MAX_TREE_LAG ?? 1000)
-const maxAgeSeconds = Number(process.env.ATRIB_WITNESS_MAX_AGE_SECONDS ?? 300)
+const configuredMaxAgeSeconds = process.env.ATRIB_WITNESS_MAX_AGE_SECONDS
+const maxAgeSeconds =
+  configuredMaxAgeSeconds === undefined ? Number.MAX_SAFE_INTEGER : Number(configuredMaxAgeSeconds)
+const maxCheckAgeSeconds = Number(process.env.ATRIB_WITNESS_MAX_CHECK_AGE_SECONDS ?? 120)
 if (!Number.isSafeInteger(maxTreeLag) || maxTreeLag < 0) {
   throw new Error('ATRIB_WITNESS_MAX_TREE_LAG must be a non-negative safe integer')
 }
 if (!Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds < 0) {
   throw new Error('ATRIB_WITNESS_MAX_AGE_SECONDS must be a non-negative safe integer')
+}
+if (!Number.isSafeInteger(maxCheckAgeSeconds) || maxCheckAgeSeconds < 0) {
+  throw new Error('ATRIB_WITNESS_MAX_CHECK_AGE_SECONDS must be a non-negative safe integer')
 }
 
 function base64ToBase64url(value) {
@@ -54,6 +60,7 @@ if (publishedKey.origin !== witnessName || publishedKey.public_key !== witnessPu
 let proof
 let witnessedTreeSize
 let liveTreeSize
+let verifiedStatus
 for (let attempt = 1; attempt <= 10; attempt += 1) {
   let snapshots
   try {
@@ -69,6 +76,16 @@ for (let attempt = 1; attempt <= 10; attempt += 1) {
   }
   const [witnessCheckpointNote, liveCheckpointNote, status] = snapshots
   if (status.error) throw new Error(`witness reports an update error: ${status.error}`)
+  if (
+    status.health !== 'ok' ||
+    !Number.isSafeInteger(status.last_successful_check_at) ||
+    !Number.isSafeInteger(status.successful_check_age_seconds) ||
+    status.successful_check_age_seconds > maxCheckAgeSeconds
+  ) {
+    throw new Error(
+      `witness liveness check failed: health=${status.health}, successful_check_age_seconds=${status.successful_check_age_seconds}`,
+    )
+  }
   const [witnessOperator, liveOperator] = await Promise.all([
     verifyOperatorCheckpoint(witnessCheckpointNote, {
       name: logOrigin,
@@ -115,10 +132,16 @@ for (let attempt = 1; attempt <= 10; attempt += 1) {
       maxAgeSeconds,
     },
   )
+  verifiedStatus = status
   break
 }
 
-if (!proof?.operator.valid || !proof.thresholdMet || proof.validWitnesses !== 1) {
+if (
+  !proof?.operator.valid ||
+  !proof.thresholdMet ||
+  proof.validWitnesses !== 1 ||
+  !verifiedStatus
+) {
   throw new Error(`witness verification failed: ${JSON.stringify(proof)}`)
 }
 process.stdout.write(
@@ -130,6 +153,9 @@ process.stdout.write(
       witnessed_tree_size: witnessedTreeSize,
       live_tree_size: liveTreeSize,
       tree_lag: liveTreeSize - witnessedTreeSize,
+      last_successful_check_at: verifiedStatus.last_successful_check_at,
+      successful_check_age_seconds: verifiedStatus.successful_check_age_seconds,
+      evidence_max_age_seconds: configuredMaxAgeSeconds === undefined ? null : maxAgeSeconds,
       valid_witnesses: proof.validWitnesses,
       required_witnesses: proof.requiredWitnesses,
     },

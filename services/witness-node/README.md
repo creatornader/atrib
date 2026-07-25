@@ -25,21 +25,48 @@ acceptance contract is in the
 
 ## Container deployment
 
-From the repository root:
+Use a published image digest after the image workflow has completed. Confirm
+that the GHCR package is public, or configure operator-owned pull credentials.
+A tag is useful for discovery but does not pin the reviewed build.
+
+Build the operator helper, then create a private environment file and a
+separate public trust-root file:
 
 ```sh
-cp services/witness-node/deploy/.env.example \
-  services/witness-node/deploy/.env
-# Fill the operator-controlled secrets and pinned trust roots.
+pnpm --recursive --filter @atrib/witness-node... \
+  --workspace-concurrency=1 run build
+
+pnpm --silent --filter @atrib/witness-node operator -- init \
+  --name witness.example.org \
+  --epoch 1 \
+  --image 'ghcr.io/creatornader/atrib-witness-node@sha256:<reviewed-digest>' \
+  --log-public-key '<authenticated log key>' \
+  --env-file ./operator.env \
+  --trust-root-file ./witness-trust-root.json
+```
+
+`operator.env` is created with mode `0600` and contains the witness seed.
+`witness-trust-root.json` contains only the public key, key ID, name, and
+epoch.
+
+For Docker Compose:
+
+```sh
 docker compose \
   -f services/witness-node/deploy/docker-compose.yml \
-  up --build -d
+  --env-file ./operator.env \
+  up -d
 ```
 
 The compose service uses a persistent state volume and a read-only root
-filesystem. Prove the deployed endpoint from a separate machine with
-`scripts/prove-deployment.mjs`; the independent operator guide lists the
-required caller-pinned inputs.
+filesystem. The Fly template in `deploy/fly.toml.example` uses a persistent
+volume, scheduled snapshots, a 512 MB Machine, and the same health endpoint.
+The operator owns the Fly organization, app, billing, volume, secrets, and
+hostname.
+
+Prove the deployed endpoint from a separate machine with
+`scripts/prove-deployment.mjs`. Copy `deploy/monitor.yml.example` into an
+operator-controlled repository for a scheduled independent check.
 
 ## Configuration
 
@@ -53,6 +80,7 @@ ATRIB_WITNESS_LOG_URL=https://log.atrib.dev \
 ATRIB_WITNESS_LOG_ORIGIN=log.atrib.dev/v1 \
 ATRIB_WITNESS_LOG_PUBLIC_KEY='<pinned base64url key>' \
 ATRIB_WITNESS_STATE_DIR=/var/lib/atrib-witness \
+ATRIB_WITNESS_HEALTH_MAX_CHECK_AGE_SECONDS=120 \
 ATRIB_WITNESS_GOSSIP_SOURCES='[{"source_id":"observer.example","log_base_url":"https://observer.example/atrib-log"}]' \
 pnpm --filter @atrib/witness-node start
 ```
@@ -71,6 +99,7 @@ The witness serves:
 
 - `GET /v1/pubkey`
 - `GET /v1/log-pubkey`
+- `GET /v1/health`
 - `GET /v1/status`
 - `GET /v1/checkpoint`
 - `GET /v1/incidents`
@@ -83,6 +112,12 @@ interval. It does not expose a public endpoint that triggers witness work.
 actually cosigned. Deployment verification uses those stored bytes and checks
 their bounded lag against the current live-log checkpoint.
 
+`/v1/health` measures whether the witness recently completed a successful log
+check. It does not reuse the cosignature timestamp as process liveness. A quiet
+log can keep the same checkpoint and cosignature while the witness continues
+to poll successfully. `/v1/status` exposes both
+`checkpoint_witnessed_at` and `last_successful_check_at`.
+
 Leaf hashes use an append-only binary history. The service fsyncs new hashes
 and immutable cosignatures before atomically advancing checkpoint state. If a
 crash leaves an uncommitted binary tail, the next update truncates back to the
@@ -92,3 +127,40 @@ Split-view incidents use deterministic IDs over the operator origin, conflict
 kind, sources, checkpoint hashes, tree sizes, and roots. Repeated observation
 of the same conflict preserves the first immutable incident artifact instead
 of creating a new row on every poll.
+
+## Backups and retirement
+
+Stop the witness before taking an application-level backup:
+
+```sh
+pnpm --silent --filter @atrib/witness-node operator -- backup \
+  --state-dir /path/to/stopped/state \
+  --output-dir /path/to/backup \
+  --witness-name witness.example.org \
+  --witness-epoch 1 \
+  --witness-public-key '<public witness key>' \
+  --log-public-key '<authenticated log key>' \
+  --confirm-stopped
+```
+
+The operator must stop the witness and attest to that fact with
+`--confirm-stopped`. The helper detects mutation during the copy, verifies the
+checkpoint and cosignature against the supplied trust roots, hashes every
+regular state file, rejects symlinks and unfinished durable writes, and records
+the committed tree state in a manifest. `verify-backup` checks the packet.
+`restore` writes only to an absent target directory.
+
+If the operator ends the role or loses rollback state, publish a signed
+retirement and start a new epoch with a new key:
+
+```sh
+pnpm --silent --filter @atrib/witness-node operator -- retire \
+  --env-file ./operator.env \
+  --epoch 1 \
+  --reason 'operator ended the pilot' \
+  --output-file ./witness-retirement.json
+```
+
+The helper binds the retirement to the epoch stored during `operator init`.
+`@atrib/verify` can verify the artifact. Consumers enforce retirement by
+removing that key and epoch from their accepted witness set.

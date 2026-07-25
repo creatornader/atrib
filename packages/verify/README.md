@@ -85,6 +85,53 @@ Nostr and Buzz event evidence APIs ship at the package root:
 owner authorization. It does not infer community admission, relay retention,
 audit inclusion, or runtime execution from a valid event.
 
+Checkpoint witness acquisition also ships at the package root:
+`fetchCheckpointWitnessThreshold()`. The caller pins the log name, log key,
+checkpoint URL, and each witness name, key, and endpoint:
+
+```typescript
+import { fetchCheckpointWitnessThreshold } from '@atrib/verify'
+
+const result = await fetchCheckpointWitnessThreshold({
+  log: {
+    name: 'log.atrib.dev/v1',
+    publicKey: pinnedLogKey,
+    checkpointUrl: 'https://log.atrib.dev/v1/checkpoint',
+  },
+  witnesses: [
+    {
+      name: 'witness.example.org',
+      publicKey: pinnedWitnessKey,
+      baseUrl: 'https://witness.example.org',
+    },
+  ],
+  requiredWitnesses: 1,
+})
+
+if (!result.threshold.thresholdMet) {
+  throw new Error(JSON.stringify(result.witnesses))
+}
+```
+
+The helper fetches cosignatures from the pinned witness endpoints, verifies
+them locally, and reports transport and verification results separately for
+each endpoint. It constructs a fresh note from the verified operator signature
+and endpoint-returned cosignatures. A witness-looking line delivered only by
+the log does not count. Responses are bounded to 16 KiB and requests time out
+after 10 seconds by default. Callers can override both limits.
+
+Use `fetchWitnessCosignaturesForCheckpoint()` when a proof bundle already
+contains the exact checkpoint that must be witnessed. `resolveIdentity()` uses
+that path when `trustedWitnessEndpoints` is supplied, so a newer log
+checkpoint cannot replace the checkpoint that covers the selected directory
+anchor.
+
+`verifyWitnessRetirement()` verifies an
+`atrib.witness-retirement.v1` artifact against the public key named inside it.
+A valid artifact is revocation input for caller-owned trust policy. The caller
+must remove that key and epoch from its accepted witness set. Verification of
+the artifact alone does not mutate policy.
+
 ### `new AtribVerifier(options)`
 
 | Field             | Type     | Default                        | Description                                                                                                                  |

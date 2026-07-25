@@ -192,9 +192,14 @@ submitter can observe its own missing receipt. A verifier can detect rollback
 against a previously retained checkpoint. Split-view detection requires
 checkpoint gossip, an independent observer, or an independent witness.
 
-The witness software, immutable incident path, deployment kit, and verifier
-threshold are implemented. No independently controlled witness is live yet.
-Default verification therefore cannot claim an independent witness threshold.
+The witness software, immutable incident path, image workflow, operator
+lifecycle kit, and verifier threshold are implemented. Endpoint-aware
+verification binds a caller-pinned witness key to a caller-pinned endpoint and
+does not count witness lines delivered only by the log. Process liveness uses
+the last successful poll, while evidence freshness uses the checkpoint
+cosignature time. No independently controlled witness is live yet. An
+atrib-maintained reference verification profile therefore cannot claim an
+independent witness threshold.
 The acceptance gate is documented in
 [`docs/independent-operator.md`](docs/independent-operator.md).
 

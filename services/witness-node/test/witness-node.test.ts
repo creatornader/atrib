@@ -60,6 +60,7 @@ describe('witness node end to end', () => {
     closers.push(witness.close)
 
     await witness.update()
+    expect((await fetch(`${witness.url}/v1/health`)).status).toBe(200)
     expect((await fetch(`${witness.url}/v1/update`, { method: 'POST' })).status).toBe(404)
     const firstCheckpoint = await (await fetch(`${log.url}/v1/checkpoint`)).text()
     expect(await (await fetch(`${witness.url}/v1/checkpoint`)).text()).toBe(firstCheckpoint)
@@ -91,6 +92,7 @@ describe('witness node end to end', () => {
     expect(statSync(join(stateDirectory, leafHistory as string)).size).toBe(5 * 32)
     expect(await (await fetch(`${witness.url}/v1/status`)).json()).toMatchObject({
       tree_size: 5,
+      health: 'ok',
       error: null,
     })
 
@@ -101,6 +103,61 @@ describe('witness node end to end', () => {
       tree_size: 5,
       error: 'checkpoint split view: leaf 1 changed',
     })
+  })
+
+  it('tracks successful checks separately from checkpoint cosignature time', async () => {
+    const log = await startFixtureLog([leafHash(Uint8Array.of(1))])
+    const stateDirectory = mkdtempSync(join(tmpdir(), 'atrib-witness-health-test-'))
+    temporaryDirectories.push(stateDirectory)
+    let now = 1_800_000_000
+    const witness = await startWitnessServer({
+      identity: { name: WITNESS_NAME, privateKey: WITNESS_SEED },
+      log: {
+        logBaseUrl: log.url,
+        logKey: { name: LOG_NAME, publicKey: logPublicKey },
+      },
+      stateDirectory,
+      healthMaxCheckAgeSeconds: 120,
+      nowSeconds: () => now,
+    })
+    closers.push(witness.close)
+
+    await witness.update()
+    const first = (await (await fetch(`${witness.url}/v1/status`)).json()) as Record<
+      string,
+      unknown
+    >
+    expect(first).toMatchObject({
+      checkpoint_witnessed_at: now,
+      last_checked_at: now,
+      last_successful_check_at: now,
+      health: 'ok',
+    })
+
+    now += 90
+    await witness.update()
+    const unchanged = (await (await fetch(`${witness.url}/v1/status`)).json()) as Record<
+      string,
+      unknown
+    >
+    expect(unchanged).toMatchObject({
+      checkpoint_witnessed_at: 1_800_000_000,
+      last_checked_at: now,
+      last_successful_check_at: now,
+      successful_check_age_seconds: 0,
+      health: 'ok',
+    })
+
+    now += 121
+    expect(
+      (await (await fetch(`${witness.url}/v1/status`)).json()) as Record<string, unknown>,
+    ).toMatchObject({
+      checkpoint_witnessed_at: 1_800_000_000,
+      last_successful_check_at: 1_800_000_090,
+      successful_check_age_seconds: 121,
+      health: 'stale',
+    })
+    expect((await fetch(`${witness.url}/v1/health`)).status).toBe(503)
   })
 
   it('refuses a gossiped split view and publishes an immutable incident', async () => {

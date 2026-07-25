@@ -13,7 +13,9 @@ export interface WitnessServerConfig {
   log: WitnessLogConfig
   stateDirectory: string
   pollIntervalMs?: number
+  healthMaxCheckAgeSeconds?: number
   fetch?: typeof globalThis.fetch
+  nowSeconds?: () => number
 }
 
 export interface WitnessServerHandle {
@@ -28,21 +30,29 @@ export async function startWitnessServer(
   const store = new WitnessStore(config.stateDirectory)
   const publicKey = await ed.getPublicKeyAsync(config.identity.privateKey)
   const keyId = checkpointKeyId(config.identity.name, publicKey)
-  let lastError: string | undefined
   let updating: Promise<void> | undefined
+  const nowSeconds = config.nowSeconds ?? (() => Math.floor(Date.now() / 1_000))
+  const healthMaxCheckAgeSeconds =
+    config.healthMaxCheckAgeSeconds ??
+    Math.max(60, Math.ceil((config.pollIntervalMs ?? 30_000) / 500))
 
   const update = (): Promise<void> => {
     updating ??= witnessOnce({
       log: config.log,
       identity: config.identity,
       store,
+      nowSeconds: nowSeconds(),
       ...(config.fetch ? { fetch: config.fetch } : {}),
     })
       .then(() => {
-        lastError = undefined
+        store.recordCheck(config.log.logKey.name, nowSeconds(), { successful: true })
       })
       .catch((error: unknown) => {
-        lastError = error instanceof Error ? error.message : String(error)
+        const message = error instanceof Error ? error.message : String(error)
+        store.recordCheck(config.log.logKey.name, nowSeconds(), {
+          successful: false,
+          error: message,
+        })
         throw error
       })
       .finally(() => {
@@ -84,15 +94,52 @@ export async function startWitnessServer(
     }
     if (request.method === 'GET' && path === '/v1/status') {
       const state = store.load(config.log.logKey.name)
+      const health = store.loadHealth(config.log.logKey.name)
+      const checkAgeSeconds =
+        health?.lastSuccessfulCheckAtSeconds === undefined
+          ? null
+          : Math.max(0, nowSeconds() - health.lastSuccessfulCheckAtSeconds)
+      const healthStatus =
+        health?.lastError !== undefined
+          ? 'error'
+          : checkAgeSeconds === null || checkAgeSeconds > healthMaxCheckAgeSeconds
+            ? 'stale'
+            : 'ok'
       sendJson(response, 200, {
         witness: config.identity.name,
         log_origin: config.log.logKey.name,
         tree_size: state?.treeSize ?? null,
         root_hash: state?.rootHashBase64 ?? null,
+        checkpoint_witnessed_at: state?.witnessedAtSeconds ?? null,
         witnessed_at: state?.witnessedAtSeconds ?? null,
+        last_checked_at: health?.lastCheckedAtSeconds ?? null,
+        last_successful_check_at: health?.lastSuccessfulCheckAtSeconds ?? null,
+        successful_check_age_seconds: checkAgeSeconds,
+        health_max_check_age_seconds: healthMaxCheckAgeSeconds,
+        health: healthStatus,
         incident_count: store.listIncidents().length,
         updating: updating !== undefined,
-        error: lastError ?? null,
+        error: health?.lastError ?? null,
+      })
+      return
+    }
+    if (request.method === 'GET' && path === '/v1/health') {
+      const state = store.load(config.log.logKey.name)
+      const health = store.loadHealth(config.log.logKey.name)
+      const checkAgeSeconds =
+        health?.lastSuccessfulCheckAtSeconds === undefined
+          ? null
+          : Math.max(0, nowSeconds() - health.lastSuccessfulCheckAtSeconds)
+      const healthy =
+        state !== undefined &&
+        health?.lastError === undefined &&
+        checkAgeSeconds !== null &&
+        checkAgeSeconds <= healthMaxCheckAgeSeconds
+      sendJson(response, healthy ? 200 : 503, {
+        status: healthy ? 'ok' : health?.lastError ? 'error' : 'stale',
+        last_successful_check_at: health?.lastSuccessfulCheckAtSeconds ?? null,
+        successful_check_age_seconds: checkAgeSeconds,
+        incident_count: store.listIncidents().length,
       })
       return
     }

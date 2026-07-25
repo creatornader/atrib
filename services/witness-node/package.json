@@ -12,6 +12,8 @@
     "build": "rm -rf dist && tsc",
     "start": "node dist/main.js",
     "dev": "tsx src/main.ts",
+    "benchmark:live": "node scripts/benchmark-live.mjs",
+    "operator": "node scripts/operator-kit.mjs",
     "prove:deployment": "node scripts/prove-deployment.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

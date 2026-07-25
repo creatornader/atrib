@@ -1,0 +1,44 @@
+name: Verify atrib witness
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  ATRIB_WITNESS_URL: ${{ vars.ATRIB_WITNESS_URL }}
+  ATRIB_WITNESS_NAME: ${{ vars.ATRIB_WITNESS_NAME }}
+  ATRIB_WITNESS_PUBLIC_KEY: ${{ vars.ATRIB_WITNESS_PUBLIC_KEY }}
+  ATRIB_WITNESS_LOG_URL: https://log.atrib.dev
+  ATRIB_WITNESS_LOG_ORIGIN: log.atrib.dev/v1
+  ATRIB_WITNESS_LOG_PUBLIC_KEY: ${{ vars.ATRIB_WITNESS_LOG_PUBLIC_KEY }}
+  ATRIB_WITNESS_MAX_TREE_LAG: '1000'
+  ATRIB_WITNESS_MAX_CHECK_AGE_SECONDS: '120'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the pinned verifier
+        uses: actions/checkout@v7
+        with:
+          repository: creatornader/atrib
+          ref: ${{ vars.ATRIB_VERIFIER_REF }}
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Install and build the verifier
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile --filter @atrib/witness-node...
+          pnpm --recursive --filter @atrib/witness-node... --workspace-concurrency=1 run build
+
+      - name: Verify liveness, signatures, trust roots, and log lag
+        run: pnpm --filter @atrib/witness-node prove:deployment

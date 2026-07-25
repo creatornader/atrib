@@ -58,12 +58,21 @@ export function readConfig(env: NodeJS.ProcessEnv): ConfigResult {
     return { ok: false, error: 'ATRIB_WITNESS_LOG_PUBLIC_KEY must decode to 32 bytes' }
   }
   const pollIntervalMs = Number(env.ATRIB_WITNESS_POLL_INTERVAL_MS ?? 30_000)
+  const healthMaxCheckAgeSeconds = Number(
+    env.ATRIB_WITNESS_HEALTH_MAX_CHECK_AGE_SECONDS ?? Math.max(60, Math.ceil(pollIntervalMs / 500)),
+  )
   const port = Number(env.PORT ?? 3200)
   if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 1_000) {
     return { ok: false, error: 'ATRIB_WITNESS_POLL_INTERVAL_MS must be at least 1000' }
   }
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
     return { ok: false, error: 'PORT must be between 1 and 65535' }
+  }
+  if (!Number.isSafeInteger(healthMaxCheckAgeSeconds) || healthMaxCheckAgeSeconds < 1) {
+    return {
+      ok: false,
+      error: 'ATRIB_WITNESS_HEALTH_MAX_CHECK_AGE_SECONDS must be a positive safe integer',
+    }
   }
   const gossipSources = parseGossipSources(env.ATRIB_WITNESS_GOSSIP_SOURCES)
   if (!gossipSources.ok) return gossipSources
@@ -86,6 +95,7 @@ export function readConfig(env: NodeJS.ProcessEnv): ConfigResult {
       },
       stateDirectory: env.ATRIB_WITNESS_STATE_DIR as string,
       pollIntervalMs,
+      healthMaxCheckAgeSeconds,
     },
   }
 }
