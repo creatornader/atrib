@@ -1,9 +1,19 @@
 // Tests for resolveIdentity (spec §6.3 verifier consultation).
 
 import { describe, it, expect, beforeAll } from 'vitest'
+import * as ed from '@noble/ed25519'
+import {
+  EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+  EVENT_TYPE_OBSERVATION_URI,
+  computeInclusionProof,
+  computeRoot,
+  leafHash,
+  serializeEntry,
+} from '@atrib/mcp'
 import { resolveIdentity } from '../src/resolve-identity.js'
 import { buildRevocationRegistry } from '../src/revocations.js'
-import type { IdentityClaim } from '../src/resolve-identity.js'
+import { checkpointKeyId, createWitnessCosignature } from '../src/witness.js'
+import type { AnchorCommitment, IdentityClaim } from '../src/resolve-identity.js'
 
 const KEY = 'A'.repeat(43)
 
@@ -436,7 +446,6 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
   beforeAll(async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { default: canonicalize } = await import('canonicalize')
-    const ed = await import('@noble/ed25519')
     const { sha256 } = await import('@noble/hashes/sha2.js')
     const pubBytes = await ed.getPublicKeyAsync(OPERATOR_SEED)
     OPERATOR_KEY = Buffer.from(pubBytes).toString('base64url').replace(/=+$/, '')
@@ -500,14 +509,7 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
   function makeAnchorFetch(
     overrides: {
       /** Replace the directory_anchor entries returned by /by-context. */
-      logEntries?: Array<{
-        record_hash: string
-        log_index: number
-        creator_key: string
-        context_id: string
-        timestamp_ms: number
-        event_type: string
-      }>
+      logEntries?: AnchorCommitment[]
       /** Replace the /anchor self-report payload. */
       directoryAnchor?: { epoch: number; root_hash: string; directory_origin: string }
       /** When set, /by-context returns this status. */
@@ -517,7 +519,7 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     const defaultEntries = [
       {
         record_hash: CURRENT_HASH,
-        log_index: 5,
+        index: 5,
         creator_key: OPERATOR_KEY,
         context_id: CONTEXT_ID_HEX,
         timestamp_ms: CURRENT_TS,
@@ -525,7 +527,7 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
       },
       {
         record_hash: PRIOR_HASH,
-        log_index: 3,
+        index: 3,
         creator_key: OPERATOR_KEY,
         context_id: CONTEXT_ID_HEX,
         timestamp_ms: PRIOR_TS,
@@ -537,7 +539,7 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.includes(`/lookup/${KEY}`)) {
         return new Response(
-          JSON.stringify({ found: true, claim: minimalClaim, version: 1, proof: 'p' }),
+          JSON.stringify({ found: true, claim: minimalClaim, version: 1, proof: 'p', epoch: 2 }),
           {
             status: 200,
             headers: { 'content-type': 'application/json' },
@@ -604,6 +606,35 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     expect(result.warnings.some((w) => w.startsWith('step-1-anchor-not-checked'))).toBe(false)
   })
 
+  it('step 6: rejects a current lookup from a different directory epoch', async () => {
+    const base = makeAnchorFetch()
+    const fetchImpl = (async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes(`/lookup/${KEY}`)) {
+        return new Response(
+          JSON.stringify({
+            found: true,
+            claim: minimalClaim,
+            version: 1,
+            proof: 'p',
+            epoch: 3,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      return base(input as RequestInfo)
+    }) as typeof fetch
+    const result = await resolveIdentity(KEY, {
+      fetchImpl,
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.warnings.some((w) => w.startsWith('step-6-lookup-epoch-mismatch'))).toBe(true)
+  })
+
   it('step 1: anchor null when log returns no matching directory_anchor entries', async () => {
     const result = await resolveIdentity(KEY, {
       fetchImpl: makeAnchorFetch({ logEntries: [] }),
@@ -613,6 +644,7 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
       recordTimestamp: T_NOW,
     })
     expect(result.anchor).toBeNull()
+    expect(result.identity_resolution_method).toBe('no_anchor_available')
     expect(result.warnings.some((w) => w.includes('step-1-anchor-not-found'))).toBe(true)
   })
 
@@ -666,6 +698,7 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
       recordTimestamp: T_NOW,
     })
     expect(result.anchor).toBeNull()
+    expect(result.identity_resolution_method).toBe('no_anchor_available')
   })
 
   it('step 2: freshness_ok=true when anchor age within threshold', async () => {
@@ -821,6 +854,47 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     expect(result.warnings.some((w) => w.includes('step-4-signature-invalid'))).toBe(true)
   })
 
+  it('step 4: hard-rejects a valid body that does not match the log commitment', async () => {
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetch(),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: async (recordHash) => {
+        if (recordHash === CURRENT_HASH) return makeAnchorBody(PRIOR_ROOT_HEX, 1)
+        return null
+      },
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.directory_checkpoint_signature_valid).toBe(false)
+    expect(result.warnings.some((w) => w.includes('step-4-body-commitment-mismatch'))).toBe(true)
+    expect(result.warnings.some((w) => w.includes('step-4-signature-invalid'))).toBe(false)
+  })
+
+  it('step 4: hard-rejects log entry fields that do not match the committed body', async () => {
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetch({
+        logEntries: [
+          {
+            record_hash: CURRENT_HASH,
+            index: 5,
+            creator_key: OPERATOR_KEY,
+            context_id: CONTEXT_ID_HEX,
+            timestamp_ms: CURRENT_TS - 1,
+            event_type: 'directory_anchor',
+          },
+        ],
+      }),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.directory_checkpoint_signature_valid).toBe(false)
+    expect(result.warnings).toContain('step-4-body-entry-mismatch: fields=timestamp')
+  })
+
   it('step 4: hard-rejection when directoryOperatorKey is the wrong pubkey', async () => {
     const result = await resolveIdentity(KEY, {
       fetchImpl: makeAnchorFetch(),
@@ -860,96 +934,264 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
   // =========================================================================
   // Step 3, witness coverage on the log's checkpoint.
   //
-  // Soft signal: counts cosignature lines whose origin differs from the
-  // log's own. Always emits step-3-witness-not-cryptographically-verified
-  // alongside the count to make the lack of crypto-verify explicit.
+  // Soft signal: verifies the pinned log key, binds checkpoint tree size
+  // to the selected anchor log index, and counts only valid, fresh,
+  // distinct signatures from caller-pinned witness keys.
   // =========================================================================
 
-  /** Build a C2SP signed-note checkpoint body+signature(s) for tests. */
-  function makeCheckpointText(logOrigin: string, witnessOrigins: string[]): string {
-    const body = `${logOrigin}\n5\n${'A'.repeat(44)}\n`
-    const lines: string[] = [`— ${logOrigin} ${'B'.repeat(92)}`]
-    for (const w of witnessOrigins) {
-      lines.push(`— ${w} ${'C'.repeat(92)}`)
-    }
-    return body + '\n' + lines.join('\n') + '\n'
+  const LOG_NAME = 'log.test/v1'
+  const LOG_SEED = new Uint8Array(32).fill(0x51)
+  const OTHER_LOG_SEED = new Uint8Array(32).fill(0x52)
+  const WITNESS_A_NAME = 'witness-a.test'
+  const WITNESS_B_NAME = 'witness-b.test'
+  const WITNESS_C_NAME = 'witness-c.test'
+  const WITNESS_A_SEED = new Uint8Array(32).fill(0x61)
+  const WITNESS_B_SEED = new Uint8Array(32).fill(0x62)
+  const WITNESS_C_SEED = new Uint8Array(32).fill(0x63)
+  const WITNESS_NOW = 1_800_000_000
+  let logPublicKey: Uint8Array
+  let otherLogPublicKey: Uint8Array
+  let witnessAPublicKey: Uint8Array
+  let witnessBPublicKey: Uint8Array
+  let witnessCPublicKey: Uint8Array
+
+  beforeAll(async () => {
+    logPublicKey = await ed.getPublicKeyAsync(LOG_SEED)
+    otherLogPublicKey = await ed.getPublicKeyAsync(OTHER_LOG_SEED)
+    witnessAPublicKey = await ed.getPublicKeyAsync(WITNESS_A_SEED)
+    witnessBPublicKey = await ed.getPublicKeyAsync(WITNESS_B_SEED)
+    witnessCPublicKey = await ed.getPublicKeyAsync(WITNESS_C_SEED)
+  })
+
+  async function signCheckpoint(treeSize: number, rootHash: Uint8Array): Promise<string> {
+    const body = `${LOG_NAME}\n${treeSize}\n${Buffer.from(rootHash).toString('base64')}\n`
+    const signature = await ed.signAsync(new TextEncoder().encode(body), LOG_SEED)
+    const payload = Buffer.concat([
+      Buffer.from(checkpointKeyId(LOG_NAME, logPublicKey)),
+      Buffer.from(signature),
+    ])
+    return `${body}\n— ${LOG_NAME} ${payload.toString('base64')}\n`
   }
 
-  function makeAnchorFetchWithCheckpoint(checkpointText: string): typeof fetch {
+  interface TestProofBundle {
+    log_index: number
+    checkpoint: string
+    inclusion_proof: string[]
+    leaf_hash: string
+  }
+
+  async function makeAnchorProof(treeSize = 6): Promise<TestProofBundle> {
+    const anchorEntry = serializeEntry({
+      record_hash_hex: CURRENT_HASH.replace(/^sha256:/, ''),
+      creator_key_b64url: OPERATOR_KEY,
+      context_id: CONTEXT_ID_HEX,
+      timestamp: CURRENT_TS,
+      event_type: EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+    })
+    const dummyEntries = Array.from({ length: Math.min(treeSize, 5) }, (_, index) =>
+      serializeEntry({
+        record_hash_hex: Buffer.alloc(32, index + 1).toString('hex'),
+        creator_key_b64url: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp: PRIOR_TS - index,
+        event_type: EVENT_TYPE_OBSERVATION_URI,
+      }),
+    )
+    const entries = treeSize > 5 ? [...dummyEntries, anchorEntry] : dummyEntries
+    const rootHash = computeRoot(entries)
+    return {
+      log_index: 5,
+      checkpoint: await signCheckpoint(entries.length, rootHash),
+      inclusion_proof:
+        entries.length > 5
+          ? computeInclusionProof(5, entries).map((hash) => Buffer.from(hash).toString('base64'))
+          : [],
+      leaf_hash: Buffer.from(leafHash(anchorEntry)).toString('base64'),
+    }
+  }
+
+  function checkpointBody(note: string): string {
+    return note.slice(0, note.indexOf('\n\n') + 1)
+  }
+
+  async function makeCosignature(
+    note: string,
+    witnessName: string,
+    privateKey: Uint8Array,
+    timestampSeconds = WITNESS_NOW - 30,
+  ): Promise<string> {
+    return createWitnessCosignature({
+      checkpointBody: checkpointBody(note),
+      witnessName,
+      privateKey,
+      timestampSeconds,
+    })
+  }
+
+  function tamperCosignature(line: string): string {
+    const [prefix, token] = line.trimEnd().split(/ (?=[^ ]+$)/)
+    const payload = Buffer.from(token!, 'base64')
+    payload[payload.length - 1] = payload[payload.length - 1]! ^ 0x01
+    return `${prefix} ${payload.toString('base64')}\n`
+  }
+
+  function makeAnchorFetchWithProof(proofBundle: TestProofBundle): typeof fetch {
     const base = makeAnchorFetch()
     return (async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
-      if (url.endsWith('/checkpoint')) {
-        return new Response(checkpointText, {
+      if (url.includes(`/proof/${CURRENT_HASH.replace(/^sha256:/, '')}`)) {
+        return new Response(JSON.stringify(proofBundle), {
           status: 200,
-          headers: { 'content-type': 'text/plain' },
+          headers: { 'content-type': 'application/json' },
         })
       }
       return base(input as RequestInfo)
     }) as typeof fetch
   }
 
-  it('step 3: anchor_witness_count=0 when checkpoint has only the log signer (no witnesses)', async () => {
+  it('step 3: does not infer witness coverage without a pinned log key', async () => {
     const result = await resolveIdentity(KEY, {
-      fetchImpl: makeAnchorFetchWithCheckpoint(makeCheckpointText('log.test/v1', [])),
+      fetchImpl: makeAnchorFetch(),
       logEndpoint: 'http://log.test/v1',
       directoryOperatorKey: OPERATOR_KEY,
       fetchAnchorBody: makeFetchAnchorBody(),
       recordTimestamp: T_NOW,
     })
-    expect(result.anchor?.anchor_witness_count).toBe(0)
+    expect(result.anchor?.anchor_witness_count).toBeNull()
     expect(
-      result.warnings.some((w) => w.startsWith('step-3-witness-not-cryptographically-verified')),
+      result.warnings.some((w) => w.startsWith('step-3-log-checkpoint-key-not-configured')),
     ).toBe(true)
+  })
+
+  it('step 3: counts valid trusted cosignatures fetched from witness endpoints', async () => {
+    const proofBundle = await makeAnchorProof()
+    const cosigA = await makeCosignature(proofBundle.checkpoint, WITNESS_A_NAME, WITNESS_A_SEED)
+    const cosigB = await makeCosignature(proofBundle.checkpoint, WITNESS_B_NAME, WITNESS_B_SEED)
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofBundle),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      trustedWitnessKeys: [
+        { name: WITNESS_A_NAME, publicKey: witnessAPublicKey },
+        { name: WITNESS_B_NAME, publicKey: witnessBPublicKey },
+      ],
+      fetchWitnessCosignatures: async (checkpoint) => {
+        expect(checkpoint.treeSize).toBe(6)
+        return [cosigA, cosigB]
+      },
+      witnessThreshold: 2,
+      witnessNowSeconds: WITNESS_NOW,
+    })
+    expect(result.anchor?.anchor_witness_count).toBe(2)
+    expect(result.warnings.some((w) => w.startsWith('step-3-witness-insufficient'))).toBe(false)
     expect(result.warnings.some((w) => w.startsWith('step-3-witness-not-checked'))).toBe(false)
   })
 
-  it('step 3: anchor_witness_count counts cosignatures from non-log origins', async () => {
-    const cp = makeCheckpointText('log.test/v1', ['witness-a/v1', 'witness-b/v1'])
+  it('step 3: excludes untrusted and invalid cosignatures', async () => {
+    const proofBundle = await makeAnchorProof()
+    const validA = await makeCosignature(proofBundle.checkpoint, WITNESS_A_NAME, WITNESS_A_SEED)
+    const untrustedB = await makeCosignature(proofBundle.checkpoint, WITNESS_B_NAME, WITNESS_B_SEED)
+    const invalidC = tamperCosignature(
+      await makeCosignature(proofBundle.checkpoint, WITNESS_C_NAME, WITNESS_C_SEED),
+    )
     const result = await resolveIdentity(KEY, {
-      fetchImpl: makeAnchorFetchWithCheckpoint(cp),
+      fetchImpl: makeAnchorFetchWithProof(proofBundle),
       logEndpoint: 'http://log.test/v1',
       directoryOperatorKey: OPERATOR_KEY,
       fetchAnchorBody: makeFetchAnchorBody(),
       recordTimestamp: T_NOW,
-    })
-    expect(result.anchor?.anchor_witness_count).toBe(2)
-  })
-
-  it('step 3: surfaces step-3-witness-insufficient warning when below threshold', async () => {
-    const cp = makeCheckpointText('log.test/v1', ['witness-a/v1'])
-    const result = await resolveIdentity(KEY, {
-      fetchImpl: makeAnchorFetchWithCheckpoint(cp),
-      logEndpoint: 'http://log.test/v1',
-      directoryOperatorKey: OPERATOR_KEY,
-      fetchAnchorBody: makeFetchAnchorBody(),
-      recordTimestamp: T_NOW,
-      witnessThreshold: 3, // 1 actual; 3 required
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      trustedWitnessKeys: [
+        { name: WITNESS_A_NAME, publicKey: witnessAPublicKey },
+        { name: WITNESS_C_NAME, publicKey: witnessCPublicKey },
+      ],
+      fetchWitnessCosignatures: async () => [validA, untrustedB, invalidC],
+      witnessThreshold: 2,
+      witnessNowSeconds: WITNESS_NOW,
     })
     expect(result.anchor?.anchor_witness_count).toBe(1)
-    expect(result.warnings.some((w) => w.includes('step-3-witness-insufficient'))).toBe(true)
-    expect(result.warnings.some((w) => w.includes('actual=1, required=3'))).toBe(true)
+    expect(result.warnings.some((w) => w.includes('step-3-witness-untrusted-witness-key'))).toBe(
+      true,
+    )
+    expect(result.warnings.some((w) => w.includes('step-3-witness-signature-is-invalid'))).toBe(
+      true,
+    )
+    expect(result.warnings.some((w) => w.includes('actual=1, required=2'))).toBe(true)
   })
 
-  it('step 3: no insufficient warning when at-or-above threshold', async () => {
-    const cp = makeCheckpointText('log.test/v1', ['witness-a/v1', 'witness-b/v1', 'witness-c/v1'])
+  it('step 3: excludes stale, future, and duplicate trusted cosignatures', async () => {
+    const proofBundle = await makeAnchorProof()
+    const validA = await makeCosignature(proofBundle.checkpoint, WITNESS_A_NAME, WITNESS_A_SEED)
+    const staleB = await makeCosignature(
+      proofBundle.checkpoint,
+      WITNESS_B_NAME,
+      WITNESS_B_SEED,
+      WITNESS_NOW - 90_000,
+    )
+    const futureC = await makeCosignature(
+      proofBundle.checkpoint,
+      WITNESS_C_NAME,
+      WITNESS_C_SEED,
+      WITNESS_NOW + 1_000,
+    )
     const result = await resolveIdentity(KEY, {
-      fetchImpl: makeAnchorFetchWithCheckpoint(cp),
+      fetchImpl: makeAnchorFetchWithProof(proofBundle),
       logEndpoint: 'http://log.test/v1',
       directoryOperatorKey: OPERATOR_KEY,
       fetchAnchorBody: makeFetchAnchorBody(),
       recordTimestamp: T_NOW,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      trustedWitnessKeys: [
+        { name: WITNESS_A_NAME, publicKey: witnessAPublicKey },
+        { name: WITNESS_B_NAME, publicKey: witnessBPublicKey },
+        { name: WITNESS_C_NAME, publicKey: witnessCPublicKey },
+      ],
+      fetchWitnessCosignatures: async () => [validA, validA, staleB, futureC],
       witnessThreshold: 3,
+      witnessNowSeconds: WITNESS_NOW,
     })
-    expect(result.anchor?.anchor_witness_count).toBe(3)
-    expect(result.warnings.some((w) => w.includes('step-3-witness-insufficient'))).toBe(false)
+    expect(result.anchor?.anchor_witness_count).toBe(1)
+    expect(
+      result.warnings.some((w) => w.includes('step-3-witness-duplicate-witness-signature')),
+    ).toBe(true)
+    expect(result.warnings.some((w) => w.includes('step-3-witness-cosignature-is-stale'))).toBe(
+      true,
+    )
+    expect(
+      result.warnings.some((w) => w.includes('step-3-witness-timestamp-is-in-the-future')),
+    ).toBe(true)
   })
 
-  it('step 3: anchor_witness_count stays null when checkpoint fetch fails', async () => {
-    // Fetch impl that returns 503 for /checkpoint
+  it('step 3: rejects malformed callback cosignatures before witness verification', async () => {
+    const proofBundle = await makeAnchorProof()
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofBundle),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      trustedWitnessKeys: [{ name: WITNESS_A_NAME, publicKey: witnessAPublicKey }],
+      fetchWitnessCosignatures: async () => [
+        `— ${WITNESS_A_NAME} ${Buffer.alloc(75).toString('base64')}`,
+      ],
+      witnessThreshold: 1,
+      witnessNowSeconds: WITNESS_NOW,
+    })
+    expect(result.anchor?.anchor_witness_count).toBe(0)
+    expect(result.warnings.some((w) => w.startsWith('step-3-witness-cosignature-malformed'))).toBe(
+      true,
+    )
+    expect(result.warnings.some((w) => w.includes('actual=0, required=1'))).toBe(true)
+  })
+
+  it('step 3: anchor_witness_count stays null when proof fetch fails', async () => {
     const fetchImpl = ((input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
-      if (url.endsWith('/checkpoint')) {
+      if (url.includes('/proof/')) {
         return new Response('', { status: 503 })
       }
       return makeAnchorFetch()(input as RequestInfo)
@@ -961,9 +1203,107 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
       directoryOperatorKey: OPERATOR_KEY,
       fetchAnchorBody: makeFetchAnchorBody(),
       recordTimestamp: T_NOW,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
     })
     expect(result.anchor?.anchor_witness_count).toBeNull()
-    expect(result.warnings.some((w) => w.includes('step-3-checkpoint-fetch-error'))).toBe(true)
+    expect(result.warnings.some((w) => w.includes('step-3-proof-fetch-error'))).toBe(true)
+  })
+
+  it('step 3: rejects a checkpoint signed by a different operator key', async () => {
+    const proofBundle = await makeAnchorProof()
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofBundle),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+      logCheckpointKey: { name: LOG_NAME, publicKey: otherLogPublicKey },
+    })
+    expect(result.anchor?.anchor_witness_count).toBeNull()
+    expect(result.warnings.some((w) => w.startsWith('step-3-operator-checkpoint-invalid'))).toBe(
+      true,
+    )
+  })
+
+  it('step 3: rejects a signed checkpoint that does not cover the anchor log index', async () => {
+    const proofBundle = await makeAnchorProof(5)
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofBundle),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+    })
+    expect(result.anchor?.anchor_witness_count).toBeNull()
+    expect(
+      result.warnings.some((w) => w.startsWith('step-3-checkpoint-does-not-cover-anchor')),
+    ).toBe(true)
+  })
+
+  it('step 3: rejects an inclusion proof that does not reconstruct the signed root', async () => {
+    const proofBundle = await makeAnchorProof()
+    const tampered = Buffer.from(proofBundle.inclusion_proof[0]!, 'base64')
+    tampered[0] = tampered[0]! ^ 0x01
+    proofBundle.inclusion_proof[0] = tampered.toString('base64')
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofBundle),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+    })
+    expect(result.anchor?.anchor_witness_count).toBeNull()
+    expect(result.warnings.some((w) => w.startsWith('step-3-inclusion-proof-invalid'))).toBe(true)
+  })
+
+  it('step 3: rejects a proof for a different log position', async () => {
+    const proofBundle = await makeAnchorProof()
+    proofBundle.log_index = 4
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofBundle),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+    })
+    expect(result.anchor?.anchor_witness_count).toBeNull()
+    expect(result.warnings.some((w) => w.startsWith('step-3-proof-index-mismatch'))).toBe(true)
+  })
+
+  it('step 3: leaves witness count unknown when witness retrieval fails', async () => {
+    const proofBundle = await makeAnchorProof()
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofBundle),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      trustedWitnessKeys: [{ name: WITNESS_A_NAME, publicKey: witnessAPublicKey }],
+      fetchWitnessCosignatures: async () => {
+        throw new Error('witness unavailable')
+      },
+    })
+    expect(result.anchor?.anchor_witness_count).toBeNull()
+    expect(result.warnings.some((w) => w.includes('step-3-witness-fetch-error'))).toBe(true)
+  })
+
+  it('step 3: counts zero when the verified checkpoint presents no witness evidence', async () => {
+    const proofBundle = await makeAnchorProof()
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofBundle),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      trustedWitnessKeys: [{ name: WITNESS_A_NAME, publicKey: witnessAPublicKey }],
+      witnessNowSeconds: WITNESS_NOW,
+    })
+    expect(result.anchor?.anchor_witness_count).toBe(0)
   })
 
   it("step 3: not invoked when step 1 didn't surface an anchor", async () => {
