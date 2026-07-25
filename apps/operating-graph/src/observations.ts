@@ -43,7 +43,7 @@ export interface RuntimeObservationMapping {
 
 export type BuzzObservationMapping = RuntimeObservationMapping
 
-type PortableObservationBatch = RuntimeObservationBatch<
+export type PortableObservationBatch = RuntimeObservationBatch<
   Record<string, unknown>,
   RuntimeObservationClaim,
   RuntimeObservationCoverage,

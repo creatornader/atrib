@@ -14,6 +14,10 @@
     "./observations": {
       "types": "./dist/observations.d.ts",
       "import": "./dist/observations.js"
+    },
+    "./observation-journal": {
+      "types": "./dist/observation-journal.d.ts",
+      "import": "./dist/observation-journal.js"
     }
   },
   "scripts": {
