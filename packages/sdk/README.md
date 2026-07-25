@@ -243,10 +243,11 @@ then tries paths in order:
 2. **In-process** (`'prefer'` after a daemon failure, or `'off'`): resolves
    the caller-owned key (see `key` in
    [`AtribClientConfig`](#atribclientconfig)) and calls `emitInProcess`
-   from `@atrib/emit` with the configured `producer` and the primary
-   atrib-log anchor as `logEndpoint`, then reads the freshly signed
-   record back from the mirror tail and fans it out to every configured
-   anchor via `createAnchorFanout`
+   from `@atrib/emit` with the configured `producer`, `mirrorPath`,
+   `autochainSource`, and primary atrib-log anchor as `logEndpoint`. It
+   then reads the freshly signed record back from that same explicit
+   mirror path and fans it out to every configured anchor via
+   `createAnchorFanout`
    ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture);
    fire-and-forget per [§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission);
    the primary log receiving the record twice is idempotent-safe per
@@ -373,6 +374,8 @@ too is caught and degraded.
 | `key`                 | `ResolvedKey \| null` | `resolveKey()` ladder from `@atrib/emit` (`ATRIB_PRIVATE_KEY` env → `ATRIB_KEY_FILE` → macOS Keychain → 1Password) | Pre-resolved in-process signing key. `null` disables in-process signing (pass-through per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) rule 5). Note: _any_ explicitly-set `key` property opts out of the `resolveKey()` ladder. |
 | `contextId`           | `string`              | `resolveEnvContextId()` at call time                                                                               | Per-client default context (32 lowercase hex). Context identity stays an explicit per-request value (stateless-MCP-native posture).                                                                                                                                               |
 | `producer`            | `string`              | `'atrib-sdk'` (`DEFAULT_PRODUCER`)                                                                                 | `_local.producer` mirror-sidecar label ([§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions)); in-process path only.                                                                                                                 |
+| `mirrorPath`          | `string`              | `$ATRIB_MIRROR_FILE`, then the per-agent default                                                                   | Explicit in-process mirror write path for this client. Anchor fan-out reads the same path. Use this for multiple clients in one process.                                                                                                                                          |
+| `autochainSource`     | `string`              | `mirrorPath`, then `$ATRIB_AUTOCHAIN_SOURCE`, then the legacy mirror fallback                                      | Explicit in-process mirror source for chain inheritance. Set it separately when a client writes to one mirror but inherits an existing chain from another.                                                                                                                        |
 
 ### `DaemonConfig` / `DaemonMode`
 
@@ -580,7 +583,7 @@ record layer, re-exported verbatim from `@atrib/mcp` (grouped as in
 **Key handling ([§5.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#56-key-management)), re-exported from `@atrib/emit`.**
 
 - `resolveKey()`: the async key ladder: `ATRIB_PRIVATE_KEY` env → `ATRIB_KEY_FILE` → macOS Keychain → 1Password; `null` (pass-through) when nothing resolves.
-- `emitInProcess(input, options?)`: the in-process write engine the SDK's fallback path uses; exported for hosts that want it directly.
+- `emitInProcess(input, options?)`: the in-process write engine the SDK's fallback path uses; exported for hosts that want it directly. `options.mirrorPath` and `options.autochainSource` isolate write and chain-read paths without changing process environment variables.
 - Types `EmitOutput`, `ResolvedKey`.
 
 ## Conformance

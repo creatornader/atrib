@@ -112,9 +112,10 @@ export const AttestInput = z.object({
   tool_name: z
     .string()
     .min(1)
-    .max(64)
     .optional()
-    .describe('Optional §8.2 tool_name disclosure, unchanged from the legacy emit tool.'),
+    .describe(
+      'Optional §8.2 tool_name disclosure. The 64-character cap applies only to opaque labels; hashed and verbatim forms follow §8.2.',
+    ),
   args_hash: z
     .string()
     .regex(SHA256_REF_PATTERN)

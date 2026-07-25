@@ -243,6 +243,32 @@ describe('inheritChainContext', () => {
     expect(result.inheritedFrom).toBe('mirror-tail')
   })
 
+  it('file-scoped inheritance ignores a newer same-context sibling mirror', async () => {
+    const selected = await makeRecord({
+      context_id: CTX_A,
+      timestamp: 1,
+      content_id: `sha256:${'a'.repeat(64)}`,
+    })
+    const sibling = await makeRecord({
+      context_id: CTX_A,
+      timestamp: 2,
+      content_id: `sha256:${'b'.repeat(64)}`,
+    })
+    await writeFile(mirrorPath, JSON.stringify(selected) + '\n')
+    await writeFile(join(tmpDir, 'sibling.jsonl'), JSON.stringify(sibling) + '\n')
+
+    const result = await inheritChainContext({
+      callerContextId: CTX_A,
+      mirrorPath,
+      mirrorScope: 'file',
+      env: {},
+      randomContextId,
+    })
+
+    expect(result.chainRoot).toBe(`sha256:${hexEncode(sha256(canonicalRecord(selected)))}`)
+    expect(result.inheritedFrom).toBe('mirror-tail')
+  })
+
   it('skips a malformed sibling mirror and resolves from the remaining corpus', async () => {
     const valid = await makeRecord({ context_id: CTX_A, timestamp: 1 })
     const validHex = hexEncode(sha256(canonicalRecord(valid)))

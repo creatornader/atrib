@@ -131,6 +131,7 @@ export type { BuildSubagentProducerEnvOptions } from './subagent.js'
 export { genesisChainRoot, chainRoot, resolveChainRoot } from './chain-root.js'
 export { readMirrorTail, inheritChainContext, recordHashExistsInMirror } from './mirror.js'
 export type { ChainContext } from './mirror.js'
+export type { MirrorInheritanceScope } from './mirror.js'
 export {
   clearRecordReferenceResolverCacheForTests,
   defaultRecordReferenceResolver,

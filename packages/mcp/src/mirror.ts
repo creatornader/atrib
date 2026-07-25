@@ -661,6 +661,8 @@ export interface ChainContext {
   inheritedFrom: 'caller-supplied' | 'fresh-orphan' | 'env-tail' | 'mirror-tail' | 'fresh'
 }
 
+export type MirrorInheritanceScope = 'corpus' | 'file'
+
 /**
  * Resolve `{contextId, chainRoot}` for a producer about to sign a record,
  * orchestrating context_id inheritance + chain_root resolution end to end.
@@ -701,6 +703,8 @@ export async function inheritChainContext(opts: {
   callerContextId?: string | undefined
   callerChainRoot?: string | undefined
   mirrorPath?: string | undefined
+  /** Default `corpus`; explicit per-client mirrors can request file isolation. */
+  mirrorScope?: MirrorInheritanceScope | undefined
   env?: NodeJS.ProcessEnv
   randomContextId: () => string
 }): Promise<ChainContext> {
@@ -720,7 +724,9 @@ export async function inheritChainContext(opts: {
   if (opts.callerContextId) {
     const ctxId = opts.callerContextId
     const mirrorTailRecord = opts.mirrorPath
-      ? await readMirrorCorpusTail({ path: opts.mirrorPath, contextId: ctxId })
+      ? opts.mirrorScope === 'file'
+        ? await readMirrorTail({ path: opts.mirrorPath, contextId: ctxId })
+        : await readMirrorCorpusTail({ path: opts.mirrorPath, contextId: ctxId })
       : null
     let mirrorTailHex: string | undefined
     if (mirrorTailRecord) {

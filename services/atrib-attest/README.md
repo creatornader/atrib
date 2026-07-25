@@ -146,6 +146,12 @@ Environment variables are unchanged from the legacy emit surface:
 table with descriptions; the values and resolution order carried over
 unchanged.
 
+Programmatic callers can set `mirrorPath` and `autochainSource` in
+`EmitInProcessOptions`. `mirrorPath` selects the write target for one call.
+`autochainSource` selects its mirror-based chain inheritance source. When only
+`mirrorPath` is set, it is also the read source. Calls that omit both options
+retain the environment and per-agent default ladder above.
+
 ## Degradation and privacy
 
 atrib failures never affect the primary call ([spec §5.8](../../atrib-spec.md#58-degradation-contract)), and for the write

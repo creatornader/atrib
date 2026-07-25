@@ -12,6 +12,7 @@ interface FilterResolvableInformedByOptions {
   allowUnresolved?: boolean | undefined
   resolver?: RecordReferenceResolver | undefined
   logEndpoint?: string | undefined
+  localMirrorPaths?: readonly string[] | undefined
   warnings: string[]
 }
 
@@ -29,7 +30,10 @@ export async function filterResolvableInformedBy(
   const kept: string[] = []
   const resolver =
     options.resolver ??
-    ((recordHash: string) => defaultRecordReferenceResolver(recordHash, options.logEndpoint))
+    ((recordHash: string) =>
+      defaultRecordReferenceResolver(recordHash, options.logEndpoint, {
+        localMirrorPaths: options.localMirrorPaths,
+      }))
 
   for (const ref of unique) {
     const resolution = await resolver(ref)

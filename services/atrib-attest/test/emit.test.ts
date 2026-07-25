@@ -43,6 +43,11 @@ let testEnvPriorMirrorFile: string | undefined
 let testEnvPriorAutochainSource: string | undefined
 let testEnvPriorRecordsDir: string | undefined
 let testEnvPriorRequireExplicitContextId: string | undefined
+let testEnvPriorContextId: string | undefined
+let testEnvPriorClaudeSessionId: string | undefined
+let testEnvPriorCodexThreadId: string | undefined
+let testEnvPriorAgent: string | undefined
+let testEnvPriorActiveSessionProfile: string | undefined
 let testEnvTmpDir: string | undefined
 
 beforeEach(async () => {
@@ -50,10 +55,20 @@ beforeEach(async () => {
   testEnvPriorAutochainSource = process.env['ATRIB_AUTOCHAIN_SOURCE']
   testEnvPriorRecordsDir = process.env['ATRIB_RECORDS_DIR']
   testEnvPriorRequireExplicitContextId = process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID']
+  testEnvPriorContextId = process.env['ATRIB_CONTEXT_ID']
+  testEnvPriorClaudeSessionId = process.env['CLAUDE_CODE_SESSION_ID']
+  testEnvPriorCodexThreadId = process.env['CODEX_THREAD_ID']
+  testEnvPriorAgent = process.env['ATRIB_AGENT']
+  testEnvPriorActiveSessionProfile = process.env['ATRIB_ACTIVE_SESSION_PROFILE']
   testEnvTmpDir = await mkdtemp(join(tmpdir(), 'atrib-emit-test-'))
   process.env['ATRIB_MIRROR_FILE'] = join(testEnvTmpDir, 'mirror.jsonl')
   process.env['ATRIB_AUTOCHAIN_SOURCE'] = process.env['ATRIB_MIRROR_FILE']
   process.env['ATRIB_RECORDS_DIR'] = testEnvTmpDir
+  delete process.env['ATRIB_CONTEXT_ID']
+  delete process.env['CLAUDE_CODE_SESSION_ID']
+  delete process.env['CODEX_THREAD_ID']
+  delete process.env['ATRIB_AGENT']
+  delete process.env['ATRIB_ACTIVE_SESSION_PROFILE']
 })
 
 afterEach(async () => {
@@ -71,6 +86,19 @@ afterEach(async () => {
     delete process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID']
   } else {
     process.env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID'] = testEnvPriorRequireExplicitContextId
+  }
+  if (testEnvPriorContextId === undefined) delete process.env['ATRIB_CONTEXT_ID']
+  else process.env['ATRIB_CONTEXT_ID'] = testEnvPriorContextId
+  if (testEnvPriorClaudeSessionId === undefined) delete process.env['CLAUDE_CODE_SESSION_ID']
+  else process.env['CLAUDE_CODE_SESSION_ID'] = testEnvPriorClaudeSessionId
+  if (testEnvPriorCodexThreadId === undefined) delete process.env['CODEX_THREAD_ID']
+  else process.env['CODEX_THREAD_ID'] = testEnvPriorCodexThreadId
+  if (testEnvPriorAgent === undefined) delete process.env['ATRIB_AGENT']
+  else process.env['ATRIB_AGENT'] = testEnvPriorAgent
+  if (testEnvPriorActiveSessionProfile === undefined) {
+    delete process.env['ATRIB_ACTIVE_SESSION_PROFILE']
+  } else {
+    process.env['ATRIB_ACTIVE_SESSION_PROFILE'] = testEnvPriorActiveSessionProfile
   }
 })
 

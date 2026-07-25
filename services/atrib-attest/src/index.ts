@@ -18,8 +18,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { randomBytes } from 'node:crypto'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import {
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
@@ -53,7 +51,7 @@ import {
 import { resolveKey, type ResolvedKey } from './keys.js'
 import { filterResolvableInformedBy, type RecordReferenceResolver } from './reference-resolution.js'
 import { buildAndSignEmitRecord } from './sign.js'
-import { mirrorRecord } from './storage.js'
+import { mirrorRecord, resolveMirrorWritePath } from './storage.js'
 import { AttestInput, isAttestMappingRefusal, mapAttestInput, type AttestInputT } from './attest.js'
 import { registerAnnotateTool } from './annotate.js'
 import { registerReviseTool } from './revise.js'
@@ -64,16 +62,17 @@ import { registerReviseTool } from './revise.js'
 // rarely useful as a read source, but kept for backward compatibility),
 // then to the per-agent default. Distinct from ATRIB_MIRROR_FILE which is
 // where emit's own records are persisted.
-function readMirrorPath(): string {
+function readMirrorPath(
+  options: {
+    autochainSource?: string | undefined
+    mirrorPath?: string | undefined
+  } = {},
+): string {
   return (
+    options.autochainSource ??
+    options.mirrorPath ??
     process.env['ATRIB_AUTOCHAIN_SOURCE'] ??
-    process.env['ATRIB_MIRROR_FILE'] ??
-    join(
-      homedir(),
-      '.atrib',
-      'records',
-      `atrib-emit-${process.env['ATRIB_AGENT'] ?? 'claude-code'}.jsonl`,
-    )
+    resolveMirrorWritePath()
   )
 }
 
@@ -186,11 +185,12 @@ const EmitInput = z.object({
   tool_name: z
     .string()
     .min(1)
-    .max(64)
     .optional()
     .describe(
       'Optional §8.2 tool_name disclosure. Verbatim or transformed name (verbatim, opaque, ' +
-        'or hashed per §8.2). Lets emit-signed records carry the tool name for downstream ' +
+        'or hashed per §8.2). The 64-character cap applies only to opaque-label form; ' +
+        'the hashed form is sha256:<64 lowercase hex>, and verbatim names have no ' +
+        'protocol-wide length cap. Lets emit-signed records carry the tool name for downstream ' +
         'consumers (e.g. recall_my_attribution_history filtering by tool_name). Absence ' +
         'indicates the §8.1 default posture (no disclosure).',
     ),
@@ -585,6 +585,13 @@ interface HandleEmitInput {
    */
   producer?: string
   logEndpoint?: string | undefined
+  /** Explicit write target for this call. Falls back to ATRIB_MIRROR_FILE. */
+  mirrorPath?: string | undefined
+  /**
+   * Explicit read source for mirror-based chain inheritance. When omitted,
+   * mirrorPath wins before the legacy environment and default path ladder.
+   */
+  autochainSource?: string | undefined
   recordReferenceResolver?: RecordReferenceResolver | undefined
   localSubstrate?: EmitLocalSubstrateShadowOptions | undefined
   localSubstrateCommit?: EmitLocalSubstrateCommitOptions | undefined
@@ -600,6 +607,8 @@ async function handleEmit({
   queue,
   producer,
   logEndpoint,
+  mirrorPath,
+  autochainSource,
   recordReferenceResolver,
   localSubstrate,
   localSubstrateCommit,
@@ -702,10 +711,14 @@ async function handleEmit({
   // is the primary case that needs preserving; pre-fix this produced isolated
   // genesis records because atrib-emit's local resolver short-circuited on
   // caller context.
+  const autochainMirrorPath = readMirrorPath({ autochainSource, mirrorPath })
   const chain = await inheritChainContext({
     callerContextId,
     callerChainRoot: input.chain_root,
-    mirrorPath: readMirrorPath(),
+    mirrorPath: autochainMirrorPath,
+    ...((mirrorPath !== undefined || autochainSource !== undefined) && {
+      mirrorScope: 'file' as const,
+    }),
     randomContextId,
   })
   const contextId = chain.contextId
@@ -739,6 +752,9 @@ async function handleEmit({
     allowUnresolved: input.allow_unresolved_informed_by,
     resolver: recordReferenceResolver,
     logEndpoint,
+    ...((mirrorPath !== undefined || autochainSource !== undefined) && {
+      localMirrorPaths: [resolveMirrorWritePath(mirrorPath), autochainMirrorPath],
+    }),
     warnings,
   })
   const effectiveInformedBy = validParentHash
@@ -816,10 +832,15 @@ async function handleEmit({
   // consumers (recall, trace, summarize) can surface semantic context
   // alongside the cryptographic evidence. The sidecar lives at the
   // envelope level, the signed record bytes are unchanged.
-  await mirrorRecord(record, getProofFor(queue, recordHash) ?? null, {
-    content: input.content,
-    producer: producer ?? 'atrib-emit',
-  })
+  await mirrorRecord(
+    record,
+    getProofFor(queue, recordHash) ?? null,
+    {
+      content: input.content,
+      producer: producer ?? 'atrib-emit',
+    },
+    mirrorPath,
+  )
 
   // Try to read a proof if the queue submitted synchronously and the log
   // returned one within the same tick. Most submissions return null here
@@ -1291,6 +1312,17 @@ export interface EmitInProcessOptions {
    */
   producer?: string
   /**
+   * Explicit mirror write target for this call. When omitted,
+   * ATRIB_MIRROR_FILE and the per-agent default remain unchanged fallbacks.
+   */
+  mirrorPath?: string | undefined
+  /**
+   * Explicit mirror read source for chain inheritance. When omitted, an
+   * explicit mirrorPath is also the read source before the environment
+   * fallback ladder.
+   */
+  autochainSource?: string | undefined
+  /**
    * Upper bound on the post-sign queue flush, in milliseconds. Default
    * 5000ms. The submission queue itself has a 30s retry budget against an
    * unreachable log (`MAX_WINDOW_MS` in `@atrib/mcp`); without this
@@ -1367,6 +1399,8 @@ export async function emitInProcess(
     queue,
     producer: options.producer,
     logEndpoint,
+    mirrorPath: options.mirrorPath,
+    autochainSource: options.autochainSource,
     recordReferenceResolver: options.recordReferenceResolver,
     localSubstrate: resolveLocalSubstrateOption(options.localSubstrate, {
       producer: options.producer ?? 'atrib-emit',
@@ -1433,6 +1467,8 @@ export interface HandleAttestInput {
   /** Sidecar label; defaults to 'atrib-attest'. input.producer wins. */
   producer?: string
   logEndpoint?: string | undefined
+  mirrorPath?: string | undefined
+  autochainSource?: string | undefined
   recordReferenceResolver?: RecordReferenceResolver | undefined
   localSubstrate?: EmitLocalSubstrateShadowOptions | undefined
   localSubstrateCommit?: EmitLocalSubstrateCommitOptions | undefined
@@ -1454,6 +1490,8 @@ export async function handleAttest(args: HandleAttestInput): Promise<AttestOutpu
     queue: args.queue,
     producer: args.input.producer ?? args.producer ?? 'atrib-attest',
     logEndpoint: args.logEndpoint,
+    mirrorPath: args.mirrorPath,
+    autochainSource: args.autochainSource,
     recordReferenceResolver: args.recordReferenceResolver,
     localSubstrate: args.localSubstrate,
     localSubstrateCommit: args.localSubstrateCommit,
@@ -1504,6 +1542,7 @@ export const __test_only__ = { createServerKeyResolver, handleEmit, keyResolveRe
 //
 // Stable as of @atrib/emit@0.8.0. Breaking changes here require a major bump.
 export { handleEmit, EmitInput }
+export { resolveMirrorWritePath }
 export type { EmitOutput }
 export { resolveKey } from './keys.js'
 export type { ResolvedKey } from './keys.js'

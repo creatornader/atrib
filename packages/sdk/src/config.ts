@@ -13,7 +13,12 @@
  * applies.
  */
 
-import { ANCHOR_TYPES, type AnchorDescriptor, type AnchorSetConfig, type AnchorType } from '@atrib/mcp'
+import {
+  ANCHOR_TYPES,
+  type AnchorDescriptor,
+  type AnchorSetConfig,
+  type AnchorType,
+} from '@atrib/mcp'
 import type { ResolvedKey } from '@atrib/emit'
 
 export type DaemonMode = 'prefer' | 'require' | 'off'
@@ -85,6 +90,18 @@ export interface AtribClientConfig {
   contextId?: string
   /** `_local.producer` mirror sidecar label. Default 'atrib-sdk'. */
   producer?: string
+  /**
+   * Explicit mirror write path for this client's in-process records. The
+   * client also reads this path for anchor fan-out. When omitted,
+   * ATRIB_MIRROR_FILE and the per-agent default remain the fallback.
+   */
+  mirrorPath?: string
+  /**
+   * Explicit mirror source for in-process chain inheritance. When omitted,
+   * mirrorPath wins before ATRIB_AUTOCHAIN_SOURCE and the legacy fallback
+   * ladder.
+   */
+  autochainSource?: string
 }
 
 export const DEFAULT_DAEMON_ENDPOINT = 'http://127.0.0.1:8796/mcp'
@@ -97,9 +114,7 @@ const ANCHOR_TYPE_SET: ReadonlySet<string> = new Set(ANCHOR_TYPES)
 
 export function resolveDaemonEndpoint(config?: DaemonConfig): string {
   return (
-    config?.endpoint ??
-    process.env['ATRIB_PRIMITIVES_HTTP_ENDPOINT'] ??
-    DEFAULT_DAEMON_ENDPOINT
+    config?.endpoint ?? process.env['ATRIB_PRIMITIVES_HTTP_ENDPOINT'] ?? DEFAULT_DAEMON_ENDPOINT
   )
 }
 
@@ -153,7 +168,10 @@ export function resolveAnchorSet(
       continue
     }
     const anchorType = (descriptor as { anchor_type?: unknown }).anchor_type
-    if (anchorType !== undefined && (typeof anchorType !== 'string' || !ANCHOR_TYPE_SET.has(anchorType))) {
+    if (
+      anchorType !== undefined &&
+      (typeof anchorType !== 'string' || !ANCHOR_TYPE_SET.has(anchorType))
+    ) {
       const named = (descriptor.url ?? descriptor.endpoint) as unknown
       warnings.push(
         `atrib: anchor_type '${String(anchorType)}'${typeof named === 'string' ? ` (${named})` : ''} is not in the §2.11.8 registry (${ANCHOR_TYPES.join(', ')}); skipping this anchor`,
@@ -163,7 +181,8 @@ export function resolveAnchorSet(
     const effectiveType: AnchorType = (anchorType as AnchorType | undefined) ?? 'atrib-log'
     // `url` wins over `endpoint` when both are set (the §2.11.12 sample
     // config spells the field `url`; both spellings are accepted).
-    const endpoint = (descriptor as { url?: unknown }).url ?? (descriptor as { endpoint?: unknown }).endpoint
+    const endpoint =
+      (descriptor as { url?: unknown }).url ?? (descriptor as { endpoint?: unknown }).endpoint
     if (effectiveType === 'atrib-log' || endpoint !== undefined) {
       if (typeof endpoint !== 'string') {
         warnings.push('atrib: anchor entry without a string url/endpoint; skipping')

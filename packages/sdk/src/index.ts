@@ -203,5 +203,5 @@ export type {
 } from '@atrib/mcp'
 
 // ── Key handling (§5.6), re-exported from @atrib/emit ────────────────────
-export { emitInProcess, resolveKey } from '@atrib/emit'
-export type { EmitOutput, ResolvedKey } from '@atrib/emit'
+export { emitInProcess, resolveKey, resolveMirrorWritePath } from '@atrib/emit'
+export type { EmitInProcessOptions, EmitOutput, ResolvedKey } from '@atrib/emit'
