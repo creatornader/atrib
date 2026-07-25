@@ -8,7 +8,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this form if you can operate the reference witness with independent key custody, infrastructure, hostname, and trust-root publication. Do not post private keys or credentials.
+        Use this form if you can operate the reference witness with independent key custody, infrastructure, hostname, and trust-root publication. A bounded 90-day pilot is enough to start. Do not post private keys or credentials.
   - type: input
     id: operator
     attributes:
@@ -28,6 +28,19 @@ body:
     attributes:
       label: Proposed endpoint
       description: Public HTTPS origin for the witness, if already chosen.
+  - type: input
+    id: epoch
+    attributes:
+      label: Witness epoch
+      description: Start with 1 for a new witness key and durable state lineage.
+      placeholder: '1'
+    validations:
+      required: true
+  - type: input
+    id: image
+    attributes:
+      label: Reviewed image digest
+      description: Immutable GHCR digest the operator plans to deploy.
   - type: textarea
     id: operations
     attributes:
@@ -46,5 +59,9 @@ body:
           required: true
         - label: I will publish the witness public key through an operator-controlled channel.
           required: true
+        - label: I will run the independent deployment proof on a schedule.
+          required: true
         - label: I will preserve and disclose split-view or rollback incidents.
+          required: true
+        - label: I will publish a signed retirement before abandoning a key or restarting from empty state.
           required: true

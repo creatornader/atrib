@@ -1582,6 +1582,60 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     expect(result.warnings.some((w) => w.startsWith('step-3-witness-not-checked'))).toBe(false)
   })
 
+  it('step 3: binds endpoint-fetched witnesses to the exact proof checkpoint', async () => {
+    const original = await makeAnchorProof()
+    const cosigA = await makeCosignature(original.checkpoint, WITNESS_A_NAME, WITNESS_A_SEED)
+    const cosigB = await makeCosignature(original.checkpoint, WITNESS_B_NAME, WITNESS_B_SEED)
+    const proofBundle = {
+      ...original,
+      checkpoint: `${original.checkpoint.trimEnd()}\n${cosigB}`,
+    }
+    const baseFetch = makeAnchorFetchWithProof(proofBundle)
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = input.toString()
+      if (url.startsWith('http://witness-a.test/v1/cosig/')) {
+        return new Response(cosigA, { status: 200 })
+      }
+      if (url.startsWith('http://witness-b.test/v1/cosig/')) {
+        return new Response('', { status: 404 })
+      }
+      return baseFetch(input, init)
+    }) as typeof fetch
+
+    const result = await resolveIdentity(KEY, {
+      fetchImpl,
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      recordTimestamp: T_NOW,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      trustedWitnessEndpoints: [
+        {
+          name: WITNESS_A_NAME,
+          publicKey: witnessAPublicKey,
+          baseUrl: 'http://witness-a.test',
+        },
+        {
+          name: WITNESS_B_NAME,
+          publicKey: witnessBPublicKey,
+          baseUrl: 'http://witness-b.test',
+        },
+      ],
+      witnessThreshold: 2,
+      witnessNowSeconds: WITNESS_NOW,
+    })
+
+    expect(result.anchor?.anchor_witness_count).toBe(1)
+    expect(
+      result.warnings.some(
+        (warning) =>
+          warning.includes('step-3-witness-endpoint-rejected') &&
+          warning.includes(`name=${WITNESS_B_NAME}`),
+      ),
+    ).toBe(true)
+    expect(result.warnings.some((warning) => warning.includes('actual=1, required=2'))).toBe(true)
+  })
+
   it('step 3: excludes untrusted and invalid cosignatures', async () => {
     const proofBundle = await makeAnchorProof()
     const validA = await makeCosignature(proofBundle.checkpoint, WITNESS_A_NAME, WITNESS_A_SEED)

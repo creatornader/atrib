@@ -56,6 +56,7 @@ export async function witnessOnce(options: WitnessOnceOptions): Promise<WitnessO
   const checkpoint = operator.checkpoint
   const rootHashBase64 = Buffer.from(checkpoint.rootHash).toString('base64')
   const prior = options.store.load(checkpoint.origin)
+  const gossipSources = options.log.gossipSources ?? []
 
   if (prior && checkpoint.treeSize < prior.treeSize) {
     throw new Error(
@@ -66,6 +67,15 @@ export async function witnessOnce(options: WitnessOnceOptions): Promise<WitnessO
   if (prior && checkpoint.treeSize === prior.treeSize) {
     if (rootHashBase64 !== prior.rootHashBase64) {
       throw new Error('checkpoint split view: same tree size has a different root')
+    }
+    if (gossipSources.length === 0) {
+      return {
+        status: 'unchanged',
+        treeSize: prior.treeSize,
+        rootHashBase64,
+        cosignature: prior.cosignature,
+        gossipSourcesCompared: 0,
+      }
     }
   }
 
@@ -99,7 +109,6 @@ export async function witnessOnce(options: WitnessOnceOptions): Promise<WitnessO
     throw new Error('checkpoint consistency verification failed')
   }
 
-  const gossipSources = options.log.gossipSources ?? []
   if (gossipSources.length > 0) {
     const observedAtMs = (options.nowSeconds ?? Math.floor(Date.now() / 1_000)) * 1_000
     const peerObservations = await Promise.all(

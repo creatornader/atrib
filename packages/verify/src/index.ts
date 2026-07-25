@@ -420,6 +420,37 @@ export type {
   WitnessThresholdVerification,
 } from './witness.js'
 
+// Endpoint-aware witness acquisition (§2.9): caller-pinned log and witness
+// endpoints, local note composition, and per-endpoint transport outcomes.
+export {
+  fetchCheckpointWitnessThreshold,
+  fetchWitnessCosignaturesForCheckpoint,
+} from './witness-endpoints.js'
+
+// Operator-published witness retirement evidence. Trust policy remains
+// caller-owned: a valid artifact tells a consumer which key and epoch to
+// remove from its accepted witness set.
+export { verifyWitnessRetirement, witnessRetirementSigningInput } from './witness-retirement.js'
+export type {
+  UnsignedWitnessRetirement,
+  WitnessRetirement,
+  WitnessRetirementVerification,
+} from './witness-retirement.js'
+export type {
+  CheckpointEndpointTransportOutcome,
+  CheckpointEndpointTransportState,
+  FetchCheckpointWitnessThresholdOptions,
+  FetchCheckpointWitnessThresholdResult,
+  FetchWitnessCosignaturesForCheckpointOptions,
+  FetchWitnessCosignaturesForCheckpointResult,
+  PinnedCheckpointLogEndpoint,
+  PinnedWitnessEndpoint,
+  WitnessEndpointOutcome,
+  WitnessEndpointTransportOutcome,
+  WitnessEndpointTransportState,
+  WitnessEndpointVerificationOutcome,
+} from './witness-endpoints.js'
+
 // Checkpoint gossip: compare independently observed signed checkpoints,
 // detect split views and rollbacks, and produce deterministic incident objects.
 export { analyzeCheckpointGossip } from './checkpoint-gossip.js'

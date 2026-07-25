@@ -1,0 +1,39 @@
+app = "replace-with-operator-owned-app"
+primary_region = "ord"
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "3200"
+  ATRIB_WITNESS_STATE_DIR = "/var/lib/atrib-witness"
+  ATRIB_WITNESS_LOG_URL = "https://log.atrib.dev"
+  ATRIB_WITNESS_LOG_ORIGIN = "log.atrib.dev/v1"
+  ATRIB_WITNESS_POLL_INTERVAL_MS = "30000"
+  ATRIB_WITNESS_HEALTH_MAX_CHECK_AGE_SECONDS = "120"
+  ATRIB_WITNESS_GOSSIP_SOURCES = "[]"
+
+[http_service]
+  internal_port = 3200
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = false
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    timeout = "10s"
+    path = "/v1/health"
+
+[mounts]
+  source = "witness_state"
+  destination = "/var/lib/atrib-witness"
+  initial_size = "1GB"
+  scheduled_snapshots = true
+  snapshot_retention = 14
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[[restart]]
+  policy = "always"

@@ -388,9 +388,12 @@ The record layer, transparency log, graph, key directory, payments profile, and
 verifier evidence checks are implemented, deployed, and pinned by conformance
 corpora. [`services/witness-node/`](services/witness-node/) is an
 external-operator-ready witness reference that verifies pinned log checkpoints,
-detects historical rewrites, and publishes C2SP cosignatures. Its software path
-has been exercised locally against `log.atrib.dev`; no independently operated
-witness is deployed yet. The
+detects historical rewrites, and publishes C2SP cosignatures. The deployment
+kit includes an image publication workflow, Compose and Fly templates, offline
+backup verification, scheduled monitoring, signed retirement, and an
+endpoint-aware verifier that binds fetched cosignatures to caller-pinned
+witness keys and endpoints. Its software path has been exercised locally
+against `log.atrib.dev`; no independently operated witness is deployed yet. The
 [independent operator guide](docs/independent-operator.md) supplies the
 deployment and acceptance contract. Multi-log replication also remains
 undeployed. The full enumeration, with spec and decision references, is in

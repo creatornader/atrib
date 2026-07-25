@@ -26,6 +26,14 @@ export interface StoredWitnessState {
   witnessedAtSeconds: number
 }
 
+export interface StoredWitnessHealth {
+  schema: 'atrib.witness-health.v1'
+  logOrigin: string
+  lastCheckedAtSeconds: number
+  lastSuccessfulCheckAtSeconds?: number
+  lastError?: string
+}
+
 export class WitnessStore {
   readonly #root: string
 
@@ -40,6 +48,43 @@ export class WitnessStore {
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as StoredWitnessState
     validateState(parsed, logOrigin)
     return parsed
+  }
+
+  loadHealth(logOrigin: string): StoredWitnessHealth | undefined {
+    const path = this.#healthPath(logOrigin)
+    if (!existsSync(path)) return undefined
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as StoredWitnessHealth
+    validateHealth(parsed, logOrigin)
+    return parsed
+  }
+
+  recordCheck(
+    logOrigin: string,
+    checkedAtSeconds: number,
+    result: { successful: true } | { successful: false; error: string },
+  ): StoredWitnessHealth {
+    if (!Number.isSafeInteger(checkedAtSeconds) || checkedAtSeconds < 0) {
+      throw new Error('witness check time must be a non-negative safe integer')
+    }
+    const prior = this.loadHealth(logOrigin)
+    if (prior && checkedAtSeconds < prior.lastCheckedAtSeconds) {
+      throw new Error('refusing to move witness check time backward')
+    }
+    const health: StoredWitnessHealth = {
+      schema: 'atrib.witness-health.v1',
+      logOrigin,
+      lastCheckedAtSeconds: checkedAtSeconds,
+      ...(result.successful
+        ? { lastSuccessfulCheckAtSeconds: checkedAtSeconds }
+        : {
+            ...(prior?.lastSuccessfulCheckAtSeconds !== undefined
+              ? { lastSuccessfulCheckAtSeconds: prior.lastSuccessfulCheckAtSeconds }
+              : {}),
+            lastError: result.error,
+          }),
+    }
+    writeDurably(this.#healthPath(logOrigin), `${JSON.stringify(health)}\n`)
+    return health
   }
 
   getCosignature(logOrigin: string, rootHashBase64url: string): string | undefined {
@@ -125,6 +170,10 @@ export class WitnessStore {
 
   #statePath(logOrigin: string): string {
     return join(this.#root, `${stableName(logOrigin)}.json`)
+  }
+
+  #healthPath(logOrigin: string): string {
+    return join(this.#root, `${stableName(logOrigin)}.health.json`)
   }
 
   #leafHashesPath(logOrigin: string): string {
@@ -229,6 +278,29 @@ function validateState(state: StoredWitnessState, expectedOrigin: string): void 
     !Number.isSafeInteger(state.witnessedAtSeconds)
   ) {
     throw new Error('stored witness state is malformed')
+  }
+}
+
+function validateHealth(health: StoredWitnessHealth, expectedOrigin: string): void {
+  if (
+    health.schema !== 'atrib.witness-health.v1' ||
+    health.logOrigin !== expectedOrigin ||
+    !Number.isSafeInteger(health.lastCheckedAtSeconds) ||
+    health.lastCheckedAtSeconds < 0 ||
+    (health.lastSuccessfulCheckAtSeconds !== undefined &&
+      (!Number.isSafeInteger(health.lastSuccessfulCheckAtSeconds) ||
+        health.lastSuccessfulCheckAtSeconds < 0 ||
+        health.lastSuccessfulCheckAtSeconds > health.lastCheckedAtSeconds)) ||
+    (health.lastError !== undefined &&
+      (typeof health.lastError !== 'string' || health.lastError.length === 0))
+  ) {
+    throw new Error('stored witness health is malformed')
+  }
+  if (
+    health.lastError === undefined &&
+    health.lastSuccessfulCheckAtSeconds !== health.lastCheckedAtSeconds
+  ) {
+    throw new Error('stored witness health result is inconsistent')
   }
 }
 

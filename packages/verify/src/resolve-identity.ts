@@ -33,6 +33,10 @@ import {
   type ParsedCheckpointNote,
   type TrustedCheckpointKey,
 } from './witness.js'
+import {
+  fetchWitnessCosignaturesForCheckpoint,
+  type PinnedWitnessEndpoint,
+} from './witness-endpoints.js'
 
 /** Identity claim shape from spec §6.1. Mirrored here to avoid an import cycle with @atrib/directory. */
 export interface IdentityClaim {
@@ -316,6 +320,12 @@ export interface ResolveIdentityOptions {
    */
   trustedWitnessKeys?: readonly TrustedCheckpointKey[]
   /**
+   * Caller-pinned witness names, keys, and endpoints. When supplied, step 3
+   * fetches cosignatures for the exact checkpoint in the anchor proof bundle
+   * and excludes witness lines delivered only by the log.
+   */
+  trustedWitnessEndpoints?: readonly PinnedWitnessEndpoint[]
+  /**
    * Fetch witness-published C2SP cosignature lines for an
    * operator-verified checkpoint. The protocol does not require the log
    * operator to aggregate witness lines, so production callers normally
@@ -559,6 +569,7 @@ export async function resolveIdentity(
       anchorCommitment,
       logCheckpointKey: opts.logCheckpointKey,
       trustedWitnessKeys: opts.trustedWitnessKeys ?? [],
+      trustedWitnessEndpoints: opts.trustedWitnessEndpoints ?? [],
       fetchWitnessCosignatures: opts.fetchWitnessCosignatures,
       threshold: opts.witnessThreshold,
       nowSeconds: opts.witnessNowSeconds,
@@ -1602,6 +1613,7 @@ interface StepThreeInputs {
   anchorCommitment: (AnchorCommitment & { log_index: number }) | null
   logCheckpointKey: TrustedCheckpointKey | undefined
   trustedWitnessKeys: readonly TrustedCheckpointKey[]
+  trustedWitnessEndpoints: readonly PinnedWitnessEndpoint[]
   fetchWitnessCosignatures:
     ((checkpoint: ParsedCheckpointNote) => Promise<readonly string[]>) | undefined
   threshold: number | undefined
@@ -1737,7 +1749,33 @@ async function runStepThree(opts: StepThreeInputs): Promise<number | null> {
   }
 
   let checkpointText = proofBundle.checkpoint
-  if (opts.fetchWitnessCosignatures) {
+  let trustedWitnessKeys = opts.trustedWitnessKeys
+  if (opts.trustedWitnessEndpoints.length > 0) {
+    const endpointResult = await fetchWitnessCosignaturesForCheckpoint({
+      checkpointNote: proofBundle.checkpoint,
+      operatorKey: opts.logCheckpointKey,
+      witnesses: opts.trustedWitnessEndpoints,
+      requiredWitnesses: opts.threshold ?? 0,
+      ...(opts.nowSeconds === undefined ? {} : { nowSeconds: opts.nowSeconds }),
+      ...(opts.maxAgeSeconds === undefined ? {} : { maxAgeSeconds: opts.maxAgeSeconds }),
+      ...(opts.futureSkewSeconds === undefined
+        ? {}
+        : { futureSkewSeconds: opts.futureSkewSeconds }),
+      fetchImpl: opts.fetchFn,
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    })
+    checkpointText = endpointResult.checkpointNote
+    trustedWitnessKeys = opts.trustedWitnessEndpoints
+    for (const outcome of endpointResult.witnesses.filter(
+      (candidate) => !candidate.verification.valid,
+    )) {
+      const reason =
+        outcome.verification.reason ?? outcome.transport.reason ?? outcome.transport.state
+      opts.warnings.push(
+        `step-3-witness-endpoint-rejected: name=${outcome.name}, state=${outcome.transport.state}, reason=${reason}`,
+      )
+    }
+  } else if (opts.fetchWitnessCosignatures) {
     let lines: readonly string[]
     try {
       lines = await opts.fetchWitnessCosignatures(operator.checkpoint)
@@ -1755,7 +1793,7 @@ async function runStepThree(opts: StepThreeInputs): Promise<number | null> {
   try {
     verification = await verifyCheckpointWitnessThreshold(checkpointText, {
       operatorKey: opts.logCheckpointKey,
-      witnessKeys: opts.trustedWitnessKeys,
+      witnessKeys: trustedWitnessKeys,
       requiredWitnesses: opts.threshold ?? 0,
       ...(opts.nowSeconds === undefined ? {} : { nowSeconds: opts.nowSeconds }),
       ...(opts.maxAgeSeconds === undefined ? {} : { maxAgeSeconds: opts.maxAgeSeconds }),

@@ -9264,6 +9264,74 @@ same-epoch unchanged-root re-anchoring, and audit response range mismatch.
 [D180](#d180-directory-anchors-use-a-durable-linear-commit-journal), and
 [§6.3](atrib-spec.md#63-verifier-consultation-algorithm).
 
+## D182: Witness acceptance binds the endpoint, trust root, and operating epoch
+
+**Status:** Accepted and implemented.
+
+**Context.** [D167](#d167-witness-software-ships-before-external-operation)
+made the witness software deployable before an external operator existed.
+Cryptographic threshold verification already accepted caller-pinned witness
+keys, but a consumer still had to write its own HTTP acquisition callback.
+That left an avoidable seam between the key the verifier trusted and the
+endpoint from which it obtained a cosignature.
+
+The first operator package also exposed two operational ambiguities. A
+cosignature timestamp measures when a checkpoint was witnessed, not whether
+the process is still polling a quiet log. A state backup can preserve files
+while still being mislabeled with a witness or log key that did not sign them.
+
+**Decision.**
+
+1. `@atrib/verify` provides an endpoint-aware checkpoint witness helper. The
+   caller pins the log name, log key, checkpoint URL, witness names, witness
+   keys, and witness endpoints.
+2. The helper verifies the operator checkpoint first. It then fetches each
+   cosignature from its pinned witness endpoint and constructs a new note from
+   the verified operator signature plus those endpoint responses. Witness
+   lines supplied only by the log do not count in this path.
+3. Transport and cryptographic outcomes remain separate per endpoint. Response
+   bodies and request duration are bounded.
+4. Trust policy remains verifier-owned. An atrib-maintained reference profile
+   may publish an accepted independent witness name, key, endpoint, and epoch.
+   Consumers can accept, replace, or reject that profile.
+5. Witness process health uses the time of the last successful poll.
+   Checkpoint evidence freshness uses the cosignature timestamp. Neither value
+   substitutes for the other.
+6. Operator initialization separates the private seed file from the public
+   trust-root artifact. Deployment pins an image digest. Offline backups verify
+   the stored operator checkpoint and witness cosignature against the declared
+   keys before recording the state packet.
+7. Losing rollback state ends that operating epoch. The operator publishes a
+   signed retirement and starts a new epoch with a new key instead of silently
+   reusing the old identity from empty state. Consumers verify the retirement
+   artifact and remove that key and epoch from their accepted witness set.
+   Artifact verification does not mutate trust policy by itself.
+
+**Consequences.**
+
+- A verifier can consume an independent witness without trusting the log to
+  aggregate or deliver that witness's signature.
+- A healthy witness no longer looks stale only because the log has not
+  advanced.
+- The reference profile is distribution, not a protocol trust registry.
+- An endpoint outage, signature failure, stale checkpoint policy, and stale
+  process poll produce different evidence and can drive different policy.
+- The first independent deployment still requires a real external operator.
+  Software, templates, and a self-operated deployment do not satisfy that
+  gate.
+- A retired key can still produce signatures. Retirement is enforced only
+  after verifier-owned policy stops accepting that key and epoch.
+
+**Protocol impact.** None. The C2SP checkpoint and cosignature bytes are
+unchanged. This decision binds existing protocol artifacts to verifier
+transport and operator lifecycle rules.
+
+**Cross-references.**
+[D138](#d138-anchor-plurality-as-the-default-trust-posture),
+[D167](#d167-witness-software-ships-before-external-operation),
+[D170](#d170-checkpoint-gossip-fails-closed-and-publishes-conflicts), and
+[§2.9](atrib-spec.md#29-witnessing-and-cosignatures).
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

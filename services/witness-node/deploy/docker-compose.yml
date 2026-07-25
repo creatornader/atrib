@@ -1,8 +1,6 @@
 services:
   witness:
-    build:
-      context: ../../..
-      dockerfile: services/witness-node/Dockerfile
+    image: ${ATRIB_WITNESS_IMAGE:?set ATRIB_WITNESS_IMAGE to a reviewed digest}
     environment:
       HOST: 0.0.0.0
       PORT: 3200
@@ -13,6 +11,7 @@ services:
       ATRIB_WITNESS_LOG_ORIGIN: ${ATRIB_WITNESS_LOG_ORIGIN:?set ATRIB_WITNESS_LOG_ORIGIN}
       ATRIB_WITNESS_LOG_PUBLIC_KEY: ${ATRIB_WITNESS_LOG_PUBLIC_KEY:?set ATRIB_WITNESS_LOG_PUBLIC_KEY}
       ATRIB_WITNESS_POLL_INTERVAL_MS: ${ATRIB_WITNESS_POLL_INTERVAL_MS:-30000}
+      ATRIB_WITNESS_HEALTH_MAX_CHECK_AGE_SECONDS: ${ATRIB_WITNESS_HEALTH_MAX_CHECK_AGE_SECONDS:-120}
       ATRIB_WITNESS_GOSSIP_SOURCES: ${ATRIB_WITNESS_GOSSIP_SOURCES:-[]}
     ports:
       - '${PORT:-3200}:3200'
@@ -28,7 +27,7 @@ services:
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:3200/v1/status').then(async r=>{const s=await r.json();if(!r.ok||s.error||!s.tree_size)process.exit(1)})",
+          "fetch('http://127.0.0.1:3200/v1/health').then(r=>{if(!r.ok)process.exit(1)})",
         ]
       interval: 30s
       timeout: 10s
