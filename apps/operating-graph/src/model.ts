@@ -140,6 +140,24 @@ export function parseAgentRef(value: unknown): AgentRef | undefined {
   return { ...named, role: value['role'] }
 }
 
+export function parseOptionalNamedRef(
+  object: Record<string, unknown>,
+  field: string,
+): { valid: boolean; value?: NamedRef } {
+  if (!(field in object)) return { valid: true }
+  const value = parseNamedRef(object[field])
+  return value ? { valid: true, value } : { valid: false }
+}
+
+export function parseOptionalAgentRef(
+  object: Record<string, unknown>,
+  field: string,
+): { valid: boolean; value?: AgentRef } {
+  if (!(field in object)) return { valid: true }
+  const value = parseAgentRef(object[field])
+  return value ? { valid: true, value } : { valid: false }
+}
+
 export function parseOperatingEvent(value: unknown): OperatingEvent | null {
   if (
     !isRecord(value) ||
@@ -161,11 +179,11 @@ export function parseOperatingEvent(value: unknown): OperatingEvent | null {
     workspace,
     subject: value['subject'],
   }
-  const task = optionalNamedRef(value, 'task')
-  const team = optionalNamedRef(value, 'team')
-  const agent = optionalAgentRef(value, 'agent')
-  const fromAgent = optionalAgentRef(value, 'from_agent')
-  const toAgent = optionalAgentRef(value, 'to_agent')
+  const task = parseOptionalNamedRef(value, 'task')
+  const team = parseOptionalNamedRef(value, 'team')
+  const agent = parseOptionalAgentRef(value, 'agent')
+  const fromAgent = parseOptionalAgentRef(value, 'from_agent')
+  const toAgent = parseOptionalAgentRef(value, 'to_agent')
   if (!task.valid || !team.valid || !agent.valid || !fromAgent.valid || !toAgent.valid) return null
   if (task.value) event.task = task.value
   if (team.value) event.team = team.value
@@ -227,24 +245,6 @@ export function parseOperatingEvent(value: unknown): OperatingEvent | null {
     }
   }
   return event
-}
-
-function optionalNamedRef(
-  object: Record<string, unknown>,
-  field: string,
-): { valid: boolean; value?: NamedRef } {
-  if (!(field in object)) return { valid: true }
-  const value = parseNamedRef(object[field])
-  return value ? { valid: true, value } : { valid: false }
-}
-
-function optionalAgentRef(
-  object: Record<string, unknown>,
-  field: string,
-): { valid: boolean; value?: AgentRef } {
-  if (!(field in object)) return { valid: true }
-  const value = parseAgentRef(object[field])
-  return value ? { valid: true, value } : { valid: false }
 }
 
 function inBaseScope(entry: OperatingEntry, query: OperatingViewQuery): boolean {

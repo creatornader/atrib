@@ -22,6 +22,7 @@ import {
 import { OPERATING_EVENT_SCHEMA, type OperatingEvent } from '../src/model.js'
 import { BUZZ_RUNTIME_OBSERVATION_SCHEMA } from '../src/observations.js'
 import { startOperatingGraphServer } from '../src/server.js'
+import { loadOperatingMirror } from '../src/store.js'
 
 const tempDirectories: string[] = []
 
@@ -145,10 +146,14 @@ async function appendSignedContentRecord(
   character: string,
   content: Record<string, unknown>,
   timestamp: number,
-  informedBy: readonly string[] = [],
+  options: {
+    readonly informedBy?: readonly string[]
+    readonly forgeSignature?: boolean
+  } = {},
 ): Promise<string> {
   const seed = new Uint8Array(32).fill(character.charCodeAt(0))
   const contextId = character.repeat(32)
+  const informedBy = options.informedBy ?? []
   const contentCommitment = createJsonCommitment(content, 'salted-sha256', () =>
     new Uint8Array(16).fill(character.charCodeAt(0)),
   )
@@ -168,11 +173,14 @@ async function appendSignedContentRecord(
     } as AtribRecord,
     seed,
   )
-  const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+  const storedRecord = options.forgeSignature
+    ? { ...record, signature: base64urlEncode(new Uint8Array(64).fill(0xff)) }
+    : record
+  const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(storedRecord)))}`
   appendFileSync(
     mirrorFile,
     `${JSON.stringify({
-      record,
+      record: storedRecord,
       proof: null,
       written_at: timestamp,
       _local: { content, producer: 'operating-test' },
@@ -507,6 +515,65 @@ describe('operating graph HTTP contract', () => {
         source_observation: observationHash,
       })
       expect(view.view.handoffs).toEqual([])
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  it('rejects promotion from a body-valid observation with a forged signature', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'atrib-operating-buzz-forged-'))
+    tempDirectories.push(directory)
+    const mirrorFile = join(directory, 'records.jsonl')
+    const workspace = { id: 'workspace-forged', name: 'Forged observation' }
+    const observationHash = await appendSignedContentRecord(
+      mirrorFile,
+      '7',
+      buzzObservationContent({ workspace }),
+      207,
+      { forgeSignature: true },
+    )
+    const promotion: OperatingEvent = {
+      schema: OPERATING_EVENT_SCHEMA,
+      kind: 'accepted_state',
+      workspace,
+      subject: 'deployment',
+      value: 'approved by application policy',
+      source_observation: observationHash,
+    }
+    await appendOperatingRecord(mirrorFile, '8', promotion, 208, {
+      informedBy: [observationHash],
+    })
+
+    const mirror = await loadOperatingMirror(mirrorFile)
+    expect(mirror.runtime_observations).toMatchObject([
+      {
+        record_hash: observationHash,
+        signature_verified: false,
+        content_commitment_verified: true,
+      },
+    ])
+    expect(mirror.operating_entries).toEqual([])
+
+    const server = await startOperatingGraphServer({
+      mirrorPath: mirrorFile,
+      host: '127.0.0.1',
+      port: 0,
+      writesEnabled: false,
+      pollMs: 50,
+    })
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    try {
+      const observations = await fetch(
+        `${base}/v1/runtime-observations?workspace_id=${workspace.id}`,
+      ).then((response) => response.json())
+      expect(observations.observations).toEqual([])
+
+      const view = await fetch(`${base}/v1/view?workspace_id=${workspace.id}`).then((response) =>
+        response.json(),
+      )
+      expect(view.view.counts).toMatchObject({ records_considered: 0, cells_total: 0 })
+      expect(view.view.activity).toEqual([])
     } finally {
       server.closeAllConnections()
       await new Promise<void>((resolve) => server.close(() => resolve()))

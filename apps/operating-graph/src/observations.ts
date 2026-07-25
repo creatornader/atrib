@@ -13,9 +13,10 @@ import {
   type Sha256Uri,
 } from '@atrib/runtime-log'
 import {
-  parseAgentRef,
   parseNamedRef,
   parseOperatingEvent,
+  parseOptionalAgentRef,
+  parseOptionalNamedRef,
   type AgentRef,
   type NamedRef,
   type OperatingEvent,
@@ -177,10 +178,10 @@ export function parseBuzzRuntimeObservation(value: unknown): BuzzRuntimeObservat
 
   const workspace = parseNamedRef(value['workspace'])
   if (!workspace) return null
-  const task = optionalNamedRef(value, 'task')
-  const team = optionalNamedRef(value, 'team')
+  const task = parseOptionalNamedRef(value, 'task')
+  const team = parseOptionalNamedRef(value, 'team')
   if ('agent' in value) return null
-  const mappedAgent = optionalAgentRef(value, 'mapped_agent')
+  const mappedAgent = parseOptionalAgentRef(value, 'mapped_agent')
   if (!task.valid || !team.valid || !mappedAgent.valid) return null
   const source = parseSource(value['source'])
   const runtimeWindow = parseRuntimeWindow(value['runtime_window'])
@@ -479,24 +480,6 @@ function isNoSemanticEffect(value: unknown): boolean {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function optionalNamedRef(
-  object: Record<string, unknown>,
-  field: string,
-): { valid: boolean; value?: NamedRef } {
-  if (!(field in object)) return { valid: true }
-  const value = parseNamedRef(object[field])
-  return value ? { valid: true, value } : { valid: false }
-}
-
-function optionalAgentRef(
-  object: Record<string, unknown>,
-  field: string,
-): { valid: boolean; value?: AgentRef } {
-  if (!(field in object)) return { valid: true }
-  const value = parseAgentRef(object[field])
-  return value ? { valid: true, value } : { valid: false }
 }
 
 function nonEmptyString(value: unknown): value is string {
