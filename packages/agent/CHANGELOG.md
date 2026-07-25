@@ -1,5 +1,13 @@
 # @atrib/agent
 
+## 0.4.6
+
+### Patch Changes
+
+- Updated dependencies [f16d2dc]
+  - @atrib/mcp@0.23.0
+  - @atrib/verify@0.12.3
+
 ## 0.4.5
 
 ### Patch Changes

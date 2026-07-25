@@ -1,5 +1,13 @@
 # @atrib/recall
 
+## 4.0.1
+
+### Patch Changes
+
+- Updated dependencies [f16d2dc]
+  - @atrib/mcp@0.23.0
+  - @atrib/verify@0.12.3
+
 ## 4.0.0
 
 ### Patch Changes

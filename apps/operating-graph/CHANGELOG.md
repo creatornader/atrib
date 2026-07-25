@@ -1,5 +1,13 @@
 # @atrib/operating-graph
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [f16d2dc]
+  - @atrib/mcp@0.23.0
+  - @atrib/sdk@5.1.0
+
 ## 0.1.4
 
 ### Patch Changes

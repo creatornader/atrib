@@ -1,5 +1,12 @@
 # @atrib/verify
 
+## 0.12.3
+
+### Patch Changes
+
+- Updated dependencies [f16d2dc]
+  - @atrib/mcp@0.23.0
+
 ## 0.12.2
 
 ### Patch Changes

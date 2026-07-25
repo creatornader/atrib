@@ -1,5 +1,17 @@
 # @atrib/emit
 
+## 1.1.0
+
+### Minor Changes
+
+- f16d2dc: Add explicit per-call and per-client mirror paths, file-scoped chain inheritance, and isolated anchor fan-out for concurrent in-process clients.
+
+### Patch Changes
+
+- Updated dependencies [f16d2dc]
+- Updated dependencies [f16d2dc]
+  - @atrib/attest@0.3.0
+
 ## 1.0.1
 
 ### Patch Changes
