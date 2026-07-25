@@ -429,9 +429,22 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
   let CURRENT_BODY: ReturnType<typeof makeBodyShape>
   let PRIOR_BODY: ReturnType<typeof makeBodyShape>
 
-  function makeBodyShape(rootHex: string, epoch: number, ts: number) {
+  function directoryGenesisRoot(): string {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { sha256 } = require('@noble/hashes/sha2.js') as {
+      sha256: (data: Uint8Array) => Uint8Array
+    }
+    return `sha256:${Buffer.from(sha256(new TextEncoder().encode(CONTEXT_ID_HEX))).toString('hex')}`
+  }
+
+  function makeBodyShape(
+    rootHex: string,
+    epoch: number,
+    ts: number,
+    chainRoot = directoryGenesisRoot(),
+  ) {
     return {
-      chain_root: 'sha256:' + '0'.repeat(64),
+      chain_root: chainRoot,
       content_id: 'sha256:' + '0'.repeat(64),
       context_id: CONTEXT_ID_HEX,
       creator_key: OPERATOR_KEY,
@@ -443,31 +456,30 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     }
   }
 
-  beforeAll(async () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+  async function signBody(b: ReturnType<typeof makeBodyShape>) {
     const { default: canonicalize } = await import('canonicalize')
     const { sha256 } = await import('@noble/hashes/sha2.js')
+    const { signature: _, ...unsigned } = { ...b, creator_key: OPERATOR_KEY }
+    const canonical = canonicalize(unsigned)!
+    const sigBytes = await ed.signAsync(new TextEncoder().encode(canonical), OPERATOR_SEED)
+    const sig = Buffer.from(sigBytes).toString('base64url').replace(/=+$/, '')
+    const signed = { ...b, creator_key: OPERATOR_KEY, signature: sig }
+    const fullCanonical = canonicalize(signed)!
+    const hashHex = Buffer.from(sha256(new TextEncoder().encode(fullCanonical))).toString('hex')
+    return { signed, hashHex: 'sha256:' + hashHex }
+  }
+
+  beforeAll(async () => {
     const pubBytes = await ed.getPublicKeyAsync(OPERATOR_SEED)
     OPERATOR_KEY = Buffer.from(pubBytes).toString('base64url').replace(/=+$/, '')
-
-    async function signBody(b: ReturnType<typeof makeBodyShape>) {
-      const { signature: _, ...unsigned } = { ...b, creator_key: OPERATOR_KEY }
-      const canonical = canonicalize(unsigned)!
-      const sigBytes = await ed.signAsync(new TextEncoder().encode(canonical), OPERATOR_SEED)
-      const sig = Buffer.from(sigBytes).toString('base64url').replace(/=+$/, '')
-      const signed = { ...b, creator_key: OPERATOR_KEY, signature: sig }
-      const fullCanonical = canonicalize(signed)!
-      const hashHex = Buffer.from(sha256(new TextEncoder().encode(fullCanonical))).toString('hex')
-      return { signed, hashHex: 'sha256:' + hashHex }
-    }
-
-    const cur = await signBody(makeBodyShape(CURRENT_ROOT_HEX, 2, CURRENT_TS))
-    CURRENT_BODY = cur.signed
-    CURRENT_HASH = cur.hashHex
 
     const pri = await signBody(makeBodyShape(PRIOR_ROOT_HEX, 1, PRIOR_TS))
     PRIOR_BODY = pri.signed
     PRIOR_HASH = pri.hashHex
+
+    const cur = await signBody(makeBodyShape(CURRENT_ROOT_HEX, 2, CURRENT_TS, PRIOR_HASH))
+    CURRENT_BODY = cur.signed
+    CURRENT_HASH = cur.hashHex
   })
 
   const minimalClaim: IdentityClaim = {
@@ -739,11 +751,14 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
   })
 
   it('step 5: append_only_consistent=true when audit proof verifies', async () => {
+    const proofs = await makeAnchorProofSet()
     const result = await resolveIdentity(KEY, {
-      fetchImpl: makeAnchorFetch(),
+      fetchImpl: makeAnchorFetchWithProof(proofs.current, proofs.prior),
       logEndpoint: 'http://log.test/v1',
       directoryOperatorKey: OPERATOR_KEY,
       fetchAnchorBody: makeFetchAnchorBody(),
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: PRIOR_HASH,
       verifyAuditProof: async () => true,
       recordTimestamp: T_NOW,
     })
@@ -752,11 +767,14 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
   })
 
   it('step 5: rejects (hard failure) when audit proof verification returns false', async () => {
+    const proofs = await makeAnchorProofSet()
     const result = await resolveIdentity(KEY, {
-      fetchImpl: makeAnchorFetch(),
+      fetchImpl: makeAnchorFetchWithProof(proofs.current, proofs.prior),
       logEndpoint: 'http://log.test/v1',
       directoryOperatorKey: OPERATOR_KEY,
       fetchAnchorBody: makeFetchAnchorBody(),
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: PRIOR_HASH,
       verifyAuditProof: async () => false,
       recordTimestamp: T_NOW,
     })
@@ -766,35 +784,29 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     expect(result.warnings.some((w) => w.includes('step-5-audit-proof-invalid'))).toBe(true)
   })
 
-  it('step 5: callback throw → null, soft warning', async () => {
+  it('step 5: callback throw is a hard verification failure', async () => {
+    const proofs = await makeAnchorProofSet()
     const result = await resolveIdentity(KEY, {
-      fetchImpl: makeAnchorFetch(),
+      fetchImpl: makeAnchorFetchWithProof(proofs.current, proofs.prior),
       logEndpoint: 'http://log.test/v1',
       directoryOperatorKey: OPERATOR_KEY,
       fetchAnchorBody: makeFetchAnchorBody(),
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: PRIOR_HASH,
       verifyAuditProof: async () => {
         throw new Error('bad bytes')
       },
       recordTimestamp: T_NOW,
     })
-    expect(result.append_only_consistent).toBeNull()
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.append_only_consistent).toBe(false)
     expect(result.warnings.some((w) => w.includes('step-5-verify-threw'))).toBe(true)
   })
 
-  it('step 5: not invoked when only one anchor exists (no prior body)', async () => {
-    const onlyOneEntry = [
-      {
-        record_hash: CURRENT_HASH,
-        log_index: 5,
-        creator_key: OPERATOR_KEY,
-        context_id: CONTEXT_ID_HEX,
-        timestamp_ms: CURRENT_TS,
-        event_type: 'directory_anchor',
-      },
-    ]
+  it('step 5: does not infer a previous anchor when caller state is absent', async () => {
     let called = false
     const result = await resolveIdentity(KEY, {
-      fetchImpl: makeAnchorFetch({ logEntries: onlyOneEntry }),
+      fetchImpl: makeAnchorFetch(),
       logEndpoint: 'http://log.test/v1',
       directoryOperatorKey: OPERATOR_KEY,
       fetchAnchorBody: makeFetchAnchorBody(),
@@ -807,6 +819,392 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     expect(result.anchor).not.toBeNull()
     expect(result.append_only_consistent).toBeNull()
     expect(called).toBe(false)
+    expect(result.warnings.some((w) => w.startsWith('step-5-previous-anchor-not-supplied'))).toBe(
+      true,
+    )
+  })
+
+  it('step 5: hard-rejects a prior consultation absent from the current log view', async () => {
+    const proofs = await makeAnchorProofSet()
+    const currentOnly = [
+      {
+        record_hash: CURRENT_HASH,
+        index: 5,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: CURRENT_TS,
+        event_type: 'directory_anchor',
+      },
+    ]
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(
+        proofs.current,
+        null,
+        makeAnchorFetch({ logEntries: currentOnly }),
+      ),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: PRIOR_HASH,
+      verifyAuditProof: async () => true,
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.append_only_consistent).toBe(false)
+    expect(result.warnings.some((w) => w.startsWith('step-5-previous-anchor-not-visible'))).toBe(
+      true,
+    )
+  })
+
+  it('step 5: follows signed ancestry instead of the second-newest log entry', async () => {
+    const decoy = await signBody(makeBodyShape('cc'.repeat(32), 1, PRIOR_TS + 10_000, PRIOR_HASH))
+    const proofs = await makeAnchorProofSet(6, {
+      recordHash: decoy.hashHex,
+      timestamp: PRIOR_TS + 10_000,
+    })
+    const entries = [
+      {
+        record_hash: CURRENT_HASH,
+        index: 5,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: CURRENT_TS,
+        event_type: 'directory_anchor',
+      },
+      {
+        record_hash: decoy.hashHex,
+        index: 4,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: PRIOR_TS + 10_000,
+        event_type: 'directory_anchor',
+      },
+      {
+        record_hash: PRIOR_HASH,
+        index: 3,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: PRIOR_TS,
+        event_type: 'directory_anchor',
+      },
+    ]
+    let decoyFetched = false
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(
+        proofs.current,
+        proofs.prior,
+        makeAnchorFetch({ logEntries: entries }),
+      ),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: async (recordHash) => {
+        if (recordHash === decoy.hashHex) {
+          decoyFetched = true
+          return decoy.signed
+        }
+        return makeFetchAnchorBody()(recordHash)
+      },
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: PRIOR_HASH,
+      verifyAuditProof: async ({ rootHashes }) =>
+        Buffer.from(rootHashes[0]!).toString('hex') === PRIOR_ROOT_HEX &&
+        Buffer.from(rootHashes[1]!).toString('hex') === CURRENT_ROOT_HEX,
+      recordTimestamp: T_NOW,
+    })
+    expect(result.append_only_consistent).toBe(true)
+    expect(decoyFetched).toBe(false)
+  })
+
+  it('step 5: hard-rejects a tampered predecessor signature', async () => {
+    const proofs = await makeAnchorProofSet()
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofs.current, proofs.prior),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: async (recordHash) => {
+        if (recordHash !== PRIOR_HASH) return makeFetchAnchorBody()(recordHash)
+        const tampered = { ...PRIOR_BODY }
+        tampered.signature =
+          (tampered.signature.startsWith('A') ? 'B' : 'A') + tampered.signature.slice(1)
+        return tampered
+      },
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: PRIOR_HASH,
+      verifyAuditProof: async () => true,
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.warnings.some((w) => w.startsWith('step-5-chain-signature-invalid'))).toBe(true)
+  })
+
+  it('step 5: hard-rejects a predecessor body that misses its log commitment', async () => {
+    const proofs = await makeAnchorProofSet()
+    const replacement = await signBody(makeBodyShape('dd'.repeat(32), 1, PRIOR_TS))
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofs.current, proofs.prior),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: async (recordHash) =>
+        recordHash === PRIOR_HASH ? replacement.signed : makeFetchAnchorBody()(recordHash),
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: PRIOR_HASH,
+      verifyAuditProof: async () => true,
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.warnings.some((w) => w.startsWith('step-5-chain-body-commitment-mismatch'))).toBe(
+      true,
+    )
+  })
+
+  it('step 5: hard-rejects an invalid predecessor inclusion proof', async () => {
+    const proofs = await makeAnchorProofSet()
+    const priorProof = structuredClone(proofs.prior!)
+    const tampered = Buffer.from(priorProof.inclusion_proof[0]!, 'base64')
+    tampered[0] = tampered[0]! ^ 0x01
+    priorProof.inclusion_proof[0] = tampered.toString('base64')
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofs.current, priorProof),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: PRIOR_HASH,
+      verifyAuditProof: async () => true,
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.warnings.some((w) => w.startsWith('step-5-chain-inclusion-proof-invalid'))).toBe(
+      true,
+    )
+  })
+
+  it('step 5: hard-rejects a visible anchor outside the selected chain', async () => {
+    const decoy = await signBody(makeBodyShape('ee'.repeat(32), 1, PRIOR_TS + 10_000, PRIOR_HASH))
+    const proofs = await makeAnchorProofSet(6, {
+      recordHash: decoy.hashHex,
+      timestamp: PRIOR_TS + 10_000,
+    })
+    const entries = [
+      {
+        record_hash: CURRENT_HASH,
+        index: 5,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: CURRENT_TS,
+        event_type: 'directory_anchor',
+      },
+      {
+        record_hash: decoy.hashHex,
+        index: 4,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: PRIOR_TS + 10_000,
+        event_type: 'directory_anchor',
+      },
+      {
+        record_hash: PRIOR_HASH,
+        index: 3,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: PRIOR_TS,
+        event_type: 'directory_anchor',
+      },
+    ]
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(
+        proofs.current,
+        proofs.prior,
+        makeAnchorFetch({ logEntries: entries }),
+      ),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: decoy.hashHex,
+      verifyAuditProof: async () => true,
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.warnings.some((w) => w.startsWith('step-5-previous-anchor-not-ancestor'))).toBe(
+      true,
+    )
+  })
+
+  it('step 5: accepts the same consulted anchor without an audit transition', async () => {
+    let called = false
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetch(),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      previousAnchorRecordHash: CURRENT_HASH,
+      verifyAuditProof: async () => {
+        called = true
+        return false
+      },
+      recordTimestamp: T_NOW,
+    })
+    expect(result.append_only_consistent).toBe(true)
+    expect(called).toBe(false)
+  })
+
+  it('step 5: hard-rejects a malformed carried anchor hash', async () => {
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetch(),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      previousAnchorRecordHash: 'not-a-record-hash',
+      verifyAuditProof: async () => true,
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.warnings.some((w) => w.startsWith('step-5-previous-anchor-hash-malformed'))).toBe(
+      true,
+    )
+  })
+
+  it('step 5: accepts a same-epoch re-anchor only when the root is unchanged', async () => {
+    const reanchoredPrior = await signBody(makeBodyShape(CURRENT_ROOT_HEX, 2, PRIOR_TS))
+    const reanchoredCurrent = await signBody(
+      makeBodyShape(CURRENT_ROOT_HEX, 2, CURRENT_TS, reanchoredPrior.hashHex),
+    )
+    const proofs = await makeProofSetForAnchors(
+      { recordHash: reanchoredCurrent.hashHex, timestamp: CURRENT_TS },
+      { recordHash: reanchoredPrior.hashHex, timestamp: PRIOR_TS },
+    )
+    const entries = [
+      {
+        record_hash: reanchoredCurrent.hashHex,
+        index: 5,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: CURRENT_TS,
+        event_type: 'directory_anchor',
+      },
+      {
+        record_hash: reanchoredPrior.hashHex,
+        index: 3,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: PRIOR_TS,
+        event_type: 'directory_anchor',
+      },
+    ]
+    const bodies = new Map([
+      [reanchoredCurrent.hashHex, reanchoredCurrent.signed],
+      [reanchoredPrior.hashHex, reanchoredPrior.signed],
+    ])
+    let called = false
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeFetchWithProofs(
+        makeAnchorFetch({ logEntries: entries }),
+        new Map([
+          [reanchoredCurrent.hashHex, proofs.current],
+          [reanchoredPrior.hashHex, proofs.prior!],
+        ]),
+      ),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: async (recordHash) => bodies.get(recordHash) ?? null,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: reanchoredPrior.hashHex,
+      verifyAuditProof: async () => {
+        called = true
+        return false
+      },
+      recordTimestamp: T_NOW,
+    })
+    expect(result.append_only_consistent).toBe(true)
+    expect(called).toBe(false)
+  })
+
+  it('step 5: hard-rejects a same-epoch re-anchor with a different root', async () => {
+    const conflictingPrior = await signBody(makeBodyShape(PRIOR_ROOT_HEX, 2, PRIOR_TS))
+    const conflictingCurrent = await signBody(
+      makeBodyShape(CURRENT_ROOT_HEX, 2, CURRENT_TS, conflictingPrior.hashHex),
+    )
+    const proofs = await makeProofSetForAnchors(
+      { recordHash: conflictingCurrent.hashHex, timestamp: CURRENT_TS },
+      { recordHash: conflictingPrior.hashHex, timestamp: PRIOR_TS },
+    )
+    const entries = [
+      {
+        record_hash: conflictingCurrent.hashHex,
+        index: 5,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: CURRENT_TS,
+        event_type: 'directory_anchor',
+      },
+      {
+        record_hash: conflictingPrior.hashHex,
+        index: 3,
+        creator_key: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp_ms: PRIOR_TS,
+        event_type: 'directory_anchor',
+      },
+    ]
+    const bodies = new Map([
+      [conflictingCurrent.hashHex, conflictingCurrent.signed],
+      [conflictingPrior.hashHex, conflictingPrior.signed],
+    ])
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeFetchWithProofs(
+        makeAnchorFetch({ logEntries: entries }),
+        new Map([
+          [conflictingCurrent.hashHex, proofs.current],
+          [conflictingPrior.hashHex, proofs.prior!],
+        ]),
+      ),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: async (recordHash) => bodies.get(recordHash) ?? null,
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: conflictingPrior.hashHex,
+      verifyAuditProof: async () => true,
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.append_only_consistent).toBe(false)
+    expect(result.warnings.some((w) => w.startsWith('step-5-chain-epoch-invalid'))).toBe(true)
+  })
+
+  it('step 5: hard-rejects an audit proof response for a different epoch range', async () => {
+    const proofs = await makeAnchorProofSet()
+    const base = makeAnchorFetch()
+    const mismatchedAuditFetch = (async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/audit-proof')) {
+        return new Response(JSON.stringify({ from_epoch: 0, to_epoch: 2, proof: 'wrong-range' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return base(input as RequestInfo)
+    }) as typeof fetch
+    let called = false
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofs.current, proofs.prior, mismatchedAuditFetch),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: PRIOR_HASH,
+      verifyAuditProof: async () => {
+        called = true
+        return true
+      },
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(called).toBe(false)
+    expect(result.warnings.some((w) => w.startsWith('step-5-audit-proof-range-mismatch'))).toBe(
+      true,
+    )
   })
 
   // =========================================================================
@@ -931,6 +1329,34 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     ).toBe(true)
   })
 
+  it('step 5: hard-rejects a successful audit response without proof bytes', async () => {
+    const proofs = await makeAnchorProofSet()
+    const base = makeAnchorFetch()
+    const missingProofFetch = (async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/audit-proof')) {
+        return new Response(JSON.stringify({ from_epoch: 1, to_epoch: 2 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return base(input as RequestInfo)
+    }) as typeof fetch
+    const result = await resolveIdentity(KEY, {
+      fetchImpl: makeAnchorFetchWithProof(proofs.current, proofs.prior, missingProofFetch),
+      logEndpoint: 'http://log.test/v1',
+      directoryOperatorKey: OPERATOR_KEY,
+      fetchAnchorBody: makeFetchAnchorBody(),
+      logCheckpointKey: { name: LOG_NAME, publicKey: logPublicKey },
+      previousAnchorRecordHash: PRIOR_HASH,
+      verifyAuditProof: async () => true,
+      recordTimestamp: T_NOW,
+    })
+    expect(result.identity_resolution_method).toBe('rejected')
+    expect(result.append_only_consistent).toBe(false)
+    expect(result.warnings.some((w) => w.startsWith('step-5-audit-proof-missing'))).toBe(true)
+  })
+
   // =========================================================================
   // Step 3, witness coverage on the log's checkpoint.
   //
@@ -980,15 +1406,27 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     leaf_hash: string
   }
 
-  async function makeAnchorProof(treeSize = 6): Promise<TestProofBundle> {
-    const anchorEntry = serializeEntry({
-      record_hash_hex: CURRENT_HASH.replace(/^sha256:/, ''),
+  async function makeProofSetForAnchors(
+    current: { recordHash: string; timestamp: number },
+    prior: { recordHash: string; timestamp: number },
+    treeSize = 6,
+    middle?: { recordHash: string; timestamp: number },
+  ): Promise<{ current: TestProofBundle; prior: TestProofBundle | null }> {
+    const currentEntry = serializeEntry({
+      record_hash_hex: current.recordHash.replace(/^sha256:/, ''),
       creator_key_b64url: OPERATOR_KEY,
       context_id: CONTEXT_ID_HEX,
-      timestamp: CURRENT_TS,
+      timestamp: current.timestamp,
       event_type: EVENT_TYPE_DIRECTORY_ANCHOR_URI,
     })
-    const dummyEntries = Array.from({ length: Math.min(treeSize, 5) }, (_, index) =>
+    const priorEntry = serializeEntry({
+      record_hash_hex: prior.recordHash.replace(/^sha256:/, ''),
+      creator_key_b64url: OPERATOR_KEY,
+      context_id: CONTEXT_ID_HEX,
+      timestamp: prior.timestamp,
+      event_type: EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+    })
+    const entries = Array.from({ length: treeSize }, (_, index) =>
       serializeEntry({
         record_hash_hex: Buffer.alloc(32, index + 1).toString('hex'),
         creator_key_b64url: OPERATOR_KEY,
@@ -997,17 +1435,57 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
         event_type: EVENT_TYPE_OBSERVATION_URI,
       }),
     )
-    const entries = treeSize > 5 ? [...dummyEntries, anchorEntry] : dummyEntries
-    const rootHash = computeRoot(entries)
-    return {
-      log_index: 5,
-      checkpoint: await signCheckpoint(entries.length, rootHash),
-      inclusion_proof:
-        entries.length > 5
-          ? computeInclusionProof(5, entries).map((hash) => Buffer.from(hash).toString('base64'))
-          : [],
-      leaf_hash: Buffer.from(leafHash(anchorEntry)).toString('base64'),
+    if (treeSize > 3) entries[3] = priorEntry
+    if (treeSize > 4 && middle) {
+      entries[4] = serializeEntry({
+        record_hash_hex: middle.recordHash.replace(/^sha256:/, ''),
+        creator_key_b64url: OPERATOR_KEY,
+        context_id: CONTEXT_ID_HEX,
+        timestamp: middle.timestamp,
+        event_type: EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+      })
     }
+    if (treeSize > 5) entries[5] = currentEntry
+    const rootHash = computeRoot(entries)
+    const checkpoint = await signCheckpoint(entries.length, rootHash)
+    return {
+      current: {
+        log_index: 5,
+        checkpoint,
+        inclusion_proof:
+          entries.length > 5
+            ? computeInclusionProof(5, entries).map((hash) => Buffer.from(hash).toString('base64'))
+            : [],
+        leaf_hash: Buffer.from(leafHash(currentEntry)).toString('base64'),
+      },
+      prior:
+        entries.length > 3
+          ? {
+              log_index: 3,
+              checkpoint,
+              inclusion_proof: computeInclusionProof(3, entries).map((hash) =>
+                Buffer.from(hash).toString('base64'),
+              ),
+              leaf_hash: Buffer.from(leafHash(priorEntry)).toString('base64'),
+            }
+          : null,
+    }
+  }
+
+  async function makeAnchorProofSet(
+    treeSize = 6,
+    middle?: { recordHash: string; timestamp: number },
+  ): Promise<{ current: TestProofBundle; prior: TestProofBundle | null }> {
+    return makeProofSetForAnchors(
+      { recordHash: CURRENT_HASH, timestamp: CURRENT_TS },
+      { recordHash: PRIOR_HASH, timestamp: PRIOR_TS },
+      treeSize,
+      middle,
+    )
+  }
+
+  async function makeAnchorProof(treeSize = 6): Promise<TestProofBundle> {
+    return (await makeAnchorProofSet(treeSize)).current
   }
 
   function checkpointBody(note: string): string {
@@ -1035,15 +1513,29 @@ describe('steps 1 + 2 + 5, anchor arc', () => {
     return `${prefix} ${payload.toString('base64')}\n`
   }
 
-  function makeAnchorFetchWithProof(proofBundle: TestProofBundle): typeof fetch {
-    const base = makeAnchorFetch()
+  function makeAnchorFetchWithProof(
+    proofBundle: TestProofBundle,
+    priorProofBundle?: TestProofBundle | null,
+    base: typeof fetch = makeAnchorFetch(),
+  ): typeof fetch {
+    const proofs = new Map<string, TestProofBundle>([[CURRENT_HASH, proofBundle]])
+    if (priorProofBundle) proofs.set(PRIOR_HASH, priorProofBundle)
+    return makeFetchWithProofs(base, proofs)
+  }
+
+  function makeFetchWithProofs(
+    base: typeof fetch,
+    proofs: Map<string, TestProofBundle>,
+  ): typeof fetch {
     return (async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
-      if (url.includes(`/proof/${CURRENT_HASH.replace(/^sha256:/, '')}`)) {
-        return new Response(JSON.stringify(proofBundle), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        })
+      for (const [recordHash, proof] of proofs) {
+        if (url.includes(`/proof/${recordHash.replace(/^sha256:/, '')}`)) {
+          return new Response(JSON.stringify(proof), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
       }
       return base(input as RequestInfo)
     }) as typeof fetch

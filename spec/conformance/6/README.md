@@ -29,6 +29,9 @@ Cases enumerated below that require live AKD proofs (anchor coherence,
 append-only consistency, AKD proof validation, witness coverage,
 capability envelopes) will generate when the corpus runner exercises
 a live `directory-node` + `log-node` pair against fixtures end-to-end.
+Until then, `packages/verify/test/resolve-identity.test.ts` pins the
+cryptographic step 5 cases with deterministic signed bodies, log checkpoints,
+and inclusion proofs.
 
 ## What will be in the corpus
 
@@ -42,7 +45,11 @@ spec/conformance/6/
     valid-history.json                      # two versions for one label; history returns chronologically
     valid-non-membership.json               # lookup unregistered key returns AKD non-membership proof
     valid-anchor-coherence.json             # directory_anchor on Tessera log matches actual root
+    valid-consulted-anchor-chain.json        # exact prior is a signed, log-included ancestor
+    valid-same-epoch-reanchor.json           # unchanged root re-anchors at the same epoch
     invalid-anchor-mismatch.json            # anchor's root differs → verifier rejects
+    invalid-consulted-anchor-substitution.json # adjacent entry cannot replace prior state
+    invalid-anchor-chain-evidence.json       # bad body, signature, inclusion, order, or range
     invalid-lookup-proof.json               # tampered AKD proof → verifier rejects
     revocation-applies.json                 # lookup against post-revocation timestamp respects §1.9
 ```

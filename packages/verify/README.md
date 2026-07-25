@@ -509,6 +509,9 @@ const result = await resolveIdentity(record.creator_key, {
   directoryOperatorKey,
   logEndpoint: 'https://log.atrib.dev/v1',
   logCheckpointKey: { name: 'log.atrib.dev/v1', publicKey: logPublicKey },
+  fetchAnchorBody,
+  previousAnchorRecordHash: verifierState.lastAcceptedDirectoryAnchorHash,
+  verifyAuditProof,
   trustedWitnessKeys: witnesses.map(({ name, publicKey }) => ({ name, publicKey })),
   witnessThreshold: 2,
   fetchWitnessCosignatures: async (checkpoint) => {
@@ -526,6 +529,20 @@ const result = await resolveIdentity(record.creator_key, {
   },
 })
 ```
+
+`previousAnchorRecordHash` is verifier state, not a value inferred from the
+current log response. When supplied, step 5 follows signed `chain_root` links
+from the selected anchor to that exact hash. It verifies every path body's
+canonical hash and directory signature, strict descending log order, and log
+inclusion under `logCheckpointKey` before calling `verifyAuditProof` for the
+exact prior-to-current epoch range. An unrelated adjacent anchor is ignored.
+After accepting the result, persist
+`result.anchor?.anchor_record_hash` as the next consultation's prior hash.
+
+The first consultation has no continuity baseline, so omit
+`previousAnchorRecordHash` and expect `append_only_consistent` to remain
+`null`. Supplying `verifyAuditProof` without the prior hash adds
+`step-5-previous-anchor-not-supplied`; it does not make the verifier guess.
 
 `anchor_witness_count` is `null` when the caller omits the pinned log key, the operator checkpoint or anchor inclusion proof fails verification, or configured witness retrieval fails. A value of `0` means the checkpoint and anchor inclusion verified, but the evidence presented to the verifier contained no valid trusted witness signature. A threshold shortfall adds `step-3-witness-insufficient` as a soft signal.
 
