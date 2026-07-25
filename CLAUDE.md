@@ -134,6 +134,7 @@ atrib/
         reference-runtime-log/ # Local append-only JSONL runtime-log source for window, fork, compaction, and side-effect receipt proofs.
         session-transcript-runtime-log/ # D163 session-transcript runtime-log source: manifests Claude-Code-style session JSONL windows (subagent fork, compaction continuation, tool_use projection, signed tool_call receipt refs) and manifests real local transcripts in hash-only mode. v2 adds the auto-detected codex-rollout-jsonl profile (payload ids, type.payload_type kinds, session_meta identity).
         buzz-observer-runtime-log/ # Buzz NIP-AO kind 24200 telemetry runtime-log proof with Nostr verification, host-owned decryption, and process-sequence gap reporting across interleaved ACP sessions.
+        buzz-cross-control-plane/ # Hermetic fixture composing Buzz-shaped ACP observer frames, paired SDK action evidence, D168 coverage, explicit operating events, handoff verification, and a protected non-Buzz receiver effect.
         dogfood-runtime-log/   # Sanitized Agent Bridge job-window proof that binds status, result refs, bridge receipts, and signed atrib refs.
         secondary-runtime-log/ # LangGraph-checkpoint runtime source plus OpenInference trace-projection boundary proof.
         runtime-log-verifier-ux/ # Static verifier proof packets over runtime-log manifests and local evidence.

@@ -255,6 +255,13 @@
       "commands": ["buzz-observer-runtime-log-smoke"]
     },
     {
+      "id": "buzz-cross-control-plane",
+      "path": "examples/buzz-cross-control-plane",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["buzz-cross-control-plane-fixture"]
+    },
+    {
       "id": "dogfood-runtime-log",
       "path": "examples/dogfood-runtime-log",
       "record_class": "offline-local",
