@@ -1,5 +1,12 @@
 # @atrib/runtime-log
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [f98f932]
+  - @atrib/verify@0.12.4
+
 ## 0.4.0
 
 ### Minor Changes

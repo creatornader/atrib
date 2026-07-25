@@ -1,5 +1,18 @@
 # @atrib/integration
 
+## 0.0.52
+
+### Patch Changes
+
+- Updated dependencies [f98f932]
+  - @atrib/verify@0.12.4
+  - @atrib/action-gate@0.1.5
+  - @atrib/agent@0.4.7
+  - @atrib/runtime-log@0.4.1
+  - @atrib/sdk@5.1.1
+  - @atrib/archive-node@0.1.45
+  - @atrib/graph-node@0.1.45
+
 ## 0.0.51
 
 ### Patch Changes

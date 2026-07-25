@@ -1,5 +1,14 @@
 # @atrib/sdk
 
+## 5.1.1
+
+### Patch Changes
+
+- Updated dependencies [f98f932]
+  - @atrib/verify@0.12.4
+  - @atrib/recall@4.0.1
+  - @atrib/verify-mcp@1.0.8
+
 ## 5.1.0
 
 ### Minor Changes
