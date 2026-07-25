@@ -75,6 +75,7 @@ function expandEntries(): OperatingEntry[] {
       } as AtribRecord,
       event,
       signature_verified: true,
+      content_commitment_verified: true,
       proof_supplied: false,
       producer: 'application-conformance',
     }

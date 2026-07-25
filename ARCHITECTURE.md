@@ -158,12 +158,24 @@ The open reference client in
 [`apps/operating-graph/`](apps/operating-graph/) demonstrates the product layer
 over those protocol facts. It verifies mirror signatures and projects named,
 bounded workspace, task, team, and agent views. Private bodies provide
-searchable state, decisions, outcomes, handoffs, and conflict policy.
+searchable state, decisions, outcomes, handoffs, and conflict policy. The
+application verifies each private body against the signed `args_hash` before
+it can affect a view.
 
 An application resolution cites every active state head through
 `informed_by`, then names one accepted head in its private body. That convention
 does not change deterministic graph derivation. Another client can apply a
 different application policy over the same signed records.
+
+Runtime-source observations occupy a separate application lane. The Buzz
+mapping builder verifies a runtime window and sequence audit before the host
+signs its observation. The stored observation keeps observed Nostr signers,
+the mapped application agent, and the atrib record signer distinct. A later
+reader verifies the atrib signature and body commitment, but it cannot replay
+the source checks without the external frames and manifest. The observation
+has no semantic effect. A second signed application event must cite the
+atrib-signature-verified observation and match its named scope before the
+operating projector accepts the relationship.
 
 ---
 

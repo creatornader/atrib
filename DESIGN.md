@@ -115,6 +115,11 @@ Working today:
   one bounded workspace surface. Its visual signature is the evidence rail:
   each active state head keeps a visible hash, signer, and semantic status
   until an all-head resolution lands.
+- The operating-graph client renders runtime observations in a separate panel.
+  The panel names the mapped application agent, atrib observer signer, and
+  source-runtime signer separately. It also keeps execution evidence, owner
+  authorization, result truth, and capture completeness visible as distinct
+  states.
 
 Still underdesigned:
 
@@ -175,6 +180,21 @@ Live replay:
 - Job: show recent public-log activity as an animated graph.
 - Current focus: `https://explore.atrib.dev/demo`, now labeled as live recent-action replay so it does not compete with the stable YC demo.
 - Target state: makes live substrate activity legible without looking like a separate demo product.
+
+Operating graph reference client:
+
+- Job: turn signed private application bodies into bounded shared state while
+  keeping source-runtime telemetry outside semantic state.
+- Current focus: workspace, task, team, and agent views; conflicts and explicit
+  resolutions; handoffs; body search; and a separate runtime-observation
+  panel.
+- Target state: an operator can see who observed an event, who the source
+  runtime says signed it, where the application mapped it, and which claims
+  remain unresolved before any semantic promotion.
+- Observation treatment: use a distinct panel and neutral status language.
+  Never present an observation as accepted state, a decision, an outcome, a
+  handoff, execution evidence, or a verified result. Label source signers as
+  reported by the observer when the reader did not replay source artifacts.
 
 Protocol docs:
 

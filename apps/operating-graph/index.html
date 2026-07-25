@@ -92,7 +92,7 @@
       }
       .metrics {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(6, 1fr);
         gap: 10px;
         margin-bottom: 16px;
       }
@@ -114,6 +114,7 @@
         grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.8fr);
         gap: 16px;
       }
+      .observation-panel { margin-top: 16px; }
       .panel-head {
         display: flex;
         align-items: center;
@@ -177,6 +178,19 @@
       .source { color: var(--ink-secondary); font-size: 12px; }
       .proof { color: var(--evidence); font-size: 11px; }
       .proof.partial { color: var(--warning); }
+      .observation-facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 7px;
+      }
+      .observation-facts span {
+        border: 1px solid var(--rule);
+        border-radius: 999px;
+        padding: 3px 7px;
+        color: var(--ink-secondary);
+        font-size: 11px;
+      }
       .empty, .error { padding: 24px; color: var(--ink-secondary); text-align: center; }
       .error { color: var(--conflict); }
       .search-results { margin-bottom: 16px; }
@@ -255,6 +269,14 @@
           <div class="panel-body" id="activity"></div>
         </aside>
       </section>
+
+      <section class="panel observation-panel">
+        <div class="panel-head">
+          <h2>Runtime observations</h2>
+          <span id="observation-count"></span>
+        </div>
+        <div class="panel-body" id="observations"></div>
+      </section>
     </main>
 
     <script type="module">
@@ -296,6 +318,7 @@
           ['open conflicts', view.counts.conflicts],
           ['resolved conflicts', view.counts.resolutions],
           ['handoffs', view.counts.handoffs],
+          ['runtime observations', state.observations?.length ?? 0],
         ]
         $('metrics').innerHTML = items.map(([label, value]) =>
           `<div class="metric"><strong>${value}</strong><span>${label}</span></div>`
@@ -406,6 +429,43 @@
         `).join('') : '<div class="empty">No decisions, outcomes, resolutions, or handoffs.</div>'
       }
 
+      function renderObservations(entries) {
+        $('observation-count').textContent = String(entries.length)
+        $('observations').innerHTML = entries.length ? entries.map((entry) => {
+          const observation = entry.observation
+          const coverage = observation.coverage
+          const mappedAgent = observation.mapped_agent?.name
+          const observedAgents = observation.source.observed_agent_pubkeys
+            .map(shortHash)
+            .join(', ')
+          return `
+            <article class="activity">
+              <div class="activity-top">
+                <span class="kind">runtime observation</span>
+                <span class="proof ${coverage.sequence_complete ? '' : 'partial'}">
+                  ${coverage.sequence_complete ? 'captured window complete' : 'captured window has gaps'}
+                </span>
+              </div>
+              <div class="subject">
+                ${mappedAgent ? `Mapped to ${escapeHtml(mappedAgent)}` : 'Workspace-level observation'}
+              </div>
+              <div class="source">
+                atrib observer signer ${escapeHtml(shortHash(entry.record.creator_key))}
+                · Buzz Nostr signers reported by observer ${escapeHtml(observedAgents)}
+              </div>
+              <div class="observation-facts">
+                <span>body commitment verified</span>
+                <span>source artifacts not replayed by reader</span>
+                <span>recipient owner ${escapeHtml(shortHash(observation.source.owner_pubkey))}</span>
+                <span>execution evidence: false</span>
+                <span>owner authorization: not asserted</span>
+                <span>result truth: not claimed</span>
+              </div>
+            </article>
+          `
+        }).join('') : '<div class="empty">No signed runtime observations in this view.</div>'
+      }
+
       function renderTasks(view) {
         $('visible-tasks').innerHTML = view.visible_task_ids.map((id) =>
           `<button class="task-link" data-task="${escapeHtml(id)}">${escapeHtml(id)}</button>`
@@ -418,20 +478,31 @@
         }
       }
 
-      async function loadView() {
+      async function loadView(retryOnRevisionMismatch = true) {
         const workspaceId = $('workspace').value
         if (!workspaceId) return
         try {
-          const body = await fetchJson(`/v1/view?${query()}`)
+          const params = query()
+          const [body, observationBody] = await Promise.all([
+            fetchJson(`/v1/view?${params}`),
+            fetchJson(`/v1/runtime-observations?${params}`),
+          ])
+          if (body.revision !== observationBody.revision) {
+            if (retryOnRevisionMismatch) return loadView(false)
+            throw new Error('view changed while loading; retry')
+          }
           state.revision = body.revision
           state.view = body.view
+          state.observations = observationBody.observations
           $('revision').textContent = `revision ${body.revision}`
           renderMetrics(body.view)
           renderCells(body.view)
           renderActivity(body.view)
+          renderObservations(observationBody.observations)
           renderTasks(body.view)
         } catch (error) {
           $('cells').innerHTML = `<div class="error">${escapeHtml(error.message)}</div>`
+          $('observations').innerHTML = `<div class="error">${escapeHtml(error.message)}</div>`
         }
       }
 

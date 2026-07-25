@@ -103,10 +103,19 @@ importers:
       '@atrib/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
+      '@atrib/runtime-log':
+        specifier: workspace:*
+        version: link:../../packages/runtime-log
       '@atrib/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
     devDependencies:
+      '@atrib/verify':
+        specifier: workspace:*
+        version: link:../../packages/verify
+      '@noble/secp256k1':
+        specifier: ^3.1.0
+        version: 3.1.0
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1

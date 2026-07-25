@@ -69,6 +69,7 @@ function entry(
     } as AtribRecord,
     event,
     signature_verified: true,
+    content_commitment_verified: true,
     proof_supplied: false,
     producer: 'test',
   }
@@ -97,6 +98,20 @@ describe('operating graph projection', () => {
         resolves: [hash('a'), hash('a')],
       }),
     ).toBeNull()
+  })
+
+  it('rejects present but invalid scope and promotion fields', () => {
+    const base = {
+      schema: OPERATING_EVENT_SCHEMA,
+      kind: 'decision',
+      workspace: WORKSPACE,
+      subject: 'deployment',
+    }
+    expect(parseOperatingEvent({ ...base, task: null })).toBeNull()
+    expect(parseOperatingEvent({ ...base, agent: { ...ALICE, role: '' } })).toBeNull()
+    expect(parseOperatingEvent({ ...base, source_observation: 42 })).toBeNull()
+    expect(parseOperatingEvent({ ...base, accepted_head: 'not-a-hash' })).toBeNull()
+    expect(parseOperatingEvent({ ...base, resolves: 'not-an-array' })).toBeNull()
   })
 
   it('preserves conflicts until a signed application resolution cites every head', () => {

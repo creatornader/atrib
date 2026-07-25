@@ -10,6 +10,10 @@
     "./model": {
       "types": "./dist/model.d.ts",
       "import": "./dist/model.js"
+    },
+    "./observations": {
+      "types": "./dist/observations.d.ts",
+      "import": "./dist/observations.js"
     }
   },
   "scripts": {
@@ -23,9 +27,12 @@
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
+    "@atrib/runtime-log": "workspace:*",
     "@atrib/sdk": "workspace:*"
   },
   "devDependencies": {
+    "@atrib/verify": "workspace:*",
+    "@noble/secp256k1": "^3.1.0",
     "@types/node": "^26.1.1",
     "tsx": "^4.23.1",
     "typescript": "^6.0.3",

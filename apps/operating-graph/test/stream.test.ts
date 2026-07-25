@@ -21,5 +21,7 @@ describe('operating graph stream revisions', () => {
     expect(html).toContain('if (update.revision > state.revision + 1)')
     expect(html).toContain("stream.addEventListener('gap'")
     expect(html).toContain('if (update.current_revision <= state.revision) return')
+    expect(html).toContain('/v1/runtime-observations?')
+    expect(html).toContain('if (body.revision !== observationBody.revision)')
   })
 })
