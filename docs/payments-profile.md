@@ -41,21 +41,21 @@ Requirements language follows core [§1.1](../atrib-spec.md#11-normative-require
 
 **Section map.** Except for [§1](#1-scope-and-position-in-the-protocol), [§12](#12-evidence-profiles), [§14](#14-conformance), and parts of [§13](#13-scope-boundaries), every section of this profile relocated verbatim from the core spec:
 
-| Profile section | Core spec origin (tombstoned anchor) |
-| --- | --- |
+| Profile section                                                        | Core spec origin (tombstoned anchor)                                                                         |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | [§2.1](#21-acp-agentic-commerce-protocol)-[§2.5](#25-ap2-and-a2a-x402) | [§1.7.1](../atrib-spec.md#171-acp-agentic-commerce-protocol)-[§1.7.5](../atrib-spec.md#175-ap2-and-a2a-x402) |
-| [§3](#3-sdk-transaction-detection) | [§5.4.5](../atrib-spec.md#545-transaction-detection) |
-| [§4](#4-policy-document-format) | [§4.2](../atrib-spec.md#42-policy-document-format) |
-| [§5](#5-the-default-policy) | [§4.3](../atrib-spec.md#43-the-default-policy) |
-| [§6](#6-publication-and-discovery) | [§4.4](../atrib-spec.md#44-publication-and-discovery) |
-| [§7.1](#71-negotiation-protocol)-[§7.3](#73-session-policy-record) | [§4.5.1](../atrib-spec.md#451-negotiation-protocol)-[§4.5.3](../atrib-spec.md#453-session-policy-record) |
-| [§7.4](#74-session-policy-record-creation-sdk) | [§5.4.6](../atrib-spec.md#546-session-policy-record-creation) |
-| [§8](#8-the-calculation-algorithm) | [§4.6](../atrib-spec.md#46-the-calculation-algorithm) |
-| [§9](#9-settlement-recommendation-document) | [§4.7](../atrib-spec.md#47-settlement-recommendation-document) |
-| [§10.1](#101-verifying-a-settlement-recommendation) | [§5.5.2](../atrib-spec.md#552-verifying-a-settlement-recommendation) |
-| [§10.2](#102-post-hoc-calculation-no-agent-sdk) | [§5.5.3](../atrib-spec.md#553-post-hoc-calculation-no-agent-sdk) |
-| [§11](#11-ap2--verifiable-intent-evidence-checks) | [§5.5.4](../atrib-spec.md#554-ap2--verifiable-intent-evidence-checks) |
-| [§13](#13-scope-boundaries) (in part) | [§1.8](../atrib-spec.md#18-scope-boundaries) settlement- and policy-specific paragraphs |
+| [§3](#3-sdk-transaction-detection)                                     | [§5.4.5](../atrib-spec.md#545-transaction-detection)                                                         |
+| [§4](#4-policy-document-format)                                        | [§4.2](../atrib-spec.md#42-policy-document-format)                                                           |
+| [§5](#5-the-default-policy)                                            | [§4.3](../atrib-spec.md#43-the-default-policy)                                                               |
+| [§6](#6-publication-and-discovery)                                     | [§4.4](../atrib-spec.md#44-publication-and-discovery)                                                        |
+| [§7.1](#71-negotiation-protocol)-[§7.3](#73-session-policy-record)     | [§4.5.1](../atrib-spec.md#451-negotiation-protocol)-[§4.5.3](../atrib-spec.md#453-session-policy-record)     |
+| [§7.4](#74-session-policy-record-creation-sdk)                         | [§5.4.6](../atrib-spec.md#546-session-policy-record-creation)                                                |
+| [§8](#8-the-calculation-algorithm)                                     | [§4.6](../atrib-spec.md#46-the-calculation-algorithm)                                                        |
+| [§9](#9-settlement-recommendation-document)                            | [§4.7](../atrib-spec.md#47-settlement-recommendation-document)                                               |
+| [§10.1](#101-verifying-a-settlement-recommendation)                    | [§5.5.2](../atrib-spec.md#552-verifying-a-settlement-recommendation)                                         |
+| [§10.2](#102-post-hoc-calculation-no-agent-sdk)                        | [§5.5.3](../atrib-spec.md#553-post-hoc-calculation-no-agent-sdk)                                             |
+| [§11](#11-ap2--verifiable-intent-evidence-checks)                      | [§5.5.4](../atrib-spec.md#554-ap2--verifiable-intent-evidence-checks)                                        |
+| [§13](#13-scope-boundaries) (in part)                                  | [§1.8](../atrib-spec.md#18-scope-boundaries) settlement- and policy-specific paragraphs                      |
 
 **Binding invariants that travel with this profile.** Two invariants from the core design move here verbatim and remain binding:
 
@@ -282,7 +282,7 @@ Implementations SHOULD embed the `context_id` in the agent protocol envelope whe
 }
 ```
 
-Older AP2 v0.1 deployments used an A2A (Agent2Agent) Message with a DataPart whose `data` object contains the key `ap2.mandates.PaymentMandate`. Implementations MAY keep this compatibility fallback. If they do, they MUST NOT detect `IntentMandate` or `CartMandate`.
+Older AP2 v0.1 deployments used an A2A v0.3 (Agent2Agent) Message with a data part whose `data` object contains the key `ap2.mandates.PaymentMandate`. Implementations MAY keep this compatibility fallback. If they do, they MUST NOT detect `IntentMandate` or `CartMandate`.
 
 ```jsonc
 // AP2 v0.1 compatibility fallback
@@ -411,7 +411,7 @@ function detectTransaction(toolName, response, headers):
       || hasAp2SuccessEnvelopeWithReceiptJwt(response)):
     return { detected: true, protocol: 'AP2' }
 
-  // AP2 v0.1 compatibility: PaymentMandate Message inside an A2A DataPart.
+  // AP2 v0.1 compatibility: PaymentMandate Message inside an A2A v0.3 data part.
   // Source: github.com/google-agentic-commerce/ap2 docs/specification.md v0.1
   if (Array.isArray(response?.parts)):
     for (part in response.parts):

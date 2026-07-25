@@ -21,10 +21,11 @@
 #    consolidation.)
 #
 # Strategy: minor/patch versions are auto-merge candidates (low risk,
-# security patches). Major versions get manually reviewed. SHA-pinned
-# actions get their SHA re-pinned automatically by Dependabot when a
-# new tag version is detected (Dependabot understands the `# vN.N.N`
-# comment convention).
+# security patches). Major versions get manually reviewed. TypeScript and A2A
+# majors each receive their own review path because either can require parser
+# or protocol migrations. SHA-pinned actions get their SHA re-pinned
+# automatically by Dependabot when a new tag version is detected (Dependabot
+# understands the `# vN.N.N` comment convention).
 
 version: 2
 updates:
@@ -63,6 +64,25 @@ updates:
       npm-major:
         update-types:
           - major
+        exclude-patterns:
+          - typescript
+          - '@a2a-js/sdk'
+      typescript-major:
+        patterns:
+          - typescript
+        update-types:
+          - major
+      a2a-major:
+        patterns:
+          - '@a2a-js/sdk'
+        update-types:
+          - major
+    ignore:
+      # typescript-eslint 8 supports TypeScript < 6.1. Hold TypeScript 7
+      # updates until its parser advertises support for that compiler major.
+      - dependency-name: typescript
+        versions:
+          - '>=7.0.0'
     commit-message:
       prefix: deps
       include: scope
