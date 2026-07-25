@@ -28,6 +28,7 @@ of that log.
 | You need to sign tool calls as they happen.                                    | Use `@atrib/mcp`, `@atrib/mcp-wrap`, or `@atrib/agent`.                                                                                        |
 | You already emit OpenTelemetry or OpenInference spans.                         | Use `@atrib/openinference` beside your existing trace exporter.                                                                                |
 | You need to prove a run window, fork, compaction, projection, or receipt root. | Use `@atrib/runtime-log`.                                                                                                                      |
+| You need to observe an already-running local runtime without taking it over.   | Use an observation adapter under `@atrib/runtime-log`, then let the host commit each batch and cursor together.                                |
 | You want a hosted trace dashboard, prompt analytics, cost charts, or eval UI.  | Use Langfuse, Phoenix, LangSmith, Braintrust, or your existing observability stack. atrib can sign evidence that points back to those systems. |
 
 `@atrib/runtime-log` does not decide what a runtime should store. It gives the
@@ -177,6 +178,53 @@ The shared conformance corpus lives at
 [`spec/conformance/runtime-log/`](../../spec/conformance/runtime-log/). Adapter
 authors can run their own verifier against those cases before publishing a new
 runtime-log source.
+
+## Live observation adapters
+
+The `@atrib/runtime-log/observation` subpath defines a source-neutral contract
+for host-accessible runtime telemetry. A host supplies source discovery and
+binding. The adapter reads from an expected cursor and returns observations,
+coverage, gaps, and a proposed cursor without changing durable state.
+
+```ts
+import { verifyRuntimeObservationBatchTransition } from '@atrib/runtime-log/observation'
+import { bindCodexRolloutObservationSource } from '@atrib/runtime-log/codex-rollout'
+
+const { adapter, cursor } = await bindCodexRolloutObservationSource({
+  path: selectedRolloutPath,
+  source_handle: 'selected-codex-thread',
+  session_id: selectedThreadId,
+  runtime_id: 'runtime:codex',
+  observer_ref: 'host:runtime-observer',
+  subject_ref: 'runtime:codex',
+})
+
+const batch = await adapter.readBatch(cursor)
+const transition = verifyRuntimeObservationBatchTransition(batch, cursor)
+if (!transition.valid) throw new Error(transition.issues.map((issue) => issue.message).join(', '))
+
+await localStore.transact(async (transaction) => {
+  await transaction.appendObservationBatch(batch)
+  await transaction.setAuthoritativeCursor(batch.proposed_cursor)
+})
+```
+
+The final transaction is caller-owned and must commit the batch and
+authoritative cursor together. A side cursor may be a rebuildable cache, but it
+cannot acknowledge bytes before the observation batch is durable.
+
+The first source profile is `@atrib/runtime-log/codex-rollout`. It attaches to
+one explicitly selected Codex rollout JSONL file without spawning, resuming, or
+replacing Codex. It commits exact event bytes and delimiter-aware frame bytes,
+keeps the local path and transcript body out of portable output, reports
+partial, malformed, oversized, truncated, replaced, and anchor-mismatch cases,
+and carries compaction markers across adjacent batches.
+
+The output proves only that the host observed the reported telemetry under the
+stated coverage. It does not establish tool execution, runtime-vendor
+provenance, accepted application state, effect outcome, or complete history
+beyond the reported coverage. Backfill remains `bounded-backfill` even when it
+starts at byte zero.
 
 ## Buzz observer source
 
