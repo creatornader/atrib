@@ -17,7 +17,8 @@ import {
   type OperatingViewQuery,
 } from './model.js'
 import { buildArchiveBodyOpening, buildLocalBodyOpening } from './opening.js'
-import { loadLocalRecordMaterial, loadOperatingEntries, mirrorFingerprint } from './store.js'
+import { selectRuntimeObservations, type RuntimeObservationEntry } from './observations.js'
+import { loadLocalRecordMaterial, loadOperatingMirror, mirrorFingerprint } from './store.js'
 import { revisionRelation } from './stream.js'
 
 const SOURCE_DIR = dirname(fileURLToPath(import.meta.url))
@@ -26,11 +27,13 @@ const DEFAULT_HOST = '127.0.0.1'
 const DEFAULT_PORT = 8797
 const MAX_BODY_BYTES = 1_000_000
 const MAX_OPENING_RESPONSE_BYTES = 2_000_000
+const MAX_RUNTIME_OBSERVATION_LIMIT = 200
 
 interface Snapshot {
   revision: number
   fingerprint: string
   entries: OperatingEntry[]
+  runtime_observations: RuntimeObservationEntry[]
   loaded_at_ms: number
 }
 
@@ -198,11 +201,29 @@ function queryFromUrl(url: URL, config: ServerConfig): OperatingViewQuery {
   }
 }
 
-function workspaceIndex(entries: OperatingEntry[]): Array<{ id: string; name: string }> {
+function workspaceIndex(
+  entries: OperatingEntry[],
+  observations: RuntimeObservationEntry[],
+  trustedCreatorKeys?: readonly string[],
+): Array<{ id: string; name: string }> {
+  const trusted = trustedCreatorKeys ? new Set(trustedCreatorKeys) : null
   const workspaces = new Map<string, string>()
   for (const entry of entries) {
-    if (entry.signature_verified) {
+    if (
+      entry.signature_verified &&
+      (!trusted || trusted.has(entry.record.creator_key)) &&
+      !workspaces.has(entry.event.workspace.id)
+    ) {
       workspaces.set(entry.event.workspace.id, entry.event.workspace.name)
+    }
+  }
+  for (const entry of observations) {
+    if (
+      entry.signature_verified &&
+      (!trusted || trusted.has(entry.record.creator_key)) &&
+      !workspaces.has(entry.observation.workspace.id)
+    ) {
+      workspaces.set(entry.observation.workspace.id, entry.observation.workspace.name)
     }
   }
   return [...workspaces]
@@ -221,6 +242,7 @@ export async function startOperatingGraphServer(
     revision: 0,
     fingerprint: '',
     entries: [],
+    runtime_observations: [],
     loaded_at_ms: 0,
   }
   const clients = new Set<ServerResponse>()
@@ -229,11 +251,12 @@ export async function startOperatingGraphServer(
   const refresh = async (): Promise<boolean> => {
     const fingerprint = await mirrorFingerprint(config.mirrorPath).catch(() => '')
     if (fingerprint === snapshot.fingerprint && snapshot.loaded_at_ms !== 0) return false
-    const entries = await loadOperatingEntries(config.mirrorPath)
+    const loaded = await loadOperatingMirror(config.mirrorPath)
     snapshot = {
       revision: snapshot.revision + 1,
       fingerprint,
-      entries,
+      entries: loaded.operating_entries,
+      runtime_observations: loaded.runtime_observations,
       loaded_at_ms: Date.now(),
     }
     for (const client of clients) {
@@ -241,6 +264,7 @@ export async function startOperatingGraphServer(
         `id: ${snapshot.revision}\nevent: changed\ndata: ${JSON.stringify({
           revision: snapshot.revision,
           record_count: snapshot.entries.length,
+          runtime_observation_count: snapshot.runtime_observations.length,
         })}\n\n`,
       )
     }
@@ -274,6 +298,7 @@ export async function startOperatingGraphServer(
           status: 'ok',
           revision: snapshot.revision,
           records: snapshot.entries.length,
+          runtime_observations: snapshot.runtime_observations.length,
           writes_enabled: config.writesEnabled,
           write_auth: config.writesEnabled ? 'bearer' : 'disabled',
           body_retrieval: config.bodyReadToken ? 'bearer' : 'disabled',
@@ -289,7 +314,11 @@ export async function startOperatingGraphServer(
       if (request.method === 'GET' && url.pathname === '/v1/workspaces') {
         json(response, 200, {
           revision: snapshot.revision,
-          workspaces: workspaceIndex(snapshot.entries),
+          workspaces: workspaceIndex(
+            snapshot.entries,
+            snapshot.runtime_observations,
+            config.trustedCreatorKeys,
+          ),
         })
         return
       }
@@ -298,6 +327,27 @@ export async function startOperatingGraphServer(
         json(response, 200, {
           revision: snapshot.revision,
           view: projectOperatingView(snapshot.entries, query),
+        })
+        return
+      }
+      if (request.method === 'GET' && url.pathname === '/v1/runtime-observations') {
+        const query = queryFromUrl(url, config)
+        const limit = Math.min(
+          integerParam(url, 'limit') ?? MAX_RUNTIME_OBSERVATION_LIMIT,
+          MAX_RUNTIME_OBSERVATION_LIMIT,
+        )
+        json(response, 200, {
+          revision: snapshot.revision,
+          observations: selectRuntimeObservations(snapshot.runtime_observations, {
+            workspace_id: query.workspace_id,
+            ...(query.task_id ? { task_id: query.task_id } : {}),
+            ...(query.team_id ? { team_id: query.team_id } : {}),
+            ...(query.agent_id ? { agent_id: query.agent_id } : {}),
+            ...(query.trusted_creator_keys
+              ? { trusted_creator_keys: query.trusted_creator_keys }
+              : {}),
+            limit,
+          }),
         })
         return
       }
@@ -386,6 +436,7 @@ export async function startOperatingGraphServer(
           `id: ${snapshot.revision}\nevent: ready\ndata: ${JSON.stringify({
             revision: snapshot.revision,
             record_count: snapshot.entries.length,
+            runtime_observation_count: snapshot.runtime_observations.length,
           })}\n\n`,
         )
         clients.add(response)

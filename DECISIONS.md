@@ -8991,7 +8991,7 @@ and [D168](#d168-coverage-manifests-make-capture-scope-verifiable).
 
 **Date:** 2026-07-23
 
-**Status:** Accepted and implemented
+**Status:** Accepted and implemented (v2 2026-07-25)
 
 **Context.** [D174](#d174-current-state-is-a-policy-bound-revision-projection)
 made verified state heads and conflicts queryable, but a generic state
@@ -9036,6 +9036,22 @@ resolution.
    reconnecting client behind the current revision receives an explicit gap
    event and reloads the bounded view. Duplicate and out-of-order revisions
    never move client state backward.
+10. The application reader requires every private event body to reopen against
+    the signed record's `args_hash`. Missing commitments, invalid salts, and
+    mismatched `_local.content` are excluded before semantic parsing. Signature
+    verification alone cannot admit an uncommitted application body.
+11. Runtime-source observations use a separate application lane and read
+    route. The browser renders the same lane separately and lists workspaces
+    that contain only observations. The mapping builder verifies the
+    runtime-window artifacts before signing a body that binds the manifest,
+    sequence audit, observed Nostr signer keys, bounded coverage, and explicit
+    unresolved trust facts. The reader verifies the atrib signature and body
+    commitment but does not replay absent source artifacts. The observation
+    has no semantic effect and carries no raw observer payload.
+12. An operating event can name a `source_observation`, but the reader accepts
+    the join only when the separately signed event cites that hash through
+    `informed_by`, the cited observation has a valid atrib signature, and both
+    bodies use the same named workspace, task, team, and mapped agent.
 
 **Protocol boundary.** This is an application profile, not a public protocol
 profile. It adds no record field, event type, graph edge, SDK cognitive verb,
@@ -9059,20 +9075,25 @@ fallback verification, and live updates.
 The hostile integration suite composes the client with checkpoint rollback,
 result inconsistency, permit replay and revocation, withheld bodies, unresolved
 heads, and source actions omitted from projections.
+Version 2 adds missing-commitment, mismatched-body, malformed-commitment,
+observation-only, incomplete-window, false-authorization, result-claim, and
+scope-mismatched promotion cases. A source-derived test starts with the public
+Buzz observer adapter instead of a hand-built observation.
 
 **Cross-references.**
 [D142](#d142-orchestration-topology-baton-pass-and-join-records-as-attest-conventions),
 [D152](#d152-handoff-verdicts-are-receiver-computed-not-sender-declared),
 [D168](#d168-coverage-manifests-make-capture-scope-verifiable),
 [D174](#d174-current-state-is-a-policy-bound-revision-projection),
-[D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor), and
+[D175](#d175-log-subscriptions-resume-from-an-exclusive-log-index-cursor),
+[D179](#d179-nostr-and-buzz-events-are-separate-evidence-profiles), and
 [P053](#p053-multi-head-revision-merge-semantics-require-independent-application-proof).
 
 ## D179: Nostr and Buzz events are separate evidence profiles
 
 **Date:** 2026-07-24
 
-**Status:** Accepted and implemented (v2 2026-07-25)
+**Status:** Accepted and implemented (v3 2026-07-25)
 
 **Context.** A Nostr signature, a Buzz owner authorization, Buzz relay
 admission, operator audit insertion, and runtime execution are different
@@ -9129,11 +9150,24 @@ commitments. The manifest remains hash-only and does not promote observer
 telemetry into relay, audit, runtime-execution, result-truth, or
 action-completeness evidence.
 
+Version 3 adds the
+[D178](#d178-the-operating-graph-ships-as-an-application-profile-and-reference-client)
+application mapping. The operating-graph client signs a bounded Buzz window as
+a host observation in a separate feed. The body keeps the observed Nostr
+signer keys distinct from the caller's mapped application agent and from the
+atrib record signer. The mapping builder verifies source artifacts, while the
+later reader verifies only the atrib signature and body commitment unless
+those source artifacts are supplied separately. Recipient-owner matching
+remains separate from owner authorization. Accepted state, decisions,
+outcomes, handoffs, and resolutions require a second application record that
+cites the atrib-signature-verified observation and matches its named scope.
+
 **Cross-references.**
 [D121](#d121-runtime-log-proof-manifests-verify-host-owned-run-windows),
 [D137](#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model),
-[D147](#d147-payments-profile-spin-out-from-protocol-core), and
-[D168](#d168-coverage-manifests-make-capture-scope-verifiable).
+[D147](#d147-payments-profile-spin-out-from-protocol-core),
+[D168](#d168-coverage-manifests-make-capture-scope-verifiable), and
+[D178](#d178-the-operating-graph-ships-as-an-application-profile-and-reference-client).
 
 ## D180: Directory anchors use a durable linear commit journal
 

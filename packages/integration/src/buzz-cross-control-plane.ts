@@ -907,6 +907,7 @@ function recomputeOperatingView(
       record: candidate.record,
       event,
       signature_verified: true,
+      content_commitment_verified: true,
       proof_supplied: false,
       producer: candidate._local?.producer ?? null,
     })

@@ -361,7 +361,8 @@ corpora and a cross-implementation determinism harness.
 application over the protocol. It verifies local mirror records and presents
 named, bounded workspace, task, team, and agent views with body-aware search,
 live decisions and outcomes, incoming handoffs that expose prior task state,
-and explicit state conflicts.
+and explicit state conflicts. The reader verifies each private application body
+against the signed record's `args_hash` before projection.
 
 The application never chooses a conflict winner from time or signer preference.
 A resolution is accepted only when its signed record cites every active head
@@ -375,6 +376,16 @@ opening disclosure is disabled by default. Operators can enable a separate
 bearer-protected route that re-verifies local or archived record bodies and
 tests available content, tool-name, argument, and result openings against the
 signed commitments.
+
+The application also exposes signed Buzz runtime-window observations in a
+separate, bounded feed. The mapping builder verifies source artifacts before
+the host signs its observation. A later reader verifies the atrib signature
+and body commitment; it does not replay absent Buzz frames or manifests.
+Source verification facts therefore remain claims by the observation signer
+unless those artifacts are supplied separately. The observation does not
+create accepted state or other semantic events. A later application event must
+cite the atrib-signature-verified observation and match its named scope before
+it enters an operating view.
 
 This is an application profile, not a new protocol surface. It demonstrates
 usable shared state while keeping names, values, and resolution policy outside

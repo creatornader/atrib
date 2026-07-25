@@ -19,6 +19,11 @@ event types, or graph edges to the atrib protocol.
 - Incoming handoffs that make a task visible in the receiving agent's view.
 - Explicit proof posture. A verified signature and a supplied log proof are
   rendered as separate facts.
+- Private application bodies enter a view only when they match the signed
+  record's `args_hash`.
+- Buzz observer windows can appear in a separate runtime-observation feed
+  without becoming accepted state, decisions, outcomes, handoffs, or
+  resolutions.
 
 This client does not prove that every action was captured or that a signed
 claim is true. Coverage manifests, protected executors, counterparty evidence,
@@ -94,20 +99,56 @@ Kinds are `accepted_state`, `decision`, `outcome`, `handoff`, and
 `resolves` through `informed_by`.
 
 Application state is deliberately body-aware. Public log commitments alone do
-not reveal names, state values, or resolution choices.
+not reveal names, state values, or resolution choices. The reader requires an
+`args_hash` and verifies `_local.content` against it before parsing an
+application event. A missing commitment, invalid salt, or mismatched body
+excludes the record from the operating view.
+
+## Buzz runtime observations
+
+`buildBuzzRuntimeObservation()` accepts a concrete
+`BuzzObserverRuntimeLogSource`, exports and verifies a bounded window, and
+builds an `atrib.operating-runtime-observation.buzz.v1` body. The caller assigns
+the window to a workspace and can optionally assign a task, team, and
+`mapped_agent`. The mapped agent is an application placement. Buzz Nostr
+authors remain separate in `source.observed_agent_pubkeys`, and the atrib
+record signer is the host that signs the observation.
+
+The body commits the full runtime-window manifest and sequence audit. It keeps
+raw observer payloads out of the portable observation and sets
+`execution_evidence` to `false`. Its trust facts record the observer's claim
+that its adapter verified the Nostr signatures and recipient-owner match. The
+operating-graph reader verifies the atrib record signature and body
+commitment. It does not receive or replay the source frames, manifest, or
+sequence audit. Those source checks therefore remain claims by the observation
+signer unless a consumer obtains and verifies the external artifacts. The body
+does not claim owner authorization, relay admission or persistence, operator
+audit inclusion, result truth, or capture beyond the requested window.
+
+The caller signs the body through the normal `attest()` path. It then appears
+under `GET /v1/runtime-observations` and in the browser's Runtime observations
+panel; it never enters the semantic operating view. The workspace index
+includes observation-only workspaces. To create semantic state from an
+observation, the application signs a separate `atrib.operating-event.v1` body
+with `source_observation` and cites the same record hash through `informed_by`.
+The reader also requires the cited observation's atrib signature to verify and
+requires the same named workspace, task, team, and agent.
+`buildBuzzSemanticPromotion()` prepares those two linked inputs but does not
+sign them or choose an application policy.
 
 ## HTTP surface
 
-| Route                 | Purpose                                           |
-| --------------------- | ------------------------------------------------- |
-| `GET /v1/health`      | Mirror, revision, write, and trust-policy status  |
-| `GET /v1/workspaces`  | Named workspace index                             |
-| `GET /v1/view`        | Bounded operating view                            |
-| `GET /v1/search`      | Body-aware search inside the selected scope       |
-| `GET /v1/stream`      | SSE revision stream with exact reconnect cursors  |
-| `GET /v1/body/<hash>` | Verify and disclose authorized opening material   |
-| `POST /v1/events`     | Sign an application event when writes are enabled |
-| `POST /v1/resolve`    | Sign an all-head application resolution           |
+| Route                          | Purpose                                           |
+| ------------------------------ | ------------------------------------------------- |
+| `GET /v1/health`               | Mirror, revision, write, and trust-policy status  |
+| `GET /v1/workspaces`           | Named workspace index                             |
+| `GET /v1/view`                 | Bounded operating view                            |
+| `GET /v1/search`               | Body-aware search inside the selected scope       |
+| `GET /v1/runtime-observations` | Bounded, non-semantic runtime observations        |
+| `GET /v1/stream`               | SSE revision stream with exact reconnect cursors  |
+| `GET /v1/body/<hash>`          | Verify and disclose authorized opening material   |
+| `POST /v1/events`              | Sign an application event when writes are enabled |
+| `POST /v1/resolve`             | Sign an all-head application resolution           |
 
 `GET /v1/view` requires `workspace_id`. Optional `task_id`, `team_id`, and
 `agent_id` parameters narrow the view. A signed handoff includes the handed-off
@@ -119,6 +160,11 @@ its SSE event ID. A cursor ahead of the local revision returns 409. A cursor
 behind the current revision receives an explicit `gap` event so the client
 reloads its bounded view instead of assuming it saw every intermediate
 projection.
+
+The runtime-observation route uses the same required `workspace_id` and
+optional task, team, and agent filters as the bounded view. It returns at most
+200 observations. `agent_id` selects the caller-owned `mapped_agent`, not a
+Buzz Nostr signer.
 
 Body retrieval is disabled until `ATRIB_OPERATING_BODY_TOKEN` is set.
 Authorized lookups rehash and verify the signed record. Local mirror lookups
@@ -186,6 +232,7 @@ One application preferring a different UI does not.
 ```sh
 pnpm --filter @atrib/operating-graph typecheck
 pnpm --filter @atrib/operating-graph test
+pnpm --filter @atrib/operating-graph build
 pnpm --filter @atrib/integration test -- hostile-operating-graph.test.ts
 ```
 

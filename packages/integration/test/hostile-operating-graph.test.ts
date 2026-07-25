@@ -252,6 +252,7 @@ function operatingEntry(character: string, value: string): OperatingEntry {
       value,
     },
     signature_verified: true,
+    content_commitment_verified: true,
     proof_supplied: false,
     producer: 'hostile-test',
   }

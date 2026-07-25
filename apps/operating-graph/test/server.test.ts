@@ -20,6 +20,7 @@ import {
   type AtribRecord,
 } from '@atrib/mcp'
 import { OPERATING_EVENT_SCHEMA, type OperatingEvent } from '../src/model.js'
+import { BUZZ_RUNTIME_OBSERVATION_SCHEMA } from '../src/observations.js'
 import { startOperatingGraphServer } from '../src/server.js'
 
 const tempDirectories: string[] = []
@@ -35,9 +36,23 @@ async function appendOperatingRecord(
   character: string,
   event: OperatingEvent,
   timestamp: number,
+  options: {
+    readonly committed?: boolean
+    readonly localContent?: Record<string, unknown>
+    readonly committedContent?: Record<string, unknown>
+    readonly informedBy?: readonly string[]
+    readonly commitmentScheme?: 'plain-sha256' | 'salted-sha256'
+    readonly argsSaltOverride?: unknown
+  } = {},
 ): Promise<void> {
   const seed = new Uint8Array(32).fill(character.charCodeAt(0))
   const contextId = character.repeat(32)
+  const content = options.localContent ?? event
+  const contentCommitment = createJsonCommitment(
+    options.committedContent ?? content,
+    options.commitmentScheme ?? 'salted-sha256',
+    () => new Uint8Array(16).fill(character.charCodeAt(0)),
+  )
   const record = await signRecord(
     {
       spec_version: 'atrib/1.0',
@@ -47,6 +62,19 @@ async function appendOperatingRecord(
       event_type: 'https://atrib.dev/v1/types/observation',
       context_id: contextId,
       timestamp,
+      ...(options.informedBy && options.informedBy.length > 0
+        ? { informed_by: [...options.informedBy] }
+        : {}),
+      ...(options.committed === false
+        ? {}
+        : {
+            args_hash: contentCommitment.hash,
+            ...('argsSaltOverride' in options
+              ? { args_salt: options.argsSaltOverride }
+              : 'salt' in contentCommitment
+                ? { args_salt: contentCommitment.salt }
+                : {}),
+          }),
       signature: '',
     } as AtribRecord,
     seed,
@@ -57,7 +85,7 @@ async function appendOperatingRecord(
       record,
       proof: null,
       written_at: timestamp,
-      _local: { content: event, producer: 'operating-test' },
+      _local: { content, producer: 'operating-test' },
     })}\n`,
   )
 }
@@ -110,6 +138,124 @@ async function appendActionRecord(
     })}\n`,
   )
   return { recordHash, record, args, result }
+}
+
+async function appendSignedContentRecord(
+  mirrorFile: string,
+  character: string,
+  content: Record<string, unknown>,
+  timestamp: number,
+  informedBy: readonly string[] = [],
+): Promise<string> {
+  const seed = new Uint8Array(32).fill(character.charCodeAt(0))
+  const contextId = character.repeat(32)
+  const contentCommitment = createJsonCommitment(content, 'salted-sha256', () =>
+    new Uint8Array(16).fill(character.charCodeAt(0)),
+  )
+  const record = await signRecord(
+    {
+      spec_version: 'atrib/1.0',
+      content_id: computeContentId('mcp://operating-test', 'signed-content'),
+      creator_key: base64urlEncode(await getPublicKey(seed)),
+      chain_root: genesisChainRoot(contextId),
+      event_type: 'https://atrib.dev/v1/types/observation',
+      context_id: contextId,
+      timestamp,
+      args_hash: contentCommitment.hash,
+      args_salt: contentCommitment.salt,
+      ...(informedBy.length > 0 ? { informed_by: [...informedBy] } : {}),
+      signature: '',
+    } as AtribRecord,
+    seed,
+  )
+  const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
+  appendFileSync(
+    mirrorFile,
+    `${JSON.stringify({
+      record,
+      proof: null,
+      written_at: timestamp,
+      _local: { content, producer: 'operating-test' },
+    })}\n`,
+  )
+  return recordHash
+}
+
+function sha256Uri(character: string): string {
+  return `sha256:${character.repeat(64)}`
+}
+
+async function creatorKey(character: string): Promise<string> {
+  const seed = new Uint8Array(32).fill(character.charCodeAt(0))
+  return base64urlEncode(await getPublicKey(seed))
+}
+
+function buzzObservationContent(options: {
+  readonly workspace: { id: string; name: string }
+  readonly task?: { id: string; name: string }
+  readonly team?: { id: string; name: string }
+  readonly agent?: { id: string; name: string; role: string }
+  readonly incomplete?: boolean
+}): Record<string, unknown> {
+  const incomplete = options.incomplete ?? false
+  return {
+    schema: BUZZ_RUNTIME_OBSERVATION_SCHEMA,
+    kind: 'runtime_observation',
+    workspace: options.workspace,
+    ...(options.task ? { task: options.task } : {}),
+    ...(options.team ? { team: options.team } : {}),
+    ...(options.agent ? { mapped_agent: options.agent } : {}),
+    source: {
+      id: 'buzz-observer-frames',
+      kind: 'buzz-nip-ao-capture',
+      version: 'v1',
+      capture_id: 'buzz-observer-process-1',
+      owner_pubkey: 'a'.repeat(64),
+      observed_agent_pubkeys: ['b'.repeat(64)],
+      capture_kind: 'live-subscription',
+    },
+    runtime_window: {
+      runtime_window_hash: sha256Uri('b'),
+      session_id: 'buzz-observer-process-1',
+      session_definition_digest: sha256Uri('c'),
+      start: 1,
+      end: 3,
+      event_count: incomplete ? 2 : 3,
+      event_root: sha256Uri('d'),
+      projection_root: sha256Uri('e'),
+      sequence_audit_root: sha256Uri('f'),
+    },
+    coverage: {
+      bounded_to_capture: true,
+      sequence_complete: !incomplete,
+      basis: incomplete ? 'incomplete-captured-window' : 'complete-captured-window',
+      missing_ranges: incomplete ? [{ start: 2, end: 2 }] : [],
+      duplicate_seq: [],
+      duplicate_event_ids: [],
+      out_of_order_count: 0,
+    },
+    trust: {
+      nostr_event_signatures: 'verified-by-observer-adapter',
+      recipient_owner_binding: 'verified-by-observer-adapter',
+      owner_authorization: 'not-asserted',
+      relay_admission: 'not-claimed',
+      relay_persistence: 'not-claimed',
+      audit_inclusion: 'not-claimed',
+      runtime_execution: 'observer-telemetry-only',
+      result_truth: 'not-claimed',
+      capture_completeness: 'captured-window-only',
+      source_artifact_replay: 'not-performed-by-reader',
+    },
+    execution_evidence: false,
+    semantic_effects: {
+      accepted_state: false,
+      decision: false,
+      outcome: false,
+      handoff: false,
+      resolution: false,
+    },
+    raw_payloads: 'omitted',
+  }
 }
 
 describe('operating graph HTTP contract', () => {
@@ -167,6 +313,250 @@ describe('operating graph HTTP contract', () => {
       })
       expect(authorized.status).toBe(400)
       expect(await authorized.json()).toEqual({ error: 'invalid request' })
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  it('rejects uncommitted and tampered local content before semantic projection', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'atrib-operating-integrity-'))
+    tempDirectories.push(directory)
+    const mirrorFile = join(directory, 'records.jsonl')
+    const workspace = { id: 'workspace-integrity', name: 'Integrity' }
+    const task = { id: 'task-integrity', name: 'Protect projection' }
+    const alice = { id: 'agent-alice', name: 'Alice', role: 'builder' }
+    const bob = { id: 'agent-bob', name: 'Bob', role: 'reviewer' }
+    const valid: OperatingEvent = {
+      schema: OPERATING_EVENT_SCHEMA,
+      kind: 'decision',
+      workspace,
+      task,
+      agent: alice,
+      subject: 'committed decision',
+      value: 'accepted',
+    }
+    const omitted: OperatingEvent = {
+      ...valid,
+      subject: 'missing args hash',
+    }
+    const invalidEmptySalt: OperatingEvent = {
+      ...valid,
+      subject: 'empty salt must not become plain',
+    }
+    const signedHandoff: OperatingEvent = {
+      schema: OPERATING_EVENT_SCHEMA,
+      kind: 'handoff',
+      workspace,
+      task,
+      agent: alice,
+      from_agent: alice,
+      to_agent: bob,
+      subject: 'review handoff',
+    }
+    const tamperedHandoff: OperatingEvent = {
+      ...signedHandoff,
+      subject: 'tampered handoff',
+    }
+
+    await appendOperatingRecord(mirrorFile, 'a', valid, 100)
+    await appendOperatingRecord(mirrorFile, 'b', omitted, 101, { committed: false })
+    await appendOperatingRecord(mirrorFile, 'd', invalidEmptySalt, 101, {
+      commitmentScheme: 'plain-sha256',
+      argsSaltOverride: '',
+    })
+    await appendOperatingRecord(mirrorFile, 'c', signedHandoff, 102, {
+      committedContent: signedHandoff,
+      localContent: tamperedHandoff,
+    })
+    appendFileSync(
+      mirrorFile,
+      `${JSON.stringify({
+        record: { args_hash: 'sha256:not-a-digest', args_salt: 123 },
+        _local: { content: valid, producer: 'malformed-commitment' },
+      })}\n`,
+    )
+
+    const server = await startOperatingGraphServer({
+      mirrorPath: mirrorFile,
+      host: '127.0.0.1',
+      port: 0,
+      writesEnabled: false,
+      pollMs: 50,
+    })
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    try {
+      const response = await fetch(`${base}/v1/view?workspace_id=${workspace.id}`)
+      expect(response.status).toBe(200)
+      const body = await response.json()
+      expect(body.view.counts).toMatchObject({ records_considered: 1, cells_total: 1, handoffs: 0 })
+      expect(body.view.activity).toHaveLength(1)
+      expect(body.view.activity[0].event.subject).toBe('committed decision')
+      expect(body.view.handoffs).toEqual([])
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  it('keeps Buzz telemetry observational until a compatible signed promotion joins it', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'atrib-operating-buzz-'))
+    tempDirectories.push(directory)
+    const mirrorFile = join(directory, 'records.jsonl')
+    const workspace = { id: 'workspace-buzz', name: 'Buzz' }
+    const task = { id: 'task-buzz', name: 'Review capture' }
+    const team = { id: 'team-buzz', name: 'Runtime' }
+    const agent = { id: 'agent-buzz', name: 'Buzz agent', role: 'observer subject' }
+    const observation = buzzObservationContent({ workspace, task, team, agent, incomplete: true })
+    const observationHash = await appendSignedContentRecord(mirrorFile, 'd', observation, 200)
+    const observationOnlyWorkspace = {
+      id: 'workspace-observation-only',
+      name: 'Observation only',
+    }
+    await appendSignedContentRecord(
+      mirrorFile,
+      '4',
+      buzzObservationContent({ workspace: observationOnlyWorkspace }),
+      206,
+    )
+
+    await appendSignedContentRecord(
+      mirrorFile,
+      'e',
+      {
+        ...observation,
+        trust: {
+          ...(observation['trust'] as Record<string, unknown>),
+          owner_authorization: 'verified',
+        },
+      },
+      201,
+    )
+    await appendSignedContentRecord(mirrorFile, 'f', { ...observation, result: 'approved' }, 202)
+
+    const promotion: OperatingEvent = {
+      schema: OPERATING_EVENT_SCHEMA,
+      kind: 'accepted_state',
+      workspace,
+      task,
+      team,
+      agent,
+      subject: 'deployment',
+      value: 'approved by application policy',
+      source_observation: observationHash,
+    }
+    await appendOperatingRecord(mirrorFile, '1', promotion, 203)
+    await appendOperatingRecord(
+      mirrorFile,
+      '2',
+      { ...promotion, team: { id: 'team-other', name: 'Other team' } },
+      204,
+      {
+        committedContent: { ...promotion, team: { id: 'team-other', name: 'Other team' } },
+        informedBy: [observationHash],
+      },
+    )
+    await appendOperatingRecord(mirrorFile, '3', promotion, 205, {
+      informedBy: [observationHash],
+    })
+
+    const server = await startOperatingGraphServer({
+      mirrorPath: mirrorFile,
+      host: '127.0.0.1',
+      port: 0,
+      writesEnabled: false,
+      pollMs: 50,
+    })
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    try {
+      const workspaces = await fetch(`${base}/v1/workspaces`).then((response) => response.json())
+      expect(workspaces.workspaces).toEqual(
+        expect.arrayContaining([workspace, observationOnlyWorkspace]),
+      )
+      const observations = await fetch(
+        `${base}/v1/runtime-observations?workspace_id=${workspace.id}&limit=999`,
+      ).then((response) => response.json())
+      expect(observations.observations).toHaveLength(1)
+      expect(observations.observations[0]).toMatchObject({
+        record_hash: observationHash,
+        observation: {
+          execution_evidence: false,
+          coverage: { sequence_complete: false, missing_ranges: [{ start: 2, end: 2 }] },
+          trust: {
+            recipient_owner_binding: 'verified-by-observer-adapter',
+            owner_authorization: 'not-asserted',
+            result_truth: 'not-claimed',
+          },
+          semantic_effects: {
+            accepted_state: false,
+            decision: false,
+            outcome: false,
+            handoff: false,
+            resolution: false,
+          },
+        },
+      })
+
+      const view = await fetch(`${base}/v1/view?workspace_id=${workspace.id}`).then((response) =>
+        response.json(),
+      )
+      expect(view.view.counts).toMatchObject({ records_considered: 1, cells_total: 1 })
+      expect(view.view.activity).toHaveLength(1)
+      expect(view.view.activity[0].event).toMatchObject({
+        kind: 'accepted_state',
+        source_observation: observationHash,
+      })
+      expect(view.view.handoffs).toEqual([])
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  it('applies the creator allowlist to workspace names and observation feeds', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'atrib-operating-trust-'))
+    tempDirectories.push(directory)
+    const mirrorFile = join(directory, 'records.jsonl')
+    const workspace = { id: 'workspace-trusted', name: 'Trusted name' }
+    const spoofedWorkspace = { id: workspace.id, name: 'Spoofed name' }
+    const untrustedOnlyWorkspace = { id: 'workspace-untrusted', name: 'Untrusted only' }
+    await appendSignedContentRecord(mirrorFile, 'a', buzzObservationContent({ workspace }), 210)
+    await appendSignedContentRecord(
+      mirrorFile,
+      'b',
+      buzzObservationContent({ workspace: spoofedWorkspace }),
+      211,
+    )
+    await appendSignedContentRecord(
+      mirrorFile,
+      'b',
+      buzzObservationContent({ workspace: untrustedOnlyWorkspace }),
+      212,
+    )
+
+    const server = await startOperatingGraphServer({
+      mirrorPath: mirrorFile,
+      host: '127.0.0.1',
+      port: 0,
+      writesEnabled: false,
+      trustedCreatorKeys: [await creatorKey('a')],
+      pollMs: 50,
+    })
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    try {
+      const workspaces = await fetch(`${base}/v1/workspaces`).then((response) => response.json())
+      expect(workspaces.workspaces).toEqual([workspace])
+
+      const trusted = await fetch(
+        `${base}/v1/runtime-observations?workspace_id=${workspace.id}`,
+      ).then((response) => response.json())
+      expect(trusted.observations).toHaveLength(1)
+      expect(trusted.observations[0].observation.workspace).toEqual(workspace)
+
+      const untrusted = await fetch(
+        `${base}/v1/runtime-observations?workspace_id=${untrustedOnlyWorkspace.id}`,
+      ).then((response) => response.json())
+      expect(untrusted.observations).toEqual([])
     } finally {
       server.closeAllConnections()
       await new Promise<void>((resolve) => server.close(() => resolve()))

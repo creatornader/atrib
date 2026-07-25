@@ -6,11 +6,13 @@ import {
   canonicalRecord,
   hexEncode,
   sha256,
+  verifyJsonCommitment,
   verifyRecord,
   type AtribRecord,
   type ProofBundle,
 } from '@atrib/mcp'
 import { parseOperatingEvent, type OperatingEntry, type OperatingEnvelope } from './model.js'
+import { parseBuzzRuntimeObservation, type RuntimeObservationEntry } from './observations.js'
 
 function recordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
@@ -43,8 +45,33 @@ export async function loadOperatingEntries(
   path: string,
   maxRecords = 100_000,
 ): Promise<OperatingEntry[]> {
+  return (await loadOperatingMirror(path, maxRecords)).operating_entries
+}
+
+export async function loadRuntimeObservationEntries(
+  path: string,
+  maxRecords = 100_000,
+): Promise<RuntimeObservationEntry[]> {
+  return (await loadOperatingMirror(path, maxRecords)).runtime_observations
+}
+
+export interface OperatingMirrorEntries {
+  readonly operating_entries: OperatingEntry[]
+  readonly runtime_observations: RuntimeObservationEntry[]
+}
+
+/**
+ * Reads one fingerprintable mirror snapshot once and splits committed content
+ * into separate semantic and runtime-observation lanes. A record cannot enter
+ * either lane unless its private content reopens against the signed args hash.
+ */
+export async function loadOperatingMirror(
+  path: string,
+  maxRecords = 100_000,
+): Promise<OperatingMirrorEntries> {
   const files = await mirrorFiles(path)
-  const deduped = new Map<string, OperatingEntry>()
+  const operatingEntries = new Map<string, OperatingEntry>()
+  const runtimeObservations = new Map<string, RuntimeObservationEntry>()
   let recordsRead = 0
 
   for (const file of files) {
@@ -62,21 +89,85 @@ export async function loadOperatingEntries(
         continue
       }
       if (!envelope.record || typeof envelope.record !== 'object') continue
-      const event = parseOperatingEvent(envelope._local?.content)
-      if (!event) continue
+      const content = committedLocalContent(envelope.record, envelope._local?.content)
+      if (!content) continue
       const hash = recordHash(envelope.record)
       const signatureVerified = await verifyRecord(envelope.record).catch(() => false)
-      deduped.set(hash, {
-        record_hash: hash,
-        record: envelope.record,
-        event,
-        signature_verified: signatureVerified,
-        proof_supplied: envelope.proof !== undefined && envelope.proof !== null,
-        producer: envelope._local?.producer ?? null,
-      })
+      const event = parseOperatingEvent(content)
+      if (event) {
+        operatingEntries.set(hash, {
+          record_hash: hash,
+          record: envelope.record,
+          event,
+          signature_verified: signatureVerified,
+          content_commitment_verified: true,
+          proof_supplied: envelope.proof !== undefined && envelope.proof !== null,
+          producer: envelope._local?.producer ?? null,
+        })
+      }
+      const observation = parseBuzzRuntimeObservation(content)
+      if (observation) {
+        runtimeObservations.set(hash, {
+          record_hash: hash,
+          record: envelope.record,
+          observation,
+          signature_verified: signatureVerified,
+          content_commitment_verified: true,
+          proof_supplied: envelope.proof !== undefined && envelope.proof !== null,
+          producer: envelope._local?.producer ?? null,
+        })
+      }
     }
   }
-  return [...deduped.values()]
+  const joinedOperatingEntries = [...operatingEntries.values()].filter((entry) => {
+    const observationHash = entry.event.source_observation
+    if (!observationHash) return true
+    if (!entry.record.informed_by?.includes(observationHash)) return false
+    const observation = runtimeObservations.get(observationHash)
+    return (
+      observation !== undefined &&
+      observation.signature_verified &&
+      samePlacement(entry, observation)
+    )
+  })
+  return {
+    operating_entries: joinedOperatingEntries,
+    runtime_observations: [...runtimeObservations.values()],
+  }
+}
+
+function samePlacement(entry: OperatingEntry, observation: RuntimeObservationEntry): boolean {
+  const event = entry.event
+  const mapped = observation.observation
+  return (
+    sameNamedRef(event.workspace, mapped.workspace) &&
+    sameOptionalNamedRef(event.task, mapped.task) &&
+    sameOptionalNamedRef(event.team, mapped.team) &&
+    sameOptionalAgentRef(event.agent, mapped.mapped_agent)
+  )
+}
+
+function sameNamedRef(
+  left: { id: string; name: string },
+  right: { id: string; name: string },
+): boolean {
+  return left.id === right.id && left.name === right.name
+}
+
+function sameOptionalNamedRef(
+  left: { id: string; name: string } | undefined,
+  right: { id: string; name: string } | undefined,
+): boolean {
+  return left === undefined ? right === undefined : right !== undefined && sameNamedRef(left, right)
+}
+
+function sameOptionalAgentRef(
+  left: { id: string; name: string; role: string } | undefined,
+  right: { id: string; name: string; role: string } | undefined,
+): boolean {
+  return left === undefined
+    ? right === undefined
+    : right !== undefined && sameNamedRef(left, right) && left.role === right.role
 }
 
 export interface LocalRecordMaterial {
@@ -186,4 +277,22 @@ function isProofBundle(value: unknown): value is ProofBundle {
     Array.isArray(value['inclusion_proof']) &&
     typeof value['leaf_hash'] === 'string'
   )
+}
+
+function committedLocalContent(
+  record: AtribRecord,
+  content: unknown,
+): Record<string, unknown> | null {
+  if (!isObject(content) || !record.args_hash) return null
+  const hasArgsSalt = Object.prototype.hasOwnProperty.call(record, 'args_salt')
+  if (hasArgsSalt && typeof record.args_salt !== 'string') return null
+  try {
+    const verified = verifyJsonCommitment(content, {
+      hash: record.args_hash,
+      ...(hasArgsSalt ? { salt: record.args_salt } : {}),
+    })
+    return verified ? content : null
+  } catch {
+    return null
+  }
 }

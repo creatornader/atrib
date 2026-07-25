@@ -28,6 +28,7 @@ export interface OperatingEvent {
   value?: unknown
   status?: string
   source?: string
+  source_observation?: string
   from_agent?: AgentRef
   to_agent?: AgentRef
   accepted_head?: string
@@ -49,6 +50,7 @@ export interface OperatingEntry {
   record: AtribRecord
   event: OperatingEvent
   signature_verified: boolean
+  content_commitment_verified: true
   proof_supplied: boolean
   producer: string | null
 }
@@ -112,7 +114,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function namedRef(value: unknown): NamedRef | undefined {
+export function parseNamedRef(value: unknown): NamedRef | undefined {
   if (
     !isRecord(value) ||
     typeof value['id'] !== 'string' ||
@@ -125,9 +127,16 @@ function namedRef(value: unknown): NamedRef | undefined {
   return { id: value['id'], name: value['name'] }
 }
 
-function agentRef(value: unknown): AgentRef | undefined {
-  const named = namedRef(value)
-  if (!named || !isRecord(value) || typeof value['role'] !== 'string') return undefined
+export function parseAgentRef(value: unknown): AgentRef | undefined {
+  const named = parseNamedRef(value)
+  if (
+    !named ||
+    !isRecord(value) ||
+    typeof value['role'] !== 'string' ||
+    value['role'].trim() === ''
+  ) {
+    return undefined
+  }
   return { ...named, role: value['role'] }
 }
 
@@ -143,7 +152,7 @@ export function parseOperatingEvent(value: unknown): OperatingEvent | null {
   ) {
     return null
   }
-  const workspace = namedRef(value['workspace'])
+  const workspace = parseNamedRef(value['workspace'])
   if (!workspace) return null
   const kind = value['kind'] as OperatingEventKind
   const event: OperatingEvent = {
@@ -152,24 +161,48 @@ export function parseOperatingEvent(value: unknown): OperatingEvent | null {
     workspace,
     subject: value['subject'],
   }
-  const task = namedRef(value['task'])
-  const team = namedRef(value['team'])
-  const agent = agentRef(value['agent'])
-  const fromAgent = agentRef(value['from_agent'])
-  const toAgent = agentRef(value['to_agent'])
-  if (task) event.task = task
-  if (team) event.team = team
-  if (agent) event.agent = agent
-  if (fromAgent) event.from_agent = fromAgent
-  if (toAgent) event.to_agent = toAgent
+  const task = optionalNamedRef(value, 'task')
+  const team = optionalNamedRef(value, 'team')
+  const agent = optionalAgentRef(value, 'agent')
+  const fromAgent = optionalAgentRef(value, 'from_agent')
+  const toAgent = optionalAgentRef(value, 'to_agent')
+  if (!task.valid || !team.valid || !agent.valid || !fromAgent.valid || !toAgent.valid) return null
+  if (task.value) event.task = task.value
+  if (team.value) event.team = team.value
+  if (agent.value) event.agent = agent.value
+  if (fromAgent.value) event.from_agent = fromAgent.value
+  if (toAgent.value) event.to_agent = toAgent.value
   if ('value' in value) event.value = value['value']
-  if (typeof value['status'] === 'string') event.status = value['status']
-  if (typeof value['source'] === 'string') event.source = value['source']
-  if (typeof value['accepted_head'] === 'string') event.accepted_head = value['accepted_head']
-  if (
-    Array.isArray(value['resolves']) &&
-    value['resolves'].every((entry) => typeof entry === 'string' && HASH_PATTERN.test(entry))
-  ) {
+  if ('status' in value) {
+    if (typeof value['status'] !== 'string') return null
+    event.status = value['status']
+  }
+  if ('source' in value) {
+    if (typeof value['source'] !== 'string') return null
+    event.source = value['source']
+  }
+  if ('source_observation' in value) {
+    if (
+      typeof value['source_observation'] !== 'string' ||
+      !HASH_PATTERN.test(value['source_observation'])
+    ) {
+      return null
+    }
+    event.source_observation = value['source_observation']
+  }
+  if ('accepted_head' in value) {
+    if (typeof value['accepted_head'] !== 'string' || !HASH_PATTERN.test(value['accepted_head'])) {
+      return null
+    }
+    event.accepted_head = value['accepted_head']
+  }
+  if ('resolves' in value) {
+    if (
+      !Array.isArray(value['resolves']) ||
+      !value['resolves'].every((entry) => typeof entry === 'string' && HASH_PATTERN.test(entry))
+    ) {
+      return null
+    }
     event.resolves = [...value['resolves']]
   }
   if (
@@ -194,6 +227,24 @@ export function parseOperatingEvent(value: unknown): OperatingEvent | null {
     }
   }
   return event
+}
+
+function optionalNamedRef(
+  object: Record<string, unknown>,
+  field: string,
+): { valid: boolean; value?: NamedRef } {
+  if (!(field in object)) return { valid: true }
+  const value = parseNamedRef(object[field])
+  return value ? { valid: true, value } : { valid: false }
+}
+
+function optionalAgentRef(
+  object: Record<string, unknown>,
+  field: string,
+): { valid: boolean; value?: AgentRef } {
+  if (!(field in object)) return { valid: true }
+  const value = parseAgentRef(object[field])
+  return value ? { valid: true, value } : { valid: false }
 }
 
 function inBaseScope(entry: OperatingEntry, query: OperatingViewQuery): boolean {
