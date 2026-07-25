@@ -4246,7 +4246,38 @@ A verifier resolving identity for an attribution record `R` with `creator_key = 
 
 **Step 4: Verify directory checkpoint signature.** Confirm the directory's checkpoint signature against the directory's published key. If invalid, surface `directory_checkpoint_invalid: true` AND reject the entire query (do NOT proceed). A directory operator returning an invalidly-signed checkpoint is a fault, not a soft signal.
 
-**Step 5: Verify append-only consistency.** For the chain of `directory_anchor` records between the previous anchor the verifier consulted and the current one, confirm the directory's checkpoint chain is consistent: each successive checkpoint extends the previous root via standard AKD consistency proof. If broken, surface `directory_append_only_violation: true` AND reject all queries against this directory until the operator resolves the inconsistency.
+**Step 5: Verify append-only consistency.** The verifier carries the exact
+`record_hash` of the directory anchor accepted during its previous
+consultation. It MUST NOT infer that state from the second-newest or any other
+nearby log entry.
+
+If the carried hash equals the selected current anchor hash, the consultation
+has no state transition and `append_only_consistent` is true. Otherwise, the
+verifier MUST follow signed `chain_root` links from the current anchor back to
+the carried hash. For every anchor on that path, it MUST:
+
+1. reconstruct the canonical record hash from the body;
+2. verify the directory-operator signature and the committed entry fields;
+3. verify inclusion in a checkpoint signed by the caller-pinned log key; and
+4. require the parent to have a lower log index, rejecting cycles, missing
+   parents, and a path that reaches genesis before the carried hash.
+
+Directory epochs MUST NOT decrease along the verified path. Two successive
+anchors MAY name the same epoch only when they commit to the same directory
+root, which allows an operator to re-anchor unchanged state after a deployment
+or recovery. When the current epoch is newer, the verifier MUST request the AKD
+consistency proof for the exact carried-to-current epoch range, verify that the
+response names that range, and verify the proof against the two signed endpoint
+roots.
+
+On a first consultation, the verifier has no prior accepted anchor and leaves
+`append_only_consistent` unknown. After the query passes the applicable hard
+checks, the caller persists the selected anchor hash for the next consultation.
+If a supplied prior hash is missing from the current log view, is not an
+ancestor, or any body, signature, inclusion proof, ordering check, root, epoch,
+or AKD proof is inconsistent, surface `directory_append_only_violation: true`
+AND reject all queries against this directory until the operator resolves the
+inconsistency.
 
 **Step 6: AKD lookup.** Query the directory for `K` at the anchor's checkpoint version. The directory returns either `(claim, version, lookup_proof)` for membership or `(null, lookup_proof)` for non-membership. Both forms include a verifiable proof.
 
@@ -4290,7 +4321,15 @@ If `K`'s claim carries `capabilities` per [§6.7](#67-capability-declarations), 
 }
 ```
 
-**Failure semantics.** Steps 4, 5, and 7 are HARD failures (verifier rejects the result). All other failures are SOFT signals (verifier surfaces and proceeds). Consumer policy decides what to do with soft signals; the protocol does not block records on identity-layer signals because identity is one input to the [§8.7.2](#872-layered-trust-assessment) trust assessment, not a gate.
+**Failure semantics.** Steps 4, 5, and 7 are HARD failures when supplied
+evidence is malformed, inconsistent, or cryptographically invalid. An omitted
+optional verifier capability or unavailable external response leaves the
+corresponding output unknown and adds a warning under the
+[§5.8](#58-degradation-contract) degradation contract. All other failures are
+SOFT signals (verifier surfaces and proceeds). Consumer policy decides what to
+do with soft signals; the protocol does not block records on identity-layer
+signals because identity is one input to the
+[§8.7.2](#872-layered-trust-assessment) trust assessment, not a gate.
 
 ### 6.4 Witness Model
 
@@ -4311,8 +4350,19 @@ Implementations MUST pass all vectors in [`spec/conformance/6/`](spec/conformanc
 - `valid-anchor-coherence`: a `directory_anchor` record on the Tessera log matches the directory's actual root at that tree size.
 - `valid-per-operation-anchoring`: insert N consecutive operations; verifier observes N anchor records in the log, one per operation, in order.
 - `valid-append-only-consistency`: anchored checkpoints (V, V+1, V+2) verifier confirms each successive checkpoint extends the previous via AKD consistency proof.
+- `valid-consulted-anchor-chain`: verifier follows signed, log-included
+  `chain_root` links from the selected anchor to the exact prior accepted
+  anchor, ignoring unrelated adjacent entries.
+- `valid-same-epoch-reanchor`: two successive signed anchors name the same
+  epoch and root; verifier accepts the unchanged-state transition without
+  requesting an AKD proof.
 - `invalid-anchor-mismatch`: anchor's root differs from directory's actual root → verifier rejects (hard failure per [§6.3](#63-verifier-consultation-algorithm) step 4).
 - `invalid-append-only-violation`: directory rolls back state between two anchored checkpoints → verifier rejects all queries until resolved (hard failure per [§6.3](#63-verifier-consultation-algorithm) step 5).
+- `invalid-consulted-anchor-substitution`: the adjacent log entry is not the
+  verifier's carried prior anchor; verifier rejects any attempted substitution.
+- `invalid-anchor-chain-evidence`: a predecessor body, operator signature,
+  log inclusion proof, descending log order, or audit-proof epoch range is
+  invalid; verifier rejects.
 - `invalid-lookup-proof`: tampered lookup proof → verifier rejects (hard failure per [§6.3](#63-verifier-consultation-algorithm) step 7).
 - `valid-anchor-stale-soft-signal`: anchor is older than consumer freshness threshold → verifier surfaces `directory_anchor_stale: true` but does not reject (soft signal).
 - `valid-witness-insufficient-soft-signal`: anchor's underlying log checkpoint has fewer cosignatures than consumer threshold → verifier surfaces `directory_witness_insufficient` but does not reject (soft signal).

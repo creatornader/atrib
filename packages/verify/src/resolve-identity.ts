@@ -294,6 +294,16 @@ export interface ResolveIdentityOptions {
    */
   verifyAuditProof?: (input: VerifyAuditProofInput) => Promise<boolean>
   /**
+   * §6.3 step 5: record hash of the directory anchor this verifier accepted
+   * during its previous consultation. The verifier follows signed
+   * `chain_root` links from the selected current anchor back to this hash.
+   *
+   * Supplying `verifyAuditProof` without this state does not authorize the
+   * verifier to substitute a nearby log entry. The check stays explicit and
+   * unchecked until the caller supplies the actual prior consultation point.
+   */
+  previousAnchorRecordHash?: string
+  /**
    * §6.3 step 3: caller-pinned C2SP key for the log checkpoint. This is
    * distinct from `directoryOperatorKey`, which signs directory anchors.
    * Without this key, `anchor_witness_count` stays `null`.
@@ -457,9 +467,9 @@ export async function resolveIdentity(
   const T = typeof opts.recordTimestamp === 'number' ? opts.recordTimestamp : Date.now()
   let anchor: AnchorSurface | null = null
   let anchorCommitment: (AnchorCommitment & { log_index: number }) | null = null
+  let anchorCommitments: AnchorCommitment[] = []
   let anchorDirectoryOrigin: string | null = null
   let anchorBody: AnchorBody | null = null
-  let priorAnchorBody: AnchorBody | null = null
   let directorySignatureValid: boolean | null = null
   let anchorDiscoveryAttempted = false
   if (opts.logEndpoint && opts.directoryOperatorKey && opts.fetchAnchorBody) {
@@ -478,9 +488,9 @@ export async function resolveIdentity(
     if (stepOneResult) {
       anchor = stepOneResult.anchor
       anchorCommitment = stepOneResult.anchorCommitment
+      anchorCommitments = stepOneResult.anchorCommitments
       anchorDirectoryOrigin = stepOneResult.directoryOrigin
       anchorBody = stepOneResult.currentBody
-      priorAnchorBody = stepOneResult.priorBody
     }
   }
 
@@ -603,15 +613,32 @@ export async function resolveIdentity(
     lookupProofValid = stepSevenOutcome // true | null
   }
 
-  // Step 5 (append-only consistency). Only attempted when step 1 surfaced
-  // both a current AND a prior anchor body (need a pair for audit_verify),
-  // AND `verifyAuditProof` callback is supplied.
+  // Step 5 (append-only consistency). The caller supplies the anchor hash
+  // accepted during its previous consultation. The verifier follows the
+  // current body's signed chain_root path back to that exact anchor and
+  // verifies every path body and log inclusion before checking AKD
+  // consistency. It never substitutes the second-newest log entry.
   let appendOnlyConsistent: boolean | null = null
-  if (opts.verifyAuditProof && anchorBody && priorAnchorBody) {
+  if (
+    opts.verifyAuditProof &&
+    opts.previousAnchorRecordHash &&
+    opts.logEndpoint &&
+    opts.directoryOperatorKey &&
+    opts.fetchAnchorBody &&
+    anchorBody &&
+    anchorCommitment &&
+    anchorDirectoryOrigin
+  ) {
     const stepFiveOutcome = await runStepFive({
-      currentBody: anchorBody,
-      priorBody: priorAnchorBody,
+      current: { body: anchorBody, commitment: anchorCommitment },
+      previousAnchorRecordHash: opts.previousAnchorRecordHash,
+      anchorCommitments,
+      directoryOperatorKey: opts.directoryOperatorKey,
+      directoryOrigin: anchorDirectoryOrigin,
       directoryEndpoint,
+      logEndpoint: opts.logEndpoint,
+      logCheckpointKey: opts.logCheckpointKey,
+      fetchAnchorBody: opts.fetchAnchorBody,
       verifyAuditProof: opts.verifyAuditProof,
       fetchFn,
       signal: opts.signal,
@@ -632,6 +659,10 @@ export async function resolveIdentity(
       }
     }
     appendOnlyConsistent = stepFiveOutcome // true | null
+  } else if (opts.verifyAuditProof && anchorBody && !opts.previousAnchorRecordHash) {
+    warnings.push(
+      'step-5-previous-anchor-not-supplied: append-only verification requires the prior consulted anchor hash',
+    )
   }
 
   return {
@@ -678,12 +709,12 @@ interface StepOneSuccess {
   anchor: AnchorSurface
   /** Anchor fields needed to reconstruct and verify its log leaf. */
   anchorCommitment: AnchorCommitment & { log_index: number }
+  /** Matching directory-anchor commitments available for signed path walking. */
+  anchorCommitments: AnchorCommitment[]
   /** Directory origin used to derive the queried log context. */
   directoryOrigin: string
   /** Body of the discovered anchor (current). */
   currentBody: AnchorBody
-  /** Body of the predecessor anchor when present; null for a single-anchor history. */
-  priorBody: AnchorBody | null
 }
 
 /**
@@ -759,7 +790,6 @@ async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
     return null
   }
   const current = matches[0]! // newest-first → first match is the most recent
-  const prior = matches[1] ?? null // second-most-recent, if any
   if (current.context_id !== contextHex) {
     opts.warnings.push(
       'step-1-anchor-context-mismatch: log response entry does not match the queried directory context',
@@ -774,7 +804,8 @@ async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
     return null
   }
 
-  // Fetch the body for the current anchor (and predecessor when present).
+  // Fetch the body for the current anchor. Step 5 later follows this body's
+  // signed chain_root to the caller's explicit prior consultation point.
   const recordHashStr = current.record_hash.startsWith('sha256:')
     ? current.record_hash
     : `sha256:${current.record_hash}`
@@ -812,20 +843,6 @@ async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
     return null
   }
 
-  // Optional predecessor body for step 5; tolerate failure since step 5
-  // can stay warning-only without it.
-  let priorBody: AnchorBody | null = null
-  if (prior) {
-    const priorHashStr = prior.record_hash.startsWith('sha256:')
-      ? prior.record_hash
-      : `sha256:${prior.record_hash}`
-    try {
-      priorBody = await opts.fetchAnchorBody(priorHashStr)
-    } catch {
-      // Soft: step 5 will note its absence.
-    }
-  }
-
   const anchorAgeMs = opts.recordTimestamp - current.timestamp_ms
   const freshnessOk =
     typeof opts.freshnessThresholdMs === 'number' ? anchorAgeMs <= opts.freshnessThresholdMs : null
@@ -855,9 +872,9 @@ async function runStepOne(opts: StepOneInputs): Promise<StepOneSuccess | null> {
       record_hash: recordHashStr,
       log_index: currentLogIndex,
     },
+    anchorCommitments: entries,
     directoryOrigin,
     currentBody,
-    priorBody,
   }
 }
 
@@ -903,9 +920,18 @@ async function fetchDirectoryOrigin(
 }
 
 interface StepFiveInputs {
-  currentBody: AnchorBody
-  priorBody: AnchorBody
+  current: {
+    body: AnchorBody
+    commitment: AnchorCommitment & { log_index: number }
+  }
+  previousAnchorRecordHash: string
+  anchorCommitments: AnchorCommitment[]
+  directoryOperatorKey: string
+  directoryOrigin: string
   directoryEndpoint: string
+  logEndpoint: string
+  logCheckpointKey: TrustedCheckpointKey | undefined
+  fetchAnchorBody: (recordHash: string) => Promise<AnchorBody | null>
   verifyAuditProof: (input: VerifyAuditProofInput) => Promise<boolean>
   fetchFn: typeof fetch
   signal: AbortSignal | undefined
@@ -913,23 +939,188 @@ interface StepFiveInputs {
 }
 
 /**
- * Spec §6.3 step 5: append-only consistency check. Fetches the audit
- * proof between the prior anchor's epoch and the current anchor's
- * epoch from the directory's `/v6/audit-proof` endpoint, then runs
- * verify_audit_proof against the [prior_root, current_root] pair.
+ * Spec §6.3 step 5: append-only consistency check. Walks signed
+ * `chain_root` links from the current anchor back to the exact anchor the
+ * caller accepted during its previous consultation. Every body on that path
+ * must match a log commitment, carry a valid directory-operator signature,
+ * occur earlier in the log, and have a valid inclusion proof under the
+ * caller-pinned log key. Only then does the verifier check the AKD audit proof
+ * between the endpoint roots.
  *
  * Returns:
  *   - `true`     when the audit proof verifies
- *   - `null`     when verification couldn't be attempted (fetch or
- *                decode error, callback throws)
+ *   - `null`     when required external evidence was unavailable
  *   - `'rejected'` when verification rejects → §6.3 step 5 HARD failure
  */
 async function runStepFive(opts: StepFiveInputs): Promise<true | null | 'rejected'> {
-  const fromEpoch = opts.priorBody.metadata.directory_epoch
-  const toEpoch = opts.currentBody.metadata.directory_epoch
-  if (toEpoch <= fromEpoch) {
-    opts.warnings.push(`step-5-invalid-epoch-range: prior=${fromEpoch} >= current=${toEpoch}`)
+  const previousHash = normalizeAnchorRecordHash(opts.previousAnchorRecordHash)
+  if (!previousHash) {
+    opts.warnings.push('step-5-previous-anchor-hash-malformed: expected sha256:<64-lowercase-hex>')
+    return 'rejected'
+  }
+
+  const currentHash = normalizeAnchorRecordHash(opts.current.commitment.record_hash)
+  if (!currentHash) {
+    opts.warnings.push('step-5-current-anchor-hash-malformed: selected commitment is malformed')
+    return 'rejected'
+  }
+  if (previousHash === currentHash) {
+    removeWarning(opts.warnings, 'step-5-append-only-not-checked')
+    return true
+  }
+
+  const commitmentsByHash = new Map<
+    string,
+    AnchorCommitment & { log_index: number; record_hash: string }
+  >()
+  for (const commitment of opts.anchorCommitments) {
+    const recordHash = normalizeAnchorRecordHash(commitment.record_hash)
+    const logIndex = normalizeAnchorLogIndex(commitment)
+    if (
+      recordHash &&
+      logIndex !== null &&
+      commitment.creator_key === opts.directoryOperatorKey &&
+      commitment.context_id === opts.current.commitment.context_id &&
+      commitment.event_type === 'directory_anchor'
+    ) {
+      commitmentsByHash.set(recordHash, {
+        ...commitment,
+        record_hash: recordHash,
+        log_index: logIndex,
+      })
+    }
+  }
+
+  if (!commitmentsByHash.has(previousHash)) {
+    opts.warnings.push(
+      `step-5-previous-anchor-not-visible: prior consulted anchor ${previousHash} is absent from the current log view`,
+    )
+    return 'rejected'
+  }
+
+  const currentInclusion = await verifyAnchorLogInclusion({
+    logEndpoint: opts.logEndpoint,
+    commitment: { ...opts.current.commitment, record_hash: currentHash },
+    logCheckpointKey: opts.logCheckpointKey,
+    fetchFn: opts.fetchFn,
+    signal: opts.signal,
+    warnings: opts.warnings,
+    warningPrefix: 'step-5-chain',
+  })
+  if (currentInclusion === false) return 'rejected'
+  if (currentInclusion === null) return null
+
+  const genesisRoot = directoryAnchorGenesisRoot(opts.current.body.context_id)
+  const seen = new Set<string>([currentHash])
+  let child = {
+    body: opts.current.body,
+    commitment: { ...opts.current.commitment, record_hash: currentHash },
+  }
+  let priorBody: AnchorBody | null = null
+
+  while (child.commitment.record_hash !== previousHash) {
+    const parentHash = normalizeAnchorRecordHash(child.body.chain_root)
+    if (!parentHash) {
+      opts.warnings.push(`step-5-chain-parent-malformed: child=${child.commitment.record_hash}`)
+      return 'rejected'
+    }
+    if (parentHash === genesisRoot) {
+      opts.warnings.push(
+        `step-5-previous-anchor-not-ancestor: chain reached genesis before ${previousHash}`,
+      )
+      return 'rejected'
+    }
+    if (seen.has(parentHash)) {
+      opts.warnings.push(`step-5-chain-cycle: repeated=${parentHash}`)
+      return 'rejected'
+    }
+    seen.add(parentHash)
+
+    const parentCommitment = commitmentsByHash.get(parentHash)
+    if (!parentCommitment) {
+      opts.warnings.push(
+        `step-5-chain-parent-not-in-log: child=${child.commitment.record_hash}, parent=${parentHash}`,
+      )
+      return 'rejected'
+    }
+    if (parentCommitment.log_index >= child.commitment.log_index) {
+      opts.warnings.push(
+        `step-5-chain-log-order-invalid: child=${child.commitment.log_index}, parent=${parentCommitment.log_index}`,
+      )
+      return 'rejected'
+    }
+
+    let parentBody: AnchorBody | null
+    try {
+      parentBody = await opts.fetchAnchorBody(parentHash)
+    } catch (e) {
+      opts.warnings.push(
+        `step-5-chain-body-fetch-error: ${e instanceof Error ? e.message : String(e)}`,
+      )
+      return null
+    }
+    if (!parentBody) {
+      opts.warnings.push(`step-5-chain-body-not-available: anchor=${parentHash}`)
+      return null
+    }
+
+    const parentBodyValid = await verifyAnchorBody(
+      parentBody,
+      opts.directoryOperatorKey,
+      parentCommitment,
+      opts.directoryOrigin,
+      opts.warnings,
+      'step-5-chain',
+    )
+    if (!parentBodyValid) return 'rejected'
+
+    const parentInclusion = await verifyAnchorLogInclusion({
+      logEndpoint: opts.logEndpoint,
+      commitment: parentCommitment,
+      logCheckpointKey: opts.logCheckpointKey,
+      fetchFn: opts.fetchFn,
+      signal: opts.signal,
+      warnings: opts.warnings,
+      warningPrefix: 'step-5-chain',
+    })
+    if (parentInclusion === false) return 'rejected'
+    if (parentInclusion === null) return null
+
+    const parentEpoch = parentBody.metadata.directory_epoch
+    const childEpoch = child.body.metadata.directory_epoch
+    if (
+      parentEpoch > childEpoch ||
+      (parentEpoch === childEpoch &&
+        parentBody.metadata.directory_root !== child.body.metadata.directory_root)
+    ) {
+      opts.warnings.push(`step-5-chain-epoch-invalid: child=${childEpoch}, parent=${parentEpoch}`)
+      return 'rejected'
+    }
+
+    child = { body: parentBody, commitment: parentCommitment }
+    if (parentHash === previousHash) priorBody = parentBody
+  }
+
+  if (!priorBody) {
+    opts.warnings.push(`step-5-chain-resolution-failed: prior=${previousHash}`)
     return null
+  }
+
+  const fromEpoch = priorBody.metadata.directory_epoch
+  const toEpoch = opts.current.body.metadata.directory_epoch
+  if (toEpoch < fromEpoch) {
+    opts.warnings.push(`step-5-invalid-epoch-range: prior=${fromEpoch} > current=${toEpoch}`)
+    return 'rejected'
+  }
+  if (toEpoch === fromEpoch) {
+    if (priorBody.metadata.directory_root !== opts.current.body.metadata.directory_root) {
+      opts.warnings.push(
+        `step-5-same-epoch-root-mismatch: epoch=${toEpoch}, prior and current roots differ`,
+      )
+      return 'rejected'
+    }
+    removeWarning(opts.warnings, 'step-5-append-only-not-checked')
+    return true
   }
 
   // Fetch audit proof from the directory.
@@ -944,12 +1135,18 @@ async function runStepFive(opts: StepFiveInputs): Promise<true | null | 'rejecte
       opts.warnings.push(`step-5-audit-proof-fetch-error: ${res.status} ${res.statusText}`)
       return null
     }
-    const body = (await res.json()) as { proof?: string }
+    const body = (await res.json()) as { from_epoch?: number; to_epoch?: number; proof?: string }
+    if (body.from_epoch !== fromEpoch || body.to_epoch !== toEpoch) {
+      opts.warnings.push(
+        `step-5-audit-proof-range-mismatch: requested=${fromEpoch}:${toEpoch}, returned=${String(body.from_epoch)}:${String(body.to_epoch)}`,
+      )
+      return 'rejected'
+    }
     if (typeof body.proof !== 'string' || body.proof.length === 0) {
       opts.warnings.push(
         'step-5-audit-proof-missing: directory /audit-proof response missing proof field',
       )
-      return null
+      return 'rejected'
     }
     proofB64u = body.proof
   } catch (e) {
@@ -964,15 +1161,15 @@ async function runStepFive(opts: StepFiveInputs): Promise<true | null | 'rejecte
   let currentRoot: Uint8Array
   let proof: Uint8Array
   try {
-    priorRoot = hexToBytes(opts.priorBody.metadata.directory_root)
-    currentRoot = hexToBytes(opts.currentBody.metadata.directory_root)
+    priorRoot = hexToBytes(priorBody.metadata.directory_root)
+    currentRoot = hexToBytes(opts.current.body.metadata.directory_root)
     if (priorRoot.length !== 32 || currentRoot.length !== 32) {
       throw new Error('directory_root must be 32 bytes')
     }
     proof = base64urlToBytes(proofB64u)
   } catch (e) {
     opts.warnings.push(`step-5-input-decode-error: ${e instanceof Error ? e.message : String(e)}`)
-    return null
+    return 'rejected'
   }
 
   let verified: boolean
@@ -983,7 +1180,7 @@ async function runStepFive(opts: StepFiveInputs): Promise<true | null | 'rejecte
     })
   } catch (e) {
     opts.warnings.push(`step-5-verify-threw: ${e instanceof Error ? e.message : String(e)}`)
-    return null
+    return 'rejected'
   }
 
   if (verified) {
@@ -995,6 +1192,133 @@ async function runStepFive(opts: StepFiveInputs): Promise<true | null | 'rejecte
     'step-5-audit-proof-invalid: audit proof did not verify against the prior + current anchored roots',
   )
   return 'rejected'
+}
+
+function normalizeAnchorRecordHash(recordHash: string): string | null {
+  const normalized = recordHash.startsWith('sha256:') ? recordHash : `sha256:${recordHash}`
+  return /^sha256:[0-9a-f]{64}$/.test(normalized) ? normalized : null
+}
+
+function directoryAnchorGenesisRoot(contextId: string): string {
+  return `sha256:${Buffer.from(sha256(new TextEncoder().encode(contextId))).toString('hex')}`
+}
+
+interface AnchorLogInclusionInputs {
+  logEndpoint: string
+  commitment: AnchorCommitment & { log_index: number }
+  logCheckpointKey: TrustedCheckpointKey | undefined
+  fetchFn: typeof fetch
+  signal: AbortSignal | undefined
+  warnings: string[]
+  warningPrefix: string
+}
+
+/**
+ * Independently verify that one directory-anchor commitment is included in a
+ * checkpoint signed by the caller-pinned log key.
+ *
+ * `null` means required evidence was unavailable. `false` means supplied
+ * evidence was malformed or cryptographically inconsistent.
+ */
+async function verifyAnchorLogInclusion(opts: AnchorLogInclusionInputs): Promise<boolean | null> {
+  if (!opts.logCheckpointKey) {
+    opts.warnings.push(
+      `${opts.warningPrefix}-log-checkpoint-key-not-configured: a caller-pinned log key is required`,
+    )
+    return null
+  }
+
+  let proofBundle: AnchorProofBundle
+  try {
+    const recordHashHex = opts.commitment.record_hash.replace(/^sha256:/, '')
+    const url = `${opts.logEndpoint.replace(/\/$/, '')}/proof/${recordHashHex}`
+    const res = await opts.fetchFn(url, {
+      headers: { accept: 'application/json' },
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    })
+    if (!res.ok) {
+      opts.warnings.push(`${opts.warningPrefix}-proof-fetch-error: ${res.status} ${res.statusText}`)
+      return null
+    }
+    const body = (await res.json()) as Partial<AnchorProofBundle>
+    if (
+      !Number.isSafeInteger(body.log_index) ||
+      (body.log_index as number) < 0 ||
+      typeof body.checkpoint !== 'string' ||
+      !Array.isArray(body.inclusion_proof) ||
+      !body.inclusion_proof.every((hash) => typeof hash === 'string') ||
+      typeof body.leaf_hash !== 'string'
+    ) {
+      opts.warnings.push(`${opts.warningPrefix}-proof-malformed: log returned an invalid bundle`)
+      return false
+    }
+    proofBundle = body as AnchorProofBundle
+  } catch (e) {
+    opts.warnings.push(
+      `${opts.warningPrefix}-proof-fetch-error: ${e instanceof Error ? e.message : String(e)}`,
+    )
+    return null
+  }
+
+  const operator = await verifyOperatorCheckpoint(proofBundle.checkpoint, opts.logCheckpointKey)
+  if (!operator.valid || !operator.checkpoint) {
+    opts.warnings.push(
+      `${opts.warningPrefix}-operator-checkpoint-invalid: ${operator.reason ?? 'unknown verification failure'}`,
+    )
+    return false
+  }
+  if (proofBundle.log_index !== opts.commitment.log_index) {
+    opts.warnings.push(
+      `${opts.warningPrefix}-proof-index-mismatch: anchor=${opts.commitment.log_index}, proof=${proofBundle.log_index}`,
+    )
+    return false
+  }
+  if (operator.checkpoint.treeSize <= opts.commitment.log_index) {
+    opts.warnings.push(
+      `${opts.warningPrefix}-checkpoint-does-not-cover-anchor: tree_size=${operator.checkpoint.treeSize}, anchor_log_index=${opts.commitment.log_index}`,
+    )
+    return false
+  }
+
+  try {
+    const entryBytes = serializeEntry({
+      record_hash_hex: opts.commitment.record_hash.replace(/^sha256:/, ''),
+      creator_key_b64url: opts.commitment.creator_key,
+      context_id: opts.commitment.context_id,
+      timestamp: opts.commitment.timestamp_ms,
+      event_type: EVENT_TYPE_DIRECTORY_ANCHOR_URI,
+    })
+    const expectedLeafHash = leafHash(entryBytes)
+    const claimedLeafHash = decodeCanonicalBase64(proofBundle.leaf_hash, 32)
+    const proof = proofBundle.inclusion_proof.map((hash) => decodeCanonicalBase64(hash, 32))
+    if (!equalBytes(expectedLeafHash, claimedLeafHash)) {
+      opts.warnings.push(
+        `${opts.warningPrefix}-leaf-hash-mismatch: proof leaf does not match the anchor entry`,
+      )
+      return false
+    }
+    if (
+      !verifyInclusion(
+        proofBundle.log_index,
+        operator.checkpoint.treeSize,
+        expectedLeafHash,
+        proof,
+        operator.checkpoint.rootHash,
+      )
+    ) {
+      opts.warnings.push(
+        `${opts.warningPrefix}-inclusion-proof-invalid: anchor is not included in the signed checkpoint`,
+      )
+      return false
+    }
+  } catch (e) {
+    opts.warnings.push(
+      `${opts.warningPrefix}-inclusion-proof-malformed: ${e instanceof Error ? e.message : String(e)}`,
+    )
+    return false
+  }
+
+  return true
 }
 
 /**
@@ -1195,6 +1519,7 @@ async function verifyAnchorBody(
   expectedCommitment: AnchorCommitment & { log_index: number },
   expectedDirectoryOrigin: string,
   warnings: string[],
+  warningPrefix = 'step-4',
 ): Promise<boolean> {
   const commitmentMismatches: string[] = []
   if (body.creator_key !== expectedCommitment.creator_key) {
@@ -1213,13 +1538,15 @@ async function verifyAnchorBody(
     commitmentMismatches.push('directory_origin')
   }
   if (commitmentMismatches.length > 0) {
-    warnings.push(`step-4-body-entry-mismatch: fields=${commitmentMismatches.join(',')}`)
+    warnings.push(`${warningPrefix}-body-entry-mismatch: fields=${commitmentMismatches.join(',')}`)
   }
 
   let commitmentMatches = false
   const fullCanonical = canonicalize(body)
   if (typeof fullCanonical !== 'string') {
-    warnings.push('step-4-canonicalize-failed: full anchor body could not be canonicalized')
+    warnings.push(
+      `${warningPrefix}-canonicalize-failed: full anchor body could not be canonicalized`,
+    )
   } else {
     const computedRecordHash = `sha256:${Buffer.from(
       sha256(new TextEncoder().encode(fullCanonical)),
@@ -1227,7 +1554,7 @@ async function verifyAnchorBody(
     commitmentMatches = computedRecordHash === expectedCommitment.record_hash
     if (!commitmentMatches) {
       warnings.push(
-        `step-4-body-commitment-mismatch: expected=${expectedCommitment.record_hash}, actual=${computedRecordHash}`,
+        `${warningPrefix}-body-commitment-mismatch: expected=${expectedCommitment.record_hash}, actual=${computedRecordHash}`,
       )
     }
   }
@@ -1237,7 +1564,7 @@ async function verifyAnchorBody(
   const { signature, ...unsigned } = body
   const canonical = canonicalize(unsigned)
   if (typeof canonical !== 'string') {
-    warnings.push('step-4-canonicalize-failed: anchor body could not be canonicalized')
+    warnings.push(`${warningPrefix}-canonicalize-failed: anchor body could not be canonicalized`)
     return false
   }
   let sigBytes: Uint8Array
@@ -1246,25 +1573,25 @@ async function verifyAnchorBody(
     sigBytes = base64urlToBytes(signature)
     pubBytes = base64urlToBytes(expectedOperatorKey)
   } catch (e) {
-    warnings.push(`step-4-decode-failed: ${e instanceof Error ? e.message : String(e)}`)
+    warnings.push(`${warningPrefix}-decode-failed: ${e instanceof Error ? e.message : String(e)}`)
     return false
   }
   if (sigBytes.length !== 64 || pubBytes.length !== 32) {
     warnings.push(
-      `step-4-decode-failed: signature must be 64 bytes (got ${sigBytes.length}), pubkey 32 bytes (got ${pubBytes.length})`,
+      `${warningPrefix}-decode-failed: signature must be 64 bytes (got ${sigBytes.length}), pubkey 32 bytes (got ${pubBytes.length})`,
     )
     return false
   }
-  let ok = false
+  let ok: boolean
   try {
     ok = await ed25519.verifyAsync(sigBytes, new TextEncoder().encode(canonical), pubBytes)
   } catch (e) {
-    warnings.push(`step-4-verify-threw: ${e instanceof Error ? e.message : String(e)}`)
+    warnings.push(`${warningPrefix}-verify-threw: ${e instanceof Error ? e.message : String(e)}`)
     return false
   }
   if (!ok) {
     warnings.push(
-      'step-4-signature-invalid: directory operator signature on anchor body did not verify',
+      `${warningPrefix}-signature-invalid: directory operator signature on anchor body did not verify`,
     )
   }
   return ok && commitmentMatches && commitmentMismatches.length === 0

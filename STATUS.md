@@ -59,7 +59,18 @@ The package inventory, grouped current / deprecated / private, lives in the [REA
 - Named identity profiles and run rotation ([D171](DECISIONS.md#d171-one-command-named-identity-preserves-the-principal-to-run-chain), [D172](DECISIONS.md#d172-run-rotation-publishes-revocation-before-successor-activation)): `atrib identity init` creates or recovers a Keychain-backed principal, deterministic workspace and agent labels, a principal-signed portable identity claim, and a context-bound run certificate. A repeat invocation publishes a principal-signed revocation for the prior run before activating the successor. `identity show` verifies the claim, key match, active certificate, and accepted revocation state. Self-attested names remain claims, and directory publication requires `--publish`.
 - Delegation evaluation now distinguishes signer time from caller-owned trusted time. Scope constraints without required facts surface under `unverifiable` with `fully_evaluated: false` instead of appearing fully checked.
 - Revocation ordering ([D173](DECISIONS.md#d173-revocation-order-is-log-order-never-signer-time)) uses log positions only. Identity resolution reports `since_revocation: null` and `order_verifiable: false` when the record log index is unavailable instead of treating a signer timestamp as ordering evidence. Shape-only registries report `registry_verified: false` until the caller confirms signature and revoker-authority checks.
-- Verifier consultation ([§6.3](atrib-spec.md#63-verifier-consultation-algorithm)) discovers log-anchored directory state, applies caller freshness policy, verifies the anchor body commitment and directory signature, checks optional AKD append-only and lookup proofs, and evaluates log-ordered revocation. Step 3 reconstructs the selected anchor leaf, verifies its inclusion proof against a caller-pinned log checkpoint, and counts only fresh cosignatures from caller-pinned witness keys. The current reference directory still serves latest-state membership lookups only.
+- Verifier consultation ([§6.3](atrib-spec.md#63-verifier-consultation-algorithm),
+  [D181](DECISIONS.md#d181-directory-consistency-follows-the-verifiers-accepted-anchor))
+  discovers log-anchored directory state, applies caller freshness policy,
+  verifies the anchor body commitment and directory signature, checks optional
+  AKD append-only and lookup proofs, and evaluates log-ordered revocation. Step
+  3 reconstructs the selected anchor leaf, verifies its inclusion proof against
+  a caller-pinned log checkpoint, and counts only fresh cosignatures from
+  caller-pinned witness keys. Step 5 takes the exact previously accepted anchor
+  hash, follows signed predecessor links, and verifies every body, signature,
+  log position, and inclusion proof before checking the exact AKD epoch range.
+  The current reference directory still serves latest-state membership lookups
+  only.
 
 ### Verification and evidence
 

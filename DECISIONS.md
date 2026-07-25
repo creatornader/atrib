@@ -9193,6 +9193,71 @@ bootstrap from an existing log anchor.
 [D070](#d070-record-body-archive-layer), and
 [§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log).
 
+## D181: Directory consistency follows the verifier's accepted anchor
+
+**Date:** 2026-07-24
+
+**Status:** Accepted and implemented
+
+**Context.** `resolveIdentity()` previously treated the second-newest matching
+log entry as the prior directory state. The caller never identified which
+anchor it had accepted during its previous consultation. Step 5 fetched that
+adjacent body but did not independently verify its canonical record hash,
+directory signature, or log inclusion before passing its root into the AKD
+audit check.
+
+That logic could report `append_only_consistent: true` for a valid proof between
+the current root and an unrelated or unverified adjacent entry. It also failed
+to distinguish a legitimate same-epoch re-anchor from a same-epoch root
+conflict. [D180](#d180-directory-anchors-use-a-durable-linear-commit-journal)
+made each producer-side predecessor explicit. The verifier must consume that
+chronology without guessing which prior state the caller trusted.
+
+**Decision.**
+
+1. `resolveIdentity()` accepts `previousAnchorRecordHash`, the exact anchor hash
+   the caller accepted during its previous consultation. The caller reads the
+   next value from `result.anchor.anchor_record_hash` only after accepting the
+   result.
+2. Step 5 never substitutes an adjacent log entry. It follows the selected
+   current anchor's signed `chain_root` links back to the supplied hash.
+3. Every predecessor body on the path must reproduce its log-committed record
+   hash, match the committed creator, context, timestamp, and event type, and
+   verify under the caller-pinned directory key.
+4. Every path anchor must have a valid inclusion proof under the caller-pinned
+   log key. Parent log positions must decrease strictly. Missing parents,
+   cycles, genesis before the supplied hash, and supplied hashes absent from
+   the current log view are hard failures.
+5. Epochs cannot decrease. A repeated epoch is valid only when its root is
+   unchanged. This permits restart or migration re-anchoring without treating
+   it as a directory update.
+6. For an epoch advance, the audit response must name the exact requested
+   range before its proof is checked against the signed endpoint roots.
+7. A first consultation has no continuity baseline and leaves
+   `append_only_consistent` unknown. Omitting the option never authorizes an
+   inferred predecessor.
+
+**Alternatives rejected.**
+
+- Keep using the second-newest entry. Log adjacency does not identify caller
+  state, and unrelated re-anchors can occupy that position.
+- Carry only a prior epoch or root. Neither value identifies the signed record,
+  its operator, its log position, or its exact chronology.
+- Trust the directory's audit endpoint to name both endpoints. The directory is
+  the party being checked, so the caller must bind the proof request to state it
+  already accepted.
+
+**Conformance.** The verifier tests pin exact-prior carriage, unrelated adjacent
+anchors, predecessor signature and commitment tampering, predecessor inclusion
+proof failure, absent and non-ancestor prior hashes, same-anchor reuse,
+same-epoch unchanged-root re-anchoring, and audit response range mismatch.
+
+**Cross-references.**
+[D034](#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers),
+[D170](#d170-checkpoint-gossip-fails-closed-and-publishes-conflicts),
+[D180](#d180-directory-anchors-use-a-durable-linear-commit-journal), and
+[§6.3](atrib-spec.md#63-verifier-consultation-algorithm).
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
