@@ -1,5 +1,20 @@
 # @atrib/sdk
 
+## 5.1.0
+
+### Minor Changes
+
+- f16d2dc: Add explicit per-call and per-client mirror paths, file-scoped chain inheritance, and isolated anchor fan-out for concurrent in-process clients.
+
+### Patch Changes
+
+- Updated dependencies [f16d2dc]
+  - @atrib/emit@1.1.0
+  - @atrib/mcp@0.23.0
+  - @atrib/verify@0.12.3
+  - @atrib/recall@4.0.1
+  - @atrib/verify-mcp@1.0.7
+
 ## 5.0.2
 
 ### Patch Changes

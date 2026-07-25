@@ -1,5 +1,15 @@
 # @atrib/runtime-log
 
+## 0.4.0
+
+### Minor Changes
+
+- f16d2dc: Add a public Buzz NIP-AO observer runtime-log source with live capture loading, complete decrypted-object commitments, and explicit process-sequence gap policy.
+
+### Patch Changes
+
+- @atrib/verify@0.12.3
+
 ## 0.3.0
 
 ### Minor Changes

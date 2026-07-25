@@ -1,5 +1,11 @@
 # @atrib/witness-node
 
+## 0.1.5
+
+### Patch Changes
+
+- @atrib/verify@0.12.3
+
 ## 0.1.4
 
 ### Patch Changes

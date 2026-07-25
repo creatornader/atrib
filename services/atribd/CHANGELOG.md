@@ -1,5 +1,17 @@
 # @atrib/daemon
 
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies [f16d2dc]
+- Updated dependencies [f16d2dc]
+  - @atrib/attest@0.3.0
+  - @atrib/mcp@0.23.0
+  - @atrib/verify@0.12.3
+  - @atrib/recall@4.0.1
+  - @atrib/summarize@0.4.25
+
 ## 0.2.5
 
 ### Patch Changes

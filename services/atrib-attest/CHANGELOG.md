@@ -1,5 +1,17 @@
 # @atrib/attest
 
+## 0.3.0
+
+### Minor Changes
+
+- f16d2dc: Add explicit per-call and per-client mirror paths, file-scoped chain inheritance, and isolated anchor fan-out for concurrent in-process clients.
+
+### Patch Changes
+
+- f16d2dc: Accept the normative hashed and unrestricted verbatim tool-name forms from protocol section 8.2.
+- Updated dependencies [f16d2dc]
+  - @atrib/mcp@0.23.0
+
 ## 0.2.0
 
 ### Minor Changes
