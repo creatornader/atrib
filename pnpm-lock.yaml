@@ -656,6 +656,9 @@ importers:
 
   packages/runtime-log:
     dependencies:
+      '@atrib/verify':
+        specifier: workspace:*
+        version: link:../verify
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
@@ -666,6 +669,9 @@ importers:
       '@atrib/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@noble/secp256k1':
+        specifier: ^3.1.0
+        version: 3.1.0
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1

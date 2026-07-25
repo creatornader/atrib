@@ -9072,7 +9072,7 @@ heads, and source actions omitted from projections.
 
 **Date:** 2026-07-24
 
-**Status:** Accepted and implemented
+**Status:** Accepted and implemented (v2 2026-07-25)
 
 **Context.** A Nostr signature, a Buzz owner authorization, Buzz relay
 admission, operator audit insertion, and runtime execution are different
@@ -9114,14 +9114,20 @@ action-completeness claims still require runtime-log and coverage evidence.
 
 **Conformance.** `nostr-event--*` pins a valid event and post-signature
 mutation. `buzz-event--*` pins valid owner authorization, an uncovered event
-kind, and unresolved community, relay, audit, and runtime constraints. The
-private integration package includes a Buzz NIP-AO runtime-log source that
-verifies each signed observer frame, calls a host-owned decrypt function,
-commits ciphertext and plaintext hashes, and fails closed on gaps, duplicates,
-or out-of-order capture by default. The source audits the process-wide sequence
-implemented by `buzz-acp`; ACP sessions remain projections over that window.
-It does not promote observer telemetry into tool-execution or relay-admission
-evidence.
+kind, and unresolved community, relay, audit, and runtime constraints.
+
+Version 2 promotes the proven observer boundary from the private integration
+package to `@atrib/runtime-log/buzz`. A caller supplies an archived JSONL path
+or a live event loader. The source verifies NIP-01 before host-owned decryption,
+checks the owner, agent, frame, payload-size, and known telemetry shapes, then
+commits the complete decrypted JSON object. Unknown fields remain covered even
+when the typed projection does not expose them. The default process-sequence
+policy fails on gaps, duplicate sequences, duplicate event IDs, and
+out-of-order capture. `report-gaps` produces an explicitly incomplete window.
+Physical archive line numbers remain local diagnostics and do not alter event
+commitments. The manifest remains hash-only and does not promote observer
+telemetry into relay, audit, runtime-execution, result-truth, or
+action-completeness evidence.
 
 **Cross-references.**
 [D121](#d121-runtime-log-proof-manifests-verify-host-owned-run-windows),

@@ -386,6 +386,15 @@ binding, and side-effect receipt refs. Real runtimes can use a database,
 workflow store, object store, or hosted trace API behind the same manifest
 boundary.
 
+The public Buzz source lives at
+[`@atrib/runtime-log/buzz`](packages/runtime-log/README.md#buzz-observer-source).
+It accepts a live host event loader or archived JSONL, verifies each NIP-AO
+Nostr event before host-owned decryption, and audits the process-wide sequence
+implemented by current `buzz-acp`. Each event commitment covers the complete
+decrypted JSON object while the manifest stays hash-only. The source does not
+turn observer telemetry into proof of relay admission, audit inclusion, runtime
+execution, result truth, or capture completeness outside the supplied window.
+
 The dogfood proof lives at
 [`packages/integration/examples/dogfood-runtime-log/`](packages/integration/examples/dogfood-runtime-log/).
 It uses sanitized Agent Bridge entries from a real runtime-log proof-kit job

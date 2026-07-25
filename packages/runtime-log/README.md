@@ -178,9 +178,46 @@ The shared conformance corpus lives at
 authors can run their own verifier against those cases before publishing a new
 runtime-log source.
 
+## Buzz observer source
+
+The `@atrib/runtime-log/buzz` subpath converts host-captured Buzz NIP-AO kind
+24200 telemetry into a bounded process-level manifest:
+
+```ts
+import { BuzzObserverRuntimeLogSource } from '@atrib/runtime-log/buzz'
+
+const source = new BuzzObserverRuntimeLogSource({
+  load_events: subscribeToCapturedObserverEvents,
+  owner_pubkey: ownerPublicKey,
+  capture_id: 'buzz-desktop-process-1',
+  decrypt: decryptNip44ObserverEvent,
+})
+
+const bundle = await source.exportWindow({
+  session_id: 'buzz-desktop-process-1',
+  start: 41,
+  end: 57,
+})
+```
+
+Use `load_events` for a live host subscription or `path` for an archived JSONL
+capture. The source requires exactly one. It verifies each Nostr event before
+decryption, checks the owner and agent tags, validates known telemetry fields,
+and commits the complete decrypted JSON object. Unknown fields remain covered
+by `plaintext_hash` even when the typed projection does not expose them.
+
+Sequence checks use the process-wide counter implemented by current
+`buzz-acp`. Missing, duplicate, or out-of-order frames fail closed by default.
+Set `sequence_policy: 'report-gaps'` only when an incomplete captured window is
+acceptable and must stay explicit in the proof.
+
+The decrypt callback and captured bodies remain host-owned. The manifest does
+not claim relay admission, relay persistence, Buzz audit-log inclusion, runtime
+execution, result truth, or completeness outside the supplied capture.
+
 The integration package includes a local reference source at
 [`packages/integration/examples/reference-runtime-log/`](../integration/examples/reference-runtime-log/)
-and a Buzz NIP-AO observer-frame source at
+and a runnable Buzz observer proof at
 [`packages/integration/examples/buzz-observer-runtime-log/`](../integration/examples/buzz-observer-runtime-log/),
 and a dogfood Agent Bridge source at
 [`packages/integration/examples/dogfood-runtime-log/`](../integration/examples/dogfood-runtime-log/).

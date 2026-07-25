@@ -9,9 +9,11 @@ import { describe, expect, it } from 'vitest'
 import { deriveNostrEventId, type NostrEvent } from '@atrib/verify'
 import {
   BUZZ_OBSERVER_SEQUENCE_PROJECTION,
+  MAX_BUZZ_OBSERVER_PAYLOAD_BYTES,
   BuzzObserverRuntimeLogSource,
   type BuzzObserverTelemetry,
-} from '../src/buzz-observer-runtime-log.js'
+} from '../src/buzz.js'
+import { hashRuntimeLogEvent } from '../src/index.js'
 
 const AGENT_SECRET = new Uint8Array(32).fill(0x02)
 const OWNER_SECRET = new Uint8Array(32).fill(0x01)
@@ -33,6 +35,7 @@ async function fixtureFrame(seq: number, sessionId = 'buzz-session-1'): Promise<
     channelId: 'channel-1',
     sessionId,
     turnId: 'turn-1',
+    startedAt: '2026-07-24T12:00:00.000Z',
     payload: { method: seq === 2 ? 'session/prompt' : 'lifecycle' },
   }
   const unsigned = {
@@ -69,7 +72,13 @@ async function fixtureSource(
     'utf8',
   )
   const telemetryByCiphertext = new Map(
-    fixtures.map(({ event, telemetry }) => [event.content, telemetry]),
+    fixtures.map(({ event, telemetry }) => [
+      event.content,
+      {
+        ...telemetry,
+        futureField: 'committed even before the adapter understands it',
+      },
+    ]),
   )
   return new BuzzObserverRuntimeLogSource({
     path,
@@ -106,9 +115,69 @@ describe('Buzz observer runtime-log source', () => {
     })
     expect(bundle.manifest.projections?.[0]?.name).toBe(BUZZ_OBSERVER_SEQUENCE_PROJECTION)
     expect(bundle.frames.every((frame) => frame.event_verification.valid)).toBe(true)
+    expect(bundle.frames[0]?.plaintext_hash).toBe(
+      hashRuntimeLogEvent({
+        ...bundle.frames[0]?.telemetry,
+        futureField: 'committed even before the adapter understands it',
+      }),
+    )
     const publicManifest = JSON.stringify(bundle.manifest)
     expect(publicManifest).not.toContain('ciphertext-')
     expect(publicManifest).not.toContain('session/prompt')
+  })
+
+  it('accepts a live host event loader without a JSONL file', async () => {
+    const fixtures = await Promise.all([1, 2, 3].map((seq) => fixtureFrame(seq)))
+    const telemetryByCiphertext = new Map(
+      fixtures.map(({ event, telemetry }) => [
+        event.content,
+        { ...telemetry, futureField: `future-${telemetry.seq}` },
+      ]),
+    )
+    const source = new BuzzObserverRuntimeLogSource({
+      load_events: () => fixtures.map(({ event }) => event),
+      owner_pubkey: OWNER_PUBKEY,
+      capture_id: 'buzz-observer-process-1',
+      decrypt(event) {
+        return telemetryByCiphertext.get(event.content)
+      },
+    })
+
+    const bundle = await source.exportWindow({
+      session_id: 'buzz-observer-process-1',
+      start: 1,
+      end: 3,
+    })
+
+    expect(bundle.verification.valid).toBe(true)
+    expect(bundle.frames[0]?.plaintext_hash).toBe(
+      hashRuntimeLogEvent(telemetryByCiphertext.get(fixtures[0]!.event.content)),
+    )
+    expect(bundle.frames[0]?.telemetry.startedAt).toBe('2026-07-24T12:00:00.000Z')
+  })
+
+  it('keeps event commitments stable across capture storage layouts', async () => {
+    const fixture = await fixtureFrame(1)
+    const dir = await mkdtemp(join(tmpdir(), 'atrib-buzz-observer-layout-'))
+    const path = join(dir, 'observer-events.jsonl')
+    await writeFile(path, `\n${JSON.stringify(fixture.event)}\n`, 'utf8')
+    const archived = new BuzzObserverRuntimeLogSource({
+      path,
+      owner_pubkey: OWNER_PUBKEY,
+      decrypt: () => fixture.telemetry,
+    })
+    const live = new BuzzObserverRuntimeLogSource({
+      load_events: () => [fixture.event],
+      owner_pubkey: OWNER_PUBKEY,
+      decrypt: () => fixture.telemetry,
+    })
+
+    const [archivedFrame] = await archived.readFrames()
+    const [liveFrame] = await live.readFrames()
+
+    expect(archivedFrame?.capture_line).toBe(2)
+    expect(liveFrame?.capture_line).toBe(1)
+    expect(archivedFrame?.event_hash).toBe(liveFrame?.event_hash)
   })
 
   it('fails closed on a missing observer sequence by default', async () => {
@@ -174,6 +243,17 @@ describe('Buzz observer runtime-log source', () => {
     ])
   })
 
+  it('fails closed on duplicate sequence numbers and event IDs', async () => {
+    const source = await fixtureSource('duplicate', [1, 2, 2, 3])
+    await expect(
+      source.exportWindow({
+        session_id: 'buzz-observer-process-1',
+        start: 1,
+        end: 3,
+      }),
+    ).rejects.toThrow('duplicate_seq,duplicate_event_id')
+  })
+
   it('rejects a validly signed frame addressed to a different owner', async () => {
     const fixture = await fixtureFrame(1)
     const dir = await mkdtemp(join(tmpdir(), 'atrib-buzz-observer-owner-'))
@@ -188,5 +268,35 @@ describe('Buzz observer runtime-log source', () => {
     await expect(source.readFrames()).rejects.toThrow(
       'observer frame recipient does not match owner',
     )
+  })
+
+  it('rejects decrypted observer payloads above the NIP-AO byte limit', async () => {
+    const fixture = await fixtureFrame(1)
+    const source = new BuzzObserverRuntimeLogSource({
+      load_events: () => [fixture.event],
+      owner_pubkey: OWNER_PUBKEY,
+      decrypt: () => ({
+        ...fixture.telemetry,
+        oversized: 'x'.repeat(MAX_BUZZ_OBSERVER_PAYLOAD_BYTES),
+      }),
+    })
+
+    await expect(source.readFrames()).rejects.toThrow('decrypted content exceeds')
+  })
+
+  it('rejects an invalid Nostr event before calling the decrypt boundary', async () => {
+    const fixture = await fixtureFrame(1)
+    let decryptCalled = false
+    const source = new BuzzObserverRuntimeLogSource({
+      load_events: () => [{ ...fixture.event, content: 'tampered-ciphertext' }],
+      owner_pubkey: OWNER_PUBKEY,
+      decrypt: () => {
+        decryptCalled = true
+        return fixture.telemetry
+      },
+    })
+
+    await expect(source.readFrames()).rejects.toThrow('invalid Nostr observer event')
+    expect(decryptCalled).toBe(false)
   })
 })
