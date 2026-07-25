@@ -21,6 +21,8 @@ event types, or graph edges to the atrib protocol.
   rendered as separate facts.
 - Private application bodies enter a view only when they match the signed
   record's `args_hash`.
+- Source-neutral [D183](../../DECISIONS.md#d183-runtime-observation-adapters-separate-reading-from-durable-acceptance) observation batches can enter a caller-owned atomic
+  journal without becoming semantic state or execution evidence.
 - Buzz observer windows can appear in a separate runtime-observation feed
   without becoming accepted state, decisions, outcomes, handoffs, or
   resolutions.
@@ -104,7 +106,31 @@ not reveal names, state values, or resolution choices. The reader requires an
 application event. A missing commitment, invalid salt, or mismatched body
 excludes the record from the operating view.
 
-## Buzz runtime observations
+## Runtime observations
+
+`buildRuntimeObservation()` places a verified [D183](../../DECISIONS.md#d183-runtime-observation-adapters-separate-reading-from-durable-acceptance) batch in a workspace and
+optional task, team, and mapped-agent scope. The signed body commits the batch
+ID and bounded coverage summary. It omits raw observations, keeps
+`execution_evidence` false, and grants no accepted-state, decision, outcome,
+handoff, or resolution effect.
+
+`commitObservationBatch()` is the file-backed reference for the caller-owned
+acceptance boundary. It verifies the complete portable batch, source and
+generation binding, expected cursor, signed observation record, and body
+commitment. One atomic file replacement advances the authoritative cursor and
+adds the signed observation together. The journal rejects stale or concurrent
+writers, detects persisted history tampering, and can reclaim a lock whose
+owning process has exited. A side cursor can be rebuilt from this journal and
+must not be treated as authoritative.
+
+The generic source profile does not discover runtimes, select source files,
+store raw telemetry, infer application meaning, or execute tools. Source
+discovery and polling remain host concerns. A separate signed
+`atrib.operating-event.v1` body must cite the verified observation through
+both `source_observation` and `informed_by` before it can affect an operating
+view.
+
+### Buzz runtime observations
 
 `buildBuzzRuntimeObservation()` accepts a concrete
 `BuzzObserverRuntimeLogSource`, exports and verifies a bounded window, and
@@ -233,8 +259,16 @@ One application preferring a different UI does not.
 pnpm --filter @atrib/operating-graph typecheck
 pnpm --filter @atrib/operating-graph test
 pnpm --filter @atrib/operating-graph build
+pnpm --filter @atrib/integration open-runtime-composition
 pnpm --filter @atrib/integration test -- hostile-operating-graph.test.ts
 ```
+
+The open runtime composition uses the public Codex rollout adapter, atomic
+observation journal, separate signed semantic mapping, bounded view receipt,
+paired SDK action records, signed [D168](../../DECISIONS.md#d168-coverage-manifests-make-capture-scope-verifiable) coverage, and an independently signed
+receiver gate. It is a local deterministic fixture. It does not claim a live
+external session, complete capture, runtime-vendor provenance, telemetry as
+execution, arbitrary result truth, or a deployed product.
 
 The hostile suite covers checkpoint rollback, result-evidence inconsistency,
 permit replay and revoked credentials, withheld bodies, conflicting heads, and

@@ -167,15 +167,19 @@ An application resolution cites every active state head through
 does not change deterministic graph derivation. Another client can apply a
 different application policy over the same signed records.
 
-Runtime-source observations occupy a separate application lane. The Buzz
-mapping builder verifies a runtime window and sequence audit before the host
-signs its observation. The stored observation keeps observed Nostr signers,
-the mapped application agent, and the atrib record signer distinct. A later
-reader verifies the atrib signature and body commitment, but it cannot replay
-the source checks without the external frames and manifest. The observation
-has no semantic effect. A second signed application event must cite the
-atrib-signature-verified observation and match its named scope before the
-operating projector accepts the relationship.
+Runtime-source observations occupy a separate application lane. A source
+adapter returns a [D183](DECISIONS.md#d183-runtime-observation-adapters-separate-reading-from-durable-acceptance) portable batch against an expected cursor. The
+application journal verifies the complete batch, source generation, signed
+observation, and body commitment, then atomically stores that batch with the
+new authoritative cursor. Readers replay the full batch and cursor history
+before exposing any observation record.
+
+The observer signer, runtime subject, and mapped application agent remain
+distinct. The observation has no semantic effect. A second signed application
+event must cite the atrib-signature-verified observation and match its named
+scope before the operating projector accepts the relationship. Buzz uses this
+same non-semantic lane, while its source-specific mapping also preserves the
+observed Nostr signers and bounded runtime-window facts.
 
 ---
 
@@ -430,6 +434,17 @@ anchor mismatch, malformed frames, oversized frames, and compaction
 continuations. The resulting telemetry remains observation. It does not become
 execution evidence or operating-graph state without separate evidence and a
 signed application mapping.
+
+The runnable composition at
+[`packages/integration/examples/open-runtime-composition/`](packages/integration/examples/open-runtime-composition/)
+shows the public application boundary end to end. A generated Codex rollout
+produces one [D183](DECISIONS.md#d183-runtime-observation-adapters-separate-reading-from-durable-acceptance) batch. The operating graph atomically accepts it, a separate
+signer creates the task mapping and bounded view receipt, the SDK produces a
+linked action pair, [D168](DECISIONS.md#d168-coverage-manifests-make-capture-scope-verifiable) binds exact record membership, and an independent
+receiver verifies the composition before one selected effect. The hostile
+arms prove that missing outcome membership and wrong-task mapping block without
+running the effect. The fixture does not establish a live external session,
+complete capture, vendor provenance, or product deployment.
 
 The dogfood proof lives at
 [`packages/integration/examples/dogfood-runtime-log/`](packages/integration/examples/dogfood-runtime-log/).
