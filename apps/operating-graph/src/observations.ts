@@ -44,11 +44,11 @@ export interface RuntimeObservationMapping {
 export type BuzzObservationMapping = RuntimeObservationMapping
 
 export type PortableObservationBatch = RuntimeObservationBatch<
-  Record<string, unknown>,
+  object,
   RuntimeObservationClaim,
   RuntimeObservationCoverage,
   RuntimeObservationGap,
-  Record<string, unknown>
+  object
 >
 
 export interface PortableRuntimeObservation {
@@ -188,7 +188,7 @@ export type BuzzSemanticPromotion = RuntimeSemanticPromotion
  */
 export function buildRuntimeObservation(
   batch: PortableObservationBatch,
-  authoritativeCursor: Record<string, unknown>,
+  authoritativeCursor: object,
   mapping: RuntimeObservationMapping,
 ): PortableRuntimeObservation {
   const transition = verifyRuntimeObservationBatchTransition(batch, authoritativeCursor)

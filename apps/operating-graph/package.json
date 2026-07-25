@@ -18,6 +18,10 @@
     "./observation-journal": {
       "types": "./dist/observation-journal.d.ts",
       "import": "./dist/observation-journal.js"
+    },
+    "./store": {
+      "types": "./dist/store.d.ts",
+      "import": "./dist/store.js"
     }
   },
   "scripts": {

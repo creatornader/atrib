@@ -34,15 +34,15 @@ export interface ObservationJournalState {
     readonly source_ref: string
     readonly generation_ref: string
   }
-  readonly initial_cursor: Record<string, unknown>
-  readonly authoritative_cursor: Record<string, unknown>
+  readonly initial_cursor: object
+  readonly authoritative_cursor: object
   readonly commits: readonly ObservationJournalCommit[]
 }
 
 export interface CommitObservationBatchInput {
   readonly path: string
   readonly operation_id: string
-  readonly initial_cursor: Record<string, unknown>
+  readonly initial_cursor: object
   readonly batch: PortableObservationBatch
   readonly envelope: OperatingEnvelope
 }
@@ -115,7 +115,7 @@ export async function readObservationJournal(
   initial: {
     readonly source_ref: string
     readonly generation_ref: string
-    readonly initial_cursor: Record<string, unknown>
+    readonly initial_cursor: object
   },
 ): Promise<ObservationJournalState> {
   let parsed: unknown
