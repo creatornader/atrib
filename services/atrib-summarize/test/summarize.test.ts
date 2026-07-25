@@ -26,6 +26,7 @@ const ENV_KEYS = [
   'CLOUDFLARE_API_KEY',
 ]
 const ORIGINAL_HOME = process.env['HOME']
+let testHome: string | undefined
 
 function clearTestEnv() {
   for (const key of ENV_KEYS) delete process.env[key]
@@ -33,10 +34,16 @@ function clearTestEnv() {
 
 beforeEach(() => {
   clearTestEnv()
+  testHome = mkdtempSync(join(tmpdir(), 'atrib-summarize-test-home-'))
+  process.env['HOME'] = testHome
 })
 
 afterEach(() => {
   clearTestEnv()
+  if (testHome !== undefined) {
+    rmSync(testHome, { recursive: true, force: true })
+    testHome = undefined
+  }
   if (ORIGINAL_HOME === undefined) delete process.env['HOME']
   else process.env['HOME'] = ORIGINAL_HOME
   vi.restoreAllMocks()

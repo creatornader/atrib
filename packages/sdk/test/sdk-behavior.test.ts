@@ -18,8 +18,8 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createServer, type Server as HttpServer } from 'node:http'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
@@ -281,6 +281,242 @@ describe('attest() in-process fallback (daemon off)', () => {
     expect(envelope.record.context_id).toBe(CONTEXT_A)
     expect(recordHashRef(envelope.record)).toBe(result.record_hash)
     expect(await verifyRecord(envelope.record)).toBe(true)
+  })
+
+  it('signs a real action request and linked outcome through the attest service boundary', async () => {
+    const seed = new Uint8Array(32).fill(8)
+    const client = createAtribClient({
+      daemon: { mode: 'off' },
+      key: { privateKey: seed, source: 'env' },
+      anchors: [logEndpoint],
+      allowSingleAnchor: true,
+      contextId: CONTEXT_B,
+    })
+
+    const result = await client.action({
+      name: 'sdk_action_boundary_regression',
+      args: { task_id: 'task-1', revision: 'r1' },
+      execute: () => ({ status: 'completed', revision: 'r1' }),
+    })
+    await client.flushAnchors()
+    await client.close()
+
+    expect(result.ok).toBe(true)
+    expect(result.request.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(result.outcome.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(result.request.record_hash).not.toBe(result.outcome.record_hash)
+
+    const lines = readFileSync(mirrorFile, 'utf8').trim().split('\n')
+    const envelopes = lines.slice(-2).map(
+      (line) =>
+        JSON.parse(line) as {
+          record: AtribRecord
+          _local?: { content?: Record<string, unknown> }
+        },
+    )
+    const [requestEnvelope, outcomeEnvelope] = envelopes
+    expect(requestEnvelope?.record.tool_name).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(requestEnvelope?.record.tool_name).toHaveLength(71)
+    expect(recordHashRef(requestEnvelope!.record)).toBe(result.request.record_hash)
+    expect(recordHashRef(outcomeEnvelope!.record)).toBe(result.outcome.record_hash)
+    expect(outcomeEnvelope?.record.chain_root).toBe(result.request.record_hash)
+    expect(outcomeEnvelope?.record.informed_by).toEqual([result.request.record_hash])
+    expect(requestEnvelope?._local?.content).toMatchObject({ action_phase: 'request' })
+    expect(outcomeEnvelope?._local?.content).toMatchObject({ action_phase: 'outcome' })
+    expect(await verifyRecord(requestEnvelope!.record)).toBe(true)
+    expect(await verifyRecord(outcomeEnvelope!.record)).toBe(true)
+  })
+
+  it('isolates concurrent in-process clients with explicit mirror and autochain paths', async () => {
+    const mirrorA = join(mirrorDir, `client-a-${randomUUID()}.jsonl`)
+    const mirrorB = join(mirrorDir, `client-b-${randomUUID()}.jsonl`)
+    const mutatedMirrorA = join(mirrorDir, `client-a-mutated-${randomUUID()}.jsonl`)
+    const sharedMirrorHashesBefore = new Set(
+      readFileSync(mirrorFile, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => recordHashRef((JSON.parse(line) as { record: AtribRecord }).record)),
+    )
+
+    const configA = {
+      daemon: { mode: 'off' },
+      key: { privateKey: new Uint8Array(32).fill(0x41), source: 'env' },
+      anchors: [logEndpoint],
+      allowSingleAnchor: true,
+      contextId: CONTEXT_A,
+      producer: 'concurrent-client-a',
+      mirrorPath: mirrorA,
+    } as const
+    const clientA = createAtribClient(configA)
+    const mutableConfigA = configA as { mirrorPath: string }
+    mutableConfigA.mirrorPath = mutatedMirrorA
+    const clientB = createAtribClient({
+      daemon: { mode: 'off' },
+      key: { privateKey: new Uint8Array(32).fill(0x42), source: 'env' },
+      anchors: [logEndpoint],
+      allowSingleAnchor: true,
+      contextId: CONTEXT_A,
+      producer: 'concurrent-client-b',
+      mirrorPath: mirrorB,
+    })
+
+    try {
+      const [seedA, seedB] = await Promise.all([
+        clientA.attest({ content: { what: 'client A seed' } }),
+        clientB.attest({ content: { what: 'client B seed' } }),
+      ])
+      const [actionA, actionB] = await Promise.all([
+        clientA.action({
+          name: 'client_a_action',
+          args: { client: 'a' },
+          execute: () => ({ client: 'a', status: 'completed' }),
+        }),
+        clientB.action({
+          name: 'client_b_action',
+          args: { client: 'b' },
+          execute: () => ({ client: 'b', status: 'completed' }),
+        }),
+      ])
+      await Promise.all([clientA.flushAnchors(), clientB.flushAnchors()])
+
+      expect(actionA.ok).toBe(true)
+      expect(actionB.ok).toBe(true)
+      expect(seedA.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(seedB.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(existsSync(mutatedMirrorA)).toBe(false)
+
+      const readRecords = (path: string): AtribRecord[] =>
+        readFileSync(path, 'utf8')
+          .trim()
+          .split('\n')
+          .map((line) => (JSON.parse(line) as { record: AtribRecord }).record)
+      const recordsA = readRecords(mirrorA)
+      const recordsB = readRecords(mirrorB)
+      expect(recordsA).toHaveLength(3)
+      expect(recordsB).toHaveLength(3)
+      expect(new Set(recordsA.map((record) => record.context_id))).toEqual(new Set([CONTEXT_A]))
+      expect(new Set(recordsB.map((record) => record.context_id))).toEqual(new Set([CONTEXT_A]))
+
+      const byHashA = new Map(recordsA.map((record) => [recordHashRef(record), record]))
+      const byHashB = new Map(recordsB.map((record) => [recordHashRef(record), record]))
+      expect(byHashA.has(seedB.record_hash!)).toBe(false)
+      expect(byHashB.has(seedA.record_hash!)).toBe(false)
+      const explicitHashes = [
+        seedA.record_hash,
+        seedB.record_hash,
+        actionA.request.record_hash,
+        actionA.outcome.record_hash,
+        actionB.request.record_hash,
+        actionB.outcome.record_hash,
+      ]
+      expect(explicitHashes.every((hash) => !sharedMirrorHashesBefore.has(hash!))).toBe(true)
+      const sharedMirrorHashesAfter = new Set(
+        readFileSync(mirrorFile, 'utf8')
+          .trim()
+          .split('\n')
+          .map((line) => recordHashRef((JSON.parse(line) as { record: AtribRecord }).record)),
+      )
+      expect(explicitHashes.every((hash) => !sharedMirrorHashesAfter.has(hash!))).toBe(true)
+      expect(byHashA.get(actionA.request.record_hash!)?.chain_root).toBe(seedA.record_hash)
+      expect(byHashB.get(actionB.request.record_hash!)?.chain_root).toBe(seedB.record_hash)
+      expect(byHashA.get(actionA.outcome.record_hash!)?.informed_by).toEqual([
+        actionA.request.record_hash,
+      ])
+      expect(byHashB.get(actionB.outcome.record_hash!)?.informed_by).toEqual([
+        actionB.request.record_hash,
+      ])
+      for (const result of [
+        seedA,
+        seedB,
+        actionA.request,
+        actionA.outcome,
+        actionB.request,
+        actionB.outcome,
+      ]) {
+        expect(result.warnings.some((warning) => warning.includes('anchor fan-out skipped'))).toBe(
+          false,
+        )
+      }
+    } finally {
+      await Promise.all([clientA.close(), clientB.close()])
+    }
+  })
+
+  it('uses mirrorPath as the autochain fallback when no source is configured', async () => {
+    const explicitMirror = join(mirrorDir, `mirror-only-${randomUUID()}.jsonl`)
+    const client = createAtribClient({
+      daemon: { mode: 'off' },
+      key: { privateKey: new Uint8Array(32).fill(0x43), source: 'env' },
+      anchors: [logEndpoint],
+      allowSingleAnchor: true,
+      contextId: CONTEXT_C,
+      mirrorPath: explicitMirror,
+    })
+    try {
+      const seed = await client.attest({ content: { what: 'mirror-only seed' } })
+      const action = await client.action({
+        name: 'mirror_only_action',
+        args: { client: 'mirror-only' },
+        execute: () => ({ status: 'completed' }),
+      })
+      await client.flushAnchors()
+
+      const records = readFileSync(explicitMirror, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => (JSON.parse(line) as { record: AtribRecord }).record)
+      const byHash = new Map(records.map((record) => [recordHashRef(record), record]))
+      expect(records).toHaveLength(3)
+      expect(byHash.get(action.request.record_hash!)?.chain_root).toBe(seed.record_hash)
+      expect(action.request.warnings.some((warning) => warning.includes('fan-out skipped'))).toBe(
+        false,
+      )
+      expect(action.outcome.warnings.some((warning) => warning.includes('fan-out skipped'))).toBe(
+        false,
+      )
+    } finally {
+      await client.close()
+    }
+  })
+
+  it('uses the shared default mirror path for zero-config in-process fan-out', async () => {
+    const priorMirror = process.env['ATRIB_MIRROR_FILE']
+    const priorAutochain = process.env['ATRIB_AUTOCHAIN_SOURCE']
+    const priorAgent = process.env['ATRIB_AGENT']
+    const priorHome = process.env['HOME']
+    const agent = `sdk-zero-config-${randomUUID()}`
+    const temporaryHome = join(mirrorDir, `home-${randomUUID()}`)
+    delete process.env['ATRIB_MIRROR_FILE']
+    delete process.env['ATRIB_AUTOCHAIN_SOURCE']
+    process.env['ATRIB_AGENT'] = agent
+    process.env['HOME'] = temporaryHome
+    const defaultMirror = join(homedir(), '.atrib', 'records', `atrib-emit-${agent}.jsonl`)
+    rmSync(defaultMirror, { force: true })
+
+    const client = createAtribClient({
+      daemon: { mode: 'off' },
+      key: { privateKey: new Uint8Array(32).fill(0x44), source: 'env' },
+      anchors: [logEndpoint],
+      allowSingleAnchor: true,
+      contextId: randomUUID().replaceAll('-', ''),
+    })
+    try {
+      const result = await client.attest({ content: { what: 'zero-config mirror path' } })
+      await client.flushAnchors()
+      expect(existsSync(defaultMirror)).toBe(true)
+      expect(result.warnings.some((warning) => warning.includes('fan-out skipped'))).toBe(false)
+    } finally {
+      await client.close()
+      rmSync(defaultMirror, { force: true })
+      if (priorMirror === undefined) delete process.env['ATRIB_MIRROR_FILE']
+      else process.env['ATRIB_MIRROR_FILE'] = priorMirror
+      if (priorAutochain === undefined) delete process.env['ATRIB_AUTOCHAIN_SOURCE']
+      else process.env['ATRIB_AUTOCHAIN_SOURCE'] = priorAutochain
+      if (priorAgent === undefined) delete process.env['ATRIB_AGENT']
+      else process.env['ATRIB_AGENT'] = priorAgent
+      if (priorHome === undefined) delete process.env['HOME']
+      else process.env['HOME'] = priorHome
+    }
   })
 
   it('fans the signed record out to every configured atrib-log anchor (D138)', async () => {

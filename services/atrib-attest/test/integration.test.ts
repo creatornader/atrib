@@ -364,7 +364,8 @@ describe('emit end-to-end (sign → submit → mirror)', () => {
         event_type: 'https://atrib.dev/v1/types/revision',
         content: {
           prior_position: 'the cutoff was 64KB',
-          new_position: 'the cutoff is 1MB; the 64KB observation was a different rate-limit response',
+          new_position:
+            'the cutoff is 1MB; the 64KB observation was a different rate-limit response',
           reason: 'tested empirically with proper variable payload sizes',
         },
         context_id: ctxId,
@@ -482,5 +483,46 @@ describe('emitInProcess (in-process entrypoint)', () => {
     expect(result.signed).toBe(false)
     expect(result).not.toHaveProperty('record_hash')
     expect(result.refusals.some((refusal) => refusal.includes('event_type'))).toBe(true)
+  })
+
+  it('accepts the 71-character §8.2 hashed tool-name form', async () => {
+    const { seed } = await fixedKey()
+    const { emitInProcess } = await import('../src/index.js')
+    const hashedToolName = `sha256:${'a'.repeat(64)}`
+
+    const result = await emitInProcess(
+      {
+        event_type: 'https://atrib.dev/v1/types/tool_call',
+        content: { action_phase: 'request' },
+        context_id: '7'.repeat(32),
+        tool_name: hashedToolName,
+      },
+      { key: { privateKey: seed, source: 'env' }, logEndpoint: log.url },
+    )
+
+    expect(result.signed).toBe(true)
+    expect(log.received).toHaveLength(1)
+    expect(log.received[0]?.tool_name).toBe(hashedToolName)
+  })
+
+  it('accepts a §8.2 verbatim tool name longer than 71 characters', async () => {
+    const { seed } = await fixedKey()
+    const { emitInProcess } = await import('../src/index.js')
+    const verbatimToolName = `company.internal.workflow.${'descriptive-action-'.repeat(5)}execute`
+
+    const result = await emitInProcess(
+      {
+        event_type: 'https://atrib.dev/v1/types/tool_call',
+        content: { action_phase: 'request' },
+        context_id: '8'.repeat(32),
+        tool_name: verbatimToolName,
+      },
+      { key: { privateKey: seed, source: 'env' }, logEndpoint: log.url },
+    )
+
+    expect(verbatimToolName.length).toBeGreaterThan(71)
+    expect(result.signed).toBe(true)
+    expect(log.received).toHaveLength(1)
+    expect(log.received[0]?.tool_name).toBe(verbatimToolName)
   })
 })

@@ -17,7 +17,7 @@
  * (programmer error).
  */
 
-import { emitInProcess, resolveKey, type ResolvedKey } from '@atrib/emit'
+import { emitInProcess, resolveKey, resolveMirrorWritePath, type ResolvedKey } from '@atrib/emit'
 import {
   createAnchorFanout,
   readMirrorTail,
@@ -112,6 +112,8 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
   const anchorSet = resolveAnchorSet(config.anchors, config.allowSingleAnchor)
   const anchorWarnings = anchorSet.warnings
   const logEndpoint = anchorSet.primaryLogEndpoint
+  const mirrorPath = config.mirrorPath
+  const autochainSource = config.autochainSource
 
   // One D138 anchor fan-out per client, built lazily on the first
   // in-process attest. The daemon attest path never consults it: the
@@ -194,6 +196,8 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
         key,
         producer,
         ...(logEndpoint !== undefined ? { logEndpoint } : {}),
+        ...(mirrorPath !== undefined ? { mirrorPath } : {}),
+        ...(autochainSource !== undefined ? { autochainSource } : {}),
       })
       const result = attestResultFromEmitOutput(output as EmitOutputLike, 'in-process', warnings)
       await fanOutToAnchors(result)
@@ -231,17 +235,14 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
 
       // The freshly-written mirror tail is the expected match: emitInProcess
       // mirrors the signed record before returning.
-      const mirrorPath = process.env['ATRIB_MIRROR_FILE']
-      const record =
-        mirrorPath !== undefined && mirrorPath !== ''
-          ? await readMirrorTail({
-              path: mirrorPath,
-              ...(result.context_id !== null ? { contextId: result.context_id } : {}),
-            })
-          : null
+      const resolvedMirrorPath = resolveMirrorWritePath(mirrorPath)
+      const record = await readMirrorTail({
+        path: resolvedMirrorPath,
+        ...(result.context_id !== null ? { contextId: result.context_id } : {}),
+      })
       if (record === null || recordHashRef(record) !== result.record_hash) {
         result.warnings.push(
-          'atrib: anchor fan-out skipped — signed record not found at the mirror tail (ATRIB_MIRROR_FILE)',
+          'atrib: anchor fan-out skipped: signed record not found at the configured mirror tail',
         )
         return
       }

@@ -6,10 +6,7 @@ import { join } from 'node:path'
 import * as secp from '@noble/secp256k1'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { deriveNostrEventId, type NostrEvent } from '@atrib/verify'
-import {
-  BuzzObserverRuntimeLogSource,
-  type BuzzObserverTelemetry,
-} from '../../src/buzz-observer-runtime-log.js'
+import { BuzzObserverRuntimeLogSource, type BuzzObserverTelemetry } from '@atrib/runtime-log/buzz'
 
 const agentSecret = new Uint8Array(32).fill(0x02)
 const ownerSecret = new Uint8Array(32).fill(0x01)
@@ -28,6 +25,7 @@ async function observerEvent(
     channelId: 'channel-1',
     sessionId: 'buzz-session-1',
     turnId: 'turn-1',
+    startedAt: '2026-07-24T12:00:00.000Z',
     payload: { phase: seq },
   }
   const unsigned = {

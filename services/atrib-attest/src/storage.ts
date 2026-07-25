@@ -55,10 +55,16 @@ export interface MirrorLine {
 
 let ensuredDirs = new Set<string>()
 
-function mirrorPath(): string {
+export function resolveMirrorWritePath(explicitPath?: string): string {
   return (
+    explicitPath ??
     process.env['ATRIB_MIRROR_FILE'] ??
-    join(homedir(), '.atrib', 'records', `atrib-emit-${process.env['ATRIB_AGENT'] ?? 'claude-code'}.jsonl`)
+    join(
+      homedir(),
+      '.atrib',
+      'records',
+      `atrib-emit-${process.env['ATRIB_AGENT'] ?? 'claude-code'}.jsonl`,
+    )
   )
 }
 
@@ -72,8 +78,9 @@ export async function mirrorRecord(
   record: AtribRecord,
   proof: ProofBundle | null,
   localSidecar?: LocalSidecar,
+  explicitPath?: string,
 ): Promise<void> {
-  const path = mirrorPath()
+  const path = resolveMirrorWritePath(explicitPath)
   const line: MirrorLine = { record, proof, written_at: Date.now() }
   if (localSidecar) {
     line._local = localSidecar

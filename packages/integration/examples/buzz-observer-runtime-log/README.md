@@ -3,7 +3,8 @@
 This example turns locally captured Buzz NIP-AO observer frames into a bounded
 `log_window_manifest`. It verifies each Nostr event, calls a host-owned NIP-44
 decrypt function, validates the telemetry payload, and audits the session
-capture before building the manifest.
+capture before building the manifest. The source is public at
+`@atrib/runtime-log/buzz`; this directory is its runnable integration proof.
 
 ## Run it
 
@@ -24,7 +25,10 @@ Buzz. It consumes the observer plane, not the agent harness itself.
 - The owner recipient and NIP-AO telemetry tags are checked against
   caller-supplied policy.
 - The decrypt callback belongs to the host. The manifest commits to hashes of
-  the ciphertext and decrypted payload.
+  the ciphertext and complete decrypted JSON object. Fields unknown to the
+  current typed projection remain covered by the plaintext commitment.
+- A live host can supply captured events through `load_events`. An archived
+  capture can use a JSONL `path`.
 - Process-sequence gaps, duplicates, and out-of-order capture prevent a
   completeness claim by default. ACP sessions remain projections over that
   process window.

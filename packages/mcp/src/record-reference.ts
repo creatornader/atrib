@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import * as readline from 'node:readline'
 import { canonicalRecord } from './canon.js'
 import { hexEncode, sha256 } from './hash.js'
+import { recordHashExistsInMirror } from './mirror.js'
 import { SHA256_REF_PATTERN } from './refs.js'
 import type { AtribRecord } from './types.js'
 
@@ -21,6 +22,11 @@ export interface DefaultRecordReferenceResolverOptions {
   localLookupTimeoutMs?: number | undefined
   /** Optional wall-clock budget for public log lookup. Defaults to 750ms. */
   logLookupTimeoutMs?: number | undefined
+  /**
+   * Explicit local mirror files for this lookup. When present, these replace
+   * process-global mirror discovery while public log fallback stays enabled.
+   */
+  localMirrorPaths?: readonly string[] | undefined
 }
 
 export type LocalRecordReferenceResolver = (
@@ -58,10 +64,11 @@ export async function defaultRecordReferenceResolver(
 
   let localLookupIncomplete = false
   try {
-    const localResult = await withOptionalTimeout(
-      hasLocalRecordHash(recordHash),
-      options.localLookupTimeoutMs,
-    )
+    const localLookup =
+      options.localMirrorPaths !== undefined
+        ? hasRecordHashInExplicitMirrors(recordHash, options.localMirrorPaths)
+        : hasLocalRecordHash(recordHash)
+    const localResult = await withOptionalTimeout(localLookup, options.localLookupTimeoutMs)
     if (localResult === 'timeout') {
       localLookupIncomplete = true
     } else if (localResult) {
@@ -74,6 +81,16 @@ export async function defaultRecordReferenceResolver(
   const logResolution = await lookupLogRecord(recordHash, logEndpoint, options.logLookupTimeoutMs)
   if (logResolution === 'found') return 'found'
   return localLookupIncomplete ? 'unknown' : logResolution
+}
+
+async function hasRecordHashInExplicitMirrors(
+  recordHash: string,
+  paths: readonly string[],
+): Promise<boolean> {
+  for (const path of new Set(paths)) {
+    if (await recordHashExistsInMirror({ path, recordHash })) return true
+  }
+  return false
 }
 
 async function hasLocalRecordHash(recordHash: string): Promise<boolean> {

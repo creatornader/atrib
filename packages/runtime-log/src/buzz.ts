@@ -7,7 +7,7 @@ import {
   hashRuntimeLogEvent,
   hashSessionDefinition,
   verifyLogWindowManifest,
-} from '@atrib/runtime-log'
+} from './index.js'
 import type {
   LogWindowManifest,
   LogWindowRequest,
@@ -18,7 +18,7 @@ import type {
   RuntimeLogSource,
   RuntimeLogSourceRef,
   Sha256Uri,
-} from '@atrib/runtime-log'
+} from './index.js'
 import { verifyNostrEvent, type NostrEvent, type NostrEventVerification } from '@atrib/verify'
 
 export const BUZZ_OBSERVER_SESSION_SCHEMA =
@@ -28,9 +28,13 @@ export const BUZZ_OBSERVER_EVENT_SCHEMA =
 export const BUZZ_OBSERVER_SEQUENCE_AUDIT_SCHEMA =
   'https://atrib.dev/schemas/runtime-log/buzz-observer-sequence-audit/v0' as const
 export const BUZZ_OBSERVER_SEQUENCE_PROJECTION = 'buzz.observer-sequence-audit' as const
+export const MAX_BUZZ_OBSERVER_PAYLOAD_BYTES = 65_535 as const
 
 export type BuzzObserverCaptureKind = 'live-subscription' | 'desktop-local-archive'
 export type BuzzObserverSequencePolicy = 'require-contiguous' | 'report-gaps'
+export type BuzzObserverCapturedEvents = Iterable<unknown> | AsyncIterable<unknown>
+export type BuzzObserverEventLoader = () =>
+  BuzzObserverCapturedEvents | Promise<BuzzObserverCapturedEvents>
 
 export interface BuzzObserverTelemetry {
   readonly seq: number
@@ -40,6 +44,7 @@ export interface BuzzObserverTelemetry {
   readonly channelId: string | null
   readonly sessionId: string | null
   readonly turnId: string | null
+  readonly startedAt: string | null
   readonly payload: Record<string, unknown>
 }
 
@@ -107,7 +112,11 @@ export interface BuzzObserverSessionDefinition {
     readonly decrypted_payload: 'host-decrypt-callback'
     readonly telemetry_timestamp: 'sender-declared'
     readonly relay_admission: 'not-claimed'
+    readonly relay_persistence: 'not-claimed'
+    readonly audit_inclusion: 'not-claimed'
     readonly runtime_execution: 'observer-telemetry-only'
+    readonly result_truth: 'not-claimed'
+    readonly capture_completeness: 'captured-window-only'
   }
 }
 
@@ -122,7 +131,8 @@ export interface BuzzObserverWindowBundle {
 }
 
 export interface BuzzObserverRuntimeLogSourceOptions {
-  readonly path: string
+  readonly path?: string
+  readonly load_events?: BuzzObserverEventLoader
   readonly owner_pubkey: string
   readonly capture_id?: string
   readonly decrypt: (event: NostrEvent) => unknown | Promise<unknown>
@@ -135,7 +145,8 @@ export interface BuzzObserverRuntimeLogSourceOptions {
 export class BuzzObserverRuntimeLogSource implements RuntimeLogSource {
   readonly source: RuntimeLogSourceRef
 
-  private readonly path: string
+  private readonly path: string | undefined
+  private readonly loadEvents: BuzzObserverEventLoader | undefined
   private readonly ownerPubkey: string
   private readonly captureId: string
   private readonly decrypt: BuzzObserverRuntimeLogSourceOptions['decrypt']
@@ -146,7 +157,11 @@ export class BuzzObserverRuntimeLogSource implements RuntimeLogSource {
 
   constructor(options: BuzzObserverRuntimeLogSourceOptions) {
     assertHex32(options.owner_pubkey, 'owner_pubkey')
+    if ((options.path === undefined) === (options.load_events === undefined)) {
+      throw new Error('exactly one of path or load_events must be provided')
+    }
     this.path = options.path
+    this.loadEvents = options.load_events
     this.ownerPubkey = options.owner_pubkey
     this.captureId = options.capture_id ?? 'buzz-observer-process'
     if (this.captureId.length === 0) throw new Error('capture_id must not be empty')
@@ -231,7 +246,11 @@ export class BuzzObserverRuntimeLogSource implements RuntimeLogSource {
         decrypted_payload: 'host-decrypt-callback',
         telemetry_timestamp: 'sender-declared',
         relay_admission: 'not-claimed',
+        relay_persistence: 'not-claimed',
+        audit_inclusion: 'not-claimed',
         runtime_execution: 'observer-telemetry-only',
+        result_truth: 'not-claimed',
+        capture_completeness: 'captured-window-only',
       },
     }
     const manifest = createLogWindowManifest({
@@ -281,22 +300,25 @@ export class BuzzObserverRuntimeLogSource implements RuntimeLogSource {
   }
 
   async readFrames(): Promise<readonly BuzzObserverFrame[]> {
-    const text = await readFile(this.path, 'utf8')
     const frames: BuzzObserverFrame[] = []
-    for (const [index, line] of text.split(/\r?\n/).entries()) {
-      if (line.trim().length === 0) continue
-      const captureLine = index + 1
-      const parsed = parseJsonObject(line, `${this.path}:${captureLine}`)
+    for await (const captured of this.readCapturedEvents()) {
+      const { captureLine, label } = captured
+      const parsed =
+        typeof captured.value === 'string'
+          ? parseJsonObject(captured.value, label)
+          : requireObject(captured.value, label)
       const eventVerification = await verifyNostrEvent(parsed)
       if (!eventVerification.valid) {
         throw new Error(
-          `invalid Nostr observer event at ${this.path}:${captureLine}: ${eventVerification.errors.join(',')}`,
+          `invalid Nostr observer event at ${label}: ${eventVerification.errors.join(',')}`,
         )
       }
       const event = parsed as unknown as NostrEvent
       const tags = validateTelemetryTags(event, this.ownerPubkey)
       const decrypted = await this.decrypt(event)
-      const telemetry = parseTelemetry(decrypted, `${this.path}:${captureLine}`)
+      const { telemetry, payload: decryptedPayload } = parseTelemetry(decrypted, label)
+      const ciphertextHash = hashRuntimeLogEvent(event.content)
+      const plaintextHash = hashRuntimeLogEvent(decryptedPayload)
       frames.push({
         capture_line: captureLine,
         event,
@@ -304,11 +326,10 @@ export class BuzzObserverRuntimeLogSource implements RuntimeLogSource {
         owner_pubkey: this.ownerPubkey,
         agent_pubkey: tags.agent,
         telemetry,
-        ciphertext_hash: hashRuntimeLogEvent(event.content),
-        plaintext_hash: hashRuntimeLogEvent(telemetry),
+        ciphertext_hash: ciphertextHash,
+        plaintext_hash: plaintextHash,
         event_hash: hashRuntimeLogEvent({
           schema: BUZZ_OBSERVER_EVENT_SCHEMA,
-          capture_line: captureLine,
           nostr_event_id: event.id,
           author_pubkey: event.pubkey,
           recipient_pubkey: tags.recipient,
@@ -317,12 +338,43 @@ export class BuzzObserverRuntimeLogSource implements RuntimeLogSource {
           seq: telemetry.seq,
           timestamp: telemetry.timestamp,
           kind: telemetry.kind,
-          ciphertext_hash: hashRuntimeLogEvent(event.content),
-          plaintext_hash: hashRuntimeLogEvent(telemetry),
+          ciphertext_hash: ciphertextHash,
+          plaintext_hash: plaintextHash,
         }),
       })
     }
     return frames
+  }
+
+  private async *readCapturedEvents(): AsyncIterable<{
+    captureLine: number
+    label: string
+    value: unknown
+  }> {
+    if (this.path !== undefined) {
+      const text = await readFile(this.path, 'utf8')
+      for (const [index, line] of text.split(/\r?\n/).entries()) {
+        if (line.trim().length === 0) continue
+        const captureLine = index + 1
+        yield {
+          captureLine,
+          label: `${this.path}:${captureLine}`,
+          value: line,
+        }
+      }
+      return
+    }
+
+    let captureLine = 0
+    const capturedEvents = await this.loadEvents!()
+    for await (const value of capturedEvents) {
+      captureLine += 1
+      yield {
+        captureLine,
+        label: `${this.source.uri ?? this.source.id} event ${captureLine}`,
+        value,
+      }
+    }
   }
 }
 
@@ -411,25 +463,46 @@ function exactSingleTag(event: NostrEvent, name: string): string {
   return matches[0]![1]!
 }
 
-function parseTelemetry(value: unknown, label: string): BuzzObserverTelemetry {
+function parseTelemetry(
+  value: unknown,
+  label: string,
+): {
+  telemetry: BuzzObserverTelemetry
+  payload: Readonly<Record<string, unknown>>
+} {
   const parsed =
     typeof value === 'string'
       ? parseJsonObject(value, `${label} decrypted content`)
       : requireObject(value, `${label} decrypted content`)
+  const encoded =
+    typeof value === 'string'
+      ? Buffer.byteLength(value, 'utf8')
+      : Buffer.byteLength(JSON.stringify(parsed), 'utf8')
+  if (encoded > MAX_BUZZ_OBSERVER_PAYLOAD_BYTES) {
+    throw new Error(`${label} decrypted content exceeds ${MAX_BUZZ_OBSERVER_PAYLOAD_BYTES} bytes`)
+  }
   const seq = readSafeUint(parsed, 'seq')
   const timestamp = readNonEmptyString(parsed, 'timestamp')
   if (!isRfc3339(timestamp)) throw new Error(`${label} timestamp must be RFC 3339`)
   const kind = readNonEmptyString(parsed, 'kind')
   const payload = requireObject(parsed.payload, `${label} payload`)
+  const startedAt = readNullableString(parsed, 'startedAt')
+  if (startedAt !== null && !isRfc3339(startedAt)) {
+    throw new Error(`${label} startedAt must be RFC 3339`)
+  }
   return {
-    seq,
-    timestamp,
-    kind,
-    agentIndex: readNullableIndex(parsed, 'agentIndex'),
-    channelId: readNullableString(parsed, 'channelId'),
-    sessionId: readNullableString(parsed, 'sessionId'),
-    turnId: readNullableString(parsed, 'turnId'),
-    payload,
+    telemetry: {
+      seq,
+      timestamp,
+      kind,
+      agentIndex: readNullableIndex(parsed, 'agentIndex'),
+      channelId: readNullableString(parsed, 'channelId'),
+      sessionId: readNullableString(parsed, 'sessionId'),
+      turnId: readNullableString(parsed, 'turnId'),
+      startedAt,
+      payload,
+    },
+    payload: parsed,
   }
 }
 
