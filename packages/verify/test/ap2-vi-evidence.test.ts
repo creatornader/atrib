@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 import { base64urlDecode, base64urlEncode, sha256 } from '@atrib/mcp'
+import { Disclosure } from '@sd-jwt/core'
 import {
   evaluateAp2ViConstraints,
   verifyAp2ViEvidence,
@@ -147,6 +148,19 @@ function applyNegativeMutation(bundle: Ap2ViEvidenceBundle, mutation: NegativeMu
 }
 
 describe('verifyAp2ViEvidence', () => {
+  it('rejects invalid UTF-8 disclosure bytes through the SD-JWT public API', async () => {
+    const invalidUtf8Disclosure = Buffer.from([
+      0x5b, 0x22, 0x73, 0x22, 0x2c, 0x22, 0xc3, 0x28, 0x22, 0x5d,
+    ]).toString('base64url')
+
+    await expect(
+      Disclosure.fromEncode(invalidUtf8Disclosure, {
+        hasher: async () => new Uint8Array(32),
+        alg: 'sha-256',
+      }),
+    ).rejects.toThrow('Invalid disclosure data')
+  })
+
   it('verifies signed VI immediate evidence with matching AP2 receipts', () => {
     const result = verifyAp2ViEvidence(immediateFixture)
 

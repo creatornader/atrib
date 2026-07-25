@@ -63,7 +63,7 @@ describe('AP2 official SDK reference artifacts', () => {
     const summary = await runAp2LiveInterop({
       result: ap2ReferenceResult,
       evidence: ap2ReferenceEvidence,
-      evidenceOptions: { nowSeconds },
+      evidenceOptions: { nowSeconds, sdJwtConformancePolicy: 'best-effort' },
       transactionRecord,
     })
 
@@ -75,6 +75,7 @@ describe('AP2 official SDK reference artifacts', () => {
     expect(summary.evidence?.ap2.paymentReceipt?.jwt?.jwksSource).toBe('static')
     expect(summary.evidence?.ap2.checkoutReceipt?.jwt?.jwksSource).toBe('static')
     expect(summary.evidence?.transactionAccepted).toBe(true)
+    expect(summary.evidence?.warnings).toContain('vi_sd_jwt_conformance_invalid:L2')
     expect(summary.recordVerification?.cross_attestation).toEqual({
       signers_count: 2,
       signers_valid: 2,

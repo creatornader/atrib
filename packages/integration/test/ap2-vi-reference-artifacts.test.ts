@@ -1,3 +1,7 @@
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { detectTransaction } from '@atrib/agent'
 import {
@@ -96,10 +100,37 @@ const splitEvidence = ap2ViReferenceEvidenceJson as SplitEvidenceFixture
 const splitResult = ap2ViReferenceResultJson as SplitResultFixture
 const ap2ViReferenceEvidence = rehydrateEvidence(splitEvidence)
 const ap2ViReferenceResult = rehydrateResult(splitResult)
+const fixtureDirectory = dirname(fileURLToPath(import.meta.url))
+const evidenceFixturePath = join(
+  fixtureDirectory,
+  'fixtures/ap2-vi-reference/ap2-vi-reference-evidence.json',
+)
 const ap2ViReferenceMetadata = ap2ViReferenceMetadataJson as {
   source_repositories: string[]
   source_paths: string[]
   now_seconds: number
+}
+
+async function evidenceFixtureSha256(): Promise<string> {
+  return createHash('sha256')
+    .update(await readFile(evidenceFixturePath))
+    .digest('hex')
+}
+
+function l2DuplicateDigestReferences(): string[] {
+  const credential = splitEvidence.vi.credentials.find(({ layer }) => layer === 'L2')
+  if (!credential) throw new Error('missing L2 credential')
+
+  const payload = JSON.parse(
+    Buffer.from(credential.sdJwtParts.jwt[1]!, 'base64url').toString('utf8'),
+  ) as {
+    _sd: string[]
+    delegate_payload: Array<{ '...': string }>
+  }
+  const sdDigests = new Set(payload._sd)
+  return payload.delegate_payload
+    .map((entry) => entry['...'])
+    .filter((digest) => sdDigests.has(digest))
 }
 
 async function counterpartySignedTransactionRecord(): Promise<AtribRecord> {
@@ -128,7 +159,11 @@ async function counterpartySignedTransactionRecord(): Promise<AtribRecord> {
 }
 
 describe('AP2 plus Verifiable Intent upstream reference artifacts', () => {
-  it('verifies AP2 SDK receipts and VI reference credentials through the live interop harness', async () => {
+  it('rejects the preserved upstream artifact with repeated L2 digest references', async () => {
+    expect(await evidenceFixtureSha256()).toBe(
+      '80a39736114d8ec4ad693b70f7f8f1475a1ca6275cdb7892a2f913074baadcb2',
+    )
+    expect(l2DuplicateDigestReferences()).toHaveLength(2)
     expect(ap2ViReferenceMetadata.source_repositories).toEqual(
       expect.arrayContaining([
         'https://github.com/google-agentic-commerce/AP2',
@@ -161,8 +196,8 @@ describe('AP2 plus Verifiable Intent upstream reference artifacts', () => {
       transactionRecord,
     })
 
-    expect(summary.ok).toBe(true)
-    expect(summary.errors).toEqual([])
+    expect(summary.ok).toBe(false)
+    expect(summary.errors).toEqual(['ap2_vi_evidence_invalid'])
     expect(summary.detection).toMatchObject({ detected: true, protocol: 'AP2' })
     expect(summary.evidence?.ap2.paymentReceipt?.jwt?.verified).toBe(true)
     expect(summary.evidence?.ap2.checkoutReceipt?.jwt?.verified).toBe(true)
@@ -176,11 +211,18 @@ describe('AP2 plus Verifiable Intent upstream reference artifacts', () => {
         expect.objectContaining({ type: 'mandate.checkout.line_items', status: 'passed' }),
       ]),
     )
-    expect(
-      summary.evidence?.vi.credentials.every(
-        (credential) => credential.sdJwtConformance.status === 'verified',
-      ),
-    ).toBe(true)
+    expect(summary.evidence?.vi.credentials).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          layer: 'L2',
+          sdJwtConformance: {
+            status: 'invalid',
+            profile: 'sd-jwt',
+            reason: 'disclosure_digest',
+          },
+        }),
+      ]),
+    )
     expect(summary.evidence?.transactionAccepted).toBe(true)
     expect(summary.recordVerification?.cross_attestation).toEqual({
       signers_count: 2,
@@ -188,6 +230,38 @@ describe('AP2 plus Verifiable Intent upstream reference artifacts', () => {
       missing: false,
       trust_evaluated: false,
     })
+    expect(summary.recordVerification?.valid).toBe(true)
+    expect(summary.recordVerification?.ap2_vi_evidence?.valid).toBe(false)
+  })
+
+  it('keeps duplicate-digest conformance advisory when configured', async () => {
+    const summary = await runAp2LiveInterop({
+      result: ap2ViReferenceResult,
+      evidence: ap2ViReferenceEvidence,
+      evidenceOptions: {
+        nowSeconds: ap2ViReferenceMetadata.now_seconds,
+        sdJwtConformanceProfile: 'sd-jwt',
+        sdJwtConformancePolicy: 'best-effort',
+      },
+      transactionRecord: await counterpartySignedTransactionRecord(),
+    })
+
+    expect(summary.ok).toBe(true)
+    expect(summary.errors).toEqual([])
+    expect(summary.evidence?.valid).toBe(true)
+    expect(summary.evidence?.warnings).toContain('vi_sd_jwt_conformance_invalid:L2')
+    expect(summary.evidence?.vi.credentials).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          layer: 'L2',
+          sdJwtConformance: expect.objectContaining({
+            status: 'invalid',
+            profile: 'sd-jwt',
+            reason: 'disclosure_digest',
+          }),
+        }),
+      ]),
+    )
     expect(summary.recordVerification?.ap2_vi_evidence?.valid).toBe(true)
   })
 })

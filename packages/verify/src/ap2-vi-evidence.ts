@@ -9,7 +9,7 @@ import type {
   SDJWTVCConfig,
   StatusListFetcher,
   StatusValidator,
-  VcTFetcher,
+  VCTFetcher,
 } from '@sd-jwt/sd-jwt-vc'
 import {
   createLocalJWKSet,
@@ -29,11 +29,7 @@ export type Ap2ConstraintPolicy = 'require' | 'best-effort' | 'off'
 export type Ap2ConstraintDomain = 'checkout' | 'payment'
 export type Ap2ConstraintCheckStatus = 'passed' | 'failed' | 'unresolved' | 'unsupported'
 export type Ap2ConstraintEvaluationStatus =
-  | 'passed'
-  | 'failed'
-  | 'unresolved'
-  | 'not_applicable'
-  | 'not_checked'
+  'passed' | 'failed' | 'unresolved' | 'not_applicable' | 'not_checked'
 
 export interface ViCredentialInput {
   layer: ViCredentialLayer
@@ -63,7 +59,7 @@ export interface Ap2ReceiptJwtIssuer {
 
 export interface SdJwtVcConformanceOptions {
   loadTypeMetadata?: boolean
-  vctFetcher?: VcTFetcher
+  vctFetcher?: VCTFetcher
   statusListFetcher?: StatusListFetcher
   statusValidator?: StatusValidator
   maxVctExtendsDepth?: number

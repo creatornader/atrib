@@ -9,11 +9,10 @@ import {
 } from '../src/ap2-local-participant.js'
 import { runAp2LiveInteropFromEnv } from '../src/ap2-live-interop.js'
 
-import ap2ViReferenceEvidenceJson from './fixtures/ap2-vi-reference/ap2-vi-reference-evidence.json'
-import ap2ViReferenceMetadataJson from './fixtures/ap2-vi-reference/ap2-vi-reference-metadata.json'
-import ap2ViReferenceResultJson from './fixtures/ap2-vi-reference/ap2-vi-reference-result.json'
+import ap2EvidenceJson from '../../agent/test/fixtures/ap2/vi_autonomous_success_evidence.json'
+import ap2ResultJson from '../../agent/test/fixtures/ap2/payment_receipt_result.json'
 
-const metadata = ap2ViReferenceMetadataJson as { now_seconds: number }
+const nowSeconds = 1_779_840_000
 
 describe('AP2 local participant artifacts', () => {
   it('extracts closed mandate JWT reference material from delegated AP2 chains', () => {
@@ -51,14 +50,14 @@ describe('AP2 local participant artifacts', () => {
     expect(evidence.ap2?.closedPaymentMandate).toBe('closed.payment.signature')
   })
 
-  it('emits a counterparty-signed atrib transaction record for AP2 / VI evidence', async () => {
+  it('emits a counterparty-signed atrib transaction record for AP2 evidence', async () => {
     const outDir = await mkdtemp(join(tmpdir(), 'atrib-ap2-local-participant-'))
     try {
       const generated = await generateAp2LocalParticipantArtifacts({
-        result: ap2ViReferenceResultJson,
-        evidence: ap2ViReferenceEvidenceJson,
+        result: ap2ResultJson,
+        evidence: ap2EvidenceJson,
         outDir,
-        nowSeconds: metadata.now_seconds,
+        nowSeconds,
       })
 
       expect(generated.transactionRecord.signers).toHaveLength(2)
@@ -71,7 +70,7 @@ describe('AP2 local participant artifacts', () => {
         ATRIB_AP2_INTEROP_EVIDENCE_JSON: generated.files.evidence,
         ATRIB_AP2_INTEROP_TRANSACTION_RECORD_JSON: generated.files.transactionRecord,
         ATRIB_AP2_INTEROP_REQUIRE_COUNTERPARTY_ATTESTATION: '1',
-        ATRIB_AP2_INTEROP_NOW_SECONDS: String(metadata.now_seconds),
+        ATRIB_AP2_INTEROP_NOW_SECONDS: String(nowSeconds),
       })
 
       expect(summary.ok).toBe(true)

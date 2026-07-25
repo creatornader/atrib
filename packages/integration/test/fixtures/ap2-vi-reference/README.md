@@ -17,3 +17,8 @@ uv run --with cryptography --with jwcrypto --with pydantic \
 The generator builds L1, L2, and split L3 VI credentials with the VI reference issuer, user, agent, and merchant keys. It verifies the VI merchant and payment-network chains with the upstream verifier, then creates compact AP2 payment and checkout receipt JWTs with the AP2 SDK and verifies them with the AP2 receipt client. Committed fixtures store JWTs as segment arrays to avoid false-positive secret scans; the test reassembles the compact strings before verifier use.
 
 Default CI consumes these files through `test/ap2-vi-reference-artifacts.test.ts`. It does not start AP2 services and does not need Google credentials.
+
+The L2 credential remains byte-for-byte preserved. It references two disclosure
+digests from both `_sd` and `delegate_payload`. `@sd-jwt/core@0.20.0` rejects
+that construction, so the integration test keeps the fixture as a negative
+conformance case until the upstream generator produces a corrected artifact.

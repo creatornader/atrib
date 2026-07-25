@@ -10,14 +10,14 @@ import {
   merchantAdapterContract,
 } from '../src/google-evidence-runtime.js'
 
-const fixtureDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/ap2-vi-reference')
+const fixtureDir = join(dirname(fileURLToPath(import.meta.url)), '../../agent/test/fixtures/ap2')
 const hasUv = spawnSync('uv', ['--version'], { stdio: 'ignore' }).status === 0
 
 describe('Google evidence runtime', () => {
   it('allows the next action from replayed AP2 evidence', async () => {
     const packet = await buildReplayPacket({
-      resultJson: join(fixtureDir, 'ap2-vi-reference-result.json'),
-      evidenceJson: join(fixtureDir, 'ap2-vi-reference-evidence.json'),
+      resultJson: join(fixtureDir, 'payment_receipt_result.json'),
+      evidenceJson: join(fixtureDir, 'vi_autonomous_success_evidence.json'),
     })
 
     const gate = await buildGoogleEvidenceGate(packet)
@@ -42,8 +42,8 @@ describe('Google evidence runtime', () => {
     'runs the active Google stack after AP2 verification',
     async () => {
       const packet = await buildReplayPacket({
-        resultJson: join(fixtureDir, 'ap2-vi-reference-result.json'),
-        evidenceJson: join(fixtureDir, 'ap2-vi-reference-evidence.json'),
+        resultJson: join(fixtureDir, 'payment_receipt_result.json'),
+        evidenceJson: join(fixtureDir, 'vi_autonomous_success_evidence.json'),
       })
 
       const events: string[] = []
