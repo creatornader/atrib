@@ -1,5 +1,12 @@
 # @atrib/graph-node
 
+## 0.1.45
+
+### Patch Changes
+
+- Updated dependencies [f98f932]
+  - @atrib/verify@0.12.4
+
 ## 0.1.44
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @atrib/verify
 
+## 0.12.4
+
+### Patch Changes
+
+- f98f932: Upgrade SD-JWT dependencies to 0.20.0 for GHSA-f9j6-8p6x-r9j6. Reject repeated disclosure digest references in the preserved upstream AP2 / VI artifact.
+
 ## 0.12.3
 
 ### Patch Changes

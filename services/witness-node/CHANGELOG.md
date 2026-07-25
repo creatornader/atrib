@@ -1,5 +1,12 @@
 # @atrib/witness-node
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [f98f932]
+  - @atrib/verify@0.12.4
+
 ## 0.1.5
 
 ### Patch Changes

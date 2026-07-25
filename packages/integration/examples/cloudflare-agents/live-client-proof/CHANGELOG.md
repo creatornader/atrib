@@ -1,5 +1,11 @@
 # @atrib/cloudflare-live-client-proof
 
+## 0.0.29
+
+### Patch Changes
+
+- @atrib/agent@0.4.7
+
 ## 0.0.28
 
 ### Patch Changes
