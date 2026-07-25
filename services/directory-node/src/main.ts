@@ -14,7 +14,10 @@ async function main(): Promise<void> {
     console.error('ATRIB_DIRECTORY_KEY (base64url Ed25519 32-byte seed) is required')
     process.exit(1)
   }
-  const operatorPrivateKey = Buffer.from(seedB64.padEnd(seedB64.length + ((4 - (seedB64.length % 4)) % 4), '='), 'base64url')
+  const operatorPrivateKey = Buffer.from(
+    seedB64.padEnd(seedB64.length + ((4 - (seedB64.length % 4)) % 4), '='),
+    'base64url',
+  )
   if (operatorPrivateKey.length !== 32) {
     console.error(`ATRIB_DIRECTORY_KEY must decode to 32 bytes, got ${operatorPrivateKey.length}`)
     process.exit(1)
@@ -22,21 +25,28 @@ async function main(): Promise<void> {
 
   // Sanity log: derived public key. Lets operators map records back to this
   // service instance without re-deriving from the secret seed.
-  const operatorPubKey = Buffer.from(await ed.getPublicKeyAsync(operatorPrivateKey)).toString('base64url')
+  const operatorPubKey = Buffer.from(await ed.getPublicKeyAsync(operatorPrivateKey)).toString(
+    'base64url',
+  )
   console.log(`  signing key (creator_key): ${operatorPubKey}`)
 
   const persistencePath = process.env.ATRIB_DIRECTORY_PERSIST
+  const anchorPersistencePath = process.env.ATRIB_DIRECTORY_ANCHOR_PERSIST
 
   const handle = await bindDirectoryServer(port, host, {
     operatorPrivateKey,
     origin,
     logEndpoint,
     ...(persistencePath ? { persistencePath } : {}),
+    ...(anchorPersistencePath ? { anchorPersistencePath } : {}),
   })
   console.log(`atrib directory-node listening on ${handle.url}`)
   console.log(`  origin:  ${origin}`)
   console.log(`  log:     ${logEndpoint}`)
   console.log(`  persist: ${persistencePath ?? '(in-memory only, set ATRIB_DIRECTORY_PERSIST)'}`)
+  console.log(
+    `  anchors: ${anchorPersistencePath ?? (persistencePath ? `${persistencePath}.anchors.jsonl` : '(in-memory only)')}`,
+  )
 
   // Self-claim: every record this service signs (directory_anchor extension
   // entries per §6.2.4) carries the operator key as creator_key. Without a
@@ -46,7 +56,9 @@ async function main(): Promise<void> {
   await ensureSelfClaim(handle.url, operatorPubKey, operatorPrivateKey).catch((e: unknown) => {
     // Self-claim is best-effort. Failure must NOT prevent the service from
     // serving requests, operators can re-run manually if it doesn't land.
-    console.error(`self-claim attempt failed (will retry on next boot): ${e instanceof Error ? e.message : String(e)}`)
+    console.error(
+      `self-claim attempt failed (will retry on next boot): ${e instanceof Error ? e.message : String(e)}`,
+    )
   })
 
   for (const sig of ['SIGINT', 'SIGTERM']) {
@@ -67,14 +79,10 @@ async function main(): Promise<void> {
  * (display_name + organization + url) already exists, but publishes a new
  * version when the existing claim is missing canonical fields.
  */
-async function ensureSelfClaim(
-  baseUrl: string,
-  pubKey: string,
-  privateKey: Buffer,
-): Promise<void> {
-  const lookup = await fetch(`${baseUrl}/v6/lookup/${encodeURIComponent(pubKey)}`).then((r) => r.json()).catch(() => null) as
-    | { claim: { claim_subject?: { url?: unknown } } | null }
-    | null
+async function ensureSelfClaim(baseUrl: string, pubKey: string, privateKey: Buffer): Promise<void> {
+  const lookup = (await fetch(`${baseUrl}/v6/lookup/${encodeURIComponent(pubKey)}`)
+    .then((r) => r.json())
+    .catch(() => null)) as { claim: { claim_subject?: { url?: unknown } } | null } | null
   const existingUrl = lookup?.claim?.claim_subject?.url
   if (lookup?.claim && typeof existingUrl === 'string') {
     console.log(`  self-claim already published for ${pubKey} (with url)`)
@@ -106,7 +114,9 @@ async function ensureSelfClaim(
     body: JSON.stringify(signed),
   })
   if (!res.ok) {
-    throw new Error(`self-claim publish returned ${res.status}: ${await res.text().catch(() => '')}`)
+    throw new Error(
+      `self-claim publish returned ${res.status}: ${await res.text().catch(() => '')}`,
+    )
   }
   console.log(`  self-claim published for ${pubKey}`)
 }

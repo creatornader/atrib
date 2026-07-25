@@ -467,12 +467,17 @@ Caption: an agent learned something during work that future-self should be able 
 {
   "spec_version": "atrib/1.0",
   "event_type": "https://atrib.dev/v1/types/directory_anchor",
-  "content_id": "sha256:<canonical hash of {directory_root, epoch, version}>",
-  "content": {
+  "content_id": "sha256:<SHA-256 of '<directory_origin>:directory_anchor'>",
+  "creator_key": "<directory operator's pubkey>",
+  "chain_root": "<previous log-committed directory_anchor record_hash, or genesis>",
+  "context_id": "<directory operator's reserved context_id>",
+  "timestamp": 1743850000000,
+  "metadata": {
+    "directory_origin": "directory.example/v6",
     "directory_root": "...",
-    "epoch": 12345,
-    "version": "akd-v1"
-  }
+    "directory_epoch": 12345
+  },
+  "signature": "<base64url 64-byte Ed25519 signature>"
 }
 ```
 
@@ -4198,15 +4203,15 @@ The directory's root commitment is periodically posted to the Tessera log ([§2]
 ```json
 {
   "spec_version": "atrib/1.0",
-  "event_type": "directory_anchor",
+  "event_type": "https://atrib.dev/v1/types/directory_anchor",
   "context_id": "<directory operator's reserved context_id>",
   "creator_key": "<directory operator's pubkey>",
-  "chain_root": "<previous directory_anchor's record_hash, or genesis>",
-  "content_id": "<sha256 of canonical directory_root>",
+  "chain_root": "<previous log-committed directory_anchor's record_hash, or genesis>",
+  "content_id": "<SHA-256 of '<directory_origin>:directory_anchor'>",
   "timestamp": <unix-ms>,
   "metadata": {
     "directory_root": "<base64url AKD root>",
-    "directory_tree_size": <integer>,
+    "directory_epoch": <integer>,
     "directory_origin": "<directory's signed-note origin>"
   },
   "signature": "<base64url 64-byte Ed25519 signature>"
@@ -4214,6 +4219,16 @@ The directory's root commitment is periodically posted to the Tessera log ([§2]
 ```
 
 **Anchoring cadence: per-operation (normative default).** Every successful directory operation (publish, update, revoke) MUST produce a new directory checkpoint AND emit a `directory_anchor` record to the Tessera log immediately. This is the most robust position: the equivocation window is bounded by the log round-trip (sub-second under normal operation), not by an inter-anchor delay. Per-operation anchoring also gives every directory state change the same witness-cosignature coverage as ordinary log entries.
+
+**Linear submission and ambiguous outcomes.** A non-genesis anchor MUST set
+`chain_root` to the previous anchor record whose inclusion in the log has been
+confirmed. The producer MUST preserve the exact signed body before submission.
+If a submission response is missing or ambiguous, the producer MUST query the
+log by `record_hash` and retry that same body when absent. It MUST NOT advance
+the directory beyond the state described by the pending anchor or sign a
+successor anchor until the pending anchor is confirmed. This rule prevents
+concurrent publishes, process restarts, and lost responses from creating
+multiple anchor children or silently skipping a directory state.
 
 **Batching escape hatch (operator opt-in).** Operators serving high-throughput directories MAY batch multiple directory operations into a single anchor by declaring a batching policy in their directory metadata. The policy MUST specify (a) the maximum batch interval, (b) the maximum number of operations per batch, and (c) the consumer-facing implication: queries against a batched directory state MAY observe an unanchored window of up to the batching policy's max interval. Verifiers consuming a batched directory MUST surface `directory_batching_window_ms: <value>` so consumers can apply policy. atrib's reference directory implementation is per-operation; batching is for downstream operators with throughput requirements that exceed per-operation limits.
 

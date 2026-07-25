@@ -46,7 +46,14 @@ The package inventory, grouped current / deprecated / private, lives in the [REA
 ### Key directory and identity
 
 - AKD-backed public-key directory ([§6](atrib-spec.md#6-key-directory), [D034](DECISIONS.md#d034-public-key-directory-architecture-akd-unblinded-vrf-blinded-mode-available-for-downstream-consumers)) deployed at `https://directory.atrib.dev/v6` (unblinded mode for atrib's own use; VRF-blinded mode available for downstream consumers requiring privacy-preserving lookup).
-- Per-operation directory anchoring back into the log ([§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log)).
+- Per-operation directory anchoring back into the log
+  ([§6.2.4](atrib-spec.md#624-anchor-cross-reference-into-the-tessera-log),
+  [D180](DECISIONS.md#d180-directory-anchors-use-a-durable-linear-commit-journal)).
+  Directory-node serializes publishes, fsyncs prepared and committed anchor
+  journal entries, retries an ambiguous submission by exact record hash and
+  body, restores committed bodies plus the chain head after restart, and
+  fails closed on claim-journal corruption. It bootstraps the first durable
+  anchor journal from the newest matching log anchor.
 - Key rotation and revocation ([§1.9](atrib-spec.md#19-key-rotation-and-revocation), [D033](DECISIONS.md#d033-key-rotation-and-revocation)): verifier honors revocations, `@atrib/cli` exposes `publish-claim` / `revoke` commands, conformance corpus generated.
 - Capability declarations ([§6.7](atrib-spec.md#67-capability-declarations), [D051](DECISIONS.md#d051-capability-scoped-records-via-directory-published-envelopes)) surfaced by the verifier as soft signals per [§6.7.3](atrib-spec.md#673-signal-not-invalidation).
 - Named identity profiles and run rotation ([D171](DECISIONS.md#d171-one-command-named-identity-preserves-the-principal-to-run-chain), [D172](DECISIONS.md#d172-run-rotation-publishes-revocation-before-successor-activation)): `atrib identity init` creates or recovers a Keychain-backed principal, deterministic workspace and agent labels, a principal-signed portable identity claim, and a context-bound run certificate. A repeat invocation publishes a principal-signed revocation for the prior run before activating the successor. `identity show` verifies the claim, key match, active certificate, and accepted revocation state. Self-attested names remain claims, and directory publication requires `--publish`.
