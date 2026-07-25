@@ -1,5 +1,13 @@
 # @atrib/verify
 
+## 0.13.0
+
+### Minor Changes
+
+- ffa7378: Add endpoint-aware checkpoint witness acquisition with caller-pinned log and
+  witness endpoints, bounded transport, per-endpoint verification outcomes,
+  exact-checkpoint identity integration, and signed retirement verification.
+
 ## 0.12.4
 
 ### Patch Changes

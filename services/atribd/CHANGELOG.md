@@ -1,5 +1,13 @@
 # @atrib/daemon
 
+## 0.2.8
+
+### Patch Changes
+
+- Updated dependencies [ffa7378]
+  - @atrib/verify@0.13.0
+  - @atrib/recall@5.0.0
+
 ## 0.2.7
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @atrib/archive-node
 
+## 0.1.46
+
+### Patch Changes
+
+- Updated dependencies [ffa7378]
+  - @atrib/verify@0.13.0
+
 ## 0.1.45
 
 ### Patch Changes
