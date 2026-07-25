@@ -377,15 +377,22 @@ bearer-protected route that re-verifies local or archived record bodies and
 tests available content, tool-name, argument, and result openings against the
 signed commitments.
 
-The application also exposes signed Buzz runtime-window observations in a
-separate, bounded feed. The mapping builder verifies source artifacts before
-the host signs its observation. A later reader verifies the atrib signature
-and body commitment; it does not replay absent Buzz frames or manifests.
-Source verification facts therefore remain claims by the observation signer
-unless those artifacts are supplied separately. The observation does not
-create accepted state or other semantic events. A later application event must
-cite the atrib-signature-verified observation and match its named scope before
-it enters an operating view.
+The application also exposes signed runtime observations in a separate,
+bounded feed. The source-neutral [D183](DECISIONS.md#d183-runtime-observation-adapters-separate-reading-from-durable-acceptance) path verifies a portable batch and
+commits its complete artifact, signed observation, and authoritative cursor in
+one caller-owned journal update. The observation does not create accepted state
+or other semantic events. A later application event must cite the
+atrib-signature-verified observation and match its named scope before it enters
+an operating view.
+
+The runnable open composition uses the Codex rollout profile, a separate host
+mapping, a bounded view receipt, paired SDK action records, signed
+[D168](DECISIONS.md#d168-coverage-manifests-make-capture-scope-verifiable)
+membership, and an independent selected-effect verdict. It is a deterministic
+local fixture, not evidence of a live external session or deployed product.
+Buzz runtime-window observations use the same non-semantic application lane.
+Their later reader verifies the atrib signature and body commitment; it cannot
+replay absent Buzz frames or manifests.
 
 This is an application profile, not a new protocol surface. It demonstrates
 usable shared state while keeping names, values, and resolution policy outside

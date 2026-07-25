@@ -5,10 +5,14 @@ import { describe, expect, it } from 'vitest'
 import { deriveNostrEventId, type NostrEvent } from '@atrib/verify'
 import { BuzzObserverRuntimeLogSource, type BuzzObserverTelemetry } from '@atrib/runtime-log/buzz'
 import { hashLogWindowManifest } from '@atrib/runtime-log'
+import { createRuntimeObservationBatch } from '@atrib/runtime-log/observation'
 import {
   buildBuzzRuntimeObservation,
   buildBuzzSemanticPromotion,
+  buildRuntimeObservation,
+  buildRuntimeSemanticPromotion,
   parseBuzzRuntimeObservation,
+  parseRuntimeObservation,
 } from '../src/observations.js'
 import { OPERATING_EVENT_SCHEMA, type OperatingEvent } from '../src/model.js'
 
@@ -156,6 +160,119 @@ describe('Buzz runtime observations', () => {
     }
     const sourceObservation = `sha256:${'a'.repeat(64)}`
     expect(buildBuzzSemanticPromotion(sourceObservation, event)).toEqual({
+      event: { ...event, source_observation: sourceObservation },
+      informed_by: [sourceObservation],
+    })
+  })
+})
+
+describe('source-neutral runtime observations', () => {
+  const cursor = { byte_offset: 0 }
+  const mapping = {
+    workspace: { id: 'workspace-1', name: 'Apollo' },
+    task: { id: 'task-1', name: 'Review runtime capture' },
+    team: { id: 'team-1', name: 'Protocol' },
+    mapped_agent: { id: 'codex-agent', name: 'Codex', role: 'builder' },
+  }
+  const batch = createRuntimeObservationBatch({
+    adapter: { id: 'codex-rollout-jsonl', version: '1' },
+    source: {
+      source_ref: `sha256:${'1'.repeat(64)}`,
+      generation_ref: `sha256:${'2'.repeat(64)}`,
+      runtime: { name: 'Codex', version: 'host-observed', environment: 'local' },
+      session_id: '019f6a03-db2d-7040-ab13-0034852163eb',
+    },
+    status: 'ok',
+    expected_cursor: cursor,
+    proposed_cursor: { byte_offset: 128 },
+    observations: [
+      {
+        schema: 'atrib.runtime-observation.codex-rollout.v1',
+        observation_id: `sha256:${'3'.repeat(64)}`,
+        kind: 'response_item',
+        observer_ref: 'host:runtime-observer',
+        subject_ref: 'runtime:codex',
+        subject_runtime_session_id: '019f6a03-db2d-7040-ab13-0034852163eb',
+        observed_at: '2026-07-25T12:00:01.000Z',
+        source_occurred_at: '2026-07-25T12:00:00.000Z',
+        source_frame: {
+          source_ref: `sha256:${'1'.repeat(64)}`,
+          generation_ref: `sha256:${'2'.repeat(64)}`,
+          sequence: 1,
+          event_hash: `sha256:${'4'.repeat(64)}`,
+          framed_event_hash: `sha256:${'5'.repeat(64)}`,
+        },
+        capture_mode: 'attach-native',
+        evidence_grade: 'runtime-captured',
+        execution_evidence: false,
+        semantic_state: 'not-inferred',
+      },
+    ],
+    coverage: {
+      history_completeness: 'bounded-backfill',
+      parsing_status: 'ok',
+      complete_event_count: 1,
+      complete_window_eligible: true,
+    },
+    gaps: [],
+    observed_at: '2026-07-25T12:00:01.000Z',
+    profile_data: { compaction_count: 0 },
+  })
+
+  it('places a verified batch without copying transcript observations into the signed body', () => {
+    const observation = buildRuntimeObservation(batch, cursor, mapping)
+
+    expect(observation).toMatchObject({
+      workspace: mapping.workspace,
+      task: mapping.task,
+      team: mapping.team,
+      mapped_agent: mapping.mapped_agent,
+      source: {
+        adapter_id: 'codex-rollout-jsonl',
+        source_ref: batch.source.source_ref,
+        session_id: batch.source.session_id,
+      },
+      batch: {
+        batch_id: batch.batch_id,
+        observation_count: 1,
+        history_completeness: 'bounded-backfill',
+        parsing_status: 'ok',
+        gap_kinds: [],
+      },
+      claim_boundary: {
+        runtime_telemetry: 'host-observed',
+        execution: 'not-established',
+        accepted_state: 'not-inferred',
+        effect_outcome: 'not-established',
+      },
+      execution_evidence: false,
+      raw_observations: 'omitted',
+    })
+    expect(JSON.stringify(observation)).not.toContain(batch.observations[0]!.observation_id)
+    expect(parseRuntimeObservation(observation)).toEqual(observation)
+    expect(parseRuntimeObservation({ ...observation, execution_evidence: true })).toBeNull()
+    expect(parseRuntimeObservation({ ...observation, observations: [] })).toBeNull()
+  })
+
+  it('rejects a batch that does not begin at the authoritative cursor', () => {
+    expect(() => buildRuntimeObservation(batch, { byte_offset: 64 }, mapping)).toThrow(
+      'authoritative_cursor_mismatch',
+    )
+  })
+
+  it('uses the same explicit signed-promotion contract for every runtime source', () => {
+    const event: OperatingEvent = {
+      schema: OPERATING_EVENT_SCHEMA,
+      kind: 'accepted_state',
+      workspace: mapping.workspace,
+      task: mapping.task,
+      team: mapping.team,
+      agent: mapping.mapped_agent,
+      subject: 'task-status',
+      value: { state: 'reviewed' },
+    }
+    const sourceObservation = `sha256:${'a'.repeat(64)}`
+    expect(buildRuntimeSemanticPromotion(sourceObservation, event)).toEqual({
       event: { ...event, source_observation: sourceObservation },
       informed_by: [sourceObservation],
     })

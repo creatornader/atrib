@@ -12,7 +12,8 @@ import {
   type ProofBundle,
 } from '@atrib/mcp'
 import { parseOperatingEvent, type OperatingEntry, type OperatingEnvelope } from './model.js'
-import { parseBuzzRuntimeObservation, type RuntimeObservationEntry } from './observations.js'
+import { OBSERVATION_JOURNAL_SCHEMA, observationJournalEnvelopes } from './observation-journal.js'
+import { parseAnyRuntimeObservation, type RuntimeObservationEntry } from './observations.js'
 
 function recordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
@@ -25,7 +26,11 @@ async function mirrorFiles(path: string): Promise<string[]> {
   if (!pathStat.isDirectory()) return []
   const entries = await readdir(absolute, { withFileTypes: true })
   return entries
-    .filter((entry) => entry.isFile() && extname(entry.name) === '.jsonl')
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        (extname(entry.name) === '.jsonl' || entry.name.endsWith('.observation-journal.json')),
+    )
     .map((entry) => join(absolute, entry.name))
     .sort()
 }
@@ -75,19 +80,13 @@ export async function loadOperatingMirror(
   let recordsRead = 0
 
   for (const file of files) {
-    const lines = (await readFile(file, 'utf8')).split('\n')
-    for (const line of lines) {
-      if (!line.trim()) continue
+    const values = await readMirrorValues(file)
+    for (const value of values) {
       recordsRead += 1
       if (recordsRead > maxRecords) {
         throw new Error(`mirror record limit exceeded (${maxRecords})`)
       }
-      let envelope: OperatingEnvelope
-      try {
-        envelope = JSON.parse(line) as OperatingEnvelope
-      } catch {
-        continue
-      }
+      const envelope = value as OperatingEnvelope
       if (!envelope.record || typeof envelope.record !== 'object') continue
       const content = committedLocalContent(envelope.record, envelope._local?.content)
       if (!content) continue
@@ -105,7 +104,7 @@ export async function loadOperatingMirror(
           producer: envelope._local?.producer ?? null,
         })
       }
-      const observation = parseBuzzRuntimeObservation(content)
+      const observation = parseAnyRuntimeObservation(content)
       if (observation) {
         runtimeObservations.set(hash, {
           record_hash: hash,
@@ -188,18 +187,11 @@ export async function loadLocalRecordMaterial(
   let matched: LocalRecordMaterial | null = null
 
   for (const file of files) {
-    const lines = (await readFile(file, 'utf8')).split('\n')
-    for (const line of lines) {
-      if (!line.trim()) continue
+    const values = await readMirrorValues(file)
+    for (const parsed of values) {
       recordsRead += 1
       if (recordsRead > maxRecords) {
         throw new Error(`mirror record limit exceeded (${maxRecords})`)
-      }
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(line) as unknown
-      } catch {
-        continue
       }
       const envelope = normalizeMirrorEnvelope(parsed)
       if (!envelope) continue
@@ -226,6 +218,36 @@ export async function loadLocalRecordMaterial(
     }
   }
   return matched
+}
+
+async function readMirrorValues(file: string): Promise<readonly unknown[]> {
+  const text = await readFile(file, 'utf8')
+  try {
+    const parsed = JSON.parse(text) as unknown
+    if (isObject(parsed) && parsed['schema'] === OBSERVATION_JOURNAL_SCHEMA) {
+      const envelopes = await observationJournalEnvelopes(parsed)
+      if (!envelopes) throw new Error('observation journal is malformed')
+      return envelopes
+    }
+    return [parsed]
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      if (file.endsWith('.observation-journal.json')) {
+        throw new Error('observation journal is malformed', { cause: error })
+      }
+      return text
+        .split('\n')
+        .filter((line) => line.trim() !== '')
+        .flatMap((line) => {
+          try {
+            return [JSON.parse(line) as unknown]
+          } catch {
+            return []
+          }
+        })
+    }
+    throw error
+  }
 }
 
 function normalizeMirrorEnvelope(value: unknown): {

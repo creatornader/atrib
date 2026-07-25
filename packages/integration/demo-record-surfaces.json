@@ -262,6 +262,13 @@
       "commands": ["buzz-cross-control-plane-fixture"]
     },
     {
+      "id": "open-runtime-composition",
+      "path": "examples/open-runtime-composition",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["open-runtime-composition"]
+    },
+    {
       "id": "dogfood-runtime-log",
       "path": "examples/dogfood-runtime-log",
       "record_class": "offline-local",

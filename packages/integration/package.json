@@ -69,6 +69,7 @@
     "session-transcript-runtime-log-smoke": "node --import tsx examples/session-transcript-runtime-log/session-transcript-runtime-log-smoke.ts",
     "buzz-observer-runtime-log-smoke": "tsx examples/buzz-observer-runtime-log/buzz-observer-runtime-log-smoke.ts",
     "buzz-cross-control-plane-fixture": "tsx examples/buzz-cross-control-plane/buzz-cross-control-plane-fixture.ts",
+    "open-runtime-composition": "tsx examples/open-runtime-composition/open-runtime-composition.ts",
     "dogfood-runtime-log-smoke": "tsx examples/dogfood-runtime-log/dogfood-runtime-log-smoke.ts",
     "secondary-runtime-log-smoke": "tsx examples/secondary-runtime-log/secondary-runtime-log-smoke.ts",
     "runtime-log-verifier-ux-smoke": "tsx examples/runtime-log-verifier-ux/runtime-log-verifier-ux-smoke.ts",
