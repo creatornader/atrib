@@ -12,7 +12,7 @@ import {
   type ProofBundle,
 } from '@atrib/mcp'
 import { parseOperatingEvent, type OperatingEntry, type OperatingEnvelope } from './model.js'
-import { parseBuzzRuntimeObservation, type RuntimeObservationEntry } from './observations.js'
+import { parseAnyRuntimeObservation, type RuntimeObservationEntry } from './observations.js'
 
 function recordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
@@ -105,7 +105,7 @@ export async function loadOperatingMirror(
           producer: envelope._local?.producer ?? null,
         })
       }
-      const observation = parseBuzzRuntimeObservation(content)
+      const observation = parseAnyRuntimeObservation(content)
       if (observation) {
         runtimeObservations.set(hash, {
           record_hash: hash,

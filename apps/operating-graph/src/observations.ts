@@ -13,6 +13,14 @@ import {
   type Sha256Uri,
 } from '@atrib/runtime-log'
 import {
+  RUNTIME_OBSERVATION_CLAIM_BOUNDARY,
+  verifyRuntimeObservationBatchTransition,
+  type RuntimeObservationBatch,
+  type RuntimeObservationClaim,
+  type RuntimeObservationCoverage,
+  type RuntimeObservationGap,
+} from '@atrib/runtime-log/observation'
+import {
   parseNamedRef,
   parseOperatingEvent,
   parseOptionalAgentRef,
@@ -24,12 +32,67 @@ import {
 
 export const BUZZ_RUNTIME_OBSERVATION_SCHEMA =
   'atrib.operating-runtime-observation.buzz.v1' as const
+export const RUNTIME_OBSERVATION_SCHEMA = 'atrib.operating-runtime-observation.v1' as const
 
-export interface BuzzObservationMapping {
+export interface RuntimeObservationMapping {
   readonly workspace: NamedRef
   readonly task?: NamedRef
   readonly team?: NamedRef
   readonly mapped_agent?: AgentRef
+}
+
+export type BuzzObservationMapping = RuntimeObservationMapping
+
+type PortableObservationBatch = RuntimeObservationBatch<
+  Record<string, unknown>,
+  RuntimeObservationClaim,
+  RuntimeObservationCoverage,
+  RuntimeObservationGap,
+  Record<string, unknown>
+>
+
+export interface PortableRuntimeObservation {
+  readonly schema: typeof RUNTIME_OBSERVATION_SCHEMA
+  readonly kind: 'runtime_observation'
+  readonly workspace: NamedRef
+  readonly task?: NamedRef
+  readonly team?: NamedRef
+  /** Caller-owned placement. This is not the observed runtime subject. */
+  readonly mapped_agent?: AgentRef
+  readonly source: {
+    readonly adapter_id: string
+    readonly adapter_version: string
+    readonly source_ref: string
+    readonly generation_ref: string
+    readonly runtime: {
+      readonly name: string
+      readonly version: string
+      readonly environment?: string
+    }
+    readonly session_id: string
+  }
+  readonly batch: {
+    /** Commits to the complete external batch, including cursors and observations. */
+    readonly batch_id: string
+    readonly status: 'ok' | 'gap'
+    readonly observation_count: number
+    readonly history_completeness: RuntimeObservationCoverage['history_completeness']
+    readonly parsing_status: RuntimeObservationCoverage['parsing_status']
+    readonly complete_window_eligible: boolean
+    readonly gap_kinds: readonly string[]
+    readonly observed_at: string
+  }
+  readonly claim_boundary: typeof RUNTIME_OBSERVATION_CLAIM_BOUNDARY
+  readonly source_artifact_replay: 'not-performed-by-reader'
+  readonly execution_evidence: false
+  readonly semantic_effects: {
+    readonly accepted_state: false
+    readonly decision: false
+    readonly outcome: false
+    readonly handoff: false
+    readonly resolution: false
+  }
+  readonly raw_observations: 'omitted'
 }
 
 export interface BuzzRuntimeObservation {
@@ -95,7 +158,7 @@ export interface BuzzRuntimeObservation {
 export interface RuntimeObservationEntry {
   readonly record_hash: string
   readonly record: AtribRecord
-  readonly observation: BuzzRuntimeObservation
+  readonly observation: PortableRuntimeObservation | BuzzRuntimeObservation
   readonly signature_verified: boolean
   readonly content_commitment_verified: true
   readonly proof_supplied: boolean
@@ -111,9 +174,65 @@ export interface RuntimeObservationQuery {
   readonly limit?: number
 }
 
-export interface BuzzSemanticPromotion {
+export interface RuntimeSemanticPromotion {
   readonly event: OperatingEvent
   readonly informed_by: readonly [string]
+}
+
+export type BuzzSemanticPromotion = RuntimeSemanticPromotion
+
+/**
+ * Places a verified D183 observation batch in an application-owned scope.
+ * The signed body carries the batch commitment and bounded summary, not raw
+ * transcript observations. The complete batch remains an external artifact.
+ */
+export function buildRuntimeObservation(
+  batch: PortableObservationBatch,
+  authoritativeCursor: Record<string, unknown>,
+  mapping: RuntimeObservationMapping,
+): PortableRuntimeObservation {
+  const transition = verifyRuntimeObservationBatchTransition(batch, authoritativeCursor)
+  if (!transition.valid) {
+    throw new Error(
+      `runtime observation batch transition is invalid: ${transition.issues
+        .map((issue) => issue.code)
+        .join(', ')}`,
+    )
+  }
+  const observation: PortableRuntimeObservation = {
+    schema: RUNTIME_OBSERVATION_SCHEMA,
+    kind: 'runtime_observation',
+    workspace: mapping.workspace,
+    ...(mapping.task ? { task: mapping.task } : {}),
+    ...(mapping.team ? { team: mapping.team } : {}),
+    ...(mapping.mapped_agent ? { mapped_agent: mapping.mapped_agent } : {}),
+    source: {
+      adapter_id: batch.adapter.id,
+      adapter_version: batch.adapter.version,
+      source_ref: batch.source.source_ref,
+      generation_ref: batch.source.generation_ref,
+      runtime: batch.source.runtime,
+      session_id: batch.source.session_id,
+    },
+    batch: {
+      batch_id: batch.batch_id,
+      status: batch.status,
+      observation_count: batch.observations.length,
+      history_completeness: batch.coverage.history_completeness,
+      parsing_status: batch.coverage.parsing_status,
+      complete_window_eligible: batch.coverage.complete_window_eligible,
+      gap_kinds: [...new Set(batch.gaps.map((gap) => gap.kind))].sort(),
+      observed_at: batch.observed_at,
+    },
+    claim_boundary: RUNTIME_OBSERVATION_CLAIM_BOUNDARY,
+    source_artifact_replay: 'not-performed-by-reader',
+    execution_evidence: false,
+    semantic_effects: noSemanticEffects(),
+    raw_observations: 'omitted',
+  }
+  const parsed = parseRuntimeObservation(observation)
+  if (!parsed) throw new Error('runtime observation mapping is invalid')
+  return parsed
 }
 
 /**
@@ -147,6 +266,13 @@ export function buildBuzzSemanticPromotion(
   observationRecordHash: string,
   event: OperatingEvent,
 ): BuzzSemanticPromotion {
+  return buildRuntimeSemanticPromotion(observationRecordHash, event)
+}
+
+export function buildRuntimeSemanticPromotion(
+  observationRecordHash: string,
+  event: OperatingEvent,
+): RuntimeSemanticPromotion {
   if (!/^sha256:[0-9a-f]{64}$/.test(observationRecordHash)) {
     throw new Error('observationRecordHash must be a sha256 URI')
   }
@@ -158,6 +284,48 @@ export function buildBuzzSemanticPromotion(
   return {
     event: promotedEvent,
     informed_by: [observationRecordHash],
+  }
+}
+
+export function parseRuntimeObservation(value: unknown): PortableRuntimeObservation | null {
+  if (!isObject(value) || value['schema'] !== RUNTIME_OBSERVATION_SCHEMA) return null
+  if (value['kind'] !== 'runtime_observation') return null
+  if (
+    'payload' in value ||
+    'frames' in value ||
+    'raw_events' in value ||
+    'observations' in value ||
+    'result' in value ||
+    'outcome' in value
+  ) {
+    return null
+  }
+  const placement = parseObservationPlacement(value)
+  if (!placement) return null
+  const source = parsePortableSource(value['source'])
+  const batch = parsePortableBatch(value['batch'])
+  if (
+    !source ||
+    !batch ||
+    !isExactClaimBoundary(value['claim_boundary']) ||
+    value['source_artifact_replay'] !== 'not-performed-by-reader' ||
+    value['execution_evidence'] !== false ||
+    !isNoSemanticEffect(value['semantic_effects']) ||
+    value['raw_observations'] !== 'omitted'
+  ) {
+    return null
+  }
+  return {
+    schema: RUNTIME_OBSERVATION_SCHEMA,
+    kind: 'runtime_observation',
+    ...placement,
+    source,
+    batch,
+    claim_boundary: RUNTIME_OBSERVATION_CLAIM_BOUNDARY,
+    source_artifact_replay: 'not-performed-by-reader',
+    execution_evidence: false,
+    semantic_effects: noSemanticEffects(),
+    raw_observations: 'omitted',
   }
 }
 
@@ -216,6 +384,112 @@ export function parseBuzzRuntimeObservation(value: unknown): BuzzRuntimeObservat
     semantic_effects: noSemanticEffects(),
     raw_payloads: 'omitted',
   }
+}
+
+export function parseAnyRuntimeObservation(
+  value: unknown,
+): PortableRuntimeObservation | BuzzRuntimeObservation | null {
+  return parseRuntimeObservation(value) ?? parseBuzzRuntimeObservation(value)
+}
+
+function parseObservationPlacement(
+  value: Record<string, unknown>,
+): Pick<
+  PortableRuntimeObservation,
+  'workspace' | 'task' | 'team' | 'mapped_agent'
+> | null {
+  const workspace = parseNamedRef(value['workspace'])
+  if (!workspace || 'agent' in value) return null
+  const task = parseOptionalNamedRef(value, 'task')
+  const team = parseOptionalNamedRef(value, 'team')
+  const mappedAgent = parseOptionalAgentRef(value, 'mapped_agent')
+  if (!task.valid || !team.valid || !mappedAgent.valid) return null
+  return {
+    workspace,
+    ...(task.value ? { task: task.value } : {}),
+    ...(team.value ? { team: team.value } : {}),
+    ...(mappedAgent.value ? { mapped_agent: mappedAgent.value } : {}),
+  }
+}
+
+function parsePortableSource(value: unknown): PortableRuntimeObservation['source'] | null {
+  if (!isObject(value) || !isObject(value['runtime'])) return null
+  const runtime = value['runtime']
+  const environment = runtime['environment']
+  if (
+    !nonEmptyString(value['adapter_id']) ||
+    !nonEmptyString(value['adapter_version']) ||
+    !nonEmptyString(value['source_ref']) ||
+    !nonEmptyString(value['generation_ref']) ||
+    !nonEmptyString(value['session_id']) ||
+    !nonEmptyString(runtime['name']) ||
+    !nonEmptyString(runtime['version']) ||
+    (environment !== undefined && !nonEmptyString(environment))
+  ) {
+    return null
+  }
+  return {
+    adapter_id: value['adapter_id'],
+    adapter_version: value['adapter_version'],
+    source_ref: value['source_ref'],
+    generation_ref: value['generation_ref'],
+    runtime: {
+      name: runtime['name'],
+      version: runtime['version'],
+      ...(environment !== undefined ? { environment } : {}),
+    },
+    session_id: value['session_id'],
+  }
+}
+
+function parsePortableBatch(value: unknown): PortableRuntimeObservation['batch'] | null {
+  if (!isObject(value)) return null
+  const observationCount = value['observation_count']
+  const gapKinds = value['gap_kinds']
+  if (
+    !nonEmptyString(value['batch_id']) ||
+    (value['status'] !== 'ok' && value['status'] !== 'gap') ||
+    !nonNegativeInteger(observationCount) ||
+    !['tail-only', 'bounded-backfill', 'continuous'].includes(
+      String(value['history_completeness']),
+    ) ||
+    !['ok', 'degraded', 'blocked'].includes(String(value['parsing_status'])) ||
+    typeof value['complete_window_eligible'] !== 'boolean' ||
+    !Array.isArray(gapKinds) ||
+    !gapKinds.every(nonEmptyString) ||
+    new Set(gapKinds).size !== gapKinds.length ||
+    !isSorted(gapKinds) ||
+    !nonEmptyString(value['observed_at']) ||
+    !Number.isFinite(Date.parse(value['observed_at']))
+  ) {
+    return null
+  }
+  return {
+    batch_id: value['batch_id'],
+    status: value['status'],
+    observation_count: observationCount,
+    history_completeness: value[
+      'history_completeness'
+    ] as RuntimeObservationCoverage['history_completeness'],
+    parsing_status: value[
+      'parsing_status'
+    ] as RuntimeObservationCoverage['parsing_status'],
+    complete_window_eligible: value['complete_window_eligible'],
+    gap_kinds: gapKinds,
+    observed_at: value['observed_at'],
+  }
+}
+
+function isExactClaimBoundary(value: unknown): boolean {
+  return (
+    isObject(value) &&
+    value['runtime_telemetry'] === 'host-observed' &&
+    value['execution'] === 'not-established' &&
+    value['capture_completeness'] === 'coverage-reported' &&
+    value['runtime_vendor_provenance'] === 'not-established' &&
+    value['accepted_state'] === 'not-inferred' &&
+    value['effect_outcome'] === 'not-established'
+  )
 }
 
 export function selectRuntimeObservations(
