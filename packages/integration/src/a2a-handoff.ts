@@ -6,20 +6,26 @@ import canonicalize from 'canonicalize'
 import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 import {
+  A2A_PROTOCOL_VERSION,
   type AgentCard,
-  type AgentCardSignature,
-  type DataPart,
   type Message,
-  type MessageSendParams,
+  type Part,
+  Role,
+  type SendMessageRequest,
+  canonicalizeAgentCard,
+  generateAgentCardSignature,
+  verifyAgentCardSignature as verifySdkAgentCardSignature,
 } from '@a2a-js/sdk'
 import { ClientFactory, JsonRpcTransportFactory } from '@a2a-js/sdk/client'
 import {
+  AgentEvent,
   DefaultRequestHandler,
   InMemoryTaskStore,
   JsonRpcTransportHandler,
   type AgentExecutor,
   type ExecutionEventBus,
   type RequestContext,
+  ServerCallContext,
 } from '@a2a-js/sdk/server'
 import {
   base64urlEncode,
@@ -41,7 +47,6 @@ import {
 ed.hashes.sha512 = sha512
 ed.hashes.sha512Async = (message) => Promise.resolve(sha512(message))
 
-const A2A_PROTOCOL_VERSION = '0.3.0'
 const A2A_CONTEXT_ID = 'a2a-attrib-handoff-context'
 const A2A_AGENT_URL = 'https://a2a.example.test/atrib-handoff/jsonrpc'
 const A2A_AGENT_CARD_URL = 'https://a2a.example.test/.well-known/agent-card.json'
@@ -63,7 +68,7 @@ export interface A2aHandoffProofResult {
   agent_card: {
     name: string
     url: string
-    preferred_transport: string
+    protocol_binding: string
     signatures_count: number
     signature_alg: 'EdDSA'
     signature_kid: string
@@ -72,9 +77,10 @@ export interface A2aHandoffProofResult {
   }
   a2a: {
     request_context_id: string
+    return_immediately: false
     response_kind: 'message'
-    response_part_kinds: string[]
-    packet_part_kind: 'data'
+    response_part_content_cases: string[]
+    packet_part_content_case: 'data'
   }
   evidence: {
     remote_record_hash: string
@@ -193,35 +199,33 @@ class EvidencePacketAgent implements AgentExecutor {
         ),
       'a2a_send_message',
     )
-    const packetPart: DataPart = {
-      kind: 'data',
-      data: {
-        kind: 'atrib_handoff_packet',
-        packet: evidence.packet,
-        record_hash: evidence.recordHash,
-        a2a_context_id: requestContext.contextId,
-        a2a_task_id: requestContext.taskId,
-      } satisfies Record<string, unknown>,
-    }
+    const packetPart = makeDataPart({
+      kind: 'atrib_handoff_packet',
+      packet: evidence.packet,
+      record_hash: evidence.recordHash,
+      a2a_context_id: requestContext.contextId,
+      a2a_task_id: requestContext.taskId,
+    })
     const response: Message = {
-      kind: 'message',
       messageId: this.options.ids?.responseMessageId ?? randomUUID(),
-      role: 'agent',
+      role: Role.ROLE_AGENT,
       taskId: requestContext.taskId,
       contextId: requestContext.contextId,
       parts: [
-        {
-          kind: 'text',
-          text: 'A2A specialist completed the delegated check and returned an atrib evidence packet.',
-        },
+        makeTextPart(
+          'A2A specialist completed the delegated check and returned an atrib evidence packet.',
+        ),
         packetPart,
       ],
+      metadata: undefined,
+      extensions: [],
+      referenceTaskIds: [],
     }
-    eventBus.publish(response)
+    eventBus.publish(AgentEvent.message(response))
     eventBus.finished()
   }
 
-  cancelTask = async (): Promise<void> => {}
+  cancelTask = async (_taskId: string, _eventBus: ExecutionEventBus): Promise<void> => {}
 }
 
 export async function runA2aHandoffProof(
@@ -245,7 +249,7 @@ export async function runA2aHandoffProof(
     const agentCardSignature = await timings.span(
       'agent_card_verify',
       'Verify A2A Agent Card signature',
-      () => verifyAgentCardSignature(agentCard),
+      () => verifySignedAgentCard(agentCard),
     )
     const clientFactory = await timings.span(
       'a2a_stack_setup',
@@ -278,9 +282,7 @@ export async function runA2aHandoffProof(
       'Send blocking A2A JSON-RPC message',
       () => client.sendMessage(makeSendParams(options.ids)),
     )
-    if (!isMessage(response)) {
-      throw new Error(`expected A2A message response, got ${response.kind}`)
-    }
+    if (!isMessage(response)) throw new Error('expected A2A message response')
     const packetData = await timings.span(
       'handoff_packet_extract',
       'Extract atrib handoff packet',
@@ -346,9 +348,9 @@ export async function runA2aHandoffProof(
       },
       agent_card: {
         name: agentCard.name,
-        url: agentCard.url,
-        preferred_transport: agentCard.preferredTransport ?? 'JSONRPC',
-        signatures_count: agentCard.signatures?.length ?? 0,
+        url: primaryAgentInterface(agentCard).url,
+        protocol_binding: primaryAgentInterface(agentCard).protocolBinding,
+        signatures_count: agentCard.signatures.length,
         signature_alg: agentCardSignature.alg,
         signature_kid: agentCardSignature.kid,
         signature_valid: agentCardSignature.valid,
@@ -356,9 +358,10 @@ export async function runA2aHandoffProof(
       },
       a2a: {
         request_context_id: response.contextId ?? A2A_CONTEXT_ID,
+        return_immediately: false,
         response_kind: 'message',
-        response_part_kinds: response.parts.map((part) => part.kind),
-        packet_part_kind: 'data',
+        response_part_content_cases: response.parts.map(partContentCase),
+        packet_part_content_case: 'data',
       },
       evidence: {
         remote_record_hash: handoff.accepted_record_hashes[0]!,
@@ -452,85 +455,111 @@ function roundMs(value: number): number {
   return Math.round(value * 1000) / 1000
 }
 
-async function makeSignedAgentCard(): Promise<AgentCard> {
-  const unsignedCard = makeUnsignedAgentCard()
-  return {
-    ...unsignedCard,
-    signatures: [await signAgentCard(unsignedCard)],
-  }
-}
-
 function makeUnsignedAgentCard(): AgentCard {
   return {
     name: 'atrib A2A Evidence Agent',
     description: 'Returns a signed atrib evidence packet for a delegated A2A task.',
-    protocolVersion: A2A_PROTOCOL_VERSION,
+    supportedInterfaces: [
+      {
+        url: A2A_AGENT_URL,
+        protocolBinding: 'JSONRPC',
+        protocolVersion: A2A_PROTOCOL_VERSION,
+        tenant: '',
+      },
+    ],
+    provider: undefined,
     version: '0.1.0',
-    url: A2A_AGENT_URL,
-    preferredTransport: 'JSONRPC',
+    documentationUrl: undefined,
     skills: [
       {
         id: 'delegated-evidence',
         name: 'Delegated evidence',
         description: 'Complete a delegated task and return atrib handoff evidence.',
         tags: ['handoff', 'evidence', 'atrib'],
+        examples: [],
+        inputModes: ['text/plain'],
+        outputModes: ['text/plain', 'application/json'],
+        securityRequirements: [],
       },
     ],
     capabilities: {
       pushNotifications: false,
       streaming: false,
+      extensions: [],
+      extendedAgentCard: false,
     },
+    securitySchemes: {},
+    securityRequirements: [],
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain', 'application/json'],
-    additionalInterfaces: [{ url: A2A_AGENT_URL, transport: 'JSONRPC' }],
+    signatures: [],
+    iconUrl: undefined,
   }
 }
 
-async function signAgentCard(card: AgentCard): Promise<AgentCardSignature> {
-  const protectedHeader = {
+async function makeSignedAgentCard(): Promise<AgentCard> {
+  const unsignedCard = makeUnsignedAgentCard()
+  const signer = generateAgentCardSignature(await agentCardSigningJwk(), {
     alg: 'EdDSA',
     typ: 'JOSE',
     kid: A2A_AGENT_CARD_KEY_ID,
-  }
-  const protectedValue = base64urlEncode(utf8(JSON.stringify(protectedHeader)))
-  const payloadValue = base64urlEncode(utf8(canonicalAgentCardPayload(card)))
-  const signingInput = utf8(`${protectedValue}.${payloadValue}`)
-  const signature = await ed.signAsync(signingInput, A2A_REMOTE_AGENT_SEED)
+  })
+  return signer(unsignedCard)
+}
+
+async function agentCardSigningJwk(): Promise<Parameters<typeof generateAgentCardSignature>[0]> {
   return {
-    protected: protectedValue,
-    signature: base64urlEncode(signature),
+    kty: 'OKP',
+    crv: 'Ed25519',
+    d: base64urlEncode(A2A_REMOTE_AGENT_SEED),
+    x: base64urlEncode(await ed.getPublicKeyAsync(A2A_REMOTE_AGENT_SEED)),
   }
 }
 
-async function verifyAgentCardSignature(card: AgentCard): Promise<{
+async function agentCardVerificationJwk(): Promise<
+  Awaited<ReturnType<Parameters<typeof verifySdkAgentCardSignature>[0]>>
+> {
+  return {
+    kty: 'OKP',
+    crv: 'Ed25519',
+    x: base64urlEncode(await ed.getPublicKeyAsync(A2A_REMOTE_AGENT_SEED)),
+  }
+}
+
+async function verifySignedAgentCard(card: AgentCard): Promise<{
   alg: 'EdDSA'
   kid: string
   valid: boolean
   payloadHash: string
 }> {
-  const signature = card.signatures?.[0]
+  const signature = card.signatures[0]
+  const { signatures: _signatures, ...unsignedCard } = card
+  const payload = canonicalizeAgentCard(unsignedCard)
   if (!signature) {
     return {
       alg: 'EdDSA',
       kid: '',
       valid: false,
-      payloadHash: hashText(canonicalAgentCardPayload(card)),
+      payloadHash: hashText(payload),
     }
   }
   const protectedHeader = JSON.parse(text(base64urlDecode(signature.protected))) as {
     alg?: unknown
     kid?: unknown
   }
-  const payload = canonicalAgentCardPayload(card)
-  const signingInput = utf8(`${signature.protected}.${base64urlEncode(utf8(payload))}`)
-  const valid =
-    protectedHeader.alg === 'EdDSA' &&
-    typeof protectedHeader.kid === 'string' &&
-    (await ed.verifyAsync(
-      base64urlDecode(signature.signature),
-      signingInput,
-      await ed.getPublicKeyAsync(A2A_REMOTE_AGENT_SEED),
-    ))
+  let valid = false
+  if (protectedHeader.alg === 'EdDSA' && typeof protectedHeader.kid === 'string') {
+    try {
+      const verifier = verifySdkAgentCardSignature(async (kid) => {
+        if (kid !== A2A_AGENT_CARD_KEY_ID) throw new Error(`unknown Agent Card key ${kid}`)
+        return agentCardVerificationJwk()
+      })
+      await verifier(card)
+      valid = true
+    } catch {
+      valid = false
+    }
+  }
 
   return {
     alg: 'EdDSA',
@@ -540,32 +569,27 @@ async function verifyAgentCardSignature(card: AgentCard): Promise<{
   }
 }
 
-function canonicalAgentCardPayload(card: AgentCard): string {
-  const { signatures: _signatures, ...unsignedCard } = card
-  const encoded = canonicalize(unsignedCard)
-  if (encoded === undefined) throw new Error('agent card is not JSON-canonicalizable')
-  return encoded
-}
-
-function makeSendParams(ids: A2aHandoffProofOptions['ids'] = {}): MessageSendParams {
+function makeSendParams(ids: A2aHandoffProofOptions['ids'] = {}): SendMessageRequest {
   const message: Message = {
-    kind: 'message',
     messageId: ids.requestMessageId ?? randomUUID(),
-    role: 'user',
+    role: Role.ROLE_USER,
     contextId: ids.contextId ?? A2A_CONTEXT_ID,
+    taskId: '',
     parts: [
-      {
-        kind: 'text',
-        text: `Investigate support handoff ${PRIVATE_TASK_PHRASE} and return evidence.`,
-      },
+      makeTextPart(`Investigate support handoff ${PRIVATE_TASK_PHRASE} and return evidence.`),
     ],
+    metadata: undefined,
+    extensions: [],
+    referenceTaskIds: [],
   }
   return {
     configuration: {
-      blocking: true,
       acceptedOutputModes: ['text/plain', 'application/json'],
+      taskPushNotificationConfig: undefined,
+      returnImmediately: false,
     },
     message,
+    tenant: '',
     metadata: {
       'atrib.dev/requested-evidence': 'handoff_packet',
     },
@@ -576,7 +600,10 @@ function makeInProcessA2aFetch(handler: JsonRpcTransportHandler): typeof fetch {
   return (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const bodyText = await requestBodyText(init?.body)
     const requestBody = JSON.parse(bodyText) as unknown
-    const responseBody = await handler.handle(requestBody)
+    const responseBody = await handler.handle(
+      requestBody as Record<string, unknown>,
+      new ServerCallContext({ requestedVersion: A2A_PROTOCOL_VERSION }),
+    )
     if (isAsyncIterable(responseBody)) {
       throw new Error('streaming A2A responses are not used in this proof')
     }
@@ -734,19 +761,14 @@ async function submitRecord(url: string, record: AtribRecord): Promise<ProofBund
 }
 
 function extractPacketData(message: Message): A2aHandoffPacketPartData {
-  const dataPart = message.parts.find(
-    (part): part is DataPart =>
-      part.kind === 'data' &&
-      typeof part.data.kind === 'string' &&
-      part.data.kind === 'atrib_handoff_packet',
-  )
-  if (!dataPart) throw new Error('A2A response did not include an atrib packet DataPart')
-  return dataPart.data as unknown as A2aHandoffPacketPartData
+  const packetPart = message.parts.find(isA2aHandoffPacketPart)
+  if (!packetPart) throw new Error('A2A response did not include an atrib packet data part')
+  return packetPart.content.value
 }
 
 function requestTextFromMessage(message: Message): string {
   return message.parts
-    .map((part) => (part.kind === 'text' ? part.text : ''))
+    .map((part) => (part.content?.$case === 'text' ? part.content.value : ''))
     .filter(Boolean)
     .join('\n')
 }
@@ -755,9 +777,48 @@ function isMessage(value: unknown): value is Message {
   return (
     typeof value === 'object' &&
     value !== null &&
-    (value as { kind?: unknown }).kind === 'message' &&
+    typeof (value as { messageId?: unknown }).messageId === 'string' &&
     Array.isArray((value as { parts?: unknown }).parts)
   )
+}
+
+function makeTextPart(text: string): Part {
+  return {
+    content: { $case: 'text', value: text },
+    metadata: undefined,
+    filename: '',
+    mediaType: 'text/plain',
+  }
+}
+
+function makeDataPart(data: Record<string, unknown>): Part {
+  return {
+    content: { $case: 'data', value: data },
+    metadata: undefined,
+    filename: '',
+    mediaType: 'application/json',
+  }
+}
+
+function isA2aHandoffPacketPart(
+  part: Part,
+): part is Part & { content: { $case: 'data'; value: A2aHandoffPacketPartData } } {
+  const data = part.content?.$case === 'data' ? part.content.value : undefined
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    (data as { kind?: unknown }).kind === 'atrib_handoff_packet'
+  )
+}
+
+function partContentCase(part: Part): string {
+  return part.content?.$case ?? 'unset'
+}
+
+function primaryAgentInterface(card: AgentCard): AgentCard['supportedInterfaces'][number] {
+  const agentInterface = card.supportedInterfaces[0]
+  if (!agentInterface) throw new Error('Agent Card does not declare a supported interface')
+  return agentInterface
 }
 
 async function publicKey(seed: Uint8Array): Promise<string> {
@@ -776,10 +837,6 @@ function hashText(value: string): string {
 
 function recordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
-}
-
-function utf8(value: string): Uint8Array {
-  return new TextEncoder().encode(value)
 }
 
 function text(value: Uint8Array): string {
