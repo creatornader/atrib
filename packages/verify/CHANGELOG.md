@@ -1,5 +1,12 @@
 # @atrib/verify
 
+## 0.12.2
+
+### Patch Changes
+
+- 71b756d: Make directory append-only verification follow the caller's exact previously
+  accepted anchor through signed, log-included predecessor links.
+
 ## 0.12.1
 
 ### Patch Changes
