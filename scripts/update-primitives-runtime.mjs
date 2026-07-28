@@ -85,7 +85,7 @@ const EXPECTED_BEHAVIORAL_PROBES = {
 }
 const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
 const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
-const DEFAULT_TIMEOUT_MS = 15_000
+const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_PROBE_QUERY = 'atrib primitive runtime content index health probe'
 const REPORT_SCHEMA = 'atrib.primitives-runtime-update-report.v0'
 
@@ -101,7 +101,7 @@ Options:
   --no-topology          Skip final topology gate check.
   --dry-run              Print the discovered plan without build, restart, or probe.
   --json                 Print JSON report.
-  --timeout-ms <n>       Total wait per endpoint. Defaults to 15000.
+  --timeout-ms <n>       Total wait per endpoint. Defaults to 30000.
   --probe-query <text>   Query used for recall_by_content health probe.
   --help                 Print this help.
 
