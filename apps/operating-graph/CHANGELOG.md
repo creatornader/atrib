@@ -1,5 +1,14 @@
 # @atrib/operating-graph
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [7528afa]
+- Updated dependencies [e55f99a]
+  - @atrib/sdk@6.0.1
+  - @atrib/runtime-log@0.5.0
+
 ## 0.1.7
 
 ### Patch Changes
