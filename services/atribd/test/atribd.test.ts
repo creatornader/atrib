@@ -448,6 +448,7 @@ describe('atribd stateless HTTP host', () => {
       expect(payload.result?.serverInfo?.name).toBe('atribd')
       expect(payload.result?.capabilities).toBeDefined()
       expect(host.requestCounters().legacy_initialize).toBe(1)
+      expect(host.requestCounters().legacy_requests).toBe(1)
     } finally {
       await host.close()
     }
@@ -468,6 +469,7 @@ describe('atribd stateless HTTP host', () => {
       }
       expect(discoverPayload.result?.supportedVersions).toContain('2026-07-28')
       expect(discoverPayload.result?._meta?.['io.modelcontextprotocol/serverInfo']?.name).toBe('atribd')
+      expect(host.requestCounters().modern_requests).toBe(1)
 
       const list = await postJson(
         host.endpoint,

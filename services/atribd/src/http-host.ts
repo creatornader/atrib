@@ -74,6 +74,8 @@ const MAX_JSON_BODY_BYTES = 1024 * 1024
 
 export interface AtribdRequestCounters {
   served: number
+  modern_requests: number
+  legacy_requests: number
   rejected_header_mismatch: number
   rejected_missing_context: number
   legacy_initialize: number
@@ -442,6 +444,8 @@ export async function bindAtribdHttpHost(
   const version = readPackageVersion()
   const counters: AtribdRequestCounters = {
     served: 0,
+    modern_requests: 0,
+    legacy_requests: 0,
     rejected_header_mismatch: 0,
     rejected_missing_context: 0,
     legacy_initialize: 0,
@@ -620,6 +624,11 @@ export async function bindAtribdHttpHost(
       }
 
       counters.served += 1
+      if (headerValue(req, 'mcp-protocol-version') === '2026-07-28') {
+        counters.modern_requests += 1
+      } else {
+        counters.legacy_requests += 1
+      }
       await adapter.handleRequest(req, res, body)
     } catch (error) {
       if (!res.headersSent) {
