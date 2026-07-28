@@ -575,7 +575,7 @@ function createServerKeyResolver(
 interface HandleEmitInput {
   input: z.infer<typeof EmitInput>
   key: ResolvedKey | null
-  queue: SubmissionQueue
+  queue?: SubmissionQueue
   /**
    * Producer label written to the sidecar's `_local.producer` field for
    * cross-source disambiguation in mirror queries. Defaults to
@@ -823,7 +823,7 @@ async function handleEmit({
   // Submit asynchronously; the queue handles retry + degradation per §5.8.
   // Cognitive events default to normal priority, annotations/observations
   // never need to block the agent.
-  if (!localSubstrateCommitted) {
+  if (!localSubstrateCommitted && queue) {
     queue.submit(record, 'normal')
   }
 
@@ -851,7 +851,7 @@ async function handleEmit({
     warnings.push(
       'submission delegated to local substrate coordinator; proof not available in this process',
     )
-  } else if (!proof) {
+  } else if (!proof && queue) {
     warnings.push('submission queued; proof not yet available (poll the log later if needed)')
   }
 
@@ -1291,7 +1291,8 @@ function notifyLocalSubstrateWarning(
  * always reported `log_index: null` and a misleading "submission queued"
  * warning, even when the record had already landed on the log.
  */
-function getProofFor(queue: SubmissionQueue, recordHash: string): ProofBundle | undefined {
+function getProofFor(queue: SubmissionQueue | undefined, recordHash: string): ProofBundle | undefined {
+  if (!queue) return undefined
   return queue.getProof(
     recordHash.startsWith('sha256:') ? recordHash.slice('sha256:'.length) : recordHash,
   )
@@ -1302,6 +1303,11 @@ export interface EmitInProcessOptions {
   key?: ResolvedKey
   /** Override the log endpoint (defaults to ATRIB_LOG_ENDPOINT or @atrib/mcp default). */
   logEndpoint?: string | undefined
+  /**
+   * Set false for local-only producers. The record is still signed and
+   * mirrored, but this process does not create a public-log queue.
+   */
+  submit?: boolean
   /**
    * Producer label written to the sidecar's `_local.producer` field for
    * cross-source disambiguation. Defaults to `'atrib-emit'`. Callers that
@@ -1392,11 +1398,11 @@ export async function emitInProcess(
   const key = options.key ?? (await resolveKey())
   const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
   const flushDeadlineMs = options.flushDeadlineMs ?? DEFAULT_FLUSH_DEADLINE_MS
-  const queue: SubmissionQueue = createSubmissionQueue(logEndpoint)
+  const queue = options.submit === false ? undefined : createSubmissionQueue(logEndpoint)
   const result = await handleEmit({
     input,
     key,
-    queue,
+    ...(queue !== undefined ? { queue } : {}),
     producer: options.producer,
     logEndpoint,
     mirrorPath: options.mirrorPath,
@@ -1419,7 +1425,7 @@ export async function emitInProcess(
       },
     ),
   })
-  if (!result.signed) {
+  if (!result.signed || queue === undefined) {
     return result
   }
   // Drain before returning, bounded by flushDeadlineMs. The typical caller

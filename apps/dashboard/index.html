@@ -2441,7 +2441,7 @@ async function renderOverview() {
   root.append(el('div', { class: 'pulse-strip', id: 'pulse-strip' },
     pulseStat('log health', '—'),
     pulseStat('protected history', '—'),
-    pulseStat('active signers', '—'),
+    pulseStat('active public keys', '—'),
     pulseStat('proof status', '—'),
   ))
 
@@ -2863,9 +2863,11 @@ function signerActivityStat(stats) {
   const windowLabel = active7d !== null ? 'last 7d' : active24h !== null ? 'last 24h' : 'lifetime'
   const sub =
     lifetime !== null && windowLabel !== 'lifetime'
-      ? `${windowLabel}, ${formatCount(lifetime)} lifetime public-log keys`
-      : 'creator keys with records'
-  return pulseStat('active signers', value !== null ? formatCount(value) : '—', sub)
+      ? `${windowLabel}, ${formatCount(lifetime)} lifetime public keys`
+      : 'creator keys with records, not identity claims'
+  return pulseStat('active public keys', value !== null ? formatCount(value) : '—', sub, {
+    title: 'A public key is protocol evidence. It is not automatically a person, customer, or distinct agent.',
+  })
 }
 
 function updatePulseStrip(stats, checkpoint, recent = null) {

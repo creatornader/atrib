@@ -16,7 +16,7 @@
  *      'require' mode (resolves via 'none', never throws).
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { createServer, type Server as HttpServer } from 'node:http'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -156,6 +156,45 @@ describe('recall shape routing', () => {
       shape: 'state',
       include_content: false,
     })
+  })
+})
+
+describe('local-only log submission', () => {
+  it('signs and mirrors without an outbound fetch', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'atrib-sdk-local-only-'))
+    const mirrorPath = join(directory, 'records.jsonl')
+    const originalFetch = globalThis.fetch
+    const fetchSpy = vi.fn(() => {
+      throw new Error('local-only client attempted network submission')
+    })
+    globalThis.fetch = fetchSpy as typeof fetch
+    try {
+      const client = createAtribClient({
+        daemon: { mode: 'off' },
+        logSubmission: 'disabled',
+        key: { privateKey: new Uint8Array(32).fill(15), source: 'env' },
+        mirrorPath,
+        contextId: CONTEXT_C,
+      })
+      const result = await client.attest({ content: { what: 'local proof' } })
+      await client.close()
+
+      expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(result.log_index).toBeNull()
+      expect(fetchSpy).not.toHaveBeenCalled()
+      const envelope = JSON.parse(readFileSync(mirrorPath, 'utf8').trim()) as { record: AtribRecord }
+      expect(recordHashRef(envelope.record)).toBe(result.record_hash)
+      expect(await verifyRecord(envelope.record)).toBe(true)
+    } finally {
+      globalThis.fetch = originalFetch
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('requires a non-daemon client', () => {
+    expect(() => createAtribClient({ logSubmission: 'disabled' })).toThrow(
+      "logSubmission: 'disabled' requires daemon.mode: 'off'",
+    )
   })
 })
 
