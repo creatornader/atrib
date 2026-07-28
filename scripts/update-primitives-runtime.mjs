@@ -438,6 +438,16 @@ export function validateHealthPayload(
         `expected daemon.transport streamable-http-stateless, got ${runtime?.transport}`,
       )
     }
+    if (runtime && runtime.transport_adapter !== 'v2-dual-era-per-request') {
+      issues.push(
+        `expected daemon.transport_adapter v2-dual-era-per-request, got ${runtime?.transport_adapter}`,
+      )
+    }
+    if (runtime && runtime.protocol_version !== '2026-07-28') {
+      issues.push(
+        `expected daemon.protocol_version 2026-07-28, got ${runtime?.protocol_version}`,
+      )
+    }
   }
   if (contract?.status !== 'pass') {
     issues.push(`expected recall_contract.status pass, got ${contract?.status}`)

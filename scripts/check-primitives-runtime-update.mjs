@@ -300,7 +300,8 @@ function atribdHealthBody() {
         pid: 456,
         version: '0.1.0',
         transport: 'streamable-http-stateless',
-        transport_adapter: 'session-sdk-per-request',
+        transport_adapter: 'v2-dual-era-per-request',
+        protocol_version: '2026-07-28',
       },
       recall_contract: {
         status: 'pass',
@@ -327,6 +328,16 @@ assert.equal(atribdHealth.pid, 456)
 assert.equal(atribdHealth.recall_contract, 'pass')
 assert.equal(atribdHealth.primitive_contracts.recall.tool_count, 12)
 assert.equal(atribdHealth.behavioral_probes.attest.status, 'skipped')
+
+assert.throws(() => {
+  const withLegacyAdapter = atribdHealthBody()
+  withLegacyAdapter.report.daemon.transport_adapter = 'session-sdk-per-request'
+  validateHealthPayload(withLegacyAdapter, {
+    expectedRuntimeVersion: '0.1.0',
+    expectedPrimitiveVersions,
+    mode: 'atribd',
+  })
+}, /v2-dual-era-per-request/)
 
 assert.throws(() => {
   const withSessions = atribdHealthBody()
