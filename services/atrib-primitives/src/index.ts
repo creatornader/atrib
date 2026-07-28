@@ -28,6 +28,10 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import {
+  Client as ModernClient,
+  StreamableHTTPClientTransport as ModernStreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client'
+import {
   CallToolRequestSchema,
   ErrorCode,
   ListToolsRequestSchema,
@@ -1133,11 +1137,14 @@ export async function createAtribPrimitivesHttpProxyRuntime(
       'ATRIB_PRIMITIVES_TOOL_TIMEOUT_MS',
     ) ??
     DEFAULT_TOOL_TIMEOUT_MS
-  const upstreamTransport = new StreamableHTTPClientTransport(new URL(endpoint))
-  const upstream = new Client({
-    name: 'atrib-primitives-stdio-http-proxy',
-    version: readPackageVersion(),
-  })
+  const upstreamTransport = new ModernStreamableHTTPClientTransport(new URL(endpoint))
+  const upstream = new ModernClient(
+    {
+      name: 'atrib-primitives-stdio-http-proxy',
+      version: readPackageVersion(),
+    },
+    { versionNegotiation: { mode: 'auto' } },
+  )
   await upstream.connect(upstreamTransport)
   const listed = await upstream.listTools()
   const server = new Server(
@@ -1152,7 +1159,8 @@ export async function createAtribPrimitivesHttpProxyRuntime(
     },
   )
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: listed.tools }))
+  const upstreamTools = listed.tools as Tool[]
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: upstreamTools }))
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return callWithToolTimeout(
       request.params.name,
@@ -1163,8 +1171,8 @@ export async function createAtribPrimitivesHttpProxyRuntime(
 
   return {
     server,
-    tools: listed.tools,
-    toolNames: listed.tools.map((tool) => tool.name),
+    tools: upstreamTools,
+    toolNames: upstreamTools.map((tool) => tool.name),
     flush: async () => {},
     close: async () => {
       await Promise.allSettled([server.close(), upstream.close(), upstreamTransport.close()])
