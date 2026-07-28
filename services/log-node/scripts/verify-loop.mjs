@@ -375,12 +375,27 @@ async function fetchBytes(url) {
   return new Uint8Array(ab)
 }
 
+function entryBundlePath(bundleIndex, treeSize) {
+  if (!Number.isInteger(bundleIndex) || bundleIndex < 0) {
+    throw new Error('bundle index must be a non-negative integer')
+  }
+  if (!Number.isInteger(treeSize) || treeSize < 1) {
+    throw new Error('tree size must be a positive integer')
+  }
+
+  const remaining = treeSize - bundleIndex * TILE_SIZE
+  if (remaining < 1) throw new Error('bundle index is outside the tree')
+
+  const tilePath = String(bundleIndex).padStart(3, '0')
+  return remaining < TILE_SIZE ? `${tilePath}.p/${remaining}` : tilePath
+}
+
 // Fetch all entries 0..treeSize-1 by walking the §2.5.3 bundles.
 async function fetchAllEntries(treeSize) {
   const entries = []
   let bundleIndex = 0
   while (entries.length < treeSize) {
-    const url = `${LOG_ENDPOINT}/tile/entries/${String(bundleIndex).padStart(3, '0')}`
+    const url = `${LOG_ENDPOINT}/tile/entries/${entryBundlePath(bundleIndex, treeSize)}`
     const bytes = await fetchBytes(url)
     const parsed = parseEntryBundle(bytes)
     for (const e of parsed) entries.push(e)
@@ -834,4 +849,5 @@ export {
   parseNonNegativeInt,
   formatDecodedEntryLine,
   selectEntrySamples,
+  entryBundlePath,
 }
