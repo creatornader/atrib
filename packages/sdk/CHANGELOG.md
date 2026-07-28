@@ -1,5 +1,11 @@
 # @atrib/sdk
 
+## 6.0.1
+
+### Patch Changes
+
+- 7528afa: Serve MCP 2026-07-28 HTTP requests through the stable v2 SDK while retaining the v1 compatibility path for older clients. Have the consolidated SDK negotiate the modern protocol with atribd automatically.
+
 ## 6.0.0
 
 ### Patch Changes
