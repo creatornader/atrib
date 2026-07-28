@@ -34,6 +34,11 @@ organizations, and protocols can verify what carried forward. Do not put that
 commercial framing in the spec abstract or GitHub repo description unless the
 protocol identity itself changes.
 
+When a public contribution needs to distinguish the commercial app from this
+open substrate, call the app `atrib` and this substrate `atrib protocol`.
+`atrib Workflows` is historical product language, not a forward-facing product
+name. Keep commercial-app claims within their proved boundary.
+
 The complete protocol specification is in `atrib-spec.md` ([§0](atrib-spec.md#0-foundations)-[§7](atrib-spec.md#7-harness-integration-patterns)). The technical architecture overview is in `ARCHITECTURE.md`. Read the spec before making any implementation decisions.
 
 ## Repository structure
