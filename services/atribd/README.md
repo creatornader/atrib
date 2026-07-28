@@ -82,11 +82,13 @@ instance:
   alias window (operator-tunable via `--tools-list-ttl-ms` /
   `ATRIBD_TOOLS_LIST_TTL_MS`).
 
-The transport binding sits behind an adapter
-(`src/transport-adapter.ts`). The current adapter runs the session-era MCP
-TypeScript SDK in its documented stateless mode; when the SDK ships native
-stateless-transport support, the adapter internals swap and nothing above
-the boundary changes.
+The transport binding sits behind `src/transport-adapter.ts`. HTTP requests
+for the 2026-07-28 protocol use the stable v2 MCP TypeScript SDK and its
+native per-request handler. The endpoint also routes 2025-era HTTP traffic
+to the existing v1 stateless adapter, which keeps deployed clients on their
+JSON response behavior during the compatibility window. Direct stdio and the
+stdio-to-HTTP proxy remain v1 compatibility surfaces until their hosts adopt
+the v2 protocol.
 
 ## Context identity on HTTP
 
@@ -144,8 +146,10 @@ and mirror stay on the host.
   values are honored so existing LaunchAgent plists migrate without config
   churn. `ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID` is redundant on HTTP (explicit
   is the default) and keeps its meaning on stdio.
-- **Old MCP clients.** Session-era clients work through the
-  legacy-initialize window on HTTP, or through the stdio shim indefinitely.
+- **Old MCP clients.** Session-era clients work through the v1 compatibility
+  adapter on HTTP, or through the stdio shim indefinitely. Modern HTTP
+  clients negotiate `server/discover` without `initialize` or
+  `Mcp-Session-Id`.
 - **Rollback.** Re-point the harness MCP config at the per-primitive
   binaries or at `atrib-primitives`. Rollback is a config change, not a data
   migration; no signed byte differs between the topologies.
@@ -161,4 +165,5 @@ The test suite includes the reference tests for
 [`spec/conformance/atribd/`](../../spec/conformance/atribd/), which pin the
 stateless transport contract, routing-header rejection, the context ladder,
 record byte parity across surfaces, health gates, degradation posture, and
-write serialization.
+write serialization. It also pins a real stable-v2-client negotiation and
+`tools/list` call against the daemon.

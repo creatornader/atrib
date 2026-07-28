@@ -48,10 +48,10 @@ fallback families degrade to a typed unavailable outcome with a
 warning instead of an import failure. `@atrib/emit` stays a hard
 dependency so the write path always works.
 
-The SDK is **semantically stateless** (stateless-MCP-native posture):
-`context_id` and chain tokens are explicit per-request values; nothing
-rides on the MCP protocol session, which remains a transport detail of the
-current runtime until the 2026-07-28 stateless transport ships.
+The SDK is **semantically stateless**: `context_id` and chain tokens are
+explicit per-request values. Its v2 MCP client negotiates the 2026-07-28
+protocol with a compatible daemon and falls back to the legacy handshake for
+an older runtime.
 
 ## Usage
 

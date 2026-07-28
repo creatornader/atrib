@@ -85,7 +85,7 @@ const EXPECTED_BEHAVIORAL_PROBES = {
 }
 const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
 const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
-const DEFAULT_TIMEOUT_MS = 15_000
+const DEFAULT_TIMEOUT_MS = 120_000
 const DEFAULT_PROBE_QUERY = 'atrib primitive runtime content index health probe'
 const REPORT_SCHEMA = 'atrib.primitives-runtime-update-report.v0'
 
@@ -101,7 +101,7 @@ Options:
   --no-topology          Skip final topology gate check.
   --dry-run              Print the discovered plan without build, restart, or probe.
   --json                 Print JSON report.
-  --timeout-ms <n>       Total wait per endpoint. Defaults to 15000.
+  --timeout-ms <n>       Total wait per endpoint. Defaults to 120000.
   --probe-query <text>   Query used for recall_by_content health probe.
   --help                 Print this help.
 
@@ -438,6 +438,16 @@ export function validateHealthPayload(
         `expected daemon.transport streamable-http-stateless, got ${runtime?.transport}`,
       )
     }
+    if (runtime && runtime.transport_adapter !== 'v2-dual-era-per-request') {
+      issues.push(
+        `expected daemon.transport_adapter v2-dual-era-per-request, got ${runtime?.transport_adapter}`,
+      )
+    }
+    if (runtime && runtime.protocol_version !== '2026-07-28') {
+      issues.push(
+        `expected daemon.protocol_version 2026-07-28, got ${runtime?.protocol_version}`,
+      )
+    }
   }
   if (contract?.status !== 'pass') {
     issues.push(`expected recall_contract.status pass, got ${contract?.status}`)
@@ -596,6 +606,11 @@ function serviceRequire(mode = 'atrib-primitives') {
 
 async function loadMcpClientModules(mode) {
   const req = serviceRequire(mode)
+  if (mode === 'atribd') {
+    const clientPath = req.resolve('@modelcontextprotocol/client')
+    const { Client, StreamableHTTPClientTransport } = await import(pathToFileURL(clientPath).href)
+    return { Client, StreamableHTTPClientTransport }
+  }
   const clientPath = req.resolve('@modelcontextprotocol/sdk/client/index.js')
   const transportPath = req.resolve('@modelcontextprotocol/sdk/client/streamableHttp.js')
   const [{ Client }, { StreamableHTTPClientTransport }] = await Promise.all([
@@ -691,12 +706,18 @@ export function validateToolSurfacePayload(tools) {
 async function probeMcpEndpoint(agent, { timeoutMs, probeQuery, runtime }) {
   const { Client, StreamableHTTPClientTransport } = await loadMcpClientModules(runtime)
   const transport = new StreamableHTTPClientTransport(new URL(agent.endpoint))
-  const client = new Client({
-    name: `atrib-primitives-runtime-update-${agent.profile}`,
-    version: '0.0.0',
-  })
+  const client = new Client(
+    {
+      name: `atrib-primitives-runtime-update-${agent.profile}`,
+      version: '0.0.0',
+    },
+    runtime === 'atribd' ? { versionNegotiation: { mode: { pin: '2026-07-28' } } } : undefined,
+  )
   try {
     await withTimeout(client.connect(transport), timeoutMs, `connect ${agent.endpoint}`)
+    if (runtime === 'atribd' && client.getProtocolEra?.() !== 'modern') {
+      throw new Error(`modern MCP negotiation failed for ${agent.endpoint}`)
+    }
     const listed = await withTimeout(client.listTools(), timeoutMs, `listTools ${agent.endpoint}`)
     const tools = validateToolSurfacePayload(listed.tools)
     const result = await withTimeout(

@@ -38,7 +38,7 @@
   "dependencies": {
     "@atrib/emit": "workspace:*",
     "@atrib/mcp": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "@modelcontextprotocol/client": "^2.0.0"
   },
   "peerDependencies": {
     "@atrib/recall": "workspace:*",
@@ -60,6 +60,7 @@
     "@atrib/recall": "workspace:*",
     "@atrib/verify": "workspace:*",
     "@atrib/verify-mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/node": "^26.1.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"

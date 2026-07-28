@@ -135,7 +135,7 @@ documents.
 
 ## 5. Daemon consolidation (`atribd`)
 
-**Promoted to [D148](../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime) on 2026-07-10.** The daemon shipped behind an isolated transport adapter; the MCP SDK timing gate binds the transport binding, not the daemon core.
+**Promoted to [D148](../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime) on 2026-07-10.** The daemon shipped behind an isolated transport adapter. On 2026-07-28, that adapter moved its HTTP boundary to the stable v2 MCP TypeScript SDK while retaining a v1 compatibility route for older clients.
 
 **Promotes:** the private `services/atrib-primitives` runtime shape
 ([D120](../DECISIONS.md#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned),
@@ -201,15 +201,13 @@ enter 12-month deprecation (SEP-2577). Sources: the official
 
 The release strengthens every step of the plan and reorders none:
 
-- **Step 5 (`atribd`) becomes stateless-native, and partially forced.** The
-  current primitives HTTP host is built on the removed machinery
-  (`mcp-session-id` parsing, per-session transports, idle sweeper,
-  "initialize first" rejection in `services/atrib-primitives/src/index.ts`).
-  When the Tier-1 TypeScript SDK ships the new transport, that host gets
-  rebuilt around per-request `_meta` + `Mcp-Method`/`Mcp-Name` validation,
-  and `ATRIB_PRIMITIVES_SESSION_IDLE_MS` retires. The daemon design should
-  assume any request can land on any instance, which it already almost does,
-  since primitives take explicit arguments.
+- **Step 5 (`atribd`) is now stateless-native on HTTP.** The stable v2 MCP
+  TypeScript SDK shipped with the new transport on 2026-07-28. atribd now
+  handles modern requests through its per-request v2 handler, including
+  `server/discover`, `_meta`, and routing-header validation. The v1 adapter
+  remains only for older HTTP clients, and stdio keeps its existing
+  compatibility path. `ATRIB_PRIMITIVES_SESSION_IDLE_MS` remains accepted
+  but has no effect on the daemon.
 - **Context identity: explicit carriage moves to the top of the ladder.**
   Protocol sessions are gone, so nothing session-scoped can carry
   `context_id` implicitly on HTTP. The resolution order becomes: explicit
