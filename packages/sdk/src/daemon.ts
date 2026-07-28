@@ -5,19 +5,16 @@
  * runtime.
  *
  * Semantically stateless per the SDK brief: nothing session-scoped carries
- * meaning — context_id and chain tokens travel as explicit tool arguments
- * on every call. The MCP protocol session (initialize handshake +
- * Mcp-Session-Id) is a transport detail of the CURRENT runtime that the
- * official client manages; when the post-2026-07-28 stateless transport
- * ships, this class swaps transports without changing the SDK surface.
+ * meaning. context_id and chain tokens travel as explicit tool arguments
+ * on every call. The v2 client negotiates the 2026-07-28 protocol through
+ * server/discover and falls back to the legacy handshake when it reaches an
+ * older runtime.
  *
  * Degradation (§5.8): every operational failure is caught, logged with the
  * `atrib:` prefix, and reported as an unavailable outcome — never thrown.
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { verifyAttributionReceipt, type AttributionReceiptVerification } from '@atrib/mcp'
 import {
   ATTRIBUTION_EXTENSION_KEY,
@@ -164,11 +161,10 @@ export class DaemonClient {
         // URL parsing stays INSIDE the try: a garbage endpoint is an
         // operational failure that must degrade (§5.8), never throw.
         const url = new URL(this.endpoint)
-        // The SDK's concrete transport declares `sessionId: string | undefined`
-        // while the Transport interface under exactOptionalPropertyTypes wants
-        // an optional property; the runtime shapes are identical.
-        const transport = new StreamableHTTPClientTransport(url) as unknown as Transport
-        client = new Client(SDK_CLIENT_INFO)
+        const transport = new StreamableHTTPClientTransport(url)
+        client = new Client(SDK_CLIENT_INFO, {
+          versionNegotiation: { mode: 'auto' },
+        })
         await withTimeout(client.connect(transport), this.connectTimeoutMs, 'daemon connect')
         this.client = client
         this.lastFailureAt = 0

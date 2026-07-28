@@ -63,13 +63,16 @@ export {
   type HttpContextPolicyOutcome,
 } from './context-policy.js'
 export {
+  createModernSdkStatelessAdapter,
   createSessionSdkStatelessAdapter,
   type AtribdTransportAdapter,
+  type ModernSdkStatelessAdapterOptions,
   type SessionSdkStatelessAdapterOptions,
 } from './transport-adapter.js'
 export {
   bindAtribdHttpHost,
   createAtribdServer,
+  createAtribdModernServer,
   routingHeaderMismatch,
   httpEndpoint,
   normalizeMcpPath,

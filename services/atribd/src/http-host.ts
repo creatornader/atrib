@@ -41,6 +41,9 @@ import {
   isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js'
 import {
+  Server as ModernServer,
+} from '@modelcontextprotocol/server'
+import {
   createAtribdBackend,
   errorMessage,
   logDaemonEvent,
@@ -52,7 +55,7 @@ import {
 } from './backend.js'
 import { applyHttpContextPolicy } from './context-policy.js'
 import {
-  createSessionSdkStatelessAdapter,
+  createModernSdkStatelessAdapter,
   type AtribdTransportAdapter,
 } from './transport-adapter.js'
 
@@ -101,7 +104,10 @@ export interface AtribdHttpHostOptions {
    */
   ambientContext?: boolean
   backendFactory?: () => Promise<AtribdBackend>
-  adapterFactory?: (serverFactory: () => Server) => AtribdTransportAdapter
+  adapterFactory?: (
+    modernServerFactory: () => ModernServer,
+    legacyServerFactory: () => Server,
+  ) => AtribdTransportAdapter
 }
 
 type BackendStatus =
@@ -368,6 +374,57 @@ export function createAtribdServer(options: AtribdServerFactoryOptions): Server 
   return server
 }
 
+/**
+ * v2 outer server for the native 2026-07-28 HTTP adapter. The backend and
+ * standalone primitives remain on the v1 in-memory surface; this boundary
+ * only translates the public MCP wire protocol and preserves their handlers.
+ */
+export function createAtribdModernServer(options: AtribdServerFactoryOptions): ModernServer {
+  const server = new ModernServer(
+    {
+      name: 'atribd',
+      version: readPackageVersion(),
+    },
+    {
+      capabilities: { tools: {} },
+      instructions:
+        'atribd: one local daemon exposing all seven atrib cognitive primitives. ' +
+        'Pass context_id explicitly on every write-primitive call over HTTP.',
+    },
+  )
+
+  server.setRequestHandler('tools/list', async () => {
+    const backend = await options.getBackend()
+    return {
+      // The in-process primitives remain on v1 until their independent
+      // migration. Tool descriptors are JSON wire values, so the explicit
+      // boundary cast avoids coupling the daemon transport migration to that
+      // broader package transition.
+      tools: backend.tools as never,
+      ttlMs: options.toolsListTtlMs,
+      cacheScope: 'private' as const,
+    }
+  })
+
+  server.setRequestHandler('tools/call', async (request) => {
+    const backend = await options.getBackend()
+    const policy = options.httpContextPolicy
+    if (!policy) return backend.callTool(request.params)
+    const outcome = applyHttpContextPolicy(request.params, {
+      ambientContext: policy.ambientContext,
+    })
+    if (outcome.kind === 'rejected') {
+      policy.onRejected?.()
+      logDaemonEvent({ event: 'write_call_rejected_missing_context', tool: request.params.name })
+      return outcome.result
+    }
+    if (outcome.kind === 'injected') policy.onInjected?.()
+    return backend.callTool(outcome.params)
+  })
+
+  return server
+}
+
 export async function bindAtribdHttpHost(
   options: AtribdHttpHostOptions = {},
 ): Promise<AtribdHttpHost> {
@@ -394,7 +451,18 @@ export async function bindAtribdHttpHost(
   let endpoint = ''
   let healthEndpoint = ''
 
-  const serverFactory = () =>
+  const modernServerFactory = () =>
+    createAtribdModernServer({
+      getBackend: backendProvider.get,
+      toolsListTtlMs,
+      httpContextPolicy: {
+        ambientContext,
+        onRejected: () => {
+          counters.rejected_missing_context += 1
+        },
+      },
+    })
+  const legacyServerFactory = () =>
     createAtribdServer({
       getBackend: backendProvider.get,
       toolsListTtlMs,
@@ -407,8 +475,12 @@ export async function bindAtribdHttpHost(
     })
   const adapterFactory =
     options.adapterFactory ??
-    ((factory: () => Server) => createSessionSdkStatelessAdapter({ serverFactory: factory }))
-  const adapter = adapterFactory(serverFactory)
+    ((modernFactory: () => ModernServer, legacyFactory: () => Server) =>
+      createModernSdkStatelessAdapter({
+        serverFactory: modernFactory,
+        legacyServerFactory: legacyFactory,
+      }))
+  const adapter = adapterFactory(modernServerFactory, legacyServerFactory)
 
   const server = createServer(async (req, res) => {
     const path = requestPath(req)
@@ -528,7 +600,13 @@ export async function bindAtribdHttpHost(
       )
       if (mismatch) {
         counters.rejected_header_mismatch += 1
-        sendJsonRpcError(res, 400, -32600, `routing header mismatch: ${mismatch}`)
+        const modern = headerValue(req, 'mcp-protocol-version') === '2026-07-28'
+        sendJsonRpcError(
+          res,
+          400,
+          modern ? -32020 : -32600,
+          `routing header mismatch: ${mismatch}`,
+        )
         return
       }
 

@@ -6,6 +6,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
+import {
+  Client as ModernClient,
+  StreamableHTTPClientTransport as ModernStreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -13,6 +17,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   bindAtribdHttpHost,
   createAtribdBackend,
+  DEFAULT_TOOLS_LIST_TTL_MS,
   parseCliOptions,
   routingHeaderMismatch,
   MISSING_CONTEXT_ERROR_TEXT,
@@ -210,6 +215,27 @@ function toolsCallBody(id: number, name: string, args: Record<string, unknown>, 
 }
 
 const TOOLS_LIST_BODY = { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }
+
+function modernMeta() {
+  return {
+    'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+    'io.modelcontextprotocol/clientInfo': { name: 'atribd-modern-test', version: '0.0.0' },
+    'io.modelcontextprotocol/clientCapabilities': {},
+  }
+}
+
+function modernRequest(id: number, method: string, params: Record<string, unknown> = {}) {
+  return {
+    jsonrpc: '2.0',
+    id,
+    method,
+    params: { ...params, _meta: modernMeta() },
+  }
+}
+
+const MODERN_HEADERS = {
+  'mcp-protocol-version': '2026-07-28',
+}
 
 async function connectHttpClient(endpoint: string, name: string): Promise<Client> {
   const transport = new StreamableHTTPClientTransport(new URL(endpoint))
@@ -427,6 +453,66 @@ describe('atribd stateless HTTP host', () => {
     }
   })
 
+  it('serves 2026-07-28 discovery and tool listing without a handshake', async () => {
+    const { backend } = await fakeToolBackend()
+    const host = await bindAtribdHttpHost({ port: 0, backendFactory: async () => backend })
+    try {
+      const discover = await postJson(
+        host.endpoint,
+        modernRequest(21, 'server/discover'),
+        { ...MODERN_HEADERS, 'mcp-method': 'server/discover' },
+      )
+      expect(discover.status).toBe(200)
+      const discoverPayload = (await discover.json()) as {
+        result?: { supportedVersions?: string[]; _meta?: { 'io.modelcontextprotocol/serverInfo'?: { name?: string } } }
+      }
+      expect(discoverPayload.result?.supportedVersions).toContain('2026-07-28')
+      expect(discoverPayload.result?._meta?.['io.modelcontextprotocol/serverInfo']?.name).toBe('atribd')
+
+      const list = await postJson(
+        host.endpoint,
+        modernRequest(22, 'tools/list'),
+        { ...MODERN_HEADERS, 'mcp-method': 'tools/list' },
+      )
+      expect(list.status).toBe(200)
+      const listPayload = (await list.json()) as {
+        result?: { tools?: { name: string }[]; ttlMs?: number; cacheScope?: string }
+      }
+      expect(listPayload.result?.tools?.map((tool) => tool.name).sort()).toEqual([
+        'emit',
+        'fake_read',
+      ])
+      expect(listPayload.result?.ttlMs).toBe(DEFAULT_TOOLS_LIST_TTL_MS)
+      expect(listPayload.result?.cacheScope).toBe('private')
+    } finally {
+      await host.close()
+    }
+  })
+
+  it('negotiates and lists tools with the stable v2 client', async () => {
+    const { backend } = await fakeToolBackend()
+    const host = await bindAtribdHttpHost({ port: 0, backendFactory: async () => backend })
+    const transport = new ModernStreamableHTTPClientTransport(new URL(host.endpoint))
+    const client = new ModernClient(
+      { name: 'atribd-v2-integration-test', version: '0.0.0' },
+      { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+    )
+    try {
+      await client.connect(transport)
+      expect(client.getProtocolEra()).toBe('modern')
+      expect(client.getNegotiatedProtocolVersion()).toBe('2026-07-28')
+      const listed = await client.listTools()
+      expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
+        'emit',
+        'fake_read',
+      ])
+    } finally {
+      await client.close().catch(() => {})
+      await transport.close().catch(() => {})
+      await host.close()
+    }
+  })
+
   it('returns an equivalent read result when the same request lands on a different instance', async () => {
     const first = await bindAtribdHttpHost({
       port: 0,
@@ -477,6 +563,24 @@ describe('atribd stateless HTTP host', () => {
       expect(counters.rejected_header_mismatch).toBe(2)
       // The mismatch path consulted no state and routed nothing.
       expect(calls.filter((call) => call.tool === 'emit')).toHaveLength(0)
+    } finally {
+      await host.close()
+    }
+  })
+
+  it('uses the 2026-07-28 header-mismatch code for modern requests', async () => {
+    const { backend, calls } = await fakeToolBackend()
+    const host = await bindAtribdHttpHost({ port: 0, backendFactory: async () => backend })
+    try {
+      const response = await postJson(
+        host.endpoint,
+        modernRequest(23, 'tools/list'),
+        { ...MODERN_HEADERS, 'mcp-method': 'tools/call' },
+      )
+      expect(response.status).toBe(400)
+      const payload = (await response.json()) as { error?: { code?: number } }
+      expect(payload.error?.code).toBe(-32020)
+      expect(calls).toHaveLength(0)
     } finally {
       await host.close()
     }
@@ -723,8 +827,8 @@ describe('atribd health surface', () => {
       expect(health.status).toBe('healthy')
       expect(health.report?.daemon?.name).toBe('atribd')
       expect(health.report?.daemon?.transport).toBe('streamable-http-stateless')
-      expect(health.report?.daemon?.transport_adapter).toBe('session-sdk-per-request')
-      expect(typeof health.report?.daemon?.protocol_version).toBe('string')
+      expect(health.report?.daemon?.transport_adapter).toBe('v2-dual-era-per-request')
+      expect(health.report?.daemon?.protocol_version).toBe('2026-07-28')
       expect(health.report?.profile?.context_id_policy).toBe('explicit-required')
       expect(health.report?.profile?.requires_explicit_context_id).toBe(true)
       expect(health.report?.requests?.served).toBe(1)

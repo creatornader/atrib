@@ -10,18 +10,25 @@
  * request into MCP server handling" behind this interface. When the SDK
  * ships stateless-transport support, only the adapter internals swap.
  *
- * The current implementation runs the session-era SDK in its documented
- * stateless mode: a fresh `Server` + `StreamableHTTPServerTransport` pair
- * per request, `sessionIdGenerator: undefined` (no session id issued, no
- * session validation, `Mcp-Session-Id` request headers ignored), and JSON
- * responses instead of SSE. A legacy `initialize` POST is answered with a
- * valid capabilities response and no session id.
+ * The native adapter uses the stable v2 TypeScript SDK's modern HTTP
+ * handler. It serves 2026-07-28 requests as single self-describing
+ * exchanges and retains a stateless 2025-era fallback for clients that
+ * have not upgraded yet.
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js'
+import {
+  createMcpHandler,
+  isLegacyRequest,
+  type Server as ModernServer,
+} from '@modelcontextprotocol/server'
+import { toNodeHandler, toWebRequest } from '@modelcontextprotocol/node'
+
+/** The highest protocol revision served by the v2 per-request HTTP handler. */
+export const MODERN_MCP_PROTOCOL_VERSION = '2026-07-28'
 
 export interface AtribdTransportAdapter {
   /** Adapter implementation name, surfaced in the health report. */
@@ -43,6 +50,60 @@ export interface SessionSdkStatelessAdapterOptions {
    * on any instance: no transport state survives the response.
    */
   serverFactory: () => Server
+}
+
+/** Options for the native 2026-07-28 HTTP adapter. */
+export interface ModernSdkStatelessAdapterOptions {
+  /**
+   * The v2 server factory is invoked for each request. The v2 handler keeps
+   * the 2026-07-28 exchange stateless and applies its own stateless legacy
+   * fallback for 2025-era clients.
+   */
+  serverFactory: () => ModernServer
+  /** Existing v1 server factory for 2025-era clients during the compatibility window. */
+  legacyServerFactory: () => Server
+}
+
+/**
+ * Serve the current MCP wire protocol with a dual-era stateless endpoint.
+ *
+ * `createMcpHandler` owns modern protocol validation, discovery, header
+ * handling, and legacy fallback. The Node adapter preserves the existing
+ * plain-node HTTP host without reimplementing Fetch request conversion.
+ */
+export function createModernSdkStatelessAdapter(
+  options: ModernSdkStatelessAdapterOptions,
+): AtribdTransportAdapter {
+  const handler = createMcpHandler(options.serverFactory, {
+    // The host routes 2025 traffic to the existing v1 adapter. Keeping the
+    // paths separate preserves its JSON-only response behavior for deployed
+    // legacy clients while v2 owns the modern wire protocol.
+    legacy: 'reject',
+  })
+  const nodeHandler = toNodeHandler(handler, {
+    onerror: (error) => {
+      try {
+        process.stderr.write(`atribd: MCP transport error: ${error.message}\n`)
+      } catch {
+        // Transport diagnostics must not affect a primary MCP response.
+      }
+    },
+  })
+  const legacyAdapter = createSessionSdkStatelessAdapter({
+    serverFactory: options.legacyServerFactory,
+  })
+
+  return {
+    name: 'v2-dual-era-per-request',
+    protocolVersion: MODERN_MCP_PROTOCOL_VERSION,
+    handleRequest: async (req, res, parsedBody) => {
+      const webRequest = await toWebRequest(req, parsedBody)
+      if (await isLegacyRequest(webRequest)) {
+        return legacyAdapter.handleRequest(req, res, parsedBody)
+      }
+      return nodeHandler(req, res, parsedBody)
+    },
+  }
 }
 
 export function createSessionSdkStatelessAdapter(
