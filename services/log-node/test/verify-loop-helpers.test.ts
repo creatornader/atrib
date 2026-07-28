@@ -34,6 +34,7 @@ import {
   parseNonNegativeInt,
   formatDecodedEntryLine,
   selectEntrySamples,
+  entryBundlePath,
 } from '../scripts/verify-loop.mjs'
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -315,6 +316,21 @@ describe('verify-loop helpers: parseEntryBundle', () => {
   it('throws on truncated entry body', () => {
     // Length says 5 bytes but only 2 are present
     expect(() => parseEntryBundle(new Uint8Array([0x00, 0x05, 0xaa, 0xbb]))).toThrow(/truncated entry/)
+  })
+})
+
+describe('verify-loop helpers: entry bundle paths', () => {
+  it('uses an immutable partial-tile path for the final incomplete bundle', () => {
+    expect(entryBundlePath(439, 112_444)).toBe('439.p/60')
+  })
+
+  it('keeps complete bundles on their canonical unversioned paths', () => {
+    expect(entryBundlePath(0, 512)).toBe('000')
+    expect(entryBundlePath(1, 512)).toBe('001')
+  })
+
+  it('rejects a bundle index outside the checkpoint tree', () => {
+    expect(() => entryBundlePath(2, 512)).toThrow(/outside the tree/)
   })
 })
 
