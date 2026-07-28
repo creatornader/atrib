@@ -606,6 +606,11 @@ function serviceRequire(mode = 'atrib-primitives') {
 
 async function loadMcpClientModules(mode) {
   const req = serviceRequire(mode)
+  if (mode === 'atribd') {
+    const clientPath = req.resolve('@modelcontextprotocol/client')
+    const { Client, StreamableHTTPClientTransport } = await import(pathToFileURL(clientPath).href)
+    return { Client, StreamableHTTPClientTransport }
+  }
   const clientPath = req.resolve('@modelcontextprotocol/sdk/client/index.js')
   const transportPath = req.resolve('@modelcontextprotocol/sdk/client/streamableHttp.js')
   const [{ Client }, { StreamableHTTPClientTransport }] = await Promise.all([
@@ -701,12 +706,18 @@ export function validateToolSurfacePayload(tools) {
 async function probeMcpEndpoint(agent, { timeoutMs, probeQuery, runtime }) {
   const { Client, StreamableHTTPClientTransport } = await loadMcpClientModules(runtime)
   const transport = new StreamableHTTPClientTransport(new URL(agent.endpoint))
-  const client = new Client({
-    name: `atrib-primitives-runtime-update-${agent.profile}`,
-    version: '0.0.0',
-  })
+  const client = new Client(
+    {
+      name: `atrib-primitives-runtime-update-${agent.profile}`,
+      version: '0.0.0',
+    },
+    runtime === 'atribd' ? { versionNegotiation: { mode: { pin: '2026-07-28' } } } : undefined,
+  )
   try {
     await withTimeout(client.connect(transport), timeoutMs, `connect ${agent.endpoint}`)
+    if (runtime === 'atribd' && client.getProtocolEra?.() !== 'modern') {
+      throw new Error(`modern MCP negotiation failed for ${agent.endpoint}`)
+    }
     const listed = await withTimeout(client.listTools(), timeoutMs, `listTools ${agent.endpoint}`)
     const tools = validateToolSurfacePayload(listed.tools)
     const result = await withTimeout(
