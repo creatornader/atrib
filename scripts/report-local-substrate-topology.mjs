@@ -13,7 +13,7 @@ const SCHEMA = 'atrib.local-substrate-topology-report.v0'
 const SNAPSHOT_SCHEMA = 'atrib.local-substrate-topology-snapshot.v0'
 const ROUTE_REGISTRY_SCHEMA = 'atrib.local-substrate-route-registry.v0'
 const EXPECTED_RUNTIME_PACKAGE_PATHS = {
-  coordinator: join(ROOT, 'services/atrib-emit/package.json'),
+  coordinator: join(ROOT, 'services/atrib-attest/package.json'),
   primitive_runtime: join(ROOT, 'services/atrib-primitives/package.json'),
   daemon: join(ROOT, 'services/atribd/package.json'),
 }
@@ -2892,10 +2892,10 @@ function buildGates({
     const stale = versionMismatches(health, expectedCoordinatorVersion, coordinatorVersion)
     const ok = Boolean(expectedCoordinatorVersion) && stale.length === 0
     const detail = ok
-      ? `all healthy coordinator endpoint(s) report @atrib/emit ${expectedCoordinatorVersion}`
+      ? `all healthy coordinator endpoint(s) report @atrib/attest ${expectedCoordinatorVersion}`
       : expectedCoordinatorVersion
-        ? `${stale.length} healthy coordinator endpoint(s) do not report @atrib/emit ${expectedCoordinatorVersion}`
-        : 'checked-out @atrib/emit package version could not be read'
+        ? `${stale.length} healthy coordinator endpoint(s) do not report @atrib/attest ${expectedCoordinatorVersion}`
+        : 'checked-out @atrib/attest package version could not be read'
     gates.push(gate('coordinator-version-freshness', ok ? 'pass' : 'fail', detail))
   }
 
@@ -3842,7 +3842,7 @@ function recommendationsFor({ status, gates, processSummary }) {
   }
   if (gates.find((item) => item.name === 'coordinator-version-freshness')?.status === 'fail') {
     recommendations.push(
-      'restart stale local-substrate coordinator LaunchAgents so they run the checked-out @atrib/emit package version',
+      'restart stale local-substrate coordinator LaunchAgents so they run the checked-out @atrib/attest package version',
     )
   }
   if (gates.find((item) => item.name === 'route-registry')?.status !== 'pass') {
@@ -4043,6 +4043,7 @@ if (import.meta.url === invokedPath) {
 export {
   SNAPSHOT_SCHEMA,
   buildReport,
+  collectExpectedRuntimeVersions,
   collectKnowledgeBaseReceiptReport,
   collectLongLivedActivityReport,
   collectLiveSnapshot,
