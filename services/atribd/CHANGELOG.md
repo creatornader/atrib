@@ -1,5 +1,16 @@
 # @atrib/daemon
 
+## 0.4.2
+
+### Patch Changes
+
+- f970204: Degrade health and emit a structured event when an expected-modern profile receives legacy traffic after its first modern request.
+
+  Let content recall observe HTTP cancellation between synchronous corpus phases.
+
+- Updated dependencies [f970204]
+  - @atrib/recall@5.1.3
+
 ## 0.4.1
 
 ### Patch Changes
