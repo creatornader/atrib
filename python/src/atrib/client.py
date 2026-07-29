@@ -4,10 +4,8 @@
 Mirrors the ``@atrib/sdk`` TypeScript surface: ``attest()`` (write) and
 ``recall()`` (read), with the same degradation contract (§5.8 — operational
 failures degrade into ``warnings``, never throw; contradictory input is
-the only raise path). The v0 Python client signs in-process via the ported
-record layer; daemon-first transport arrives with the post-2026-07-28
-stateless MCP HTTP client (the current runtime's initialize-handshake
-transport is deliberately not reimplemented here).
+the only raise path). The client prefers the native MCP 2026-07-28 daemon and
+falls back to the ported in-process record layer when configured to do so.
 """
 
 from __future__ import annotations
@@ -40,6 +38,13 @@ from .mirror import (
     mirror_corpus_tail_hash_hex,
     read_mirror,
 )
+from .mcp_client import (
+    McpProtocolError,
+    McpTransportError,
+    McpTransportInfo,
+    StatelessMcpClient,
+)
+from .attribution import AttributionReceiptBlock, AttributionReceiptVerification
 from .records import build_and_sign_emit_record
 from .submission import SubmissionQueue
 from .types import (
@@ -215,19 +220,25 @@ class AttestRef:
 class AttestResult:
     record_hash: str | None
     context_id: str | None
-    via: str  # 'in-process' | 'none'
+    via: str  # 'daemon' | 'in-process' | 'none'
     warnings: list[str] = field(default_factory=list)
     # §2.11.12 posture of the client's anchor set (D138):
     # {"effective_anchor_count": int, "used_default_set": bool, "warned": bool}
     anchor_posture: dict[str, object] | None = None
+    transport: McpTransportInfo | None = None
+    attribution_receipt: AttributionReceiptBlock | None = None
+    attribution_verification: AttributionReceiptVerification | None = None
 
 
 @dataclass(frozen=True)
 class RecallOutcome:
     shape: str
-    via: str  # 'in-process' | 'none'
+    via: str  # 'daemon' | 'in-process' | 'none'
     data: object
     warnings: list[str] = field(default_factory=list)
+    transport: McpTransportInfo | None = None
+    attribution_receipt: AttributionReceiptBlock | None = None
+    attribution_verification: AttributionReceiptVerification | None = None
 
 
 def _resolve_env_context_id(env: Mapping[str, str]) -> str | None:
@@ -258,6 +269,13 @@ class AtribClient:
         producer: str = DEFAULT_PRODUCER,
         mirror_write_path: Path | str | None = None,
         mirror_read_path: Path | str | None = None,
+        daemon_endpoint: str | None = None,
+        daemon_mode: str = "prefer",
+        daemon_timeout_s: float = 10.0,
+        request_meta: Mapping[str, object] | None = None,
+        client_capabilities: Mapping[str, object] | None = None,
+        session_token: str | None = None,
+        attribution_accept: tuple[str, ...] = ("token",),
         env: Mapping[str, str] | None = None,
     ) -> None:
         self._env: Mapping[str, str] = os.environ if env is None else env
@@ -266,6 +284,26 @@ class AtribClient:
         self._key_resolved = False
         self._context_id = context_id
         self._producer = producer
+        if daemon_mode not in ("prefer", "require", "off"):
+            raise ValueError("atrib: daemon_mode must be 'prefer', 'require', or 'off'")
+        self._daemon_mode = daemon_mode
+        endpoint = (
+            daemon_endpoint
+            or self._env.get("ATRIB_PRIMITIVES_HTTP_ENDPOINT")
+            or "http://127.0.0.1:8796/mcp"
+        )
+        self._daemon = (
+            None
+            if daemon_mode == "off"
+            else StatelessMcpClient(
+                endpoint,
+                timeout_s=daemon_timeout_s,
+                request_meta=request_meta,
+                client_capabilities=client_capabilities,
+                session_token=session_token,
+                attribution_accept=attribution_accept,
+            )
+        )
         anchor_plan = _resolve_anchor_plan(anchors, allow_single_anchor, self._env)
         self._anchor_posture = anchor_plan.posture
         self._anchor_sidecar_marker = anchor_plan.sidecar_marker
@@ -300,6 +338,7 @@ class AtribClient:
         args_hash: str | None = None,
         result_hash: str | None = None,
         timestamp_ms: int | None = None,
+        idempotency_key: str | None = None,
     ) -> AttestResult:
         """Single write verb. Raises only on contradictory input; every
         operational failure degrades into warnings (§5.8)."""
@@ -320,6 +359,130 @@ class AtribClient:
         if chain_root is not None and context_id is None and self._default_context_id() is None:
             raise ValueError("atrib: explicit chain_root requires a context_id")
 
+        effective_context = context_id or self._default_context_id()
+        daemon_unreachable = False
+        if self._daemon is not None and effective_context is None:
+            try:
+                self._daemon.discover()
+            except McpTransportError as exc:
+                warnings.append(f"atrib: daemon attest failed: {exc}")
+                daemon_unreachable = True
+                if self._daemon_mode == "require":
+                    return AttestResult(
+                        record_hash=None,
+                        context_id=None,
+                        via="none",
+                        warnings=warnings,
+                        anchor_posture=dict(self._anchor_posture),
+                    )
+            except McpProtocolError as exc:
+                warnings.append(f"atrib: daemon attest failed: {exc}")
+                return AttestResult(
+                    record_hash=None,
+                    context_id=None,
+                    via="none",
+                    warnings=warnings,
+                    anchor_posture=dict(self._anchor_posture),
+                )
+            else:
+                warnings.append(
+                    "atrib: daemon attest requires an explicit context_id on every "
+                    "stateless request; no record emitted"
+                )
+                return AttestResult(
+                    record_hash=None,
+                    context_id=None,
+                    via="none",
+                    warnings=warnings,
+                    anchor_posture=dict(self._anchor_posture),
+                )
+
+        if self._daemon is not None and not daemon_unreachable:
+            assert effective_context is not None
+            daemon_args: dict[str, object] = {
+                "event_type": resolved_event_type,
+                "content": dict(content),
+                "context_id": effective_context,
+            }
+            if annotates is not None:
+                daemon_args["annotates"] = annotates
+            if revises is not None:
+                daemon_args["revises"] = revises
+            if informed_by is not None:
+                daemon_args["informed_by"] = informed_by
+            for key_name, daemon_value in (
+                ("chain_root", chain_root),
+                ("provenance_token", provenance_token),
+                ("tool_name", tool_name),
+                ("args_hash", args_hash),
+                ("result_hash", result_hash),
+                ("timestamp_ms", timestamp_ms),
+            ):
+                if daemon_value is not None:
+                    daemon_args[key_name] = daemon_value
+            try:
+                outcome = self._daemon.call_tool(
+                    "emit",
+                    daemon_args,
+                    context_id=effective_context,
+                    idempotency_key=idempotency_key,
+                )
+                if not isinstance(outcome.value, Mapping):
+                    raise McpProtocolError("daemon emit result was not an object")
+                record_hash = outcome.value.get("record_hash")
+                if not isinstance(record_hash, str):
+                    raise McpProtocolError("daemon emit result omitted record_hash")
+                returned_context = outcome.value.get("context_id")
+                return AttestResult(
+                    record_hash=record_hash,
+                    context_id=(
+                        returned_context
+                        if isinstance(returned_context, str)
+                        else effective_context
+                    ),
+                    via="daemon",
+                    warnings=warnings,
+                    anchor_posture=None,
+                    transport=outcome.transport,
+                    attribution_receipt=outcome.attribution_receipt,
+                    attribution_verification=outcome.attribution_verification,
+                )
+            except (McpTransportError, McpProtocolError) as exc:
+                warnings.append(f"atrib: daemon attest failed: {exc}")
+                if self._daemon_mode == "require" or idempotency_key is not None:
+                    if idempotency_key is not None:
+                        warnings.append(
+                            "atrib: in-process fallback suppressed because the daemon "
+                            "write outcome may be uncertain; retry the same idempotency_key"
+                        )
+                    return AttestResult(
+                        record_hash=None,
+                        context_id=None,
+                        via="none",
+                        warnings=warnings,
+                        anchor_posture=dict(self._anchor_posture),
+                    )
+
+        if idempotency_key is not None:
+            warnings.append(
+                "atrib: idempotency_key requires the daemon write path; no record emitted"
+            )
+            return AttestResult(
+                record_hash=None,
+                context_id=None,
+                via="none",
+                warnings=warnings,
+                anchor_posture=dict(self._anchor_posture),
+            )
+
+        if effective_context is None:
+            # §1.5.1: synthesize fresh; NEVER inherit context_id from the
+            # mirror tail (session-conflation guard).
+            effective_context = secrets.token_hex(16)
+            warnings.append("atrib: no context_id available; created fresh orphan context")
+        if not _CONTEXT_ID_RE.match(effective_context):
+            raise ValueError("atrib: context_id must be 32 lowercase hex characters")
+
         key = self._resolve_client_key()
         if key is None:
             warnings.append(
@@ -333,15 +496,6 @@ class AtribClient:
                 warnings=warnings,
                 anchor_posture=dict(self._anchor_posture),
             )
-
-        effective_context = context_id or self._default_context_id()
-        if effective_context is None:
-            # §1.5.1: synthesize fresh; NEVER inherit context_id from the
-            # mirror tail (session-conflation guard).
-            effective_context = secrets.token_hex(16)
-            warnings.append("atrib: no context_id available; created fresh orphan context")
-        if not _CONTEXT_ID_RE.match(effective_context):
-            raise ValueError("atrib: context_id must be 32 lowercase hex characters")
 
         if provenance_token is not None:
             # §1.2.6 genesis-only invariant: refuse when the context already
@@ -418,6 +572,50 @@ class AtribClient:
         """Single read verb over the local mirror (v0 shapes: 'history',
         'session_chain'). Unknown shapes degrade with a warning outcome."""
         warnings: list[str] = []
+        daemon_args: dict[str, object] = {
+            "shape": shape,
+            "limit": limit,
+            "verify_signatures": verify_signatures,
+        }
+        for key_name, value in (
+            ("context_id", context_id),
+            ("event_type", event_type),
+            ("creator_key", creator_key),
+            ("since_ms", since_ms),
+            ("until_ms", until_ms),
+        ):
+            if value is not None:
+                daemon_args[key_name] = value
+        if self._daemon is not None:
+            tool = (
+                "recall_my_attribution_history"
+                if shape == "history"
+                else "recall_session_chain"
+                if shape == "session_chain"
+                else "recall"
+            )
+            request_context = context_id or self._default_context_id()
+            try:
+                outcome = self._daemon.call_tool(
+                    tool,
+                    daemon_args,
+                    context_id=request_context,
+                )
+                return RecallOutcome(
+                    shape=shape,
+                    via="daemon",
+                    data=outcome.value,
+                    warnings=warnings,
+                    transport=outcome.transport,
+                    attribution_receipt=outcome.attribution_receipt,
+                    attribution_verification=outcome.attribution_verification,
+                )
+            except (McpTransportError, McpProtocolError) as exc:
+                warnings.append(f"atrib: daemon recall ({tool}) failed: {exc}")
+                if self._daemon_mode == "require":
+                    return RecallOutcome(
+                        shape=shape, via="none", data=None, warnings=warnings
+                    )
         if shape not in ("history", "session_chain"):
             warnings.append(
                 f"atrib: recall shape '{shape}' is not available in the Python "

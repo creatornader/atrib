@@ -17,6 +17,7 @@
 
 import type { ProofBundle } from '@atrib/mcp'
 import type { VerifiedAttributionReceipt } from './attribution.js'
+import type { DaemonTransportInfo } from './daemon.js'
 
 /**
  * The client's resolved D138 anchor posture (§2.11.12), surfaced on
@@ -97,12 +98,14 @@ export interface AttestResult {
   warnings: string[]
   /**
    * `dev.atrib/attribution` receipt from the daemon result's `_meta`,
-   * present only when `attributionReceipts` is enabled and the daemon
+   * present when receipt parsing is enabled (the default) and the daemon
    * emitted one (D141): the parsed block plus its
    * `verifyAttributionReceipt` outcome. Advisory; trust derives from
    * verifying signed records.
    */
   attribution_receipt?: VerifiedAttributionReceipt
+  /** Negotiated MCP transport and extension result for the daemon call. */
+  transport?: DaemonTransportInfo
   /**
    * D138 anchor posture of the client's fan-out (§2.11.12), present on
    * in-process results after anchor fan-out was consulted. The daemon

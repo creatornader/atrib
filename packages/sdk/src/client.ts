@@ -111,7 +111,10 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
     daemonMode === 'off'
       ? null
       : new DaemonClient(config.daemon, {
-          attributionReceipts: config.attributionReceipts === true,
+          attributionReceipts: config.attributionReceipts !== false,
+          ...(config.attributionAccept !== undefined
+            ? { attributionAccept: config.attributionAccept }
+            : {}),
         })
   const producer = config.producer ?? DEFAULT_PRODUCER
   const anchorSet = resolveAnchorSet(config.anchors, config.allowSingleAnchor)
@@ -159,13 +162,47 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
     const args = buildEmitArgs(input, defaultContextId())
     const warnings = [...anchorWarnings]
 
-    if (daemon) {
+    daemonAttempt: if (daemon) {
+      const requestContextId =
+        typeof args['context_id'] === 'string' ? args['context_id'] : undefined
+      if (requestContextId === undefined) {
+        const connection = await daemon.connect()
+        if (!connection.ok) {
+          warnings.push(`atrib: daemon attest failed: ${connection.reason}`)
+          if (daemonMode === 'require') {
+            return {
+              record_hash: null,
+              context_id: null,
+              log_index: null,
+              inclusion_proof: null,
+              via: 'none',
+              warnings,
+            }
+          }
+          break daemonAttempt
+        } else {
+          warnings.push(
+            'atrib: daemon attest requires an explicit context_id on every stateless request; no record emitted',
+          )
+          return {
+            record_hash: null,
+            context_id: null,
+            log_index: null,
+            inclusion_proof: null,
+            via: 'none',
+            warnings,
+          }
+        }
+      }
       const outcome = await daemon.callTool(
         'emit',
         args,
-        input.idempotency_key === undefined
-          ? undefined
-          : { idempotencyKey: input.idempotency_key },
+        {
+          contextId: requestContextId,
+          ...(input.idempotency_key !== undefined
+            ? { idempotencyKey: input.idempotency_key }
+            : {}),
+        },
       )
       const attribution = outcome.ok ? outcome.attribution : undefined
       const emitOutput =
@@ -177,7 +214,11 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
       // the in-process path can still sign.
       if (emitOutput !== null && typeof emitOutput.record_hash === 'string') {
         const result = attestResultFromEmitOutput(emitOutput, 'daemon', warnings)
-        return attribution !== undefined ? { ...result, attribution_receipt: attribution } : result
+        return {
+          ...result,
+          ...(outcome.ok ? { transport: outcome.transport } : {}),
+          ...(attribution !== undefined ? { attribution_receipt: attribution } : {}),
+        }
       }
       const reason = outcome.ok
         ? 'daemon returned an emit result without a record_hash'
@@ -313,13 +354,18 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
     const warnings: string[] = []
 
     if (daemon) {
-      const outcome = await daemon.callTool(tool, args)
+      const requestContextId =
+        typeof args['context_id'] === 'string' ? args['context_id'] : defaultContextId()
+      const outcome = await daemon.callTool(tool, args, {
+        ...(requestContextId !== undefined ? { contextId: requestContextId } : {}),
+      })
       if (outcome.ok) {
         const result: RecallOutcome<T> = {
           shape,
           via: 'daemon',
           data: outcome.value as T,
           warnings,
+          transport: outcome.transport,
         }
         return outcome.attribution !== undefined
           ? { ...result, attribution_receipt: outcome.attribution }

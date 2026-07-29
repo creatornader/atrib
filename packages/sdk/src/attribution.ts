@@ -5,7 +5,7 @@
  * spec at docs/extensions/dev.atrib-attribution/v0.1.md, conformance at
  * spec/conformance/mcp-extension/).
  *
- * Behind an opt-in flag, the daemon client parses attestation receipts
+ * The daemon client parses negotiated attestation receipts by default
  * from tool results' `_meta["dev.atrib/attribution"]`: the propagation
  * token, a receipt block naming the record the server already signed
  * locally, and optionally the full signed record for immediate Tier-3
@@ -186,4 +186,3 @@ export function checkAttributionReceiptConsistency(
     ...(claimed !== undefined ? { claimed_record_hash: claimed } : {}),
   }
 }
-

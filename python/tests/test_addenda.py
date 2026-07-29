@@ -180,6 +180,7 @@ def test_plan_non_string_anchor_type_warns_and_skips() -> None:
 
 def test_attest_pass_through_surfaces_anchor_warnings(tmp_path: Path) -> None:
     client = AtribClient(
+        daemon_mode="off",
         key=None,  # explicit: no signing key → §5.8 rule 5 pass-through
         anchors=[
             {"endpoint": REKOR, "anchor_type": "rekor"},
@@ -209,6 +210,7 @@ def test_attest_pass_through_surfaces_anchor_warnings(tmp_path: Path) -> None:
 
 def test_attest_anchor_warnings_repeat_per_call(tmp_path: Path) -> None:
     client = AtribClient(
+        daemon_mode="off",
         key=None,
         anchors=[LOG_A],
         mirror_write_path=tmp_path / "write.jsonl",

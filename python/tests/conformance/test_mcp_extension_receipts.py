@@ -13,6 +13,7 @@ from typing import cast
 from atrib import AtribRecord
 from atrib.attribution import (
     ATTRIBUTION_EXTENSION_KEY,
+    build_attribution_request_meta,
     check_attribution_receipt_consistency,
     parse_attribution_receipt_block,
     verify_attribution_receipt,
@@ -32,6 +33,24 @@ def _block_and_record(case: dict[str, object]):
     assert block is not None
     record = cast(AtribRecord | None, case_input.get("record"))
     return block, record
+
+
+def test_stateless_request_carriage_matches_shared_corpus() -> None:
+    case = _load("request--stateless-carriage.json")
+    case_input = cast(dict[str, object], case["input"])
+    request_meta = cast(dict[str, object], case_input["request_meta"])
+    options = cast(dict[str, object], case_input["options"])
+    snapshot = json.loads(json.dumps(request_meta))
+    result = build_attribution_request_meta(
+        request_meta,
+        accept=tuple(cast(list[str], options["accept"])),
+        token=cast(str, options["token"]),
+        context_id=cast(str, options["context_id"]),
+        session_token=cast(str, options["session_token"]),
+    )
+    expected = cast(dict[str, object], case["expected"])
+    assert result == expected["request_meta"]
+    assert request_meta == snapshot
 
 
 def test_verify_attribution_receipt_matches_corpus_receipt_valid() -> None:

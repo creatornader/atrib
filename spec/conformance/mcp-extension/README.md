@@ -29,6 +29,7 @@ these vectors compose with.
 | `context--*` | Ladder 2 (context identity): explicit tool argument > extension `context_id` > `traceparent` trace-id > [D078](../../../DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](../../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers) env-file registry > undefined. Non-32-lowercase-hex extension values fall through; unknown block fields (including `session_token` / `provenance_token` from a nonconforming peer) are ignored with no record-field effect. |
 | `receipt--*` | Receipt integrity against REAL Ed25519-signed records: `token` = `encodeToken(record)`, `record_hash` recomputes from `sha256(JCS(record))`, `creator_key` matches the signer, `args_hash` recomputes from the pinned tool args, the record signature verifies independently (Tier-3); a mismatched receipt is discarded without invalidating the tool result; `log_submission` is a closed queue-status enum, never an awaited proof ([§5.3.5](../../../atrib-spec.md#535-log-submission)). |
 | `degradation--*` | [§5.8](../../../atrib-spec.md#58-degradation-contract): forced signing failure and forced capability-read failure both leave the tool result byte-identical to passthrough (pinned by JCS hash) with no error; a request with no `_meta` at all never blocks the call and yields a genesis record per [§1.2.3](../../../atrib-spec.md#123-chain_root-for-genesis-records). |
+| `request--*` | Client-side request construction: extension declaration, explicit context, W3C trace and baggage, legacy token carriers, other capabilities, and custom metadata merge without caller mutation. |
 
 ## Cases
 
@@ -60,6 +61,7 @@ these vectors compose with.
 | `cases/degradation--signing-failure-passthrough.json` | Forced signing failure → passthrough byte-identical, no error. |
 | `cases/degradation--capability-read-failure-passthrough.json` | Forced capability-read failure → same passthrough. |
 | `cases/degradation--missing-meta-never-blocks.json` | Total `_meta` loss → tool call proceeds, genesis chain. |
+| `cases/request--stateless-carriage.json` | TypeScript and Python produce the same complete request metadata while preserving caller fields. |
 
 ## Generator
 
@@ -91,8 +93,10 @@ implementations SHOULD load the same fixtures and assert the same invariants.
 
 ## Status
 
-**Initial 26-case corpus shipped** across the six families named in the P049
-mcp-extension ADR. Future cases (legacy-`initialize` capability carriage,
+**The corpus now contains 28 cases across seven families.**
+[D185](../../../DECISIONS.md#d185-client-sdks-carry-complete-stateless-mcp-request-context)
+adds the shared client request carriage case to the prior server-side and
+legacy capability cases. Future cases (additional legacy capability carriage,
 gateway `_meta` forwarding shapes, a future `session_token` /
 `provenance_token` carriage revision with conflict rules) can be added by
 extending the generator.

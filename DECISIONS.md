@@ -9498,6 +9498,76 @@ pending entries after a timeout: permits a late first call and a retried second
 call to both sign. Put the caller key in the signed record: changes canonical
 bytes for a transport concern and discloses a correlation identifier.
 
+## D185: Client SDKs carry complete stateless MCP request context
+
+**Date:** 2026-07-28
+
+**Status:** Accepted and implemented
+
+**Extends:** [D141](#d141-devatribattribution-first-class-mcp-extension-sep-2133),
+[D148](#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime),
+and [D184](#d184-stateless-mcp-writes-use-action-bound-idempotency-keys).
+
+**Context.** A server can be stateless while a client still relies on connection
+state, ambient process variables, or manual `_meta` assembly. That leaves
+requests incomplete when they move across processes, retry after a restart, or
+come from another language. The TypeScript SDK negotiated MCP 2026-07-28 but
+did not declare `dev.atrib/attribution` by default, did not advance propagation
+tokens from receipts, and did not expose the negotiated result. The Python SDK
+had no daemon transport.
+
+**Decision.**
+
+1. `@atrib/mcp` owns one request-metadata builder. It merges the attribution
+   extension declaration, explicit `context_id`, W3C trace context, propagation
+   token, legacy carriers, session baggage, and caller metadata without
+   mutating the caller's object.
+2. The official MCP client owns the core protocol version, client identity, and
+   client-capabilities envelope. The atrib helper merges into that envelope.
+   It does not create a second protocol negotiation path.
+3. An existing caller `traceparent` remains intact. When it conflicts with the
+   explicit atrib context, the extension context wins through the
+   [D141](#d141-devatribattribution-first-class-mcp-extension-sep-2133)
+   resolution ladder and the server can surface the mismatch. Preserving both
+   values keeps the conflict observable.
+4. Daemon-backed writes require a resolved 32-hex `context_id` before
+   `tools/call`. Missing context returns a no-record outcome. The stdio and
+   explicit in-process paths retain their documented ambient and fresh-orphan
+   compatibility behavior.
+5. Clients declare `dev.atrib/attribution` and parse receipts by default. A
+   valid receipt token becomes the next request's propagation token. Receipt
+   data remains advisory and never replaces signature or inclusion
+   verification.
+6. Successful daemon results expose the negotiated protocol version, protocol
+   era, discover result, server identity when present, and validated
+   attribution-extension declaration.
+7. The Python package ships an independent standard-library HTTP client for
+   MCP 2026-07-28. It performs `server/discover`, sends the required
+   `Mcp-Method`, `Mcp-Name`, and `Mcp-Protocol-Version` headers, accepts JSON or
+   SSE responses, and uses the same committed request-carriage fixture as the
+   TypeScript implementation.
+8. Python remains daemon-first by default. Tests and hosts that require the
+   in-process path must select `daemon_mode="off"` explicitly. Unit tests must
+   never depend on or mutate an operator's live localhost daemon.
+
+**Guarantee boundary.** Automatic carriage makes each request self-describing
+for atrib context. It does not make an unverified receipt trustworthy, turn a
+session token into authority, or recover a context the caller never supplied.
+Transport reachability can still degrade according to each SDK's documented
+mode. [D184](#d184-stateless-mcp-writes-use-action-bound-idempotency-keys)
+remains the duplicate-safety contract for uncertain writes.
+
+**Alternatives rejected.** Keep the client declaration opt-in: native-v2
+servers would continue returning no negotiated receipt by default. Put core MCP
+envelope fields in atrib code: duplicates the official SDK's negotiation
+logic. Replace a conflicting caller traceparent: hides useful diagnostics and
+changes another tracing owner's state. Reuse the TypeScript client from Python:
+does not prove cross-language interoperability. Let tests inherit the default
+localhost endpoint: can sign fixture records into operator state.
+
+**Protocol impact.** None. The change implements existing MCP 2026-07-28 and
+`dev.atrib/attribution` v0.1 carriage. It changes no atrib signed byte.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

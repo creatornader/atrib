@@ -387,7 +387,7 @@ The follow-through program is complete when:
 | 0A: native-v2 release gate                | complete        | `scripts/mcp-v2-owned-surfaces.json` covers 13 owned surfaces and 12 published surfaces; source, process-proof, built-entrypoint, and packed-artifact gates run through doc sync and release readiness                                                                                          |
 | 0B: compatibility observability           | release pending | atribd persists bounded profile, client, protocol, and era observations; health and topology agree; the updater rejects modern-to-legacy regressions; the live profiles still need the released package                                                                                         |
 | 1A: duplicate-safe writes                 | release pending | [D184](../DECISIONS.md#d184-stateless-mcp-writes-use-action-bound-idempotency-keys) defines action-bound keys, durable completed-result replay, indeterminate pending outcomes, seven-day retention, and lock-through-settlement; daemon and TS SDK implementation needs release and live proof |
-| 1B: automatic request carriage            | not started     | Existing clients negotiate v2, but cross-SDK automatic carriage needs a dedicated audit                                                                                                                                                                                                         |
+| 1B: automatic request carriage            | release pending | [D185](../DECISIONS.md#d185-client-sdks-carry-complete-stateless-mcp-request-context) adds one shared metadata builder, default receipt negotiation, explicit write context, W3C and legacy carriers, exposed transport facts, and an independent Python v2 HTTP client. The shared corpus, Python mock daemon, and both clients pass live atribd reads. |
 | 1C: request-scoped security and lifecycle | not started     | Existing permit and authorization components must be audited against the stateless request boundary                                                                                                                                                                                             |
 | 2A: resilience and performance            | not started     | Existing tests cover parts of concurrency and transport behavior, not the full failure matrix                                                                                                                                                                                                   |
 | 2B: independent interoperability          | not started     | atribd and atrib clients interoperate; independence gate remains                                                                                                                                                                                                                                |
@@ -397,8 +397,7 @@ The follow-through program is complete when:
 
 ## Immediate next slice
 
-Release and install Tranches 0B and 1A on the three operator profiles. Confirm
-modern traffic with no post-modern legacy regression. Run the lost-response,
-restart replay, changed-binding, concurrent duplicate, and late-settlement
-proofs against the installed daemon. Then start automatic cross-SDK request
-carriage.
+Land and release Tranches 0B, 1A, and 1B. Install the released daemon and SDKs
+on the three operator profiles. Confirm modern traffic with no post-modern
+legacy regression. Run the duplicate-write proof matrix against the installed
+daemon, then begin the request-scoped security and lifecycle audit.

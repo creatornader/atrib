@@ -134,10 +134,14 @@
     {
       "file": "cases/degradation--missing-meta-never-blocks.json",
       "name": "degradation--missing-meta-never-blocks"
+    },
+    {
+      "file": "cases/request--stateless-carriage.json",
+      "name": "request--stateless-carriage"
     }
   ],
   "keys": {
     "server_pubkey": "wFDFY3pE-oYp__PMzOIwDLNipj2Z2V_FQUUmb0MyRFo"
   },
-  "note": "The six families collectively pin the extension contract: settings validity and the reserved-prefix rule (capability), receipt opt-in gating with byte-identical legacy fallback (gating), Ladder 1 inbound token precedence composing with the D067 chain ladder (token), Ladder 2 context-identity precedence above the D078/D083 registry (context), receipt consistency against real signed records with non-blocking log submission (receipt), and §5.8 silent passthrough under forced failures (degradation). No signed byte changes anywhere in this corpus."
+  "note": "Seven families pin the extension contract: settings validity and the reserved-prefix rule (capability), receipt opt-in gating with byte-identical legacy fallback (gating), Ladder 1 inbound token precedence composing with the D067 chain ladder (token), Ladder 2 context-identity precedence above the D078/D083 registry (context), receipt consistency against real signed records with non-blocking log submission (receipt), §5.8 silent passthrough under forced failures (degradation), and cross-language complete stateless request construction (request). No signed byte changes anywhere in this corpus."
 }
