@@ -1,12 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <defs>
-    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#e8a04f" stop-opacity="0.55" />
-      <stop offset="40%" stop-color="#e8a04f" stop-opacity="0.18" />
-      <stop offset="100%" stop-color="#e8a04f" stop-opacity="0" />
-    </radialGradient>
-  </defs>
-  <rect width="32" height="32" fill="#0a0a0a" />
-  <circle cx="16" cy="16" r="15" fill="url(#glow)" />
-  <circle cx="16" cy="16" r="6" fill="#e8a04f" />
+  <!-- The mark's own 'a', the same Libre Baskerville outline the wordmark uses,
+       on the water column's floor. Replaces an amber orb on #0a0a0a: a ground
+       the system no longer uses, and a shape with no relationship to the
+       wordmark. Amber stays reserved for signed things, so it is not the brand
+       mark either. Bounds measured off the path and centred, not eyeballed. -->
+  <rect width="32" height="32" rx="6.5" fill="#050914"/>
+  <g transform="translate(15.014 15.863) scale(0.01826)">
+    <path d="M444.0 10.0Q401.0 10.0 379.0 -18.0Q357.0 -46.0 357.0 -97.0H352.0Q325.0 -48.0 279.0 -19.5Q233.0 9.0 177.0 9.0Q136.0 9.0 106.0 -6.0Q76.0 -21.0 59.5 -47.5Q43.0 -74.0 43.0 -110.0Q43.0 -157.0 78.0 -196.5Q113.0 -236.0 205.0 -276.0L349.0 -339.0V-380.0Q349.0 -443.0 323.5 -472.5Q298.0 -502.0 243.0 -502.0Q211.0 -502.0 196.5 -489.0Q182.0 -476.0 169.0 -437.0Q158.0 -409.0 147.5 -399.0Q137.0 -389.0 117.0 -389.0Q93.0 -389.0 80.0 -402.0Q67.0 -415.0 67.0 -439.0Q67.0 -487.0 118.0 -513.5Q169.0 -540.0 263.0 -540.0Q364.0 -540.0 405.5 -505.0Q447.0 -470.0 447.0 -384.0V-160.0Q447.0 -98.0 459.0 -72.0Q471.0 -46.0 497.0 -46.0Q507.0 -46.0 520.5 -50.5Q534.0 -55.0 541.0 -68.0L555.0 -44.0Q543.0 -21.0 511.0 -5.5Q479.0 10.0 444.0 10.0ZM222.0 -51.0Q258.0 -51.0 287.0 -73.5Q316.0 -96.0 332.5 -134.0Q349.0 -172.0 349.0 -217.0V-296.0Q273.0 -267.0 228.0 -239.0Q183.0 -211.0 163.5 -183.5Q144.0 -156.0 144.0 -127.0Q144.0 -93.0 166.0 -72.0Q188.0 -51.0 222.0 -51.0Z" fill="#7d9bd6"/>
+  </g>
 </svg>

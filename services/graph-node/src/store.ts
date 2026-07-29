@@ -42,6 +42,11 @@ export interface RecordStore {
   getAllRecords(): { record: AtribRecord; log_index: number | null }[]
   /** Count of distinct records in the store. Used for cheap cache invalidation. */
   getRecordCount(): number
+  /**
+   * Count of distinct context_ids in the store. O(1); reported by /v1/stats so
+   * operators can see session breadth alongside record volume.
+   */
+  getContextCount(): number
   /** log_index for a specific record_hash, or null if unknown. */
   getLogIndex(recordHashHex: string): number | null
   /** Stored record for a specific record_hash, or null if absent. */
@@ -189,6 +194,10 @@ export function createRecordStore(): RecordStore {
 
     getRecordCount(): number {
       return allRecords.length
+    },
+
+    getContextCount(): number {
+      return byContext.size
     },
 
     getLogIndex(recordHashHex: string): number | null {

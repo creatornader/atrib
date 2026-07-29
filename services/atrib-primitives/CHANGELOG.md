@@ -1,5 +1,13 @@
 # @atrib/primitives-runtime
 
+## 0.2.14
+
+### Patch Changes
+
+- Updated dependencies [f970204]
+  - @atrib/daemon@0.4.2
+  - @atrib/recall@5.1.3
+
 ## 0.2.13
 
 ### Patch Changes

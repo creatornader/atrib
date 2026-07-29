@@ -51,6 +51,7 @@ import {
   type TraceInputT,
 } from './trace-tools.js'
 import { tryHandleAtribVerify, VerifyInput } from './verification.js'
+import { checkpointRecallCancellation } from './cancellation.js'
 
 const SHA256_REF_PATTERN = /^sha256:[0-9a-f]{64}$/
 
@@ -247,6 +248,7 @@ function refusal(message: string): {
 /** Dispatch one recall-verb call to the shape runners. Exported for tests. */
 export async function runRecallVerb(
   input: RecallVerbInputT,
+  signal?: AbortSignal,
 ): Promise<{ payload: Record<string, unknown> } | { error: string }> {
   if (!input.shape && !input.verification) {
     return { error: 'recall requires `shape`, `verification`, or both' }
@@ -309,15 +311,18 @@ export async function runRecallVerb(
       }
       case 'content': {
         if (input.query === undefined) return { error: "shape='content' requires `query`" }
-        payload = await runRecallByContent({
-          query: input.query,
-          ...(input.limit !== undefined ? { k: input.limit } : {}),
-          ...(input.max_records !== undefined ? { max_records: input.max_records } : {}),
-          ...(input.evidence_mode !== undefined ? { evidence_mode: input.evidence_mode } : {}),
-          ...(input.include_tool_call_args !== undefined
-            ? { include_tool_call_args: input.include_tool_call_args }
-            : {}),
-        })
+        payload = await runRecallByContent(
+          {
+            query: input.query,
+            ...(input.limit !== undefined ? { k: input.limit } : {}),
+            ...(input.max_records !== undefined ? { max_records: input.max_records } : {}),
+            ...(input.evidence_mode !== undefined ? { evidence_mode: input.evidence_mode } : {}),
+            ...(input.include_tool_call_args !== undefined
+              ? { include_tool_call_args: input.include_tool_call_args }
+              : {}),
+          },
+          signal,
+        )
         break
       }
       case 'chain': {
@@ -398,14 +403,15 @@ export function registerRecallVerbTool(mcp: McpServer): void {
         'be chained. Signs nothing.',
       inputSchema: RecallVerbInput.shape,
     },
-    async (rawInput) => {
+    async (rawInput, context) => {
+      await checkpointRecallCancellation(context.mcpReq.signal)
       const input = RecallVerbInput.parse(rawInput) as RecallVerbInputT
       const primitive = `recall:${input.shape ?? 'verification'}`
       return logReadPrimitiveCall(
         primitive,
         rawInput,
         async () => {
-          const outcome = await runRecallVerb(input)
+          const outcome = await runRecallVerb(input, context.mcpReq.signal)
           if ('error' in outcome) return refusal(outcome.error)
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(outcome.payload, null, 2) }],
