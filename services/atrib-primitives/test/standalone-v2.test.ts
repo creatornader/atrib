@@ -15,6 +15,7 @@ const STANDALONE_SERVERS = [
   ['@atrib/summarize', 'atrib-summarize/dist/main.js'],
   ['@atrib/trace', 'atrib-trace/dist/main.js'],
   ['@atrib/verify-mcp', 'atrib-verify/dist/main.js'],
+  ['@atrib/primitives-runtime', 'atrib-primitives/dist/index.js'],
 ] as const
 
 describe('standalone MCP v2 entry points', () => {

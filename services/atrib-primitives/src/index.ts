@@ -12,34 +12,23 @@
 
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import {
-  createServer,
-  type IncomingMessage,
-  type Server as HttpServer,
-  type ServerResponse,
-} from 'node:http'
+import type { Server as HttpServer } from 'node:http'
 import { createRequire } from 'node:module'
-import type { AddressInfo, Socket } from 'node:net'
 import { pathToFileURL } from 'node:url'
 import { bindAtribdHttpHost } from '@atrib/daemon'
-import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { InMemoryTransport, type McpServer as ModernMcpServer } from '@modelcontextprotocol/server'
 import {
   Client as ModernClient,
   StreamableHTTPClientTransport as ModernStreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client'
 import { Server as ModernServer } from '@modelcontextprotocol/server'
-import { StdioServerTransport as ModernStdioServerTransport } from '@modelcontextprotocol/server/stdio'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import {
-  CallToolRequestSchema,
   ErrorCode,
-  ListToolsRequestSchema,
   McpError,
   type CallToolRequest,
   type CallToolResult,
   type Tool,
-  isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js'
 
 export interface AtribPrimitiveHandle {
@@ -167,15 +156,6 @@ interface CliOptions {
   help: boolean
 }
 
-interface HttpSession {
-  server: Server
-  transport: StreamableHTTPServerTransport
-  sessionId?: string
-  createdAt: number
-  lastSeenAt: number
-  closing: boolean
-}
-
 export interface AtribPrimitivesHttpHost {
   endpoint: string
   healthEndpoint: string
@@ -216,7 +196,6 @@ const DEFAULT_HTTP_PORT = 8796
 const DEFAULT_HTTP_PATH = '/mcp'
 const DEFAULT_SESSION_IDLE_MS = 12 * 60 * 60 * 1000
 const DEFAULT_TOOL_TIMEOUT_MS = 45_000
-const MAX_JSON_BODY_BYTES = 1024 * 1024
 const MCP_REQUEST_TIMEOUT_CODE = -32001
 const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
 const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
@@ -286,13 +265,6 @@ const PRIMITIVES: readonly [string, AtribPrimitiveFactory][] = [
   ['recall', async () => (await import('@atrib/recall')).createAtribRecallServer()],
   ['summarize', async () => (await import('@atrib/summarize')).createAtribSummarizeServer()],
 ]
-
-const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
-
-function requiresExplicitContextId(env: NodeJS.ProcessEnv = process.env): boolean {
-  const raw = env['ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID']
-  return raw !== undefined && TRUE_ENV_VALUES.has(raw.trim().toLowerCase())
-}
 
 function readPackageVersion(): string {
   try {
@@ -385,12 +357,6 @@ function serializeInFlightToolCall(
     serialized.timed_out_at = new Date(call.timedOutAt).toISOString()
   }
   return serialized
-}
-
-function toolCallDiagnosticsDegraded(diagnostics: AtribPrimitivesDiagnostics): boolean {
-  return diagnostics.in_flight_tool_calls.some(
-    (call) => call.timed_out || call.elapsed_ms >= diagnostics.tool_timeout_ms,
-  )
 }
 
 function stringValue(value: unknown): string | undefined {
@@ -834,14 +800,6 @@ async function inspectRuntimeContracts(
   }
 }
 
-function runtimeContractsDegraded(contracts: AtribPrimitivesRuntimeContracts): boolean {
-  return (
-    contracts.recall_content.status !== 'pass' ||
-    Object.values(contracts.primitives).some((contract) => contract.status !== 'pass') ||
-    Object.values(contracts.behavioral_probes).some((probe) => probe.status === 'fail')
-  )
-}
-
 async function mountPrimitive(
   name: string,
   factory: AtribPrimitiveFactory,
@@ -1095,33 +1053,6 @@ function createModernOuterServer(getBackend: () => Promise<AtribPrimitivesBacken
   return server
 }
 
-function createLegacyOuterServer(getBackend: () => Promise<AtribPrimitivesBackend>): Server {
-  const server = new Server(
-    {
-      name: 'atrib-primitives',
-      version: readPackageVersion(),
-    },
-    {
-      capabilities: { tools: {} },
-      instructions:
-        'One local MCP runtime exposing all seven atrib cognitive primitives. ' +
-        'Use this instead of per-primitive stdio servers when a harness supports only per-thread MCP spawning.',
-    },
-  )
-
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const backend = await getBackend()
-    return { tools: backend.tools }
-  })
-
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const backend = await getBackend()
-    return backend.callTool(request.params)
-  })
-
-  return server
-}
-
 export async function createAtribPrimitivesRuntime(
   options: AtribPrimitivesRuntimeOptions = {},
 ): Promise<AtribPrimitivesRuntime> {
@@ -1205,104 +1136,17 @@ export async function createAtribPrimitivesHttpProxyRuntime(
   }
 }
 
+function httpEndpoint(host: string, port: number, path: string): string {
+  const literalHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+  return `http://${literalHost}:${port}${path}`
+}
+
 function normalizeMcpPath(raw: string): string {
   const withSlash = raw.startsWith('/') ? raw : `/${raw}`
   let end = withSlash.length
   while (end > 1 && withSlash.charCodeAt(end - 1) === 47) end -= 1
   const trimmed = withSlash.slice(0, end)
   return trimmed.length > 0 ? trimmed : DEFAULT_HTTP_PATH
-}
-
-function healthPathFor(mcpPath: string): string {
-  return mcpPath === '/' ? '/health' : `${mcpPath}/health`
-}
-
-function parseSessionIdHeader(req: IncomingMessage): string | undefined {
-  const header = req.headers['mcp-session-id']
-  if (Array.isArray(header)) return header[0]
-  return header
-}
-
-function requestPath(req: IncomingMessage): string {
-  try {
-    return new URL(req.url ?? '/', 'http://localhost').pathname
-  } catch {
-    return '/'
-  }
-}
-
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  const bytes = Buffer.from(JSON.stringify(body))
-  res.statusCode = status
-  res.setHeader('content-type', 'application/json; charset=utf-8')
-  res.setHeader('content-length', bytes.length)
-  res.end(bytes)
-}
-
-function sendJsonRpcError(
-  res: ServerResponse,
-  status: number,
-  code: number,
-  message: string,
-): void {
-  sendJson(res, status, {
-    jsonrpc: '2.0',
-    error: { code, message },
-    id: null,
-  })
-}
-
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = []
-  let total = 0
-  for await (const chunk of req) {
-    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    total += buf.length
-    if (total > MAX_JSON_BODY_BYTES) {
-      throw new Error(`request body exceeds ${MAX_JSON_BODY_BYTES} bytes`)
-    }
-    chunks.push(buf)
-  }
-  if (chunks.length === 0) return undefined
-  const raw = Buffer.concat(chunks).toString('utf8')
-  if (raw.trim().length === 0) return undefined
-  return JSON.parse(raw)
-}
-
-function listen(server: HttpServer, host: string, port: number): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const onError = (error: Error) => {
-      server.off('listening', onListening)
-      reject(error)
-    }
-    const onListening = () => {
-      server.off('error', onError)
-      resolve()
-    }
-    server.once('error', onError)
-    server.once('listening', onListening)
-    server.listen(port, host)
-  })
-}
-
-function closeHttpServer(server: HttpServer): Promise<void> {
-  return new Promise((resolve, reject) => {
-    server.close((error) => {
-      if (error) reject(error)
-      else resolve()
-    })
-  })
-}
-
-function httpEndpoint(host: string, port: number, path: string): string {
-  const literalHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
-  return `http://${literalHost}:${port}${path}`
-}
-
-function actualPort(server: HttpServer): number {
-  const address = server.address()
-  if (!address || typeof address === 'string') return DEFAULT_HTTP_PORT
-  return (address as AddressInfo).port
 }
 
 function parseCliOptions(argv: readonly string[]): CliOptions {
@@ -1383,7 +1227,7 @@ Options:
   --host <host>                  HTTP bind host. Defaults to 127.0.0.1.
   --port <port>                  HTTP bind port. Defaults to 8796. Use 0 for ephemeral.
   --path <path>                  HTTP MCP path. Defaults to /mcp.
-  --session-idle-ms <ms>         Close idle HTTP sessions. Defaults to 12 hours.
+  --session-idle-ms <ms>         Deprecated; ignored (the stateless daemon has no sessions).
   --tool-timeout-ms <ms>         Bound each primitive tool call. Defaults to 45000.
   --json                         Print a JSON ready line in HTTP mode.
   --help                         Print this help.
@@ -1448,284 +1292,6 @@ export async function bindAtribPrimitivesHttpHost(
     toolTimeoutMs: options.toolTimeoutMs,
     backendFactory: options.backendFactory,
   })
-
-  const toolTimeoutMs = options.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
-  const backendProvider = createBackendProvider(
-    options.backendFactory ?? (() => createAtribPrimitivesBackend({ toolTimeoutMs })),
-  )
-  const host = options.host ?? DEFAULT_HTTP_HOST
-  const port = options.port ?? DEFAULT_HTTP_PORT
-  const mcpPath = normalizeMcpPath(options.path ?? DEFAULT_HTTP_PATH)
-  const healthPath = healthPathFor(mcpPath)
-  const sessionIdleMs = options.sessionIdleMs ?? DEFAULT_SESSION_IDLE_MS
-  const sessions = new Map<string, HttpSession>()
-  const sockets = new Set<Socket>()
-  const version = readPackageVersion()
-  let openedSessions = 0
-  let closedSessions = 0
-  let activeHttpRequests = 0
-  let endpoint = ''
-  let healthEndpoint = ''
-
-  const closeSession = async (session: HttpSession): Promise<void> => {
-    if (session.closing) return
-    session.closing = true
-    if (session.sessionId) sessions.delete(session.sessionId)
-    closedSessions += 1
-    await Promise.allSettled([session.transport.close(), session.server.close()])
-  }
-
-  const sweepIdleSessions = (): void => {
-    const cutoff = Date.now() - sessionIdleMs
-    for (const session of sessions.values()) {
-      if (session.lastSeenAt < cutoff) void closeSession(session)
-    }
-  }
-
-  const sweepTimer = setInterval(sweepIdleSessions, Math.min(sessionIdleMs, 60_000))
-  sweepTimer.unref?.()
-
-  const server = createServer(async (req, res) => {
-    const path = requestPath(req)
-    if (path === healthPath || path === '/health') {
-      const backendStatus = backendProvider.status()
-      if (backendStatus.state === 'starting') {
-        sendJson(res, 503, {
-          status: 'starting',
-          report: {
-            primitive_runtime: {
-              name: 'atrib-primitives',
-              version,
-              pid: process.pid,
-              transport: 'streamable-http',
-              backend: 'starting',
-              session_model: 'per-session-transport-shared-backend',
-              endpoint,
-              health_endpoint: healthEndpoint,
-              tool_count: 0,
-              mounted_primitive_count: 0,
-              backend_started_at: backendStatus.startedAt,
-            },
-          },
-        })
-        return
-      }
-      if (backendStatus.state === 'error') {
-        sendJson(res, 500, {
-          status: 'error',
-          report: {
-            primitive_runtime: {
-              name: 'atrib-primitives',
-              version,
-              pid: process.pid,
-              transport: 'streamable-http',
-              backend: 'error',
-              session_model: 'per-session-transport-shared-backend',
-              endpoint,
-              health_endpoint: healthEndpoint,
-              error: errorMessage(backendStatus.error),
-              backend_started_at: backendStatus.startedAt,
-              backend_error_at: backendStatus.errorAt,
-            },
-          },
-        })
-        return
-      }
-      const backend = backendStatus.backend
-      const toolCalls = backend.diagnostics()
-      const runtimeContracts = backend.runtimeContracts()
-      const status =
-        toolCallDiagnosticsDegraded(toolCalls) || runtimeContractsDegraded(runtimeContracts)
-          ? 'degraded'
-          : 'healthy'
-      let activeHttpConnections = 0
-      for (const socket of sockets) {
-        if (!socket.destroyed && socket !== req.socket) activeHttpConnections += 1
-      }
-      sendJson(res, 200, {
-        status,
-        report: {
-          primitive_runtime: {
-            name: 'atrib-primitives',
-            version,
-            pid: process.pid,
-            transport: 'streamable-http',
-            backend: 'shared',
-            session_model: 'per-session-transport-shared-backend',
-            endpoint,
-            health_endpoint: healthEndpoint,
-            tool_count: backend.toolNames.length,
-            mounted_primitive_count: backend.mountedPrimitiveCount,
-            primitive_contracts: runtimeContracts.primitives,
-            behavioral_probes: runtimeContracts.behavioral_probes,
-            recall_contract: runtimeContracts.recall_content,
-          },
-          profile: {
-            agent: process.env.ATRIB_AGENT,
-            mirror_file: process.env.ATRIB_MIRROR_FILE,
-            local_substrate_endpoint: process.env.ATRIB_LOCAL_SUBSTRATE_ENDPOINT,
-            context_id_policy: requiresExplicitContextId()
-              ? 'explicit-required'
-              : 'active-session-or-fallback',
-            requires_explicit_context_id: requiresExplicitContextId(),
-          },
-          sessions: {
-            active: sessions.size,
-            opened: openedSessions,
-            closed: closedSessions,
-            active_http_requests: activeHttpRequests,
-            active_http_connections: activeHttpConnections,
-            idle_timeout_ms: sessionIdleMs,
-          },
-          tool_calls: toolCalls,
-        },
-      })
-      return
-    }
-
-    if (path !== mcpPath) {
-      sendJsonRpcError(res, 404, -32000, 'Not Found')
-      return
-    }
-
-    if (req.method !== 'POST' && req.method !== 'GET' && req.method !== 'DELETE') {
-      sendJsonRpcError(res, 405, -32000, 'Method Not Allowed')
-      return
-    }
-
-    activeHttpRequests += 1
-    try {
-      sweepIdleSessions()
-      const sessionId = parseSessionIdHeader(req)
-
-      try {
-        let body: unknown
-        if (req.method === 'POST') {
-          try {
-            body = await readJsonBody(req)
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            sendJsonRpcError(res, 400, -32700, `invalid JSON body: ${message}`)
-            return
-          }
-        }
-
-        if (sessionId) {
-          const session = sessions.get(sessionId)
-          if (!session) {
-            sendJsonRpcError(res, 404, -32000, 'Session not found')
-            return
-          }
-          session.lastSeenAt = Date.now()
-          await session.transport.handleRequest(req, res, body)
-          return
-        }
-
-        if (req.method !== 'POST' || !isInitializeRequest(body)) {
-          sendJsonRpcError(
-            res,
-            400,
-            -32000,
-            'Bad Request: initialize first or provide mcp-session-id',
-          )
-          return
-        }
-
-        let session: HttpSession | undefined
-        try {
-          const sessionServer = createLegacyOuterServer(backendProvider.get)
-          session = {
-            server: sessionServer,
-            transport: new StreamableHTTPServerTransport({
-              sessionIdGenerator: () => randomUUID(),
-              onsessioninitialized: (newSessionId) => {
-                if (!session) return
-                session.sessionId = newSessionId
-                session.lastSeenAt = Date.now()
-                sessions.set(newSessionId, session)
-              },
-            }),
-            createdAt: Date.now(),
-            lastSeenAt: Date.now(),
-            closing: false,
-          }
-          session.transport.onclose = () => {
-            if (session) void closeSession(session)
-          }
-          await sessionServer.connect(session.transport)
-          openedSessions += 1
-          await session.transport.handleRequest(req, res, body)
-        } finally {
-          if (session && !session.sessionId && !session.closing) {
-            await closeSession(session)
-          }
-        }
-      } catch (error) {
-        if (!res.headersSent) {
-          const message = error instanceof Error ? error.message : String(error)
-          sendJsonRpcError(res, 500, -32603, `Internal server error: ${message}`)
-        }
-      }
-    } finally {
-      activeHttpRequests = Math.max(0, activeHttpRequests - 1)
-    }
-  })
-  server.on('connection', (socket: Socket) => {
-    sockets.add(socket)
-    socket.on('close', () => {
-      sockets.delete(socket)
-    })
-  })
-
-  try {
-    await listen(server, host, port)
-  } catch (error) {
-    clearInterval(sweepTimer)
-    await backendProvider.close().catch(() => {})
-    throw error
-  }
-  const boundPort = actualPort(server)
-  endpoint = httpEndpoint(host, boundPort, mcpPath)
-  healthEndpoint = httpEndpoint(host, boundPort, healthPath)
-
-  if (options.jsonReady) {
-    void backendProvider
-      .get()
-      .then((backend) => {
-        process.stdout.write(
-          `${JSON.stringify({
-            status: 'ready',
-            name: 'atrib-primitives',
-            version,
-            pid: process.pid,
-            transport: 'streamable-http',
-            endpoint,
-            health_endpoint: healthEndpoint,
-            tool_count: backend.toolNames.length,
-            mounted_primitive_count: backend.mountedPrimitiveCount,
-          })}\n`,
-        )
-      })
-      .catch((error: unknown) => {
-        process.stderr.write(`atrib-primitives: backend failed: ${errorMessage(error)}\n`)
-      })
-  }
-
-  return {
-    endpoint,
-    healthEndpoint,
-    server,
-    close: async () => {
-      clearInterval(sweepTimer)
-      const active = [...sessions.values()]
-      await Promise.allSettled(active.map((session) => closeSession(session)))
-      try {
-        await closeHttpServer(server)
-      } finally {
-        await backendProvider.close()
-      }
-    },
-  }
 }
 
 async function main(): Promise<void> {
@@ -1765,18 +1331,19 @@ async function main(): Promise<void> {
           toolTimeoutMs: options.toolTimeoutMs,
         })
       : await createAtribPrimitivesRuntime({ toolTimeoutMs: options.toolTimeoutMs })
+  const stdio = serveStdio(() => runtime.server)
   const shutdown = async () => {
     try {
-      await runtime.close()
+      await Promise.allSettled([stdio.close(), runtime.close()])
     } finally {
       process.exit(0)
     }
   }
   process.once('SIGINT', shutdown)
   process.once('SIGTERM', shutdown)
-
-  const transport = new ModernStdioServerTransport()
-  await runtime.server.connect(transport)
+  process.once('exit', () => {
+    void stdio.close()
+  })
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
