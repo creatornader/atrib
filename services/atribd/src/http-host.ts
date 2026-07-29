@@ -40,7 +40,13 @@ import {
   ListToolsRequestSchema,
   isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js'
-import { Server as ModernServer } from '@modelcontextprotocol/server'
+import {
+  Server as ModernServer,
+  bearerAuthChallengeResponse,
+  verifyBearerToken,
+  type AuthInfo,
+  type BearerAuthOptions,
+} from '@modelcontextprotocol/server'
 import {
   ATTRIBUTION_EXTENSION_ID,
   ATTRIBUTION_EXTENSION_VERSION,
@@ -54,6 +60,7 @@ import {
   readPackageVersion,
   runtimeContractsDegraded,
   toolCallDiagnosticsDegraded,
+  WRITE_TOOL_NAMES,
   DEFAULT_TOOL_TIMEOUT_MS,
   type AtribdBackend,
 } from './backend.js'
@@ -108,10 +115,36 @@ export interface AtribdRequestCounters {
   legacy_requests: number
   rejected_header_mismatch: number
   rejected_missing_context: number
+  rejected_auth: number
+  rate_limited: number
   legacy_initialize: number
   legacy_session_header_ignored: number
   method_not_allowed: number
 }
+
+export interface AtribdRequestPrincipal {
+  client_id: string
+  scopes: string[]
+  expires_at?: number
+  resource?: string
+  attributes?: Record<string, unknown>
+}
+
+export interface AtribdRateLimitContext {
+  method: string
+  tool?: string
+  action_class: 'write' | 'read' | 'control' | 'unknown'
+  protocol_era: 'modern' | 'legacy'
+  principal?: AtribdRequestPrincipal
+}
+
+export type AtribdRateLimitDecision =
+  | { allowed: true }
+  | { allowed: false; retry_after_ms?: number; reason?: string }
+
+export type AtribdRateLimit = (
+  context: AtribdRateLimitContext,
+) => AtribdRateLimitDecision | Promise<AtribdRateLimitDecision>
 
 export interface AtribdHttpHost {
   endpoint: string
@@ -135,6 +168,17 @@ export interface AtribdHttpHostOptions {
    * is the default. Working flag name; final name is a P046 open question.
    */
   ambientContext?: boolean
+  /**
+   * Optional MCP-native bearer verification. The verifier runs on every MCP
+   * POST and must reject revoked or otherwise invalid tokens. Health remains
+   * unauthenticated so supervisors can diagnose a failed auth dependency.
+   */
+  bearerAuth?: BearerAuthOptions
+  /**
+   * Optional per-request limiter. It receives verified identity facts without
+   * the bearer token and is called independently of HTTP connection reuse.
+   */
+  rateLimit?: AtribdRateLimit
   compatibilityObserver?: McpCompatibilityObserver
   compatibilityStateFile?: string | false
   expectedModernClient?: boolean
@@ -206,6 +250,56 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.setHeader('content-type', 'application/json; charset=utf-8')
   res.setHeader('content-length', bytes.length)
   res.end(bytes)
+}
+
+async function sendWebResponse(res: ServerResponse, response: Response): Promise<void> {
+  res.statusCode = response.status
+  for (const [name, value] of response.headers) {
+    res.setHeader(name, value)
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  res.setHeader('content-length', bytes.byteLength)
+  res.end(bytes)
+}
+
+function rateLimitContext(
+  body: unknown,
+  authInfo: AuthInfo | undefined,
+  protocolVersion: string | undefined,
+): AtribdRateLimitContext {
+  const record = body && typeof body === 'object' && !Array.isArray(body)
+    ? (body as Record<string, unknown>)
+    : {}
+  const method = typeof record.method === 'string' ? record.method : 'unknown'
+  const params =
+    record.params && typeof record.params === 'object' && !Array.isArray(record.params)
+      ? (record.params as Record<string, unknown>)
+      : undefined
+  const tool = method === 'tools/call' && typeof params?.name === 'string' ? params.name : undefined
+  const actionClass: AtribdRateLimitContext['action_class'] =
+    method !== 'tools/call'
+      ? 'control'
+      : tool === undefined
+        ? 'unknown'
+        : WRITE_TOOL_NAMES.has(tool)
+          ? 'write'
+          : 'read'
+  const principal: AtribdRequestPrincipal | undefined = authInfo
+    ? {
+        client_id: authInfo.clientId,
+        scopes: [...authInfo.scopes],
+        ...(authInfo.expiresAt !== undefined ? { expires_at: authInfo.expiresAt } : {}),
+        ...(authInfo.resource !== undefined ? { resource: String(authInfo.resource) } : {}),
+        ...(authInfo.extra !== undefined ? { attributes: authInfo.extra } : {}),
+      }
+    : undefined
+  return {
+    method,
+    ...(tool !== undefined ? { tool } : {}),
+    action_class: actionClass,
+    protocol_era: protocolVersion === '2026-07-28' ? 'modern' : 'legacy',
+    ...(principal !== undefined ? { principal } : {}),
+  }
 }
 
 function sendJsonRpcError(
@@ -390,11 +484,11 @@ export function createAtribdServer(options: AtribdServerFactoryOptions): Server 
     }
   })
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const backend = await options.getBackend()
     const policy = options.httpContextPolicy
     if (!policy) {
-      return backend.callTool(request.params)
+      return backend.callTool(request.params, { signal: extra.signal })
     }
     const outcome = applyHttpContextPolicy(request.params, {
       ambientContext: policy.ambientContext,
@@ -410,7 +504,7 @@ export function createAtribdServer(options: AtribdServerFactoryOptions): Server 
     if (outcome.kind === 'injected') {
       policy.onInjected?.()
     }
-    return backend.callTool(outcome.params)
+    return backend.callTool(outcome.params, { signal: extra.signal })
   })
 
   return server
@@ -467,11 +561,11 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
     }
   })
 
-  server.setRequestHandler('tools/call', async (request) => {
+  server.setRequestHandler('tools/call', async (request, context) => {
     const backend = await options.getBackend()
     const policy = options.httpContextPolicy
     const result = !policy
-      ? await backend.callTool(request.params)
+      ? await backend.callTool(request.params, { signal: context.mcpReq.signal })
       : await (async () => {
           const outcome = applyHttpContextPolicy(request.params, {
             ambientContext: policy.ambientContext,
@@ -485,7 +579,7 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
             return outcome.result
           }
           if (outcome.kind === 'injected') policy.onInjected?.()
-          return backend.callTool(outcome.params)
+          return backend.callTool(outcome.params, { signal: context.mcpReq.signal })
         })()
     const internalRecord = signedRecordFromToolResult(result)
     if (internalRecord) {
@@ -549,6 +643,8 @@ export async function bindAtribdHttpHost(
     legacy_requests: 0,
     rejected_header_mismatch: 0,
     rejected_missing_context: 0,
+    rejected_auth: 0,
+    rate_limited: 0,
     legacy_initialize: 0,
     legacy_session_header_ignored: 0,
     method_not_allowed: 0,
@@ -667,6 +763,8 @@ export async function bindAtribdHttpHost(
             local_substrate_endpoint: process.env.ATRIB_LOCAL_SUBSTRATE_ENDPOINT,
             context_id_policy: ambientContext ? 'ambient-opt-in' : 'explicit-required',
             requires_explicit_context_id: !ambientContext,
+            authentication: options.bearerAuth ? 'oauth-bearer-required' : 'loopback-unauthed',
+            rate_limit: options.rateLimit ? 'request-scoped' : 'not-configured',
           },
           requests: { ...counters },
           compatibility: compatibility.report(),
@@ -722,6 +820,52 @@ export async function bindAtribdHttpHost(
       }
       if (isInitializeRequest(body)) {
         counters.legacy_initialize += 1
+      }
+
+      let authInfo: AuthInfo | undefined
+      if (options.bearerAuth) {
+        try {
+          authInfo = await verifyBearerToken(
+            headerValue(req, 'authorization'),
+            options.bearerAuth,
+          )
+        } catch (error) {
+          counters.rejected_auth += 1
+          await sendWebResponse(
+            res,
+            bearerAuthChallengeResponse(error, {
+              ...(options.bearerAuth.requiredScopes !== undefined
+                ? { requiredScopes: options.bearerAuth.requiredScopes }
+                : {}),
+              ...(options.bearerAuth.resourceMetadataUrl !== undefined
+                ? { resourceMetadataUrl: options.bearerAuth.resourceMetadataUrl }
+                : {}),
+            }),
+          )
+          return
+        }
+      }
+
+      if (options.rateLimit) {
+        const rateLimit = await options.rateLimit(
+          rateLimitContext(body, authInfo, headerValue(req, 'mcp-protocol-version')),
+        )
+        if (!rateLimit.allowed) {
+          counters.rate_limited += 1
+          if (
+            rateLimit.retry_after_ms !== undefined &&
+            Number.isFinite(rateLimit.retry_after_ms) &&
+            rateLimit.retry_after_ms >= 0
+          ) {
+            res.setHeader('retry-after', String(Math.ceil(rateLimit.retry_after_ms / 1000)))
+          }
+          sendJsonRpcError(res, 429, -32029, rateLimit.reason ?? 'Too Many Requests')
+          return
+        }
+      }
+
+      if (authInfo) {
+        ;(req as IncomingMessage & { auth?: AuthInfo }).auth = authInfo
       }
 
       counters.served += 1

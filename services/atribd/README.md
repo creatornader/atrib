@@ -154,6 +154,31 @@ Caller-facing timeouts do not release the per-context write lock. The lock
 stays held until the underlying primitive settles. If the late call succeeds,
 atribd stores its result before the next write in that context begins.
 
+## Request security and cancellation
+
+HTTP authorization belongs to each request, not to the connection. Embedders
+can pass `bearerAuth` to `bindAtribdHttpHost()`. atribd then runs the MCP SDK's
+token verifier on every POST before dispatch. The verifier owns token validity,
+expiry, required scopes, and revocation checks.
+
+The optional `rateLimit` hook also runs per POST. It receives the method, tool,
+protocol era, action class, and verified principal fields. It does not receive
+the bearer token. Neither a reused socket nor
+`io.modelcontextprotocol/clientInfo` grants authority.
+
+Cancellation follows the request signal supplied by the MCP SDK. Reads pass
+that signal to the mounted primitive, so a disconnected or timed-out request
+can stop its work. Writes use a stricter rule once dispatch starts. The caller
+gets a cancellation or timeout error, but the write keeps settling under its
+per-context lock. A late success completes the idempotency entry. Health
+diagnostics report cancellation and timeout counts separately, including
+settlements that arrive after either event.
+
+atribd does not use MCP `requestState`. A future multi-round tool must verify
+and integrity-protect that caller-carried value before it can affect
+authorization or routing. See
+[D186](../../DECISIONS.md#d186-stateless-mcp-security-and-cancellation-are-request-scoped).
+
 ## Degradation
 
 The [§5.8](../../atrib-spec.md#58-degradation-contract) contract is absolute. Log submission, mirror writes, and health

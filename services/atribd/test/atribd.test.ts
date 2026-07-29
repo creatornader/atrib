@@ -118,7 +118,9 @@ function emptyDiagnostics(toolTimeoutMs = 45_000): AtribdDiagnostics {
     calls_succeeded: 0,
     calls_failed: 0,
     calls_timed_out: 0,
+    calls_cancelled: 0,
     calls_settled_after_timeout: 0,
+    calls_settled_after_cancel: 0,
     in_flight_tool_calls: [],
     idempotency: {
       schema: 'atrib.mcp-write-idempotency.v1',
@@ -563,6 +565,100 @@ describe('atribd stateless HTTP host', () => {
     }
   })
 
+  it('verifies bearer auth per request without exposing the token to rate limiting', async () => {
+    const { backend } = await fakeToolBackend()
+    const seen: unknown[] = []
+    const host = await bindAtribdHttpHost({
+      port: 0,
+      backendFactory: async () => backend,
+      bearerAuth: {
+        requiredScopes: ['atrib:read'],
+        verifier: {
+          async verifyAccessToken(token) {
+            expect(token).toBe('valid-secret')
+            return {
+              token,
+              clientId: 'principal-from-token',
+              scopes: ['atrib:read'],
+              expiresAt: Math.floor(Date.now() / 1000) + 60,
+              extra: { tenant_id: 'tenant-a' },
+            }
+          },
+        },
+      },
+      rateLimit: (context) => {
+        seen.push(context)
+        return { allowed: true }
+      },
+    })
+    try {
+      const missing = await postJson(host.endpoint, TOOLS_LIST_BODY)
+      expect(missing.status).toBe(401)
+      expect(host.requestCounters().rejected_auth).toBe(1)
+
+      const accepted = await postJson(host.endpoint, modernRequest(31, 'tools/list'), {
+        ...MODERN_HEADERS,
+        'mcp-method': 'tools/list',
+        authorization: 'Bearer valid-secret',
+      })
+      expect(accepted.status, await accepted.clone().text()).toBe(200)
+      expect(seen).toEqual([
+        {
+          method: 'tools/list',
+          action_class: 'control',
+          protocol_era: 'modern',
+          principal: {
+            client_id: 'principal-from-token',
+            scopes: ['atrib:read'],
+            expires_at: expect.any(Number),
+            attributes: { tenant_id: 'tenant-a' },
+          },
+        },
+      ])
+      expect(JSON.stringify(seen)).not.toContain('valid-secret')
+    } finally {
+      await host.close()
+    }
+  })
+
+  it('rate limits every request independently of connection or client name', async () => {
+    const { backend, calls } = await fakeToolBackend()
+    let requests = 0
+    const host = await bindAtribdHttpHost({
+      port: 0,
+      backendFactory: async () => backend,
+      rateLimit: (context) => {
+        expect(context.principal).toBeUndefined()
+        expect(context.action_class).toBe('read')
+        requests += 1
+        return requests === 1
+          ? { allowed: true }
+          : { allowed: false, retry_after_ms: 1_500, reason: 'request budget exhausted' }
+      },
+    })
+    try {
+      const first = await postJson(
+        host.endpoint,
+        toolsCallBody(32, 'fake_read', {}, {
+          'io.modelcontextprotocol/clientInfo': { name: 'trusted-looking-name' },
+        }),
+      )
+      const second = await postJson(
+        host.endpoint,
+        toolsCallBody(33, 'fake_read', {}, {
+          'io.modelcontextprotocol/clientInfo': { name: 'different-name' },
+        }),
+      )
+      expect(first.status).toBe(200)
+      expect(second.status).toBe(429)
+      expect(second.headers.get('retry-after')).toBe('2')
+      expect(calls.filter((call) => call.tool === 'fake_read')).toHaveLength(1)
+      expect(host.requestCounters().rate_limited).toBe(1)
+    } finally {
+      await host.close()
+    }
+  })
+
   it('returns an equivalent read result when the same request lands on a different instance', async () => {
     const first = await bindAtribdHttpHost({
       port: 0,
@@ -822,6 +918,81 @@ describe('atribd write serialization', () => {
   })
 })
 
+describe('atribd request cancellation', () => {
+  it('forwards cancellation to a read primitive and frees the route', async () => {
+    let primitiveObservedAbort = false
+    const backend = await createAtribdBackend({
+      primitives: [
+        [
+          'reader',
+          () => {
+            const mcp = new McpServer({ name: 'abort-aware-reader', version: '0.0.0' })
+            mcp.registerTool(
+              'abortable_read',
+              { description: 'Abort-aware read', inputSchema: {} },
+              async (_args, extra) => {
+                await new Promise<never>((_resolve, reject) => {
+                  extra.signal.addEventListener(
+                    'abort',
+                    () => {
+                      primitiveObservedAbort = true
+                      reject(extra.signal.reason)
+                    },
+                    { once: true },
+                  )
+                })
+              },
+            )
+            return { mcp }
+          },
+        ],
+      ],
+    })
+    const controller = new AbortController()
+    const call = backend.callTool(
+      { name: 'abortable_read', arguments: {} },
+      { signal: controller.signal },
+    )
+    await delay(5)
+    controller.abort()
+    await expect(call).rejects.toThrow(/abortable_read was cancelled/)
+    await delay(10)
+    expect(primitiveObservedAbort).toBe(true)
+    expect(backend.diagnostics()).toMatchObject({
+      active_tool_calls: 0,
+      calls_cancelled: 1,
+      calls_settled_after_cancel: 1,
+    })
+    await backend.close()
+  })
+
+  it('keeps a cancelled write settling and replays its eventual result', async () => {
+    const { backend, calls } = await fakeToolBackend({ writeDelayMs: 35 })
+    const controller = new AbortController()
+    const request = {
+      name: 'emit',
+      arguments: { context_id: CONTEXT_A, content: { what: 'settle after cancel' } },
+      _meta: { 'dev.atrib/idempotencyKey': 'cancelled-write-0001' },
+    }
+    const call = backend.callTool(request, { signal: controller.signal })
+    await delay(5)
+    controller.abort()
+    await expect(call).rejects.toThrow(/emit was cancelled/)
+    await delay(50)
+
+    const replay = await backend.callTool(request)
+    expect(replay.content).toEqual([{ type: 'text', text: JSON.stringify({ ok: true }) }])
+    expect(calls).toHaveLength(1)
+    expect(backend.diagnostics()).toMatchObject({
+      active_tool_calls: 0,
+      calls_cancelled: 1,
+      calls_settled_after_cancel: 1,
+      idempotency: { pending: 0, completed: 1 },
+    })
+    await backend.close()
+  })
+})
+
 describe('atribd health surface', () => {
   it('answers health while the shared backend is still mounting', async () => {
     let releaseBackend!: () => void
@@ -928,11 +1099,8 @@ describe('atribd health surface', () => {
     }
   })
 
-  it('times out hung primitive calls and exposes in-flight diagnostics', async () => {
-    let releaseTool!: () => void
-    const toolGate = new Promise<void>((resolveTool) => {
-      releaseTool = resolveTool
-    })
+  it('cancels timed-out read primitives and releases the routed request', async () => {
+    let primitiveObservedAbort = false
     const backend = await createAtribdBackend({
       toolTimeoutMs: 25,
       primitives: [
@@ -946,9 +1114,17 @@ describe('atribd health surface', () => {
                 description: 'Slow test tool',
                 inputSchema: {},
               },
-              async () => {
-                await toolGate
-                return { content: [{ type: 'text', text: 'released' }] }
+              async (_args, extra) => {
+                await new Promise<never>((_resolve, reject) => {
+                  extra.signal.addEventListener(
+                    'abort',
+                    () => {
+                      primitiveObservedAbort = true
+                      reject(extra.signal.reason)
+                    },
+                    { once: true },
+                  )
+                })
               },
             )
             return { mcp }
@@ -967,15 +1143,17 @@ describe('atribd health surface', () => {
       await expect(client.callTool({ name: 'slow_tool', arguments: {} })).rejects.toThrow(
         /slow_tool timed out after 25ms/,
       )
-      const degraded = (await (await fetch(host.healthEndpoint)).json()) as {
+      await delay(10)
+      const health = (await (await fetch(host.healthEndpoint)).json()) as {
         status?: string
         report?: { tool_calls?: AtribdDiagnostics }
       }
-      expect(degraded.status).toBe('degraded')
-      expect(degraded.report?.tool_calls?.calls_timed_out).toBe(1)
-      expect(degraded.report?.tool_calls?.in_flight_tool_calls[0]?.tool).toBe('slow_tool')
+      expect(primitiveObservedAbort).toBe(true)
+      expect(health.status).toBe('degraded')
+      expect(health.report?.tool_calls?.calls_timed_out).toBe(1)
+      expect(health.report?.tool_calls?.calls_settled_after_timeout).toBe(1)
+      expect(health.report?.tool_calls?.active_tool_calls).toBe(0)
     } finally {
-      releaseTool()
       await client?.close().catch(() => {})
       await host.close()
     }
