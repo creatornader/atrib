@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execFile as execFileCallback } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -51,6 +50,14 @@ export function base64url(bytes: Uint8Array): string {
     .replace(/=+$/u, '')
 }
 
+function requirePublicProofOptIn(): void {
+  if (process.env.ATRIB_PUBLIC_PROOF !== '1') {
+    throw new Error(
+      'This script writes to log.atrib.dev. Set ATRIB_PUBLIC_PROOF=1 after provisioning a named persistent proof identity.',
+    )
+  }
+}
+
 export function recordHash(record: AtribRecord): string {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
 }
@@ -85,8 +92,9 @@ export async function ensureSecretFile(serverUrl?: string): Promise<boolean> {
 
   let changed = false
   if (typeof secrets.ATRIB_PRIVATE_KEY !== 'string' || secrets.ATRIB_PRIVATE_KEY.length === 0) {
-    secrets.ATRIB_PRIVATE_KEY = base64url(randomBytes(32))
-    changed = true
+    throw new Error(
+      `Missing ATRIB_PRIVATE_KEY in ${SECRETS_PATH}. Provision a persistent named proof identity before a public run.`,
+    )
   }
 
   if (serverUrl && secrets.ATRIB_SERVER_URL !== serverUrl) {
@@ -167,6 +175,7 @@ export async function fetchContextEntries(contextId: string): Promise<unknown> {
 }
 
 export async function main() {
+  requirePublicProofOptIn()
   await ensureSecretFile()
   let workerUrl = await runWranglerDeploy()
   const mcpUrl = `${workerUrl}/mcp`

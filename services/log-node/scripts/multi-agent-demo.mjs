@@ -34,7 +34,7 @@ import canonicalize from 'canonicalize'
 
 ed.hashes.sha512 = sha512
 
-const LOG_ENDPOINT = (process.env.LOG_ENDPOINT ?? 'https://log.atrib.dev/v1').replace(/\/$/, '')
+const LOG_ENDPOINT = requireLogEndpoint()
 const PER_AGENT = Number(process.env.PER_AGENT ?? 3)
 const STAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const RECORD_FILE = process.env.RECORD_FILE ?? join(
@@ -45,6 +45,28 @@ const toHex = (b) => Buffer.from(b).toString('hex')
 const b64url = (b) => Buffer.from(b).toString('base64url')
 const utf8 = (s) => new TextEncoder().encode(s)
 const jcsBytes = (o) => new TextEncoder().encode(canonicalize(o))
+
+function requireLogEndpoint() {
+  const endpoint = process.env.LOG_ENDPOINT?.trim()
+  if (!endpoint) {
+    throw new Error('LOG_ENDPOINT is required. Use a local log for ordinary demos.')
+  }
+  const normalized = endpoint.replace(/\/$/, '')
+  if (new URL(normalized).hostname === 'log.atrib.dev' && process.env.ATRIB_PUBLIC_DEMO !== '1') {
+    throw new Error('Public demo submission requires ATRIB_PUBLIC_DEMO=1 and a named persistent demo identity.')
+  }
+  return normalized
+}
+
+function demoPrivateKey(label) {
+  if (new URL(LOG_ENDPOINT).hostname !== 'log.atrib.dev') return ed.utils.randomSecretKey()
+  const configured = process.env[`ATRIB_DEMO_PRIVATE_KEY_${label}`]
+  const key = configured ? new Uint8Array(Buffer.from(configured, 'base64url')) : null
+  if (key?.length !== 32) {
+    throw new Error(`Public multi-agent-demo requires a 32-byte base64url ATRIB_DEMO_PRIVATE_KEY_${label} for its named persistent demo identity.`)
+  }
+  return key
+}
 
 const computeContentId = (serverUrl, toolName) =>
   `sha256:${toHex(sha256(utf8(`${serverUrl}/${toolName}`)))}`
@@ -76,7 +98,7 @@ function persist(record) {
 }
 
 async function makeAgent(label) {
-  const privateKey = ed.utils.randomSecretKey()
+  const privateKey = demoPrivateKey(label)
   const publicKey = await ed.getPublicKeyAsync(privateKey)
   return { label, privateKey, publicKey, creatorKey: b64url(publicKey) }
 }

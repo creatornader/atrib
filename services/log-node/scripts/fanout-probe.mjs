@@ -1,5 +1,5 @@
-// Synthesize a signed record, submit to log.atrib.dev, then check
-// graph.atrib.dev. Also assert the dashboard's session view will work.
+// Synthesize a signed record against an explicitly selected log, then check
+// its graph projection. Public atrib proof runs require a deliberate opt-in.
 
 import * as ed from '@noble/ed25519'
 import { sha256, sha512 } from '@noble/hashes/sha2.js'
@@ -7,8 +7,34 @@ import { canonicalRecord, signRecord, base64urlEncode } from '@atrib/mcp'
 
 ed.hashes.sha512 = sha512
 
-const seed = new Uint8Array(32)
-crypto.getRandomValues(seed)
+const logEndpoint = requireLogEndpoint()
+const graphEndpoint = process.env.GRAPH_ENDPOINT?.trim() ?? 'http://127.0.0.1:8788/v1'
+
+function requireLogEndpoint() {
+  const endpoint = process.env.LOG_ENDPOINT?.trim()
+  if (!endpoint) throw new Error('LOG_ENDPOINT is required. Use a local log for ordinary probes.')
+  const normalized = endpoint.replace(/\/$/, '')
+  if (new URL(normalized).hostname === 'log.atrib.dev' && process.env.ATRIB_PUBLIC_DEMO !== '1') {
+    throw new Error('Public probe submission requires ATRIB_PUBLIC_DEMO=1 and a named persistent demo identity.')
+  }
+  return normalized
+}
+
+function probePrivateKey() {
+  if (new URL(logEndpoint).hostname !== 'log.atrib.dev') {
+    const seed = new Uint8Array(32)
+    crypto.getRandomValues(seed)
+    return seed
+  }
+  const configured = process.env.ATRIB_DEMO_PRIVATE_KEY
+  const key = configured ? new Uint8Array(Buffer.from(configured, 'base64url')) : null
+  if (key?.length !== 32) {
+    throw new Error('Public fanout probe requires a 32-byte base64url ATRIB_DEMO_PRIVATE_KEY for its named persistent demo identity.')
+  }
+  return key
+}
+
+const seed = probePrivateKey()
 const pubKey = await ed.getPublicKeyAsync(seed)
 const creatorKey = base64urlEncode(pubKey)
 
@@ -32,7 +58,7 @@ const record = await signRecord({
   signature: '',
 }, seed)
 
-const submit = await fetch('https://log.atrib.dev/v1/entries', {
+const submit = await fetch(`${logEndpoint}/entries`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify(record),
@@ -49,7 +75,7 @@ console.log('creator_key', creatorKey)
 await new Promise(r => setTimeout(r, 1500))
 
 // Check graph
-const g = await fetch('https://graph.atrib.dev/v1/graph/' + contextId)
+const g = await fetch(`${graphEndpoint}/graph/` + contextId)
 console.log('GRAPH', g.status)
 if (g.ok) {
   const body = await g.json()
@@ -57,7 +83,7 @@ if (g.ok) {
 }
 
 // Check log /v1/recent picks it up
-const r = await fetch('https://log.atrib.dev/v1/recent?limit=5')
+const r = await fetch(`${logEndpoint}/recent?limit=5`)
 const rb = await r.json()
 const found = rb.entries.find(e => e.record_hash === recordHash)
 console.log('IN /v1/recent:', !!found)

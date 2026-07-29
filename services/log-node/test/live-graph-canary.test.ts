@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { verifyRecord } from '@atrib/mcp'
-import { buildCanaryRecord, runLiveGraphCanary } from '../scripts/live-graph-canary.mjs'
+import { buildCanaryRecord, readCanarySeed, runLiveGraphCanary } from '../scripts/live-graph-canary.mjs'
 
 describe('live graph canary', () => {
+  it('refuses to use the public derivable development seed for a live run', () => {
+    expect(() => readCanarySeed({})).toThrow(/ATRIB_GRAPH_CANARY_KEY is required/)
+  })
+
   it('builds a self-verifying signed record', async () => {
     const { record, record_hash } = await buildCanaryRecord({
       now: () => 1_780_000_000_000,
