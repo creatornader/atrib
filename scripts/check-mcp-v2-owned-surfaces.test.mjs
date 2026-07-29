@@ -33,4 +33,4 @@ assert.equal(result.protocol_version, '2026-07-28')
 assert.equal(result.surface_count, 13)
 assert.equal(result.published_surface_count, 12)
 
-console.log('MCP v2 owned-surface checker tests passed')
+process.stdout.write('MCP v2 owned-surface checker tests passed\n')

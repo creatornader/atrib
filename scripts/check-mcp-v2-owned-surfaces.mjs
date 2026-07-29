@@ -210,12 +210,12 @@ function main() {
   const result = runOwnedSurfaceCheck(options)
 
   if (jsonMode) {
-    console.log(JSON.stringify(result, null, 2))
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
   }
   if (result.errors.length > 0) {
     if (!jsonMode) {
-      console.error('MCP v2 owned-surface check failed.')
-      for (const error of result.errors) console.error(`- ${error}`)
+      process.stderr.write('MCP v2 owned-surface check failed.\n')
+      for (const error of result.errors) process.stderr.write(`- ${error}\n`)
     }
     process.exit(1)
   }
@@ -224,8 +224,8 @@ function main() {
       result.packed_checked.length > 0
         ? ` Packed artifact checks: ${result.packed_checked.length}.`
         : ''
-    console.log(
-      `MCP v2 owned-surface check passed: ${result.surface_count} surfaces, ${result.published_surface_count} published, ${result.excluded_fixture_count} classified fixtures.${packed}`,
+    process.stdout.write(
+      `MCP v2 owned-surface check passed: ${result.surface_count} surfaces, ${result.published_surface_count} published, ${result.excluded_fixture_count} classified fixtures.${packed}\n`,
     )
   }
 }
