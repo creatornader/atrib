@@ -42,6 +42,15 @@
      /dashboard path on log.atrib.dev serves the same file as a fallback. -->
 <link rel="canonical" href="https://explore.atrib.dev/" />
 <style>
+  @font-face{font-family:Literata;src:url(/static/fonts/Literata-Variable.woff2) format('woff2-variations');
+    font-weight:200 900;font-style:normal;font-display:swap}
+  @font-face{font-family:"Libre Franklin";src:url(/static/fonts/LibreFranklin-Variable.woff2) format('woff2-variations');
+    font-weight:100 900;font-style:normal;font-display:swap}
+  @font-face{font-family:IoskeleyMono;src:url(/static/fonts/IoskeleyMono-Regular.woff2) format('woff2');
+    font-weight:400;font-style:normal;font-display:swap}
+  @font-face{font-family:IoskeleyMono;src:url(/static/fonts/IoskeleyMono-Medium.woff2) format('woff2');
+    font-weight:500;font-style:normal;font-display:swap}
+
   /*
    * atrib explorer, design system
    * D054 option 1, single-file vanilla; no framework, no build.
@@ -212,8 +221,17 @@
     --edge-cross-session:    #a08672;  /* cross_session, desaturated taupe (across-session derived) */
 
     /* Type */
-    --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, Roboto, sans-serif;
-    --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+    /* The design system's three faces, served from this origin like every
+       other atrib surface. This was a system stack, so the explorer rendered
+       in San Francisco on a Mac and Segoe on Windows while the website and the
+       home page used Literata and Libre Franklin. Same brand, different
+       typefaces, decided by the visitor's operating system.
+
+       All three are SIL OFL. Two are variable and carry their whole weight
+       range. The fallbacks exist for the swap window only. */
+    --font-serif: Literata, ui-serif, Georgia, serif;
+    --font-sans: "Libre Franklin", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: IoskeleyMono, ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
 
     /* Layout */
     --container: 1180px;
@@ -232,6 +250,8 @@
     background: var(--bg);
     color: var(--text);
     font: 15px/1.55 var(--font-sans);
+    font-synthesis: none;
+    font-optical-sizing: auto;
     font-feature-settings: 'cv11', 'ss01', 'ss03';
     overflow-x: clip;
     min-width: 0;
@@ -478,8 +498,8 @@
     100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
   }
   .hero h1 {
-    font: 600 44px/1.08 var(--font-sans);
-    letter-spacing: -0.025em;
+    font: 500 44px/1.08 var(--font-serif);
+    letter-spacing: -0.015em;
     color: var(--text);
     margin: 0 0 18px;
     text-wrap: balance;
@@ -1224,8 +1244,8 @@
   }
   .view-header h1 {
     margin: 0 0 8px;
-    font: 600 28px/1.15 var(--font-sans);
-    letter-spacing: -0.02em;
+    font: 500 28px/1.15 var(--font-serif);
+    letter-spacing: -0.01em;
     color: var(--text);
   }
   .view-header .subject {
