@@ -23,10 +23,8 @@ import type { AddressInfo, Socket } from 'node:net'
 import { pathToFileURL } from 'node:url'
 import { bindAtribdHttpHost } from '@atrib/daemon'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { InMemoryTransport, type McpServer as ModernMcpServer } from '@modelcontextprotocol/server'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import {
   Client as ModernClient,
   StreamableHTTPClientTransport as ModernStreamableHTTPClientTransport,
@@ -668,7 +666,6 @@ async function probeVerifyBehavior(
     missing_required_record_rejected: true,
   })
 }
-
 
 async function probeRecallVerbBehavior(
   primitive: MountedPrimitive,

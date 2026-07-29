@@ -40,9 +40,7 @@ import {
   ListToolsRequestSchema,
   isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js'
-import {
-  Server as ModernServer,
-} from '@modelcontextprotocol/server'
+import { Server as ModernServer } from '@modelcontextprotocol/server'
 import {
   ATTRIBUTION_EXTENSION_ID,
   ATTRIBUTION_EXTENSION_VERSION,
@@ -201,7 +199,12 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(bytes)
 }
 
-function sendJsonRpcError(res: ServerResponse, status: number, code: number, message: string): void {
+function sendJsonRpcError(
+  res: ServerResponse,
+  status: number,
+  code: number,
+  message: string,
+): void {
   sendJson(res, status, {
     jsonrpc: '2.0',
     error: { code, message },
@@ -405,9 +408,9 @@ export function createAtribdServer(options: AtribdServerFactoryOptions): Server 
 }
 
 /**
- * v2 outer server for the native 2026-07-28 HTTP adapter. The backend and
- * standalone primitives remain on the v1 in-memory surface; this boundary
- * only translates the public MCP wire protocol and preserves their handlers.
+ * v2 outer server for the native 2026-07-28 HTTP adapter. The backend mounts
+ * the standalone v2 primitives in memory and exposes them over the stateless
+ * public MCP wire protocol.
  */
 export function createAtribdModernServer(options: AtribdServerFactoryOptions): ModernServer {
   const server = new ModernServer(
@@ -451,17 +454,20 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
     const result = !policy
       ? await backend.callTool(request.params)
       : await (async () => {
-    const outcome = applyHttpContextPolicy(request.params, {
-      ambientContext: policy.ambientContext,
-    })
-    if (outcome.kind === 'rejected') {
-      policy.onRejected?.()
-      logDaemonEvent({ event: 'write_call_rejected_missing_context', tool: request.params.name })
-      return outcome.result
-    }
-    if (outcome.kind === 'injected') policy.onInjected?.()
-    return backend.callTool(outcome.params)
-      })()
+          const outcome = applyHttpContextPolicy(request.params, {
+            ambientContext: policy.ambientContext,
+          })
+          if (outcome.kind === 'rejected') {
+            policy.onRejected?.()
+            logDaemonEvent({
+              event: 'write_call_rejected_missing_context',
+              tool: request.params.name,
+            })
+            return outcome.result
+          }
+          if (outcome.kind === 'injected') policy.onInjected?.()
+          return backend.callTool(outcome.params)
+        })()
     const internalRecord = signedRecordFromToolResult(result)
     if (internalRecord) {
       applyAttributionReceipt(
@@ -658,12 +664,7 @@ export async function bindAtribdHttpHost(
       if (mismatch) {
         counters.rejected_header_mismatch += 1
         const modern = headerValue(req, 'mcp-protocol-version') === '2026-07-28'
-        sendJsonRpcError(
-          res,
-          400,
-          modern ? -32020 : -32600,
-          `routing header mismatch: ${mismatch}`,
-        )
+        sendJsonRpcError(res, 400, modern ? -32020 : -32600, `routing header mismatch: ${mismatch}`)
         return
       }
 

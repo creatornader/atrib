@@ -30,7 +30,7 @@ import {
   sha256,
   verifyInclusion,
 } from '@atrib/mcp'
-import type { AtribRecord, AtribServer, ProofBundle } from '@atrib/mcp'
+import type { AtribRecord, ProofBundle } from '@atrib/mcp'
 import { startLogServer, parseCheckpointBody, type LogServer } from '@atrib/log-node'
 import { createMockMcpServer } from '../src/test-harness.js'
 
@@ -103,7 +103,7 @@ describe('full-chain integration (real log, real crypto)', () => {
   it('submits a record through middleware to a real log and verifies the inclusion proof', async () => {
     // ── 1. Set up a mock MCP server wrapped with atrib middleware ──────
     const handle = createMockMcpServer()
-    const wrappedServer: AtribServer = atrib(handle.server, {
+    const wrappedServer = atrib(handle.server, {
       creatorKey: CREATOR_PRIVATE_KEY_B64,
       serverUrl: SERVER_URL,
       logEndpoint: `${logServer.url}/v1/entries`,
@@ -166,9 +166,7 @@ describe('full-chain integration (real log, real crypto)', () => {
 
     const rootHashBytes = new Uint8Array(Buffer.from(proofParsed.rootHash, 'base64'))
     const leafHashBytes = new Uint8Array(Buffer.from(proof.leaf_hash, 'base64'))
-    const proofHashes = proof.inclusion_proof.map(
-      (h) => new Uint8Array(Buffer.from(h, 'base64')),
-    )
+    const proofHashes = proof.inclusion_proof.map((h) => new Uint8Array(Buffer.from(h, 'base64')))
 
     const inclusionValid = verifyInclusion(
       proof.log_index,
@@ -205,9 +203,7 @@ describe('full-chain integration (real log, real crypto)', () => {
 
     const rootHashBytes = new Uint8Array(Buffer.from(parsed.rootHash, 'base64'))
     const leafHashBytes = new Uint8Array(Buffer.from(proof.leaf_hash, 'base64'))
-    const proofHashes = proof.inclusion_proof.map(
-      (h) => new Uint8Array(Buffer.from(h, 'base64')),
-    )
+    const proofHashes = proof.inclusion_proof.map((h) => new Uint8Array(Buffer.from(h, 'base64')))
 
     // Tamper with the leaf hash (flip first byte)
     const tamperedLeaf = new Uint8Array(leafHashBytes)
@@ -232,7 +228,7 @@ describe('full-chain integration (real log, real crypto)', () => {
 
     // Set up middleware pointed at the real log
     const handle = createMockMcpServer()
-    const wrappedServer: AtribServer = atrib(handle.server, {
+    const wrappedServer = atrib(handle.server, {
       creatorKey: CREATOR_PRIVATE_KEY_B64,
       serverUrl: SERVER_URL,
       logEndpoint: `${logServer.url}/v1/entries`,

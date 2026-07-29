@@ -208,7 +208,12 @@ async function postJson(
   })
 }
 
-function toolsCallBody(id: number, name: string, args: Record<string, unknown>, meta?: Record<string, unknown>) {
+function toolsCallBody(
+  id: number,
+  name: string,
+  args: Record<string, unknown>,
+  meta?: Record<string, unknown>,
+) {
   const params: Record<string, unknown> = { name, arguments: args }
   if (meta) params._meta = meta
   return { jsonrpc: '2.0', id, method: 'tools/call', params }
@@ -256,7 +261,10 @@ interface HttpHostProcess {
   close(): Promise<void>
 }
 
-function startHttpHostProcess(env: NodeJS.ProcessEnv, extraArgs: string[] = []): Promise<HttpHostProcess> {
+function startHttpHostProcess(
+  env: NodeJS.ProcessEnv,
+  extraArgs: string[] = [],
+): Promise<HttpHostProcess> {
   return new Promise((resolveHost, rejectHost) => {
     const child = spawn(
       'node',
@@ -373,9 +381,9 @@ describe('routingHeaderMismatch (SEP-2243)', () => {
   })
 
   it('rejects a name header that diverges from the body tool name', () => {
-    expect(routingHeaderMismatch('tools/call', 'summarize', toolsCallBody(2, 'emit', {}))).toContain(
-      'Mcp-Name',
-    )
+    expect(
+      routingHeaderMismatch('tools/call', 'summarize', toolsCallBody(2, 'emit', {})),
+    ).toContain('Mcp-Name')
   })
 
   it('rejects a name header when the body is not a tools/call', () => {
@@ -397,10 +405,7 @@ describe('atribd stateless HTTP host', () => {
       const payload = (await response.json()) as {
         result?: { tools?: { name: string }[]; ttlMs?: number; cacheScope?: string }
       }
-      expect(payload.result?.tools?.map((tool) => tool.name).sort()).toEqual([
-        'emit',
-        'fake_read',
-      ])
+      expect(payload.result?.tools?.map((tool) => tool.name).sort()).toEqual(['emit', 'fake_read'])
       expect(payload.result?.ttlMs).toBe(12_345)
       expect(payload.result?.cacheScope).toBe('private')
       // No session is ever issued on the stateless surface.
@@ -458,24 +463,27 @@ describe('atribd stateless HTTP host', () => {
     const { backend } = await fakeToolBackend()
     const host = await bindAtribdHttpHost({ port: 0, backendFactory: async () => backend })
     try {
-      const discover = await postJson(
-        host.endpoint,
-        modernRequest(21, 'server/discover'),
-        { ...MODERN_HEADERS, 'mcp-method': 'server/discover' },
-      )
+      const discover = await postJson(host.endpoint, modernRequest(21, 'server/discover'), {
+        ...MODERN_HEADERS,
+        'mcp-method': 'server/discover',
+      })
       expect(discover.status).toBe(200)
       const discoverPayload = (await discover.json()) as {
-        result?: { supportedVersions?: string[]; _meta?: { 'io.modelcontextprotocol/serverInfo'?: { name?: string } } }
+        result?: {
+          supportedVersions?: string[]
+          _meta?: { 'io.modelcontextprotocol/serverInfo'?: { name?: string } }
+        }
       }
       expect(discoverPayload.result?.supportedVersions).toContain('2026-07-28')
-      expect(discoverPayload.result?._meta?.['io.modelcontextprotocol/serverInfo']?.name).toBe('atribd')
+      expect(discoverPayload.result?._meta?.['io.modelcontextprotocol/serverInfo']?.name).toBe(
+        'atribd',
+      )
       expect(host.requestCounters().modern_requests).toBe(1)
 
-      const list = await postJson(
-        host.endpoint,
-        modernRequest(22, 'tools/list'),
-        { ...MODERN_HEADERS, 'mcp-method': 'tools/list' },
-      )
+      const list = await postJson(host.endpoint, modernRequest(22, 'tools/list'), {
+        ...MODERN_HEADERS,
+        'mcp-method': 'tools/list',
+      })
       expect(list.status).toBe(200)
       const listPayload = (await list.json()) as {
         result?: { tools?: { name: string }[]; ttlMs?: number; cacheScope?: string }
@@ -504,10 +512,7 @@ describe('atribd stateless HTTP host', () => {
       expect(client.getProtocolEra()).toBe('modern')
       expect(client.getNegotiatedProtocolVersion()).toBe('2026-07-28')
       const listed = await client.listTools()
-      expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
-        'emit',
-        'fake_read',
-      ])
+      expect(listed.tools.map((tool) => tool.name).sort()).toEqual(['emit', 'fake_read'])
     } finally {
       await client.close().catch(() => {})
       await transport.close().catch(() => {})
@@ -555,11 +560,10 @@ describe('atribd stateless HTTP host', () => {
         { 'mcp-method': 'tools/call', 'mcp-name': 'summarize' },
       )
       expect(nameMismatch.status).toBe(400)
-      const matching = await postJson(
-        host.endpoint,
-        toolsCallBody(4, 'fake_read', {}),
-        { 'mcp-method': 'tools/call', 'mcp-name': 'fake_read' },
-      )
+      const matching = await postJson(host.endpoint, toolsCallBody(4, 'fake_read', {}), {
+        'mcp-method': 'tools/call',
+        'mcp-name': 'fake_read',
+      })
       expect(matching.status).toBe(200)
       const counters = host.requestCounters()
       expect(counters.rejected_header_mismatch).toBe(2)
@@ -574,11 +578,10 @@ describe('atribd stateless HTTP host', () => {
     const { backend, calls } = await fakeToolBackend()
     const host = await bindAtribdHttpHost({ port: 0, backendFactory: async () => backend })
     try {
-      const response = await postJson(
-        host.endpoint,
-        modernRequest(23, 'tools/list'),
-        { ...MODERN_HEADERS, 'mcp-method': 'tools/call' },
-      )
+      const response = await postJson(host.endpoint, modernRequest(23, 'tools/list'), {
+        ...MODERN_HEADERS,
+        'mcp-method': 'tools/call',
+      })
       expect(response.status).toBe(400)
       const payload = (await response.json()) as { error?: { code?: number } }
       expect(payload.error?.code).toBe(-32020)
@@ -612,9 +615,9 @@ describe('atribd stateless HTTP host', () => {
       const listed = await client.listTools()
       expect(listed.tools.map((tool) => tool.name).sort()).toEqual(['emit', 'fake_read'])
       const result = await client.callTool({ name: 'fake_read', arguments: {} })
-      const payload = JSON.parse(
-        (result as { content: { text: string }[] }).content[0]!.text,
-      ) as { read: boolean }
+      const payload = JSON.parse((result as { content: { text: string }[] }).content[0]!.text) as {
+        read: boolean
+      }
       expect(payload.read).toBe(true)
     } finally {
       await client?.close().catch(() => {})
@@ -667,10 +670,15 @@ describe('atribd HTTP context policy', () => {
       const traceparent = `00-${CONTEXT_B}-00f067aa0ba902b7-01`
       const response = await postJson(
         host.endpoint,
-        toolsCallBody(7, 'emit', { content: { what: 'carried' } }, {
-          atrib: token,
-          traceparent,
-        }),
+        toolsCallBody(
+          7,
+          'emit',
+          { content: { what: 'carried' } },
+          {
+            atrib: token,
+            traceparent,
+          },
+        ),
       )
       expect(response.status).toBe(200)
       expect(calls).toHaveLength(1)
@@ -689,10 +697,15 @@ describe('atribd HTTP context policy', () => {
       const traceparent = `00-${CONTEXT_B}-00f067aa0ba902b7-01`
       const response = await postJson(
         host.endpoint,
-        toolsCallBody(8, 'emit', { content: { what: 'fallback' } }, {
-          'X-Atrib-Chain': token,
-          traceparent,
-        }),
+        toolsCallBody(
+          8,
+          'emit',
+          { content: { what: 'fallback' } },
+          {
+            'X-Atrib-Chain': token,
+            traceparent,
+          },
+        ),
       )
       expect(response.status).toBe(200)
       expect(calls).toHaveLength(1)
@@ -927,58 +940,125 @@ describe('atribd health surface', () => {
 })
 
 describe('atribd real primitive mounts', () => {
-  it('lists every cognitive primitive tool from one stdio process', { timeout: 30_000 }, async () => {
-    const transport = new StdioClientTransport({
-      command: 'node',
-      args: [BINARY],
-      env: processEnvWith({ ATRIB_RECORD_FILE: recordFile }),
-      stderr: 'pipe',
-    })
-    const client = new Client({ name: 'atribd-stdio-test', version: '0.0.0' })
-    try {
-      await client.connect(transport)
-      const listed = await client.listTools()
-      expect(listed.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
-    } finally {
-      await client.close().catch(() => {})
-    }
-  })
+  it(
+    'lists every cognitive primitive tool from one stdio process',
+    { timeout: 30_000 },
+    async () => {
+      const transport = new StdioClientTransport({
+        command: 'node',
+        args: [BINARY],
+        env: processEnvWith({ ATRIB_RECORD_FILE: recordFile }),
+        stderr: 'pipe',
+      })
+      const client = new Client({ name: 'atribd-stdio-test', version: '0.0.0' })
+      try {
+        await client.connect(transport)
+        const listed = await client.listTools()
+        expect(listed.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+      } finally {
+        await client.close().catch(() => {})
+      }
+    },
+  )
 
-  it('serves the seventeen-tool alias union over stateless HTTP with passing contracts', { timeout: 30_000 }, async () => {
-    const host = await startHttpHostProcess({
-      ATRIB_AGENT: 'test-agent',
-      ATRIB_RECORD_FILE: recordFile,
-    })
-    try {
-      const health = (await (await fetch(host.healthEndpoint)).json()) as {
-        status?: string
-        report?: {
-          daemon?: { tool_count?: number; mounted_primitive_count?: number }
-          primitive_contracts?: Record<string, { status?: string }>
-          behavioral_probes?: Record<string, { status?: string }>
-          recall_contract?: { status?: string }
+  it(
+    'serves the seventeen-tool alias union over stateless HTTP with passing contracts',
+    { timeout: 30_000 },
+    async () => {
+      const host = await startHttpHostProcess({
+        ATRIB_AGENT: 'test-agent',
+        ATRIB_RECORD_FILE: recordFile,
+      })
+      try {
+        const health = (await (await fetch(host.healthEndpoint)).json()) as {
+          status?: string
+          report?: {
+            daemon?: { tool_count?: number; mounted_primitive_count?: number }
+            primitive_contracts?: Record<string, { status?: string }>
+            behavioral_probes?: Record<string, { status?: string }>
+            recall_contract?: { status?: string }
+          }
         }
-      }
-      expect(health.status).toBe('healthy')
-      expect(health.report?.daemon?.mounted_primitive_count).toBe(3)
-      expect(health.report?.daemon?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
-      expect(health.report?.recall_contract?.status).toBe('pass')
-      for (const primitive of ['recall', 'summarize']) {
-        expect(health.report?.behavioral_probes?.[primitive]?.status).toBe('pass')
-      }
-      expect(health.report?.behavioral_probes?.['attest']?.status).toBe('skipped')
+        expect(health.status).toBe('healthy')
+        expect(health.report?.daemon?.mounted_primitive_count).toBe(3)
+        expect(health.report?.daemon?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
+        expect(health.report?.recall_contract?.status).toBe('pass')
+        for (const primitive of ['recall', 'summarize']) {
+          expect(health.report?.behavioral_probes?.[primitive]?.status).toBe('pass')
+        }
+        expect(health.report?.behavioral_probes?.['attest']?.status).toBe('skipped')
 
-      const response = await postJson(host.endpoint, TOOLS_LIST_BODY)
-      const payload = (await response.json()) as {
-        result?: { tools?: { name: string }[]; ttlMs?: number; cacheScope?: string }
+        const response = await postJson(host.endpoint, TOOLS_LIST_BODY)
+        const payload = (await response.json()) as {
+          result?: { tools?: { name: string }[]; ttlMs?: number; cacheScope?: string }
+        }
+        expect(payload.result?.tools?.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+        expect(typeof payload.result?.ttlMs).toBe('number')
+        expect(payload.result?.cacheScope).toBe('private')
+      } finally {
+        await host.close()
       }
-      expect(payload.result?.tools?.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
-      expect(typeof payload.result?.ttlMs).toBe('number')
-      expect(payload.result?.cacheScope).toBe('private')
-    } finally {
-      await host.close()
-    }
-  })
+    },
+  )
+
+  it(
+    'returns a negotiated dev.atrib/attribution record receipt on a native v2 call',
+    { timeout: 30_000 },
+    async () => {
+      const host = await startHttpHostProcess({
+        ATRIB_AGENT: 'test-agent',
+        ATRIB_RECORD_FILE: recordFile,
+      })
+      try {
+        const requestMeta = {
+          ...modernMeta(),
+          'io.modelcontextprotocol/clientCapabilities': {
+            extensions: {
+              'dev.atrib/attribution': {
+                version: '0.1',
+                accept: ['record'],
+              },
+            },
+          },
+        }
+        const response = await postJson(
+          host.endpoint,
+          toolsCallBody(
+            31,
+            'emit',
+            {
+              context_id: 'e'.repeat(32),
+              event_type: 'observation',
+              content: { what: 'native v2 receipt proof' },
+            },
+            requestMeta,
+          ),
+          { ...MODERN_HEADERS, 'mcp-method': 'tools/call', 'mcp-name': 'emit' },
+        )
+        expect(response.status).toBe(200)
+        const payload = (await response.json()) as {
+          result?: {
+            _meta?: {
+              'dev.atrib/attribution'?: {
+                token?: string
+                receipt?: { context_id?: string; record_hash?: string }
+                record?: { context_id?: string; signature?: string }
+              }
+            }
+          }
+        }
+        const attribution = payload.result?._meta?.['dev.atrib/attribution']
+        expect(attribution, JSON.stringify(payload)).toBeDefined()
+        expect(attribution?.token).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/)
+        expect(attribution?.receipt?.context_id).toBe('e'.repeat(32))
+        expect(attribution?.receipt?.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
+        expect(attribution?.record?.context_id).toBe('e'.repeat(32))
+        expect(attribution?.record?.signature).toMatch(/^[A-Za-z0-9_-]+$/)
+      } finally {
+        await host.close()
+      }
+    },
+  )
 
   it('proxies stdio clients into the stateless HTTP daemon', { timeout: 30_000 }, async () => {
     const host = await startHttpHostProcess({
@@ -1017,7 +1097,12 @@ describe('atribd real primitive mounts', () => {
 
 describe('atribd CLI options', () => {
   it('accepts the deprecated --session-idle-ms as an ignored no-op', () => {
-    const options = parseCliOptions(['--transport', 'streamable-http', '--session-idle-ms', '60000'])
+    const options = parseCliOptions([
+      '--transport',
+      'streamable-http',
+      '--session-idle-ms',
+      '60000',
+    ])
     expect(options.transport).toBe('streamable-http')
   })
 
