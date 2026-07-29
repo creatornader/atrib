@@ -55,6 +55,12 @@ export type AnchorSpec = string | AnchorDescriptor
 export interface AtribClientConfig {
   daemon?: DaemonConfig
   /**
+   * Set to 'disabled' for a local-only producer. Records still sign and
+   * mirror locally, but the SDK creates no submission queue or anchor fan-out.
+   * This requires daemon.mode 'off'.
+   */
+  logSubmission?: 'enabled' | 'disabled'
+  /**
    * Anchor set (D138, §2.11.12). When omitted, the two-anchor
    * `BUILT_IN_DEFAULT_ANCHOR_SET` from `@atrib/mcp` applies and the emit
    * pipeline keeps its own env/default atrib-log endpoint. Hostile or

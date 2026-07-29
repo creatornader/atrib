@@ -21,6 +21,7 @@ import { emitInProcess, resolveKey, resolveMirrorWritePath, type ResolvedKey } f
 import {
   createAnchorFanout,
   readMirrorTail,
+  recordHashExistsInMirror,
   resolveEnvContextId,
   type AnchorFanout,
   type AnchorSubmissionReport,
@@ -102,6 +103,10 @@ function loadVerifyModule(): Promise<VerifyModule | null> {
 
 export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
   const daemonMode = config.daemon?.mode ?? 'prefer'
+  const logSubmission = config.logSubmission ?? 'enabled'
+  if (logSubmission === 'disabled' && daemonMode !== 'off') {
+    throw new TypeError("logSubmission: 'disabled' requires daemon.mode: 'off'")
+  }
   const daemon =
     daemonMode === 'off'
       ? null
@@ -140,6 +145,12 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
   }
 
   const defaultContextId = (): string | undefined => config.contextId ?? resolveEnvContextId()
+
+  const resolveLocalRecordReference = async (recordHash: string): Promise<'found' | 'unknown'> => {
+    const path = mirrorPath ?? process.env['ATRIB_MIRROR_FILE']
+    if (path === undefined || path === '') return 'unknown'
+    return (await recordHashExistsInMirror({ path, recordHash })) ? 'found' : 'unknown'
+  }
 
   async function attest(input: AttestInput): Promise<AttestResult> {
     // Throws TypeError on contradictory input — the only throw path.
@@ -198,9 +209,17 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
         ...(logEndpoint !== undefined ? { logEndpoint } : {}),
         ...(mirrorPath !== undefined ? { mirrorPath } : {}),
         ...(autochainSource !== undefined ? { autochainSource } : {}),
+        ...(logSubmission === 'disabled'
+          ? {
+              submit: false,
+              recordReferenceResolver: resolveLocalRecordReference,
+              localSubstrate: false,
+              localSubstrateCommit: false,
+            }
+          : {}),
       })
       const result = attestResultFromEmitOutput(output as EmitOutputLike, 'in-process', warnings)
-      await fanOutToAnchors(result)
+      if (logSubmission === 'enabled') await fanOutToAnchors(result)
       return result
     } catch (error) {
       // emitInProcess throws only on input-shape validation; surface it as
