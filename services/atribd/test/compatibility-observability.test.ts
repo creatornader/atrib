@@ -46,11 +46,13 @@ function legacyBody(name = 'claude-code', version = '1.0.0') {
 describe('MCP compatibility observability', () => {
   it('reports bounded protocol facts and a legacy-after-modern regression', () => {
     let now = Date.parse('2026-07-28T00:00:00.000Z')
+    const alerts: unknown[] = []
     const observer = createMcpCompatibilityObserver({
       profile: 'codex',
       expectedModern: true,
       stateFile: false,
       now: () => now,
+      onLegacyAfterModern: (event) => alerts.push(event),
     })
 
     observer.observe({ headers: { 'mcp-protocol-version': '2026-07-28' } }, modernBody())
@@ -69,6 +71,15 @@ describe('MCP compatibility observability', () => {
     expect(report.removal_readiness.reasons).toContain(
       'legacy traffic observed after modern traffic',
     )
+    expect(alerts).toEqual([
+      {
+        profile: 'codex',
+        client: 'claude-code@1.0.0',
+        protocol: '2025-06-18',
+        observedAt: '2026-07-28T00:00:01.000Z',
+        count: 1,
+      },
+    ])
     expect(report.privacy).toEqual({
       request_bodies_recorded: false,
       context_ids_recorded: false,

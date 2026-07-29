@@ -48,6 +48,7 @@ import type { AtribRecord, EventTypeShortName } from '@atrib/mcp'
 // EventTypeFilterSchema moved to ./event-type-filter.js (leaf module) so
 // recall-verb.ts can use it at module init despite the import cycle with
 // this file. Re-exported here for existing importers.
+import { checkpointRecallCancellation } from './cancellation.js'
 import { EventTypeFilterSchema } from './event-type-filter.js'
 export { EventTypeFilterSchema }
 
@@ -1735,11 +1736,13 @@ export interface RecallByContentArgs {
 
 export async function runRecallByContent(
   args: RecallByContentArgs,
+  signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
   const evidenceMode = args.evidence_mode === 'require_complete' ? 'require_complete' : 'bounded'
   const includeToolCallArgs = args.include_tool_call_args === true
   const boundedLimit = resolveBoundedContentSearchLimit(args.max_records, Number.MAX_SAFE_INTEGER)
   const snapshot = getContentSearchSnapshotForRecall(evidenceMode, boundedLimit)
+  await checkpointRecallCancellation(signal)
   const { entryByHash } = snapshot
   const totalRecords = snapshot.totalRecords
   const loadedLength = snapshot.entries.length
@@ -1777,6 +1780,7 @@ export async function runRecallByContent(
   const bm25Index = getContentBm25IndexForNewestLimit(snapshot, searchLimit)
   const queryTokens = tokenize(args.query)
   const relevanceByHash = bm25ScoresForQuery(bm25Index, queryTokens)
+  await checkpointRecallCancellation(signal)
   const now = Date.now()
   const searchPool =
     queryTokens.length > 0
@@ -1805,6 +1809,7 @@ export async function runRecallByContent(
     const score = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
     return { entry, score, recency: r, importance: i, relevance: rel }
   })
+  await checkpointRecallCancellation(signal)
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score
     return b.entry.timestamp - a.entry.timestamp
@@ -2344,11 +2349,14 @@ export function registerAtribRecallTools(server: McpServer): void {
           ),
       },
     },
-    async (args) =>
+    async (args, context) =>
       logReadPrimitiveCall(
         'recall_by_content',
         args,
-        async () => jsonToolResult(await runRecallByContent(args as RecallByContentArgs)),
+        async () =>
+          jsonToolResult(
+            await runRecallByContent(args as RecallByContentArgs, context.mcpReq.signal),
+          ),
         extractRecordHashFieldsFromMcpResult,
       ),
   )
