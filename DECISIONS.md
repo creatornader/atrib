@@ -9568,6 +9568,74 @@ localhost endpoint: can sign fixture records into operator state.
 **Protocol impact.** None. The change implements existing MCP 2026-07-28 and
 `dev.atrib/attribution` v0.1 carriage. It changes no atrib signed byte.
 
+## D186: Stateless MCP security and cancellation are request-scoped
+
+**Date:** 2026-07-29
+
+**Status:** Accepted and implemented
+
+**Extends:** [D169](#d169-protected-mcp-execution-requires-a-one-time-server-side-permit),
+[D184](#d184-stateless-mcp-writes-use-action-bound-idempotency-keys), and
+[D185](#d185-client-sdks-carry-complete-stateless-mcp-request-context).
+
+**Context.** Removing MCP sessions also removes the connection as a valid
+place to keep authorization, rate-limit, or cancellation state. A reused HTTP
+connection says nothing about who sent the next request. A client name is
+self-asserted metadata. Cancellation creates a second problem for writes: the
+caller can leave after the signing side effect starts, so "cancelled" cannot
+mean "nothing happened."
+
+**Decision.**
+
+1. atribd can require the MCP SDK's bearer verifier on every MCP POST. The
+   verifier checks token validity, expiry, required scopes, and operator-owned
+   revocation state before dispatch. Health stays unauthenticated so a process
+   supervisor can diagnose a broken verifier.
+2. Verified `authInfo` is request-local. The rate-limit hook receives the
+   client id, scopes, expiry, resource, and optional verified attributes. It
+   never receives the bearer token. atribd does not write authentication
+   material into signed records or daemon diagnostics.
+3. The rate-limit hook runs once per POST. It receives the MCP method, tool
+   name when present, protocol era, and action class. It cannot key authority
+   from a socket, session id, or client name.
+4. Incoming cancellation reaches atribd through the official MCP handler
+   signal. Read calls forward that signal to the mounted primitive. A timeout
+   aborts the same path, releases the routed request, and records the outcome
+   in daemon diagnostics.
+5. A write is not aborted after dispatch. Its caller receives the cancellation
+   or timeout error, while the per-context lock stays held until the primitive
+   settles. A late success completes the [D184](#d184-stateless-mcp-writes-use-action-bound-idempotency-keys)
+   entry and becomes replayable. Diagnostics distinguish late settlement after
+   cancellation from late settlement after timeout.
+6. One-time execution permits remain bound to the exact action through
+   [D169](#d169-protected-mcp-execution-requires-a-one-time-server-side-permit).
+   Write retry keys remain bound to context, tool, and complete arguments
+   through [D184](#d184-stateless-mcp-writes-use-action-bound-idempotency-keys).
+   Missing, changed, expired, replayed, and revoked cases fail before the
+   protected dispatch boundary.
+7. atribd does not use MCP `requestState` for authority or routing. Any future
+   multi-round tool that does so must configure the SDK verification hook,
+   integrity-protect the value, set an expiry, and bind it to the authenticated
+   principal and method.
+
+**Guarantee boundary.** The default local daemon still binds loopback without
+bearer authentication. Operators that expose it beyond a trusted local process
+boundary must configure bearer verification and a request limiter. Cancellation
+releases read-request resources, but a dispatched write can still complete. Its
+idempotency state and late-settlement counters are the evidence for that
+uncertain interval.
+
+**Alternatives rejected.** Trust `clientInfo.name`: the caller controls it.
+Authorize once per connection: HTTP connection reuse crosses requests and
+principals. Abort every timed-out write: the side effect may already have
+happened, and forgetting it permits a duplicate retry. Pass raw bearer tokens
+to the limiter: the limiter needs verified identity facts, not reusable
+credentials. Accept raw `requestState`: caller-carried continuation state has
+no authority without integrity and binding checks.
+
+**Protocol impact.** None. This applies MCP 2026-07-28 request lifecycle and
+OAuth hooks to atribd. It changes no atrib record field or signed byte.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

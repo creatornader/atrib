@@ -388,7 +388,7 @@ The follow-through program is complete when:
 | 0B: compatibility observability           | release pending | atribd persists bounded profile, client, protocol, and era observations; health and topology agree; the updater rejects modern-to-legacy regressions; the live profiles still need the released package                                                                                         |
 | 1A: duplicate-safe writes                 | release pending | [D184](../DECISIONS.md#d184-stateless-mcp-writes-use-action-bound-idempotency-keys) defines action-bound keys, durable completed-result replay, indeterminate pending outcomes, seven-day retention, and lock-through-settlement; daemon and TS SDK implementation needs release and live proof |
 | 1B: automatic request carriage            | release pending | [D185](../DECISIONS.md#d185-client-sdks-carry-complete-stateless-mcp-request-context) adds one shared metadata builder, default receipt negotiation, explicit write context, W3C and legacy carriers, exposed transport facts, and an independent Python v2 HTTP client. The shared corpus, Python mock daemon, and both clients pass live atribd reads. |
-| 1C: request-scoped security and lifecycle | not started     | Existing permit and authorization components must be audited against the stateless request boundary                                                                                                                                                                                             |
+| 1C: request-scoped security and lifecycle | release pending | [D186](../DECISIONS.md#d186-stateless-mcp-security-and-cancellation-are-request-scoped) applies bearer verification and rate limiting per request, forwards cancellation to reads, preserves write settlement and idempotency after caller abandonment, and rejects connection or client-name authority. Existing protected-permit tests cover missing, changed, expired, replayed, and revoked dispatch. |
 | 2A: resilience and performance            | not started     | Existing tests cover parts of concurrency and transport behavior, not the full failure matrix                                                                                                                                                                                                   |
 | 2B: independent interoperability          | not started     | atribd and atrib clients interoperate; independence gate remains                                                                                                                                                                                                                                |
 | 2C: human-facing propagation              | in progress     | Cutover docs are current; the wider session-era scan and runbooks remain                                                                                                                                                                                                                        |
@@ -397,7 +397,8 @@ The follow-through program is complete when:
 
 ## Immediate next slice
 
-Land and release Tranches 0B, 1A, and 1B. Install the released daemon and SDKs
-on the three operator profiles. Confirm modern traffic with no post-modern
-legacy regression. Run the duplicate-write proof matrix against the installed
-daemon, then begin the request-scoped security and lifecycle audit.
+Release Tranches 0B, 1A, 1B, and 1C. Install the released daemon and SDKs on
+the three operator profiles. Confirm modern traffic with no post-modern legacy
+regression, then run the duplicate-write and cancellation proof matrix against
+the installed daemon. Begin the restart, concurrency, and performance tranche
+from that released baseline.

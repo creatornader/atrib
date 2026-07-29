@@ -68,6 +68,7 @@ export {
   DEFAULT_TOOL_TIMEOUT_MS,
   type AtribdBackend,
   type AtribdBackendOptions,
+  type AtribdCallOptions,
   type AtribdPrimitiveFactory,
   type AtribdPrimitiveHandle,
   type AtribdHandlerKind,
@@ -105,6 +106,10 @@ export {
   type AtribdHttpHost,
   type AtribdHttpHostOptions,
   type AtribdRequestCounters,
+  type AtribdRequestPrincipal,
+  type AtribdRateLimit,
+  type AtribdRateLimitContext,
+  type AtribdRateLimitDecision,
   type AtribdServerFactoryOptions,
 } from './http-host.js'
 export {
