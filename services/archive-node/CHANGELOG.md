@@ -1,5 +1,13 @@
 # @atrib/archive-node
 
+## 0.1.48
+
+### Patch Changes
+
+- Updated dependencies [f650be9]
+  - @atrib/mcp@0.25.0
+  - @atrib/verify@0.13.2
+
 ## 0.1.47
 
 ### Patch Changes

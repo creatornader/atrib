@@ -1,5 +1,12 @@
 # @atrib/summarize
 
+## 0.5.2
+
+### Patch Changes
+
+- Updated dependencies [f650be9]
+  - @atrib/mcp@0.25.0
+
 ## 0.5.1
 
 ### Patch Changes

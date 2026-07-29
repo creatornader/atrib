@@ -1,5 +1,12 @@
 # @atrib/verify-mcp
 
+## 1.1.2
+
+### Patch Changes
+
+- @atrib/verify@0.13.2
+- @atrib/recall@5.1.2
+
 ## 1.1.1
 
 ### Patch Changes

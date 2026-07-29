@@ -1,5 +1,11 @@
 # @atrib/emit
 
+## 1.2.2
+
+### Patch Changes
+
+- @atrib/attest@0.4.2
+
 ## 1.2.1
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @atrib/mcp-wrap
 
+## 0.12.2
+
+### Patch Changes
+
+- d5939c5: Run the filesystem smoke through the stable MCP 2026-07-28 client.
+- Updated dependencies [f650be9]
+  - @atrib/mcp@0.25.0
+
 ## 0.12.1
 
 ### Patch Changes

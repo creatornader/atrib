@@ -1,5 +1,12 @@
 # @atrib/cloudflare-live-proof
 
+## 0.0.24
+
+### Patch Changes
+
+- Updated dependencies [f650be9]
+  - @atrib/mcp@0.25.0
+
 ## 0.0.23
 
 ### Patch Changes

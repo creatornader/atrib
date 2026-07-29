@@ -1,5 +1,12 @@
 # @atrib/mcp
 
+## 0.25.0
+
+### Minor Changes
+
+- f650be9: Add complete stateless MCP request metadata, default attribution negotiation,
+  and exposed transport facts to client surfaces.
+
 ## 0.24.0
 
 ### Minor Changes
