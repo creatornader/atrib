@@ -64,6 +64,13 @@ export interface McpCompatibilityObserverOptions {
   legacyZeroWindowMs?: number
   now?: () => number
   onPersistenceError?: (error: unknown) => void
+  onLegacyAfterModern?: (event: {
+    profile: string
+    client: string
+    protocol: string
+    observedAt: string
+    count: number
+  }) => void
 }
 
 function cleanLabel(value: unknown, maxLength: number): string | undefined {
@@ -219,6 +226,15 @@ export function createMcpCompatibilityObserver(
         if (hadModernTraffic) {
           state.legacy_after_modern_requests += 1
           state.last_legacy_after_modern_at = observedAt
+          if (expectedModern) {
+            options.onLegacyAfterModern?.({
+              profile,
+              client: labels.client,
+              protocol: labels.protocol,
+              observedAt,
+              count: state.legacy_after_modern_requests,
+            })
+          }
         }
       }
       persist()

@@ -140,8 +140,7 @@ export interface AtribdRateLimitContext {
 }
 
 export type AtribdRateLimitDecision =
-  | { allowed: true }
-  | { allowed: false; retry_after_ms?: number; reason?: string }
+  { allowed: true } | { allowed: false; retry_after_ms?: number; reason?: string }
 
 export type AtribdRateLimit = (
   context: AtribdRateLimitContext,
@@ -268,9 +267,10 @@ function rateLimitContext(
   authInfo: AuthInfo | undefined,
   protocolVersion: string | undefined,
 ): AtribdRateLimitContext {
-  const record = body && typeof body === 'object' && !Array.isArray(body)
-    ? (body as Record<string, unknown>)
-    : {}
+  const record =
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {}
   const method = typeof record.method === 'string' ? record.method : 'unknown'
   const params =
     record.params && typeof record.params === 'object' && !Array.isArray(record.params)
@@ -595,11 +595,7 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
         })()
     const internalRecord = signedRecordFromToolResult(result)
     if (internalRecord) {
-      applyAttributionReceipt(
-        result as Record<string, unknown>,
-        requestMeta,
-        internalRecord,
-      )
+      applyAttributionReceipt(result as Record<string, unknown>, requestMeta, internalRecord)
       delete (result as { _meta?: Record<string, unknown> })._meta?.[INTERNAL_RECORD_META_KEY]
     }
     return result
@@ -635,6 +631,14 @@ export async function bindAtribdHttpHost(
           component: 'atribd',
           event: 'compatibility_state_persistence_failed',
           error: errorMessage(error),
+        })
+      },
+      onLegacyAfterModern: (event) => {
+        logDaemonEvent({
+          component: 'atribd',
+          event: 'mcp_legacy_after_modern',
+          severity: 'error',
+          ...event,
         })
       },
     })
@@ -745,8 +749,13 @@ export async function bindAtribdHttpHost(
       const backend = backendStatus.backend
       const toolCalls = backend.diagnostics()
       const runtimeContracts = backend.runtimeContracts()
+      const compatibilityReport = compatibility.report()
+      const compatibilityRegression =
+        compatibilityReport.expected_modern && compatibilityReport.legacy_after_modern_requests > 0
       const status =
-        toolCallDiagnosticsDegraded(toolCalls) || runtimeContractsDegraded(runtimeContracts)
+        toolCallDiagnosticsDegraded(toolCalls) ||
+        runtimeContractsDegraded(runtimeContracts) ||
+        compatibilityRegression
           ? 'degraded'
           : 'healthy'
       let activeHttpConnections = 0
@@ -777,7 +786,7 @@ export async function bindAtribdHttpHost(
             rate_limit: options.rateLimit ? 'request-scoped' : 'not-configured',
           },
           requests: { ...counters },
-          compatibility: compatibility.report(),
+          compatibility: compatibilityReport,
           tool_calls: toolCalls,
           idempotency: toolCalls.idempotency,
         },
@@ -835,10 +844,7 @@ export async function bindAtribdHttpHost(
       let authInfo: AuthInfo | undefined
       if (options.bearerAuth) {
         try {
-          authInfo = await verifyBearerToken(
-            headerValue(req, 'authorization'),
-            options.bearerAuth,
-          )
+          authInfo = await verifyBearerToken(headerValue(req, 'authorization'), options.bearerAuth)
         } catch (error) {
           counters.rejected_auth += 1
           await sendWebResponse(

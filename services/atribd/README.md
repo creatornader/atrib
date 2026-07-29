@@ -73,10 +73,22 @@ counts, labels, and timestamps. It never contains request bodies, arguments,
 context IDs, network addresses, or user-agent strings. Set
 `ATRIBD_MCP_COMPAT_STATE_FILE` to choose another local path. Set it to an empty
 string to disable persistence. `ATRIBD_MCP_EXPECT_MODERN=1` makes the updater
-reject legacy traffic observed after modern traffic. The default removal gate
-requires 30 days with no legacy request followed by an explicit deprecation
-announcement. `ATRIBD_MCP_LEGACY_ZERO_WINDOW_MS` changes that local evidence
-window; it does not remove the announcement requirement.
+reject legacy traffic observed after modern traffic. The same regression emits
+the structured `mcp_legacy_after_modern` error event and degrades the health
+response. Check one or more profiles without restarting them:
+
+```sh
+pnpm monitor:mcp-compatibility -- \
+  --endpoint http://127.0.0.1:8792/mcp/health \
+  --endpoint http://127.0.0.1:8795/mcp/health \
+  --endpoint http://127.0.0.1:8796/mcp/health
+```
+
+The command exits nonzero for a regression, an unavailable endpoint, or an
+invalid health response. The default removal gate requires 30 days with no
+legacy request followed by an explicit deprecation announcement.
+`ATRIBD_MCP_LEGACY_ZERO_WINDOW_MS` changes that local evidence window; it does
+not remove the announcement requirement.
 
 ## Stateless transport
 

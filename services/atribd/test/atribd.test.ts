@@ -617,6 +617,62 @@ describe('atribd stateless HTTP host', () => {
     }
   })
 
+  it('observes stable v2 client cancellation through real HTTP', async () => {
+    const backend = await createAtribdBackend({
+      primitives: [
+        [
+          'reader',
+          () => {
+            const mcp = new McpServer({ name: 'http-abort-aware-reader', version: '0.0.0' })
+            mcp.registerTool(
+              'abortable_read',
+              { description: 'Abort-aware read', inputSchema: {} },
+              async (_args, extra) => {
+                await new Promise<never>((_resolve, reject) => {
+                  extra.signal.addEventListener('abort', () => reject(extra.signal.reason), {
+                    once: true,
+                  })
+                })
+              },
+            )
+            return { mcp }
+          },
+        ],
+      ],
+    })
+    const host = await bindAtribdHttpHost({ port: 0, backendFactory: async () => backend })
+    const transport = new ModernStreamableHTTPClientTransport(new URL(host.endpoint))
+    const client = new ModernClient(
+      { name: 'atribd-v2-cancellation-test', version: '0.0.0' },
+      { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+    )
+    try {
+      await client.connect(transport)
+      const controller = new AbortController()
+      const call = client.callTool(
+        { name: 'abortable_read', arguments: {} },
+        { signal: controller.signal },
+      )
+      await delay(5)
+      controller.abort(new Error('HTTP cancellation proof'))
+      await expect(call).rejects.toThrow(/HTTP cancellation proof/)
+      await delay(10)
+
+      const health = (await (await fetch(host.healthEndpoint)).json()) as {
+        report: { tool_calls: AtribdDiagnostics }
+      }
+      expect(health.report.tool_calls).toMatchObject({
+        active_tool_calls: 0,
+        calls_cancelled: 1,
+        calls_settled_after_cancel: 1,
+      })
+    } finally {
+      await client.close().catch(() => {})
+      await transport.close().catch(() => {})
+      await host.close()
+    }
+  })
+
   it('verifies bearer auth per request without exposing the token to rate limiting', async () => {
     const { backend } = await fakeToolBackend()
     const seen: unknown[] = []
@@ -691,15 +747,25 @@ describe('atribd stateless HTTP host', () => {
     try {
       const first = await postJson(
         host.endpoint,
-        toolsCallBody(32, 'fake_read', {}, {
-          'io.modelcontextprotocol/clientInfo': { name: 'trusted-looking-name' },
-        }),
+        toolsCallBody(
+          32,
+          'fake_read',
+          {},
+          {
+            'io.modelcontextprotocol/clientInfo': { name: 'trusted-looking-name' },
+          },
+        ),
       )
       const second = await postJson(
         host.endpoint,
-        toolsCallBody(33, 'fake_read', {}, {
-          'io.modelcontextprotocol/clientInfo': { name: 'different-name' },
-        }),
+        toolsCallBody(
+          33,
+          'fake_read',
+          {},
+          {
+            'io.modelcontextprotocol/clientInfo': { name: 'different-name' },
+          },
+        ),
       )
       expect(first.status).toBe(200)
       expect(second.status).toBe(429)
@@ -955,13 +1021,11 @@ describe('atribd write serialization', () => {
 
   it('lets writes on different contexts overlap', async () => {
     const { backend, maxConcurrentWrites } = await fakeToolBackend({ writeDelayMs: 30 })
-    const contexts = Array.from({ length: 32 }, (_, index) =>
-      index.toString(16).padStart(32, '0'),
-    )
+    const contexts = Array.from({ length: 32 }, (_, index) => index.toString(16).padStart(32, '0'))
     await Promise.all(
       contexts.map((contextId) =>
         backend.callTool({
-        name: 'emit',
+          name: 'emit',
           arguments: { context_id: contextId, content: {} },
         }),
       ),
@@ -979,8 +1043,8 @@ describe('atribd write serialization', () => {
       }),
     )
     const independent = backend.callTool({
-        name: 'emit',
-        arguments: { context_id: CONTEXT_B, content: {} },
+      name: 'emit',
+      arguments: { context_id: CONTEXT_B, content: {} },
     })
     await independent
     expect(calls.some((call) => call.args['context_id'] === CONTEXT_B)).toBe(true)
@@ -1166,6 +1230,40 @@ describe('atribd health surface', () => {
       }
       expect(health.status).toBe('degraded')
       expect(health.report?.recall_contract?.status).toBe('fail')
+    } finally {
+      await host.close()
+    }
+  })
+
+  it('degrades health after expected-modern traffic regresses to legacy', async () => {
+    const host = await bindAtribdHttpHost({
+      port: 0,
+      expectedModernClient: true,
+      compatibilityStateFile: false,
+      backendFactory: async () => fakeBackend(),
+    })
+    try {
+      const modern = await postJson(host.endpoint, modernRequest(40, 'tools/list'), {
+        ...MODERN_HEADERS,
+        'mcp-method': 'tools/list',
+      })
+      expect(modern.status).toBe(200)
+
+      const legacy = await postJson(host.endpoint, TOOLS_LIST_BODY)
+      expect(legacy.status).toBe(200)
+
+      const health = (await (await fetch(host.healthEndpoint)).json()) as {
+        status?: string
+        report?: {
+          compatibility?: {
+            expected_modern?: boolean
+            legacy_after_modern_requests?: number
+          }
+        }
+      }
+      expect(health.status).toBe('degraded')
+      expect(health.report?.compatibility?.expected_modern).toBe(true)
+      expect(health.report?.compatibility?.legacy_after_modern_requests).toBe(1)
     } finally {
       await host.close()
     }
@@ -1471,11 +1569,10 @@ describe('atribd process replacement', () => {
       const first = await startHttpHostProcess(env, args)
       let second: HttpHostProcess | undefined
       try {
-        const discover = await postJson(
-          first.endpoint,
-          modernRequest(499, 'server/discover'),
-          { ...MODERN_HEADERS, 'mcp-method': 'server/discover' },
-        )
+        const discover = await postJson(first.endpoint, modernRequest(499, 'server/discover'), {
+          ...MODERN_HEADERS,
+          'mcp-method': 'server/discover',
+        })
         expect(discover.status).toBe(200)
 
         const read = await postJson(
@@ -1512,11 +1609,10 @@ describe('atribd process replacement', () => {
         const retriedPayload = (await retriedWrite.json()) as { result?: unknown }
         expect(retriedPayload.result).toEqual(initialPayload.result)
 
-        const list = await postJson(
-          second.endpoint,
-          modernRequest(502, 'tools/list'),
-          { ...MODERN_HEADERS, 'mcp-method': 'tools/list' },
-        )
+        const list = await postJson(second.endpoint, modernRequest(502, 'tools/list'), {
+          ...MODERN_HEADERS,
+          'mcp-method': 'tools/list',
+        })
         const listed = (await list.json()) as {
           result?: { ttlMs?: number; cacheScope?: string; tools?: unknown[] }
         }
@@ -1524,9 +1620,7 @@ describe('atribd process replacement', () => {
         expect(listed.result?.cacheScope).toBe('private')
         expect(listed.result?.tools?.length).toBe(EXPECTED_TOOL_NAMES.length)
 
-        const records = readFileSync(recordFile, 'utf8')
-          .split('\n')
-          .filter(Boolean)
+        const records = readFileSync(recordFile, 'utf8').split('\n').filter(Boolean)
         expect(records).toHaveLength(1)
       } finally {
         if (second) await second.close()
@@ -1625,11 +1719,7 @@ describe('atribd process replacement', () => {
 
         const second = await startHttpHostProcess(env, args)
         try {
-          const response = await retryPost(
-            second.endpoint,
-            requestCase.body,
-            requestCase.headers,
-          )
+          const response = await retryPost(second.endpoint, requestCase.body, requestCase.headers)
           expect(response.status, requestCase.name).toBe(200)
           const payload = (await response.json()) as {
             result?: {
@@ -1639,18 +1729,16 @@ describe('atribd process replacement', () => {
             }
           }
           if (requestCase.name === 'write with negotiated receipt') {
-            expect(
-              payload.result?._meta?.['dev.atrib/attribution']?.receipt?.record_hash,
-            ).toMatch(/^sha256:[0-9a-f]{64}$/)
+            expect(payload.result?._meta?.['dev.atrib/attribution']?.receipt?.record_hash).toMatch(
+              /^sha256:[0-9a-f]{64}$/,
+            )
           }
         } finally {
           await second.close()
         }
       }
 
-      const records = readFileSync(recordFile, 'utf8')
-        .split('\n')
-        .filter(Boolean)
+      const records = readFileSync(recordFile, 'utf8').split('\n').filter(Boolean)
       expect(records).toHaveLength(1)
     },
   )
@@ -1679,11 +1767,10 @@ describe('atribd process replacement', () => {
       ])
       try {
         const coldDiscoveryMs = await timedRequest(() =>
-          postJson(
-            host.endpoint,
-            modernRequest(700, 'server/discover'),
-            { ...MODERN_HEADERS, 'mcp-method': 'server/discover' },
-          ),
+          postJson(host.endpoint, modernRequest(700, 'server/discover'), {
+            ...MODERN_HEADERS,
+            'mcp-method': 'server/discover',
+          }),
         )
         const cachedListMs: number[] = []
         const readMs: number[] = []
@@ -1693,11 +1780,10 @@ describe('atribd process replacement', () => {
         for (let index = 0; index < 8; index += 1) {
           cachedListMs.push(
             await timedRequest(() =>
-              postJson(
-                host.endpoint,
-                modernRequest(710 + index, 'tools/list'),
-                { ...MODERN_HEADERS, 'mcp-method': 'tools/list' },
-              ),
+              postJson(host.endpoint, modernRequest(710 + index, 'tools/list'), {
+                ...MODERN_HEADERS,
+                'mcp-method': 'tools/list',
+              }),
             ),
           )
           readMs.push(
