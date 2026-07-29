@@ -1,5 +1,11 @@
 # @atrib/recall
 
+## 5.1.1
+
+### Patch Changes
+
+- 33c9e34: Negotiate the 2026-07-28 MCP protocol on every standalone stdio executable.
+
 ## 5.1.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @atrib/summarize
 
+## 0.5.1
+
+### Patch Changes
+
+- 33c9e34: Negotiate the 2026-07-28 MCP protocol on every standalone stdio executable.
+
 ## 0.5.0
 
 ### Minor Changes

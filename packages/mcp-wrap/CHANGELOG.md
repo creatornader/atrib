@@ -1,5 +1,11 @@
 # @atrib/mcp-wrap
 
+## 0.12.1
+
+### Patch Changes
+
+- f169af8: Negotiate the MCP protocol era on the wrapper's outer stdio boundary.
+
 ## 0.12.0
 
 ### Minor Changes
