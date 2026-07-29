@@ -10,22 +10,15 @@
  * The stateless explicit-required policy applies to the HTTP surface only.
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  type CallToolResult,
-  type Tool,
-} from '@modelcontextprotocol/sdk/types.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { Server, type CallToolResult, type Tool } from '@modelcontextprotocol/server'
 import {
   callWithToolTimeout,
   createAtribdBackend,
   readPackageVersion,
   DEFAULT_TOOL_TIMEOUT_MS,
 } from './backend.js'
-import { createAtribdServer, DEFAULT_TOOLS_LIST_TTL_MS } from './http-host.js'
+import { createAtribdModernServer, DEFAULT_TOOLS_LIST_TTL_MS } from './http-host.js'
 
 export interface AtribdRuntime {
   server: Server
@@ -47,14 +40,14 @@ export async function createAtribdRuntime(
   const toolTimeoutMs = options.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
   const toolsListTtlMs = options.toolsListTtlMs ?? DEFAULT_TOOLS_LIST_TTL_MS
   const backend = await createAtribdBackend({ toolTimeoutMs })
-  const server = createAtribdServer({
+  const server = createAtribdModernServer({
     getBackend: async () => backend,
     toolsListTtlMs,
   })
 
   return {
     server,
-    tools: backend.tools,
+    tools: backend.tools as unknown as Tool[],
     toolNames: backend.toolNames,
     flush: backend.flush,
     close: async () => {
@@ -67,9 +60,9 @@ export async function createAtribdRuntime(
 
 /**
  * stdio-to-HTTP proxy shim: a lightweight stdio child that forwards MCP
- * calls to a host-owned atribd HTTP endpoint. Works against both the
- * legacy session host and the stateless host (the client's initialize is
- * answered without session issuance and later requests carry no session).
+ * calls to a host-owned atribd HTTP endpoint. The v2 client negotiates the
+ * modern stateless protocol and the daemon keeps legacy handling at its HTTP
+ * compatibility boundary.
  */
 export async function createAtribdHttpProxyRuntime(
   endpoint: string,
@@ -77,10 +70,13 @@ export async function createAtribdHttpProxyRuntime(
 ): Promise<AtribdRuntime> {
   const toolTimeoutMs = options.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
   const upstreamTransport = new StreamableHTTPClientTransport(new URL(endpoint))
-  const upstream = new Client({
-    name: 'atribd-stdio-http-proxy',
-    version: readPackageVersion(),
-  })
+  const upstream = new Client(
+    {
+      name: 'atribd-stdio-http-proxy',
+      version: readPackageVersion(),
+    },
+    { versionNegotiation: { mode: 'auto' } },
+  )
   await upstream.connect(upstreamTransport)
   const listed = await upstream.listTools()
   const server = new Server(
@@ -95,18 +91,18 @@ export async function createAtribdHttpProxyRuntime(
     },
   )
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: listed.tools }))
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler('tools/list', async () => ({ tools: listed.tools }))
+  server.setRequestHandler('tools/call', async (request) => {
     return callWithToolTimeout(
       request.params.name,
       toolTimeoutMs,
-      () => upstream.callTool(request.params) as Promise<CallToolResult>,
-    )
+      () => upstream.callTool(request.params) as never,
+    ) as unknown as CallToolResult
   })
 
   return {
     server,
-    tools: listed.tools,
+    tools: listed.tools as Tool[],
     toolNames: listed.tools.map((tool) => tool.name),
     flush: async () => {},
     close: async () => {

@@ -19,7 +19,7 @@
  */
 
 import { pathToFileURL } from 'node:url'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import {
   bindAtribdHttpHost,
   httpEndpoint,
@@ -315,18 +315,19 @@ async function main(): Promise<void> {
           toolTimeoutMs: options.toolTimeoutMs,
           toolsListTtlMs: options.toolsListTtlMs,
         })
+  const stdio = serveStdio(() => runtime.server)
   const shutdown = async () => {
     try {
-      await runtime.close()
+      await Promise.allSettled([stdio.close(), runtime.close()])
     } finally {
       process.exit(0)
     }
   }
   process.once('SIGINT', shutdown)
   process.once('SIGTERM', shutdown)
-
-  const transport = new StdioServerTransport()
-  await runtime.server.connect(transport)
+  process.once('exit', () => {
+    void stdio.close()
+  })
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

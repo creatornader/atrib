@@ -413,27 +413,37 @@ export function createAtribdServer(options: AtribdServerFactoryOptions): Server 
  * public MCP wire protocol.
  */
 export function createAtribdModernServer(options: AtribdServerFactoryOptions): ModernServer {
+  const capabilities = {
+    tools: {},
+    extensions: {
+      [ATTRIBUTION_EXTENSION_ID]: {
+        version: ATTRIBUTION_EXTENSION_VERSION,
+        signs: ['observation', 'annotation', 'revision'],
+        receipts: ['token', 'record'],
+      },
+    },
+  }
+  const instructions =
+    'atribd: one local daemon exposing all seven atrib cognitive primitives. ' +
+    'Pass context_id explicitly on every write-primitive call over HTTP.'
   const server = new ModernServer(
     {
       name: 'atribd',
       version: readPackageVersion(),
     },
     {
-      capabilities: {
-        tools: {},
-        extensions: {
-          [ATTRIBUTION_EXTENSION_ID]: {
-            version: ATTRIBUTION_EXTENSION_VERSION,
-            signs: ['observation', 'annotation', 'revision'],
-            receipts: ['token', 'record'],
-          },
-        },
-      },
-      instructions:
-        'atribd: one local daemon exposing all seven atrib cognitive primitives. ' +
-        'Pass context_id explicitly on every write-primitive call over HTTP.',
+      capabilities,
+      instructions,
     },
   )
+
+  server.setRequestHandler('server/discover', async () => ({
+    ttlMs: 0,
+    cacheScope: 'private',
+    supportedVersions: ['2026-07-28'],
+    capabilities,
+    instructions,
+  }))
 
   server.setRequestHandler('tools/list', async () => {
     const backend = await options.getBackend()

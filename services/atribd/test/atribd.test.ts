@@ -10,8 +10,8 @@ import {
   Client as ModernClient,
   StreamableHTTPClientTransport as ModernStreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client'
+import { StdioClientTransport as ModernStdioClientTransport } from '@modelcontextprotocol/client/stdio'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
@@ -50,6 +50,7 @@ const EXPECTED_TOOL_NAMES = [
 
 const CONTEXT_A = 'a'.repeat(32)
 const CONTEXT_B = 'b'.repeat(32)
+const TEST_PRIVATE_KEY = Buffer.from(new Uint8Array(32).fill(29)).toString('base64url')
 
 function processEnvWith(env: NodeJS.ProcessEnv): Record<string, string> {
   const merged: Record<string, string> = {}
@@ -944,15 +945,20 @@ describe('atribd real primitive mounts', () => {
     'lists every cognitive primitive tool from one stdio process',
     { timeout: 30_000 },
     async () => {
-      const transport = new StdioClientTransport({
+      const transport = new ModernStdioClientTransport({
         command: 'node',
         args: [BINARY],
         env: processEnvWith({ ATRIB_RECORD_FILE: recordFile }),
         stderr: 'pipe',
       })
-      const client = new Client({ name: 'atribd-stdio-test', version: '0.0.0' })
+      const client = new ModernClient(
+        { name: 'atribd-v2-stdio-test', version: '0.0.0' },
+        { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+      )
       try {
         await client.connect(transport)
+        expect(client.getProtocolEra()).toBe('modern')
+        expect(client.getNegotiatedProtocolVersion()).toBe('2026-07-28')
         const listed = await client.listTools()
         expect(listed.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
       } finally {
@@ -1007,6 +1013,7 @@ describe('atribd real primitive mounts', () => {
     async () => {
       const host = await startHttpHostProcess({
         ATRIB_AGENT: 'test-agent',
+        ATRIB_PRIVATE_KEY: TEST_PRIVATE_KEY,
         ATRIB_RECORD_FILE: recordFile,
       })
       try {
@@ -1066,15 +1073,20 @@ describe('atribd real primitive mounts', () => {
       ATRIB_RECORD_FILE: recordFile,
     })
     try {
-      const transport = new StdioClientTransport({
+      const transport = new ModernStdioClientTransport({
         command: 'node',
         args: [BINARY, '--transport', 'stdio-http-proxy', '--endpoint', host.endpoint],
         env: processEnvWith({ ATRIB_RECORD_FILE: recordFile }),
         stderr: 'pipe',
       })
-      const client = new Client({ name: 'atribd-proxy-test', version: '0.0.0' })
+      const client = new ModernClient(
+        { name: 'atribd-v2-proxy-test', version: '0.0.0' },
+        { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+      )
       try {
         await client.connect(transport)
+        expect(client.getProtocolEra()).toBe('modern')
+        expect(client.getNegotiatedProtocolVersion()).toBe('2026-07-28')
         const listed = await client.listTools()
         expect(listed.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
         const result = await client.callTool({

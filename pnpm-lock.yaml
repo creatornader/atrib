@@ -1081,6 +1081,9 @@ importers:
       '@atrib/verify':
         specifier: workspace:*
         version: link:../../packages/verify
+      '@modelcontextprotocol/client':
+        specifier: ^2.0.0
+        version: 2.0.0
       '@modelcontextprotocol/node':
         specifier: ^2.0.0
         version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.31)
@@ -1091,9 +1094,6 @@ importers:
         specifier: ^2.0.0
         version: 2.0.0
     devDependencies:
-      '@modelcontextprotocol/client':
-        specifier: ^2.0.0
-        version: 2.0.0
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
