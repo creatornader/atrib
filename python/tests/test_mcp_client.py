@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import json
+import socketserver
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import cast
 
@@ -94,13 +95,18 @@ class _Handler(BaseHTTPRequestHandler):
         return
 
 
+class _ThreadingServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
 @contextmanager
 def _server(
     *, use_sse: bool = False
 ) -> Iterator[tuple[str, list[tuple[dict[str, str], dict[str, object]]]]]:
     _Handler.requests = []
     _Handler.use_sse = use_sse
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = _ThreadingServer(("127.0.0.1", 0), _Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
