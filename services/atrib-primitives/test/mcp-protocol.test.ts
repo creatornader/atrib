@@ -83,6 +83,21 @@ function testPrivateKey(): string {
   return Buffer.from(new Uint8Array(32).fill(13)).toString('base64url')
 }
 
+function fixedHealthProbeCollisionRecord(): string {
+  return `${JSON.stringify({
+    record: {
+      spec_version: 'atrib/1.0',
+      content_id: `sha256:${'a'.repeat(64)}`,
+      creator_key: 'k'.repeat(43),
+      chain_root: `sha256:${'0'.repeat(64)}`,
+      event_type: 'https://atrib.dev/v1/types/observation',
+      context_id: 'f'.repeat(32),
+      timestamp: 1,
+      signature: 's'.repeat(86),
+    },
+  })}\n`
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
 }
@@ -337,196 +352,218 @@ afterEach(() => {
 })
 
 describe('atrib-primitives MCP runtime', () => {
-  it('lists every cognitive primitive tool from one stdio process', { timeout: 30_000 }, async () => {
-    const client = await connectStdioClient({ ATRIB_RECORD_FILE: recordFile })
-    try {
-      const listed = await client.listTools()
-      const tools = listed.tools
-      expect(tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
-    } finally {
-      await client.close()
-    }
-  })
-
-  it('routes a child primitive tool call through the combined server', { timeout: 30_000 }, async () => {
-    const client = await connectStdioClient({ ATRIB_RECORD_FILE: recordFile })
-    try {
-      const result = await client.callTool({
-        name: 'recall_my_attribution_history',
-        arguments: { compact: true },
-      })
-      const payload = JSON.parse(result.content[0]!.text) as { total: number; returned: number }
-      expect(payload.total).toBe(0)
-      expect(payload.returned).toBe(0)
-    } finally {
-      await client.close()
-    }
-  })
-
-  it('surfaces write-primitive refusals as MCP tool errors through the combined server', { timeout: 30_000 }, async () => {
-    const refusalEnv = {
-      HOME: tmp,
-      ATRIB_RECORD_FILE: recordFile,
-      ATRIB_MIRROR_FILE: recordFile,
-      ATRIB_PRIVATE_KEY: testPrivateKey(),
-      ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID: '1',
-      ATRIB_CONTEXT_ID: '',
-      CLAUDE_CODE_SESSION_ID: '',
-      CODEX_THREAD_ID: '',
-      ATRIB_ACTIVE_SESSION_PROFILE: '',
-      ATRIB_AGENT: '',
-    }
-    const validHash = `sha256:${'a'.repeat(64)}`
-    const client = await connectStdioClient(refusalEnv)
-    try {
-      const cases = [
-        {
-          name: 'emit',
-          arguments: {
-            event_type: 'https://atrib.dev/v1/types/observation',
-            content: { what: 'primitive refusal emit' },
-          },
-        },
-        {
-          name: 'atrib-annotate',
-          arguments: {
-            annotates: validHash,
-            importance: 'high',
-            summary: 'primitive refusal annotate',
-          },
-        },
-        {
-          name: 'atrib-revise',
-          arguments: {
-            revises: validHash,
-            prior_position: 'old position',
-            new_position: 'new position',
-            reason: 'primitive refusal revise',
-          },
-        },
-      ]
-
-      for (const testCase of cases) {
-        const result = await client.callTool(testCase)
-        expect(result.isError).toBe(true)
-        expect(result.content[0]?.type).toBe('text')
-        expect(result.content[0]?.text).toContain(
-          'context_id is required by ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID; no record signed',
-        )
-      }
-    } finally {
-      await client.close()
-    }
-  })
-
-  it('proxies stdio clients into a host-owned Streamable HTTP runtime', { timeout: 30_000 }, async () => {
-    const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
-    try {
-      const client = await connectProxyClient(host.endpoint, {
-        ATRIB_RECORD_FILE: recordFile,
-      })
+  it(
+    'lists every cognitive primitive tool from one stdio process',
+    { timeout: 30_000 },
+    async () => {
+      const client = await connectStdioClient({ ATRIB_RECORD_FILE: recordFile })
       try {
         const listed = await client.listTools()
-        expect(listed.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+        const tools = listed.tools
+        expect(tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+      } finally {
+        await client.close()
+      }
+    },
+  )
+
+  it(
+    'routes a child primitive tool call through the combined server',
+    { timeout: 30_000 },
+    async () => {
+      const client = await connectStdioClient({ ATRIB_RECORD_FILE: recordFile })
+      try {
         const result = await client.callTool({
           name: 'recall_my_attribution_history',
           arguments: { compact: true },
         })
-        const payload = JSON.parse(result.content[0]!.text) as {
-          total: number
-          returned: number
-        }
+        const payload = JSON.parse(result.content[0]!.text) as { total: number; returned: number }
         expect(payload.total).toBe(0)
         expect(payload.returned).toBe(0)
       } finally {
         await client.close()
       }
-    } finally {
-      await host.close()
-    }
-  })
+    },
+  )
 
-  it('answers health while the shared HTTP backend is still mounting', { timeout: 30_000 }, async () => {
-    let releaseBackend!: () => void
-    const backendGate = new Promise<void>((resolveBackend) => {
-      releaseBackend = resolveBackend
-    })
-    const host = await bindAtribPrimitivesHttpHost({
-      port: 0,
-      backendFactory: async () => {
-        await backendGate
-        return fakeBackend()
-      },
-    })
-    try {
-      const starting = await fetch(host.healthEndpoint)
-      expect(starting.status).toBe(503)
-      const startingPayload = (await starting.json()) as {
-        status?: string
-        report?: { daemon?: { backend?: string; tool_count?: number } }
+  it(
+    'surfaces write-primitive refusals as MCP tool errors through the combined server',
+    { timeout: 30_000 },
+    async () => {
+      const refusalEnv = {
+        HOME: tmp,
+        ATRIB_RECORD_FILE: recordFile,
+        ATRIB_MIRROR_FILE: recordFile,
+        ATRIB_PRIVATE_KEY: testPrivateKey(),
+        ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID: '1',
+        ATRIB_CONTEXT_ID: '',
+        CLAUDE_CODE_SESSION_ID: '',
+        CODEX_THREAD_ID: '',
+        ATRIB_ACTIVE_SESSION_PROFILE: '',
+        ATRIB_AGENT: '',
       }
-      expect(startingPayload.status).toBe('starting')
-      expect(startingPayload.report?.daemon?.backend).toBe('starting')
-      expect(startingPayload.report?.daemon?.tool_count).toBe(0)
+      const validHash = `sha256:${'a'.repeat(64)}`
+      const client = await connectStdioClient(refusalEnv)
+      try {
+        const cases = [
+          {
+            name: 'emit',
+            arguments: {
+              event_type: 'https://atrib.dev/v1/types/observation',
+              content: { what: 'primitive refusal emit' },
+            },
+          },
+          {
+            name: 'atrib-annotate',
+            arguments: {
+              annotates: validHash,
+              importance: 'high',
+              summary: 'primitive refusal annotate',
+            },
+          },
+          {
+            name: 'atrib-revise',
+            arguments: {
+              revises: validHash,
+              prior_position: 'old position',
+              new_position: 'new position',
+              reason: 'primitive refusal revise',
+            },
+          },
+        ]
 
-      releaseBackend()
-      for (let i = 0; i < 20; i += 1) {
-        const ready = await fetch(host.healthEndpoint)
-        if (ready.ok) {
-          const readyPayload = (await ready.json()) as {
-            status?: string
-            report?: { daemon?: { backend?: string } }
-          }
-          expect(readyPayload.status).toBe('healthy')
-          expect(readyPayload.report?.daemon?.backend).toBe('shared')
-          return
+        for (const testCase of cases) {
+          const result = await client.callTool(testCase)
+          expect(result.isError).toBe(true)
+          expect(result.content[0]?.type).toBe('text')
+          expect(result.content[0]?.text).toContain(
+            'context_id is required by ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID; no record signed',
+          )
         }
-        await delay(10)
+      } finally {
+        await client.close()
       }
-      throw new Error('backend did not report healthy')
-    } finally {
-      await host.close()
-    }
-  })
+    },
+  )
 
-  it('degrades health when mounted recall lacks the content-index contract', { timeout: 30_000 }, async () => {
-    const backend = {
-      ...fakeBackend(),
-      runtimeContracts: () => ({
-        ...fakeRuntimeContracts(),
-        recall_content: {
-          status: 'fail' as const,
-          package: '@atrib/recall',
-          runtime_metadata_available: false,
-          expected_coverage_version: 'coverage-v1',
-          expected_content_index_version: 'content-index-v1',
-          reason: '@atrib/recall does not export getAtribRecallRuntimeContract',
+  it(
+    'proxies stdio clients into a host-owned Streamable HTTP runtime',
+    { timeout: 30_000 },
+    async () => {
+      const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
+      try {
+        const client = await connectProxyClient(host.endpoint, {
+          ATRIB_RECORD_FILE: recordFile,
+        })
+        try {
+          const listed = await client.listTools()
+          expect(listed.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+          const result = await client.callTool({
+            name: 'recall_my_attribution_history',
+            arguments: { compact: true },
+          })
+          const payload = JSON.parse(result.content[0]!.text) as {
+            total: number
+            returned: number
+          }
+          expect(payload.total).toBe(0)
+          expect(payload.returned).toBe(0)
+        } finally {
+          await client.close()
+        }
+      } finally {
+        await host.close()
+      }
+    },
+  )
+
+  it(
+    'answers health while the shared HTTP backend is still mounting',
+    { timeout: 30_000 },
+    async () => {
+      let releaseBackend!: () => void
+      const backendGate = new Promise<void>((resolveBackend) => {
+        releaseBackend = resolveBackend
+      })
+      const host = await bindAtribPrimitivesHttpHost({
+        port: 0,
+        backendFactory: async () => {
+          await backendGate
+          return fakeBackend()
         },
-      }),
-    }
-    const host = await bindAtribPrimitivesHttpHost({
-      port: 0,
-      backendFactory: async () => backend,
-    })
-    try {
-      const health = (await (await fetch(host.healthEndpoint)).json()) as {
-        status?: string
-        report?: {
-          recall_contract?: {
-            status?: string
-            reason?: string
+      })
+      try {
+        const starting = await fetch(host.healthEndpoint)
+        expect(starting.status).toBe(503)
+        const startingPayload = (await starting.json()) as {
+          status?: string
+          report?: { daemon?: { backend?: string; tool_count?: number } }
+        }
+        expect(startingPayload.status).toBe('starting')
+        expect(startingPayload.report?.daemon?.backend).toBe('starting')
+        expect(startingPayload.report?.daemon?.tool_count).toBe(0)
+
+        releaseBackend()
+        for (let i = 0; i < 20; i += 1) {
+          const ready = await fetch(host.healthEndpoint)
+          if (ready.ok) {
+            const readyPayload = (await ready.json()) as {
+              status?: string
+              report?: { daemon?: { backend?: string } }
+            }
+            expect(readyPayload.status).toBe('healthy')
+            expect(readyPayload.report?.daemon?.backend).toBe('shared')
+            return
+          }
+          await delay(10)
+        }
+        throw new Error('backend did not report healthy')
+      } finally {
+        await host.close()
+      }
+    },
+  )
+
+  it(
+    'degrades health when mounted recall lacks the content-index contract',
+    { timeout: 30_000 },
+    async () => {
+      const backend = {
+        ...fakeBackend(),
+        runtimeContracts: () => ({
+          ...fakeRuntimeContracts(),
+          recall_content: {
+            status: 'fail' as const,
+            package: '@atrib/recall',
+            runtime_metadata_available: false,
+            expected_coverage_version: 'coverage-v1',
+            expected_content_index_version: 'content-index-v1',
+            reason: '@atrib/recall does not export getAtribRecallRuntimeContract',
+          },
+        }),
+      }
+      const host = await bindAtribPrimitivesHttpHost({
+        port: 0,
+        backendFactory: async () => backend,
+      })
+      try {
+        const health = (await (await fetch(host.healthEndpoint)).json()) as {
+          status?: string
+          report?: {
+            recall_contract?: {
+              status?: string
+              reason?: string
+            }
           }
         }
+        expect(health.status).toBe('degraded')
+        expect(health.report?.recall_contract?.status).toBe('fail')
+        expect(health.report?.recall_contract?.reason).toContain('getAtribRecallRuntimeContract')
+      } finally {
+        await host.close()
       }
-      expect(health.status).toBe('degraded')
-      expect(health.report?.recall_contract?.status).toBe('fail')
-      expect(health.report?.recall_contract?.reason).toContain(
-        'getAtribRecallRuntimeContract',
-      )
-    } finally {
-      await host.close()
-    }
-  })
+    },
+  )
 
   it('times out hung primitive calls and exposes in-flight diagnostics', async () => {
     let releaseTool!: () => void
@@ -605,87 +642,166 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('serves the same tools from one host-owned Streamable HTTP process', { timeout: 30_000 }, async () => {
-    const host = await startHttpHost({
-      ATRIB_AGENT: 'test-agent',
-      ATRIB_RECORD_FILE: recordFile,
-      ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID: '1',
-    })
-    try {
-      const health = (await (await fetch(host.healthEndpoint)).json()) as {
-        status?: string
-        report?: {
-          daemon?: {
-            backend?: string
-            mounted_primitive_count?: number
-            tool_count?: number
-            transport?: string
-          }
-          recall_contract?: { status?: string; content_index_version?: string }
-          primitive_contracts?: Record<
-            string,
-            {
-              status?: string
-              package?: string
-              mounted_tools?: string[]
-              mutates_log_on_call?: boolean
-            }
-          >
-          behavioral_probes?: Record<
-            string,
-            {
-              status?: string
-              probe_kind?: string
-              mutates_log_on_call?: boolean
-              reason?: string
-            }
-          >
-          profile?: {
-            agent?: string
-            context_id_policy?: string
-            requires_explicit_context_id?: boolean
-          }
-          requests?: { served?: number }
-        }
-      }
-      expect(health.status).toBe('healthy')
-      expect(health.report?.daemon?.transport).toBe('streamable-http-stateless')
-      expect(health.report?.daemon?.backend).toBe('shared')
-      expect(health.report?.daemon?.mounted_primitive_count).toBe(3)
-      expect(health.report?.daemon?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
-      expect(health.report?.recall_contract?.status).toBe('pass')
-      expect(health.report?.recall_contract?.content_index_version).toBe(
-        'content-index-v1',
-      )
-      const primitiveContracts = health.report?.primitive_contracts ?? {}
-      expect(Object.keys(primitiveContracts).sort()).toEqual(
-        Object.keys(EXPECTED_PRIMITIVE_CONTRACTS).sort(),
-      )
-      for (const [primitive, expected] of Object.entries(EXPECTED_PRIMITIVE_CONTRACTS)) {
-        expect(primitiveContracts[primitive]?.status).toBe('pass')
-        expect(primitiveContracts[primitive]?.package).toBe(expected.package)
-        expect(primitiveContracts[primitive]?.mounted_tools?.sort()).toEqual(expected.tools)
-        expect(primitiveContracts[primitive]?.mutates_log_on_call).toBe(expected.mutates)
-      }
-      const behavioralProbes = health.report?.behavioral_probes ?? {}
-      expect(Object.keys(behavioralProbes).sort()).toEqual(
-        Object.keys(EXPECTED_PRIMITIVE_CONTRACTS).sort(),
-      )
-      for (const primitive of ['recall', 'summarize']) {
-        expect(behavioralProbes[primitive]?.status).toBe('pass')
-      }
-      expect(behavioralProbes['attest']?.status).toBe('skipped')
-      expect(behavioralProbes['attest']?.reason).toContain('validate-only')
-      expect(health.report?.profile?.agent).toBe('test-agent')
-      expect(health.report?.profile?.context_id_policy).toBe('explicit-required')
-      expect(health.report?.profile?.requires_explicit_context_id).toBe(true)
-      expect(health.report?.requests?.served).toBe(0)
-
-      const client = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test')
+  it(
+    'serves the same tools from one host-owned Streamable HTTP process',
+    { timeout: 30_000 },
+    async () => {
+      const host = await startHttpHost({
+        ATRIB_AGENT: 'test-agent',
+        ATRIB_RECORD_FILE: recordFile,
+        ATRIB_REQUIRE_EXPLICIT_CONTEXT_ID: '1',
+      })
       try {
-        const listed = await client.listTools()
-        expect(listed.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
-        const result = await client.callTool({
+        const health = (await (await fetch(host.healthEndpoint)).json()) as {
+          status?: string
+          report?: {
+            daemon?: {
+              backend?: string
+              mounted_primitive_count?: number
+              tool_count?: number
+              transport?: string
+            }
+            recall_contract?: { status?: string; content_index_version?: string }
+            primitive_contracts?: Record<
+              string,
+              {
+                status?: string
+                package?: string
+                mounted_tools?: string[]
+                mutates_log_on_call?: boolean
+              }
+            >
+            behavioral_probes?: Record<
+              string,
+              {
+                status?: string
+                probe_kind?: string
+                mutates_log_on_call?: boolean
+                reason?: string
+              }
+            >
+            profile?: {
+              agent?: string
+              context_id_policy?: string
+              requires_explicit_context_id?: boolean
+            }
+            requests?: { served?: number }
+          }
+        }
+        expect(health.status).toBe('healthy')
+        expect(health.report?.daemon?.transport).toBe('streamable-http-stateless')
+        expect(health.report?.daemon?.backend).toBe('shared')
+        expect(health.report?.daemon?.mounted_primitive_count).toBe(3)
+        expect(health.report?.daemon?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
+        expect(health.report?.recall_contract?.status).toBe('pass')
+        expect(health.report?.recall_contract?.content_index_version).toBe('content-index-v1')
+        const primitiveContracts = health.report?.primitive_contracts ?? {}
+        expect(Object.keys(primitiveContracts).sort()).toEqual(
+          Object.keys(EXPECTED_PRIMITIVE_CONTRACTS).sort(),
+        )
+        for (const [primitive, expected] of Object.entries(EXPECTED_PRIMITIVE_CONTRACTS)) {
+          expect(primitiveContracts[primitive]?.status).toBe('pass')
+          expect(primitiveContracts[primitive]?.package).toBe(expected.package)
+          expect(primitiveContracts[primitive]?.mounted_tools?.sort()).toEqual(expected.tools)
+          expect(primitiveContracts[primitive]?.mutates_log_on_call).toBe(expected.mutates)
+        }
+        const behavioralProbes = health.report?.behavioral_probes ?? {}
+        expect(Object.keys(behavioralProbes).sort()).toEqual(
+          Object.keys(EXPECTED_PRIMITIVE_CONTRACTS).sort(),
+        )
+        for (const primitive of ['recall', 'summarize']) {
+          expect(behavioralProbes[primitive]?.status).toBe('pass')
+        }
+        expect(behavioralProbes['attest']?.status).toBe('skipped')
+        expect(behavioralProbes['attest']?.reason).toContain('validate-only')
+        expect(health.report?.profile?.agent).toBe('test-agent')
+        expect(health.report?.profile?.context_id_policy).toBe('explicit-required')
+        expect(health.report?.profile?.requires_explicit_context_id).toBe(true)
+        expect(health.report?.requests?.served).toBe(0)
+
+        const client = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test')
+        try {
+          const listed = await client.listTools()
+          expect(listed.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+          const result = await client.callTool({
+            name: 'recall_my_attribution_history',
+            arguments: { compact: true },
+          })
+          const payload = JSON.parse(result.content[0]!.text) as {
+            total: number
+            returned: number
+          }
+          expect(payload.total).toBe(0)
+          expect(payload.returned).toBe(0)
+        } finally {
+          await client.close()
+        }
+      } finally {
+        await host.close()
+      }
+    },
+  )
+
+  it(
+    'keeps health independent from a valid record using the old fixed probe context',
+    { timeout: 30_000 },
+    async () => {
+      writeFileSync(recordFile, fixedHealthProbeCollisionRecord())
+      const host = await startHttpHost({
+        ATRIB_AGENT: 'test-agent',
+        ATRIB_RECORD_FILE: recordFile,
+        ATRIB_RECORDS_DIR: tmp,
+        ATRIB_SUMMARIZE_API_KEY: 'health-probe-test-key',
+      })
+      try {
+        const health = (await (await fetch(host.healthEndpoint)).json()) as {
+          status?: string
+          report?: { behavioral_probes?: Record<string, { status?: string }> }
+        }
+        expect(health.status).toBe('healthy')
+        expect(health.report?.behavioral_probes?.['summarize']?.status).toBe('pass')
+      } finally {
+        await host.close()
+      }
+    },
+  )
+
+  it(
+    'shares one mounted primitive backend across stateless requests',
+    { timeout: 30_000 },
+    async () => {
+      const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
+      let first: Client | undefined
+      let second: Client | undefined
+      try {
+        first = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test-a')
+        second = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test-b')
+
+        const health = (await (await fetch(host.healthEndpoint)).json()) as {
+          report?: {
+            daemon?: {
+              backend?: string
+              mounted_primitive_count?: number
+              tool_count?: number
+            }
+            requests?: {
+              served?: number
+            }
+          }
+        }
+        expect(health.report?.daemon?.backend).toBe('shared')
+        expect(health.report?.daemon?.mounted_primitive_count).toBe(3)
+        expect(health.report?.daemon?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
+        expect(health.report?.requests?.served).toBeGreaterThanOrEqual(2)
+
+        const [firstTools, secondTools] = await Promise.all([first.listTools(), second.listTools()])
+        expect(firstTools.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+        expect(secondTools.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
+
+        await first.close()
+        first = undefined
+
+        const result = await second.callTool({
           name: 'recall_my_attribution_history',
           arguments: { compact: true },
         })
@@ -696,61 +812,12 @@ describe('atrib-primitives MCP runtime', () => {
         expect(payload.total).toBe(0)
         expect(payload.returned).toBe(0)
       } finally {
-        await client.close()
+        await first?.close().catch(() => {})
+        await second?.close().catch(() => {})
+        await host.close()
       }
-    } finally {
-      await host.close()
-    }
-  })
-
-  it('shares one mounted primitive backend across stateless requests', { timeout: 30_000 }, async () => {
-    const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
-    let first: Client | undefined
-    let second: Client | undefined
-    try {
-      first = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test-a')
-      second = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test-b')
-
-      const health = (await (await fetch(host.healthEndpoint)).json()) as {
-        report?: {
-          daemon?: {
-            backend?: string
-            mounted_primitive_count?: number
-            tool_count?: number
-          }
-          requests?: {
-            served?: number
-          }
-        }
-      }
-      expect(health.report?.daemon?.backend).toBe('shared')
-      expect(health.report?.daemon?.mounted_primitive_count).toBe(3)
-      expect(health.report?.daemon?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
-      expect(health.report?.requests?.served).toBeGreaterThanOrEqual(2)
-
-      const [firstTools, secondTools] = await Promise.all([first.listTools(), second.listTools()])
-      expect(firstTools.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
-      expect(secondTools.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
-
-      await first.close()
-      first = undefined
-
-      const result = await second.callTool({
-        name: 'recall_my_attribution_history',
-        arguments: { compact: true },
-      })
-      const payload = JSON.parse(result.content[0]!.text) as {
-        total: number
-        returned: number
-      }
-      expect(payload.total).toBe(0)
-      expect(payload.returned).toBe(0)
-    } finally {
-      await first?.close().catch(() => {})
-      await second?.close().catch(() => {})
-      await host.close()
-    }
-  })
+    },
+  )
 
   it('normalizes repeated trailing slashes in the HTTP path', { timeout: 30_000 }, async () => {
     const host = await startHttpHost({ ATRIB_RECORD_FILE: recordFile }, 'nested/mcp////')

@@ -1,29 +1,34 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/client'
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 
-const SERVICES_DIR = resolve(__dirname, '..', '..')
-const STANDALONE_SERVERS = [
-  ['@atrib/attest', 'atrib-attest/dist/main.js'],
-  ['@atrib/emit', 'atrib-emit/dist/main.js'],
-  ['@atrib/annotate', 'atrib-annotate/dist/main.js'],
-  ['@atrib/revise', 'atrib-revise/dist/main.js'],
-  ['@atrib/recall', 'atrib-recall/dist/index.js'],
-  ['@atrib/summarize', 'atrib-summarize/dist/main.js'],
-  ['@atrib/trace', 'atrib-trace/dist/main.js'],
-  ['@atrib/verify-mcp', 'atrib-verify/dist/main.js'],
-  ['@atrib/primitives-runtime', 'atrib-primitives/dist/index.js'],
-] as const
+const ROOT = resolve(__dirname, '..', '..', '..')
+const PROCESS_PROOF = 'services/atrib-primitives/test/standalone-v2.test.ts'
+const inventory = JSON.parse(
+  readFileSync(resolve(ROOT, 'scripts', 'mcp-v2-owned-surfaces.json'), 'utf8'),
+) as {
+  surfaces: Array<{
+    package: string
+    workspace: string
+    entrypoint: string
+    transport: string
+    process_proof: string
+  }>
+}
+const STANDALONE_SERVERS = inventory.surfaces.filter(
+  (surface) => surface.process_proof === PROCESS_PROOF && surface.transport === 'stdio',
+)
 
 describe('standalone MCP v2 entry points', () => {
-  for (const [packageName, relativeBinary] of STANDALONE_SERVERS) {
-    it(`negotiates 2026-07-28 with ${packageName}`, { timeout: 30_000 }, async () => {
+  for (const surface of STANDALONE_SERVERS) {
+    it(`negotiates 2026-07-28 with ${surface.package}`, { timeout: 30_000 }, async () => {
       const transport = new StdioClientTransport({
         command: 'node',
-        args: [resolve(SERVICES_DIR, relativeBinary)],
+        args: [resolve(ROOT, surface.workspace, surface.entrypoint)],
         env: {
           ...process.env,
           ATRIB_RECORD_FILE: resolve(__dirname, 'standalone-v2-records.jsonl'),

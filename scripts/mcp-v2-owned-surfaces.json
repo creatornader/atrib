@@ -1,0 +1,218 @@
+{
+  "schema": "atrib.mcp-v2-owned-surfaces.v1",
+  "protocol_version": "2026-07-28",
+  "surfaces": [
+    {
+      "id": "attest-stdio",
+      "package": "@atrib/attest",
+      "workspace": "services/atrib-attest",
+      "bin": "atrib-attest",
+      "entrypoint": "dist/main.js",
+      "source": "src/main.ts",
+      "artifact_file": "dist/main.js",
+      "transport": "stdio",
+      "published": true,
+      "process_proof": "services/atrib-primitives/test/standalone-v2.test.ts",
+      "require": ["@modelcontextprotocol/server/stdio", "serveStdio("],
+      "forbid": ["StdioServerTransport", "server.connect("]
+    },
+    {
+      "id": "emit-stdio",
+      "package": "@atrib/emit",
+      "workspace": "services/atrib-emit",
+      "bin": "atrib-emit",
+      "entrypoint": "dist/main.js",
+      "source": "src/main.ts",
+      "artifact_file": "dist/main.js",
+      "transport": "stdio",
+      "published": true,
+      "process_proof": "services/atrib-primitives/test/standalone-v2.test.ts",
+      "require": ["@modelcontextprotocol/server/stdio", "serveStdio("],
+      "forbid": ["StdioServerTransport", "server.connect("]
+    },
+    {
+      "id": "annotate-stdio",
+      "package": "@atrib/annotate",
+      "workspace": "services/atrib-annotate",
+      "bin": "atrib-annotate",
+      "entrypoint": "dist/main.js",
+      "source": "src/main.ts",
+      "artifact_file": "dist/main.js",
+      "transport": "stdio",
+      "published": true,
+      "process_proof": "services/atrib-primitives/test/standalone-v2.test.ts",
+      "require": ["@modelcontextprotocol/server/stdio", "serveStdio("],
+      "forbid": ["StdioServerTransport", "server.connect("]
+    },
+    {
+      "id": "revise-stdio",
+      "package": "@atrib/revise",
+      "workspace": "services/atrib-revise",
+      "bin": "atrib-revise",
+      "entrypoint": "dist/main.js",
+      "source": "src/main.ts",
+      "artifact_file": "dist/main.js",
+      "transport": "stdio",
+      "published": true,
+      "process_proof": "services/atrib-primitives/test/standalone-v2.test.ts",
+      "require": ["@modelcontextprotocol/server/stdio", "serveStdio("],
+      "forbid": ["StdioServerTransport", "server.connect("]
+    },
+    {
+      "id": "recall-stdio",
+      "package": "@atrib/recall",
+      "workspace": "services/atrib-recall",
+      "bin": "atrib-recall",
+      "entrypoint": "dist/index.js",
+      "source": "src/index.ts",
+      "artifact_file": "dist/index.js",
+      "transport": "stdio",
+      "published": true,
+      "process_proof": "services/atrib-primitives/test/standalone-v2.test.ts",
+      "require": ["@modelcontextprotocol/server/stdio", "serveStdio("],
+      "forbid": ["StdioServerTransport", "mcp.connect("]
+    },
+    {
+      "id": "summarize-stdio",
+      "package": "@atrib/summarize",
+      "workspace": "services/atrib-summarize",
+      "bin": "atrib-summarize",
+      "entrypoint": "dist/main.js",
+      "source": "src/main.ts",
+      "artifact_file": "dist/main.js",
+      "transport": "stdio",
+      "published": true,
+      "process_proof": "services/atrib-primitives/test/standalone-v2.test.ts",
+      "require": ["@modelcontextprotocol/server/stdio", "serveStdio("],
+      "forbid": ["StdioServerTransport", "server.connect("]
+    },
+    {
+      "id": "trace-stdio",
+      "package": "@atrib/trace",
+      "workspace": "services/atrib-trace",
+      "bin": "atrib-trace",
+      "entrypoint": "dist/main.js",
+      "source": "src/main.ts",
+      "artifact_file": "dist/main.js",
+      "transport": "stdio",
+      "published": true,
+      "process_proof": "services/atrib-primitives/test/standalone-v2.test.ts",
+      "require": ["@modelcontextprotocol/server/stdio", "serveStdio("],
+      "forbid": ["StdioServerTransport", "server.connect("]
+    },
+    {
+      "id": "verify-mcp-stdio",
+      "package": "@atrib/verify-mcp",
+      "workspace": "services/atrib-verify",
+      "bin": "atrib-verify",
+      "entrypoint": "dist/main.js",
+      "source": "src/main.ts",
+      "artifact_file": "dist/main.js",
+      "transport": "stdio",
+      "published": true,
+      "process_proof": "services/atrib-primitives/test/standalone-v2.test.ts",
+      "require": ["@modelcontextprotocol/server/stdio", "serveStdio("],
+      "forbid": ["StdioServerTransport", "server.connect("]
+    },
+    {
+      "id": "primitives-runtime-stdio",
+      "package": "@atrib/primitives-runtime",
+      "workspace": "services/atrib-primitives",
+      "bin": "atrib-primitives",
+      "entrypoint": "dist/index.js",
+      "source": "src/index.ts",
+      "artifact_file": "dist/index.js",
+      "transport": "stdio",
+      "published": false,
+      "process_proof": "services/atrib-primitives/test/standalone-v2.test.ts",
+      "require": ["@modelcontextprotocol/server/stdio", "serveStdio("],
+      "forbid": ["StdioServerTransport", "runtime.server.connect("]
+    },
+    {
+      "id": "atribd-stdio",
+      "package": "@atrib/daemon",
+      "workspace": "services/atribd",
+      "bin": "atribd",
+      "entrypoint": "dist/index.js",
+      "source": "src/index.ts",
+      "artifact_file": "dist/index.js",
+      "transport": "stdio",
+      "published": true,
+      "process_proof": "services/atribd/test/atribd.test.ts",
+      "require": ["@modelcontextprotocol/server/stdio", "serveStdio("],
+      "forbid": ["StdioServerTransport", "runtime.server.connect("]
+    },
+    {
+      "id": "atribd-streamable-http",
+      "package": "@atrib/daemon",
+      "workspace": "services/atribd",
+      "bin": "atribd",
+      "entrypoint": "dist/index.js",
+      "source": "src/transport-adapter.ts",
+      "artifact_file": "dist/transport-adapter.js",
+      "transport": "streamable-http",
+      "published": true,
+      "process_proof": "services/atribd/test/atribd.test.ts",
+      "require": [
+        "MODERN_MCP_PROTOCOL_VERSION = '2026-07-28'",
+        "v2-dual-era-per-request",
+        "sessionIdGenerator: undefined"
+      ],
+      "forbid": ["new Map<string, StreamableHTTPServerTransport>"]
+    },
+    {
+      "id": "atribd-stdio-http-proxy",
+      "package": "@atrib/daemon",
+      "workspace": "services/atribd",
+      "bin": "atribd",
+      "entrypoint": "dist/index.js",
+      "source": "src/stdio.ts",
+      "artifact_file": "dist/stdio.js",
+      "transport": "stdio-http-proxy",
+      "published": true,
+      "process_proof": "services/atribd/test/atribd.test.ts",
+      "require": ["versionNegotiation: { mode: 'auto' }", "createAtribdHttpProxyRuntime"],
+      "forbid": ["@modelcontextprotocol/sdk/client"]
+    },
+    {
+      "id": "mcp-wrap-stdio",
+      "package": "@atrib/mcp-wrap",
+      "workspace": "packages/mcp-wrap",
+      "bin": "atrib-wrap",
+      "entrypoint": "dist/main.js",
+      "source": "src/main.ts",
+      "artifact_file": "dist/main.js",
+      "transport": "stdio",
+      "published": true,
+      "process_proof": "packages/mcp-wrap/test/stdio-v2.test.ts",
+      "require": ["@modelcontextprotocol/server/stdio", "serveStdio("],
+      "forbid": ["StdioServerTransport", "result.proxy.server.connect("]
+    }
+  ],
+  "excluded_fixtures": [
+    {
+      "path": "packages/integration/examples/firecrawl-web-ingestion/firecrawl-fixture-mcp.ts",
+      "reason": "Simulates an external upstream MCP server for wrapper and integration proofs."
+    },
+    {
+      "path": "packages/integration/examples/browserbase-stagehand/browserbase-fixture-mcp.ts",
+      "reason": "Simulates an external upstream MCP server for wrapper and integration proofs."
+    },
+    {
+      "path": "packages/integration/examples/graphiti/graphiti-fixture-mcp.ts",
+      "reason": "Simulates an external upstream MCP server for wrapper and integration proofs."
+    },
+    {
+      "path": "packages/integration/examples/openetr-transfer/openetr-fixture-mcp.ts",
+      "reason": "Simulates an external upstream MCP server for wrapper and integration proofs."
+    },
+    {
+      "path": "packages/integration/test/mcp-platform-proof-packets.test.ts",
+      "reason": "Creates a temporary external upstream fixture inside a timeout test."
+    },
+    {
+      "path": "packages/sdk/test/sdk-behavior.test.ts",
+      "reason": "Creates a test-only HTTP transport fixture for SDK behavior."
+    }
+  ]
+}

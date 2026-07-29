@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
@@ -25,7 +25,27 @@ import {
   type AtribdDiagnostics,
 } from '../src/index.js'
 
-const BINARY = resolve(__dirname, '..', 'dist', 'index.js')
+const ROOT = resolve(__dirname, '..', '..', '..')
+const PROCESS_PROOF = 'services/atribd/test/atribd.test.ts'
+const inventory = JSON.parse(
+  readFileSync(resolve(ROOT, 'scripts', 'mcp-v2-owned-surfaces.json'), 'utf8'),
+) as {
+  surfaces: Array<{
+    id: string
+    workspace: string
+    entrypoint: string
+    process_proof: string
+  }>
+}
+const ATTRIBD_SURFACES = inventory.surfaces.filter(
+  (surface) => surface.process_proof === PROCESS_PROOF,
+)
+expect(ATTRIBD_SURFACES.map((surface) => surface.id).sort()).toEqual([
+  'atribd-stdio',
+  'atribd-stdio-http-proxy',
+  'atribd-streamable-http',
+])
+const BINARY = resolve(ROOT, ATTRIBD_SURFACES[0].workspace, ATTRIBD_SURFACES[0].entrypoint)
 // The alias-window union: the fifteen legacy tool names plus the attest
 // (write) and recall (read) verbs, all served by three mounts.
 const EXPECTED_TOOL_NAMES = [
@@ -73,6 +93,21 @@ function fakePropagationToken(recordHashByte: number): string {
   return `${base64url(new Uint8Array(32).fill(recordHashByte))}.${base64url(
     new Uint8Array(32).fill(7),
   )}`
+}
+
+function fixedHealthProbeCollisionRecord(): string {
+  return `${JSON.stringify({
+    record: {
+      spec_version: 'atrib/1.0',
+      content_id: `sha256:${'a'.repeat(64)}`,
+      creator_key: 'k'.repeat(43),
+      chain_root: `sha256:${'0'.repeat(64)}`,
+      event_type: 'https://atrib.dev/v1/types/observation',
+      context_id: 'f'.repeat(32),
+      timestamp: 1,
+      signature: 's'.repeat(86),
+    },
+  })}\n`
 }
 
 function emptyDiagnostics(toolTimeoutMs = 45_000): AtribdDiagnostics {
@@ -1001,6 +1036,30 @@ describe('atribd real primitive mounts', () => {
         expect(payload.result?.tools?.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)
         expect(typeof payload.result?.ttlMs).toBe('number')
         expect(payload.result?.cacheScope).toBe('private')
+      } finally {
+        await host.close()
+      }
+    },
+  )
+
+  it(
+    'keeps health independent from a valid record using the old fixed probe context',
+    { timeout: 30_000 },
+    async () => {
+      writeFileSync(recordFile, fixedHealthProbeCollisionRecord())
+      const host = await startHttpHostProcess({
+        ATRIB_AGENT: 'test-agent',
+        ATRIB_RECORD_FILE: recordFile,
+        ATRIB_RECORDS_DIR: tmp,
+        ATRIB_SUMMARIZE_API_KEY: 'health-probe-test-key',
+      })
+      try {
+        const health = (await (await fetch(host.healthEndpoint)).json()) as {
+          status?: string
+          report?: { behavioral_probes?: Record<string, { status?: string }> }
+        }
+        expect(health.status).toBe('healthy')
+        expect(health.report?.behavioral_probes?.['summarize']?.status).toBe('pass')
       } finally {
         await host.close()
       }

@@ -1,12 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { randomBytes } from 'node:crypto'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Client } from '@modelcontextprotocol/client'
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 import { expect, it } from 'vitest'
+
+const ROOT = resolve(__dirname, '..', '..', '..')
+const inventory = JSON.parse(
+  readFileSync(resolve(ROOT, 'scripts', 'mcp-v2-owned-surfaces.json'), 'utf8'),
+) as {
+  surfaces: Array<{
+    id: string
+    workspace: string
+    entrypoint: string
+    process_proof: string
+  }>
+}
+const WRAPPER_SURFACE = inventory.surfaces.find((surface) => surface.id === 'mcp-wrap-stdio')
+if (
+  !WRAPPER_SURFACE ||
+  WRAPPER_SURFACE.process_proof !== 'packages/mcp-wrap/test/stdio-v2.test.ts'
+) {
+  throw new Error('mcp-wrap-stdio is missing its owned-surface process proof')
+}
 
 it('negotiates MCP 2026-07-28 on the wrapper stdio boundary', { timeout: 30_000 }, async () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'atrib-mcp-wrap-v2-'))
@@ -29,7 +48,7 @@ it('negotiates MCP 2026-07-28 on the wrapper stdio boundary', { timeout: 30_000 
 
   const transport = new StdioClientTransport({
     command: 'node',
-    args: [resolve(__dirname, '..', 'dist', 'main.js'), configPath],
+    args: [resolve(ROOT, WRAPPER_SURFACE.workspace, WRAPPER_SURFACE.entrypoint), configPath],
     env: {
       ...process.env,
       ATRIB_PRIVATE_KEY: randomBytes(32).toString('base64url'),

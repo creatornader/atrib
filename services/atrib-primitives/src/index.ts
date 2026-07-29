@@ -200,7 +200,9 @@ const MCP_REQUEST_TIMEOUT_CODE = -32001
 const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
 const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
 const HEALTH_PROBE_ABSENT_HASH = `sha256:${'f'.repeat(64)}`
-const HEALTH_PROBE_ABSENT_CONTEXT_ID = 'f'.repeat(32)
+// A fixed valid context can eventually become real operator data. Generate a
+// collision-resistant probe scope once per runtime process instead.
+const HEALTH_PROBE_ABSENT_CONTEXT_ID = randomUUID().replaceAll('-', '')
 const runtimeRequire = createRequire(import.meta.url)
 
 interface PrimitiveSpec {
