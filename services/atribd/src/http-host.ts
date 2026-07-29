@@ -39,6 +39,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   isInitializeRequest,
+  type CallToolRequest,
 } from '@modelcontextprotocol/sdk/types.js'
 import {
   Server as ModernServer,
@@ -564,17 +565,28 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
   server.setRequestHandler('tools/call', async (request, context) => {
     const backend = await options.getBackend()
     const policy = options.httpContextPolicy
+    // The v2 SDK places request metadata beside `params`, while the v1 SDK
+    // carried it inside `params`. Normalize before context and idempotency
+    // policy so both protocol eras bind the same complete request.
+    const requestMeta: unknown =
+      options.requestMeta ??
+      (request as { _meta?: unknown })._meta ??
+      (request.params as { _meta?: unknown })._meta
+    const params: CallToolRequest['params'] =
+      requestMeta === undefined
+        ? request.params
+        : ({ ...request.params, _meta: requestMeta } as CallToolRequest['params'])
     const result = !policy
-      ? await backend.callTool(request.params, { signal: context.mcpReq.signal })
+      ? await backend.callTool(params, { signal: context.mcpReq.signal })
       : await (async () => {
-          const outcome = applyHttpContextPolicy(request.params, {
+          const outcome = applyHttpContextPolicy(params, {
             ambientContext: policy.ambientContext,
           })
           if (outcome.kind === 'rejected') {
             policy.onRejected?.()
             logDaemonEvent({
               event: 'write_call_rejected_missing_context',
-              tool: request.params.name,
+              tool: params.name,
             })
             return outcome.result
           }
@@ -585,9 +597,7 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
     if (internalRecord) {
       applyAttributionReceipt(
         result as Record<string, unknown>,
-        options.requestMeta ??
-          (request as { _meta?: unknown })._meta ??
-          (request.params as { _meta?: unknown })._meta,
+        requestMeta,
         internalRecord,
       )
       delete (result as { _meta?: Record<string, unknown> })._meta?.[INTERNAL_RECORD_META_KEY]

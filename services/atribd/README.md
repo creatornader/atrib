@@ -179,6 +179,25 @@ and integrity-protect that caller-carried value before it can affect
 authorization or routing. See
 [D186](../../DECISIONS.md#d186-stateless-mcp-security-and-cancellation-are-request-scoped).
 
+## Process replacement
+
+HTTP clients do not repair or recreate a session after atribd restarts. They
+retry reads as new requests. A write retry uses the same action-bound
+idempotency key and complete arguments. Completed writes replay their original
+result. A pending entry stays indeterminate instead of dispatching a second
+write.
+
+The daemon test suite hard-kills a real atribd process on a fixed endpoint,
+starts a fresh process, and proves discovery, reads, negotiated receipts, and
+completed-write replay. The retry produces one mirror record. The same suite
+exercises 32 contexts concurrently, queues competing writes within one context,
+and proves another context can progress while that queue is busy.
+
+`tools/list` remains `cacheScope: "private"`. During the alias window its
+default `ttlMs` is five minutes and operators can lower it. A client may use a
+cached catalogue until that advertised TTL expires, then must refresh before it
+assumes a removed or renamed tool still exists.
+
 ## Degradation
 
 The [§5.8](../../atrib-spec.md#58-degradation-contract) contract is absolute. Log submission, mirror writes, and health
