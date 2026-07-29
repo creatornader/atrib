@@ -146,18 +146,11 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - uses: pnpm/action-setup@v6
-
+      # No pnpm install / workspace build here: the graph canary moved to its
+      # own job below, and check-log-smoke.mjs imports only node:crypto.
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-          cache: pnpm
-
-      - name: Install canary dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build canary dependencies
-        run: pnpm --filter @atrib/mcp build
 
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
@@ -169,9 +162,6 @@ jobs:
       - name: Smoke test public log endpoints
         shell: bash
         run: node .github/scripts/check-log-smoke.mjs
-
-      - name: Smoke test log to graph indexing
-        run: pnpm --filter @atrib/log-node graph-canary
 
   deploy-graph-node:
     needs: changes
@@ -188,6 +178,60 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy -c services/graph-node/fly.toml --remote-only
+
+  # The log-to-graph indexing canary runs in its own job so it starts AFTER
+  # both deploys settle rather than alongside them.
+  #
+  # It used to be the last step of deploy-log-node, which depends only on
+  # `changes`, so deploy-log-node and deploy-graph-node ran in parallel with no
+  # ordering. A commit touching a shared path (packages/mcp/*, package.json,
+  # pnpm-lock.yaml, pnpm-workspace.yaml, tsconfig.base.json, .dockerignore)
+  # sets both flags, and the canary could then poll graph-node while its
+  # machine was restarting into the new release. graph-node replays its whole
+  # record archive on start, so that window serves 502s and the canary fails on
+  # a system that is actually fine.
+  #
+  # It now also runs when only graph-node deployed. The canary exercises log
+  # submit through graph index, so a graph-node-only release is exactly the
+  # change it should gate; previously it ran on log-node releases only, which
+  # is why the 2026-07-29 trace regression shipped without the canary seeing it.
+  graph-canary:
+    needs: [changes, deploy-log-node, deploy-graph-node]
+    # !cancelled() keeps a skipped sibling deploy from skipping this job, since
+    # a skipped `needs` entry otherwise cascades, while still standing down when
+    # the run itself is cancelled. The guards then re-impose the real
+    # conditions: `changes` actually ran, at least one of the two services
+    # deployed, and neither deploy failed or was cancelled (a red canary after a
+    # failed deploy would only restate the deploy failure).
+    if: >-
+      !cancelled()
+      && needs.changes.result == 'success'
+      && (needs.changes.outputs.log_node == 'true' || needs.changes.outputs.graph_node == 'true')
+      && needs.deploy-log-node.result != 'failure'
+      && needs.deploy-graph-node.result != 'failure'
+      && needs.deploy-log-node.result != 'cancelled'
+      && needs.deploy-graph-node.result != 'cancelled'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install canary dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build canary dependencies
+        run: pnpm --filter @atrib/mcp build
+
+      - name: Smoke test log to graph indexing
+        run: pnpm --filter @atrib/log-node graph-canary
 
   deploy-directory-node:
     needs: changes
