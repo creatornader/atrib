@@ -19,7 +19,13 @@
 
 import { base64urlEncode } from './base64url.js'
 import { canonicalRecord } from './canon.js'
-import { extractTraceId, parseTracestateAtrib, writeOutboundContext } from './context.js'
+import {
+  extractTraceId,
+  mergeBaggageAtribSession,
+  mergeTracestate,
+  parseTracestateAtrib,
+  writeOutboundContext,
+} from './context.js'
 import { hexEncode, sha256 } from './hash.js'
 import { decodeToken, encodeToken } from './token.js'
 import { EVENT_TYPE_SHORT_TO_URI } from './types.js'
@@ -278,6 +284,110 @@ export interface BuildAttributionMetaBlockInput {
   record?: AtribRecord
   /** Explicit 32-lowercase-hex context_id to carry. */
   contextId?: string
+}
+
+/** Options for {@link buildAttributionRequestMeta}. */
+export interface BuildAttributionRequestMetaOptions extends BuildAttributionMetaBlockInput {
+  /**
+   * Receipt verbosity declared in the per-request client-capabilities
+   * envelope. Defaults to `["token"]`.
+   */
+  accept?: readonly AttributionAcceptValue[]
+  /** W3C traceparent to preserve. Generated from contextId when absent. */
+  traceparent?: string
+  /** Existing W3C tracestate to merge with the atrib propagation token. */
+  tracestate?: string
+  /** Cross-trace atrib session token carried in W3C baggage. */
+  sessionToken?: string
+}
+
+function randomSpanId(): string {
+  const bytes = new Uint8Array(8)
+  crypto.getRandomValues(bytes)
+  return hexEncode(bytes)
+}
+
+/**
+ * Build the complete atrib-owned part of a stateless MCP request `_meta`
+ * envelope.
+ *
+ * The helper declares `dev.atrib/attribution`, carries explicit context and
+ * propagation state, emits W3C trace context, and keeps the legacy atrib
+ * carriers for older peers. It never mutates `meta`. Unrelated caller keys,
+ * client capability fields, extension declarations, tracestate entries, and
+ * baggage entries survive the merge.
+ *
+ * Explicit options win for atrib-owned keys. A caller-supplied traceparent is
+ * preserved even when its trace id differs from `contextId`; the server's
+ * documented resolution ladder makes the extension context authoritative and
+ * surfaces the conflict without destroying the caller's trace.
+ */
+export function buildAttributionRequestMeta(
+  meta: Record<string, unknown> = {},
+  options: BuildAttributionRequestMetaOptions = {},
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...meta }
+  try {
+    const accept = (options.accept ?? ['token']).filter((value) =>
+      (ATTRIBUTION_ACCEPT_VALUES as readonly string[]).includes(value),
+    )
+    const settings: AttributionClientSettings = {
+      version: ATTRIBUTION_EXTENSION_VERSION,
+      accept: accept.length > 0 ? [...new Set(accept)] : ['token'],
+    }
+    const existingCaps = out[MCP_CLIENT_CAPABILITIES_META_KEY]
+    const capabilities = isPlainObject(existingCaps) ? { ...existingCaps } : {}
+    const existingExtensions = capabilities.extensions
+    const extensions = isPlainObject(existingExtensions) ? { ...existingExtensions } : {}
+    extensions[ATTRIBUTION_EXTENSION_ID] = settings
+    capabilities.extensions = extensions
+    out[MCP_CLIENT_CAPABILITIES_META_KEY] = capabilities
+
+    const fragment = buildAttributionMetaBlock(options)
+    if (fragment) {
+      const nextBlock = fragment[ATTRIBUTION_EXTENSION_ID]
+      const existingBlock = out[ATTRIBUTION_EXTENSION_ID]
+      out[ATTRIBUTION_EXTENSION_ID] = isPlainObject(existingBlock)
+        ? { ...existingBlock, ...nextBlock }
+        : nextBlock
+    }
+
+    if (options.contextId !== undefined && HEX32.test(options.contextId)) {
+      out['X-atrib-Context'] = options.contextId
+      const traceparent =
+        options.traceparent ??
+        (typeof out.traceparent === 'string' ? out.traceparent : undefined) ??
+        `00-${options.contextId}-${randomSpanId()}-01`
+      out.traceparent = traceparent
+    } else if (options.traceparent !== undefined) {
+      out.traceparent = options.traceparent
+    }
+
+    const token =
+      fragment?.[ATTRIBUTION_EXTENSION_ID].token ??
+      (typeof options.token === 'string' && decodeToken(options.token) !== null
+        ? options.token
+        : undefined)
+    if (token !== undefined) {
+      out.atrib = token
+      out['X-Atrib-Chain'] = token
+      const existingTracestate =
+        options.tracestate ??
+        (typeof out.tracestate === 'string' ? out.tracestate : '')
+      out.tracestate = mergeTracestate(`atrib=${token}`, existingTracestate)
+    } else if (options.tracestate !== undefined) {
+      out.tracestate = options.tracestate
+    }
+
+    if (options.sessionToken !== undefined) {
+      const existingBaggage = typeof out.baggage === 'string' ? out.baggage : ''
+      out.baggage = mergeBaggageAtribSession(options.sessionToken, existingBaggage)
+    }
+    return out
+  } catch (err) {
+    console.warn('atrib: failed to build stateless request metadata, passing meta through', err)
+    return { ...meta }
+  }
 }
 
 /**

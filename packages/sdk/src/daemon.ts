@@ -4,18 +4,32 @@
  * Daemon transport: MCP Streamable HTTP client for the local primitives
  * runtime.
  *
- * Semantically stateless per the SDK brief: nothing session-scoped carries
- * meaning. context_id and chain tokens travel as explicit tool arguments
- * on every call. The v2 client negotiates the 2026-07-28 protocol through
- * server/discover and falls back to the legacy handshake when it reaches an
- * older runtime.
+ * Semantically stateless per the SDK brief: nothing connection-scoped carries
+ * meaning. Context, trace, capabilities, and chain tokens travel on each
+ * request. The v2 client negotiates the 2026-07-28 protocol through
+ * server/discover and falls back to the legacy handshake for an older runtime.
  *
  * Degradation (§5.8): every operational failure is caught, logged with the
  * `atrib:` prefix, and reported as an unavailable outcome — never thrown.
  */
 
-import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
-import { verifyAttributionReceipt, type AttributionReceiptVerification } from '@atrib/mcp'
+import { readFileSync } from 'node:fs'
+import {
+  Client,
+  StreamableHTTPClientTransport,
+  type ClientCapabilities,
+} from '@modelcontextprotocol/client'
+import {
+  ATTRIBUTION_EXTENSION_ID,
+  ATTRIBUTION_EXTENSION_VERSION,
+  MCP_CLIENT_CAPABILITIES_META_KEY,
+  buildAttributionRequestMeta,
+  validateAttributionSettings,
+  verifyAttributionReceipt,
+  type AttributionAcceptValue,
+  type AttributionReceiptVerification,
+  type AttributionSettingsValidation,
+} from '@atrib/mcp'
 import {
   ATTRIBUTION_EXTENSION_KEY,
   parseAttributionReceiptBlock,
@@ -30,8 +44,25 @@ import {
 } from './config.js'
 
 export type DaemonCallOutcome =
-  | { ok: true; value: unknown; attribution?: VerifiedAttributionReceipt }
+  | {
+      ok: true
+      value: unknown
+      transport: DaemonTransportInfo
+      attribution?: VerifiedAttributionReceipt
+    }
   | { ok: false; reason: string }
+
+export type DaemonConnectionOutcome =
+  | { ok: true; transport: DaemonTransportInfo }
+  | { ok: false; reason: string }
+
+export interface DaemonTransportInfo {
+  protocol_version: string
+  protocol_era: 'modern' | 'legacy'
+  server_info?: { name: string; version: string }
+  discover?: unknown
+  attribution: AttributionSettingsValidation
+}
 
 /**
  * Parse + verify the `dev.atrib/attribution` block on a tool result's
@@ -56,8 +87,24 @@ function extractAttribution(meta: unknown): VerifiedAttributionReceipt | null {
   return { block, verification }
 }
 
-const SDK_CLIENT_INFO = { name: 'atrib-sdk', version: '0.1.0' }
+function sdkVersion(): string {
+  try {
+    const parsed = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as { version?: unknown }
+    return typeof parsed.version === 'string' ? parsed.version : 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
+const SDK_CLIENT_INFO = { name: 'atrib-sdk', version: sdkVersion() }
 const IDEMPOTENCY_META_KEY = 'dev.atrib/idempotencyKey'
+
+interface DaemonClientOptions {
+  attributionReceipts?: boolean
+  attributionAccept?: readonly AttributionAcceptValue[]
+}
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined
@@ -79,16 +126,57 @@ export class DaemonClient {
   private readonly callTimeoutMs: number
   private readonly retryCooldownMs: number
   private readonly parseReceipts: boolean
+  private readonly attributionAccept: readonly AttributionAcceptValue[]
+  private readonly requestMeta: Record<string, unknown>
+  private readonly clientCapabilities: ClientCapabilities
+  private readonly sessionToken: string | undefined
   private client: Client | null = null
   private connecting: Promise<Client | null> | null = null
   private lastFailureAt = 0
+  private latestToken: string | undefined
 
-  constructor(config?: DaemonConfig, options?: { attributionReceipts?: boolean }) {
+  constructor(config?: DaemonConfig, options?: DaemonClientOptions) {
     this.endpoint = resolveDaemonEndpoint(config)
     this.connectTimeoutMs = config?.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
     this.callTimeoutMs = config?.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS
     this.retryCooldownMs = config?.retryCooldownMs ?? DEFAULT_RETRY_COOLDOWN_MS
-    this.parseReceipts = options?.attributionReceipts === true
+    this.parseReceipts = options?.attributionReceipts !== false
+    this.attributionAccept = options?.attributionAccept ?? ['token']
+    this.requestMeta = { ...(config?.requestMeta ?? {}) }
+    this.sessionToken = config?.sessionToken
+    const requestCapabilities =
+      typeof this.requestMeta[MCP_CLIENT_CAPABILITIES_META_KEY] === 'object' &&
+      this.requestMeta[MCP_CLIENT_CAPABILITIES_META_KEY] !== null &&
+      !Array.isArray(this.requestMeta[MCP_CLIENT_CAPABILITIES_META_KEY])
+        ? (this.requestMeta[MCP_CLIENT_CAPABILITIES_META_KEY] as Record<string, unknown>)
+        : {}
+    const configuredCapabilities = {
+      ...requestCapabilities,
+      ...(config?.clientCapabilities ?? {}),
+    }
+    const requestExtensions =
+      typeof requestCapabilities['extensions'] === 'object' &&
+      requestCapabilities['extensions'] !== null &&
+      !Array.isArray(requestCapabilities['extensions'])
+        ? (requestCapabilities['extensions'] as Record<string, unknown>)
+        : {}
+    const configuredExtensions =
+      typeof configuredCapabilities['extensions'] === 'object' &&
+      configuredCapabilities['extensions'] !== null &&
+      !Array.isArray(configuredCapabilities['extensions'])
+        ? (configuredCapabilities['extensions'] as Record<string, unknown>)
+        : {}
+    this.clientCapabilities = {
+      ...configuredCapabilities,
+      extensions: {
+        ...requestExtensions,
+        ...configuredExtensions,
+        [ATTRIBUTION_EXTENSION_ID]: {
+          version: ATTRIBUTION_EXTENSION_VERSION,
+          accept: [...this.attributionAccept],
+        },
+      },
+    } as ClientCapabilities
   }
 
   /**
@@ -99,20 +187,39 @@ export class DaemonClient {
   async callTool(
     name: string,
     args: Record<string, unknown>,
-    options?: { idempotencyKey?: string },
+    options?: {
+      idempotencyKey?: string
+      contextId?: string
+      token?: string
+      requestMeta?: Record<string, unknown>
+    },
   ): Promise<DaemonCallOutcome> {
     const client = await this.ensureClient()
     if (!client) {
       return { ok: false, reason: `daemon unreachable at ${this.endpoint}` }
     }
     try {
+      const effectiveToken = options?.token ?? this.latestToken
       const result = await withTimeout(
         client.callTool({
           name,
           arguments: args,
-          ...(options?.idempotencyKey !== undefined
-            ? { _meta: { [IDEMPOTENCY_META_KEY]: options.idempotencyKey } }
-            : {}),
+          _meta: buildAttributionRequestMeta(
+            {
+              ...this.requestMeta,
+              ...(options?.requestMeta ?? {}),
+              [MCP_CLIENT_CAPABILITIES_META_KEY]: this.clientCapabilities,
+              ...(options?.idempotencyKey !== undefined
+                ? { [IDEMPOTENCY_META_KEY]: options.idempotencyKey }
+                : {}),
+            },
+            {
+              accept: this.attributionAccept,
+              ...(options?.contextId !== undefined ? { contextId: options.contextId } : {}),
+              ...(effectiveToken !== undefined ? { token: effectiveToken } : {}),
+              ...(this.sessionToken !== undefined ? { sessionToken: this.sessionToken } : {}),
+            },
+          ),
         }),
         this.callTimeoutMs,
         `tools/call ${name}`,
@@ -127,8 +234,14 @@ export class DaemonClient {
       const attribution = this.parseReceipts
         ? extractAttribution((result as { _meta?: unknown })._meta)
         : null
+      if (attribution?.verification.valid === true && attribution.block.token !== undefined) {
+        this.latestToken = attribution.block.token
+      }
+      const transport = this.connectionInfo(client)
       const withAttribution = (value: unknown): DaemonCallOutcome =>
-        attribution !== null ? { ok: true, value, attribution } : { ok: true, value }
+        attribution !== null
+          ? { ok: true, value, transport, attribution }
+          : { ok: true, value, transport }
       if (text === undefined) {
         return withAttribution(result)
       }
@@ -146,6 +259,17 @@ export class DaemonClient {
       console.warn(`atrib: daemon call ${name} failed: ${reason}`)
       return { ok: false, reason }
     }
+  }
+
+  getConnectionInfo(): DaemonTransportInfo | null {
+    return this.client ? this.connectionInfo(this.client) : null
+  }
+
+  async connect(): Promise<DaemonConnectionOutcome> {
+    const client = await this.ensureClient()
+    return client
+      ? { ok: true, transport: this.connectionInfo(client) }
+      : { ok: false, reason: `daemon unreachable at ${this.endpoint}` }
   }
 
   async close(): Promise<void> {
@@ -174,6 +298,7 @@ export class DaemonClient {
         const url = new URL(this.endpoint)
         const transport = new StreamableHTTPClientTransport(url)
         client = new Client(SDK_CLIENT_INFO, {
+          capabilities: this.clientCapabilities,
           versionNegotiation: { mode: 'auto' },
         })
         await withTimeout(client.connect(transport), this.connectTimeoutMs, 'daemon connect')
@@ -197,5 +322,27 @@ export class DaemonClient {
       }
     })()
     return this.connecting
+  }
+
+  private connectionInfo(client: Client): DaemonTransportInfo {
+    const protocolVersion = client.getNegotiatedProtocolVersion() ?? 'unknown'
+    const protocolEra = client.getProtocolEra() ?? 'legacy'
+    const serverInfo = client.getServerVersion()
+    const serverCapabilities = client.getServerCapabilities() as
+      | { extensions?: Record<string, unknown> }
+      | undefined
+    return {
+      protocol_version: protocolVersion,
+      protocol_era: protocolEra,
+      ...(serverInfo !== undefined
+        ? { server_info: { name: serverInfo.name, version: serverInfo.version } }
+        : {}),
+      ...(client.getDiscoverResult() !== undefined
+        ? { discover: client.getDiscoverResult() }
+        : {}),
+      attribution: validateAttributionSettings(
+        serverCapabilities?.extensions?.[ATTRIBUTION_EXTENSION_ID],
+      ),
+    }
   }
 }

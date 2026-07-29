@@ -271,6 +271,7 @@ class TestClientGenesisOnlyEnforcement:
 
     def _client(self, tmp_path: Path) -> AtribClient:
         return AtribClient(
+            daemon_mode="off",
             env={"ATRIB_PRIVATE_KEY": base64url_encode(self.SEED)},
             mirror_write_path=tmp_path / "write.jsonl",
             mirror_read_path=tmp_path / "read.jsonl",

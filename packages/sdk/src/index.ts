@@ -62,7 +62,12 @@ export {
   type DaemonMode,
   type ResolvedAnchorSet,
 } from './config.js'
-export { DaemonClient, type DaemonCallOutcome } from './daemon.js'
+export {
+  DaemonClient,
+  type DaemonCallOutcome,
+  type DaemonConnectionOutcome,
+  type DaemonTransportInfo,
+} from './daemon.js'
 
 // ── Anchor plurality (D138, §2.11.7-§2.11.13), from @atrib/mcp ───────────
 export {

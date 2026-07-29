@@ -80,6 +80,7 @@ def make_client(tmp_path: Path, **overrides: object) -> AtribClient:
     """Client wired to tmp_path mirrors with an explicit env dict."""
     kwargs: dict[str, object] = {
         "context_id": CONTEXT_A,
+        "daemon_mode": "off",
         "anchors": [DEAD_ANCHOR],
         "mirror_write_path": tmp_path / "write.jsonl",
         "mirror_read_path": tmp_path / "read.jsonl",
@@ -408,6 +409,7 @@ class TestFreshOrphan:
         assert prior.context_id == seeded_context
 
         orphan = AtribClient(
+            daemon_mode="off",
             anchors=[DEAD_ANCHOR],
             mirror_write_path=tmp_path / "write.jsonl",
             mirror_read_path=tmp_path / "read.jsonl",

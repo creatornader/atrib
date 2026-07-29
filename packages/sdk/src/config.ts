@@ -18,6 +18,7 @@ import {
   type AnchorDescriptor,
   type AnchorSetConfig,
   type AnchorType,
+  type AttributionAcceptValue,
 } from '@atrib/mcp'
 import type { ResolvedKey } from '@atrib/emit'
 
@@ -41,6 +42,16 @@ export interface DaemonConfig {
   callTimeoutMs?: number
   /** Cooldown before re-probing an unreachable daemon. Default 30000. */
   retryCooldownMs?: number
+  /**
+   * Caller metadata merged into every daemon request. atrib-owned
+   * capability, context, trace, and propagation fields are resolved after
+   * this object; unrelated keys are preserved.
+   */
+  requestMeta?: Record<string, unknown>
+  /** Additional MCP client capabilities to advertise on every request. */
+  clientCapabilities?: Record<string, unknown>
+  /** W3C cross-trace session token carried in baggage. */
+  sessionToken?: string
 }
 
 /**
@@ -75,12 +86,18 @@ export interface AtribClientConfig {
    */
   allowSingleAnchor?: boolean
   /**
-   * Opt-in parsing of `dev.atrib/attribution` attestation receipts from
-   * daemon tool results' `_meta` (D141). Default false. Receipts are
+   * Parsing of `dev.atrib/attribution` attestation receipts from daemon tool
+   * results' `_meta` (D141). Default true. Set false only for compatibility
+   * diagnosis. Receipts are
    * advisory; trust still derives from verifying signed records. Parsed
    * blocks are additionally run through `verifyAttributionReceipt`.
    */
   attributionReceipts?: boolean
+  /**
+   * Receipt forms requested through `dev.atrib/attribution`. Default
+   * `['token']`; add `record` for immediate signed-record verification.
+   */
+  attributionAccept?: readonly AttributionAcceptValue[]
   /**
    * Pre-resolved signing key for the in-process path. Default: the
    * `@atrib/emit` `resolveKey()` ladder (ATRIB_PRIVATE_KEY env, key file,

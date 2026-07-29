@@ -9,7 +9,7 @@
  * The dev.atrib/attribution extension (SEP-2133 unofficial extension,
  * identifier frozen at v0.1) standardizes atrib's MCP carriage upward from
  * the unprefixed convention. No signed byte changes: the extension gates
- * only discovery and carriage. The corpus pins six contract families:
+ * only discovery and carriage. The corpus pins seven contract families:
  *
  *   1. capability/   Server/client settings-object validity: `version` is
  *                    the only required field, unknown fields ignored,
@@ -38,6 +38,9 @@
  *                    capability-read failure both leave the tool result
  *                    byte-identical to passthrough; a request with no
  *                    _meta at all never blocks the call.
+ *   7. request/      Cross-language stateless request construction keeps
+ *                    caller metadata while adding attribution declaration,
+ *                    context, trace, baggage, and compatibility carriers.
  *
  * Seeds and timestamps are hardcoded so successive regenerations produce
  * byte-identical files. Re-run when:
@@ -778,6 +781,55 @@ async function main(): Promise<void> {
     },
   })
 
+  const requestMeta = {
+    custom: { keep: true },
+    traceparent: TRACEPARENT,
+    tracestate: 'vendor=one',
+    baggage: 'tenant=blue',
+    [CLIENT_CAPABILITIES_META_KEY]: {
+      sampling: {},
+      extensions: {
+        'com.example/other': { version: '2.0' },
+      },
+    },
+  }
+  writeCase('request', 'stateless-carriage', {
+    name: 'request--stateless-carriage',
+    spec_section: '1.5.4',
+    extension: EXT_ID,
+    description:
+      'A stateless client merges attribution declaration, explicit context, W3C trace state, legacy token carriers, and session baggage without dropping caller metadata or other capabilities.',
+    input: {
+      request_meta: requestMeta,
+      options: {
+        accept: ['token', 'record'],
+        token: tokenA,
+        context_id: CTX_EXTENSION,
+        session_token: 'session-123',
+      },
+    },
+    expected: {
+      request_meta: {
+        ...requestMeta,
+        tracestate: `atrib=${tokenA},vendor=one`,
+        baggage: 'atrib-session=session-123,tenant=blue',
+        [CLIENT_CAPABILITIES_META_KEY]: {
+          sampling: {},
+          extensions: {
+            'com.example/other': { version: '2.0' },
+            [EXT_ID]: { version: EXT_VERSION, accept: ['token', 'record'] },
+          },
+        },
+        [EXT_ID]: { token: tokenA, context_id: CTX_EXTENSION },
+        'X-atrib-Context': CTX_EXTENSION,
+        atrib: tokenA,
+        'X-Atrib-Chain': tokenA,
+      },
+      caller_meta_unchanged: true,
+      error_raised: false,
+    },
+  })
+
   // ── Manifest ───────────────────────────────────────────────────────
   const manifest = {
     spec_section: '1.5.4',
@@ -805,7 +857,7 @@ async function main(): Promise<void> {
     cases: caseFiles.map(({ file, name }) => ({ file, name })),
     keys: { server_pubkey: serverKey },
     note:
-      'The six families collectively pin the extension contract: settings validity and the reserved-prefix rule (capability), receipt opt-in gating with byte-identical legacy fallback (gating), Ladder 1 inbound token precedence composing with the D067 chain ladder (token), Ladder 2 context-identity precedence above the D078/D083 registry (context), receipt consistency against real signed records with non-blocking log submission (receipt), and §5.8 silent passthrough under forced failures (degradation). No signed byte changes anywhere in this corpus.',
+      'Seven families pin the extension contract: settings validity and the reserved-prefix rule (capability), receipt opt-in gating with byte-identical legacy fallback (gating), Ladder 1 inbound token precedence composing with the D067 chain ladder (token), Ladder 2 context-identity precedence above the D078/D083 registry (context), receipt consistency against real signed records with non-blocking log submission (receipt), §5.8 silent passthrough under forced failures (degradation), and cross-language complete stateless request construction (request). No signed byte changes anywhere in this corpus.',
   }
 
   writeFileSync(join(CORPUS_ROOT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')

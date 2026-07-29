@@ -22,13 +22,14 @@ pip install -e python/
 ```
 
 Dependencies: `cryptography` (Ed25519), `rfc8785` (JCS), `typing_extensions`.
+The MCP 2026-07-28 client uses Python's standard HTTP library.
 
 ## Usage
 
 ```python
 from atrib import AtribClient, AttestRef
 
-client = AtribClient()  # key from ATRIB_PRIVATE_KEY / ATRIB_KEY_FILE
+client = AtribClient(context_id="0123456789abcdef0123456789abcdef")
 
 result = client.attest(
     {"what": "chose sqlite over postgres", "why_noted": "deployment constraint"},
@@ -71,6 +72,13 @@ AtribClient(
     producer="atrib-sdk-py",  # _local.producer sidecar label (DEFAULT_PRODUCER)
     mirror_write_path=None,   # Path | str | None
     mirror_read_path=None,    # Path | str | None
+    daemon_endpoint=None,     # env, then http://127.0.0.1:8796/mcp
+    daemon_mode="prefer",     # 'prefer' | 'require' | 'off'
+    daemon_timeout_s=10.0,
+    request_meta=None,
+    client_capabilities=None,
+    session_token=None,
+    attribution_accept=("token",),
     env=None,                 # Mapping[str, str] | None (default os.environ)
 )
 ```
@@ -86,6 +94,13 @@ Constructor parameters (all keyword-only):
 | `producer` | `"atrib-sdk-py"` | `_local.producer` mirror-sidecar label ([§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions)). |
 | `mirror_write_path` | `default_mirror_write_path(env)` | Where new records are appended. |
 | `mirror_read_path` | `default_mirror_read_path(env)` | Shared chain-inheritance read source. |
+| `daemon_endpoint` | env, then `http://127.0.0.1:8796/mcp` | Stateless MCP endpoint. |
+| `daemon_mode` | `"prefer"` | Daemon-first with in-process fallback. `"require"` disables fallback. `"off"` selects the in-process compatibility path. |
+| `daemon_timeout_s` | `10.0` | HTTP timeout for discovery and tool calls. |
+| `request_meta` | `None` | Custom metadata merged into every request. |
+| `client_capabilities` | `None` | Capabilities merged with `dev.atrib/attribution`. |
+| `session_token` | `None` | Cross-trace atrib session token carried in W3C baggage. |
+| `attribution_accept` | `("token",)` | Receipt forms requested from the daemon. Add `"record"` for the signed body. |
 | `env` | `os.environ` | Injectable environment mapping (for tests and embedded hosts). |
 
 The client is a context manager: `__exit__` flushes the submission queue
@@ -106,11 +121,15 @@ client.attest(
     args_hash=None,           # overrides the D099 default sha256(JCS(content))
     result_hash=None,
     timestamp_ms=None,        # clock injection for deterministic tests
+    idempotency_key=None,     # daemon retry identity
 )
 ```
 
-Single write verb; signs in-process via the ported record layer and mirrors
-+ submits per [§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions)/[§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission).
+Single write verb. The default path calls atribd over MCP 2026-07-28. It
+performs `server/discover`, attaches the full per-request protocol and
+attribution envelope, and returns negotiated transport facts plus any receipt.
+The `"off"` path signs in process via the ported record layer and mirrors plus
+submits per [§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions)/[§5.3.5](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#535-log-submission).
 The **only raise paths are contradictory inputs** (`ValueError`): an invalid
 `event_type` URI, a `ref.kind` that contradicts an explicit `event_type`, an
 unknown `ref.kind`, an `annotates`/`revises` ref that is not
@@ -123,7 +142,9 @@ genesis-only invariant). Everything operational degrades:
 
 - No signing key → pass-through result (`via="none"`, `record_hash=None`)
   with a warning.
-- No context_id anywhere → a fresh orphan context is synthesized
+- A reachable daemon with no explicit context returns no record before
+  `tools/call`.
+- The explicit in-process path with no context synthesizes a fresh orphan
   ([§1.5.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#151-context_id-the-session-anchor);
   never inherited from the mirror tail) with a warning.
 - Signing, mirror-write, or submission-enqueue failures append warnings and
@@ -141,7 +162,8 @@ through the default `args_hash` per
 `annotation` / `revision`).
 
 `AttestResult` (frozen dataclass): `record_hash` (`sha256:<64-hex>` or
-`None`), `context_id`, `via` (`'in-process' | 'none'`), `warnings`
+`None`), `context_id`, `via` (`'daemon' | 'in-process' | 'none'`), `warnings`,
+`transport`, `attribution_receipt`, `attribution_verification`,
 (`atrib:`-prefixed strings), and `anchor_posture`, the resolved
 [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture)
 posture dict `{"effective_anchor_count", "used_default_set", "warned"}`
@@ -165,10 +187,10 @@ client.recall(
 )
 ```
 
-Single read verb over the local mirror (read source + write mirror, newest
-first). v0 serves the `history` and `session_chain` shapes; any other shape
-degrades to `via="none"` with a warning pointing at the TypeScript SDK or
-the primitives runtime, and never raises. With `verify_signatures=True`
+The daemon path sends reads to the primitives runtime. If the daemon is
+unreachable in `"prefer"` mode, the local fallback serves `history` and
+`session_chain`; any other shape degrades to `via="none"` with a warning.
+With `verify_signatures=True`
 (default), records failing
 [§1.4.3](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#143-verification-procedure)
 verification are dropped and each returned entry carries
@@ -176,9 +198,8 @@ verification are dropped and each returned entry carries
 `context_id`, `creator_key`, `timestamp`, and `local_content` when the
 mirror sidecar kept the content.
 
-`RecallOutcome` (frozen dataclass): `shape`, `via`
-(`'in-process' | 'none'`), `data` (`{"total", "returned", "records"}` or
-`None`), `warnings`.
+`RecallOutcome` is a frozen dataclass with `shape`, `via`, `data`, `warnings`,
+and the same optional daemon transport and receipt fields as `AttestResult`.
 
 #### `flush(deadline_s=30.0) -> None`
 
@@ -487,10 +508,11 @@ is frozen). Envelopes live outside signed bytes. Conformance:
 - **[§2.6.1](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#261-submit-entry) submission**: bare signed record POST, priority header,
   idempotent-safe retry, proof bundles cached by record hash.
 
-## Scope (v0)
+## Scope
 
-The write verb (`attest`) signs in-process; `recall` covers the
-history/session_chain shapes over the local mirror. Anchor plurality
+The SDK is daemon-first over native MCP 2026-07-28 and falls back to the
+in-process record layer in `"prefer"` mode. The local recall fallback covers
+`history` and `session_chain`. Anchor plurality
 ([D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture))
 fans out to every usable atrib-log anchor; registered non-atrib-log
 anchor types count toward the posture but have no Python transport yet
@@ -500,11 +522,10 @@ too). `atrib.evidence` implements the
 envelope surface (validation, builder, legacy mapping, tier semantics)
 and `atrib.attribution` the
 [D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133)
-receipt checks. Daemon-first transport
-(Streamable HTTP to the local primitives runtime) lands with the
-post-2026-07-28 stateless MCP transport rather than reimplementing the
-current initialize-handshake session protocol. Summarize is not an SDK
-verb. Synthesis belongs to the calling harness.
+receipt checks. `StatelessMcpClient` is an independent standard-library
+implementation of discovery, required modern HTTP headers, JSON or SSE
+responses, and per-request envelopes. Summarize is not an SDK verb. Synthesis
+belongs to the calling harness.
 
 ## Known cross-implementation boundary (I-JSON)
 

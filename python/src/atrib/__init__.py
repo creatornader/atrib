@@ -27,10 +27,13 @@ from .anchors import (
 )
 from .attribution import (
     ATTRIBUTION_EXTENSION_KEY,
+    ATTRIBUTION_EXTENSION_VERSION,
     ATTRIBUTION_LOG_SUBMISSION_STATUSES,
+    MCP_CLIENT_CAPABILITIES_META_KEY,
     AttributionReceiptBlock,
     AttributionReceiptConsistency,
     AttributionReceiptVerification,
+    build_attribution_request_meta,
     check_attribution_receipt_consistency,
     parse_attribution_receipt_block,
     verify_attribution_receipt,
@@ -79,6 +82,14 @@ from .hashes import (
     sha256,
 )
 from .keys import ResolvedKey, resolve_key
+from .mcp_client import (
+    PROTOCOL_VERSION,
+    McpProtocolError,
+    McpToolOutcome,
+    McpTransportError,
+    McpTransportInfo,
+    StatelessMcpClient,
+)
 from .mirror import (
     MirrorLine,
     append_mirror_line,
@@ -123,7 +134,7 @@ from .types import (
 )
 from .validation import ValidationResult, validate_submission
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 __all__ = [
     "ANCHOR_CLAIM_PREFIX",
@@ -131,6 +142,7 @@ __all__ = [
     "ATRIB_PROFILE_BASE",
     "ATRIB_PROFILE_REGISTRY",
     "ATTRIBUTION_EXTENSION_KEY",
+    "ATTRIBUTION_EXTENSION_VERSION",
     "ATTRIBUTION_LOG_SUBMISSION_STATUSES",
     "AnchorDescriptor",
     "AnchorPostureResolution",
@@ -187,17 +199,25 @@ __all__ = [
     "EVENT_TYPE_TOOL_CALL_URI",
     "EVENT_TYPE_TRANSACTION_URI",
     "MirrorLine",
+    "MCP_CLIENT_CAPABILITIES_META_KEY",
+    "McpProtocolError",
+    "McpToolOutcome",
+    "McpTransportError",
+    "McpTransportInfo",
     "RecallOutcome",
     "ResolvedKey",
     "SPEC_VERSION",
+    "PROTOCOL_VERSION",
     "SignerEntry",
     "SubmissionQueue",
+    "StatelessMcpClient",
     "SYNTHETIC_SERVER_URL",
     "ValidationResult",
     "append_mirror_line",
     "base64url_decode",
     "base64url_encode",
     "build_and_sign_emit_record",
+    "build_attribution_request_meta",
     "canonical_cross_attestation_input",
     "canonical_record",
     "canonical_signing_input",

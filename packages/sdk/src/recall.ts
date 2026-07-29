@@ -155,12 +155,14 @@ export interface RecallOutcome<T = unknown> {
   warnings: string[]
   /**
    * `dev.atrib/attribution` receipt from the daemon result's `_meta`,
-   * present only when `attributionReceipts` is enabled and the daemon
+   * present when receipt parsing is enabled (the default) and the daemon
    * emitted one (D141): the parsed block plus its
    * `verifyAttributionReceipt` outcome. Advisory; trust derives from
    * verifying signed records.
    */
   attribution_receipt?: import('./attribution.js').VerifiedAttributionReceipt
+  /** Negotiated MCP transport and extension result for the daemon call. */
+  transport?: import('./daemon.js').DaemonTransportInfo
 }
 
 /** Physical tool name on the primitives runtime for each shape. */
