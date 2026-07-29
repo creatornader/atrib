@@ -8,7 +8,7 @@
     "build": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/agent build && tsc --noEmit",
     "deploy": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/agent build && wrangler deploy --secrets-file .tmp/secrets.json",
     "proof": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/agent build && tsx scripts/run-live-client-proof.ts",
-    "test": "pnpm --filter @atrib/cloudflare-live-client-proof build && vitest run"
+    "test": "vitest run"
   },
   "dependencies": {
     "@atrib/agent": "workspace:*",
