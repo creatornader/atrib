@@ -91,7 +91,7 @@ The request must be complete at the boundary:
     "dev.atrib/attribution": {
       "context_id": "0123456789abcdef0123456789abcdef"
     },
-    "dev.atrib/idempotencyKey": "charge-inv-7-attempt-1"
+    "dev.atrib/idempotencyKey": "invoice7"
   }
 }
 ```
@@ -128,13 +128,13 @@ agent loop.
 
 ## Integration map
 
-| Existing system | Integration point | Runnable proof |
-| --- | --- | --- |
-| Tool gateway | Native `dev.atrib/attribution` server capability or an `@atrib/mcp-wrap` outer boundary | `pnpm --filter @atrib/mcp-wrap smoke:filesystem` |
-| Agent framework | `@atrib/agent` callback middleware, `@atrib/openinference` span intake, or MCP middleware | The framework examples cataloged in the [root README](../README.md#examples-and-proofs) |
-| Cloud agent | The same request metadata and receipt contract over a hosted Streamable HTTP endpoint | [`packages/integration/examples/cloudflare-agents/`](../packages/integration/examples/cloudflare-agents/) |
-| Commerce system | Signed tool request and outcome plus payment or authorization evidence selected by the host | [`docs/payments-profile.md`](payments-profile.md) and the x402/AP2 examples in the [root README](../README.md#examples-and-proofs) |
-| Audit system | Store or forward the receipt, then verify the record and any disclosed evidence independently | `pnpm --filter @atrib/sdk test -- independent-mcp-server.test.ts` |
+| Existing system | Integration point                                                                             | Runnable proof                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Tool gateway    | Native `dev.atrib/attribution` server capability or an `@atrib/mcp-wrap` outer boundary       | `pnpm --filter @atrib/mcp-wrap smoke:filesystem`                                                                                   |
+| Agent framework | `@atrib/agent` callback middleware, `@atrib/openinference` span intake, or MCP middleware     | The framework examples cataloged in the [root README](../README.md#examples-and-proofs)                                            |
+| Cloud agent     | The same request metadata and receipt contract over a hosted Streamable HTTP endpoint         | [`packages/integration/examples/cloudflare-agents/`](../packages/integration/examples/cloudflare-agents/)                          |
+| Commerce system | Signed tool request and outcome plus payment or authorization evidence selected by the host   | [`docs/payments-profile.md`](payments-profile.md) and the x402/AP2 examples in the [root README](../README.md#examples-and-proofs) |
+| Audit system    | Store or forward the receipt, then verify the record and any disclosed evidence independently | `pnpm --filter @atrib/sdk test -- independent-mcp-server.test.ts`                                                                  |
 
 ## What the receipt proves
 
