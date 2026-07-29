@@ -241,6 +241,16 @@
        is what makes the mark and the ladder land in the same place when a
        reader crosses between the three. */
     --estate-container: 1024px;
+    /* The gutter that puts the 1024px column in the same place the other two
+       surfaces put theirs. They centre with `mx-auto max-w-5xl` inside a 24px
+       padding, which resolves to (viewport - 1024) / 2 once the viewport clears
+       1072px, and to a flat 24px below that. This expression is that same pair,
+       so the mark lands on the same x at every width rather than at one.
+
+       Centred against 100vw, not 100%, on purpose: this surface styles its
+       scrollbar, which costs 10px of layout width that the other surfaces do
+       not pay. Measuring from 100% would pull the column 5px left of theirs. */
+    --estate-gutter: max(24px, calc((100vw - var(--estate-container)) / 2));
     --radius: 8px;
     --radius-sm: 5px;
   }
@@ -273,12 +283,18 @@
   a:hover { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 2px; }
   a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 
+  /* Parked by its own height plus a fixed margin, never by a percentage of
+     itself. translateY(-140%) against top:16px only clears the viewport when
+     the pill is at least 40px tall. This one is 33px, so 2.8px of it sat above
+     the header on every page load, as a cream sliver at the top left. It is
+     position:fixed, so scrolling never moved it. Matches the pattern in
+     packages/integration/examples/google-stack-chain/visual/styles.css. */
   .skip-link {
     position: fixed;
     left: 16px;
-    top: 16px;
+    top: 0;
     z-index: 1000;
-    transform: translateY(-140%);
+    transform: translateY(calc(-100% - 16px));
     border-radius: var(--radius-sm);
     background: var(--text);
     color: var(--bg);
@@ -287,7 +303,7 @@
   }
   .skip-link:focus,
   .skip-link:focus-visible {
-    transform: translateY(0);
+    transform: translateY(16px);
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
@@ -334,7 +350,7 @@
     display: flex; align-items: center; justify-content: space-between;
     gap: 16px;
     height: 56px; box-sizing: border-box;
-    padding: 0 max(24px, calc((100vw - var(--estate-container)) / 2 + 24px));
+    padding: 0 var(--estate-gutter);
     border-bottom: 1px solid var(--border);
     background: rgba(5, 9, 20, 0.85);
     backdrop-filter: saturate(180%) blur(12px);
@@ -372,7 +388,7 @@
   body > header nav.ladder [aria-current] { color: var(--text); }
   nav.local {
     position: sticky; top: 56px; z-index: 49;
-    padding: 8px max(24px, calc((100vw - var(--estate-container)) / 2 + 24px));
+    padding: 8px var(--estate-gutter);
     border-bottom: 1px solid var(--border);
     background: rgba(5, 9, 20, 0.85);
     backdrop-filter: saturate(180%) blur(12px);
@@ -1908,7 +1924,7 @@
     <nav aria-label="Start here">
       <h2>Start here</h2>
       <ul>
-      <li><a href="https://atrib-hero-preview.vercel.app" target="_blank" rel="noopener noreferrer">atrib</a><p>atrib keeps goals, decisions, artifacts and handoffs coherent across the agents and tools you already use.</p></li>
+      <li><a href="https://atrib.dev" rel="noopener">atrib</a><p>atrib keeps goals, decisions, artifacts and handoffs coherent across the agents and tools you already use.</p></li>
       </ul>
     </nav>
     <nav aria-label="How it works">
