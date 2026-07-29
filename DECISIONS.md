@@ -9636,6 +9636,51 @@ no authority without integrity and binding checks.
 **Protocol impact.** None. This applies MCP 2026-07-28 request lifecycle and
 OAuth hooks to atribd. It changes no atrib record field or signed byte.
 
+## D187: Keep one atribd daemon per operator profile
+
+**Date:** 2026-07-29
+
+**Status:** Accepted and implemented
+
+**Context.** Stateless MCP allows any request for one security domain to reach
+any instance configured for that domain. It does not make separate signing,
+storage, or policy domains interchangeable. The operator machine runs
+`claude-code`, `claude-desktop`, and `codex` profiles. Each has a distinct
+loopback port, `ATRIB_AGENT`, mirror file, autochain source, and local-substrate
+endpoint.
+
+**Decision.** Keep one atribd process per operator profile. Do not add shared
+profile routing to the daemon.
+
+The current process boundary provides:
+
+1. one fixed signing and Keychain scope per process;
+2. one mirror, autochain source, idempotency store, and coordinator route;
+3. profile-labeled health, logs, restarts, and rollback;
+4. independent failure and resource-pressure domains; and
+5. no caller-controlled profile selector to authenticate or misroute.
+
+**Evidence.** The three installed LaunchAgents differ on ports 8795, 8792, and
+8796. They set profile-specific `ATRIB_AGENT`, `ATRIB_MIRROR_FILE`,
+`ATRIB_AUTOCHAIN_SOURCE`, and `ATRIB_LOCAL_SUBSTRATE_ENDPOINT` values. atribd
+does not implement authenticated per-request selection for that complete
+resource set or a scheduler that prevents one profile from starving another.
+
+**Revisit gate.** A future shared supervisor requires authenticated profile
+identity, key and mirror non-interference tests, profile-scoped idempotency and
+serialization, explicit authorization policy, per-profile health and logs,
+fairness limits, and a one-command rollback to separate daemons. Process-count
+reduction alone is not enough.
+
+**Alternatives rejected.** One fully shared daemon would turn a routing bug
+into a signing or storage boundary violation. Isolated workers behind one
+supervisor add lifecycle coupling without removing the worker processes that
+provide isolation. The current three-daemon topology is small and already
+operable through the profile-aware runtime updater.
+
+**Protocol impact.** None. This is a deployment boundary. It changes no MCP
+message and no atrib signed byte.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
