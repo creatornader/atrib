@@ -5,10 +5,9 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
+import { McpServer } from '@modelcontextprotocol/server'
 import {
   bindAtribPrimitivesHttpHost,
   createAtribPrimitivesBackend,

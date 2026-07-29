@@ -5,7 +5,7 @@
 // etc.). All four names dispatch to one handleEmit funnel; records are
 // byte-identical regardless of which name signed them.
 
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
 import { createAtribAttestServer } from './index.js'
 
 async function main() {

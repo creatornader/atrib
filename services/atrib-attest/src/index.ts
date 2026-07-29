@@ -15,7 +15,7 @@
 //     mirror filename pattern `atrib-emit-<agent>.jsonl` is frozen (L3):
 //     existing files keep their names forever
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { randomBytes } from 'node:crypto'
 import {

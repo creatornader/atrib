@@ -7,8 +7,8 @@ import * as ed from '@noble/ed25519'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport } from '@modelcontextprotocol/server'
 import {
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_DIRECTORY_ANCHOR_URI,

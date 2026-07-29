@@ -2,7 +2,7 @@
 // atrib-revise standalone binary (forwarding shim). Serves the legacy
 // atrib-revise server, which mounts `atrib-revise` plus `attest` per the
 // alias-window rule W1.
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
 import { createAtribReviseServer } from '@atrib/attest'
 
 async function main() {

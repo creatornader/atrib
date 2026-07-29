@@ -8,7 +8,7 @@
  * everything is automatic.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { base64urlDecode, base64urlEncode } from './base64url.js'
 import { computeContentId } from './content-id.js'
 import {

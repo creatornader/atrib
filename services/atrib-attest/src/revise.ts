@@ -8,7 +8,7 @@
 // ref.kind='revises'; a verifier MUST NOT distinguish revision records by
 // the tool name that signed them.
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { createSubmissionQueue, EVENT_TYPE_REVISION_URI, type SubmissionQueue } from '@atrib/mcp'
 import {

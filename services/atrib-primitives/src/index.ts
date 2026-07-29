@@ -24,13 +24,14 @@ import { pathToFileURL } from 'node:url'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { InMemoryTransport, type McpServer as ModernMcpServer } from '@modelcontextprotocol/server'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import {
   Client as ModernClient,
   StreamableHTTPClientTransport as ModernStreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client'
+import { Server as ModernServer } from '@modelcontextprotocol/server'
+import { StdioServerTransport as ModernStdioServerTransport } from '@modelcontextprotocol/server/stdio'
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -41,23 +42,22 @@ import {
   type Tool,
   isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js'
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 export interface AtribPrimitiveHandle {
-  mcp: McpServer
+  mcp: ModernMcpServer
   flush?: (() => Promise<void>) | undefined
 }
 
 interface MountedPrimitive {
   name: string
   handle: AtribPrimitiveHandle
-  client: Client
+  client: ModernClient
   tools: Tool[]
 }
 
 interface ToolRoute {
   primitive: string
-  client: Client
+  client: ModernClient
 }
 
 interface InFlightToolCall {
@@ -143,7 +143,7 @@ export interface AtribPrimitivesBackend {
 }
 
 export interface AtribPrimitivesRuntime {
-  server: Server
+  server: ModernServer
   tools: Tool[]
   toolNames: string[]
   flush(): Promise<void>
@@ -852,14 +852,14 @@ async function mountPrimitive(
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   await handle.mcp.connect(serverTransport)
 
-  const client = new Client({
+  const client = new ModernClient({
     name: `atrib-primitives-${name}`,
     version: readPackageVersion(),
   })
   await client.connect(clientTransport)
 
   const listed = await client.listTools()
-  return { name, handle, client, tools: listed.tools }
+  return { name, handle, client, tools: listed.tools as unknown as Tool[] }
 }
 
 export async function createAtribPrimitivesBackend(
@@ -1070,7 +1070,34 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function createOuterServer(getBackend: () => Promise<AtribPrimitivesBackend>): Server {
+function createModernOuterServer(getBackend: () => Promise<AtribPrimitivesBackend>): ModernServer {
+  const server = new ModernServer(
+    {
+      name: 'atrib-primitives',
+      version: readPackageVersion(),
+    },
+    {
+      capabilities: { tools: {} },
+      instructions:
+        'One local MCP runtime exposing all seven atrib cognitive primitives. ' +
+        'Use this instead of per-primitive stdio servers when a harness supports only per-thread MCP spawning.',
+    },
+  )
+
+  server.setRequestHandler('tools/list', async () => {
+    const backend = await getBackend()
+    return { tools: backend.tools as never }
+  })
+
+  server.setRequestHandler('tools/call', async (request) => {
+    const backend = await getBackend()
+    return backend.callTool(request.params)
+  })
+
+  return server
+}
+
+function createLegacyOuterServer(getBackend: () => Promise<AtribPrimitivesBackend>): Server {
   const server = new Server(
     {
       name: 'atrib-primitives',
@@ -1111,7 +1138,7 @@ export async function createAtribPrimitivesRuntime(
     createAtribPrimitivesBackend({ toolTimeoutMs }),
   )
   const backend = await backendProvider.get()
-  const server = createOuterServer(backendProvider.get)
+  const server = createModernOuterServer(backendProvider.get)
 
   return {
     server,
@@ -1147,7 +1174,7 @@ export async function createAtribPrimitivesHttpProxyRuntime(
   )
   await upstream.connect(upstreamTransport)
   const listed = await upstream.listTools()
-  const server = new Server(
+  const server = new ModernServer(
     {
       name: 'atrib-primitives-stdio-http-proxy',
       version: readPackageVersion(),
@@ -1160,8 +1187,8 @@ export async function createAtribPrimitivesHttpProxyRuntime(
   )
 
   const upstreamTools = listed.tools as Tool[]
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: upstreamTools }))
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler('tools/list', async () => ({ tools: upstreamTools as never }))
+  server.setRequestHandler('tools/call', async (request) => {
     return callWithToolTimeout(
       request.params.name,
       toolTimeoutMs,
@@ -1596,7 +1623,7 @@ export async function bindAtribPrimitivesHttpHost(
 
         let session: HttpSession | undefined
         try {
-          const sessionServer = createOuterServer(backendProvider.get)
+          const sessionServer = createLegacyOuterServer(backendProvider.get)
           session = {
             server: sessionServer,
             transport: new StreamableHTTPServerTransport({
@@ -1738,7 +1765,7 @@ async function main(): Promise<void> {
   process.once('SIGINT', shutdown)
   process.once('SIGTERM', shutdown)
 
-  const transport = new StdioServerTransport()
+  const transport = new ModernStdioServerTransport()
   await runtime.server.connect(transport)
 }
 

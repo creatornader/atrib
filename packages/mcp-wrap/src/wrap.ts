@@ -9,7 +9,6 @@
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import {
   createAtribProxy,
   createHttpLocalSubstrateTransport,
@@ -46,7 +45,7 @@ export interface WrapDeps {
    * This lets host-owned runtimes mount an upstream MCP server in process while
    * preserving the same signing, mirror, autoChain, and receipt-injection path.
    */
-  upstreamTransport?: Transport
+  upstreamTransport?: Parameters<AtribProxy['upstreamClient']['connect']>[0]
 }
 
 /**
@@ -214,7 +213,10 @@ function localSubstrateWarningDetail(detail: unknown): Record<string, unknown> |
   return { detail: String(detail) }
 }
 
-function upstreamFromConfig(config: WrapConfig, upstreamTransport?: Transport): UpstreamTransport {
+function upstreamFromConfig(
+  config: WrapConfig,
+  upstreamTransport?: Parameters<AtribProxy['upstreamClient']['connect']>[0],
+): UpstreamTransport {
   if (upstreamTransport) return { type: 'inMemory', transport: upstreamTransport }
   if (config.upstream.type === 'http') {
     return {

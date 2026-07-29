@@ -6,8 +6,8 @@
 // the narrow input contract per D079, so that's what we test here.
 
 import { describe, expect, it } from 'vitest'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport } from '@modelcontextprotocol/server'
 import { ReviseInput, createAtribReviseServer } from '../src/index.js'
 
 const VALID_HASH = 'sha256:' + 'a'.repeat(64)
