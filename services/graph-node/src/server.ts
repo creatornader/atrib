@@ -3,7 +3,7 @@
 /**
  * Graph query service HTTP server (section 3.4).
  *
- * Serves 6 read endpoints + 1 ingestion endpoint:
+ * Serves 7 read endpoints + 1 ingestion endpoint:
  *   GET  /v1/graph/:context_id                Full graph
  *   GET  /v1/graph/:context_id/nodes          Nodes only
  *   GET  /v1/graph/:context_id/transaction    Transaction node
@@ -14,10 +14,14 @@
  *   GET  /v1/trace/:record_hash               Provenance trace: backward walk via INFORMED_BY +
  *                                             PROVENANCE_OF (and optionally ANNOTATES + REVISES) from
  *                                             the starting record, returning the ancestor subgraph
+ *   GET  /v1/stats                            Operational state: record/context counts, heap
+ *                                             utilization, uptime, last archive replay. O(1);
+ *                                             also the Fly health-check target.
  *   POST /v1/ingest                           Record ingestion
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { getHeapStatistics } from 'node:v8'
 import { validateSubmission, verifyRecord, sha256, hexEncode } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { buildGraph } from './graph-builder.js'
@@ -112,6 +116,20 @@ export interface BindOptions {
    * the producer-local mirror file remains the ultimate fallback (Layer 3).
    */
   onRecordIngested?: (record: AtribRecord, logIndex: number | undefined) => void | Promise<void>
+
+  /**
+   * Facts about this boot that only the entry point knows, surfaced by
+   * /v1/stats. Archive replay happens in main.ts before the server binds, so
+   * the server cannot measure it itself.
+   */
+  runtimeInfo?: ServiceRuntimeInfo
+}
+
+export interface ServiceRuntimeInfo {
+  /** Wall-clock ms the archive replay took on this boot. */
+  replay_ms?: number
+  /** Records restored from the archive on this boot. */
+  replayed_records?: number
 }
 
 const CONTEXT_ID_RE = /^[0-9a-f]{32}$/
@@ -123,6 +141,7 @@ export async function bindGraphServer(
 ): Promise<GraphServerHandle> {
   const store = opts.store ?? createRecordStore()
   const onRecordIngested = opts.onRecordIngested
+  const runtimeInfo = opts.runtimeInfo ?? {}
 
   const server = createServer((req, res) => {
     // CORS for browser-based dashboards (D054). Read endpoints serve public data per spec §3;
@@ -135,7 +154,7 @@ export async function bindGraphServer(
       res.end()
       return
     }
-    handleRequest(req, res, store, onRecordIngested).catch((err) => {
+    handleRequest(req, res, store, onRecordIngested, runtimeInfo).catch((err) => {
       console.error('graph-node: request handler crashed', err)
       if (!res.headersSent) {
         sendProblem(res, 500, 'internal-error', 'Internal server error', '')
@@ -170,6 +189,7 @@ async function handleRequest(
   res: ServerResponse,
   store: RecordStore,
   onRecordIngested?: (record: AtribRecord, logIndex: number | undefined) => void | Promise<void>,
+  runtimeInfo: ServiceRuntimeInfo = {},
 ): Promise<void> {
   const url = req.url ?? ''
   const method = req.method ?? ''
@@ -199,10 +219,58 @@ async function handleRequest(
         creator_graph: `GET /${v}/creators/<creator_key>/graph`,
         trace: `GET /${v}/trace/<record_hash>`,
         chain: `GET /${v}/chain/<record_hash>`,
+        stats: `GET /${v}/stats`,
         ingest: `POST /${v}/ingest`,
       },
       explorer: 'https://explore.atrib.dev/',
       note: 'This base URL has no browsable UI. Use the endpoints listed above. The public explorer at https://explore.atrib.dev/ composes log + graph + directory reads into a unified surface.',
+    })
+  }
+
+  // GET /v1/stats: operational state, and the liveness probe Fly health checks
+  // hit. Mirrors log-node's /v1/stats so the two services report the same way.
+  //
+  // Deliberately NOT in the spec. §3.4 is the graph query interface; this is
+  // operational telemetry about one implementation, and log-node's /v1/stats is
+  // likewise absent from the spec. Adding a graph-fact endpoint here would need
+  // a §3.4 section and a conformance case; this does not, and must not start
+  // returning graph facts (§3.6 keeps the fact layer separate).
+  //
+  // Kept O(1) on purpose. It is polled on an interval by the Fly health check,
+  // so it must never walk the store. record_count and context_count are counter
+  // reads; heap comes from V8 directly.
+  //
+  // heap is here because graph-node holds every record in memory, so heap
+  // headroom divided by growth in records per day IS the service's runway. That
+  // number used to exist only in Fly logs; on 2026-07-29 the live set reached
+  // the V8 ceiling and the process began aborting with nothing watching. See
+  // P059 in DECISIONS.md.
+  if (method === 'GET' && urlPath === '/v1/stats') {
+    const heap = getHeapStatistics()
+    const usedMb = heap.used_heap_size / 1024 / 1024
+    const limitMb = heap.heap_size_limit / 1024 / 1024
+    return sendJson(res, 200, {
+      service: 'atrib-graph-node',
+      record_count: store.getRecordCount(),
+      context_count: store.getContextCount(),
+      heap: {
+        used_mb: Math.round(usedMb),
+        limit_mb: Math.round(limitMb),
+        // One decimal: the watchdog thresholds are whole percents, so this is
+        // precise enough to see which side of one you are on.
+        used_pct: limitMb > 0 ? Number(((usedMb / limitMb) * 100).toFixed(1)) : null,
+      },
+      uptime_s: Math.round(process.uptime()),
+      // Absent when no archive is configured, rather than null, so a caller can
+      // distinguish "no archive" from "archive replayed zero records".
+      ...(typeof runtimeInfo.replay_ms === 'number'
+        ? {
+            replay: {
+              ms: runtimeInfo.replay_ms,
+              records: runtimeInfo.replayed_records ?? 0,
+            },
+          }
+        : {}),
     })
   }
 

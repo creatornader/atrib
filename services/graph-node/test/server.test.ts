@@ -466,6 +466,7 @@ describe('graph-node server (section 3.4)', () => {
     expect(body.current_version).toBe('v1')
     expect(body.endpoints.trace).toBe('GET /v1/trace/<record_hash>')
     expect(body.endpoints.chain).toBe('GET /v1/chain/<record_hash>')
+    expect(body.endpoints.stats).toBe('GET /v1/stats')
     expect(body.explorer).toBe('https://explore.atrib.dev/')
   })
 

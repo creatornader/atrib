@@ -10345,6 +10345,26 @@ continuing to raise the ceiling with machine size. The first three change the
 service's operational shape; the fourth is bounded by machine cost and only ever
 defers the same failure.
 
+**Raising machine size runs out before the heap does (2026-07-29).** Cold-start
+archive replay is the binding constraint, not memory. main.ts replays the whole
+archive before binding the port, and Fly clamps an `http_service` health check's
+`grace_period` to 60 seconds. At the measured ~20.6k records/sec replay rate that
+covers about 1.24M records. Sizing hits that first:
+
+| machine | heap | capacity @85% | replay |
+| ------- | ---- | ------------- | ------ |
+| 1GB     | 768MB  | 214k        | ~10s   |
+| 2GB     | 1536MB | 427k        | ~21s   |
+| 4GB     | 3072MB | 854k        | ~41s   |
+| 8GB     | 6144MB | 1.7M        | ~83s, past the 60s cap |
+
+So the scaling answer expires somewhere past the 4GB tier for startup reasons
+rather than heap reasons, and every doubling also doubles the 502-serving window
+on every deploy and every restart. Two further properties that memory does not
+buy: full mark-compact pauses grow with the live object graph (during the outage
+the process spent 65-76% of wall-clock in GC), and `min_machines_running = 1`
+means each restart is a whole-service outage regardless of machine size.
+
 **Not urgent as a correctness matter, and not open-ended either.** Whatever is
 chosen must preserve two properties the current design gets for free: [§3.2.4](atrib-spec.md#324-edge-derivation-rules)
 edge derivation stays deterministic over the full record set, and the [§1.9](atrib-spec.md#19-key-rotation-and-revocation)

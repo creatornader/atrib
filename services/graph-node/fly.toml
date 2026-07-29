@@ -34,6 +34,44 @@ primary_region = 'iad'
   auto_start_machines = true
   min_machines_running = 1
 
+# Liveness. Until 2026-07-29 this service had no health check at all, so when
+# the process entered a crash loop Fly had no signal: it kept routing to a dead
+# instance and returning 502s, and the only thing that noticed was a post-deploy
+# canary in another job.
+#
+# timeout is deliberately far above the ~0.15s a healthy /v1/stats takes. The
+# failure mode worth catching is a wedged process, not a slow one: during the
+# outage the event loop was spending ~65-75% of wall-clock in GC and requests
+# took 17-25s while the process was still listening. 10s separates that from
+# ordinary GC jitter without flapping.
+#
+# grace_period MUST exceed archive replay. main.ts replays the whole record
+# archive BEFORE binding the port, so nothing is listening until it finishes:
+# ~5s at 112k records, and replay time grows linearly with record count.
+#
+# 60s is the ceiling, not a preference. Fly silently clamps this value to one
+# minute ("grace period greater than 1 minute; this will be lowered to 1
+# minute" from `flyctl config validate`), so asking for more is a no-op that
+# reads as protection you do not have.
+#
+# That clamp is a real bound on this service's design, not just on this file.
+# At the measured ~20.6k records/sec replay rate, 60s of grace covers about
+# 1.24M records. Machine sizing hits it before it hits a memory wall:
+#
+#   1GB   214k records    ~10s replay
+#   2GB   427k records    ~21s replay
+#   4GB   854k records    ~41s replay
+#   8GB   1.7M records    ~83s replay   <- exceeds the 60s cap
+#
+# So "keep raising memory" stops working somewhere past the 4GB tier, for
+# startup reasons rather than heap reasons. Recorded in P059.
+[[http_service.checks]]
+  interval = '30s'
+  timeout = '10s'
+  grace_period = '60s'
+  method = 'GET'
+  path = '/v1/stats'
+
 [[vm]]
   size = 'shared-cpu-1x'
   # Bumped from 256mb after observed OOM-kill on 2026-05-06 with ~1500 records
