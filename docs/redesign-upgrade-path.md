@@ -4,6 +4,12 @@ Status: executed. Step 1 landed as [D138](../DECISIONS.md#d138-anchor-plurality-
 signed byte of any existing record, log entry, or checkpoint changes.**
 Every step is additive except step 7 (a subtraction of scope, not of bytes).
 
+Post-cutover correctness, operations, SDK propagation, retry safety,
+interoperability, compatibility retirement, and product work are tracked in
+the active
+[Stateless MCP v2 follow-through](stateless-mcp-v2-follow-through.md)
+program. This document remains the historical redesign sequence.
+
 The clean-room exercise re-derived atrib's invariants (degradation contract,
 fact/policy separation, Ed25519, deterministic derivation, local mirror as the
 center of gravity) and diverged on infrastructure ontology: what gets to be an
