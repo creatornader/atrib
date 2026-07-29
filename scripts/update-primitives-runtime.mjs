@@ -421,6 +421,7 @@ export function validateHealthPayload(
   const contract = contractSource?.recall_contract
   const primitiveContracts = contractSource?.primitive_contracts
   const behavioralProbes = contractSource?.behavioral_probes
+  const compatibility = body?.report?.compatibility
   const issues = []
   if (!runtime) issues.push(`missing ${runtimeLabel}`)
   if (runtime?.version !== expectedRuntimeVersion) {
@@ -434,9 +435,7 @@ export function validateHealthPayload(
       issues.push('missing report.requests counters')
     }
     if (runtime && runtime.transport !== 'streamable-http-stateless') {
-      issues.push(
-        `expected daemon.transport streamable-http-stateless, got ${runtime?.transport}`,
-      )
+      issues.push(`expected daemon.transport streamable-http-stateless, got ${runtime?.transport}`)
     }
     if (runtime && runtime.transport_adapter !== 'v2-dual-era-per-request') {
       issues.push(
@@ -444,9 +443,42 @@ export function validateHealthPayload(
       )
     }
     if (runtime && runtime.protocol_version !== '2026-07-28') {
-      issues.push(
-        `expected daemon.protocol_version 2026-07-28, got ${runtime?.protocol_version}`,
-      )
+      issues.push(`expected daemon.protocol_version 2026-07-28, got ${runtime?.protocol_version}`)
+    }
+    if (!compatibility || compatibility.schema !== 'atrib.mcp-compatibility-observability.v1') {
+      issues.push('missing report.compatibility observability contract')
+    } else {
+      if (
+        typeof compatibility.modern_requests !== 'number' ||
+        typeof compatibility.legacy_requests !== 'number' ||
+        typeof compatibility.legacy_after_modern_requests !== 'number'
+      ) {
+        issues.push('invalid report.compatibility request counters')
+      }
+      if (
+        compatibility.privacy?.request_bodies_recorded !== false ||
+        compatibility.privacy?.context_ids_recorded !== false ||
+        compatibility.privacy?.network_identifiers_recorded !== false
+      ) {
+        issues.push('invalid report.compatibility privacy declaration')
+      }
+      if (
+        compatibility.removal_policy?.announcement_required !== true ||
+        typeof compatibility.removal_policy?.sustained_zero_window_ms !== 'number'
+      ) {
+        issues.push('invalid report.compatibility removal policy')
+      }
+      if (typeof compatibility.removal_readiness?.status !== 'string') {
+        issues.push('invalid report.compatibility removal readiness')
+      }
+      if (
+        compatibility.expected_modern === true &&
+        compatibility.legacy_after_modern_requests > 0
+      ) {
+        issues.push(
+          `modern-only profile regressed to legacy traffic ${compatibility.legacy_after_modern_requests} time(s)`,
+        )
+      }
     }
   }
   if (contract?.status !== 'pass') {
@@ -564,6 +596,17 @@ export function validateHealthPayload(
         },
       ]),
     ),
+    compatibility:
+      healthShape === 'daemon'
+        ? {
+            schema: compatibility.schema,
+            expected_modern: compatibility.expected_modern,
+            modern_requests: compatibility.modern_requests,
+            legacy_requests: compatibility.legacy_requests,
+            legacy_after_modern_requests: compatibility.legacy_after_modern_requests,
+            removal_readiness: compatibility.removal_readiness.status,
+          }
+        : undefined,
   }
 }
 

@@ -62,6 +62,11 @@ import {
   createModernSdkStatelessAdapter,
   type AtribdTransportAdapter,
 } from './transport-adapter.js'
+import {
+  createMcpCompatibilityObserver,
+  DEFAULT_LEGACY_ZERO_WINDOW_MS,
+  type McpCompatibilityObserver,
+} from './compatibility-observability.js'
 
 export const DEFAULT_HTTP_HOST = '127.0.0.1'
 export const DEFAULT_HTTP_PORT = 8796
@@ -130,6 +135,10 @@ export interface AtribdHttpHostOptions {
    * is the default. Working flag name; final name is a P046 open question.
    */
   ambientContext?: boolean
+  compatibilityObserver?: McpCompatibilityObserver
+  compatibilityStateFile?: string | false
+  expectedModernClient?: boolean
+  legacyZeroWindowMs?: number
   backendFactory?: () => Promise<AtribdBackend>
   adapterFactory?: (
     modernServerFactory: () => ModernServer,
@@ -501,6 +510,30 @@ export async function bindAtribdHttpHost(
   const toolTimeoutMs = options.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
   const toolsListTtlMs = options.toolsListTtlMs ?? DEFAULT_TOOLS_LIST_TTL_MS
   const ambientContext = options.ambientContext ?? false
+  const configuredZeroWindowMs = Number(process.env.ATRIBD_MCP_LEGACY_ZERO_WINDOW_MS)
+  const configuredCompatibilityStateFile =
+    options.compatibilityStateFile ??
+    process.env.ATRIBD_MCP_COMPAT_STATE_FILE ??
+    (process.env.NODE_ENV === 'test' ? false : undefined)
+  const compatibility =
+    options.compatibilityObserver ??
+    createMcpCompatibilityObserver({
+      profile: process.env.ATRIB_AGENT,
+      expectedModern: options.expectedModernClient ?? process.env.ATRIBD_MCP_EXPECT_MODERN === '1',
+      stateFile: configuredCompatibilityStateFile,
+      legacyZeroWindowMs:
+        options.legacyZeroWindowMs ??
+        (Number.isSafeInteger(configuredZeroWindowMs) && configuredZeroWindowMs > 0
+          ? configuredZeroWindowMs
+          : DEFAULT_LEGACY_ZERO_WINDOW_MS),
+      onPersistenceError: (error) => {
+        logDaemonEvent({
+          component: 'atribd',
+          event: 'compatibility_state_persistence_failed',
+          error: errorMessage(error),
+        })
+      },
+    })
   const backendProvider = createBackendProvider(
     options.backendFactory ?? (() => createAtribdBackend({ toolTimeoutMs })),
   )
@@ -581,6 +614,7 @@ export async function bindAtribdHttpHost(
               backend_started_at: backendStatus.startedAt,
             },
             requests: { ...counters },
+            compatibility: compatibility.report(),
           },
         })
         return
@@ -597,6 +631,7 @@ export async function bindAtribdHttpHost(
               backend_error_at: backendStatus.errorAt,
             },
             requests: { ...counters },
+            compatibility: compatibility.report(),
           },
         })
         return
@@ -634,6 +669,7 @@ export async function bindAtribdHttpHost(
             requires_explicit_context_id: !ambientContext,
           },
           requests: { ...counters },
+          compatibility: compatibility.report(),
           tool_calls: toolCalls,
         },
       })
@@ -693,6 +729,7 @@ export async function bindAtribdHttpHost(
       } else {
         counters.legacy_requests += 1
       }
+      compatibility.observe(req, body)
       await adapter.handleRequest(req, res, body)
     } catch (error) {
       if (!res.headersSent) {
@@ -750,6 +787,7 @@ export async function bindAtribdHttpHost(
       try {
         await closeHttpServer(server)
       } finally {
+        await compatibility.flush()
         await backendProvider.close()
       }
     },

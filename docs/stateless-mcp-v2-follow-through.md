@@ -382,28 +382,22 @@ The follow-through program is complete when:
 
 ## Current execution state
 
-| Tranche                                   | State       | Evidence                                                                                                                                                                                               |
-| ----------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0A: native-v2 release gate                | complete    | `scripts/mcp-v2-owned-surfaces.json` covers 13 owned surfaces and 12 published surfaces; source, process-proof, built-entrypoint, and packed-artifact gates run through doc sync and release readiness |
-| 0B: compatibility observability           | in progress | atribd reports modern and legacy counters; client attribution and sunset policy remain                                                                                                                 |
-| 1A: duplicate-safe writes                 | not started | Contract decision required                                                                                                                                                                             |
-| 1B: automatic request carriage            | not started | Existing clients negotiate v2, but cross-SDK automatic carriage needs a dedicated audit                                                                                                                |
-| 1C: request-scoped security and lifecycle | not started | Existing permit and authorization components must be audited against the stateless request boundary                                                                                                    |
-| 2A: resilience and performance            | not started | Existing tests cover parts of concurrency and transport behavior, not the full failure matrix                                                                                                          |
-| 2B: independent interoperability          | not started | atribd and atrib clients interoperate; independence gate remains                                                                                                                                       |
-| 2C: human-facing propagation              | in progress | Cutover docs are current; the wider session-era scan and runbooks remain                                                                                                                               |
-| 3A: daemon consolidation study            | deferred    | Begins only after tranches 1 and 2                                                                                                                                                                     |
-| 3B: product propagation                   | deferred    | Begins after released SDK and interop proof                                                                                                                                                            |
+| Tranche                                   | State           | Evidence                                                                                                                                                                                                |
+| ----------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0A: native-v2 release gate                | complete        | `scripts/mcp-v2-owned-surfaces.json` covers 13 owned surfaces and 12 published surfaces; source, process-proof, built-entrypoint, and packed-artifact gates run through doc sync and release readiness  |
+| 0B: compatibility observability           | release pending | atribd persists bounded profile, client, protocol, and era observations; health and topology agree; the updater rejects modern-to-legacy regressions; the live profiles still need the released package |
+| 1A: duplicate-safe writes                 | not started     | Contract decision required                                                                                                                                                                              |
+| 1B: automatic request carriage            | not started     | Existing clients negotiate v2, but cross-SDK automatic carriage needs a dedicated audit                                                                                                                 |
+| 1C: request-scoped security and lifecycle | not started     | Existing permit and authorization components must be audited against the stateless request boundary                                                                                                     |
+| 2A: resilience and performance            | not started     | Existing tests cover parts of concurrency and transport behavior, not the full failure matrix                                                                                                           |
+| 2B: independent interoperability          | not started     | atribd and atrib clients interoperate; independence gate remains                                                                                                                                        |
+| 2C: human-facing propagation              | in progress     | Cutover docs are current; the wider session-era scan and runbooks remain                                                                                                                                |
+| 3A: daemon consolidation study            | deferred        | Begins only after tranches 1 and 2                                                                                                                                                                      |
+| 3B: product propagation                   | deferred        | Begins after released SDK and interop proof                                                                                                                                                             |
 
 ## Immediate next slice
 
-Implement Tranche 0B as the next vertical slice:
-
-1. Define the compatibility telemetry schema and privacy boundary.
-2. Add bounded profile, client, protocol, and last-seen dimensions.
-3. Detect regressions after a profile has produced modern traffic.
-4. Encode the sustained-zero removal rule and its operator report.
-5. Prove the report and regression detector against mixed-era traffic.
-
-Then complete Tranche 0B before designing the idempotency contract. This keeps
-the current cutover protected while the higher-risk write contract is decided.
+Release and install Tranche 0B on the three operator profiles. Confirm that
+each profile reports modern traffic and no post-modern legacy regression. Then
+start Tranche 1A with an accepted idempotency contract before changing the
+write handlers.

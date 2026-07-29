@@ -22,6 +22,7 @@ import {
   collectRegisteredLongLivedAgents,
   collectRegisteredStartupSpawnConfigs,
   formatTextReport,
+  normalizePrimitiveRuntimeHealthReport,
   registeredLongLivedAgentsFromRegistry,
   registeredStartupSpawnConfigsFromRegistry,
   routeRegistryDiagnosticsFromRegistry,
@@ -34,6 +35,36 @@ const BRIDGE_SERVICE_DIR = ['agent', 'bridge', 'atrib'].join('-')
 const failures = []
 
 Date.now = () => FIXTURE_NOW_MS
+
+function checkDaemonHealthNormalization() {
+  const compatibility = {
+    schema: 'atrib.mcp-compatibility-observability.v1',
+    modern_requests: 4,
+    legacy_requests: 0,
+  }
+  const normalized = normalizePrimitiveRuntimeHealthReport({
+    daemon: {
+      name: 'atribd',
+      version: '0.3.1',
+      transport: 'streamable-http-stateless',
+      transport_adapter: 'v2-dual-era-per-request',
+      protocol_version: '2026-07-28',
+    },
+    primitive_contracts: { attest: { status: 'pass' } },
+    behavioral_probes: { attest: { status: 'skipped' } },
+    recall_contract: { status: 'pass' },
+    compatibility,
+  })
+  if (normalized.primitive_runtime?.version !== '0.3.1') {
+    fail('daemon health normalization: expected atribd version')
+  }
+  if (normalized.primitive_runtime?.session_model !== 'stateless-per-request') {
+    fail('daemon health normalization: expected stateless session model')
+  }
+  if (normalized.compatibility !== compatibility) {
+    fail('daemon health normalization: expected compatibility report preservation')
+  }
+}
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
@@ -1825,6 +1856,7 @@ function main() {
     for (const file of files) checkFixture(join(FIXTURE_DIR, file))
   }
   checkRouteRegistryNormalization()
+  checkDaemonHealthNormalization()
   checkRouteRegistryDiagnosticsGate()
   checkConfigSurfaceEndpointEvidence()
   checkPrimitiveBackendContractGate()
