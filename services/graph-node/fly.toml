@@ -7,6 +7,15 @@ primary_region = 'iad'
 [env]
   PORT = '3200'
   HOST = '0.0.0.0'
+  # Node caps its old-space heap at roughly half of a small machine's RAM,
+  # independent of what [[vm]] memory says. On this 1024mb machine V8 reported
+  # heap_size_limit = 493MB, so the 2026-05-06 bump from 256mb never reached
+  # the heap that was actually running out: on 2026-07-29 the resident record
+  # set (~112k records, ~450MB) filled that 493MB ceiling and any further
+  # allocation aborted the process with "Ineffective mark-compacts near heap
+  # limit". This makes the RAM the machine already has usable. Leaves ~200MB
+  # for non-heap RSS (node binary, buffers, archive replay stream).
+  NODE_OPTIONS = '--max-old-space-size=768'
   # Append-only archive of every successful /v1/ingest. Replayed on
   # cold-start so graph-node rebuilds its in-memory store after OOM /
   # deploy / fly machine reboot. Mounts on the [mounts] volume below.
@@ -29,6 +38,13 @@ primary_region = 'iad'
   size = 'shared-cpu-1x'
   # Bumped from 256mb after observed OOM-kill on 2026-05-06 with ~1500 records
   # in-memory. graph-node holds all derived edges + per-record verification
-  # state in memory (no volume), so memory pressure scales with log size.
-  # 1024mb gives headroom for several thousand records before OOM.
+  # state in memory, so memory pressure scales with log size. Raising this
+  # alone is not enough: see NODE_OPTIONS above, V8 will not use the extra RAM
+  # unless told. Both settings move together.
+  #
+  # Headroom is finite and the log only grows (~4k records/day at 2026-07-29,
+  # ~4KB each in heap, so ~17MB/day). At a 768MB heap that is a few weeks
+  # before this becomes tight again. The durable fix is the disk-backed graph
+  # store already flagged in src/persistence.ts, which notes this in-memory
+  # shape is sustainable to ~10^5 records; the log passed that in July 2026.
   memory = '1024mb'
