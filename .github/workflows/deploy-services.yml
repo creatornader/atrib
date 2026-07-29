@@ -141,16 +141,15 @@ jobs:
     needs: changes
     if: needs.changes.outputs.log_node == 'true'
     runs-on: ubuntu-latest
+    # See the note on deploy-graph-node for why every deploy job carries its own
+    # concurrency group.
+    concurrency:
+      group: deploy-log-node
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-
-      # No pnpm install / workspace build here: the graph canary moved to its
-      # own job below, and check-log-smoke.mjs imports only node:crypto.
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
 
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
@@ -158,6 +157,50 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy -c services/log-node/fly.toml --remote-only
+
+  # Split out of deploy-log-node so that job's result means "the deploy failed"
+  # and nothing else. Other jobs gate on it: while the smoke check lived inside
+  # deploy-log-node, any post-deploy failure turned the whole job red and took
+  # them with it. On 2026-07-29 a favicon-parity mismatch between the marketing
+  # site and the explorer's static assets, nothing to do with log-node, failed
+  # this check after a successful deploy and suppressed the graph canary for a
+  # graph-node release that had shipped fine (run 30437471595).
+  #
+  # Same reasoning that moved the graph canary out of this job: a gate should
+  # fail for its own reason, not inherit someone else's.
+  #
+  # That isolation matters more than it looks, because part of this check is not
+  # under this repo's control and cannot currently go green on demand. The asset
+  # parity section compares live bytes across two independently deployed repos,
+  # so an icon change has an unavoidable red window between the two deploys. It
+  # also calls requireImmutableCache, while /static/* ships
+  # `max-age=86400, immutable`, so a CDN may serve stale bytes for up to a day
+  # AFTER a correct deploy (observed `age: 53617` on /static/favicon.ico while
+  # the check was failing). A policy that forbids revalidation cannot coexist
+  # with byte-equality on a stable path; reconciling that is its own change, and
+  # until then this gate has to be able to fail alone.
+  log-smoke:
+    needs: [changes, deploy-log-node]
+    # !cancelled() rather than relying on the default cascade, so the guards
+    # below are the only thing deciding. Runs only for a log-node release whose
+    # deploy actually succeeded: smoke-testing a failed deploy restates the
+    # failure.
+    if: >-
+      !cancelled()
+      && needs.changes.result == 'success'
+      && needs.changes.outputs.log_node == 'true'
+      && needs.deploy-log-node.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      # No pnpm install or workspace build: check-log-smoke.mjs imports only
+      # node:crypto.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
 
       - name: Smoke test public log endpoints
         shell: bash
@@ -167,6 +210,28 @@ jobs:
     needs: changes
     if: needs.changes.outputs.graph_node == 'true'
     runs-on: ubuntu-latest
+    # Serialize deploys of THIS service across commits.
+    #
+    # The workflow-level `concurrency` above is keyed per head_sha, which puts
+    # every commit in its own group and so serializes nothing: two runs from
+    # different commits can both reach `flyctl deploy` against the same Fly app,
+    # and a slower deploy of an older commit can land after a newer one and
+    # quietly roll production back. Commits land close together here (four
+    # merges inside twenty minutes on 2026-07-29), so it is reachable.
+    #
+    # The group is per JOB, not workflow-wide. A single workflow-wide group
+    # would be wrong: GitHub cancels the previously pending run when a new one
+    # queues, and because change detection is per-commit (git diff HEAD^ HEAD),
+    # cancelling commit A's run drops A's graph-node deploy entirely if commit B
+    # only touched log-node. Per-job, only runs that actually deploy this
+    # service contend, and the survivor is always the newest, whose tree already
+    # contains the older change.
+    #
+    # cancel-in-progress stays false: a deploy that is already applying should
+    # finish rather than be killed part-way.
+    concurrency:
+      group: deploy-graph-node
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
         with:
@@ -247,6 +312,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.directory_node == 'true'
     runs-on: ubuntu-latest
+    # Per-job group, same reasoning as deploy-graph-node above.
+    concurrency:
+      group: deploy-directory-node
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
         with:
@@ -263,6 +332,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.archive_node == 'true'
     runs-on: ubuntu-latest
+    # Per-job group, same reasoning as deploy-graph-node above.
+    concurrency:
+      group: deploy-archive-node
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
         with:
