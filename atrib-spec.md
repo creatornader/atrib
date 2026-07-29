@@ -3950,6 +3950,46 @@ The degradation contract is:
 
 The degradation contract means a developer can add `@atrib/mcp` or `@atrib/agent` to a production system with zero risk of introducing failures.
 
+#### 5.8.1 Duplicate-safe stateless MCP writes
+
+A stateless MCP write MAY carry a caller-generated retry identity in
+`params._meta["dev.atrib/idempotencyKey"]`. The key MUST be a 16 to 128
+character visible-ASCII string. It is transport metadata and MUST NOT enter
+canonical atrib record bytes.
+
+A server that advertises duplicate-safe writes MUST:
+
+1. derive an action binding as
+   `sha256(JCS({context_id, tool, arguments}))`, using the explicit resolved
+   `context_id`, MCP tool name, and complete tool argument object;
+2. durably reserve the key and binding before dispatch;
+3. serialize concurrent claims for the same key;
+4. preserve the complete successful MCP result before acknowledging it;
+5. return that result without dispatch when the same key and binding repeat;
+6. reject the same key with a different binding before dispatch; and
+7. surface a durable pending entry as an indeterminate prior outcome rather
+   than assuming the action did not happen.
+
+The reference retention window for completed entries is seven days. A server
+MAY use another documented window. It MUST report the effective window. It
+MUST NOT expire unresolved pending entries automatically.
+
+Caller keys SHOULD be hashed before local persistence. The local store MAY
+contain the completed MCP result needed for exact replay and MUST be protected
+as host-private state. The store is not a public log surface.
+
+A caller that receives a timeout or transport failure after sending an
+idempotent write SHOULD retry the same key and unchanged action. It MUST NOT
+fall back to another signing path whose store cannot see the reservation.
+Within one context, the server MUST keep write serialization until the
+underlying operation settles, even when the caller-facing deadline has already
+expired.
+
+This contract proves duplicate safety for completed daemon writes. It does not
+claim exactly-once execution for arbitrary external effects. An orphaned
+pending entry is deliberately indeterminate until an operator or
+application-specific reconciler establishes the outcome.
+
 ---
 
 ### 5.9 Local Mirror Conventions

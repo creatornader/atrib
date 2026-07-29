@@ -53,6 +53,22 @@ explicit per-request values. Its v2 MCP client negotiates the 2026-07-28
 protocol with a compatible daemon and falls back to the legacy handshake for
 an older runtime.
 
+For a retryable write, pass one caller-generated key and reuse it only for the
+same intended action:
+
+```ts
+const result = await client.attest({
+  content: { what: 'accepted deployment plan' },
+  context_id: '0123456789abcdef0123456789abcdef',
+  idempotency_key: 'deploy-plan-019fac220001',
+})
+```
+
+The daemon binds the key to the context, tool, and complete arguments. A
+completed retry returns the original result. Changed arguments are rejected.
+If the daemon outcome is uncertain, the SDK suppresses in-process fallback and
+asks the caller to retry the same key.
+
 ## Usage
 
 ```ts
@@ -261,6 +277,10 @@ then tries paths in order:
 
 Under `daemon.mode: 'require'`, a daemon failure returns the degraded
 `via: 'none'` result directly. It never falls back and never throws.
+
+When `AttestInput.idempotency_key` is set, the daemon path is also required for
+that call. The SDK never signs through the in-process fallback after a timeout
+or transport failure because that path cannot see the daemon's reservation.
 
 **`action(input)` semantics.** Calls `attest()` for the request and terminal
 outcome. The action name uses the hashed-name posture. Arguments and results

@@ -671,6 +671,7 @@ export async function bindAtribdHttpHost(
           requests: { ...counters },
           compatibility: compatibility.report(),
           tool_calls: toolCalls,
+          idempotency: toolCalls.idempotency,
         },
       })
       return

@@ -49,6 +49,13 @@ export interface AttestInput {
    */
   content: Record<string, unknown>
   /**
+   * Caller-generated retry identity for daemon writes. The same key with
+   * the same context, tool, and arguments returns the original result.
+   * Reusing the key for a changed action is rejected. Requires the daemon
+   * path; the SDK never falls back in process after an uncertain daemon call.
+   */
+  idempotency_key?: string
+  /**
    * Event type short name ('observation', 'annotation', …) or absolute
    * URI. Default 'observation', or derived from `ref.kind` when a ref is
    * present ('annotates' → annotation, 'revises' → revision).

@@ -1,0 +1,8 @@
+{
+  "name": "completed retry replays the original result after restart",
+  "scenario": "completed-retry-replays-original",
+  "expected": {
+    "decision": "replay",
+    "same_result": true
+  }
+}

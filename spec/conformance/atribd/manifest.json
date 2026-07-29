@@ -71,6 +71,17 @@
         "cases/concurrent-writer-serialization/mixed-producer-linear.json",
         "cases/concurrent-writer-serialization/outside-writer-fork-boundary.json"
       ]
+    },
+    {
+      "name": "write-idempotency",
+      "cases": [
+        "cases/write-idempotency/completed-retry-replays-original.json",
+        "cases/write-idempotency/changed-binding-rejected.json",
+        "cases/write-idempotency/concurrent-duplicate-one-dispatch.json",
+        "cases/write-idempotency/restart-pending-indeterminate.json",
+        "cases/write-idempotency/timeout-locks-until-settlement.json",
+        "cases/write-idempotency/missing-context-rejected.json"
+      ]
     }
   ],
   "constants": {
@@ -79,5 +90,5 @@
     "fixed_timestamp_ms": 1781136000000,
     "missing_context_error_text": "atrib: context_id required on stateless transport"
   },
-  "note": "This corpus is the D148 (promoted from P046) design gate for the atribd daemon. It pins the stateless transport contract, the SEP-2243 routing-header rejection rule, the context-identity ladder consumed unmodified from spec 1.5.4/1.5.3, byte identity of signed records across standalone, daemon HTTP, and alias surfaces, the D127-D130 health gates without the retired sessions block, the 5.8 degradation posture, and per-context write serialization through one daemon instance. It introduces no record field, event type, cognitive primitive, or graph edge."
+  "note": "This corpus is the D148 (promoted from P046) design gate for the atribd daemon, extended by D184 duplicate-safe write vectors. It pins the stateless transport contract, the SEP-2243 routing-header rejection rule, the context-identity ladder consumed unmodified from spec 1.5.4/1.5.3, byte identity of signed records across standalone, daemon HTTP, and alias surfaces, the D127-D130 health gates without the retired sessions block, the 5.8 degradation posture, per-context write serialization through one daemon instance, and action-bound idempotency behavior. It introduces no record field, event type, cognitive primitive, or graph edge."
 }

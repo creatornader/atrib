@@ -120,6 +120,13 @@ function emptyDiagnostics(toolTimeoutMs = 45_000): AtribdDiagnostics {
     calls_timed_out: 0,
     calls_settled_after_timeout: 0,
     in_flight_tool_calls: [],
+    idempotency: {
+      schema: 'atrib.mcp-write-idempotency.v1',
+      window_ms: 7 * 24 * 60 * 60 * 1000,
+      max_entries: 10_000,
+      pending: 0,
+      completed: 0,
+    },
   }
 }
 

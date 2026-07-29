@@ -1,0 +1,7 @@
+{
+  "name": "keyed write without a resolved context is rejected",
+  "scenario": "missing-context-rejected",
+  "expected": {
+    "error_code": -32602
+  }
+}

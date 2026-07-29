@@ -1,0 +1,7 @@
+{
+  "name": "caller timeout keeps the context lock until primitive settlement",
+  "scenario": "timeout-locks-until-settlement",
+  "expected": {
+    "second_starts_before_first_settles": false
+  }
+}

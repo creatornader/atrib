@@ -133,6 +133,27 @@ routing through the daemon sit outside this boundary and can still fork a
 chain; the `spec/conformance/atribd/cases/concurrent-writer-serialization/`
 family pins both sides of that line.
 
+## Duplicate-safe writes
+
+A write caller can set
+`params._meta["dev.atrib/idempotencyKey"]` to a stable 16 to 128 character
+visible-ASCII key. atribd binds the key to the request's context, tool, and
+complete arguments. The first call reserves the binding before dispatch and
+stores the complete result before returning it. A retry with the same binding
+returns that result without signing again. The same key with changed arguments
+fails before dispatch.
+
+The default store is
+`~/.atrib/state/atribd-idempotency-<profile>.json`. It hashes caller keys and
+keeps completed results for seven days. `ATRIBD_IDEMPOTENCY_STATE_FILE`
+selects another path or disables persistence when set to an empty string.
+Unresolved pending entries never expire automatically. After a crash, such a
+key returns an indeterminate-outcome error until the operator reconciles it.
+
+Caller-facing timeouts do not release the per-context write lock. The lock
+stays held until the underlying primitive settles. If the late call succeeds,
+atribd stores its result before the next write in that context begins.
+
 ## Degradation
 
 The [§5.8](../../atrib-spec.md#58-degradation-contract) contract is absolute. Log submission, mirror writes, and health
