@@ -46,6 +46,8 @@ jobs:
 
       - run: pnpm -r build
 
+      - run: pnpm mcp-v2:packed-runtime
+
       - run: pnpm -r typecheck
 
       - run: pnpm lint
