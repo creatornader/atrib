@@ -191,7 +191,19 @@ The daemon test suite hard-kills a real atribd process on a fixed endpoint,
 starts a fresh process, and proves discovery, reads, negotiated receipts, and
 completed-write replay. The retry produces one mirror record. The same suite
 exercises 32 contexts concurrently, queues competing writes within one context,
-and proves another context can progress while that queue is busy.
+and proves another context can progress while that queue is busy. A failure
+matrix stops and kills the daemon with discovery, tool listing, reads, and a
+negotiated-receipt write pending at the client. Every request recovers by
+retrying its complete request. The write uses the same idempotency key and
+produces one mirror record.
+
+The same real-process suite pins broad local-host budgets that catch request
+path regressions without treating CI jitter as product latency: first
+`server/discover` under 2 seconds; p95 cached `tools/list` and compatibility
+routing under 500 milliseconds; p95 reads under 1.5 seconds; and p95 signed
+writes with receipt generation under 2 seconds. These budgets cover daemon
+work after startup and exclude public-log delivery, which runs through the
+degradation queue.
 
 `tools/list` remains `cacheScope: "private"`. During the alias window its
 default `ttlMs` is five minutes and operators can lower it. A client may use a

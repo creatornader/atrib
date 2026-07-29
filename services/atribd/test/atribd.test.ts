@@ -85,6 +85,19 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
 }
 
+function percentile(samples: number[], fraction: number): number {
+  const sorted = [...samples].sort((left, right) => left - right)
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))] ?? Infinity
+}
+
+async function timedRequest(run: () => Promise<Response>): Promise<number> {
+  const startedAt = performance.now()
+  const response = await run()
+  expect(response.status).toBe(200)
+  await response.arrayBuffer()
+  return performance.now() - startedAt
+}
+
 async function freeTcpPort(): Promise<number> {
   const server = createServer()
   await new Promise<void>((resolveListen, rejectListen) => {
@@ -1518,6 +1531,237 @@ describe('atribd process replacement', () => {
       } finally {
         if (second) await second.close()
         else await first.close()
+      }
+    },
+  )
+
+  it(
+    'retries requests that lose their connection while the daemon is stopped',
+    { timeout: 120_000 },
+    async () => {
+      const port = await freeTcpPort()
+      const contextId = '8'.repeat(32)
+      const env = {
+        HOME: tmp,
+        NODE_ENV: 'production',
+        ATRIB_AGENT: 'in-flight-kill-test',
+        ATRIBD_IDEMPOTENCY_STATE_FILE: join(tmp, 'idempotency-in-flight.json'),
+        ATRIB_PRIVATE_KEY: TEST_PRIVATE_KEY,
+        ATRIB_RECORD_FILE: recordFile,
+        ATRIB_MIRROR_FILE: recordFile,
+        ATRIB_LOG_ENDPOINT: 'http://127.0.0.1:9/v1/entries',
+      }
+      const args = ['--port', String(port), '--tools-list-ttl-ms', '100']
+      const cases = [
+        {
+          name: 'discovery',
+          body: modernRequest(601, 'server/discover'),
+          headers: { ...MODERN_HEADERS, 'mcp-method': 'server/discover' },
+        },
+        {
+          name: 'tool listing',
+          body: modernRequest(602, 'tools/list'),
+          headers: { ...MODERN_HEADERS, 'mcp-method': 'tools/list' },
+        },
+        {
+          name: 'read',
+          body: toolsCallBody(
+            603,
+            'recall_my_attribution_history',
+            { compact: true },
+            modernMeta(),
+          ),
+          headers: {
+            ...MODERN_HEADERS,
+            'mcp-method': 'tools/call',
+            'mcp-name': 'recall_my_attribution_history',
+          },
+        },
+        {
+          name: 'write with negotiated receipt',
+          body: toolsCallBody(
+            604,
+            'emit',
+            {
+              context_id: contextId,
+              event_type: 'observation',
+              content: { what: 'survives an in-flight connection loss' },
+            },
+            {
+              ...modernMeta(),
+              'dev.atrib/idempotencyKey': 'in-flight-kill-write-0001',
+              'io.modelcontextprotocol/clientCapabilities': {
+                extensions: {
+                  'dev.atrib/attribution': { version: '0.1', accept: ['record'] },
+                },
+              },
+            },
+          ),
+          headers: {
+            ...MODERN_HEADERS,
+            'mcp-method': 'tools/call',
+            'mcp-name': 'emit',
+          },
+        },
+      ]
+
+      for (const requestCase of cases) {
+        const first = await startHttpHostProcess(env, args)
+        let settled = false
+        const pending = postJson(first.endpoint, requestCase.body, requestCase.headers).finally(
+          () => {
+            settled = true
+          },
+        )
+        void pending.catch(() => {})
+        first.child.kill('SIGSTOP')
+        await delay(20)
+
+        expect(settled, `${requestCase.name} settled while the daemon was stopped`).toBe(false)
+
+        first.child.kill('SIGKILL')
+        await waitForExit(first.child)
+        await pending.catch(() => undefined)
+
+        const second = await startHttpHostProcess(env, args)
+        try {
+          const response = await retryPost(
+            second.endpoint,
+            requestCase.body,
+            requestCase.headers,
+          )
+          expect(response.status, requestCase.name).toBe(200)
+          const payload = (await response.json()) as {
+            result?: {
+              _meta?: {
+                'dev.atrib/attribution'?: { receipt?: { record_hash?: string } }
+              }
+            }
+          }
+          if (requestCase.name === 'write with negotiated receipt') {
+            expect(
+              payload.result?._meta?.['dev.atrib/attribution']?.receipt?.record_hash,
+            ).toMatch(/^sha256:[0-9a-f]{64}$/)
+          }
+        } finally {
+          await second.close()
+        }
+      }
+
+      const records = readFileSync(recordFile, 'utf8')
+        .split('\n')
+        .filter(Boolean)
+      expect(records).toHaveLength(1)
+    },
+  )
+
+  it(
+    'keeps stable request paths within local daemon latency budgets',
+    { timeout: 90_000 },
+    async () => {
+      const port = await freeTcpPort()
+      const contextId = '7'.repeat(32)
+      const env = {
+        HOME: tmp,
+        NODE_ENV: 'production',
+        ATRIB_AGENT: 'request-budget-test',
+        ATRIBD_IDEMPOTENCY_STATE_FILE: join(tmp, 'idempotency-benchmark.json'),
+        ATRIB_PRIVATE_KEY: TEST_PRIVATE_KEY,
+        ATRIB_RECORD_FILE: recordFile,
+        ATRIB_MIRROR_FILE: recordFile,
+        ATRIB_LOG_ENDPOINT: 'http://127.0.0.1:9/v1/entries',
+      }
+      const host = await startHttpHostProcess(env, [
+        '--port',
+        String(port),
+        '--tools-list-ttl-ms',
+        '100',
+      ])
+      try {
+        const coldDiscoveryMs = await timedRequest(() =>
+          postJson(
+            host.endpoint,
+            modernRequest(700, 'server/discover'),
+            { ...MODERN_HEADERS, 'mcp-method': 'server/discover' },
+          ),
+        )
+        const cachedListMs: number[] = []
+        const readMs: number[] = []
+        const writeReceiptMs: number[] = []
+        const compatibilityMs: number[] = []
+
+        for (let index = 0; index < 8; index += 1) {
+          cachedListMs.push(
+            await timedRequest(() =>
+              postJson(
+                host.endpoint,
+                modernRequest(710 + index, 'tools/list'),
+                { ...MODERN_HEADERS, 'mcp-method': 'tools/list' },
+              ),
+            ),
+          )
+          readMs.push(
+            await timedRequest(() =>
+              postJson(
+                host.endpoint,
+                toolsCallBody(
+                  720 + index,
+                  'recall_my_attribution_history',
+                  { compact: true },
+                  modernMeta(),
+                ),
+                {
+                  ...MODERN_HEADERS,
+                  'mcp-method': 'tools/call',
+                  'mcp-name': 'recall_my_attribution_history',
+                },
+              ),
+            ),
+          )
+          writeReceiptMs.push(
+            await timedRequest(() =>
+              postJson(
+                host.endpoint,
+                toolsCallBody(
+                  730 + index,
+                  'emit',
+                  {
+                    context_id: contextId,
+                    event_type: 'observation',
+                    content: { what: `request budget sample ${index}` },
+                  },
+                  {
+                    ...modernMeta(),
+                    'dev.atrib/idempotencyKey': `request-budget-write-${index}`,
+                    'io.modelcontextprotocol/clientCapabilities': {
+                      extensions: {
+                        'dev.atrib/attribution': { version: '0.1', accept: ['record'] },
+                      },
+                    },
+                  },
+                ),
+                {
+                  ...MODERN_HEADERS,
+                  'mcp-method': 'tools/call',
+                  'mcp-name': 'emit',
+                },
+              ),
+            ),
+          )
+          compatibilityMs.push(
+            await timedRequest(() =>
+              postJson(host.endpoint, TOOLS_LIST_BODY, { 'mcp-method': 'tools/list' }),
+            ),
+          )
+        }
+
+        expect(coldDiscoveryMs).toBeLessThan(2_000)
+        expect(percentile(cachedListMs, 0.95)).toBeLessThan(500)
+        expect(percentile(readMs, 0.95)).toBeLessThan(1_500)
+        expect(percentile(writeReceiptMs, 0.95)).toBeLessThan(2_000)
+        expect(percentile(compatibilityMs, 0.95)).toBeLessThan(500)
+      } finally {
+        await host.close()
       }
     },
   )
