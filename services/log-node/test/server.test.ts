@@ -1157,7 +1157,12 @@ describe('GET /dashboard', () => {
 
     // Only the hash-versioned assets. Some references carry a human version
     // like ?v=2026, which is not a claim about bytes and nothing to check.
-    const refs = [...html.matchAll(/"(\/[A-Za-z0-9._\-/]+)\?v=([a-f0-9]{8,})"/g)]
+    // Both quoted attributes and unquoted url(...) in the inline <style>, since
+    // the @font-face srcs are the latter and were missed the first time.
+    const refs = [
+      ...html.matchAll(/"(\/[A-Za-z0-9._\-/]+)\?v=([a-f0-9]{8,})"/g),
+      ...html.matchAll(/url\((\/[A-Za-z0-9._\-/]+)\?v=([a-f0-9]{8,})\)/g),
+    ]
     expect(
       refs.length,
       'expected hash-versioned asset references in the explorer HTML',
