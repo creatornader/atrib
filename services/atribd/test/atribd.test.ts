@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
@@ -82,6 +83,44 @@ function processEnvWith(env: NodeJS.ProcessEnv): Record<string, string> {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
+}
+
+async function freeTcpPort(): Promise<number> {
+  const server = createServer()
+  await new Promise<void>((resolveListen, rejectListen) => {
+    server.once('error', rejectListen)
+    server.listen(0, '127.0.0.1', resolveListen)
+  })
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('failed to reserve a TCP port')
+  await new Promise<void>((resolveClose, rejectClose) => {
+    server.close((error) => (error ? rejectClose(error) : resolveClose()))
+  })
+  return address.port
+}
+
+async function waitForExit(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  await new Promise<void>((resolveExit) => child.once('exit', () => resolveExit()))
+}
+
+async function retryPost(
+  endpoint: string,
+  body: unknown,
+  headers: Record<string, string>,
+  deadlineMs = 30_000,
+): Promise<Response> {
+  const deadline = Date.now() + deadlineMs
+  let lastError: unknown
+  while (Date.now() < deadline) {
+    try {
+      return await postJson(endpoint, body, headers)
+    } catch (error) {
+      lastError = error
+      await delay(25)
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('request retry deadline expired')
 }
 
 function base64url(bytes: Uint8Array): string {
@@ -903,17 +942,37 @@ describe('atribd write serialization', () => {
 
   it('lets writes on different contexts overlap', async () => {
     const { backend, maxConcurrentWrites } = await fakeToolBackend({ writeDelayMs: 30 })
-    await Promise.all([
+    const contexts = Array.from({ length: 32 }, (_, index) =>
+      index.toString(16).padStart(32, '0'),
+    )
+    await Promise.all(
+      contexts.map((contextId) =>
+        backend.callTool({
+        name: 'emit',
+          arguments: { context_id: contextId, content: {} },
+        }),
+      ),
+    )
+    expect(maxConcurrentWrites()).toBe(contexts.length)
+    await backend.close()
+  })
+
+  it('keeps independent contexts moving behind one busy context', async () => {
+    const { backend, calls } = await fakeToolBackend({ writeDelayMs: 25 })
+    const busy = Array.from({ length: 8 }, (_, index) =>
       backend.callTool({
         name: 'emit',
-        arguments: { context_id: CONTEXT_A, content: {} },
+        arguments: { context_id: CONTEXT_A, content: { index } },
       }),
-      backend.callTool({
+    )
+    const independent = backend.callTool({
         name: 'emit',
         arguments: { context_id: CONTEXT_B, content: {} },
-      }),
-    ])
-    expect(maxConcurrentWrites()).toBe(2)
+    })
+    await independent
+    expect(calls.some((call) => call.args['context_id'] === CONTEXT_B)).toBe(true)
+    expect(calls.filter((call) => call.args['context_id'] === CONTEXT_A).length).toBeLessThan(8)
+    await Promise.all(busy)
     await backend.close()
   })
 })
@@ -1259,6 +1318,7 @@ describe('atribd real primitive mounts', () => {
         ATRIB_AGENT: 'test-agent',
         ATRIB_PRIVATE_KEY: TEST_PRIVATE_KEY,
         ATRIB_RECORD_FILE: recordFile,
+        ATRIB_MIRROR_FILE: recordFile,
       })
       try {
         const requestMeta = {
@@ -1349,6 +1409,118 @@ describe('atribd real primitive mounts', () => {
       await host.close()
     }
   })
+})
+
+describe('atribd process replacement', () => {
+  it(
+    'recovers discovery, reads, writes, receipts, and retries without session repair',
+    { timeout: 90_000 },
+    async () => {
+      const port = await freeTcpPort()
+      const contextId = '9'.repeat(32)
+      const idempotencyKey = 'process-replacement-write-0001'
+      const env = {
+        HOME: tmp,
+        NODE_ENV: 'production',
+        ATRIB_AGENT: 'resilience-test',
+        ATRIBD_IDEMPOTENCY_STATE_FILE: join(tmp, 'idempotency.json'),
+        ATRIB_PRIVATE_KEY: TEST_PRIVATE_KEY,
+        ATRIB_RECORD_FILE: recordFile,
+        ATRIB_MIRROR_FILE: recordFile,
+        ATRIB_LOG_ENDPOINT: 'http://127.0.0.1:9/v1/entries',
+      }
+      const args = ['--port', String(port), '--tools-list-ttl-ms', '100']
+      const headers = {
+        ...MODERN_HEADERS,
+        'mcp-method': 'tools/call',
+        'mcp-name': 'emit',
+      }
+      const requestMeta = {
+        ...modernMeta(),
+        'dev.atrib/idempotencyKey': idempotencyKey,
+        'io.modelcontextprotocol/clientCapabilities': {
+          extensions: {
+            'dev.atrib/attribution': { version: '0.1', accept: ['record'] },
+          },
+        },
+      }
+      const write = toolsCallBody(
+        501,
+        'emit',
+        {
+          context_id: contextId,
+          event_type: 'observation',
+          content: { what: 'survives process replacement' },
+        },
+        requestMeta,
+      )
+
+      const first = await startHttpHostProcess(env, args)
+      let second: HttpHostProcess | undefined
+      try {
+        const discover = await postJson(
+          first.endpoint,
+          modernRequest(499, 'server/discover'),
+          { ...MODERN_HEADERS, 'mcp-method': 'server/discover' },
+        )
+        expect(discover.status).toBe(200)
+
+        const read = await postJson(
+          first.endpoint,
+          toolsCallBody(500, 'recall_my_attribution_history', { compact: true }, modernMeta()),
+          {
+            ...MODERN_HEADERS,
+            'mcp-method': 'tools/call',
+            'mcp-name': 'recall_my_attribution_history',
+          },
+        )
+        expect(read.status).toBe(200)
+
+        const initialWrite = await postJson(first.endpoint, write, headers)
+        expect(initialWrite.status).toBe(200)
+        const initialPayload = (await initialWrite.json()) as {
+          result?: {
+            _meta?: {
+              'dev.atrib/attribution'?: { receipt?: { record_hash?: string } }
+            }
+          }
+        }
+        expect(
+          initialPayload.result?._meta?.['dev.atrib/attribution']?.receipt?.record_hash,
+        ).toMatch(/^sha256:[0-9a-f]{64}$/)
+
+        first.child.kill('SIGKILL')
+        await waitForExit(first.child)
+
+        const retry = retryPost(first.endpoint, write, headers)
+        second = await startHttpHostProcess(env, args)
+        const retriedWrite = await retry
+        expect(retriedWrite.status).toBe(200)
+        const retriedPayload = (await retriedWrite.json()) as { result?: unknown }
+        expect(retriedPayload.result).toEqual(initialPayload.result)
+
+        const list = await postJson(
+          second.endpoint,
+          modernRequest(502, 'tools/list'),
+          { ...MODERN_HEADERS, 'mcp-method': 'tools/list' },
+        )
+        const listed = (await list.json()) as {
+          result?: { ttlMs?: number; cacheScope?: string; tools?: unknown[] }
+        }
+        expect(listed.result?.ttlMs).toBe(100)
+        expect(listed.result?.cacheScope).toBe('private')
+        expect(listed.result?.tools?.length).toBe(EXPECTED_TOOL_NAMES.length)
+
+        const records = readFileSync(recordFile, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+        expect(records).toHaveLength(1)
+      } finally {
+        if (second) await second.close()
+        else await first.close()
+      }
+    },
+  )
 })
 
 describe('atribd CLI options', () => {
