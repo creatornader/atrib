@@ -21,7 +21,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { parseConfig } from './config.js'
 import {
   installWrapperLifecycle,
@@ -110,14 +110,13 @@ async function main(): Promise<void> {
     pid: process.pid,
   })
 
-  const transport = new StdioServerTransport()
-  await result.proxy.server.connect(transport)
+  const stdio = serveStdio(() => result.proxy.server)
   log('info', 'wrapper ready, awaiting host stdio')
 
   const shutdown = async (reason: WrapperShutdownReason, details: WrapperShutdownDetails = {}) => {
     log('info', 'wrapper shutting down', { reason, ...details })
     try {
-      await transport.close()
+      await stdio.close()
     } catch (err) {
       log('warn', 'host transport close failed during shutdown', {
         reason,
