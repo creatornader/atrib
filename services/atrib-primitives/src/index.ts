@@ -21,6 +21,7 @@ import {
 import { createRequire } from 'node:module'
 import type { AddressInfo, Socket } from 'node:net'
 import { pathToFileURL } from 'node:url'
+import { bindAtribdHttpHost } from '@atrib/daemon'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -1439,6 +1440,17 @@ function parsePositiveInt(raw: string, name: string): number {
 export async function bindAtribPrimitivesHttpHost(
   options: AtribPrimitivesHttpHostOptions = {},
 ): Promise<AtribPrimitivesHttpHost> {
+  // The old sessionful primitive HTTP host is retired. Preserve the private
+  // entry point for operators and test fixtures, but terminate it at atribd's
+  // stateless v2 host rather than keeping a second HTTP implementation.
+  return bindAtribdHttpHost({
+    host: options.host,
+    port: options.port,
+    path: options.path,
+    jsonReady: options.jsonReady,
+    toolTimeoutMs: options.toolTimeoutMs,
+  })
+
   const toolTimeoutMs = options.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
   const backendProvider = createBackendProvider(
     options.backendFactory ?? (() => createAtribPrimitivesBackend({ toolTimeoutMs })),

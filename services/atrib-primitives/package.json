@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@atrib/daemon": "workspace:*",
     "@atrib/attest": "workspace:*",
     "@atrib/recall": "workspace:*",
     "@atrib/summarize": "workspace:*",

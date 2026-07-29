@@ -889,6 +889,9 @@ importers:
       '@atrib/attest':
         specifier: workspace:*
         version: link:../atrib-attest
+      '@atrib/daemon':
+        specifier: workspace:*
+        version: link:../atribd
       '@atrib/recall':
         specifier: workspace:*
         version: link:../atrib-recall
