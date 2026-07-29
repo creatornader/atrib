@@ -1,5 +1,13 @@
 # @atrib/agent
 
+## 0.4.9
+
+### Patch Changes
+
+- Updated dependencies [fc4f351]
+  - @atrib/mcp@0.24.0
+  - @atrib/verify@0.13.1
+
 ## 0.4.8
 
 ### Patch Changes

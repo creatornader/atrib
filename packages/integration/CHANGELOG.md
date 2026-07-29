@@ -1,5 +1,22 @@
 # @atrib/integration
 
+## 0.0.56
+
+### Patch Changes
+
+- Updated dependencies [fc4f351]
+  - @atrib/mcp@0.24.0
+  - @atrib/mcp-wrap@0.12.0
+  - @atrib/action-gate@0.1.7
+  - @atrib/agent@0.4.9
+  - @atrib/log-dev@0.1.39
+  - @atrib/runtime-log@0.5.1
+  - @atrib/sdk@7.0.0
+  - @atrib/verify@0.13.1
+  - @atrib/archive-node@0.1.47
+  - @atrib/graph-node@0.1.47
+  - @atrib/log-node@0.1.39
+
 ## 0.0.55
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @atrib/runtime-log
 
+## 0.5.1
+
+### Patch Changes
+
+- @atrib/verify@0.13.1
+
 ## 0.5.0
 
 ### Minor Changes

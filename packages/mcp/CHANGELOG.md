@@ -1,5 +1,11 @@
 # @atrib/mcp
 
+## 0.24.0
+
+### Minor Changes
+
+- fc4f351: Migrate maintained MCP servers, clients, and the primitive runtime to the v2 SDK split. atribd now negotiates dev.atrib/attribution receipts on stateless v2 tool calls. The retired primitives HTTP entry point delegates to atribd's stateless host.
+
 ## 0.23.0
 
 ### Minor Changes

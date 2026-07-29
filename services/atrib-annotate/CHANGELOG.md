@@ -1,5 +1,16 @@
 # @atrib/annotate
 
+## 1.1.0
+
+### Minor Changes
+
+- fc4f351: Migrate maintained MCP servers, clients, and the primitive runtime to the v2 SDK split. atribd now negotiates dev.atrib/attribution receipts on stateless v2 tool calls. The retired primitives HTTP entry point delegates to atribd's stateless host.
+
+### Patch Changes
+
+- Updated dependencies [fc4f351]
+  - @atrib/attest@0.4.0
+
 ## 1.0.3
 
 ### Patch Changes
