@@ -84,18 +84,18 @@ Every follow-through change must preserve these rules:
 
 ## Priority map
 
-| Priority | Program | Why it is ordered here |
-| --- | --- | --- |
-| P0 | Freeze the cutover contract | Prevent later releases from quietly returning an entrypoint to v1 |
-| P0 | Observe modern and compatibility traffic | A removal decision needs evidence, not a calendar guess |
-| P1 | Make write retries duplicate-safe | A timed-out signed write can otherwise be repeated |
-| P1 | Make per-request context and extension carriage automatic | Explicit context must be the easy SDK path |
-| P1 | Pin request-scoped security and lifecycle behavior | Statelessness moves trust, cancellation, and replay checks onto each request |
-| P2 | Prove restart, concurrency, and performance behavior | The architecture should survive the failures it is meant to simplify |
-| P2 | Publish independent extension interoperability | The extension becomes useful when another implementation can reproduce it |
-| P2 | Complete developer and support propagation | Operators need request-level debugging language and runbooks |
-| P3 | Evaluate profile-aware daemon consolidation | One daemon is possible only after identity and key routing are explicit |
-| P3 | Propagate the commercial and ecosystem story | Product claims should follow verified engineering facts |
+| Priority | Program                                                   | Why it is ordered here                                                       |
+| -------- | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| P0       | Freeze the cutover contract                               | Prevent later releases from quietly returning an entrypoint to v1            |
+| P0       | Observe modern and compatibility traffic                  | A removal decision needs evidence, not a calendar guess                      |
+| P1       | Make write retries duplicate-safe                         | A timed-out signed write can otherwise be repeated                           |
+| P1       | Make per-request context and extension carriage automatic | Explicit context must be the easy SDK path                                   |
+| P1       | Pin request-scoped security and lifecycle behavior        | Statelessness moves trust, cancellation, and replay checks onto each request |
+| P2       | Prove restart, concurrency, and performance behavior      | The architecture should survive the failures it is meant to simplify         |
+| P2       | Publish independent extension interoperability            | The extension becomes useful when another implementation can reproduce it    |
+| P2       | Complete developer and support propagation                | Operators need request-level debugging language and runbooks                 |
+| P3       | Evaluate profile-aware daemon consolidation               | One daemon is possible only after identity and key routing are explicit      |
+| P3       | Propagate the commercial and ecosystem story              | Product claims should follow verified engineering facts                      |
 
 ## Execution tranches
 
@@ -382,28 +382,28 @@ The follow-through program is complete when:
 
 ## Current execution state
 
-| Tranche | State | Evidence |
-| --- | --- | --- |
-| 0A: native-v2 release gate | in progress | The cutover has process tests and live proof; the owned-surface inventory and registry-artifact release gate remain to be consolidated |
-| 0B: compatibility observability | in progress | atribd reports modern and legacy counters; client attribution and sunset policy remain |
-| 1A: duplicate-safe writes | not started | Contract decision required |
-| 1B: automatic request carriage | not started | Existing clients negotiate v2, but cross-SDK automatic carriage needs a dedicated audit |
-| 1C: request-scoped security and lifecycle | not started | Existing permit and authorization components must be audited against the stateless request boundary |
-| 2A: resilience and performance | not started | Existing tests cover parts of concurrency and transport behavior, not the full failure matrix |
-| 2B: independent interoperability | not started | atribd and atrib clients interoperate; independence gate remains |
-| 2C: human-facing propagation | in progress | Cutover docs are current; the wider session-era scan and runbooks remain |
-| 3A: daemon consolidation study | deferred | Begins only after tranches 1 and 2 |
-| 3B: product propagation | deferred | Begins after released SDK and interop proof |
+| Tranche                                   | State       | Evidence                                                                                                                                                                                               |
+| ----------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0A: native-v2 release gate                | complete    | `scripts/mcp-v2-owned-surfaces.json` covers 13 owned surfaces and 12 published surfaces; source, process-proof, built-entrypoint, and packed-artifact gates run through doc sync and release readiness |
+| 0B: compatibility observability           | in progress | atribd reports modern and legacy counters; client attribution and sunset policy remain                                                                                                                 |
+| 1A: duplicate-safe writes                 | not started | Contract decision required                                                                                                                                                                             |
+| 1B: automatic request carriage            | not started | Existing clients negotiate v2, but cross-SDK automatic carriage needs a dedicated audit                                                                                                                |
+| 1C: request-scoped security and lifecycle | not started | Existing permit and authorization components must be audited against the stateless request boundary                                                                                                    |
+| 2A: resilience and performance            | not started | Existing tests cover parts of concurrency and transport behavior, not the full failure matrix                                                                                                          |
+| 2B: independent interoperability          | not started | atribd and atrib clients interoperate; independence gate remains                                                                                                                                       |
+| 2C: human-facing propagation              | in progress | Cutover docs are current; the wider session-era scan and runbooks remain                                                                                                                               |
+| 3A: daemon consolidation study            | deferred    | Begins only after tranches 1 and 2                                                                                                                                                                     |
+| 3B: product propagation                   | deferred    | Begins after released SDK and interop proof                                                                                                                                                            |
 
 ## Immediate next slice
 
-Implement Tranche 0A as the first vertical slice:
+Implement Tranche 0B as the next vertical slice:
 
-1. Define the owned MCP surface inventory.
-2. Point every existing pinned process test at that inventory.
-3. Add registry tarball inspection.
-4. Wire the combined proof into release readiness.
-5. Demonstrate that a legacy direct transport causes the proof to fail.
+1. Define the compatibility telemetry schema and privacy boundary.
+2. Add bounded profile, client, protocol, and last-seen dimensions.
+3. Detect regressions after a profile has produced modern traffic.
+4. Encode the sustained-zero removal rule and its operator report.
+5. Prove the report and regression detector against mixed-era traffic.
 
 Then complete Tranche 0B before designing the idempotency contract. This keeps
 the current cutover protected while the higher-risk write contract is decided.
