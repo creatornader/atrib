@@ -1,5 +1,15 @@
 # @atrib/operating-graph
 
+## 0.1.12
+
+### Patch Changes
+
+- Updated dependencies [f650be9]
+- Updated dependencies [d735df2]
+  - @atrib/mcp@0.25.0
+  - @atrib/sdk@7.1.0
+  - @atrib/runtime-log@0.5.2
+
 ## 0.1.11
 
 ### Patch Changes

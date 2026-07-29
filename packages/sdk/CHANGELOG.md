@@ -1,5 +1,24 @@
 # @atrib/sdk
 
+## 7.1.0
+
+### Minor Changes
+
+- f650be9: Add complete stateless MCP request metadata, default attribution negotiation,
+  and exposed transport facts to client surfaces.
+- d735df2: Add action-bound idempotency keys for stateless daemon writes, durable result
+  replay across restarts, indeterminate pending outcomes, and SDK fallback
+  suppression after uncertain writes.
+
+### Patch Changes
+
+- Updated dependencies [f650be9]
+  - @atrib/mcp@0.25.0
+  - @atrib/verify@0.13.2
+  - @atrib/recall@5.1.2
+  - @atrib/verify-mcp@1.1.2
+  - @atrib/emit@1.2.2
+
 ## 7.0.1
 
 ### Patch Changes

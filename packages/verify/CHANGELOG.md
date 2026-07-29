@@ -1,5 +1,12 @@
 # @atrib/verify
 
+## 0.13.2
+
+### Patch Changes
+
+- Updated dependencies [f650be9]
+  - @atrib/mcp@0.25.0
+
 ## 0.13.1
 
 ### Patch Changes

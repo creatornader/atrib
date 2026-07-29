@@ -1,5 +1,12 @@
 # @atrib/attest
 
+## 0.4.2
+
+### Patch Changes
+
+- Updated dependencies [f650be9]
+  - @atrib/mcp@0.25.0
+
 ## 0.4.1
 
 ### Patch Changes
