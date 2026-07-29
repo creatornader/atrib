@@ -4,7 +4,7 @@
  * `dev.atrib/attribution` MCP extension v0.1 — client-side helpers (D141 /
  * spec §1.5.4.1; extension spec docs/extensions/dev.atrib-attribution/v0.1.md).
  *
- * Two surfaces, both opt-in and §5.8-shaped:
+ * Two surfaces, both explicit and §5.8-shaped:
  *
  *   - {@link declareAttributionExtension}: return a NEW outbound `_meta`
  *     that declares the extension per-request under the core-reserved
@@ -28,7 +28,7 @@ import {
   ATTRIBUTION_EXTENSION_ID,
   ATTRIBUTION_EXTENSION_VERSION,
   MCP_CLIENT_CAPABILITIES_META_KEY,
-  decodeToken,
+  buildAttributionRequestMeta,
   verifyAttributionReceipt,
 } from '@atrib/mcp'
 import type {
@@ -44,8 +44,6 @@ export {
   MCP_CLIENT_CAPABILITIES_META_KEY,
 }
 export type { AttributionAcceptValue, AttributionReceipt, AttributionResultBlock }
-
-const HEX32 = /^[0-9a-f]{32}$/
 
 /** Options for {@link declareAttributionExtension}. */
 export interface DeclareAttributionExtensionOptions {
@@ -87,56 +85,7 @@ export function declareAttributionExtension(
   meta: Record<string, unknown> = {},
   options: DeclareAttributionExtensionOptions = {},
 ): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...meta }
-  try {
-    // Settings object per extension spec §4.2. Unknown accept values would
-    // be ignored server-side; we only ever emit recognized ones.
-    const accept = (options.accept ?? ['token']).filter((v) =>
-      (ATTRIBUTION_ACCEPT_VALUES as readonly string[]).includes(v),
-    )
-    const settings: Record<string, unknown> = {
-      version: ATTRIBUTION_EXTENSION_VERSION,
-      accept: accept.length > 0 ? [...new Set(accept)] : ['token'],
-    }
-
-    const existingCaps = out[MCP_CLIENT_CAPABILITIES_META_KEY]
-    const caps: Record<string, unknown> = isPlainObject(existingCaps) ? { ...existingCaps } : {}
-    const existingExtensions = caps.extensions
-    const extensions: Record<string, unknown> = isPlainObject(existingExtensions)
-      ? { ...existingExtensions }
-      : {}
-    extensions[ATTRIBUTION_EXTENSION_ID] = settings
-    caps.extensions = extensions
-    out[MCP_CLIENT_CAPABILITIES_META_KEY] = caps
-
-    // Prefixed request block (extension spec §5): exactly two fields in
-    // v0.1, both optional; malformed values are dropped, never thrown.
-    const block: Record<string, unknown> = {}
-    if (options.token !== undefined) {
-      if (typeof options.token === 'string' && decodeToken(options.token) !== null) {
-        block.token = options.token
-      } else {
-        console.warn('atrib: malformed propagation token, omitting from extension block')
-      }
-    }
-    if (options.contextId !== undefined) {
-      if (typeof options.contextId === 'string' && HEX32.test(options.contextId)) {
-        block.context_id = options.contextId
-      } else {
-        console.warn('atrib: malformed context_id, omitting from extension block')
-      }
-    }
-    if (Object.keys(block).length > 0) {
-      const existingBlock = out[ATTRIBUTION_EXTENSION_ID]
-      out[ATTRIBUTION_EXTENSION_ID] = isPlainObject(existingBlock)
-        ? { ...existingBlock, ...block }
-        : block
-    }
-    return out
-  } catch (err) {
-    console.warn('atrib: declareAttributionExtension failed, passing meta through', err)
-    return { ...meta }
-  }
+  return buildAttributionRequestMeta(meta, options)
 }
 
 /**

@@ -9498,6 +9498,189 @@ pending entries after a timeout: permits a late first call and a retried second
 call to both sign. Put the caller key in the signed record: changes canonical
 bytes for a transport concern and discloses a correlation identifier.
 
+## D185: Client SDKs carry complete stateless MCP request context
+
+**Date:** 2026-07-28
+
+**Status:** Accepted and implemented
+
+**Extends:** [D141](#d141-devatribattribution-first-class-mcp-extension-sep-2133),
+[D148](#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime),
+and [D184](#d184-stateless-mcp-writes-use-action-bound-idempotency-keys).
+
+**Context.** A server can be stateless while a client still relies on connection
+state, ambient process variables, or manual `_meta` assembly. That leaves
+requests incomplete when they move across processes, retry after a restart, or
+come from another language. The TypeScript SDK negotiated MCP 2026-07-28 but
+did not declare `dev.atrib/attribution` by default, did not advance propagation
+tokens from receipts, and did not expose the negotiated result. The Python SDK
+had no daemon transport.
+
+**Decision.**
+
+1. `@atrib/mcp` owns one request-metadata builder. It merges the attribution
+   extension declaration, explicit `context_id`, W3C trace context, propagation
+   token, legacy carriers, session baggage, and caller metadata without
+   mutating the caller's object.
+2. The official MCP client owns the core protocol version, client identity, and
+   client-capabilities envelope. The atrib helper merges into that envelope.
+   It does not create a second protocol negotiation path.
+3. An existing caller `traceparent` remains intact. When it conflicts with the
+   explicit atrib context, the extension context wins through the
+   [D141](#d141-devatribattribution-first-class-mcp-extension-sep-2133)
+   resolution ladder and the server can surface the mismatch. Preserving both
+   values keeps the conflict observable.
+4. Daemon-backed writes require a resolved 32-hex `context_id` before
+   `tools/call`. Missing context returns a no-record outcome. The stdio and
+   explicit in-process paths retain their documented ambient and fresh-orphan
+   compatibility behavior.
+5. Clients declare `dev.atrib/attribution` and parse receipts by default. A
+   valid receipt token becomes the next request's propagation token. Receipt
+   data remains advisory and never replaces signature or inclusion
+   verification.
+6. Successful daemon results expose the negotiated protocol version, protocol
+   era, discover result, server identity when present, and validated
+   attribution-extension declaration.
+7. The Python package ships an independent standard-library HTTP client for
+   MCP 2026-07-28. It performs `server/discover`, sends the required
+   `Mcp-Method`, `Mcp-Name`, and `Mcp-Protocol-Version` headers, accepts JSON or
+   SSE responses, and uses the same committed request-carriage fixture as the
+   TypeScript implementation.
+8. Python remains daemon-first by default. Tests and hosts that require the
+   in-process path must select `daemon_mode="off"` explicitly. Unit tests must
+   never depend on or mutate an operator's live localhost daemon.
+
+**Guarantee boundary.** Automatic carriage makes each request self-describing
+for atrib context. It does not make an unverified receipt trustworthy, turn a
+session token into authority, or recover a context the caller never supplied.
+Transport reachability can still degrade according to each SDK's documented
+mode. [D184](#d184-stateless-mcp-writes-use-action-bound-idempotency-keys)
+remains the duplicate-safety contract for uncertain writes.
+
+**Alternatives rejected.** Keep the client declaration opt-in: native-v2
+servers would continue returning no negotiated receipt by default. Put core MCP
+envelope fields in atrib code: duplicates the official SDK's negotiation
+logic. Replace a conflicting caller traceparent: hides useful diagnostics and
+changes another tracing owner's state. Reuse the TypeScript client from Python:
+does not prove cross-language interoperability. Let tests inherit the default
+localhost endpoint: can sign fixture records into operator state.
+
+**Protocol impact.** None. The change implements existing MCP 2026-07-28 and
+`dev.atrib/attribution` v0.1 carriage. It changes no atrib signed byte.
+
+## D186: Stateless MCP security and cancellation are request-scoped
+
+**Date:** 2026-07-29
+
+**Status:** Accepted and implemented
+
+**Extends:** [D169](#d169-protected-mcp-execution-requires-a-one-time-server-side-permit),
+[D184](#d184-stateless-mcp-writes-use-action-bound-idempotency-keys), and
+[D185](#d185-client-sdks-carry-complete-stateless-mcp-request-context).
+
+**Context.** Removing MCP sessions also removes the connection as a valid
+place to keep authorization, rate-limit, or cancellation state. A reused HTTP
+connection says nothing about who sent the next request. A client name is
+self-asserted metadata. Cancellation creates a second problem for writes: the
+caller can leave after the signing side effect starts, so "cancelled" cannot
+mean "nothing happened."
+
+**Decision.**
+
+1. atribd can require the MCP SDK's bearer verifier on every MCP POST. The
+   verifier checks token validity, expiry, required scopes, and operator-owned
+   revocation state before dispatch. Health stays unauthenticated so a process
+   supervisor can diagnose a broken verifier.
+2. Verified `authInfo` is request-local. The rate-limit hook receives the
+   client id, scopes, expiry, resource, and optional verified attributes. It
+   never receives the bearer token. atribd does not write authentication
+   material into signed records or daemon diagnostics.
+3. The rate-limit hook runs once per POST. It receives the MCP method, tool
+   name when present, protocol era, and action class. It cannot key authority
+   from a socket, session id, or client name.
+4. Incoming cancellation reaches atribd through the official MCP handler
+   signal. Read calls forward that signal to the mounted primitive. A timeout
+   aborts the same path, releases the routed request, and records the outcome
+   in daemon diagnostics.
+5. A write is not aborted after dispatch. Its caller receives the cancellation
+   or timeout error, while the per-context lock stays held until the primitive
+   settles. A late success completes the [D184](#d184-stateless-mcp-writes-use-action-bound-idempotency-keys)
+   entry and becomes replayable. Diagnostics distinguish late settlement after
+   cancellation from late settlement after timeout.
+6. One-time execution permits remain bound to the exact action through
+   [D169](#d169-protected-mcp-execution-requires-a-one-time-server-side-permit).
+   Write retry keys remain bound to context, tool, and complete arguments
+   through [D184](#d184-stateless-mcp-writes-use-action-bound-idempotency-keys).
+   Missing, changed, expired, replayed, and revoked cases fail before the
+   protected dispatch boundary.
+7. atribd does not use MCP `requestState` for authority or routing. Any future
+   multi-round tool that does so must configure the SDK verification hook,
+   integrity-protect the value, set an expiry, and bind it to the authenticated
+   principal and method.
+
+**Guarantee boundary.** The default local daemon still binds loopback without
+bearer authentication. Operators that expose it beyond a trusted local process
+boundary must configure bearer verification and a request limiter. Cancellation
+releases read-request resources, but a dispatched write can still complete. Its
+idempotency state and late-settlement counters are the evidence for that
+uncertain interval.
+
+**Alternatives rejected.** Trust `clientInfo.name`: the caller controls it.
+Authorize once per connection: HTTP connection reuse crosses requests and
+principals. Abort every timed-out write: the side effect may already have
+happened, and forgetting it permits a duplicate retry. Pass raw bearer tokens
+to the limiter: the limiter needs verified identity facts, not reusable
+credentials. Accept raw `requestState`: caller-carried continuation state has
+no authority without integrity and binding checks.
+
+**Protocol impact.** None. This applies MCP 2026-07-28 request lifecycle and
+OAuth hooks to atribd. It changes no atrib record field or signed byte.
+
+## D187: Keep one atribd daemon per operator profile
+
+**Date:** 2026-07-29
+
+**Status:** Accepted and implemented
+
+**Context.** Stateless MCP allows any request for one security domain to reach
+any instance configured for that domain. It does not make separate signing,
+storage, or policy domains interchangeable. The operator machine runs
+`claude-code`, `claude-desktop`, and `codex` profiles. Each has a distinct
+loopback port, `ATRIB_AGENT`, mirror file, autochain source, and local-substrate
+endpoint.
+
+**Decision.** Keep one atribd process per operator profile. Do not add shared
+profile routing to the daemon.
+
+The current process boundary provides:
+
+1. one fixed signing and Keychain scope per process;
+2. one mirror, autochain source, idempotency store, and coordinator route;
+3. profile-labeled health, logs, restarts, and rollback;
+4. independent failure and resource-pressure domains; and
+5. no caller-controlled profile selector to authenticate or misroute.
+
+**Evidence.** The three installed LaunchAgents differ on ports 8795, 8792, and
+8796. They set profile-specific `ATRIB_AGENT`, `ATRIB_MIRROR_FILE`,
+`ATRIB_AUTOCHAIN_SOURCE`, and `ATRIB_LOCAL_SUBSTRATE_ENDPOINT` values. atribd
+does not implement authenticated per-request selection for that complete
+resource set or a scheduler that prevents one profile from starving another.
+
+**Revisit gate.** A future shared supervisor requires authenticated profile
+identity, key and mirror non-interference tests, profile-scoped idempotency and
+serialization, explicit authorization policy, per-profile health and logs,
+fairness limits, and a one-command rollback to separate daemons. Process-count
+reduction alone is not enough.
+
+**Alternatives rejected.** One fully shared daemon would turn a routing bug
+into a signing or storage boundary violation. Isolated workers behind one
+supervisor add lifecycle coupling without removing the worker processes that
+provide isolation. The current three-daemon topology is small and already
+operable through the profile-aware runtime updater.
+
+**Protocol impact.** None. This is a deployment boundary. It changes no MCP
+message and no atrib signed byte.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

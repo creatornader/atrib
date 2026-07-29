@@ -22,6 +22,7 @@ import {
   collectRegisteredLongLivedAgents,
   collectRegisteredStartupSpawnConfigs,
   formatTextReport,
+  hasStatelessPrimitiveHttpProfile,
   normalizePrimitiveRuntimeHealthReport,
   registeredLongLivedAgentsFromRegistry,
   registeredStartupSpawnConfigsFromRegistry,
@@ -47,14 +48,28 @@ function checkDaemonHealthNormalization() {
       name: 'atribd',
       version: '0.3.1',
       transport: 'streamable-http-stateless',
+      backend: 'shared',
+      mounted_primitive_count: 3,
+      tool_count: 17,
       transport_adapter: 'v2-dual-era-per-request',
       protocol_version: '2026-07-28',
     },
+    profile: { agent: 'codex' },
     primitive_contracts: { attest: { status: 'pass' } },
     behavioral_probes: { attest: { status: 'skipped' } },
     recall_contract: { status: 'pass' },
     compatibility,
   })
+  if (
+    !hasStatelessPrimitiveHttpProfile({
+      endpoint: 'http://127.0.0.1:8796/mcp',
+      reachable: true,
+      status: 'healthy',
+      report: normalized,
+    })
+  ) {
+    fail('daemon health normalization: expected stateless profile host to count as shared HTTP')
+  }
   if (normalized.primitive_runtime?.version !== '0.3.1') {
     fail('daemon health normalization: expected atribd version')
   }

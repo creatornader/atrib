@@ -154,6 +154,62 @@ Caller-facing timeouts do not release the per-context write lock. The lock
 stays held until the underlying primitive settles. If the late call succeeds,
 atribd stores its result before the next write in that context begins.
 
+## Request security and cancellation
+
+HTTP authorization belongs to each request, not to the connection. Embedders
+can pass `bearerAuth` to `bindAtribdHttpHost()`. atribd then runs the MCP SDK's
+token verifier on every POST before dispatch. The verifier owns token validity,
+expiry, required scopes, and revocation checks.
+
+The optional `rateLimit` hook also runs per POST. It receives the method, tool,
+protocol era, action class, and verified principal fields. It does not receive
+the bearer token. Neither a reused socket nor
+`io.modelcontextprotocol/clientInfo` grants authority.
+
+Cancellation follows the request signal supplied by the MCP SDK. Reads pass
+that signal to the mounted primitive, so a disconnected or timed-out request
+can stop its work. Writes use a stricter rule once dispatch starts. The caller
+gets a cancellation or timeout error, but the write keeps settling under its
+per-context lock. A late success completes the idempotency entry. Health
+diagnostics report cancellation and timeout counts separately, including
+settlements that arrive after either event.
+
+atribd does not use MCP `requestState`. A future multi-round tool must verify
+and integrity-protect that caller-carried value before it can affect
+authorization or routing. See
+[D186](../../DECISIONS.md#d186-stateless-mcp-security-and-cancellation-are-request-scoped).
+
+## Process replacement
+
+HTTP clients do not repair or recreate a session after atribd restarts. They
+retry reads as new requests. A write retry uses the same action-bound
+idempotency key and complete arguments. Completed writes replay their original
+result. A pending entry stays indeterminate instead of dispatching a second
+write.
+
+The daemon test suite hard-kills a real atribd process on a fixed endpoint,
+starts a fresh process, and proves discovery, reads, negotiated receipts, and
+completed-write replay. The retry produces one mirror record. The same suite
+exercises 32 contexts concurrently, queues competing writes within one context,
+and proves another context can progress while that queue is busy. A failure
+matrix stops and kills the daemon with discovery, tool listing, reads, and a
+negotiated-receipt write pending at the client. Every request recovers by
+retrying its complete request. The write uses the same idempotency key and
+produces one mirror record.
+
+The same real-process suite pins broad local-host budgets that catch request
+path regressions without treating CI jitter as product latency: first
+`server/discover` under 2 seconds; p95 cached `tools/list` and compatibility
+routing under 500 milliseconds; p95 reads under 1.5 seconds; and p95 signed
+writes with receipt generation under 2 seconds. These budgets cover daemon
+work after startup and exclude public-log delivery, which runs through the
+degradation queue.
+
+`tools/list` remains `cacheScope: "private"`. During the alias window its
+default `ttlMs` is five minutes and operators can lower it. A client may use a
+cached catalogue until that advertised TTL expires, then must refresh before it
+assumes a removed or renamed tool still exists.
+
 ## Degradation
 
 The [§5.8](../../atrib-spec.md#58-degradation-contract) contract is absolute. Log submission, mirror writes, and health
@@ -190,6 +246,29 @@ and mirror stay on the host.
 - **Rollback.** Re-point the harness MCP config at the per-primitive
   binaries or at `atrib-primitives`. Rollback is a config change, not a data
   migration; no signed byte differs between the topologies.
+
+## Request diagnosis
+
+Diagnose one bounded request, not a connection:
+
+1. Record the profile, endpoint, timestamp, MCP method, and tool name.
+2. Check `Mcp-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` against the JSON
+   body. For modern traffic the protocol version is `2026-07-28`.
+3. Inspect request `_meta` for protocol version, client info, capabilities,
+   explicit atrib context, trace context, and the write idempotency key. Redact
+   bearer tokens and private tool arguments.
+4. Inspect the response status, JSON-RPC error or result, attribution receipt,
+   and health counters. A receipt proves a signed commitment, not the truth of
+   the underlying claim.
+5. Retry reads as fresh requests. Retry writes only with the same idempotency
+   key and byte-equivalent action. A changed action must use a new key.
+6. After process replacement, probe `server/discover`, `tools/list`, and one
+   non-mutating read. Do not attempt session repair.
+
+The outer atrib server can be modern while a configured wrapper still talks to
+an older upstream MCP server. Diagnose the outer and upstream legs separately.
+The outer receipt proves what the atrib layer signed. It does not upgrade the
+upstream server's transport or make an upstream claim true.
 
 ## Verify locally
 

@@ -1,5 +1,13 @@
 # @atrib/recall
 
+## 5.1.2
+
+### Patch Changes
+
+- Updated dependencies [f650be9]
+  - @atrib/mcp@0.25.0
+  - @atrib/verify@0.13.2
+
 ## 5.1.1
 
 ### Patch Changes

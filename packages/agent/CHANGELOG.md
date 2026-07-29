@@ -1,5 +1,15 @@
 # @atrib/agent
 
+## 0.4.10
+
+### Patch Changes
+
+- f650be9: Add complete stateless MCP request metadata, default attribution negotiation,
+  and exposed transport facts to client surfaces.
+- Updated dependencies [f650be9]
+  - @atrib/mcp@0.25.0
+  - @atrib/verify@0.13.2
+
 ## 0.4.9
 
 ### Patch Changes

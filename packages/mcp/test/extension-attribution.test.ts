@@ -14,6 +14,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import canonicalize from 'canonicalize'
+import { readFileSync } from 'node:fs'
 import {
   ATTRIBUTION_EXTENSION_ID,
   ATTRIBUTION_EXTENSION_VERSION,
@@ -21,6 +22,7 @@ import {
   MCP_CLIENT_CAPABILITIES_META_KEY,
   applyAttributionReceipt,
   buildAttributionMetaBlock,
+  buildAttributionRequestMeta,
   buildAttributionReceipt,
   declaresExtension,
   detectClientDeclaration,
@@ -346,6 +348,36 @@ describe('buildAttributionMetaBlock', () => {
 
     const fragment2 = buildAttributionMetaBlock({ contextId: 'NOT-HEX' })
     expect(fragment2).toBeUndefined()
+  })
+})
+
+describe('buildAttributionRequestMeta', () => {
+  it('matches the shared stateless-carriage corpus without mutating caller metadata', () => {
+    const path = new URL(
+      '../../../spec/conformance/mcp-extension/cases/request--stateless-carriage.json',
+      import.meta.url,
+    )
+    const fixture = JSON.parse(readFileSync(path, 'utf8')) as {
+      input: {
+        request_meta: Record<string, unknown>
+        options: {
+          accept: Array<'token' | 'record'>
+          token: string
+          context_id: string
+          session_token: string
+        }
+      }
+      expected: { request_meta: Record<string, unknown> }
+    }
+    const original = structuredClone(fixture.input.request_meta)
+    const result = buildAttributionRequestMeta(fixture.input.request_meta, {
+      accept: fixture.input.options.accept,
+      token: fixture.input.options.token,
+      contextId: fixture.input.options.context_id,
+      sessionToken: fixture.input.options.session_token,
+    })
+    expect(result).toEqual(fixture.expected.request_meta)
+    expect(fixture.input.request_meta).toEqual(original)
   })
 })
 

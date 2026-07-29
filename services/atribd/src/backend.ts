@@ -61,18 +61,23 @@ interface InFlightToolCall {
   id: string
   primitive: string
   tool: string
+  kind: AtribdHandlerKind
   startedAt: number
   timedOutAt?: number
+  cancelledAt?: number
 }
 
 export interface AtribdToolCallDiagnostic {
   id: string
   primitive: string
   tool: string
+  kind: AtribdHandlerKind
   started_at: string
   elapsed_ms: number
   timed_out: boolean
   timed_out_at?: string
+  cancelled: boolean
+  cancelled_at?: string
 }
 
 export interface AtribdDiagnostics {
@@ -82,9 +87,20 @@ export interface AtribdDiagnostics {
   calls_succeeded: number
   calls_failed: number
   calls_timed_out: number
+  calls_cancelled: number
   calls_settled_after_timeout: number
+  calls_settled_after_cancel: number
   in_flight_tool_calls: AtribdToolCallDiagnostic[]
   idempotency?: ReturnType<WriteIdempotencyStore['report']>
+}
+
+export interface AtribdCallOptions {
+  /**
+   * Cancellation for this request. Read calls forward it to the primitive.
+   * A write that already crossed the dispatch boundary keeps settling so its
+   * idempotency result cannot become a false clean failure.
+   */
+  signal?: AbortSignal
 }
 
 export interface AtribdRuntimeContractDiagnostic {
@@ -133,7 +149,7 @@ export interface AtribdBackend {
   tools: Tool[]
   toolNames: string[]
   mountedPrimitiveCount: number
-  callTool(request: CallToolRequest['params']): Promise<CallToolResult>
+  callTool(request: CallToolRequest['params'], options?: AtribdCallOptions): Promise<CallToolResult>
   diagnostics(): AtribdDiagnostics
   runtimeContracts(): AtribdRuntimeContracts
   flush(): Promise<void>
@@ -151,6 +167,7 @@ export interface AtribdBackendOptions {
 
 export const DEFAULT_TOOL_TIMEOUT_MS = 45_000
 const MCP_REQUEST_TIMEOUT_CODE = -32001
+const MCP_REQUEST_CANCELLED_CODE = -32003
 const EXPECTED_RECALL_COVERAGE_VERSION = 'coverage-v1'
 const EXPECTED_RECALL_CONTENT_INDEX_VERSION = 'content-index-v1'
 const HEALTH_PROBE_ABSENT_HASH = `sha256:${'f'.repeat(64)}`
@@ -269,6 +286,10 @@ function toolTimeoutError(tool: string, timeoutMs: number): McpError {
   )
 }
 
+function toolCancelledError(tool: string): McpError {
+  return new McpError(MCP_REQUEST_CANCELLED_CODE, `atrib primitive tool ${tool} was cancelled`)
+}
+
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -314,12 +335,17 @@ function serializeInFlightToolCall(
     id: call.id,
     primitive: call.primitive,
     tool: call.tool,
+    kind: call.kind,
     started_at: new Date(call.startedAt).toISOString(),
     elapsed_ms: Math.max(0, now - call.startedAt),
     timed_out: call.timedOutAt !== undefined,
+    cancelled: call.cancelledAt !== undefined,
   }
   if (call.timedOutAt !== undefined) {
     serialized.timed_out_at = new Date(call.timedOutAt).toISOString()
+  }
+  if (call.cancelledAt !== undefined) {
+    serialized.cancelled_at = new Date(call.cancelledAt).toISOString()
   }
   return serialized
 }
@@ -916,7 +942,9 @@ export async function createAtribdBackend(
   let callsSucceeded = 0
   let callsFailed = 0
   let callsTimedOut = 0
+  let callsCancelled = 0
   let callsSettledAfterTimeout = 0
+  let callsSettledAfterCancel = 0
 
   for (const primitive of mounted) {
     // Route kind is per TOOL, not per mount: any tool name the write
@@ -943,6 +971,7 @@ export async function createAtribdBackend(
   const routeToolCall = (
     route: ToolRoute,
     request: CallToolRequest['params'],
+    callOptions: AtribdCallOptions = {},
     onSuccess?: (result: CallToolResult) => Promise<void>,
   ): { response: Promise<CallToolResult>; settled: Promise<void> } => {
     const id = randomUUID()
@@ -951,6 +980,7 @@ export async function createAtribdBackend(
       id,
       primitive: route.primitive,
       tool: request.name,
+      kind: route.kind,
       startedAt,
     }
     callsStarted += 1
@@ -963,34 +993,67 @@ export async function createAtribdBackend(
     })
 
     let timeoutHandle: NodeJS.Timeout | undefined
-    let timedOut = false
-    const primitiveCall = route.client.callTool(request) as Promise<CallToolResult>
+    let removeAbortListener: (() => void) | undefined
+    let abandoned: 'timeout' | 'cancel' | undefined
+    const primitiveAbort = route.kind === 'read' ? new AbortController() : undefined
+    const primitiveCall = route.client.callTool(
+      request,
+      primitiveAbort ? { signal: primitiveAbort.signal } : undefined,
+    ) as Promise<CallToolResult>
     const toolCall = primitiveCall.then(async (result) => {
       await onSuccess?.(result)
       return result
     })
-    const timeout = new Promise<never>((_, reject) => {
+    const abandonment = new Promise<never>((_, reject) => {
+      const cancel = () => {
+        if (abandoned) return
+        abandoned = 'cancel'
+        call.cancelledAt = Date.now()
+        callsCancelled += 1
+        const error = toolCancelledError(request.name)
+        logDaemonEvent({
+          event: 'tool_call_cancelled',
+          id,
+          primitive: route.primitive,
+          tool: request.name,
+          kind: route.kind,
+          elapsed_ms: call.cancelledAt - startedAt,
+        })
+        primitiveAbort?.abort(error)
+        reject(error)
+      }
+      if (callOptions.signal?.aborted) {
+        cancel()
+      } else if (callOptions.signal) {
+        callOptions.signal.addEventListener('abort', cancel, { once: true })
+        removeAbortListener = () => callOptions.signal?.removeEventListener('abort', cancel)
+      }
       timeoutHandle = setTimeout(() => {
-        timedOut = true
+        if (abandoned) return
+        abandoned = 'timeout'
         call.timedOutAt = Date.now()
         callsTimedOut += 1
+        const error = toolTimeoutError(request.name, toolTimeoutMs)
         logDaemonEvent({
           event: 'tool_call_timed_out',
           id,
           primitive: route.primitive,
           tool: request.name,
+          kind: route.kind,
           timeout_ms: toolTimeoutMs,
           elapsed_ms: call.timedOutAt - startedAt,
         })
-        reject(toolTimeoutError(request.name, toolTimeoutMs))
+        primitiveAbort?.abort(error)
+        reject(error)
       }, toolTimeoutMs)
       timeoutHandle.unref?.()
     })
 
     const response = (async () => {
       try {
-        const result = await Promise.race([toolCall, timeout])
+        const result = await Promise.race([toolCall, abandonment])
         if (timeoutHandle) clearTimeout(timeoutHandle)
+        removeAbortListener?.()
         callsSucceeded += 1
         inFlightToolCalls.delete(id)
         logDaemonEvent({
@@ -1003,27 +1066,39 @@ export async function createAtribdBackend(
         return result
       } catch (error) {
         if (timeoutHandle) clearTimeout(timeoutHandle)
-        if (timedOut) {
+        removeAbortListener?.()
+        if (abandoned) {
+          const abandonedBy = abandoned
           void toolCall
             .then(
               () => {
-                callsSettledAfterTimeout += 1
+                if (abandonedBy === 'timeout') callsSettledAfterTimeout += 1
+                else callsSettledAfterCancel += 1
                 logDaemonEvent({
-                  event: 'tool_call_settled_after_timeout',
+                  event:
+                    abandonedBy === 'timeout'
+                      ? 'tool_call_settled_after_timeout'
+                      : 'tool_call_settled_after_cancel',
                   id,
                   primitive: route.primitive,
                   tool: request.name,
+                  kind: route.kind,
                   outcome: 'succeeded',
                   elapsed_ms: Date.now() - startedAt,
                 })
               },
               (lateError: unknown) => {
-                callsSettledAfterTimeout += 1
+                if (abandonedBy === 'timeout') callsSettledAfterTimeout += 1
+                else callsSettledAfterCancel += 1
                 logDaemonEvent({
-                  event: 'tool_call_settled_after_timeout',
+                  event:
+                    abandonedBy === 'timeout'
+                      ? 'tool_call_settled_after_timeout'
+                      : 'tool_call_settled_after_cancel',
                   id,
                   primitive: route.primitive,
                   tool: request.name,
+                  kind: route.kind,
                   outcome: 'failed',
                   elapsed_ms: Date.now() - startedAt,
                   error: errorMessage(lateError),
@@ -1063,6 +1138,7 @@ export async function createAtribdBackend(
   const callWriteTool = async (
     route: ToolRoute,
     request: CallToolRequest['params'],
+    callOptions: AtribdCallOptions,
   ): Promise<CallToolResult> => {
     const idempotencyKey = idempotencyKeyFromRequest(request)
     const key = writeSerializationKey(request)
@@ -1073,10 +1149,10 @@ export async function createAtribdBackend(
           'atribd: idempotency requires a resolved context_id',
         )
       }
-      return routeToolCall(route, request).response
+      return routeToolCall(route, request, callOptions).response
     }
     return writeLocks.runUntilSettled(key, async () => {
-      if (!idempotencyKey) return routeToolCall(route, request)
+      if (!idempotencyKey) return routeToolCall(route, request, callOptions)
       const binding = writeActionBinding(request, key)
       const decision = await idempotencyStore.begin(idempotencyKey, binding)
       if (decision.kind === 'replay') {
@@ -1115,7 +1191,7 @@ export async function createAtribdBackend(
           ),
         }
       }
-      return routeToolCall(route, request, (result) =>
+      return routeToolCall(route, request, callOptions, (result) =>
         idempotencyStore.complete(decision.keyHash, decision.binding, result),
       )
     })
@@ -1124,13 +1200,14 @@ export async function createAtribdBackend(
   const callReadTool = (
     route: ToolRoute,
     request: CallToolRequest['params'],
-  ): Promise<CallToolResult> => routeToolCall(route, request).response
+    callOptions: AtribdCallOptions,
+  ): Promise<CallToolResult> => routeToolCall(route, request, callOptions).response
 
   return {
     tools,
     toolNames: tools.map((tool) => tool.name),
     mountedPrimitiveCount: mounted.length,
-    callTool: async (request) => {
+    callTool: async (request, callOptions = {}) => {
       const route = routeByTool.get(request.name)
       if (!route) {
         throw new McpError(
@@ -1138,7 +1215,9 @@ export async function createAtribdBackend(
           `unknown atrib primitive tool: ${request.name}`,
         )
       }
-      return route.kind === 'write' ? callWriteTool(route, request) : callReadTool(route, request)
+      return route.kind === 'write'
+        ? callWriteTool(route, request, callOptions)
+        : callReadTool(route, request, callOptions)
     },
     diagnostics: () => {
       const now = Date.now()
@@ -1149,7 +1228,9 @@ export async function createAtribdBackend(
         calls_succeeded: callsSucceeded,
         calls_failed: callsFailed,
         calls_timed_out: callsTimedOut,
+        calls_cancelled: callsCancelled,
         calls_settled_after_timeout: callsSettledAfterTimeout,
+        calls_settled_after_cancel: callsSettledAfterCancel,
         in_flight_tool_calls: [...inFlightToolCalls.values()].map((call) =>
           serializeInFlightToolCall(call, now),
         ),

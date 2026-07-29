@@ -707,6 +707,18 @@ const DAEMON_STATE_RESULT = {
   cells: [],
 }
 
+const DAEMON_RECEIPT = (
+  JSON.parse(
+    readFileSync(
+      new URL(
+        '../../../spec/conformance/mcp-extension/cases/receipt--consistent.json',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  ) as { input: { result_block: Record<string, unknown> } }
+).input.result_block
+
 interface MockDaemon {
   endpoint: string
   close(): Promise<void>
@@ -721,6 +733,7 @@ async function startMockDaemon(): Promise<MockDaemon> {
   const mcp = new McpServer({ name: 'mock-primitives-runtime', version: '0.0.0' })
   mcp.registerTool('emit', { description: 'mock emit tool' }, async () => ({
     content: [{ type: 'text' as const, text: JSON.stringify(DAEMON_EMIT_RESULT) }],
+    _meta: { 'dev.atrib/attribution': DAEMON_RECEIPT },
   }))
   mcp.registerTool(
     'recall_my_attribution_history',
@@ -772,13 +785,18 @@ async function startMockDaemon(): Promise<MockDaemon> {
 describe('daemon path over Streamable HTTP', () => {
   it("routes attest() and recall() through a reachable daemon (via 'daemon')", async () => {
     const daemon = await startMockDaemon()
-    const client = createAtribClient({ daemon: { endpoint: daemon.endpoint } })
+    const client = createAtribClient({
+      daemon: { endpoint: daemon.endpoint },
+      contextId: CONTEXT_A,
+    })
     try {
       const attested = await client.attest({ content: { what: 'daemon-path test' } })
       expect(attested.via).toBe('daemon')
       expect(attested.record_hash).toBe(DAEMON_EMIT_RESULT.record_hash)
       expect(attested.context_id).toBe(CONTEXT_A)
       expect(attested.log_index).toBe(1)
+      expect(attested.attribution_receipt?.verification.valid).toBe(true)
+      expect(attested.transport?.protocol_era).toBe('legacy')
 
       const recalled = await client.recall<typeof DAEMON_HISTORY_RESULT>({ shape: 'history' })
       expect(recalled.via).toBe('daemon')

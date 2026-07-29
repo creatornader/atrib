@@ -30,7 +30,12 @@ Both SDKs prefer the local primitives runtime (the host-owned daemon of [D120](.
 
 When no daemon is reachable, the TypeScript SDK falls back in-process: writes through `emitInProcess()` (`@atrib/emit`, a hard dependency; the write path must always work), history reads through `@atrib/recall`, and verification through `@atrib/verify-mcp` (both optional peers, loaded lazily; absent peers degrade to a typed unavailable outcome instead of an import failure). Shapes without an exported in-process engine degrade honestly with a warning naming the runtime tool; a divergent reimplementation would be worse than a truthful "not served".
 
-The Python client signs in-process in v0 and serves the history/session_chain shapes over the local mirror; its daemon transport arrives with the stateless MCP HTTP transport rather than reimplementing the current initialize-handshake session protocol. Both SDKs are semantically stateless either way: `context_id` and chain tokens travel as explicit per-request values, never as protocol-session state.
+The Python client is daemon-first over MCP 2026-07-28 and keeps the in-process
+record layer as its explicit compatibility fallback. Its independent
+standard-library HTTP client performs `server/discover`, sends the required
+modern headers, and carries the same request metadata as the TypeScript SDK.
+Both SDKs send `context_id`, trace context, capabilities, and chain tokens on
+each request. Neither treats a protocol connection as attribution state.
 
 ## Byte-identity, enforced not asserted
 

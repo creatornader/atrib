@@ -1,6 +1,6 @@
 {
   "name": "@atrib/daemon",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Local daemon for atrib. Serves the attest/recall verbs plus the legacy alias tools from one stateless-native process over Streamable HTTP or stdio.",
   "keywords": [
     "atrib",
@@ -41,7 +41,7 @@
     "build": "rm -rf dist && tsc && chmod +x dist/index.js",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "vitest run",
+    "test": "vitest run --no-file-parallelism",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

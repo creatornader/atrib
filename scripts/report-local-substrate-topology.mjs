@@ -887,15 +887,25 @@ function parseLaunchAgent(path) {
       parsed.EnvironmentVariables && typeof parsed.EnvironmentVariables === 'object'
         ? parsed.EnvironmentVariables
         : {}
-    const endpoint =
-      firstEnvValue(env, SAFE_ENDPOINT_ENV_KEYS) || endpointFromProgramArguments(args)
+    const label = String(parsed.Label ?? '')
+    const primitiveRuntime =
+      label.startsWith('com.nader.atrib-primitives.') || label.startsWith('com.nader.atribd.')
+    const endpoint = primitiveRuntime
+      ? mcpEndpointFromProgramArguments(args)
+      : firstEnvValue(env, SAFE_ENDPOINT_ENV_KEYS) || endpointFromProgramArguments(args)
     return {
       label: parsed.Label ?? undefined,
       path: displayPath(path),
-      kind: String(parsed.Label ?? '').includes('atrib-drain') ? 'watcher-wal' : 'coordinator',
+      kind: label.includes('atrib-drain')
+        ? 'watcher-wal'
+        : primitiveRuntime
+          ? 'primitive-runtime'
+          : 'coordinator',
       program: args[0] ?? undefined,
       endpoint,
-      agent: firstEnvValue(env, SAFE_AGENT_ENV_KEYS),
+      agent:
+        firstEnvValue(env, SAFE_AGENT_ENV_KEYS) ??
+        (primitiveRuntime ? label.split('.').at(-1) : undefined),
       start_interval: parsed.StartInterval ?? undefined,
     }
   } catch {
@@ -1795,6 +1805,14 @@ function endpointFromProgramArguments(args) {
   return `http://${host}:${port}/atrib/local-substrate`
 }
 
+function mcpEndpointFromProgramArguments(args) {
+  const host = valueAfter(args, '--host') ?? '127.0.0.1'
+  const port = valueAfter(args, '--port')
+  const path = valueAfter(args, '--path') ?? '/mcp'
+  if (!port) return undefined
+  return `http://${host}:${port}${path.startsWith('/') ? path : `/${path}`}`
+}
+
 function valueAfter(args, flag) {
   const index = args.indexOf(flag)
   return index === -1 ? undefined : args[index + 1]
@@ -1808,7 +1826,9 @@ function collectLaunchAgents() {
       (name) =>
         name.endsWith('.plist') &&
         (name === 'com.nader.atrib-drain.plist' ||
-          name.startsWith('com.nader.atrib-local-substrate.')),
+          name.startsWith('com.nader.atrib-local-substrate.') ||
+          name.startsWith('com.nader.atrib-primitives.') ||
+          name.startsWith('com.nader.atribd.')),
     )
     .map((name) => parseLaunchAgent(join(dir, name)))
     .filter(Boolean)
@@ -1901,6 +1921,9 @@ async function collectLiveSnapshot({
   longLivedActivityReportPath = DEFAULT_LONG_LIVED_ACTIVITY_REPORT_PATH,
 } = {}) {
   const launchAgents = collectLaunchAgents()
+  const primitiveRuntimeLaunchAgents = launchAgents.filter(
+    (agent) => agent.kind === 'primitive-runtime' && agent.agent && agent.endpoint,
+  )
   const longLivedAgents = collectLongLivedAgents({ routeRegistryPath })
   const routeRegistryDiagnostics = collectRouteRegistryDiagnostics(routeRegistryPath)
   const configs = dedupeServerConfigs([
@@ -1910,10 +1933,24 @@ async function collectLiveSnapshot({
       join(HOME, 'Library/Application Support/Claude/claude_desktop_config.json'),
       'claude-desktop',
     ),
+    ...primitiveRuntimeLaunchAgents.map((agent) => ({
+      name: agent.agent,
+      path: agent.path,
+      exists: true,
+      server_count: 1,
+      has_primitives_runtime: true,
+      standalone_primitive_servers: [],
+      local_substrate_endpoints: [],
+      primitive_http_endpoints: [agent.endpoint],
+      bridge_http_endpoints: [],
+      source: 'launch-agent',
+    })),
     ...collectRegisteredStartupSpawnConfigs(routeRegistryPath),
   ])
   const endpoints = unique([
-    ...launchAgents.map((agent) => agent.endpoint),
+    ...launchAgents
+      .filter((agent) => agent.kind === 'coordinator' || agent.kind === 'watcher-wal')
+      .map((agent) => agent.endpoint),
     ...longLivedAgents.map((agent) => agent.endpoint),
     ...configs.flatMap((config) => config.local_substrate_endpoints ?? []),
   ])
@@ -2320,7 +2357,7 @@ function versionMismatches(items, expectedVersion, versionFn) {
 
 function hasSharedPrimitiveHttpBackend(item) {
   const runtime = item.report?.primitive_runtime ?? {}
-  const profileScoped =
+  const legacyProfileScoped =
     item.reachable === true &&
     item.status === 'healthy' &&
     runtime.transport === 'streamable-http' &&
@@ -2330,7 +2367,25 @@ function hasSharedPrimitiveHttpBackend(item) {
     Number(runtime.tool_count) === 15 &&
     primitiveRuntimeRecallContractOk(item) &&
     primitiveRuntimeBehavioralProbesOk(item)
-  return profileScoped || hasProfileRoutedPrimitiveSupervisor(item)
+  const statelessProfileScoped =
+    hasStatelessPrimitiveHttpProfile(item) &&
+    primitiveRuntimeRecallContractOk(item) &&
+    primitiveRuntimeBehavioralProbesOk(item)
+  return legacyProfileScoped || statelessProfileScoped || hasProfileRoutedPrimitiveSupervisor(item)
+}
+
+function hasStatelessPrimitiveHttpProfile(item) {
+  const runtime = item.report?.primitive_runtime ?? {}
+  return (
+    item.reachable === true &&
+    item.status === 'healthy' &&
+    runtime.transport === 'streamable-http-stateless' &&
+    runtime.backend === 'shared' &&
+    runtime.session_model === 'stateless-per-request' &&
+    primitiveRuntimeProfileRoutes(item).length === 1 &&
+    Number(runtime.mounted_primitive_count) === 3 &&
+    Number(runtime.tool_count) === 17
+  )
 }
 
 function hasProfileRoutedPrimitiveSupervisor(item) {
@@ -3995,6 +4050,7 @@ export {
   collectRegisteredStartupSpawnConfigs,
   collectRouteRegistryDiagnostics,
   formatTextReport,
+  hasStatelessPrimitiveHttpProfile,
   normalizePrimitiveRuntimeHealthReport,
   registeredLongLivedAgentsFromRegistry,
   registeredStartupSpawnConfigsFromRegistry,

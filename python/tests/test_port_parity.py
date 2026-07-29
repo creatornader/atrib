@@ -174,6 +174,7 @@ def test_client_tolerates_binary_mirror(tmp_path) -> None:
     mirror = tmp_path / "m.jsonl"
     mirror.write_bytes(b"\xff\xfe binary\n")
     client = AtribClient(
+        daemon_mode="off",
         key=None,
         mirror_read_path=mirror,
         mirror_write_path=mirror,

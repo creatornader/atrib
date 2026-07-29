@@ -1,5 +1,31 @@
 # @atrib/daemon
 
+## 0.4.0
+
+### Minor Changes
+
+- d5939c5: Add per-request bearer verification and rate limiting, abort read primitives on
+  cancellation, and preserve late write settlement through idempotent replay.
+- d735df2: Add action-bound idempotency keys for stateless daemon writes, durable result
+  replay across restarts, indeterminate pending outcomes, and SDK fallback
+  suppression after uncertain writes.
+
+### Patch Changes
+
+- a754f97: Report privacy-bounded modern and legacy MCP traffic by profile, persist the
+  operational counters across restarts, and fail runtime updates when a
+  modern-only profile falls back to legacy traffic.
+- d5939c5: Carry modern request metadata into duplicate-write binding, and prove discovery,
+  reads, receipts, and replay across hard process replacement.
+- 52d53e6: Prevent valid operator contexts from colliding with the daemon's absent-context health probe.
+- d5939c5: Add real-process in-flight kill coverage and enforce local request-path latency budgets.
+- Updated dependencies [f650be9]
+  - @atrib/mcp@0.25.0
+  - @atrib/verify@0.13.2
+  - @atrib/attest@0.4.2
+  - @atrib/recall@5.1.2
+  - @atrib/summarize@0.5.2
+
 ## 0.3.1
 
 ### Patch Changes

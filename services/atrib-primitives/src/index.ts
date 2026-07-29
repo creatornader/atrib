@@ -45,6 +45,7 @@ interface MountedPrimitive {
 
 interface ToolRoute {
   primitive: string
+  kind: 'write' | 'read'
   client: ModernClient
 }
 
@@ -52,6 +53,7 @@ interface InFlightToolCall {
   id: string
   primitive: string
   tool: string
+  kind: 'write' | 'read'
   startedAt: number
   timedOutAt?: number
 }
@@ -60,10 +62,13 @@ export interface AtribPrimitivesToolCallDiagnostic {
   id: string
   primitive: string
   tool: string
+  kind: 'write' | 'read'
   started_at: string
   elapsed_ms: number
   timed_out: boolean
   timed_out_at?: string
+  cancelled: boolean
+  cancelled_at?: string
 }
 
 export interface AtribPrimitivesDiagnostics {
@@ -73,7 +78,9 @@ export interface AtribPrimitivesDiagnostics {
   calls_succeeded: number
   calls_failed: number
   calls_timed_out: number
+  calls_cancelled: number
   calls_settled_after_timeout: number
+  calls_settled_after_cancel: number
   in_flight_tool_calls: AtribPrimitivesToolCallDiagnostic[]
 }
 
@@ -351,9 +358,11 @@ function serializeInFlightToolCall(
     id: call.id,
     primitive: call.primitive,
     tool: call.tool,
+    kind: call.kind,
     started_at: new Date(call.startedAt).toISOString(),
     elapsed_ms: Math.max(0, now - call.startedAt),
     timed_out: call.timedOutAt !== undefined,
+    cancelled: false,
   }
   if (call.timedOutAt !== undefined) {
     serialized.timed_out_at = new Date(call.timedOutAt).toISOString()
@@ -840,6 +849,10 @@ export async function createAtribPrimitivesBackend(
   let callsSettledAfterTimeout = 0
 
   for (const primitive of mounted) {
+    const kind =
+      PRIMITIVE_SPECS.find((spec) => spec.name === primitive.name)?.mutatesLogOnCall === true
+        ? 'write'
+        : 'read'
     for (const tool of primitive.tools) {
       const existing = routeByTool.get(tool.name)
       if (existing) {
@@ -847,7 +860,7 @@ export async function createAtribPrimitivesBackend(
           `duplicate atrib primitive tool ${tool.name}: ${existing.primitive} and ${primitive.name}`,
         )
       }
-      routeByTool.set(tool.name, { primitive: primitive.name, client: primitive.client })
+      routeByTool.set(tool.name, { primitive: primitive.name, kind, client: primitive.client })
       tools.push(tool)
     }
   }
@@ -872,6 +885,7 @@ export async function createAtribPrimitivesBackend(
         id,
         primitive: route.primitive,
         tool: request.name,
+        kind: route.kind,
         startedAt,
       }
       callsStarted += 1
@@ -973,7 +987,9 @@ export async function createAtribPrimitivesBackend(
         calls_succeeded: callsSucceeded,
         calls_failed: callsFailed,
         calls_timed_out: callsTimedOut,
+        calls_cancelled: 0,
         calls_settled_after_timeout: callsSettledAfterTimeout,
+        calls_settled_after_cancel: 0,
         in_flight_tool_calls: [...inFlightToolCalls.values()].map((call) =>
           serializeInFlightToolCall(call, now),
         ),

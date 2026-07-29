@@ -182,9 +182,15 @@ Independent plurality remains a verifier decision over proof bytes, trust
 roots, and operator groups. Anchoring never touches signed bytes and never
 blocks the write.
 
-## Extension receipts (opt-in)
+## Stateless request carriage and extension receipts
 
-With `attributionReceipts: true`, the daemon client parses
+The daemon client declares `dev.atrib/attribution` on every request, carries
+the resolved `context_id` in the extension block, emits W3C trace context, and
+keeps the legacy atrib token carriers for compatibility. It preserves custom
+metadata and other client capabilities. A valid receipt token automatically
+becomes the propagation token on the next request.
+
+Receipt parsing is on by default. The daemon client parses
 `dev.atrib/attribution` attestation receipts from tool results' `_meta`
 ([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133),
 extension v0.1): the propagation token, a receipt naming the record the
@@ -194,7 +200,8 @@ Tier-3 re-verification. Each parsed block is run through `@atrib/mcp`'s
 `verifyAttributionReceipt` (extension spec [§6.2](https://github.com/creatornader/atrib/blob/main/docs/extensions/dev.atrib-attribution/v0.1.md#62-receipt-block) integrity check) and
 surfaces as `attribution_receipt: { block, verification }` on
 attest/recall results. Receipts are advisory. Trust derives from
-verifying signed records, never from the receipt.
+verifying signed records, never from the receipt. Set
+`attributionReceipts: false` only for compatibility diagnosis.
 
 ## Evidence envelopes ([D137](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model), [§5.5.7](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#557-universal-evidence-envelope))
 
@@ -343,7 +350,8 @@ interface AttestRef {
 | `via`                 | `'daemon' \| 'in-process' \| 'none'`     | Which path produced the record. `'none'` = degraded; see `warnings`.                                                                                                                                                                                                            |
 | `warnings`            | `string[]`                               | `atrib:`-prefixed operational warnings (anchor skips, fallbacks, pass-through, flush deadline).                                                                                                                                                                                 |
 | `anchor_posture`      | `AttestAnchorPosture?`                   | `{ effective_anchor_count, used_default_set, warned, basis: 'configured_descriptors', plurality_met: null }`: the resolved [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture). Descriptor count is not proof success. |
-| `attribution_receipt` | `VerifiedAttributionReceipt?`            | `{ block, verification }`: the parsed `dev.atrib/attribution` receipt plus its `verifyAttributionReceipt` outcome; only when `attributionReceipts: true` and the daemon emitted one. Advisory.                                                                                  |
+| `attribution_receipt` | `VerifiedAttributionReceipt?`            | `{ block, verification }`: the parsed negotiated receipt plus its integrity result. Advisory.                                                                                                                                                                                  |
+| `transport`           | `DaemonTransportInfo?`                   | Negotiated protocol version and era, discover result, server identity when present, and validated attribution declaration.                                                                                                                                                    |
 
 ### `RecallQuery` shapes
 
@@ -381,7 +389,8 @@ too is caught and degraded.
 | `via`                 | `'daemon' \| 'in-process' \| 'none'` | Which path served the read. `'none'` = degraded; see `warnings`.                                                              |
 | `data`                | `T \| null`                          | The tool/engine result (parsed JSON when the daemon returned the single-JSON-text-block convention), or `null` when degraded. |
 | `warnings`            | `string[]`                           | `atrib:`-prefixed operational warnings.                                                                                       |
-| `attribution_receipt` | `VerifiedAttributionReceipt?`        | As on `AttestResult`; opt-in, advisory.                                                                                       |
+| `attribution_receipt` | `VerifiedAttributionReceipt?`        | As on `AttestResult`; present when the daemon returned a valid negotiated receipt. Advisory.                                  |
+| `transport`           | `DaemonTransportInfo?`               | Negotiated protocol version and era, discover result, server identity when present, and validated attribution declaration.    |
 
 ### `AtribClientConfig`
 
@@ -390,7 +399,8 @@ too is caught and degraded.
 | `daemon`              | `DaemonConfig`        | see below                                                                                                          | Daemon endpoint/mode/timeouts.                                                                                                                                                                                                                                                    |
 | `anchors`             | `AnchorSpec[]`        | `BUILT_IN_DEFAULT_ANCHOR_SET` (two anchors; the atrib-log member honors `$ATRIB_LOG_ENDPOINT`)                     | [D138](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d138-anchor-plurality-as-the-default-trust-posture) anchor set; in-process attests fan out to every member. Hostile entries and unregistered `anchor_type` values warn-and-skip.                              |
 | `allowSingleAnchor`   | `boolean`             | `false`                                                                                                            | [§2.11.12](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#21112-producer-side-anchor-posture) rule 3: states a < 2-anchor set is deliberate, silencing the sub-plurality warning and the sidecar degradation marker.                                               |
-| `attributionReceipts` | `boolean`             | `false`                                                                                                            | Opt-in parsing + verification of `dev.atrib/attribution` receipts from daemon `_meta` ([D141](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d141-devatribattribution-first-class-mcp-extension-sep-2133)).                                                         |
+| `attributionReceipts` | `boolean`             | `true`                                                                                                             | Parsing + verification of negotiated `dev.atrib/attribution` receipts. Set false only for compatibility diagnosis.                                                                                                                                                        |
+| `attributionAccept`   | `('token' \| 'record')[]` | `['token']`                                                                                                     | Receipt forms requested in the per-request extension declaration.                                                                                                                                                                                                         |
 | `key`                 | `ResolvedKey \| null` | `resolveKey()` ladder from `@atrib/emit` (`ATRIB_PRIVATE_KEY` env → `ATRIB_KEY_FILE` → macOS Keychain → 1Password) | Pre-resolved in-process signing key. `null` disables in-process signing (pass-through per [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58-degradation-contract) rule 5). Note: _any_ explicitly-set `key` property opts out of the `resolveKey()` ladder. |
 | `contextId`           | `string`              | `resolveEnvContextId()` at call time                                                                               | Per-client default context (32 lowercase hex). Context identity stays an explicit per-request value (stateless-MCP-native posture).                                                                                                                                               |
 | `producer`            | `string`              | `'atrib-sdk'` (`DEFAULT_PRODUCER`)                                                                                 | `_local.producer` mirror-sidecar label ([§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions)); in-process path only.                                                                                                                 |
@@ -406,6 +416,9 @@ too is caught and degraded.
 | `connectTimeoutMs` | `number`                         | `1500`                                                                                          | Daemon connect timeout.                                                                                                                                                                    |
 | `callTimeoutMs`    | `number`                         | `10000`                                                                                         | Per-`tools/call` timeout.                                                                                                                                                                  |
 | `retryCooldownMs`  | `number`                         | `30000`                                                                                         | Cooldown before re-probing an unreachable daemon; within the window, calls skip straight to the fallback.                                                                                  |
+| `requestMeta`      | `Record<string, unknown>`        | `{}`                                                                                            | Custom metadata merged into every request. atrib-owned fields resolve after this object; unrelated keys survive.                                                                           |
+| `clientCapabilities` | `Record<string, unknown>`      | `{}`                                                                                            | Additional client capabilities merged with the attribution extension declaration.                                                                                                         |
+| `sessionToken`     | `string`                         | none                                                                                            | Cross-trace atrib session token carried in W3C baggage.                                                                                                                                     |
 
 `resolveDaemonEndpoint(config?)` applies exactly that endpoint
 precedence and is exported for hosts that want to probe the runtime
@@ -440,10 +453,18 @@ The MCP Streamable HTTP transport to the primitives runtime, exported
 for hosts that want raw tool access with the same degradation posture.
 
 ```ts
-new DaemonClient(config?: DaemonConfig, options?: { attributionReceipts?: boolean })
+new DaemonClient(config?: DaemonConfig, options?: {
+  attributionReceipts?: boolean
+  attributionAccept?: readonly ('token' | 'record')[]
+})
 
 type DaemonCallOutcome =
-  | { ok: true; value: unknown; attribution?: AttributionReceiptBlock }
+  | {
+      ok: true
+      value: unknown
+      transport: DaemonTransportInfo
+      attribution?: AttributionReceiptBlock
+    }
   | { ok: false; reason: string }
 ```
 
@@ -452,14 +473,19 @@ type DaemonCallOutcome =
   convention) are parsed; non-JSON text is returned as the string; other
   result shapes are returned raw. A result with `isError: true` is a
   failure outcome.
+- `connect()` probes negotiation without sending `tools/call` and returns
+  transport facts or an unavailable outcome.
 - Connection is lazy and cached; a failed call closes the transport and
   starts the `retryCooldownMs` window, during which `callTool` returns
   `{ ok: false }` immediately without re-probing.
 - `close()`: best-effort transport close; never throws.
-- The client is semantically stateless: `context_id` and chain tokens
-  travel as explicit tool arguments on every call; the MCP protocol
-  session (initialize handshake + `Mcp-Session-Id`) is a transport
-  detail managed by the official `@modelcontextprotocol/sdk` client.
+- The client negotiates MCP 2026-07-28 through `server/discover`. Every modern
+  request carries protocol version, client identity, capabilities, explicit
+  atrib context, and trace metadata. There is no initialize handshake or
+  `Mcp-Session-Id` on the modern path.
+- Daemon writes fail before `tools/call` when no explicit context can be
+  resolved. Select `daemon.mode: 'off'` only when the in-process fresh-orphan
+  compatibility behavior is intentional.
 
 ### Hash helpers
 

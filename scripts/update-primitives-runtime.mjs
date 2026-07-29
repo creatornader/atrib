@@ -36,10 +36,7 @@ export const RUNTIME_MODES = {
     distEntrySuffix: '/services/atribd/dist/index.js',
     buildFilter: '@atrib/daemon...',
     healthShape: 'daemon',
-    // The topology report still reads the legacy primitive-runtime health
-    // shape; its atribd gates land with the operator cutover (D120:
-    // measure, then flip). Skipping is recorded in the report, not silent.
-    topology: 'skipped-until-cutover',
+    topology: 'required',
   },
 }
 
@@ -813,14 +810,6 @@ function topologyGateStatus(report, name) {
 
 function checkTopology({ dryRun = false, runtime = 'atrib-primitives' } = {}) {
   if (dryRun) return { status: 'skipped' }
-  if (runtimeMode(runtime).topology === 'skipped-until-cutover') {
-    return {
-      status: 'skipped',
-      reason:
-        'topology gates read the legacy primitive-runtime health shape; ' +
-        'atribd topology gates land with the operator LaunchAgent cutover',
-    }
-  }
   const result = spawnSync('node', ['scripts/report-local-substrate-topology.mjs', '--json'], {
     cwd: ROOT,
     encoding: 'utf8',

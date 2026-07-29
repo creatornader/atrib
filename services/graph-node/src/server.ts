@@ -18,7 +18,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { validateSubmission, verifyRecord, canonicalRecord, sha256, hexEncode } from '@atrib/mcp'
+import { validateSubmission, verifyRecord, sha256, hexEncode } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { buildGraph } from './graph-builder.js'
 import { createRecordStore, type RecordStore } from './store.js'
@@ -825,19 +825,23 @@ async function handleTrace(
   const includeAnnotations = params.get('include_annotations') !== 'false'
   const includeRevisions = params.get('include_revisions') !== 'false'
 
-  // Index every record by its record_hash (canonicalRecord -> sha256 -> hex)
-  // so we can walk by hash. The store doesn't expose this index directly;
-  // build it here once per request. For a busy log this would move into the
-  // store, but at current scale (low thousands of records) the per-request
-  // build is fast enough.
-  const allRecords = store.getAllRecords()
-  const byHash = new Map<string, AtribRecord>()
-  for (const { record } of allRecords) {
-    const hashHex = hexEncode(sha256(canonicalRecord(record)))
-    byHash.set(hashHex, record)
-  }
+  // Resolve records by record_hash through the store's own index. The store
+  // hashes each record exactly once at ingest (see createRecordStore's
+  // recordByHash map), so this is an O(1) lookup.
+  //
+  // This used to rebuild the whole index per request: getAllRecords() followed
+  // by canonicalRecord -> sha256 -> hexEncode over every record in the store.
+  // That was written when the log held "low thousands" of records. At 112k it
+  // allocated ~80MB of transient strings and burned >1s of CPU per request,
+  // against a V8 heap already ~450MB full of the resident record set. The
+  // allocation could not be satisfied, so V8 aborted the process
+  // ("Ineffective mark-compacts near heap limit") on every trace request,
+  // which Fly served as a 502. Keep hash resolution O(1); the walk below
+  // only ever does point lookups.
+  const recordByHash = (hashHex: string): AtribRecord | null =>
+    store.getRecordByHash(hashHex)?.record ?? null
 
-  const startRecord = byHash.get(recordHashHex)
+  const startRecord = recordByHash(recordHashHex)
   if (!startRecord) {
     return sendProblem(
       res,
@@ -865,7 +869,7 @@ async function handleTrace(
   for (let hop = 0; hop < depth; hop++) {
     const next: string[] = []
     for (const hash of frontier) {
-      const record = byHash.get(hash)
+      const record = recordByHash(hash)
       if (!record) continue
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const r = record as any
@@ -895,7 +899,7 @@ async function handleTrace(
       for (const ancestorHash of candidates) {
         if (visited.has(ancestorHash)) continue
         visited.add(ancestorHash)
-        const ancestor = byHash.get(ancestorHash)
+        const ancestor = recordByHash(ancestorHash)
         if (ancestor) {
           collected.push(ancestor)
           next.push(ancestorHash)
@@ -961,16 +965,14 @@ async function handleChain(
     Math.min(Number.isNaN(rawDepth) ? TRACE_DEFAULT_DEPTH : rawDepth, TRACE_MAX_DEPTH),
   )
 
-  // Build a hash index once per request so we can resolve chain_root references
-  // back to records. Mirrors handleTrace's approach.
-  const allRecords = store.getAllRecords()
-  const byHash = new Map<string, AtribRecord>()
-  for (const { record } of allRecords) {
-    const hashHex = hexEncode(sha256(canonicalRecord(record)))
-    byHash.set(hashHex, record)
-  }
+  // Resolve chain_root references back to records through the store's own
+  // hash index. Mirrors handleTrace: an O(1) point lookup, not a per-request
+  // rebuild of the whole index (see the note in handleTrace for why the
+  // rebuild was fatal at production log size).
+  const recordByHash = (hashHex: string): AtribRecord | null =>
+    store.getRecordByHash(hashHex)?.record ?? null
 
-  const startRecord = byHash.get(recordHashHex)
+  const startRecord = recordByHash(recordHashHex)
   if (!startRecord) {
     return sendProblem(
       res,
@@ -997,7 +999,7 @@ async function handleChain(
     if (visited.has(ancestorHash)) break
     visited.add(ancestorHash)
 
-    const ancestor = byHash.get(ancestorHash)
+    const ancestor = recordByHash(ancestorHash)
     if (!ancestor) break // chain_root references a record outside the store
     collected.push(ancestor)
     current = ancestor

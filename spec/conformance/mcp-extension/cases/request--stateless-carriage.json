@@ -1,0 +1,67 @@
+{
+  "name": "request--stateless-carriage",
+  "spec_section": "1.5.4",
+  "extension": "dev.atrib/attribution",
+  "description": "A stateless client merges attribution declaration, explicit context, W3C trace state, legacy token carriers, and session baggage without dropping caller metadata or other capabilities.",
+  "input": {
+    "request_meta": {
+      "custom": {
+        "keep": true
+      },
+      "traceparent": "00-33333333333333333333333333333333-00f067aa0ba902b7-01",
+      "tracestate": "vendor=one",
+      "baggage": "tenant=blue",
+      "io.modelcontextprotocol/clientCapabilities": {
+        "sampling": {},
+        "extensions": {
+          "com.example/other": {
+            "version": "2.0"
+          }
+        }
+      }
+    },
+    "options": {
+      "accept": [
+        "token",
+        "record"
+      ],
+      "token": "_f-WiElOw7OVElPxHUq6yRwtTZcl5LFJFikli5KMCYs.rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne-B1R_KJODNB0",
+      "context_id": "22222222222222222222222222222222",
+      "session_token": "session-123"
+    }
+  },
+  "expected": {
+    "request_meta": {
+      "custom": {
+        "keep": true
+      },
+      "traceparent": "00-33333333333333333333333333333333-00f067aa0ba902b7-01",
+      "tracestate": "atrib=_f-WiElOw7OVElPxHUq6yRwtTZcl5LFJFikli5KMCYs.rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne-B1R_KJODNB0,vendor=one",
+      "baggage": "atrib-session=session-123,tenant=blue",
+      "io.modelcontextprotocol/clientCapabilities": {
+        "sampling": {},
+        "extensions": {
+          "com.example/other": {
+            "version": "2.0"
+          },
+          "dev.atrib/attribution": {
+            "version": "0.1",
+            "accept": [
+              "token",
+              "record"
+            ]
+          }
+        }
+      },
+      "dev.atrib/attribution": {
+        "token": "_f-WiElOw7OVElPxHUq6yRwtTZcl5LFJFikli5KMCYs.rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne-B1R_KJODNB0",
+        "context_id": "22222222222222222222222222222222"
+      },
+      "X-atrib-Context": "22222222222222222222222222222222",
+      "atrib": "_f-WiElOw7OVElPxHUq6yRwtTZcl5LFJFikli5KMCYs.rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne-B1R_KJODNB0",
+      "X-Atrib-Chain": "_f-WiElOw7OVElPxHUq6yRwtTZcl5LFJFikli5KMCYs.rwaj4ykXFOTzVsGcmxXNGVHsbmZiqne-B1R_KJODNB0"
+    },
+    "caller_meta_unchanged": true,
+    "error_raised": false
+  }
+}

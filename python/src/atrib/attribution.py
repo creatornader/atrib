@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+import re
+import secrets
 from typing import cast
 
 from .encoding import base64url_encode, hex_encode
@@ -21,6 +23,9 @@ from .token import decode_token, encode_token
 from .types import AtribRecord, normalize_event_type
 
 ATTRIBUTION_EXTENSION_KEY = "dev.atrib/attribution"
+ATTRIBUTION_EXTENSION_VERSION = "0.1"
+MCP_CLIENT_CAPABILITIES_META_KEY = "io.modelcontextprotocol/clientCapabilities"
+_CONTEXT_ID_RE = re.compile(r"^[0-9a-f]{32}\Z")
 
 _RECEIPT_STRING_FIELDS = (
     "record_hash",
@@ -32,6 +37,86 @@ _RECEIPT_STRING_FIELDS = (
 )
 
 ATTRIBUTION_LOG_SUBMISSION_STATUSES = ("queued", "submitted", "disabled", "failed")
+
+
+def _merge_named_member(
+    name: str,
+    value: str,
+    existing: object,
+    limit: int,
+    max_bytes: int | None = None,
+) -> str:
+    members = (
+        [part.strip() for part in existing.split(",")]
+        if isinstance(existing, str)
+        else []
+    )
+    kept = [part for part in members if part and not part.startswith(f"{name}=")]
+    kept = kept[: limit - 1]
+    merged = ",".join([f"{name}={value}", *kept])
+    while kept and max_bytes is not None and len(merged.encode("utf-8")) > max_bytes:
+        kept.pop()
+        merged = ",".join([f"{name}={value}", *kept])
+    return merged
+
+
+def build_attribution_request_meta(
+    meta: Mapping[str, object] | None = None,
+    *,
+    accept: tuple[str, ...] = ("token",),
+    token: str | None = None,
+    context_id: str | None = None,
+    traceparent: str | None = None,
+    session_token: str | None = None,
+) -> dict[str, object]:
+    """Build atrib's part of a stateless MCP request ``_meta`` envelope.
+
+    Caller metadata and unrelated capabilities survive the merge. Explicit
+    atrib arguments win for atrib-owned keys. A caller traceparent is kept
+    even when its trace id differs from ``context_id`` because the extension
+    context wins through the documented server-side resolution ladder.
+    """
+    out = dict(meta or {})
+    raw_caps = out.get(MCP_CLIENT_CAPABILITIES_META_KEY)
+    capabilities = dict(raw_caps) if isinstance(raw_caps, Mapping) else {}
+    raw_extensions = capabilities.get("extensions")
+    extensions = dict(raw_extensions) if isinstance(raw_extensions, Mapping) else {}
+    recognized_accept = list(dict.fromkeys(v for v in accept if v in ("token", "record")))
+    extensions[ATTRIBUTION_EXTENSION_KEY] = {
+        "version": ATTRIBUTION_EXTENSION_VERSION,
+        "accept": recognized_accept or ["token"],
+    }
+    capabilities["extensions"] = extensions
+    out[MCP_CLIENT_CAPABILITIES_META_KEY] = capabilities
+
+    block_raw = out.get(ATTRIBUTION_EXTENSION_KEY)
+    block = dict(block_raw) if isinstance(block_raw, Mapping) else {}
+    valid_token = token if token is not None and decode_token(token) is not None else None
+    if valid_token is not None:
+        block["token"] = valid_token
+        out["atrib"] = valid_token
+        out["X-Atrib-Chain"] = valid_token
+        out["tracestate"] = _merge_named_member(
+            "atrib", valid_token, out.get("tracestate"), 32
+        )
+    if context_id is not None and _CONTEXT_ID_RE.match(context_id):
+        block["context_id"] = context_id
+        out["X-atrib-Context"] = context_id
+        current_traceparent = traceparent or (
+            out.get("traceparent") if isinstance(out.get("traceparent"), str) else None
+        )
+        out["traceparent"] = current_traceparent or (
+            f"00-{context_id}-{secrets.token_hex(8)}-01"
+        )
+    elif traceparent is not None:
+        out["traceparent"] = traceparent
+    if block:
+        out[ATTRIBUTION_EXTENSION_KEY] = block
+    if session_token is not None:
+        out["baggage"] = _merge_named_member(
+            "atrib-session", session_token, out.get("baggage"), 64, 8192
+        )
+    return out
 
 
 @dataclass(frozen=True)
