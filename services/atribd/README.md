@@ -87,8 +87,8 @@ for the 2026-07-28 protocol use the stable v2 MCP TypeScript SDK and its
 native per-request handler. The endpoint also routes 2025-era HTTP traffic
 to the existing v1 stateless adapter, which keeps deployed clients on their
 JSON response behavior during the compatibility window. Direct stdio and the
-stdio-to-HTTP proxy remain v1 compatibility surfaces until their hosts adopt
-the v2 protocol.
+stdio-to-HTTP proxy use the v2 era negotiator. Both accept 2025-era clients
+and clients pinned to 2026-07-28.
 
 ## Context identity on HTTP
 

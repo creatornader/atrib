@@ -448,10 +448,10 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
   server.setRequestHandler('tools/list', async () => {
     const backend = await options.getBackend()
     return {
-      // The in-process primitives remain on v1 until their independent
-      // migration. Tool descriptors are JSON wire values, so the explicit
-      // boundary cast avoids coupling the daemon transport migration to that
-      // broader package transition.
+      // The shared backend keeps tool descriptors in the legacy SDK's
+      // structural Tool type. The primitive servers themselves run on v2.
+      // Tool descriptors are JSON wire values, so the boundary cast does not
+      // change the response bytes.
       tools: backend.tools as never,
       ttlMs: options.toolsListTtlMs,
       cacheScope: 'private' as const,
