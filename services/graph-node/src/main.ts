@@ -22,7 +22,7 @@
  *                          local + automatic.
  */
 
-import { bindGraphServer } from './server.js'
+import { bindGraphServer, type ServiceRuntimeInfo } from './server.js'
 import { createRecordStore } from './store.js'
 import { createArchiveAppender, replayArchive } from './persistence.js'
 import { statfs } from 'node:fs/promises'
@@ -45,6 +45,12 @@ const store = createRecordStore()
 
 let appender: Awaited<ReturnType<typeof createArchiveAppender>> | undefined
 
+// Replay facts for /v1/stats. Replay happens here, before the server binds, so
+// the server cannot measure it itself. Left undefined when no archive is set,
+// which /v1/stats reports by omitting the `replay` block entirely.
+let replayMs: number | undefined
+let replayedRecords: number | undefined
+
 if (archivePath) {
   // eslint-disable-next-line no-console
   console.log(`atrib-graph: archive enabled at ${archivePath}`)
@@ -52,7 +58,8 @@ if (archivePath) {
   const result = await replayArchive(archivePath, (record, logIndex) =>
     store.addRecord(record, logIndex),
   )
-  const replayMs = Date.now() - replayStart
+  replayMs = Date.now() - replayStart
+  replayedRecords = result.ingested
   // eslint-disable-next-line no-console
   console.log(
     `atrib-graph: replayed ${result.ingested}/${result.total} records ` +
@@ -64,12 +71,16 @@ if (archivePath) {
   appender = await createArchiveAppender(archivePath)
 }
 
-// Conditionally include onRecordIngested, TypeScript strict
-// (`exactOptionalPropertyTypes`) rejects setting an optional property
+// Conditionally include onRecordIngested and the replay facts, TypeScript
+// strict (`exactOptionalPropertyTypes`) rejects setting an optional property
 // to `undefined` directly.
+const runtimeInfo: ServiceRuntimeInfo =
+  typeof replayMs === 'number'
+    ? { replay_ms: replayMs, replayed_records: replayedRecords ?? 0 }
+    : {}
 const bindOpts = appender
-  ? { store, onRecordIngested: (record: AtribRecord, logIndex: number | undefined) => appender!.append(record, logIndex) }
-  : { store }
+  ? { store, runtimeInfo, onRecordIngested: (record: AtribRecord, logIndex: number | undefined) => appender!.append(record, logIndex) }
+  : { store, runtimeInfo }
 const server = await bindGraphServer(port, host, bindOpts)
 
 // eslint-disable-next-line no-console

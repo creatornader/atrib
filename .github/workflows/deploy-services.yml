@@ -224,6 +224,14 @@ jobs:
           node-version: '24'
           cache: pnpm
 
+      # Runs before the install: it has no dependencies, and it fails in
+      # seconds with a specific message when graph-node is wedged, where the
+      # canary below would spend its whole 90s deadline discovering the same
+      # thing less clearly.
+      - name: Smoke test graph-node stats and heap headroom
+        shell: bash
+        run: node .github/scripts/check-graph-smoke.mjs
+
       - name: Install canary dependencies
         run: pnpm install --frozen-lockfile
 
