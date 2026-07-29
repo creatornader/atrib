@@ -69,6 +69,26 @@ export const DEFAULT_HTTP_HOST = '127.0.0.1'
 export const DEFAULT_HTTP_PORT = 8796
 export const DEFAULT_HTTP_PATH = '/mcp'
 const INTERNAL_RECORD_META_KEY = 'dev.atrib/internal-record'
+
+function signedRecordFromToolResult(result: unknown): AtribRecord | undefined {
+  if (!result || typeof result !== 'object') return undefined
+  const value = result as { _meta?: Record<string, unknown>; content?: unknown }
+  const fromMeta = value._meta?.[INTERNAL_RECORD_META_KEY]
+  if (fromMeta && typeof fromMeta === 'object') return fromMeta as AtribRecord
+  if (!Array.isArray(value.content)) return undefined
+  for (const item of value.content) {
+    if (!item || typeof item !== 'object' || (item as { type?: unknown }).type !== 'text') continue
+    const text = (item as { text?: unknown }).text
+    if (typeof text !== 'string') continue
+    try {
+      const parsed = JSON.parse(text) as { record?: unknown }
+      if (parsed.record && typeof parsed.record === 'object') return parsed.record as AtribRecord
+    } catch {
+      // Non-JSON tool text is not an attribution record.
+    }
+  }
+  return undefined
+}
 // Alias-window rule W2 (attest/recall rename): while legacy tool names are
 // still being retired, every default deployment advertises a short tools/list
 // ttlMs so a rename propagates on cache expiry within minutes, and a name may
@@ -441,14 +461,12 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
     if (outcome.kind === 'injected') policy.onInjected?.()
     return backend.callTool(outcome.params)
       })()
-    const internalRecord = (result as { _meta?: Record<string, unknown> })._meta?.[
-      INTERNAL_RECORD_META_KEY
-    ]
-    if (internalRecord && typeof internalRecord === 'object') {
+    const internalRecord = signedRecordFromToolResult(result)
+    if (internalRecord) {
       applyAttributionReceipt(
         result as Record<string, unknown>,
-        (request.params as { _meta?: unknown })._meta,
-        internalRecord as AtribRecord,
+        (request as { _meta?: unknown })._meta ?? (request.params as { _meta?: unknown })._meta,
+        internalRecord,
       )
       delete (result as { _meta?: Record<string, unknown> })._meta?.[INTERNAL_RECORD_META_KEY]
     }
