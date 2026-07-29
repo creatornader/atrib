@@ -31,11 +31,13 @@
     "typos": "typos .",
     "clean": "turbo clean",
     "version-packages": "changeset version",
-    "release": "node scripts/check-release-publish-readiness.mjs && pnpm -r build && node scripts/check-mcp-v2-owned-surfaces.mjs --require-built --packed && changeset publish"
+    "mcp-v2:packed-runtime": "node scripts/check-mcp-v2-packed-runtime.mjs",
+    "release": "node scripts/check-release-publish-readiness.mjs && pnpm -r build && node scripts/check-mcp-v2-owned-surfaces.mjs --require-built --packed && pnpm mcp-v2:packed-runtime && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.1",
     "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/client": "^2.0.0",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.8.0",

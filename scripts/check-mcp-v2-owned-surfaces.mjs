@@ -136,7 +136,7 @@ function packPublishedPackages(inventory) {
 
   try {
     for (const [packageName, entry] of packages) {
-      const packed = spawnSync('npm', ['pack', '--silent', '--pack-destination', tempDir], {
+      const packed = spawnSync('pnpm', ['pack', '--pack-destination', tempDir], {
         cwd: join(ROOT, entry.workspace),
         encoding: 'utf8',
         env: process.env,
@@ -147,13 +147,12 @@ function packPublishedPackages(inventory) {
           packed.stderr.trim() ||
           packed.stdout.trim() ||
           `exit status ${packed.status}`
-        errors.push(`${packageName}: npm pack failed: ${diagnostic}`)
+        errors.push(`${packageName}: pnpm pack failed: ${diagnostic}`)
         continue
       }
-      const archiveName = packed.stdout.trim().split('\n').at(-1)
-      const archivePath = join(tempDir, archiveName)
-      if (!archiveName || !existsSync(archivePath)) {
-        errors.push(`${packageName}: npm pack did not produce an archive`)
+      const archivePath = packed.stdout.trim().split('\n').at(-1)
+      if (!archivePath || !existsSync(archivePath)) {
+        errors.push(`${packageName}: pnpm pack did not produce an archive`)
         continue
       }
 
