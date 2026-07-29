@@ -5,13 +5,12 @@
 // so it can be launched as a subprocess by an MCP host (Claude Code,
 // Claude Desktop, etc.).
 
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { createAtribSummarizeServer } from './index.js'
 
 async function main() {
   const { mcp } = await createAtribSummarizeServer()
-  const transport = new StdioServerTransport()
-  await mcp.connect(transport)
+  serveStdio(() => mcp)
 }
 
 main().catch((e) => {

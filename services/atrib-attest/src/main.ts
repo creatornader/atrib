@@ -5,13 +5,12 @@
 // etc.). All four names dispatch to one handleEmit funnel; records are
 // byte-identical regardless of which name signed them.
 
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { createAtribAttestServer } from './index.js'
 
 async function main() {
   const { mcp } = await createAtribAttestServer()
-  const transport = new StdioServerTransport()
-  await mcp.connect(transport)
+  serveStdio(() => mcp)
   // Stays alive on the stdio transport until the host closes it.
 }
 
