@@ -42,6 +42,15 @@
      /dashboard path on log.atrib.dev serves the same file as a fallback. -->
 <link rel="canonical" href="https://explore.atrib.dev/" />
 <style>
+  @font-face{font-family:Literata;src:url(/static/fonts/Literata-Variable.woff2) format('woff2-variations');
+    font-weight:200 900;font-style:normal;font-display:swap}
+  @font-face{font-family:"Libre Franklin";src:url(/static/fonts/LibreFranklin-Variable.woff2) format('woff2-variations');
+    font-weight:100 900;font-style:normal;font-display:swap}
+  @font-face{font-family:IoskeleyMono;src:url(/static/fonts/IoskeleyMono-Regular.woff2) format('woff2');
+    font-weight:400;font-style:normal;font-display:swap}
+  @font-face{font-family:IoskeleyMono;src:url(/static/fonts/IoskeleyMono-Medium.woff2) format('woff2');
+    font-weight:500;font-style:normal;font-display:swap}
+
   /*
    * atrib explorer, design system
    * D054 option 1, single-file vanilla; no framework, no build.
@@ -94,19 +103,22 @@
        no part of this product. Four of them now come from the design system's
        deep ramp, at the same contrast they had before.
 
-       --warn is the exception and is deliberately unchanged. The system's
-       "needs review" colour is #965800, hue 35, and the evidence mark is
-       #e8a04f, hue 32. On paper they are told apart by lightness, 5.3 against
-       2.0. Lifted to this ground they land two degrees apart and become the
-       same colour, which would break the rule that amber marks signed things
-       and nothing else. That is a design decision, not a mapping, so it is
-       left open rather than guessed at. See DESIGN-SYSTEM.md. */
+       --warn is now yellow rather than amber, and that is the whole point.
+       "Needs review" is #965800 at hue 35 and the evidence mark is #e8a04f at
+       hue 32; on paper lightness separates them, but lifted to this ground they
+       land two degrees apart and become one colour, breaking the rule that
+       amber marks signed things and nothing else. Saturation cannot fix it:
+       measured as CIEDE2000 against amber, raising it tops out at 15.8 and
+       lowering it only clears the bar by making the warning duller than the
+       thing it warns about. The bar is 19.1, the closest pair this palette
+       already accepts. Hue is the lever. #e0ca1f measures 20.8 from amber and
+       30.5 or more from every other state colour. See DESIGN-SYSTEM.md. */
     --ok: #99e0c3;
     --ok-subtle: rgba(153, 224, 195, 0.12);
     --ok-border: rgba(153, 224, 195, 0.3);
-    --warn: #fbbf24;
-    --warn-subtle: rgba(251, 191, 36, 0.12);
-    --warn-border: rgba(251, 191, 36, 0.3);
+    --warn: #e0ca1f;
+    --warn-subtle: rgba(224, 202, 31, 0.12);
+    --warn-border: rgba(224, 202, 31, 0.3);
     --err: #ffb4a3;
     --err-subtle: rgba(255, 180, 163, 0.12);
     --err-border: rgba(255, 180, 163, 0.3);
@@ -209,8 +221,17 @@
     --edge-cross-session:    #a08672;  /* cross_session, desaturated taupe (across-session derived) */
 
     /* Type */
-    --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, Roboto, sans-serif;
-    --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+    /* The design system's three faces, served from this origin like every
+       other atrib surface. This was a system stack, so the explorer rendered
+       in San Francisco on a Mac and Segoe on Windows while the website and the
+       home page used Literata and Libre Franklin. Same brand, different
+       typefaces, decided by the visitor's operating system.
+
+       All three are SIL OFL. Two are variable and carry their whole weight
+       range. The fallbacks exist for the swap window only. */
+    --font-serif: Literata, ui-serif, Georgia, serif;
+    --font-sans: "Libre Franklin", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: IoskeleyMono, ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
 
     /* Layout */
     --container: 1180px;
@@ -229,6 +250,8 @@
     background: var(--bg);
     color: var(--text);
     font: 15px/1.55 var(--font-sans);
+    font-synthesis: none;
+    font-optical-sizing: auto;
     font-feature-settings: 'cv11', 'ss01', 'ss03';
     overflow-x: clip;
     min-width: 0;
@@ -304,7 +327,8 @@
   body > header {
     display: flex; align-items: center; justify-content: space-between;
     gap: 16px;
-    padding: 14px max(20px, calc((100vw - var(--container)) / 2 + 20px));
+    height: 56px; box-sizing: border-box;
+    padding: 0 max(24px, calc((100vw - var(--container)) / 2 + 24px));
     border-bottom: 1px solid var(--border);
     background: rgba(5, 9, 20, 0.85);
     backdrop-filter: saturate(180%) blur(12px);
@@ -313,16 +337,12 @@
   }
   body > header .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
   body > header .brand a {
-    color: var(--text); font: 600 16px/1 var(--font-sans);
-    letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px;
-    flex-shrink: 0;
+    color: var(--text); display: flex; align-items: center; flex-shrink: 0;
   }
-  body > header .brand a:hover { text-decoration: none; color: var(--accent-strong); }
-  body > header .brand .seal {
-    display: block; width: 20px; height: 20px;
-    border-radius: 50%;
-    box-shadow: 0 0 0 2px rgba(232, 160, 79, 0.16), inset 0 -2px 4px rgba(0, 0, 0, 0.28);
-  }
+  /* Sized by its own ink height: the viewBox is trimmed to the outlines, so
+     this is not a font size. 15px matches the other two surfaces exactly. */
+  body > header .brand a .wm { display: block; height: 15px; width: auto; fill: currentColor; }
+  body > header .brand a:hover .wm { fill: var(--color-primary); }
   body > header .brand .sub {
     color: var(--text-3); font: 12px/1 var(--font-mono);
     padding-left: 10px; border-left: 1px solid var(--border);
@@ -475,8 +495,8 @@
     100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
   }
   .hero h1 {
-    font: 600 44px/1.08 var(--font-sans);
-    letter-spacing: -0.025em;
+    font: 500 44px/1.08 var(--font-serif);
+    letter-spacing: -0.015em;
     color: var(--text);
     margin: 0 0 18px;
     text-wrap: balance;
@@ -1221,8 +1241,8 @@
   }
   .view-header h1 {
     margin: 0 0 8px;
-    font: 600 28px/1.15 var(--font-sans);
-    letter-spacing: -0.02em;
+    font: 500 28px/1.15 var(--font-serif);
+    letter-spacing: -0.01em;
     color: var(--text);
   }
   .view-header .subject {
@@ -1834,8 +1854,13 @@
 <header>
   <div class="brand">
     <a href="https://atrib.dev" aria-label="atrib home">
-      <img class="seal" src="/static/nav-mark.svg" width="20" height="20" alt="" aria-hidden="true">
-      <span>atrib</span>
+      <svg class="wm" viewBox="43.0 -830.0 2598.7 841.0" fill="currentColor" aria-hidden="true">
+  <path d="M444.0 10.0Q401.0 10.0 379.0 -18.0Q357.0 -46.0 357.0 -97.0H352.0Q325.0 -48.0 279.0 -19.5Q233.0 9.0 177.0 9.0Q136.0 9.0 106.0 -6.0Q76.0 -21.0 59.5 -47.5Q43.0 -74.0 43.0 -110.0Q43.0 -157.0 78.0 -196.5Q113.0 -236.0 205.0 -276.0L349.0 -339.0V-380.0Q349.0 -443.0 323.5 -472.5Q298.0 -502.0 243.0 -502.0Q211.0 -502.0 196.5 -489.0Q182.0 -476.0 169.0 -437.0Q158.0 -409.0 147.5 -399.0Q137.0 -389.0 117.0 -389.0Q93.0 -389.0 80.0 -402.0Q67.0 -415.0 67.0 -439.0Q67.0 -487.0 118.0 -513.5Q169.0 -540.0 263.0 -540.0Q364.0 -540.0 405.5 -505.0Q447.0 -470.0 447.0 -384.0V-160.0Q447.0 -98.0 459.0 -72.0Q471.0 -46.0 497.0 -46.0Q507.0 -46.0 520.5 -50.5Q534.0 -55.0 541.0 -68.0L555.0 -44.0Q543.0 -21.0 511.0 -5.5Q479.0 10.0 444.0 10.0ZM222.0 -51.0Q258.0 -51.0 287.0 -73.5Q316.0 -96.0 332.5 -134.0Q349.0 -172.0 349.0 -217.0V-296.0Q273.0 -267.0 228.0 -239.0Q183.0 -211.0 163.5 -183.5Q144.0 -156.0 144.0 -127.0Q144.0 -93.0 166.0 -72.0Q188.0 -51.0 222.0 -51.0Z"/>
+  <path d="M725.4 -467.0H665.4V-504.0Q718.4 -536.0 748.4 -566.5Q778.4 -597.0 794.4 -640.0H823.4V-514.0H957.4V-467.0H823.4V-163.0Q823.4 -93.0 837.9 -66.0Q852.4 -39.0 892.4 -39.0Q917.4 -39.0 935.4 -49.5Q953.4 -60.0 969.4 -85.0L994.4 -66.0Q965.4 10.0 860.4 10.0Q794.4 10.0 759.9 -22.0Q725.4 -54.0 725.4 -112.0Z"/>
+  <path d="M1296.9 -193.0V-159.0Q1296.9 -104.0 1301.4 -78.5Q1305.9 -53.0 1323.4 -45.5Q1340.9 -38.0 1378.9 -35.0V0.0H1112.9V-35.0Q1151.9 -37.0 1169.9 -45.0Q1187.9 -53.0 1193.4 -77.5Q1198.9 -102.0 1198.9 -152.0V-269.0Q1198.9 -337.0 1196.9 -375.5Q1194.9 -414.0 1186.9 -431.0Q1178.9 -448.0 1160.9 -452.0Q1142.9 -456.0 1110.9 -456.0V-491.0L1285.9 -529.0L1299.9 -405.0H1303.9Q1330.9 -465.0 1378.9 -502.5Q1426.9 -540.0 1477.9 -540.0Q1509.9 -540.0 1528.4 -524.5Q1546.9 -509.0 1546.9 -483.0Q1546.9 -459.0 1531.9 -445.5Q1516.9 -432.0 1488.9 -432.0Q1467.9 -432.0 1454.9 -438.5Q1441.9 -445.0 1431.9 -451.0Q1421.9 -457.0 1409.9 -457.0Q1382.9 -457.0 1355.9 -422.5Q1328.9 -388.0 1313.9 -335.0Q1305.9 -307.0 1301.4 -270.0Q1296.9 -233.0 1296.9 -193.0Z"/>
+  <path d="M1851.3 -540.0V-159.0Q1851.3 -108.0 1858.3 -81.5Q1865.3 -55.0 1885.3 -46.0Q1905.3 -37.0 1944.3 -35.0V0.0H1657.3V-35.0Q1698.3 -37.0 1718.8 -46.5Q1739.3 -56.0 1746.3 -80.5Q1753.3 -105.0 1753.3 -152.0V-280.0Q1753.3 -338.0 1751.8 -376.0Q1750.3 -414.0 1746.3 -427.0Q1742.3 -450.0 1723.8 -458.5Q1705.3 -467.0 1655.3 -467.0V-502.0ZM1736.3 -743.0Q1736.3 -769.0 1754.3 -787.0Q1772.3 -805.0 1798.3 -805.0Q1824.3 -805.0 1842.3 -787.0Q1860.3 -769.0 1860.3 -743.0Q1860.3 -717.0 1842.3 -699.0Q1824.3 -681.0 1798.3 -681.0Q1772.3 -681.0 1754.3 -699.0Q1736.3 -717.0 1736.3 -743.0Z"/>
+  <path d="M2383.7 11.0Q2327.7 11.0 2277.7 -10.0Q2227.7 -31.0 2195.7 -67.0L2148.7 0.0H2126.7V-604.0Q2126.7 -705.0 2113.7 -733.0Q2109.7 -743.0 2103.2 -748.0Q2096.7 -753.0 2081.7 -757.0Q2066.7 -761.0 2034.7 -765.0V-790.0L2222.7 -830.0V-459.0H2226.7Q2258.7 -501.0 2297.7 -520.5Q2336.7 -540.0 2386.7 -540.0Q2458.7 -540.0 2516.7 -503.5Q2574.7 -467.0 2608.2 -405.0Q2641.7 -343.0 2641.7 -265.0Q2641.7 -187.0 2607.7 -124.5Q2573.7 -62.0 2515.2 -25.5Q2456.7 11.0 2383.7 11.0ZM2372.7 -37.0Q2419.7 -37.0 2454.7 -65.0Q2489.7 -93.0 2509.2 -144.0Q2528.7 -195.0 2528.7 -262.0Q2528.7 -330.0 2508.2 -382.0Q2487.7 -434.0 2451.7 -463.5Q2415.7 -493.0 2368.7 -493.0Q2328.7 -493.0 2296.2 -473.5Q2263.7 -454.0 2246.7 -419.0Q2224.7 -375.0 2224.7 -298.0V-209.0Q2224.7 -159.0 2243.7 -120.0Q2262.7 -81.0 2296.2 -59.0Q2329.7 -37.0 2372.7 -37.0Z"/>
+</svg>
     </a>
     <span class="sub" id="brand-sub">explorer</span>
   </div>
@@ -1845,7 +1870,7 @@
        three surfaces read as three products. -->
   <nav class="ladder" aria-label="atrib surfaces">
     <!-- atrib:ladder generated by scripts/render-nav.mjs; edit lib/surfaces.json -->
-    <a href="https://protocol.atrib.dev" target="_blank" rel="noopener noreferrer">protocol</a>
+    <a href="https://protocol.atrib.dev" rel="noopener">protocol</a>
     <span aria-current="page">explorer</span>
     <a href="https://github.com/creatornader/atrib" target="_blank" rel="noopener noreferrer">github</a>
     <!-- /atrib:ladder -->
@@ -1883,16 +1908,16 @@
     <nav aria-label="How it works">
       <h2>How it works</h2>
       <ul>
-      <li><a href="https://protocol.atrib.dev" target="_blank" rel="noopener noreferrer">protocol</a><p>atrib protocol: the open substrate for portable verifiable records.</p></li>
+      <li><a href="https://protocol.atrib.dev" rel="noopener">protocol</a><p>atrib protocol: the open substrate for portable verifiable records.</p></li>
       </ul>
     </nav>
     <nav aria-label="Check it yourself">
       <h2>Check it yourself</h2>
       <ul>
       <li><span aria-current="page">explorer</span><p>The public log. Every signed action, checkable by anyone.</p></li>
-      <li><a href="https://explore.atrib.dev/demo" target="_blank" rel="noopener noreferrer">live replay</a><p>A recorded session, replayed against the real log.</p></li>
-      <li><a href="https://explore.atrib.dev/anchoring" target="_blank" rel="noopener noreferrer">anchoring</a><p>How the log is anchored, and how to verify an anchor.</p></li>
-      <li><a href="https://explore.atrib.dev/yc-demo" target="_blank" rel="noopener noreferrer">walkthrough</a><p>The story version: one goal, followed end to end.</p></li>
+      <li><a href="https://explore.atrib.dev/demo" rel="noopener">live replay</a><p>A recorded session, replayed against the real log.</p></li>
+      <li><a href="https://explore.atrib.dev/anchoring" rel="noopener">anchoring</a><p>How the log is anchored, and how to verify an anchor.</p></li>
+      <li><a href="https://explore.atrib.dev/yc-demo" rel="noopener">walkthrough</a><p>The story version: one goal, followed end to end.</p></li>
       </ul>
     </nav>
     <nav aria-label="The source">
