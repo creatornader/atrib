@@ -38,7 +38,7 @@ import canonicalize from 'canonicalize'
 
 ed.hashes.sha512 = sha512
 
-const LOG_ENDPOINT = (process.env.LOG_ENDPOINT ?? 'https://log.atrib.dev/v1').replace(/\/$/, '')
+const LOG_ENDPOINT = requireLogEndpoint()
 const CHAIN_LENGTH = Number(process.env.CHAIN_LENGTH ?? 5)
 const DEMO_SERVER_URL = process.env.DEMO_SERVER_URL ?? 'demo://chain-demo.atrib.dev'
 // Comma-separated list of 0-indexed step numbers that should emit a
@@ -60,6 +60,28 @@ const RECORD_FILE = process.env.RECORD_FILE ?? join(
 
 function toHex(bytes) {
   return Buffer.from(bytes).toString('hex')
+}
+
+function requireLogEndpoint() {
+  const endpoint = process.env.LOG_ENDPOINT?.trim()
+  if (!endpoint) {
+    throw new Error('LOG_ENDPOINT is required. Use a local log for ordinary demos.')
+  }
+  const normalized = endpoint.replace(/\/$/, '')
+  if (new URL(normalized).hostname === 'log.atrib.dev' && process.env.ATRIB_PUBLIC_DEMO !== '1') {
+    throw new Error('Public demo submission requires ATRIB_PUBLIC_DEMO=1 and a named persistent demo identity.')
+  }
+  return normalized
+}
+
+function demoPrivateKey() {
+  if (new URL(LOG_ENDPOINT).hostname !== 'log.atrib.dev') return ed.utils.randomSecretKey()
+  const configured = process.env.ATRIB_DEMO_PRIVATE_KEY
+  const key = configured ? new Uint8Array(Buffer.from(configured, 'base64url')) : null
+  if (key?.length !== 32) {
+    throw new Error('Public chain-demo requires a 32-byte base64url ATRIB_DEMO_PRIVATE_KEY for its named persistent demo identity.')
+  }
+  return key
 }
 function b64url(bytes) {
   return Buffer.from(bytes).toString('base64url')
@@ -118,7 +140,7 @@ async function main() {
   console.log(`record_file=${RECORD_FILE}`)
   console.log()
 
-  const privateKey = ed.utils.randomSecretKey()
+  const privateKey = demoPrivateKey()
   const publicKeyBytes = await ed.getPublicKeyAsync(privateKey)
   const creatorKey = b64url(publicKeyBytes)
   const contextId = toHex(randomBytes(16))

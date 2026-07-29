@@ -17,6 +17,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   buildReport,
+  collectExpectedRuntimeVersions,
   collectKnowledgeBaseReceiptReport,
   collectLongLivedActivityReport,
   collectRegisteredLongLivedAgents,
@@ -78,6 +79,20 @@ function checkDaemonHealthNormalization() {
   }
   if (normalized.compatibility !== compatibility) {
     fail('daemon health normalization: expected compatibility report preservation')
+  }
+}
+
+function checkCoordinatorImplementationVersionOwner() {
+  const implementation = readJson(join(ROOT, 'services/atrib-attest/package.json'))
+  const forwardingAlias = readJson(join(ROOT, 'services/atrib-emit/package.json'))
+  const expected = collectExpectedRuntimeVersions().coordinator
+  if (expected !== implementation.version) {
+    fail(
+      `coordinator version owner: expected @atrib/attest ${implementation.version}, got ${expected}`,
+    )
+  }
+  if (implementation.version !== forwardingAlias.version && expected === forwardingAlias.version) {
+    fail('coordinator version owner: forwarding @atrib/emit alias owns the runtime gate')
   }
 }
 
@@ -1872,6 +1887,7 @@ function main() {
   }
   checkRouteRegistryNormalization()
   checkDaemonHealthNormalization()
+  checkCoordinatorImplementationVersionOwner()
   checkRouteRegistryDiagnosticsGate()
   checkConfigSurfaceEndpointEvidence()
   checkPrimitiveBackendContractGate()

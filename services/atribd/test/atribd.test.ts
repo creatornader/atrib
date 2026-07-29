@@ -620,6 +620,10 @@ describe('atribd stateless HTTP host', () => {
   })
 
   it('observes stable v2 client cancellation through real HTTP', async () => {
+    let markToolCallStarted!: () => void
+    const toolCallStarted = new Promise<void>((resolve) => {
+      markToolCallStarted = resolve
+    })
     const backend = await createAtribdBackend({
       primitives: [
         [
@@ -630,6 +634,7 @@ describe('atribd stateless HTTP host', () => {
               'abortable_read',
               { description: 'Abort-aware read', inputSchema: {} },
               async (_args, extra) => {
+                markToolCallStarted()
                 await new Promise<never>((_resolve, reject) => {
                   extra.signal.addEventListener('abort', () => reject(extra.signal.reason), {
                     once: true,
@@ -655,7 +660,7 @@ describe('atribd stateless HTTP host', () => {
         { name: 'abortable_read', arguments: {} },
         { signal: controller.signal },
       )
-      await delay(5)
+      await toolCallStarted
       controller.abort(new Error('HTTP cancellation proof'))
       await expect(call).rejects.toThrow(/HTTP cancellation proof/)
       await delay(10)

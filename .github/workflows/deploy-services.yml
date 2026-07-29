@@ -239,6 +239,8 @@ jobs:
         run: pnpm --filter @atrib/mcp build
 
       - name: Smoke test log to graph indexing
+        env:
+          ATRIB_GRAPH_CANARY_KEY: ${{ secrets.ATRIB_GRAPH_CANARY_KEY }}
         run: pnpm --filter @atrib/log-node graph-canary
 
   deploy-directory-node:

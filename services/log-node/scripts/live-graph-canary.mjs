@@ -34,9 +34,13 @@ function defaultCanarySeed() {
   return sha256(new TextEncoder().encode(CANARY_SEED_LABEL))
 }
 
-function readCanarySeed(env = process.env) {
+export function readCanarySeed(env = process.env) {
   const configured = env.ATRIB_GRAPH_CANARY_KEY
-  if (!configured) return defaultCanarySeed()
+  if (!configured) {
+    throw new Error(
+      'ATRIB_GRAPH_CANARY_KEY is required for public graph-canary runs. Refusing to use the publicly derivable development seed.',
+    )
+  }
   const decoded = base64urlDecode(configured)
   if (decoded.length !== 32) {
     throw new Error(`ATRIB_GRAPH_CANARY_KEY must decode to 32 bytes, got ${decoded.length}`)
