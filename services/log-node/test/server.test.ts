@@ -1094,7 +1094,7 @@ describe('GET /dashboard', () => {
     expect(favicon.headers.get('content-type')).toContain('image/x-icon')
     expect(favicon.headers.get('cache-control')).toBe('public, max-age=60')
 
-    const versionedFavicon = await fetch(`${server.url}/favicon.ico?v=0ee8876`)
+    const versionedFavicon = await fetch(`${server.url}/favicon.ico?v=5766155`)
     expect(versionedFavicon.status).toBe(200)
     expect(versionedFavicon.headers.get('content-type')).toContain('image/x-icon')
     expect(versionedFavicon.headers.get('cache-control')).toBe('public, max-age=60')
