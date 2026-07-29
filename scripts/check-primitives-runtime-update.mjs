@@ -4,6 +4,7 @@
 
 import assert from 'node:assert/strict'
 import {
+  RUNTIME_MODES,
   endpointProbeSettled,
   normalizePrimitiveLaunchAgent,
   parseArgs,
@@ -40,6 +41,8 @@ const expectedPrimitiveTools = {
   summarize: ['summarize'],
 }
 const allExpectedTools = Object.values(expectedPrimitiveTools).flat()
+
+assert.equal(RUNTIME_MODES.atribd.topology, 'required')
 
 function primitiveContractsFixture() {
   return Object.fromEntries(
