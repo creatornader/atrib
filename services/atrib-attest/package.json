@@ -47,7 +47,8 @@
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
     "canonicalize": "^3.0.0",

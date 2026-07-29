@@ -20,8 +20,8 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolveEnvContextId } from '@atrib/mcp'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { InMemoryTransport, type McpServer } from '@modelcontextprotocol/server'
+import { Client } from '@modelcontextprotocol/client'
 import {
   ErrorCode,
   McpError,
@@ -29,7 +29,6 @@ import {
   type CallToolResult,
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js'
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 export interface AtribdPrimitiveHandle {
   mcp: McpServer
@@ -840,7 +839,7 @@ async function mountPrimitive(
   await client.connect(clientTransport)
 
   const listed = await client.listTools()
-  return { name, handle, client, tools: listed.tools }
+  return { name, handle, client, tools: listed.tools as unknown as Tool[] }
 }
 
 export async function createAtribdBackend(

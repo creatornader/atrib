@@ -16,7 +16,7 @@
  * §5.8 graceful-degradation pattern.
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import {
   resolveEnvContextId,
@@ -118,7 +118,7 @@ export async function createAtribSummarizeServer(): Promise<AtribSummarizeServer
           const input = SummarizeInput.parse(rawInput)
           const result = await handleSummarize(input)
           return {
-            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
           }
         },
         extractRecordHashesFromMcpResult,

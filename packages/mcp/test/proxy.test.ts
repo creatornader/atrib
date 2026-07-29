@@ -22,10 +22,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { McpServer, InMemoryTransport } from '@modelcontextprotocol/server'
+import { Client } from '@modelcontextprotocol/client'
 import { createAtribProxy } from '../src/proxy.js'
 import { base64urlEncode } from '../src/base64url.js'
 
@@ -58,7 +56,7 @@ async function makeUpstream(opts: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const underlying = (upstream as any).server
 
-  underlying.setRequestHandler(ListToolsRequestSchema, async () => ({
+  underlying.setRequestHandler('tools/list', async () => ({
     tools: opts.tools.map((t) => ({
       name: t.name,
       inputSchema: t.inputSchema ?? { type: 'object' },
@@ -66,7 +64,7 @@ async function makeUpstream(opts: {
   }))
 
   underlying.setRequestHandler(
-    CallToolRequestSchema,
+    'tools/call',
     async (req: { params: { name: string; arguments?: Record<string, unknown> } }) => {
       const tool = opts.tools.find((t) => t.name === req.params.name)
       if (!tool) {

@@ -59,7 +59,7 @@ export interface ModernSdkStatelessAdapterOptions {
    * the 2026-07-28 exchange stateless and applies its own stateless legacy
    * fallback for 2025-era clients.
    */
-  serverFactory: () => ModernServer
+  serverFactory: (requestMeta?: unknown) => ModernServer
   /** Existing v1 server factory for 2025-era clients during the compatibility window. */
   legacyServerFactory: () => Server
 }
@@ -74,7 +74,21 @@ export interface ModernSdkStatelessAdapterOptions {
 export function createModernSdkStatelessAdapter(
   options: ModernSdkStatelessAdapterOptions,
 ): AtribdTransportAdapter {
-  const handler = createMcpHandler(options.serverFactory, {
+  const handler = createMcpHandler(async (context) => {
+    let requestMeta: unknown
+    try {
+      const body = await context.requestInfo?.clone().json()
+      const params = body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as { params?: unknown }).params
+        : undefined
+      if (params && typeof params === 'object' && !Array.isArray(params)) {
+        requestMeta = (params as { _meta?: unknown })._meta
+      }
+    } catch {
+      // Optional extension metadata must never block the primary request.
+    }
+    return options.serverFactory(requestMeta)
+  }, {
     // The host routes 2025 traffic to the existing v1 adapter. Keeping the
     // paths separate preserves its JSON-only response behavior for deployed
     // legacy clients while v2 owns the modern wire protocol.

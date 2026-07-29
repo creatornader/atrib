@@ -15,7 +15,7 @@
 //     mirror filename pattern `atrib-emit-<agent>.jsonl` is frozen (L3):
 //     existing files keep their names forever
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { randomBytes } from 'node:crypto'
 import {
@@ -226,6 +226,7 @@ const EmitInput = z.object({
 
 type EmitSignedOutput = {
   signed: true
+  record: AtribRecord
   record_hash: string
   log_index: number | null
   inclusion_proof: ProofBundle['inclusion_proof'] | null
@@ -861,6 +862,7 @@ async function handleEmit({
 
   return {
     signed: true,
+    record,
     record_hash: recordHash,
     log_index: proof?.log_index ?? null,
     inclusion_proof: proof?.inclusion_proof ?? null,
@@ -907,9 +909,11 @@ function emitRefusalToolResult(result: EmitRefusalOutput): {
 
 function emitSuccessToolResult(result: EmitSignedOutput): {
   content: Array<{ type: 'text'; text: string }>
+  _meta: Record<string, unknown>
 } {
   return {
     content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    _meta: { 'dev.atrib/internal-record': result.record },
   }
 }
 

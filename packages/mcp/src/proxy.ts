@@ -42,17 +42,16 @@
  * surfaced to the host as a tool error; atrib stays out of the failure path.
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { McpServer } from '@modelcontextprotocol/server'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 import { atrib, type AtribOptions, type AtribServer } from './middleware.js'
 import {
   ATTRIBUTION_EXTENSION_ID,
   ATTRIBUTION_EXTENSION_VERSION,
 } from './extension-attribution.js'
+
+type ClientTransport = Parameters<Client['connect']>[0]
 
 /** Upstream MCP server transport options. */
 export type UpstreamTransport =
@@ -75,7 +74,7 @@ export type UpstreamTransport =
   | {
       type: 'inMemory'
       /** Pre-built in-process Transport (used for testing). */
-      transport: Transport
+      transport: ClientTransport
     }
 
 // Note on SSE: the MCP SDK's `SSEClientTransport` is marked deprecated as of
@@ -207,7 +206,7 @@ export async function createAtribProxy(options: AtribProxyOptions): Promise<Atri
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const underlying = (wrappedServer as any).server
 
-  underlying.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: upstreamTools.tools }))
+  underlying.setRequestHandler('tools/list', async () => ({ tools: upstreamTools.tools }))
 
   // ── 6. Register tools/call. forward to upstream client ──────────────
   // atrib()'s patched setRequestHandler will wrap this handler with the
@@ -217,7 +216,7 @@ export async function createAtribProxy(options: AtribProxyOptions): Promise<Atri
   // the host and atrib's outer try/catch ensures the failure stays
   // contained.
   underlying.setRequestHandler(
-    CallToolRequestSchema,
+    'tools/call',
     async (request: { params: { name: string; arguments?: Record<string, unknown> } }) => {
       const { name, arguments: args } = request.params
       const result = await upstreamClient.callTool({
@@ -246,7 +245,7 @@ export async function createAtribProxy(options: AtribProxyOptions): Promise<Atri
  * Stdio spawns a child process. http/sse open a network connection. inMemory
  * uses a pre-built Transport (intended for tests).
  */
-function createUpstreamTransport(spec: UpstreamTransport): Transport {
+function createUpstreamTransport(spec: UpstreamTransport): ClientTransport {
   switch (spec.type) {
     case 'stdio':
       return new StdioClientTransport({
@@ -263,7 +262,7 @@ function createUpstreamTransport(spec: UpstreamTransport): Transport {
       // guaranteed by `implements Transport` on the SDK side.
       return new StreamableHTTPClientTransport(new URL(spec.url), {
         ...(spec.headers ? { requestInit: { headers: spec.headers } } : {}),
-      }) as unknown as Transport
+      }) as unknown as ClientTransport
     case 'inMemory':
       return spec.transport
   }

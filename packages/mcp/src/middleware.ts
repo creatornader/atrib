@@ -8,7 +8,7 @@
  * everything is automatic.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { base64urlDecode, base64urlEncode } from './base64url.js'
 import { computeContentId } from './content-id.js'
 import {
@@ -476,8 +476,8 @@ export interface AtribOptions {
   extensionAttribution?: boolean
 }
 
-/** Extended McpServer with atrib-specific methods. */
-export interface AtribServer extends McpServer {
+/** Controls added to an MCP server by {@link atrib}. */
+export interface AtribServerControls {
   /** Flush pending log submissions (for testing/shutdown). */
   flush(): Promise<void>
   /** The policy document this server exposes, if any (§5.3.6). */
@@ -491,6 +491,20 @@ export interface AtribServer extends McpServer {
    */
   destroy(): void
 }
+
+/**
+ * Structural boundary used by host frameworks that still supply their own
+ * MCP server generation. atrib itself stays on the v2 SDK and patches the
+ * common low-level request-handler surface.
+ */
+export interface CompatibleMcpServer {
+  server: {
+    setRequestHandler: unknown
+  }
+}
+
+/** Native v2 MCP server extended with atrib-specific controls. */
+export type AtribServer = McpServer & AtribServerControls
 
 function createNoopSubmissionQueue(): SubmissionQueue {
   return {
@@ -508,8 +522,16 @@ function createNoopSubmissionQueue(): SubmissionQueue {
  * If creatorKey is not provided, operates in pass-through mode:
  * all requests and responses forwarded without modification.
  */
-export function atrib(server: McpServer, options: AtribOptions = {}): AtribServer {
-  const atribServer = server as AtribServer
+export function atrib(server: McpServer, options?: AtribOptions): AtribServer
+export function atrib<TServer extends CompatibleMcpServer>(
+  server: TServer,
+  options?: AtribOptions,
+): TServer & AtribServerControls
+export function atrib(
+  server: McpServer | CompatibleMcpServer,
+  options: AtribOptions = {},
+): AtribServer {
+  const atribServer = server as unknown as AtribServer
 
   // §5.8: If ATRIB_PRIVATE_KEY is not set, pass-through mode
   if (!options.creatorKey) {

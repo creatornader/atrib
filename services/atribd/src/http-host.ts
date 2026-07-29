@@ -40,9 +40,13 @@ import {
   ListToolsRequestSchema,
   isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js'
+import { Server as ModernServer } from '@modelcontextprotocol/server'
 import {
-  Server as ModernServer,
-} from '@modelcontextprotocol/server'
+  ATTRIBUTION_EXTENSION_ID,
+  ATTRIBUTION_EXTENSION_VERSION,
+  applyAttributionReceipt,
+  type AtribRecord,
+} from '@atrib/mcp'
 import {
   createAtribdBackend,
   errorMessage,
@@ -62,6 +66,27 @@ import {
 export const DEFAULT_HTTP_HOST = '127.0.0.1'
 export const DEFAULT_HTTP_PORT = 8796
 export const DEFAULT_HTTP_PATH = '/mcp'
+const INTERNAL_RECORD_META_KEY = 'dev.atrib/internal-record'
+
+function signedRecordFromToolResult(result: unknown): AtribRecord | undefined {
+  if (!result || typeof result !== 'object') return undefined
+  const value = result as { _meta?: Record<string, unknown>; content?: unknown }
+  const fromMeta = value._meta?.[INTERNAL_RECORD_META_KEY]
+  if (fromMeta && typeof fromMeta === 'object') return fromMeta as AtribRecord
+  if (!Array.isArray(value.content)) return undefined
+  for (const item of value.content) {
+    if (!item || typeof item !== 'object' || (item as { type?: unknown }).type !== 'text') continue
+    const text = (item as { text?: unknown }).text
+    if (typeof text !== 'string') continue
+    try {
+      const parsed = JSON.parse(text) as { record?: unknown }
+      if (parsed.record && typeof parsed.record === 'object') return parsed.record as AtribRecord
+    } catch {
+      // Non-JSON tool text is not an attribution record.
+    }
+  }
+  return undefined
+}
 // Alias-window rule W2 (attest/recall rename): while legacy tool names are
 // still being retired, every default deployment advertises a short tools/list
 // ttlMs so a rename propagates on cache expiry within minutes, and a name may
@@ -174,7 +199,12 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(bytes)
 }
 
-function sendJsonRpcError(res: ServerResponse, status: number, code: number, message: string): void {
+function sendJsonRpcError(
+  res: ServerResponse,
+  status: number,
+  code: number,
+  message: string,
+): void {
   sendJson(res, status, {
     jsonrpc: '2.0',
     error: { code, message },
@@ -316,6 +346,7 @@ export interface AtribdServerFactoryOptions {
     onInjected?: () => void
     onRejected?: () => void
   }
+  requestMeta?: unknown
 }
 
 /**
@@ -377,23 +408,42 @@ export function createAtribdServer(options: AtribdServerFactoryOptions): Server 
 }
 
 /**
- * v2 outer server for the native 2026-07-28 HTTP adapter. The backend and
- * standalone primitives remain on the v1 in-memory surface; this boundary
- * only translates the public MCP wire protocol and preserves their handlers.
+ * v2 outer server for the native 2026-07-28 HTTP adapter. The backend mounts
+ * the standalone v2 primitives in memory and exposes them over the stateless
+ * public MCP wire protocol.
  */
 export function createAtribdModernServer(options: AtribdServerFactoryOptions): ModernServer {
+  const capabilities = {
+    tools: {},
+    extensions: {
+      [ATTRIBUTION_EXTENSION_ID]: {
+        version: ATTRIBUTION_EXTENSION_VERSION,
+        signs: ['observation', 'annotation', 'revision'],
+        receipts: ['token', 'record'],
+      },
+    },
+  }
+  const instructions =
+    'atribd: one local daemon exposing all seven atrib cognitive primitives. ' +
+    'Pass context_id explicitly on every write-primitive call over HTTP.'
   const server = new ModernServer(
     {
       name: 'atribd',
       version: readPackageVersion(),
     },
     {
-      capabilities: { tools: {} },
-      instructions:
-        'atribd: one local daemon exposing all seven atrib cognitive primitives. ' +
-        'Pass context_id explicitly on every write-primitive call over HTTP.',
+      capabilities,
+      instructions,
     },
   )
+
+  server.setRequestHandler('server/discover', async () => ({
+    ttlMs: 0,
+    cacheScope: 'private',
+    supportedVersions: ['2026-07-28'],
+    capabilities,
+    instructions,
+  }))
 
   server.setRequestHandler('tools/list', async () => {
     const backend = await options.getBackend()
@@ -411,17 +461,35 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
   server.setRequestHandler('tools/call', async (request) => {
     const backend = await options.getBackend()
     const policy = options.httpContextPolicy
-    if (!policy) return backend.callTool(request.params)
-    const outcome = applyHttpContextPolicy(request.params, {
-      ambientContext: policy.ambientContext,
-    })
-    if (outcome.kind === 'rejected') {
-      policy.onRejected?.()
-      logDaemonEvent({ event: 'write_call_rejected_missing_context', tool: request.params.name })
-      return outcome.result
+    const result = !policy
+      ? await backend.callTool(request.params)
+      : await (async () => {
+          const outcome = applyHttpContextPolicy(request.params, {
+            ambientContext: policy.ambientContext,
+          })
+          if (outcome.kind === 'rejected') {
+            policy.onRejected?.()
+            logDaemonEvent({
+              event: 'write_call_rejected_missing_context',
+              tool: request.params.name,
+            })
+            return outcome.result
+          }
+          if (outcome.kind === 'injected') policy.onInjected?.()
+          return backend.callTool(outcome.params)
+        })()
+    const internalRecord = signedRecordFromToolResult(result)
+    if (internalRecord) {
+      applyAttributionReceipt(
+        result as Record<string, unknown>,
+        options.requestMeta ??
+          (request as { _meta?: unknown })._meta ??
+          (request.params as { _meta?: unknown })._meta,
+        internalRecord,
+      )
+      delete (result as { _meta?: Record<string, unknown> })._meta?.[INTERNAL_RECORD_META_KEY]
     }
-    if (outcome.kind === 'injected') policy.onInjected?.()
-    return backend.callTool(outcome.params)
+    return result
   })
 
   return server
@@ -455,7 +523,7 @@ export async function bindAtribdHttpHost(
   let endpoint = ''
   let healthEndpoint = ''
 
-  const modernServerFactory = () =>
+  const modernServerFactory = (requestMeta?: unknown) =>
     createAtribdModernServer({
       getBackend: backendProvider.get,
       toolsListTtlMs,
@@ -465,6 +533,7 @@ export async function bindAtribdHttpHost(
           counters.rejected_missing_context += 1
         },
       },
+      requestMeta,
     })
   const legacyServerFactory = () =>
     createAtribdServer({
@@ -605,12 +674,7 @@ export async function bindAtribdHttpHost(
       if (mismatch) {
         counters.rejected_header_mismatch += 1
         const modern = headerValue(req, 'mcp-protocol-version') === '2026-07-28'
-        sendJsonRpcError(
-          res,
-          400,
-          modern ? -32020 : -32600,
-          `routing header mismatch: ${mismatch}`,
-        )
+        sendJsonRpcError(res, 400, modern ? -32020 : -32600, `routing header mismatch: ${mismatch}`)
         return
       }
 

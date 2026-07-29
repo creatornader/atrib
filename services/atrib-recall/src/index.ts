@@ -33,8 +33,8 @@
  *                        Default: log.atrib.dev
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { McpServer } from '@modelcontextprotocol/server'
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
 import {
   verifyRecord,
   EVENT_TYPE_SHORT_NAMES,

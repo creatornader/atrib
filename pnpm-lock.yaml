@@ -551,9 +551,12 @@ importers:
 
   packages/mcp:
     dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/client':
+        specifier: ^2.0.0
+        version: 2.0.0
+      '@modelcontextprotocol/server':
+        specifier: ^2.0.0
+        version: 2.0.0
       '@noble/ed25519':
         specifier: ^3.1.0
         version: 3.1.0
@@ -582,9 +585,12 @@ importers:
       '@atrib/mcp':
         specifier: workspace:*
         version: link:../mcp
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/client':
+        specifier: ^2.0.0
+        version: 2.0.0
+      '@modelcontextprotocol/server':
+        specifier: ^2.0.0
+        version: 2.0.0
       '@noble/ed25519':
         specifier: ^3.1.0
         version: 3.1.0
@@ -802,9 +808,9 @@ importers:
       '@atrib/attest':
         specifier: workspace:*
         version: link:../atrib-attest
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: ^2.0.0
+        version: 2.0.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.1
@@ -824,9 +830,12 @@ importers:
       '@atrib/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/client':
+        specifier: ^2.0.0
+        version: 2.0.0
+      '@modelcontextprotocol/server':
+        specifier: ^2.0.0
+        version: 2.0.0
       '@noble/ed25519':
         specifier: ^3.1.0
         version: 3.1.0
@@ -858,9 +867,9 @@ importers:
       '@atrib/attest':
         specifier: workspace:*
         version: link:../atrib-attest
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: ^2.0.0
+        version: 2.0.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.1
@@ -880,6 +889,9 @@ importers:
       '@atrib/attest':
         specifier: workspace:*
         version: link:../atrib-attest
+      '@atrib/daemon':
+        specifier: workspace:*
+        version: link:../atribd
       '@atrib/recall':
         specifier: workspace:*
         version: link:../atrib-recall
@@ -895,6 +907,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: ^2.0.0
+        version: 2.0.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.1
@@ -914,9 +929,12 @@ importers:
       '@atrib/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.12.1
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/client':
+        specifier: ^2.0.0
+        version: 2.0.0
+      '@modelcontextprotocol/server':
+        specifier: ^2.0.0
+        version: 2.0.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -948,9 +966,9 @@ importers:
       '@atrib/attest':
         specifier: workspace:*
         version: link:../atrib-attest
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: ^2.0.0
+        version: 2.0.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.1
@@ -970,9 +988,9 @@ importers:
       '@atrib/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: ^2.0.0
+        version: 2.0.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -995,9 +1013,9 @@ importers:
       '@atrib/recall':
         specifier: workspace:*
         version: link:../atrib-recall
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: ^2.0.0
+        version: 2.0.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.1
@@ -1020,9 +1038,9 @@ importers:
       '@atrib/verify':
         specifier: workspace:*
         version: link:../../packages/verify
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/server':
+        specifier: ^2.0.0
+        version: 2.0.0
     devDependencies:
       '@noble/ed25519':
         specifier: ^3.1.0
@@ -1063,6 +1081,9 @@ importers:
       '@atrib/verify':
         specifier: workspace:*
         version: link:../../packages/verify
+      '@modelcontextprotocol/client':
+        specifier: ^2.0.0
+        version: 2.0.0
       '@modelcontextprotocol/node':
         specifier: ^2.0.0
         version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.31)
@@ -1073,9 +1094,6 @@ importers:
         specifier: ^2.0.0
         version: 2.0.0
     devDependencies:
-      '@modelcontextprotocol/client':
-        specifier: ^2.0.0
-        version: 2.0.0
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1

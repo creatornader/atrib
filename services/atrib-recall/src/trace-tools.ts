@@ -13,7 +13,7 @@
  * direction argument.
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { resolveEnvContextId, logReadPrimitiveCall } from '@atrib/mcp'
 import { loadAllRecords, type IndexedRecord, type SidecarPayload } from './trace-storage.js'
