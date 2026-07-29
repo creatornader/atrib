@@ -1,6 +1,6 @@
 {
   "name": "@atrib/operating-graph",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Open-source reference client for live, bounded atrib operating views.",
   "license": "Apache-2.0",
   "private": true,

@@ -1,5 +1,12 @@
 # @atrib/emit
 
+## 1.2.3
+
+### Patch Changes
+
+- Updated dependencies [c4b6d5a]
+  - @atrib/attest@0.4.3
+
 ## 1.2.2
 
 ### Patch Changes

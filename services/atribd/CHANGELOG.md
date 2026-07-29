@@ -1,5 +1,13 @@
 # @atrib/daemon
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [c4b6d5a]
+  - @atrib/attest@0.4.3
+  - @atrib/summarize@0.5.3
+
 ## 0.4.0
 
 ### Minor Changes
