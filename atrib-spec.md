@@ -3458,6 +3458,12 @@ serverInfo: {
 
 ### 5.4 @atrib/agent: Agent Middleware
 
+In this section, "session state" means application-owned continuity across an
+agent run. It is not MCP transport-session state. Each MCP request still carries
+its complete protocol, identity, capability, trace, and atrib context metadata.
+No rule in [§5.4](#54-atribagent-agent-middleware) depends on a connection,
+`initialize`, or `Mcp-Session-Id`.
+
 #### 5.4.1 Init Interface
 
 The agent middleware exposes an interception surface that the host application or MCP client integrates at outbound tool call and inbound tool response boundaries. This is a framework-agnostic design; the middleware does not monkey-patch a specific agent implementation, because no single agent shape covers the LangChain / Mastra / AI SDK / direct-MCP-client landscape. Instead, the middleware returns an interceptor object that the caller hooks into their own request/response lifecycle.
