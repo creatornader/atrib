@@ -14,7 +14,7 @@
 </script>
 
 <!-- Favicon + app icons. Source assets are shared with the public website. -->
-<link rel="icon" href="/favicon.ico?v=0ee8876" sizes="any" />
+<link rel="icon" href="/favicon.ico?v=5766155" sizes="any" />
 <link rel="icon" type="image/svg+xml" href="/static/icon.svg" />
 <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
 
@@ -274,10 +274,15 @@
   }
 
   ::selection { background: var(--accent); color: var(--bg); }
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--surface-hover); }
+  /* No ::-webkit-scrollbar width here on purpose.
+     Styling the scrollbar turns the macOS overlay scrollbar into a classic one
+     that occupies 10px of layout width. The other two surfaces do not style
+     theirs, so this surface's content box was 1430px where theirs was 1440px:
+     the header's left edge matched at 208px and its right edge missed by 10px.
+     Leaving it unstyled costs a styled thumb and buys an estate whose headers
+     agree on both edges, on every platform, because all three then get whatever
+     the platform draws. Inner scrollers below still hide theirs where a visible
+     bar would read as a bug. */
 
   a { color: var(--accent); text-decoration: none; transition: color 120ms ease; }
   a:hover { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 2px; }
@@ -349,7 +354,9 @@
   body > header {
     display: flex; align-items: center; justify-content: space-between;
     gap: 16px;
-    height: 56px; box-sizing: border-box;
+    /* 57px, not 56: the other surfaces are a 56px row plus a 1px rule, and
+       box-sizing here counts the rule inside the height. */
+    height: 57px; box-sizing: border-box;
     padding: 0 var(--estate-gutter);
     border-bottom: 1px solid var(--border);
     background: rgba(5, 9, 20, 0.85);
@@ -357,7 +364,7 @@
     -webkit-backdrop-filter: saturate(180%) blur(12px);
     position: sticky; top: 0; z-index: 50;
   }
-  body > header .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  body > header .brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
   body > header .brand a {
     color: var(--text); display: flex; align-items: center; flex-shrink: 0;
   }
@@ -365,10 +372,12 @@
      this is not a font size. 15px matches the other two surfaces exactly. */
   body > header .brand a .wm { display: block; height: 15px; width: auto; fill: currentColor; }
   body > header .brand a:hover .wm { fill: var(--color-primary); }
+  /* 8px gap, 8px padding, no margin: the same divider the other two surfaces
+     draw with gap-2 and a border-l pl-2. It was 10 + 2 here, so the label sat
+     4px right of where protocol puts it. */
   body > header .brand .sub {
-    color: var(--text-3); font: 12px/1 var(--font-mono);
-    padding-left: 10px; border-left: 1px solid var(--border);
-    margin-left: 2px;
+    color: var(--text-3); font: 12px/16px var(--font-mono);
+    padding-left: 8px; border-left: 1px solid var(--border);
   }
   body > header nav, nav.local {
     display: flex; gap: 4px; align-items: center;
@@ -381,21 +390,29 @@
      You cannot navigate to where you already are, so the current surface is a
      label that reads brighter rather than a link. */
   body > header nav.ladder a, body > header nav.ladder span {
-    font: 400 12px/1 var(--font-mono); padding: 8px 10px;
-    border-radius: var(--radius-sm); color: var(--text-3); flex-shrink: 0;
+    /* 12px on a 16px line in a 12px gutter: a 32px row, which is what the
+       other surfaces get from text-xs and px-3 py-2. It was 12px/1 and 10px,
+       giving a 28px row two pixels narrower on each side. */
+    font: 400 12px/16px var(--font-mono); padding: 8px 12px;
+    border-radius: var(--radius-sm); color: var(--text-2); flex-shrink: 0;
   }
   body > header nav.ladder a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
   body > header nav.ladder [aria-current] { color: var(--text); }
   nav.local {
-    position: sticky; top: 56px; z-index: 49;
+    position: sticky; top: 57px; z-index: 49;
     padding: 8px var(--estate-gutter);
     border-bottom: 1px solid var(--border);
     background: rgba(5, 9, 20, 0.85);
     backdrop-filter: saturate(180%) blur(12px);
     -webkit-backdrop-filter: saturate(180%) blur(12px);
   }
+  /* The view tabs read as the same kind of thing as the ladder above them, so
+     they are set in the same face at the same size: one navigation language on
+     the surface rather than two. They were 13px/500 sans against the ladder's
+     12px/400 mono, which made the page-level nav heavier than the estate
+     wayfinding above it. The active pill carries the difference instead. */
   body > header nav a, nav.local a {
-    color: var(--text-2); font: 500 13px/1 var(--font-sans);
+    color: var(--text-2); font: 400 12px/16px var(--font-mono);
     padding: 8px 12px; border-radius: var(--radius-sm);
     flex-shrink: 0;
     transition: background 120ms ease, color 120ms ease;
