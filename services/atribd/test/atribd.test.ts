@@ -72,12 +72,14 @@ const EXPECTED_TOOL_NAMES = [
 const CONTEXT_A = 'a'.repeat(32)
 const CONTEXT_B = 'b'.repeat(32)
 const TEST_PRIVATE_KEY = Buffer.from(new Uint8Array(32).fill(29)).toString('base64url')
+const TEST_LOG_ENDPOINT = 'http://127.0.0.1:9/v1/entries'
 
 function processEnvWith(env: NodeJS.ProcessEnv): Record<string, string> {
   const merged: Record<string, string> = {}
   for (const [key, value] of Object.entries({ ...process.env, ...env })) {
     if (typeof value === 'string') merged[key] = value
   }
+  merged.ATRIB_LOG_ENDPOINT = env.ATRIB_LOG_ENDPOINT ?? TEST_LOG_ENDPOINT
   return merged
 }
 
