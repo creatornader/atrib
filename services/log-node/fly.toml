@@ -38,7 +38,22 @@ primary_region = 'iad'
     type = 'http'
     interval = '15s'
     timeout = '2s'
-    grace_period = '5s'
+    # grace_period MUST exceed boot-to-listening. Measured 2026-07-29 from the
+    # Fly logs: "Starting init" 08:57:02 -> "atrib-log listening" 08:57:07, so
+    # 5 seconds against a 5 second grace, i.e. no margin at all. Any slower
+    # boot fails the check on a service that is merely starting.
+    #
+    # It also grows: as the comment on [[vm]] memory below says, the persisted
+    # log is replayed into the in-memory Merkle tree at startup, so this scales
+    # with tree_size (~115k entries on the measurement date, replaying at
+    # roughly 23k entries/sec).
+    #
+    # 45s is ~9x the measured boot and covers on the order of a million entries
+    # before it needs revisiting. Fly clamps this field at 60s (`flyctl config
+    # validate` warns "this will be lowered to 1 minute"), so 60s is the hard
+    # ceiling, not a value to reach for casually: past it the only fix is
+    # making startup cheaper.
+    grace_period = '45s'
     method = 'GET'
     # /v1/pubkey always returns 200 (even with an empty tree); /v1/checkpoint
     # returns 404 until the first entry lands. With persistence in place a

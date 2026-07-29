@@ -32,6 +32,16 @@ primary_region = 'iad'
     type = 'http'
     interval = '15s'
     timeout = '2s'
-    grace_period = '5s'
+    # grace_period MUST exceed boot-to-listening. Measured 2026-07-29 from the
+    # Fly logs: "Starting init" 08:57:14 -> "atrib-archive listening" 08:57:18,
+    # so 4 seconds against a 5 second grace. One second of margin is not margin.
+    #
+    # Startup replays the archived record bodies ("replayed 13 archived
+    # records"), so it grows with opt-in submissions. 13 is small today, which
+    # is exactly why the tight value has not bitten yet.
+    #
+    # 30s is ~7x the measured boot. Fly clamps this field at 60s, so that is the
+    # ceiling; past it the fix is a cheaper startup, not a longer grace.
+    grace_period = '30s'
     method = 'GET'
     path = '/v1/retention'
