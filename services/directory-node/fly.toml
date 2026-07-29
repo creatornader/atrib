@@ -40,4 +40,12 @@ primary_region = 'iad'
     path = '/v6/anchor'
     interval = '30s'
     timeout = '5s'
+    # Left at 15s: measured 2026-07-29, "Starting init" 08:56:59 -> "directory-node
+    # listening" 08:57:02, so 3 seconds with 5x margin. Unlike log-node and
+    # archive-node, which were sitting at zero and one second of margin and were
+    # raised in the same change, this one has room.
+    #
+    # It is not fixed forever. Startup replays persisted claims into a fresh
+    # in-memory AKD ("replayed 20 persisted claims"), so re-measure if claim
+    # volume grows by an order of magnitude. Fly clamps this field at 60s.
     grace_period = '15s'
