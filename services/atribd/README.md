@@ -235,6 +235,29 @@ and mirror stay on the host.
   binaries or at `atrib-primitives`. Rollback is a config change, not a data
   migration; no signed byte differs between the topologies.
 
+## Request diagnosis
+
+Diagnose one bounded request, not a connection:
+
+1. Record the profile, endpoint, timestamp, MCP method, and tool name.
+2. Check `Mcp-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` against the JSON
+   body. For modern traffic the protocol version is `2026-07-28`.
+3. Inspect request `_meta` for protocol version, client info, capabilities,
+   explicit atrib context, trace context, and the write idempotency key. Redact
+   bearer tokens and private tool arguments.
+4. Inspect the response status, JSON-RPC error or result, attribution receipt,
+   and health counters. A receipt proves a signed commitment, not the truth of
+   the underlying claim.
+5. Retry reads as fresh requests. Retry writes only with the same idempotency
+   key and byte-equivalent action. A changed action must use a new key.
+6. After process replacement, probe `server/discover`, `tools/list`, and one
+   non-mutating read. Do not attempt session repair.
+
+The outer atrib server can be modern while a configured wrapper still talks to
+an older upstream MCP server. Diagnose the outer and upstream legs separately.
+The outer receipt proves what the atrib layer signed. It does not upgrade the
+upstream server's transport or make an upstream claim true.
+
 ## Verify locally
 
 ```sh
