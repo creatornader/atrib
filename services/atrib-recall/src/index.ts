@@ -34,7 +34,7 @@
  */
 
 import { McpServer } from '@modelcontextprotocol/server'
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import {
   verifyRecord,
   EVENT_TYPE_SHORT_NAMES,
@@ -2525,8 +2525,7 @@ export function createAtribRecallServer(): AtribRecallServer {
 
 async function main(): Promise<void> {
   const { mcp } = createAtribRecallServer()
-  const transport = new StdioServerTransport()
-  await mcp.connect(transport)
+  serveStdio(() => mcp)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

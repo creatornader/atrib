@@ -524,7 +524,7 @@ export async function createAtribAttestServer(
  * Wire up the legacy atrib-emit MCP server. Mounts `emit` plus `attest`
  * (alias-window rule W1: every existing server also serves the new verb).
  * Returns an AtribEmitServer handle whose `.mcp` is ready to attach to a
- * transport (StdioServerTransport for the standalone binary; in-process
+ * transport (serveStdio for the standalone binary; in-process
  * transport for tests).
  */
 export async function createAtribEmitServer(

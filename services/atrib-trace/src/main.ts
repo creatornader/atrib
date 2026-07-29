@@ -2,13 +2,12 @@
 // atrib-trace standalone binary (forwarding shim). Serves the legacy
 // atrib-trace server, which mounts `trace` + `trace_forward` plus the
 // `recall` verb per the alias-window rule W1.
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { createAtribTraceServer } from '@atrib/recall'
 
 async function main() {
   const { mcp } = await createAtribTraceServer()
-  const transport = new StdioServerTransport()
-  await mcp.connect(transport)
+  serveStdio(() => mcp)
 }
 
 main().catch((e) => {

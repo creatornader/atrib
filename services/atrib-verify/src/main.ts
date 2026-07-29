@@ -2,13 +2,12 @@
 // atrib-verify standalone binary (forwarding shim). Serves the legacy
 // atrib-verify server, which mounts `atrib-verify` plus the `recall` verb
 // per the alias-window rule W1.
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { createAtribVerifyServer } from '@atrib/recall'
 
 async function main() {
   const { mcp } = await createAtribVerifyServer()
-  const transport = new StdioServerTransport()
-  await mcp.connect(transport)
+  serveStdio(() => mcp)
 }
 
 main().catch((e) => {

@@ -2,13 +2,12 @@
 // atrib-revise standalone binary (forwarding shim). Serves the legacy
 // atrib-revise server, which mounts `atrib-revise` plus `attest` per the
 // alias-window rule W1.
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { createAtribReviseServer } from '@atrib/attest'
 
 async function main() {
   const { mcp } = await createAtribReviseServer()
-  const transport = new StdioServerTransport()
-  await mcp.connect(transport)
+  serveStdio(() => mcp)
 }
 
 main().catch((e) => {

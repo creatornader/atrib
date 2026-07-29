@@ -4,13 +4,12 @@
 // rule W1. Wires the McpServer to a stdio transport so it can be launched
 // as a subprocess by an MCP host (Claude Code, Claude Desktop, etc.).
 
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { createAtribEmitServer } from '@atrib/attest'
 
 async function main() {
   const { mcp } = await createAtribEmitServer()
-  const transport = new StdioServerTransport()
-  await mcp.connect(transport)
+  serveStdio(() => mcp)
   // Stays alive on the stdio transport until the host closes it.
 }
 
