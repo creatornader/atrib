@@ -123,6 +123,7 @@ The graph-rendering views (trace, session, identity activity map) load three CDN
 ## Files
 
 - `index.html`, the entire explorer in one file (CSS + JS embedded). ~2400 lines.
+- `signer-provenance.mjs`, the reviewed system and fixture key ledger. Directory claims take precedence; keys without either source display as unregistered public keys.
 - `README.md`, this file.
 
 When option 2 lands, this file remains in-repo as the reference implementation; option 2 lives in a separate directory with its build setup.

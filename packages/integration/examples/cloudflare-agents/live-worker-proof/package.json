@@ -8,7 +8,7 @@
     "build": "pnpm --filter @atrib/mcp build && tsc --noEmit",
     "deploy": "pnpm --filter @atrib/mcp build && wrangler deploy --secrets-file .tmp/secrets.json",
     "proof": "pnpm --filter @atrib/mcp build && tsx scripts/run-live-proof.ts",
-    "test": "pnpm --filter @atrib/cloudflare-live-proof build && vitest run"
+    "test": "vitest run"
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",

@@ -1992,6 +1992,7 @@ import {
   computeDemoGraphSignature,
   computeDemoLaneOffset,
 } from '/graph-utils.mjs?v=2026-07-23-public-revision-state'
+import { signerProvenanceLabel } from '/signer-provenance.mjs?v=2026-07-29'
 
 /*
  * atrib explorer, D054 option 1.
@@ -2237,9 +2238,12 @@ function renderIdentityLabel(creatorKey, opts = {}) {
       )
     }
   } else {
+    const provenance = signerProvenanceLabel(creatorKey, false)
     inner = el('span', { class: 'id-label' },
       el('span', { class: 'mono', style: 'font-family: var(--font-mono); color: var(--text-2);' }, short ? shorten(creatorKey) : creatorKey),
-      lookup && lookup.found === false ? el('span', { class: 'badge dim' }, 'unclaimed') : null,
+      lookup && lookup.found === false
+        ? el('span', { class: `badge ${provenance.kind === 'unregistered' ? 'dim' : 'info'}`, title: provenance.detail || '' }, provenance.label)
+        : null,
     )
   }
   return withLink
@@ -3774,12 +3778,19 @@ async function renderIdentity(creatorKey) {
   ))
 
   const lookup = await resolveIdentity(creatorKey)
+  const provenance = signerProvenanceLabel(creatorKey, lookup.found === true)
   root.append(renderDetailStatus([
     {
       label: 'claim',
       value: lookup._error ? 'directory error' : lookup.found ? 'found' : 'optional',
       note: lookup.found ? `Directory version ${lookup.version}, epoch ${lookup.epoch}.` : 'A missing claim does not invalidate signed records.',
       tone: lookup._error ? 'warn' : lookup.found ? 'ok' : 'info',
+    },
+    {
+      label: 'provenance',
+      value: provenance.label,
+      note: provenance.detail || 'This key published a directory identity claim.',
+      tone: provenance.kind === 'unregistered' ? 'info' : 'ok',
     },
     {
       label: 'signer key',
