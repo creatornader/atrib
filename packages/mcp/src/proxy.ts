@@ -92,7 +92,7 @@ export interface AtribProxyOptions {
    */
   name: string
 
-  /** Server version reported via the MCP initialize handshake. Defaults to '0.0.0'. */
+  /** Server version reported through MCP discovery metadata. Defaults to '0.0.0'. */
   version?: string
 
   /** Upstream MCP server transport. what the proxy forwards calls to. */
