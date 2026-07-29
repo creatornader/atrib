@@ -137,10 +137,12 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
     if (Object.prototype.hasOwnProperty.call(config, 'key')) {
       return Promise.resolve(config.key ?? null)
     }
-    keyPromise ??= resolveKey().catch((error: unknown) => {
-      process.stderr.write(`atrib: key resolution failed: ${String(error)}\n`)
-      return null
-    })
+    if (keyPromise === null) {
+      keyPromise = resolveKey().catch((error: unknown) => {
+        process.stderr.write(`atrib: key resolution failed: ${String(error)}\n`)
+        return null
+      })
+    }
     return keyPromise
   }
 
@@ -158,7 +160,13 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
     const warnings = [...anchorWarnings]
 
     if (daemon) {
-      const outcome = await daemon.callTool('emit', args)
+      const outcome = await daemon.callTool(
+        'emit',
+        args,
+        input.idempotency_key === undefined
+          ? undefined
+          : { idempotencyKey: input.idempotency_key },
+      )
       const attribution = outcome.ok ? outcome.attribution : undefined
       const emitOutput =
         outcome.ok && typeof outcome.value === 'object' && outcome.value !== null
@@ -175,7 +183,12 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
         ? 'daemon returned an emit result without a record_hash'
         : outcome.reason
       warnings.push(`atrib: daemon attest failed: ${reason}`)
-      if (daemonMode === 'require') {
+      if (daemonMode === 'require' || input.idempotency_key !== undefined) {
+        if (input.idempotency_key !== undefined) {
+          warnings.push(
+            'atrib: in-process fallback suppressed because the daemon write outcome may be uncertain; retry the same idempotency_key',
+          )
+        }
         return {
           record_hash: null,
           context_id: null,
@@ -184,6 +197,18 @@ export function createAtribClient(config: AtribClientConfig = {}): AtribClient {
           via: 'none',
           warnings,
         }
+      }
+    }
+
+    if (input.idempotency_key !== undefined) {
+      warnings.push('atrib: idempotency_key requires the daemon write path; no record emitted')
+      return {
+        record_hash: null,
+        context_id: null,
+        log_index: null,
+        inclusion_proof: null,
+        via: 'none',
+        warnings,
       }
     }
 

@@ -9436,6 +9436,68 @@ verifier acceptance rule, or cognitive verb.
 [D168](#d168-coverage-manifests-make-capture-scope-verifiable), and
 [D178](#d178-the-operating-graph-ships-as-an-application-profile-and-reference-client).
 
+## D184: Stateless MCP writes use action-bound idempotency keys
+
+**Date:** 2026-07-28
+
+**Status:** Accepted and implemented
+
+**Extends:** [D145](#d145-action-bound-single-use-authorization-tokens),
+[D148](#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime),
+and [§5.8.1](atrib-spec.md#581-duplicate-safe-stateless-mcp-writes).
+
+**Context.** A stateless client can lose a write response after atribd has
+already signed and mirrored the record. Retrying the same semantic call without
+a stable request identity signs a second record. Log submission idempotency
+does not solve this because it deduplicates an already-signed `record_hash`;
+the duplicate client call has a new timestamp, signature, and hash. The same
+audit also found that atribd released its per-context write lock when the
+caller-facing timeout fired, even though the underlying signer could still
+finish. A retry could therefore race a late completion.
+
+**Decision.**
+
+1. A caller can put a 16 to 128 character visible-ASCII key in
+   `params._meta["dev.atrib/idempotencyKey"]` on a write tool call. The field
+   is transport metadata and never enters signed record bytes.
+2. atribd binds the key to `sha256(JCS({context_id, tool, arguments}))`. The
+   complete argument object is committed. Reusing the key with a different
+   binding fails before dispatch and does not replace the valid entry.
+3. The daemon writes a pending entry to its host-owned store before dispatch.
+   It writes the complete MCP result before acknowledging success. A completed
+   retry returns the stored result without calling the primitive again.
+4. The store hashes caller keys before persistence. It keeps pending entries,
+   bindings, completed results, and timestamps in a mode-0600 profile file.
+   Completed entries remain replayable for seven days. Pending entries do not
+   expire automatically because forgetting an uncertain action would permit a
+   later duplicate.
+5. A pending entry found without its owning in-process call returns the typed
+   `indeterminate` error. The daemon never guesses that a process crash or
+   primitive error happened before the side effect.
+6. The per-context lock remains held until the underlying primitive settles,
+   not merely until the caller-facing timeout. A late success completes the
+   idempotency entry before the next write in that context starts.
+7. `@atrib/sdk` exposes `attest({ idempotency_key })` and carries the value in
+   request metadata. After an uncertain daemon failure it suppresses in-process
+   fallback and tells the caller to retry the same key.
+8. The reference store is correct for atribd's one-process-per-profile
+   topology. A deployment with more than one writer for a profile must supply
+   one shared atomic store before claiming the same guarantee.
+
+**Guarantee boundary.** The contract provides one signed action for repeated
+completed calls with the same key and binding. It cannot prove whether an
+orphaned pending operation took effect. That state is surfaced as
+indeterminate and requires operator reconciliation. The contract adds no
+exactly-once claim for arbitrary external tools.
+
+**Alternatives rejected.** Use `record_hash` as the retry key: unavailable
+until after signing and different for a second call. Derive a key from
+arguments alone: collapses deliberate repeated actions. Store only completed
+results: leaves the pre-dispatch and process-crash window unnamed. Delete
+pending entries after a timeout: permits a late first call and a retried second
+call to both sign. Put the caller key in the signed record: changes canonical
+bytes for a transport concern and discloses a correlation identifier.
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

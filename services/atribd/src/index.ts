@@ -41,6 +41,19 @@ export {
   type McpCompatibilityReport,
 } from './compatibility-observability.js'
 export {
+  createWriteIdempotencyStore,
+  DEFAULT_IDEMPOTENCY_MAX_ENTRIES,
+  DEFAULT_IDEMPOTENCY_WINDOW_MS,
+  IDEMPOTENCY_META_KEY,
+  IDEMPOTENCY_SCHEMA,
+  idempotencyKeyFromRequest,
+  validateIdempotencyKey,
+  writeActionBinding,
+  type IdempotencyBeginResult,
+  type WriteIdempotencyStore,
+  type WriteIdempotencyStoreOptions,
+} from './idempotency.js'
+export {
   createAtribdBackend,
   callWithToolTimeout,
   readPackageVersion,

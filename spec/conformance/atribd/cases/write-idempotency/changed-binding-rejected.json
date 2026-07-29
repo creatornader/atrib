@@ -1,0 +1,8 @@
+{
+  "name": "changed action binding is rejected without replacing the original",
+  "scenario": "changed-binding-rejected",
+  "expected": {
+    "decision": "binding-mismatch",
+    "original_still_replays": true
+  }
+}

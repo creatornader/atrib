@@ -440,10 +440,7 @@ describe('atribd corpus: context-resolution', () => {
             for (const file of corpus.files) {
               const path = join(corpusTmp, file.file)
               mkdirSync(dirname(path), { recursive: true })
-              writeFileSync(
-                path,
-                `${file.lines.map((line) => JSON.stringify(line)).join('\n')}\n`,
-              )
+              writeFileSync(path, `${file.lines.map((line) => JSON.stringify(line)).join('\n')}\n`)
             }
             const chain = await inheritChainContext({
               callerContextId: upstreamCase.input.context_id,
@@ -591,6 +588,13 @@ describe('atribd corpus: health-gates', () => {
           calls_timed_out: 0,
           calls_settled_after_timeout: 0,
           in_flight_tool_calls: [],
+          idempotency: {
+            schema: 'atrib.mcp-write-idempotency.v1',
+            window_ms: 7 * 24 * 60 * 60 * 1000,
+            max_entries: 10_000,
+            pending: 0,
+            completed: 0,
+          },
         }),
         runtimeContracts: () => fixture.input.runtime_contracts,
         flush: async () => {},
@@ -785,9 +789,7 @@ async function realWriteBackend(): Promise<AtribdBackend> {
   // legacy names) since the attest/recall rename; the mixed-producer
   // corpus cases still dispatch by tool name against it.
   return createAtribdBackend({
-    primitives: [
-      ['attest', async () => (await import('@atrib/attest')).createAtribAttestServer()],
-    ],
+    primitives: [['attest', async () => (await import('@atrib/attest')).createAtribAttestServer()]],
   })
 }
 

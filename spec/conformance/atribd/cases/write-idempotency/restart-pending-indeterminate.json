@@ -1,0 +1,7 @@
+{
+  "name": "pending entry stays indeterminate across restart",
+  "scenario": "restart-pending-indeterminate",
+  "expected": {
+    "decision": "indeterminate"
+  }
+}

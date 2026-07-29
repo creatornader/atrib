@@ -422,6 +422,7 @@ export function validateHealthPayload(
   const primitiveContracts = contractSource?.primitive_contracts
   const behavioralProbes = contractSource?.behavioral_probes
   const compatibility = body?.report?.compatibility
+  const idempotency = body?.report?.idempotency
   const issues = []
   if (!runtime) issues.push(`missing ${runtimeLabel}`)
   if (runtime?.version !== expectedRuntimeVersion) {
@@ -479,6 +480,16 @@ export function validateHealthPayload(
           `modern-only profile regressed to legacy traffic ${compatibility.legacy_after_modern_requests} time(s)`,
         )
       }
+    }
+    if (!idempotency || idempotency.schema !== 'atrib.mcp-write-idempotency.v1') {
+      issues.push('missing report.idempotency contract')
+    } else if (
+      typeof idempotency.window_ms !== 'number' ||
+      typeof idempotency.max_entries !== 'number' ||
+      typeof idempotency.pending !== 'number' ||
+      typeof idempotency.completed !== 'number'
+    ) {
+      issues.push('invalid report.idempotency counters')
     }
   }
   if (contract?.status !== 'pass') {
@@ -605,6 +616,16 @@ export function validateHealthPayload(
             legacy_requests: compatibility.legacy_requests,
             legacy_after_modern_requests: compatibility.legacy_after_modern_requests,
             removal_readiness: compatibility.removal_readiness.status,
+          }
+        : undefined,
+    idempotency:
+      healthShape === 'daemon'
+        ? {
+            schema: idempotency.schema,
+            window_ms: idempotency.window_ms,
+            max_entries: idempotency.max_entries,
+            pending: idempotency.pending,
+            completed: idempotency.completed,
           }
         : undefined,
   }

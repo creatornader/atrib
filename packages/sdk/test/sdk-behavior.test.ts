@@ -182,7 +182,9 @@ describe('local-only log submission', () => {
       expect(result.record_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
       expect(result.log_index).toBeNull()
       expect(fetchSpy).not.toHaveBeenCalled()
-      const envelope = JSON.parse(readFileSync(mirrorPath, 'utf8').trim()) as { record: AtribRecord }
+      const envelope = JSON.parse(readFileSync(mirrorPath, 'utf8').trim()) as {
+        record: AtribRecord
+      }
       expect(recordHashRef(envelope.record)).toBe(result.record_hash)
       expect(await verifyRecord(envelope.record)).toBe(true)
     } finally {
@@ -815,6 +817,34 @@ describe('daemon path over Streamable HTTP', () => {
       expect(recalled.via).toBe('none')
       expect(recalled.data).toBeNull()
       expect(recalled.warnings.some((w) => w.includes('daemon recall'))).toBe(true)
+    } finally {
+      await client.close()
+    }
+  }, 10_000)
+
+  it('suppresses in-process fallback when an idempotent daemon outcome is uncertain', async () => {
+    const client = createAtribClient({
+      daemon: {
+        endpoint: 'http://127.0.0.1:1/mcp',
+        mode: 'prefer',
+        connectTimeoutMs: 200,
+      },
+      key: {
+        privateKey: new Uint8Array(32).fill(19),
+        source: 'env',
+      },
+    })
+    try {
+      const attested = await client.attest({
+        content: { what: 'must not sign through fallback' },
+        context_id: CONTEXT_A,
+        idempotency_key: 'sdk-retry-key-000001',
+      })
+      expect(attested.via).toBe('none')
+      expect(attested.record_hash).toBeNull()
+      expect(attested.warnings.some((warning) => warning.includes('fallback suppressed'))).toBe(
+        true,
+      )
     } finally {
       await client.close()
     }

@@ -29,6 +29,12 @@ import {
   type CallToolResult,
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js'
+import {
+  createWriteIdempotencyStore,
+  idempotencyKeyFromRequest,
+  type WriteIdempotencyStore,
+  writeActionBinding,
+} from './idempotency.js'
 
 export interface AtribdPrimitiveHandle {
   mcp: McpServer
@@ -78,6 +84,7 @@ export interface AtribdDiagnostics {
   calls_timed_out: number
   calls_settled_after_timeout: number
   in_flight_tool_calls: AtribdToolCallDiagnostic[]
+  idempotency?: ReturnType<WriteIdempotencyStore['report']>
 }
 
 export interface AtribdRuntimeContractDiagnostic {
@@ -138,6 +145,8 @@ export type AtribdPrimitiveFactory = () => Promise<AtribdPrimitiveHandle> | Atri
 export interface AtribdBackendOptions {
   toolTimeoutMs?: number
   primitives?: readonly [string, AtribdPrimitiveFactory][]
+  idempotencyStore?: WriteIdempotencyStore
+  idempotencyStateFile?: string | false
 }
 
 export const DEFAULT_TOOL_TIMEOUT_MS = 45_000
@@ -376,6 +385,41 @@ export class ContextWriteLocks {
       if (entry.depth === 0 && this.tails.get(key) === entry) {
         this.tails.delete(key)
       }
+    }
+  }
+
+  async runUntilSettled<T>(
+    key: string,
+    start: () =>
+      | { response: Promise<T>; settled: Promise<void> }
+      | Promise<{ response: Promise<T>; settled: Promise<void> }>,
+  ): Promise<T> {
+    const entry = this.tails.get(key) ?? { chain: Promise.resolve(), depth: 0 }
+    entry.depth += 1
+    const prior = entry.chain
+    let release!: () => void
+    entry.chain = new Promise<void>((resolveGate) => {
+      release = resolveGate
+    })
+    this.tails.set(key, entry)
+    await prior
+    try {
+      const call = await start()
+      void call.settled.finally(() => {
+        release()
+        entry.depth -= 1
+        if (entry.depth === 0 && this.tails.get(key) === entry) {
+          this.tails.delete(key)
+        }
+      })
+      return call.response
+    } catch (error) {
+      release()
+      entry.depth -= 1
+      if (entry.depth === 0 && this.tails.get(key) === entry) {
+        this.tails.delete(key)
+      }
+      throw error
     }
   }
 }
@@ -857,6 +901,16 @@ export async function createAtribdBackend(
   const tools: Tool[] = []
   const inFlightToolCalls = new Map<string, InFlightToolCall>()
   const writeLocks = new ContextWriteLocks()
+  const idempotencyStore =
+    options.idempotencyStore ??
+    createWriteIdempotencyStore({
+      profile: process.env.ATRIB_AGENT,
+      stateFile:
+        options.idempotencyStateFile ??
+        (process.env.NODE_ENV === 'test'
+          ? false
+          : process.env.ATRIBD_IDEMPOTENCY_STATE_FILE || undefined),
+    })
   const runtimeContracts = await inspectRuntimeContracts(mounted, toolTimeoutMs)
   let callsStarted = 0
   let callsSucceeded = 0
@@ -886,10 +940,11 @@ export async function createAtribdBackend(
 
   tools.sort((a, b) => a.name.localeCompare(b.name))
 
-  const routeToolCall = async (
+  const routeToolCall = (
     route: ToolRoute,
     request: CallToolRequest['params'],
-  ): Promise<CallToolResult> => {
+    onSuccess?: (result: CallToolResult) => Promise<void>,
+  ): { response: Promise<CallToolResult>; settled: Promise<void> } => {
     const id = randomUUID()
     const startedAt = Date.now()
     const call: InFlightToolCall = {
@@ -909,7 +964,11 @@ export async function createAtribdBackend(
 
     let timeoutHandle: NodeJS.Timeout | undefined
     let timedOut = false
-    const toolCall = route.client.callTool(request) as Promise<CallToolResult>
+    const primitiveCall = route.client.callTool(request) as Promise<CallToolResult>
+    const toolCall = primitiveCall.then(async (result) => {
+      await onSuccess?.(result)
+      return result
+    })
     const timeout = new Promise<never>((_, reject) => {
       timeoutHandle = setTimeout(() => {
         timedOut = true
@@ -928,64 +987,73 @@ export async function createAtribdBackend(
       timeoutHandle.unref?.()
     })
 
-    try {
-      const result = await Promise.race([toolCall, timeout])
-      if (timeoutHandle) clearTimeout(timeoutHandle)
-      callsSucceeded += 1
-      inFlightToolCalls.delete(id)
-      logDaemonEvent({
-        event: 'tool_call_completed',
-        id,
-        primitive: route.primitive,
-        tool: request.name,
-        elapsed_ms: Date.now() - startedAt,
-      })
-      return result
-    } catch (error) {
-      if (timeoutHandle) clearTimeout(timeoutHandle)
-      if (timedOut) {
-        void toolCall
-          .then(
-            () => {
-              callsSettledAfterTimeout += 1
-              logDaemonEvent({
-                event: 'tool_call_settled_after_timeout',
-                id,
-                primitive: route.primitive,
-                tool: request.name,
-                outcome: 'succeeded',
-                elapsed_ms: Date.now() - startedAt,
-              })
-            },
-            (lateError: unknown) => {
-              callsSettledAfterTimeout += 1
-              logDaemonEvent({
-                event: 'tool_call_settled_after_timeout',
-                id,
-                primitive: route.primitive,
-                tool: request.name,
-                outcome: 'failed',
-                elapsed_ms: Date.now() - startedAt,
-                error: errorMessage(lateError),
-              })
-            },
-          )
-          .finally(() => {
-            inFlightToolCalls.delete(id)
-          })
+    const response = (async () => {
+      try {
+        const result = await Promise.race([toolCall, timeout])
+        if (timeoutHandle) clearTimeout(timeoutHandle)
+        callsSucceeded += 1
+        inFlightToolCalls.delete(id)
+        logDaemonEvent({
+          event: 'tool_call_completed',
+          id,
+          primitive: route.primitive,
+          tool: request.name,
+          elapsed_ms: Date.now() - startedAt,
+        })
+        return result
+      } catch (error) {
+        if (timeoutHandle) clearTimeout(timeoutHandle)
+        if (timedOut) {
+          void toolCall
+            .then(
+              () => {
+                callsSettledAfterTimeout += 1
+                logDaemonEvent({
+                  event: 'tool_call_settled_after_timeout',
+                  id,
+                  primitive: route.primitive,
+                  tool: request.name,
+                  outcome: 'succeeded',
+                  elapsed_ms: Date.now() - startedAt,
+                })
+              },
+              (lateError: unknown) => {
+                callsSettledAfterTimeout += 1
+                logDaemonEvent({
+                  event: 'tool_call_settled_after_timeout',
+                  id,
+                  primitive: route.primitive,
+                  tool: request.name,
+                  outcome: 'failed',
+                  elapsed_ms: Date.now() - startedAt,
+                  error: errorMessage(lateError),
+                })
+              },
+            )
+            .finally(() => {
+              inFlightToolCalls.delete(id)
+            })
+          throw error
+        }
+        callsFailed += 1
+        inFlightToolCalls.delete(id)
+        logDaemonEvent({
+          event: 'tool_call_failed',
+          id,
+          primitive: route.primitive,
+          tool: request.name,
+          elapsed_ms: Date.now() - startedAt,
+          error: errorMessage(error),
+        })
         throw error
       }
-      callsFailed += 1
-      inFlightToolCalls.delete(id)
-      logDaemonEvent({
-        event: 'tool_call_failed',
-        id,
-        primitive: route.primitive,
-        tool: request.name,
-        elapsed_ms: Date.now() - startedAt,
-        error: errorMessage(error),
-      })
-      throw error
+    })()
+    return {
+      response,
+      settled: toolCall.then(
+        () => undefined,
+        () => undefined,
+      ),
     }
   }
 
@@ -996,15 +1064,67 @@ export async function createAtribdBackend(
     route: ToolRoute,
     request: CallToolRequest['params'],
   ): Promise<CallToolResult> => {
+    const idempotencyKey = idempotencyKeyFromRequest(request)
     const key = writeSerializationKey(request)
-    if (!key) return routeToolCall(route, request)
-    return writeLocks.run(key, () => routeToolCall(route, request))
+    if (!key) {
+      if (idempotencyKey) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          'atribd: idempotency requires a resolved context_id',
+        )
+      }
+      return routeToolCall(route, request).response
+    }
+    return writeLocks.runUntilSettled(key, async () => {
+      if (!idempotencyKey) return routeToolCall(route, request)
+      const binding = writeActionBinding(request, key)
+      const decision = await idempotencyStore.begin(idempotencyKey, binding)
+      if (decision.kind === 'replay') {
+        return {
+          response: Promise.resolve(decision.result),
+          settled: Promise.resolve(),
+        }
+      }
+      if (decision.kind === 'binding-mismatch') {
+        const failure = Promise.reject<CallToolResult>(
+          new McpError(
+            ErrorCode.InvalidParams,
+            'atribd: idempotency key is already bound to a different write action',
+          ),
+        )
+        return {
+          response: failure,
+          settled: failure.then(
+            () => undefined,
+            () => undefined,
+          ),
+        }
+      }
+      if (decision.kind === 'indeterminate') {
+        const failure = Promise.reject<CallToolResult>(
+          new McpError(
+            -32002,
+            'atribd: prior write with this idempotency key has an indeterminate outcome',
+          ),
+        )
+        return {
+          response: failure,
+          settled: failure.then(
+            () => undefined,
+            () => undefined,
+          ),
+        }
+      }
+      return routeToolCall(route, request, (result) =>
+        idempotencyStore.complete(decision.keyHash, decision.binding, result),
+      )
+    })
   }
 
   const callReadTool = (
     route: ToolRoute,
     request: CallToolRequest['params'],
-  ): Promise<CallToolResult> => routeToolCall(route, request)
+  ): Promise<CallToolResult> => routeToolCall(route, request).response
 
   return {
     tools,
@@ -1033,13 +1153,16 @@ export async function createAtribdBackend(
         in_flight_tool_calls: [...inFlightToolCalls.values()].map((call) =>
           serializeInFlightToolCall(call, now),
         ),
+        idempotency: idempotencyStore.report(),
       }
     },
     runtimeContracts: () => runtimeContracts,
     flush: async () => {
+      await idempotencyStore.flush()
       await Promise.all(mounted.map((primitive) => primitive.handle.flush?.() ?? Promise.resolve()))
     },
     close: async () => {
+      await idempotencyStore.flush()
       await Promise.allSettled(
         mounted.map((primitive) => primitive.handle.flush?.() ?? Promise.resolve()),
       )

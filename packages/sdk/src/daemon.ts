@@ -57,6 +57,7 @@ function extractAttribution(meta: unknown): VerifiedAttributionReceipt | null {
 }
 
 const SDK_CLIENT_INFO = { name: 'atrib-sdk', version: '0.1.0' }
+const IDEMPOTENCY_META_KEY = 'dev.atrib/idempotencyKey'
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined
@@ -95,14 +96,24 @@ export class DaemonClient {
    * text block (the atrib primitive convention) are parsed; other shapes
    * are returned raw.
    */
-  async callTool(name: string, args: Record<string, unknown>): Promise<DaemonCallOutcome> {
+  async callTool(
+    name: string,
+    args: Record<string, unknown>,
+    options?: { idempotencyKey?: string },
+  ): Promise<DaemonCallOutcome> {
     const client = await this.ensureClient()
     if (!client) {
       return { ok: false, reason: `daemon unreachable at ${this.endpoint}` }
     }
     try {
       const result = await withTimeout(
-        client.callTool({ name, arguments: args }),
+        client.callTool({
+          name,
+          arguments: args,
+          ...(options?.idempotencyKey !== undefined
+            ? { _meta: { [IDEMPOTENCY_META_KEY]: options.idempotencyKey } }
+            : {}),
+        }),
         this.callTimeoutMs,
         `tools/call ${name}`,
       )

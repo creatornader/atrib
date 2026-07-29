@@ -345,6 +345,13 @@ function atribdHealthBody() {
           reasons: ['sustained-zero window incomplete'],
         },
       },
+      idempotency: {
+        schema: 'atrib.mcp-write-idempotency.v1',
+        window_ms: 604_800_000,
+        max_entries: 10_000,
+        pending: 0,
+        completed: 3,
+      },
     },
   }
 }
@@ -359,6 +366,7 @@ assert.equal(atribdHealth.recall_contract, 'pass')
 assert.equal(atribdHealth.primitive_contracts.recall.tool_count, 12)
 assert.equal(atribdHealth.behavioral_probes.attest.status, 'skipped')
 assert.equal(atribdHealth.compatibility.expected_modern, true)
+assert.equal(atribdHealth.idempotency.completed, 3)
 
 assert.throws(() => {
   const withLegacyAdapter = atribdHealthBody()
@@ -409,6 +417,16 @@ assert.throws(() => {
     mode: 'atribd',
   })
 }, /modern-only profile regressed to legacy traffic/)
+
+assert.throws(() => {
+  const withoutIdempotency = atribdHealthBody()
+  delete withoutIdempotency.report.idempotency
+  validateHealthPayload(withoutIdempotency, {
+    expectedRuntimeVersion: '0.1.0',
+    expectedPrimitiveVersions,
+    mode: 'atribd',
+  })
+}, /missing report.idempotency/)
 
 assert.equal(
   endpointProbeSettled({

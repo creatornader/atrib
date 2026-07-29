@@ -1,0 +1,8 @@
+{
+  "name": "concurrent duplicates dispatch the primitive once",
+  "scenario": "concurrent-duplicate-one-dispatch",
+  "expected": {
+    "dispatches": 1,
+    "same_result": true
+  }
+}
