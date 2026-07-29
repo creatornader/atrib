@@ -3,6 +3,8 @@
 Generic config-driven MCP wrapper for atrib's verifiable action layer. Spawns
 any upstream MCP server and applies the `@atrib/mcp` middleware so every tool
 call becomes a signed, chain-linked record submitted to the atrib log.
+The outer stdio boundary negotiates the protocol era and accepts clients
+pinned to MCP 2026-07-28 as well as 2025-era clients.
 
 This is the fastest path for existing MCP tools to gain action-layer behavior:
 per-tool config can gate the call before execution, sign the outcome after
@@ -15,7 +17,8 @@ handoff, or verification.
 pnpm add @atrib/mcp-wrap
 ```
 
-Verify a local build with `pnpm --filter @atrib/mcp-wrap test`.
+Verify a local build with `pnpm --filter @atrib/mcp-wrap test`. The process
+suite includes a client pinned to MCP 2026-07-28.
 
 ## Why this exists
 
