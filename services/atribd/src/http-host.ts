@@ -44,6 +44,12 @@ import {
   Server as ModernServer,
 } from '@modelcontextprotocol/server'
 import {
+  ATTRIBUTION_EXTENSION_ID,
+  ATTRIBUTION_EXTENSION_VERSION,
+  applyAttributionReceipt,
+  type AtribRecord,
+} from '@atrib/mcp'
+import {
   createAtribdBackend,
   errorMessage,
   logDaemonEvent,
@@ -62,6 +68,7 @@ import {
 export const DEFAULT_HTTP_HOST = '127.0.0.1'
 export const DEFAULT_HTTP_PORT = 8796
 export const DEFAULT_HTTP_PATH = '/mcp'
+const INTERNAL_RECORD_META_KEY = 'dev.atrib/internal-record'
 // Alias-window rule W2 (attest/recall rename): while legacy tool names are
 // still being retired, every default deployment advertises a short tools/list
 // ttlMs so a rename propagates on cache expiry within minutes, and a name may
@@ -388,7 +395,16 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
       version: readPackageVersion(),
     },
     {
-      capabilities: { tools: {} },
+      capabilities: {
+        tools: {},
+        extensions: {
+          [ATTRIBUTION_EXTENSION_ID]: {
+            version: ATTRIBUTION_EXTENSION_VERSION,
+            signs: ['observation', 'annotation', 'revision'],
+            receipts: ['token', 'record'],
+          },
+        },
+      },
       instructions:
         'atribd: one local daemon exposing all seven atrib cognitive primitives. ' +
         'Pass context_id explicitly on every write-primitive call over HTTP.',
@@ -411,7 +427,9 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
   server.setRequestHandler('tools/call', async (request) => {
     const backend = await options.getBackend()
     const policy = options.httpContextPolicy
-    if (!policy) return backend.callTool(request.params)
+    const result = !policy
+      ? await backend.callTool(request.params)
+      : await (async () => {
     const outcome = applyHttpContextPolicy(request.params, {
       ambientContext: policy.ambientContext,
     })
@@ -422,6 +440,19 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
     }
     if (outcome.kind === 'injected') policy.onInjected?.()
     return backend.callTool(outcome.params)
+      })()
+    const internalRecord = (result as { _meta?: Record<string, unknown> })._meta?.[
+      INTERNAL_RECORD_META_KEY
+    ]
+    if (internalRecord && typeof internalRecord === 'object') {
+      applyAttributionReceipt(
+        result as Record<string, unknown>,
+        (request.params as { _meta?: unknown })._meta,
+        internalRecord as AtribRecord,
+      )
+      delete (result as { _meta?: Record<string, unknown> })._meta?.[INTERNAL_RECORD_META_KEY]
+    }
+    return result
   })
 
   return server
