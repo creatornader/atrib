@@ -1,5 +1,17 @@
 # @atrib/verify-mcp
 
+## 1.1.0
+
+### Minor Changes
+
+- fc4f351: Migrate maintained MCP servers, clients, and the primitive runtime to the v2 SDK split. atribd now negotiates dev.atrib/attribution receipts on stateless v2 tool calls. The retired primitives HTTP entry point delegates to atribd's stateless host.
+
+### Patch Changes
+
+- Updated dependencies [fc4f351]
+  - @atrib/recall@5.1.0
+  - @atrib/verify@0.13.1
+
 ## 1.0.9
 
 ### Patch Changes

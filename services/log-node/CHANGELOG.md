@@ -1,5 +1,12 @@
 # @atrib/log-node
 
+## 0.1.39
+
+### Patch Changes
+
+- Updated dependencies [fc4f351]
+  - @atrib/mcp@0.24.0
+
 ## 0.1.38
 
 ### Patch Changes

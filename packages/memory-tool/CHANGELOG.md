@@ -1,5 +1,12 @@
 # @atrib/memory-tool
 
+## 0.2.19
+
+### Patch Changes
+
+- Updated dependencies [fc4f351]
+  - @atrib/mcp@0.24.0
+
 ## 0.2.18
 
 ### Patch Changes

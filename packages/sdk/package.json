@@ -1,6 +1,6 @@
 {
   "name": "@atrib/sdk",
-  "version": "6.0.2",
+  "version": "7.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
