@@ -1079,6 +1079,15 @@ describe('GET /dashboard', () => {
     expect(body).toMatch(/selectLayout/)
   })
 
+  it('serves the reviewed signer provenance ledger as an ES module', async () => {
+    const res = await fetch(`${server.url}/signer-provenance.mjs`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/javascript')
+    const body = await res.text()
+    expect(body).toContain('SIGNER_PROVENANCE')
+    expect(body).toContain('unregistered public key')
+  })
+
   it('serves dashboard brand assets from /static', async () => {
     const favicon = await fetch(`${server.url}/favicon.ico`)
     expect(favicon.status).toBe(200)
