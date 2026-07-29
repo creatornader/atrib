@@ -1,5 +1,12 @@
 # @atrib/operating-graph
 
+## 0.1.9
+
+### Patch Changes
+
+- Updated dependencies [22ec7eb]
+  - @atrib/sdk@6.0.2
+
 ## 0.1.8
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @atrib/emit
 
+## 1.1.1
+
+### Patch Changes
+
+- 22ec7eb: Add an explicit local-only SDK submission mode. It signs and mirrors records without creating a public-log submission queue or anchor fan-out.
+- Updated dependencies [22ec7eb]
+  - @atrib/attest@0.3.1
+
 ## 1.1.0
 
 ### Minor Changes

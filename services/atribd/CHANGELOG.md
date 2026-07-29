@@ -1,5 +1,12 @@
 # @atrib/daemon
 
+## 0.2.10
+
+### Patch Changes
+
+- Updated dependencies [22ec7eb]
+  - @atrib/attest@0.3.1
+
 ## 0.2.9
 
 ### Patch Changes
