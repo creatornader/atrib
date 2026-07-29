@@ -4,6 +4,24 @@ Version: 0.2
 Status: active working design contract
 Last updated: 2026-07-23
 
+> **Colour and type tokens are superseded** by
+> `atrib-web/designs/fable5-authored-territories-20260721/DESIGN-SYSTEM.md`,
+> read alongside `ANTI-REFERENCES.md` beside it. Protocol language, explorer IA
+> and the asset contract are unaffected.
+>
+> The explorer keeps its dark instrument mode. Its canvas moves from neutral
+> `#0a0a0a` to the water column's own `#050914`: amber measures 9.07 there
+> against 9.02 today, so the hue costs nothing in contrast. The rest of the
+> chrome this file pins in the asset contract moves with it, at the same
+> contrast steps and hue 220 to 230: surface `#0a1027`, raised `#101929`, border
+> `#212946`, muted `#7e879a`. `foreground` `#f5f4ee` and `accent` `#e8a04f` are
+> unchanged, and cobalt `#7d9bd6` joins as the primary at depth.
+>
+> `Inter` is replaced by Literata for headings and Libre Franklin for reading.
+> IoskeleyMono is unchanged. All three are SIL OFL and served from the site's own
+> origin, so nothing in the brand depends on a third party staying up.
+> Superseded 2026-07-28.
+
 ## Purpose
 
 atrib makes agent activity verifiable. Productized atrib is a verifiable action layer for agents: control what runs, coordinate what carries forward, and prove what happened. The design system should make that idea feel concrete: not a vague AI platform, not a crypto dashboard, not an observability clone. The interface should feel like signed evidence entering a chain and becoming usable by the next agent, team, or verifier.

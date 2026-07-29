@@ -18,8 +18,8 @@
 <link rel="icon" type="image/svg+xml" href="/static/icon.svg" />
 <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
 
-<!-- Theme color matches the shared --color-background token (#0a0a0a). -->
-<meta name="theme-color" content="#0a0a0a" />
+<!-- Theme color matches the shared --color-background token (#050914). -->
+<meta name="theme-color" content="#050914" />
 <meta name="color-scheme" content="dark" />
 
 <!-- Open Graph / social previews. -->
@@ -48,25 +48,35 @@
    */
 
   :root {
-    /* Product token aliases, kept in sync with the public website. */
-    --color-background: #0a0a0a;
-    --color-surface: #131210;
-    --color-surface-raised: #1c1a17;
+    /* Product token aliases, kept in sync with the public website. The ground
+       is the water column's own floor rather than a neutral near-black, so the
+       instrument sits on the same hue axis as the painting the site opens with.
+       Amber measures 9.07 here against 9.02 on the old #0a0a0a: the hue costs
+       nothing in contrast. Every neutral below solves
+       contrast(x, floor) == contrast(old, #0a0a0a) at hue 220 to 232, so every
+       step of the previous palette survives to two decimals.
+       Canonical: atrib-web/designs/fable5-authored-territories-20260721/DESIGN-SYSTEM.md */
+    --color-background: #050914;
+    --color-surface: #0a1027;
+    --color-surface-raised: #101929;
     --color-foreground: #f5f4ee;
-    --color-muted: #8a877e;
-    --color-muted-foreground: #b8b5ac;
-    --color-border: #2d2a25;
-    --color-border-strong: #423e36;
+    --color-muted: #7e879a;
+    --color-muted-foreground: #afb4c9;
+    --color-border: #212946;
+    --color-border-strong: #343d5b;
     --color-accent: #e8a04f;
     --color-accent-strong: #f0b46c;
+    /* Cobalt is the brand. The explorer had no primary at all, which is why
+       amber was carrying headings as well as evidence. */
+    --color-primary: #7d9bd6;
 
     /* Surface */
     --bg: var(--color-background);
     --surface: var(--color-surface);
     --surface-2: var(--color-surface-raised);
-    --surface-hover: #24211d;
+    --surface-hover: #17203a;
     --border: var(--color-border);
-    --border-subtle: #211f1b;
+    --border-subtle: #191d36;
 
     /* Text */
     --text: var(--color-foreground);
@@ -80,21 +90,31 @@
     --accent-subtle: rgba(232, 160, 79, 0.12);
     --accent-border: rgba(232, 160, 79, 0.3);
 
-    /* Status */
-    --ok: #34d399;
-    --ok-subtle: rgba(52, 211, 153, 0.12);
-    --ok-border: rgba(52, 211, 153, 0.3);
+      /* Status. These were Tailwind's default 400 ramp, a palette belonging to
+       no part of this product. Four of them now come from the design system's
+       deep ramp, at the same contrast they had before.
+
+       --warn is the exception and is deliberately unchanged. The system's
+       "needs review" colour is #965800, hue 35, and the evidence mark is
+       #e8a04f, hue 32. On paper they are told apart by lightness, 5.3 against
+       2.0. Lifted to this ground they land two degrees apart and become the
+       same colour, which would break the rule that amber marks signed things
+       and nothing else. That is a design decision, not a mapping, so it is
+       left open rather than guessed at. See DESIGN-SYSTEM.md. */
+    --ok: #99e0c3;
+    --ok-subtle: rgba(153, 224, 195, 0.12);
+    --ok-border: rgba(153, 224, 195, 0.3);
     --warn: #fbbf24;
     --warn-subtle: rgba(251, 191, 36, 0.12);
     --warn-border: rgba(251, 191, 36, 0.3);
-    --err: #f87171;
-    --err-subtle: rgba(248, 113, 113, 0.12);
-    --err-border: rgba(248, 113, 113, 0.3);
-    --info: #60a5fa;
-    --info-subtle: rgba(96, 165, 250, 0.12);
-    --info-border: rgba(96, 165, 250, 0.3);
-    --muted: #9ca3af;
-    --muted-subtle: rgba(156, 163, 175, 0.1);
+    --err: #ffb4a3;
+    --err-subtle: rgba(255, 180, 163, 0.12);
+    --err-border: rgba(255, 180, 163, 0.3);
+    --info: #7d9bd6;
+    --info-subtle: rgba(125, 155, 214, 0.12);
+    --info-border: rgba(125, 155, 214, 0.3);
+    --muted: #7e879a;
+    --muted-subtle: rgba(126, 135, 154, 0.1);
 
     /* Per event_type chip colors */
     --et-tool-call: var(--info);
@@ -108,7 +128,7 @@
     --et-observation-border: rgba(192, 132, 252, 0.3);
     --et-extension: var(--muted);
     --et-extension-subtle: var(--muted-subtle);
-    --et-extension-border: rgba(156, 163, 175, 0.25);
+    --et-extension-border: rgba(126, 135, 154, 0.25);
     /* atrib-system event types (e.g. directory_anchor, byte 0x04 per D056).
        Pink sits well outside both the agent-action triad (blue tool_call,
        amber transaction, purple observation) and the verification-badge
@@ -124,10 +144,10 @@
        pretending the upstream is recoverable here. Muted-warning style
        (warm grey) so the dangling marker reads as "incomplete" without
        competing with the err-red used for verification failures. */
-    --et-dangling: #92400e;
-    --et-dangling-subtle: rgba(146, 64, 14, 0.12);
-    --et-dangling-border: rgba(146, 64, 14, 0.3);
-    --ref-external: #9ca3af;
+    --et-dangling: #bd7d57;
+    --et-dangling-subtle: rgba(189, 125, 87, 0.12);
+    --et-dangling-border: rgba(189, 125, 87, 0.3);
+    --ref-external: #7e879a;
     --ref-missing: var(--err);
     --ref-unresolved: var(--warn);
     /* Annotation event_type (D058, byte 0x05): the recall-fidelity
@@ -148,9 +168,14 @@
        semantics are different: annotation comments, revision supersedes.
        Indigo signals "structural change of stance" and reads as deeper /
        weightier than annotation's commentary tone. */
-    --et-revision: #6366f1;
-    --et-revision-subtle: rgba(99, 102, 241, 0.12);
-    --et-revision-border: rgba(99, 102, 241, 0.3);
+    /* Lifted from #6366f1 and #92400e, which read 3.76 and 2.50 against their
+       own 12% chip tint and so were unreadable at 11px. Both keep their hue to
+       the degree; only lightness moved, to the dimmest value that clears 4.5
+       with headroom. The categorical scheme itself is unchanged: these hues
+       encode protocol event types per D056 and D058, not brand. */
+    --et-revision: #7e81f7;
+    --et-revision-subtle: rgba(126, 129, 247, 0.12);
+    --et-revision-border: rgba(126, 129, 247, 0.3);
 
     /* Edge-type colors (graph viz), organized in two semantic tiers.
        Tier 1 (vibrant): the edges that carry meaning beyond
@@ -281,7 +306,7 @@
     gap: 16px;
     padding: 14px max(20px, calc((100vw - var(--container)) / 2 + 20px));
     border-bottom: 1px solid var(--border);
-    background: rgba(10, 11, 14, 0.85);
+    background: rgba(5, 9, 20, 0.85);
     backdrop-filter: saturate(180%) blur(12px);
     -webkit-backdrop-filter: saturate(180%) blur(12px);
     position: sticky; top: 0; z-index: 50;
@@ -303,21 +328,38 @@
     padding-left: 10px; border-left: 1px solid var(--border);
     margin-left: 2px;
   }
-  body > header nav {
+  body > header nav, nav.local {
     display: flex; gap: 4px; align-items: center;
     min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
   }
-  body > header nav::-webkit-scrollbar { display: none; }
-  body > header nav a {
+  body > header nav::-webkit-scrollbar, nav.local::-webkit-scrollbar { display: none; }
+  /* The estate ladder is quiet and monospaced, matching every other surface.
+     You cannot navigate to where you already are, so the current surface is a
+     label that reads brighter rather than a link. */
+  body > header nav.ladder a, body > header nav.ladder span {
+    font: 400 12px/1 var(--font-mono); padding: 8px 10px;
+    border-radius: var(--radius-sm); color: var(--text-3); flex-shrink: 0;
+  }
+  body > header nav.ladder a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+  body > header nav.ladder [aria-current] { color: var(--text); }
+  nav.local {
+    position: sticky; top: 53px; z-index: 49;
+    padding: 8px max(20px, calc((100vw - var(--container)) / 2 + 20px));
+    border-bottom: 1px solid var(--border);
+    background: rgba(5, 9, 20, 0.85);
+    backdrop-filter: saturate(180%) blur(12px);
+    -webkit-backdrop-filter: saturate(180%) blur(12px);
+  }
+  body > header nav a, nav.local a {
     color: var(--text-2); font: 500 13px/1 var(--font-sans);
     padding: 8px 12px; border-radius: var(--radius-sm);
     flex-shrink: 0;
     transition: background 120ms ease, color 120ms ease;
   }
-  body > header nav a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
-  body > header nav a.active { color: var(--accent); background: var(--accent-subtle); }
+  body > header nav a:hover, nav.local a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+  body > header nav a.active, nav.local a.active { color: var(--accent); background: var(--accent-subtle); }
   @media (max-width: 520px) {
     body > header {
       gap: 10px;
@@ -848,12 +890,20 @@
   table.feed tbody td .mono {
     font: 12.5px/1 var(--font-mono); color: var(--text-2);
   }
-  /* New-row highlight: a sustained amber wash (not a flicker). The cell-level
-   * animation matches the row-level so striped table backgrounds don't
-   * override on tr. Holds full color for ~3.5s, fades over ~3s. Total
-   * ~6.5s, long enough to actually catch the eye scanning the table. */
-  table.feed tbody tr.new,
-  table.feed tbody tr.new td {
+  /* New-row highlight: a sustained cobalt rail, held ~3.5s then faded over ~3s,
+   * long enough to catch the eye scanning the table.
+   *
+   * It was a wash, and a wash cannot work here. Every chip in this table is its
+   * own colour on a 12% tint of that same colour, which leaves the dimmest of
+   * them at 4.56 against the surface: one notch above the floor. Tinting the
+   * row underneath pushes it below, and the old rule applied its tint twice, on
+   * the row and again on the cell, so during the flash all six chip colours
+   * fell under 4.5 and the worst reached 2.00. The doubling was deliberate, to
+   * stop the striped row background overriding it, which is a real problem that
+   * a rail does not have.
+   *
+   * A rail costs nothing: it sits in the gutter rather than behind the text. */
+  table.feed tbody tr.new td:first-child {
     animation: rowEnter 6500ms ease-out;
   }
   .evidence-authority {
@@ -900,14 +950,13 @@
     }
   }
   @keyframes rowEnter {
-    0%   { background-color: rgba(252, 211, 77, 0.18); }
-    50%  { background-color: rgba(252, 211, 77, 0.18); }
-    100% { background-color: transparent; }
+    0%   { box-shadow: inset 3px 0 0 var(--color-primary); }
+    50%  { box-shadow: inset 3px 0 0 var(--color-primary); }
+    100% { box-shadow: inset 3px 0 0 transparent; }
   }
   @media (prefers-reduced-motion: reduce) {
     .hero .eyebrow .pulse, .feed-head .live-tag .dot { animation: none; }
-    table.feed tbody tr.new,
-    table.feed tbody tr.new td { animation: none; }
+    table.feed tbody tr.new td:first-child { animation: none; }
   }
 
   /* ─── Chips & badges ─────────────────────────────────────────────────── */
@@ -948,7 +997,7 @@
   .badge.warn  { background: var(--warn-subtle);  color: var(--warn);  border-color: var(--warn-border); }
   .badge.err   { background: var(--err-subtle);   color: var(--err);   border-color: var(--err-border); }
   .badge.info  { background: var(--info-subtle);  color: var(--info);  border-color: var(--info-border); }
-  .badge.dim   { background: var(--muted-subtle); color: var(--muted); border-color: rgba(156, 163, 175, 0.2); }
+  .badge.dim   { background: var(--muted-subtle); color: var(--muted); border-color: rgba(126, 135, 154, 0.2); }
 
   .verify-badges { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 
@@ -1053,7 +1102,7 @@
   }
   .proof-step.dim .mark {
     background: var(--muted-subtle);
-    border-color: rgba(156, 163, 175, 0.2);
+    border-color: rgba(126, 135, 154, 0.2);
     color: var(--muted);
   }
   .proof-step strong {
@@ -1104,6 +1153,29 @@
     padding: 32px max(20px, calc((100vw - var(--container)) / 2 + 20px));
     display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
     color: var(--text-3); font-size: 13px;
+  }
+  /* The surface map, generated from atrib-web/lib/surfaces.json by
+     scripts/render-nav.mjs. Every atrib surface, grouped by what the reader
+     would be doing when they want it. The working proof used to be reachable
+     from nowhere at all. */
+  footer .surface-map {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--border-subtle); padding-top: 28px;
+    display: grid; gap: 28px 24px;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  }
+  footer .surface-map h2 {
+    margin: 0 0 12px; font: 400 11px/1 var(--font-mono);
+    text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-3);
+  }
+  footer .surface-map ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+  footer .surface-map a, footer .surface-map [aria-current] {
+    font: 400 12px/1 var(--font-mono); color: var(--accent-strong);
+  }
+  footer .surface-map [aria-current] { color: var(--text); }
+  footer .surface-map p {
+    margin: 5px 0 0; max-width: 28ch; font-size: 12px; line-height: 1.5;
+    color: var(--text-3);
   }
   footer h3 {
     margin: 0 0 12px; font: 500 11px/1 var(--font-sans);
@@ -1761,19 +1833,30 @@
 
 <header>
   <div class="brand">
-    <a href="/">
+    <a href="https://atrib.dev" aria-label="atrib home">
       <img class="seal" src="/static/nav-mark.svg" width="20" height="20" alt="" aria-hidden="true">
       <span>atrib</span>
     </a>
     <span class="sub" id="brand-sub">explorer</span>
   </div>
-  <nav id="nav">
-    <a href="/" data-route="overview">overview</a>
-    <a href="/demo" data-route="demo">live replay</a>
-    <a href="/anchoring" data-route="anchoring">anchoring</a>
-    <a href="/about" data-route="about">about</a>
+  <!-- The estate ladder: the same three words, in the same order, on every
+       atrib surface. Local navigation is the row below, not this one. Mixing
+       "where am I in the estate" with "where am I in this page" is what made
+       three surfaces read as three products. -->
+  <nav class="ladder" aria-label="atrib surfaces">
+    <!-- atrib:ladder generated by scripts/render-nav.mjs; edit lib/surfaces.json -->
+    <a href="https://protocol.atrib.dev" target="_blank" rel="noopener noreferrer">protocol</a>
+    <span aria-current="page">explorer</span>
+    <a href="https://github.com/creatornader/atrib" target="_blank" rel="noopener noreferrer">github</a>
+    <!-- /atrib:ladder -->
   </nav>
 </header>
+<nav id="nav" class="local" aria-label="Explorer sections">
+  <a href="/" data-route="overview">overview</a>
+  <a href="/demo" data-route="demo">live replay</a>
+  <a href="/anchoring" data-route="anchoring">anchoring</a>
+  <a href="/about" data-route="about">about</a>
+</nav>
 
 <main id="app"></main>
 
@@ -1785,11 +1868,41 @@
   <div>
     <h3>Links</h3>
     <div class="links">
-      <a href="https://github.com/creatornader/atrib" target="_blank" rel="noopener">github.com/creatornader/atrib</a>
-      <a href="https://github.com/creatornader/atrib/blob/main/atrib-spec.md" target="_blank" rel="noopener">atrib-spec.md</a>
       <a href="https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d054-unified-public-explorer-vs-per-service-admin-uis" target="_blank" rel="noopener">D054 (this explorer)</a>
       <a href="/about">what is this?</a>
     </div>
+  </div>
+  <div class="surface-map">
+    <!-- atrib:map generated by scripts/render-nav.mjs; edit lib/surfaces.json -->
+    <nav aria-label="Start here">
+      <h2>Start here</h2>
+      <ul>
+      <li><a href="https://atrib-hero-preview.vercel.app" target="_blank" rel="noopener noreferrer">atrib</a><p>atrib keeps goals, decisions, artifacts and handoffs coherent across the agents and tools you already use.</p></li>
+      </ul>
+    </nav>
+    <nav aria-label="How it works">
+      <h2>How it works</h2>
+      <ul>
+      <li><a href="https://protocol.atrib.dev" target="_blank" rel="noopener noreferrer">protocol</a><p>atrib protocol: the open substrate for portable verifiable records.</p></li>
+      </ul>
+    </nav>
+    <nav aria-label="Check it yourself">
+      <h2>Check it yourself</h2>
+      <ul>
+      <li><span aria-current="page">explorer</span><p>The public log. Every signed action, checkable by anyone.</p></li>
+      <li><a href="https://explore.atrib.dev/demo" target="_blank" rel="noopener noreferrer">live replay</a><p>A recorded session, replayed against the real log.</p></li>
+      <li><a href="https://explore.atrib.dev/anchoring" target="_blank" rel="noopener noreferrer">anchoring</a><p>How the log is anchored, and how to verify an anchor.</p></li>
+      <li><a href="https://explore.atrib.dev/yc-demo" target="_blank" rel="noopener noreferrer">walkthrough</a><p>The story version: one goal, followed end to end.</p></li>
+      </ul>
+    </nav>
+    <nav aria-label="The source">
+      <h2>The source</h2>
+      <ul>
+      <li><a href="https://github.com/creatornader/atrib" target="_blank" rel="noopener noreferrer">github</a><p>Apache 2.0. The implementation, the decisions, the history.</p></li>
+      <li><a href="https://github.com/creatornader/atrib/blob/main/atrib-spec.md" target="_blank" rel="noopener noreferrer">spec</a><p>The record format and the verification rules.</p></li>
+      </ul>
+    </nav>
+    <!-- /atrib:map -->
   </div>
 </footer>
 
@@ -2378,7 +2491,10 @@ function renderEndpoints() {
 }
 
 function setActiveNav(routeName) {
-  for (const a of document.querySelectorAll('header nav a')) {
+  // Scoped to the routed links rather than to `header nav a`: the local nav is
+  // its own row below the header now, and the estate ladder inside the header
+  // carries no data-route and must never be marked active by a page change.
+  for (const a of document.querySelectorAll('nav a[data-route]')) {
     a.classList.toggle('active', a.dataset.route === routeName)
   }
   const sub = document.getElementById('brand-sub')
@@ -5572,15 +5688,15 @@ async function renderSigmaDAG(container, graphData, options = {}) {
       circle: Sigma.rendering.NodeCircleProgram,
       point: Sigma.rendering.NodePointProgram,
     },
-    defaultNodeColor: _cssVar('--muted', '#9ca3af'),
-    labelColor: { color: _cssVar('--text-2', '#a0a3ab') },
+    defaultNodeColor: _cssVar('--muted', '#7e879a'),
+    labelColor: { color: _cssVar('--text-2', '#afb4c9') },
     labelSize: 10,
     // Dense graph labels live in the DOM tooltip below. Canvas labels have
     // no background and overlap badly in session timelines, so keep them off.
     labelRenderedSizeThreshold: 1e9,
     labelDensity: 0,
     defaultDrawNodeHover: () => {},
-    edgeLabelColor: { color: _cssVar('--text-3', '#6a6e78') },
+    edgeLabelColor: { color: _cssVar('--text-3', '#7e879a') },
     // Keep edges visible during pan/zoom. The graph is the product here:
     // hiding links while moving leaves users with a cloud of disconnected
     // dots, which makes exploration feel broken even when the renderer is
@@ -5614,8 +5730,8 @@ async function renderSigmaDAG(container, graphData, options = {}) {
   let _pointerDown = false
   let _lastPointer = { x: 16, y: 16 }
   let _lastPointerInGraph = { x: 16, y: 16 }
-  const _DIM_NODE_COLOR = _cssVar('--text-3', '#6a6e78')
-  const _DIM_EDGE_COLOR = _cssVar('--border', '#2d3038')
+  const _DIM_NODE_COLOR = _cssVar('--text-3', '#7e879a')
+  const _DIM_EDGE_COLOR = _cssVar('--border', '#212946')
   const _DIM_NODE_Z = 1
   const _DIM_EDGE_Z = 0
   const _FOCUS_EDGE_Z = 40
@@ -5708,11 +5824,11 @@ async function renderSigmaDAG(container, graphData, options = {}) {
       occupied.push(box)
       roundedRectPath(focusCtx, x, y, width, height, 5)
       focusCtx.fillStyle = isActive ? 'rgba(28, 26, 23, 0.96)' : 'rgba(19, 18, 16, 0.92)'
-      focusCtx.strokeStyle = isActive ? _cssVar('--accent', '#e8a04f') : _cssVar('--border', '#2d2a25')
+      focusCtx.strokeStyle = isActive ? _cssVar('--accent', '#e8a04f') : _cssVar('--border', '#212946')
       focusCtx.lineWidth = isActive ? 1.2 : 1
       focusCtx.fill()
       focusCtx.stroke()
-      focusCtx.fillStyle = isActive ? _cssVar('--text', '#f4f4f5') : _cssVar('--text-2', '#a0a3ab')
+      focusCtx.fillStyle = isActive ? _cssVar('--text', '#f5f4ee') : _cssVar('--text-2', '#afb4c9')
       focusCtx.fillText(label, x + 9, y + height / 2, width - 18)
     }
     focusCtx.restore()
