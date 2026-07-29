@@ -315,6 +315,36 @@ function atribdHealthBody() {
         rejected_header_mismatch: 0,
         rejected_missing_context: 0,
       },
+      compatibility: {
+        schema: 'atrib.mcp-compatibility-observability.v1',
+        profile: 'claude-code',
+        observation_started_at: '2026-07-28T00:00:00.000Z',
+        updated_at: '2026-07-28T00:00:01.000Z',
+        modern_requests: 3,
+        legacy_requests: 0,
+        legacy_after_modern_requests: 0,
+        clients: {},
+        protocols: {},
+        expected_modern: true,
+        privacy: {
+          request_bodies_recorded: false,
+          context_ids_recorded: false,
+          network_identifiers_recorded: false,
+          client_labels_bounded: 16,
+          protocol_labels_bounded: 8,
+        },
+        removal_policy: {
+          sustained_zero_window_ms: 2_592_000_000,
+          announcement_required: true,
+        },
+        removal_readiness: {
+          status: 'blocked',
+          zero_since: '2026-07-28T00:00:00.000Z',
+          observed_zero_ms: 1_000,
+          remaining_ms: 2_591_999_000,
+          reasons: ['sustained-zero window incomplete'],
+        },
+      },
     },
   }
 }
@@ -328,6 +358,7 @@ assert.equal(atribdHealth.pid, 456)
 assert.equal(atribdHealth.recall_contract, 'pass')
 assert.equal(atribdHealth.primitive_contracts.recall.tool_count, 12)
 assert.equal(atribdHealth.behavioral_probes.attest.status, 'skipped')
+assert.equal(atribdHealth.compatibility.expected_modern, true)
 
 assert.throws(() => {
   const withLegacyAdapter = atribdHealthBody()
@@ -358,6 +389,26 @@ assert.throws(() => {
     mode: 'atribd',
   })
 }, /missing report.requests/)
+
+assert.throws(() => {
+  const withoutCompatibility = atribdHealthBody()
+  delete withoutCompatibility.report.compatibility
+  validateHealthPayload(withoutCompatibility, {
+    expectedRuntimeVersion: '0.1.0',
+    expectedPrimitiveVersions,
+    mode: 'atribd',
+  })
+}, /missing report.compatibility/)
+
+assert.throws(() => {
+  const withLegacyRegression = atribdHealthBody()
+  withLegacyRegression.report.compatibility.legacy_after_modern_requests = 1
+  validateHealthPayload(withLegacyRegression, {
+    expectedRuntimeVersion: '0.1.0',
+    expectedPrimitiveVersions,
+    mode: 'atribd',
+  })
+}, /modern-only profile regressed to legacy traffic/)
 
 assert.equal(
   endpointProbeSettled({

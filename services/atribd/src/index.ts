@@ -33,6 +33,14 @@ import { createAtribdHttpProxyRuntime, createAtribdRuntime } from './stdio.js'
 import { DEFAULT_TOOL_TIMEOUT_MS } from './backend.js'
 
 export {
+  createMcpCompatibilityObserver,
+  DEFAULT_LEGACY_ZERO_WINDOW_MS,
+  MCP_COMPATIBILITY_SCHEMA,
+  type McpCompatibilityObserver,
+  type McpCompatibilityObserverOptions,
+  type McpCompatibilityReport,
+} from './compatibility-observability.js'
+export {
   createAtribdBackend,
   callWithToolTimeout,
   readPackageVersion,

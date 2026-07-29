@@ -15,6 +15,7 @@ const ROUTE_REGISTRY_SCHEMA = 'atrib.local-substrate-route-registry.v0'
 const EXPECTED_RUNTIME_PACKAGE_PATHS = {
   coordinator: join(ROOT, 'services/atrib-emit/package.json'),
   primitive_runtime: join(ROOT, 'services/atrib-primitives/package.json'),
+  daemon: join(ROOT, 'services/atribd/package.json'),
 }
 // The attest/recall two-verb surface: three mounts serve the seventeen-tool
 // alias-window union (fifteen legacy names + attest + recall).
@@ -148,6 +149,7 @@ const LOCAL_SUBSTRATE_INFRA_LABELS = new Set(['com.nader.atrib-drain'])
 const LOCAL_SUBSTRATE_INFRA_LABEL_PREFIXES = [
   'com.nader.atrib-local-substrate.',
   'com.nader.atrib-primitives.',
+  'com.nader.atribd.',
 ]
 const AGENT_BRIDGE_ATTRIBUTED_SERVICE = ['agent', 'bridge', 'atrib'].join('-')
 const SAFE_ENDPOINT_ENV_KEYS = [
@@ -267,6 +269,7 @@ function collectExpectedRuntimeVersions() {
     checked: true,
     coordinator: readPackageVersion(EXPECTED_RUNTIME_PACKAGE_PATHS.coordinator),
     primitive_runtime: readPackageVersion(EXPECTED_RUNTIME_PACKAGE_PATHS.primitive_runtime),
+    daemon: readPackageVersion(EXPECTED_RUNTIME_PACKAGE_PATHS.daemon),
     primitives: Object.fromEntries(
       Object.entries(EXPECTED_PRIMITIVE_PACKAGE_PATHS).map(([primitive, path]) => {
         const pkg = existsSync(path) ? readJson(path) : {}
@@ -354,6 +357,11 @@ function parsePsStart(raw) {
 }
 
 function serviceNameForCommand(command) {
+  if (command.includes('/services/atribd/dist/index.js')) {
+    return primitiveRuntimeTransport({ command }) === 'stdio-http-proxy'
+      ? 'atrib-primitives-proxy'
+      : 'atrib-primitives'
+  }
   if (command.includes('/services/atrib-primitives/dist/index.js')) {
     return primitiveRuntimeTransport({ command }) === 'stdio-http-proxy'
       ? 'atrib-primitives-proxy'
@@ -1833,6 +1841,22 @@ function healthEndpointFor(endpoint) {
   }
 }
 
+function normalizePrimitiveRuntimeHealthReport(report) {
+  if (!report || typeof report !== 'object' || !report.daemon || report.primitive_runtime) {
+    return report
+  }
+  return {
+    ...report,
+    primitive_runtime: {
+      ...report.daemon,
+      session_model: 'stateless-per-request',
+      primitive_contracts: report.primitive_contracts,
+      behavioral_probes: report.behavioral_probes,
+      recall_contract: report.recall_contract,
+    },
+  }
+}
+
 async function fetchHealth(endpoint, timeoutMs) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -1849,7 +1873,7 @@ async function fetchHealth(endpoint, timeoutMs) {
       }
     }
     const body = await response.json()
-    const report = body?.report ?? body
+    const report = normalizePrimitiveRuntimeHealthReport(body?.report ?? body)
     return {
       endpoint,
       reachable: true,
@@ -2068,6 +2092,7 @@ function primitiveRuntimeHealthSummary(items) {
       calls_timed_out: report.tool_calls?.calls_timed_out,
       calls_settled_after_timeout: report.tool_calls?.calls_settled_after_timeout,
       in_flight_tool_calls: report.tool_calls?.in_flight_tool_calls,
+      compatibility: report.compatibility,
       reason: item.reason,
       http_status: item.http_status,
     }
@@ -2093,6 +2118,13 @@ function coordinatorVersion(item) {
 
 function primitiveRuntimeVersion(item) {
   return stringValue(item.report?.primitive_runtime?.version)
+}
+
+function expectedPrimitiveRuntimeVersion(items, expectedRuntimeVersions) {
+  return expectedRuntimeVersion(
+    expectedRuntimeVersions,
+    items.some((item) => item.report?.daemon) ? 'daemon' : 'primitive_runtime',
+  )
 }
 
 function primitiveRuntimeRecallContract(item) {
@@ -2168,48 +2200,47 @@ function primitiveRuntimeSurfaceContractFailures(item, expectedRuntimeVersions) 
     primitiveContractsGeneration(contracts) === 'legacy'
       ? LEGACY_EXPECTED_PRIMITIVE_TOOLS
       : EXPECTED_PRIMITIVE_TOOLS
-  return unique([
-    ...Object.keys(toolExpectations),
-    ...Object.keys(expectedContracts),
-  ]).flatMap((primitive) => {
-    const contract = contracts[primitive]
-    const expected = expectedContracts[primitive] ?? {}
-    const expectedTools = sortedStringArray(expected.tools ?? toolExpectations[primitive])
-    const mountedTools = sortedStringArray(contract?.mounted_tools)
-    const reasons = []
-    if (!contract || typeof contract !== 'object') {
-      reasons.push('missing primitive contract')
-    } else {
-      if (contract.status !== 'pass') reasons.push(`status=${contract.status ?? 'missing'}`)
-      if (expected.package && contract.package !== expected.package) {
-        reasons.push(`package=${contract.package ?? 'missing'} expected=${expected.package}`)
+  return unique([...Object.keys(toolExpectations), ...Object.keys(expectedContracts)]).flatMap(
+    (primitive) => {
+      const contract = contracts[primitive]
+      const expected = expectedContracts[primitive] ?? {}
+      const expectedTools = sortedStringArray(expected.tools ?? toolExpectations[primitive])
+      const mountedTools = sortedStringArray(contract?.mounted_tools)
+      const reasons = []
+      if (!contract || typeof contract !== 'object') {
+        reasons.push('missing primitive contract')
+      } else {
+        if (contract.status !== 'pass') reasons.push(`status=${contract.status ?? 'missing'}`)
+        if (expected.package && contract.package !== expected.package) {
+          reasons.push(`package=${contract.package ?? 'missing'} expected=${expected.package}`)
+        }
+        if (expected.version && contract.version !== expected.version) {
+          reasons.push(`version=${contract.version ?? 'missing'} expected=${expected.version}`)
+        }
+        if (!arraysEqual(mountedTools, expectedTools)) {
+          reasons.push(
+            `mounted_tools=${mountedTools.join(',') || 'none'} expected=${expectedTools.join(',') || 'none'}`,
+          )
+        }
+        if ((contract.missing_tools ?? []).length) {
+          reasons.push(`missing_tools=${contract.missing_tools.join(',')}`)
+        }
+        if ((contract.unexpected_tools ?? []).length) {
+          reasons.push(`unexpected_tools=${contract.unexpected_tools.join(',')}`)
+        }
       }
-      if (expected.version && contract.version !== expected.version) {
-        reasons.push(`version=${contract.version ?? 'missing'} expected=${expected.version}`)
-      }
-      if (!arraysEqual(mountedTools, expectedTools)) {
-        reasons.push(
-          `mounted_tools=${mountedTools.join(',') || 'none'} expected=${expectedTools.join(',') || 'none'}`,
-        )
-      }
-      if ((contract.missing_tools ?? []).length) {
-        reasons.push(`missing_tools=${contract.missing_tools.join(',')}`)
-      }
-      if ((contract.unexpected_tools ?? []).length) {
-        reasons.push(`unexpected_tools=${contract.unexpected_tools.join(',')}`)
-      }
-    }
-    return reasons.length
-      ? [
-          {
-            endpoint: item.endpoint,
-            pid: item.report?.primitive_runtime?.pid,
-            primitive,
-            reason: reasons.join('; '),
-          },
-        ]
-      : []
-  })
+      return reasons.length
+        ? [
+            {
+              endpoint: item.endpoint,
+              pid: item.report?.primitive_runtime?.pid,
+              primitive,
+              reason: reasons.join('; '),
+            },
+          ]
+        : []
+    },
+  )
 }
 
 function primitiveRuntimeSurfaceContractMismatches(items, expectedRuntimeVersions) {
@@ -2235,35 +2266,33 @@ function primitiveRuntimeBehavioralProbeFailures(item) {
     primitiveContractsGeneration(probes) === 'legacy'
       ? LEGACY_EXPECTED_PRIMITIVE_BEHAVIORAL_PROBES
       : EXPECTED_PRIMITIVE_BEHAVIORAL_PROBES
-  return Object.entries(probeExpectations).flatMap(
-    ([primitive, expectedStatus]) => {
-      const probe = probes[primitive]
-      const reasons = []
-      if (!probe || typeof probe !== 'object') {
-        reasons.push('missing behavioral probe')
-      } else {
-        if (probe.status !== expectedStatus) {
-          reasons.push(`status=${probe.status ?? 'missing'} expected=${expectedStatus}`)
-        }
-        if (
-          expectedStatus === 'skipped' &&
-          (probe.mutates_log_on_call !== true || typeof probe.reason !== 'string')
-        ) {
-          reasons.push('skipped write probe lacks mutation flag or reason')
-        }
+  return Object.entries(probeExpectations).flatMap(([primitive, expectedStatus]) => {
+    const probe = probes[primitive]
+    const reasons = []
+    if (!probe || typeof probe !== 'object') {
+      reasons.push('missing behavioral probe')
+    } else {
+      if (probe.status !== expectedStatus) {
+        reasons.push(`status=${probe.status ?? 'missing'} expected=${expectedStatus}`)
       }
-      return reasons.length
-        ? [
-            {
-              endpoint: item.endpoint,
-              pid: item.report?.primitive_runtime?.pid,
-              primitive,
-              reason: reasons.join('; '),
-            },
-          ]
-        : []
-    },
-  )
+      if (
+        expectedStatus === 'skipped' &&
+        (probe.mutates_log_on_call !== true || typeof probe.reason !== 'string')
+      ) {
+        reasons.push('skipped write probe lacks mutation flag or reason')
+      }
+    }
+    return reasons.length
+      ? [
+          {
+            endpoint: item.endpoint,
+            pid: item.report?.primitive_runtime?.pid,
+            primitive,
+            reason: reasons.join('; '),
+          },
+        ]
+      : []
+  })
 }
 
 function primitiveRuntimeBehavioralProbeMismatches(items) {
@@ -2873,11 +2902,14 @@ function buildGates({
   const profileRoutedPrimitiveHttp = healthyPrimitiveHttp.filter(
     hasProfileRoutedPrimitiveSupervisor,
   )
-  const expectedPrimitiveVersion = expectedRuntimeVersion(
+  const expectedPrimitiveVersion = expectedPrimitiveRuntimeVersion(
+    primitiveHealth,
     expectedRuntimeVersions,
-    'primitive_runtime',
   )
-  if (runtimeVersionCheckEnabled(expectedRuntimeVersions, 'primitive_runtime')) {
+  if (
+    runtimeVersionCheckEnabled(expectedRuntimeVersions, 'primitive_runtime') ||
+    runtimeVersionCheckEnabled(expectedRuntimeVersions, 'daemon')
+  ) {
     const stale = versionMismatches(
       primitiveHealth,
       expectedPrimitiveVersion,
@@ -2885,10 +2917,10 @@ function buildGates({
     )
     const ok = Boolean(expectedPrimitiveVersion) && stale.length === 0
     const detail = ok
-      ? `all healthy primitive HTTP endpoint(s) report @atrib/primitives-runtime ${expectedPrimitiveVersion}`
+      ? `all healthy primitive HTTP endpoint(s) report collapsed runtime ${expectedPrimitiveVersion}`
       : expectedPrimitiveVersion
-        ? `${stale.length} healthy primitive HTTP endpoint(s) do not report @atrib/primitives-runtime ${expectedPrimitiveVersion}`
-        : 'checked-out @atrib/primitives-runtime package version could not be read'
+        ? `${stale.length} healthy primitive HTTP endpoint(s) do not report collapsed runtime ${expectedPrimitiveVersion}`
+        : 'checked-out collapsed runtime package version could not be read'
     gates.push(gate('primitive-runtime-version-freshness', ok ? 'pass' : 'fail', detail))
   }
   const reachablePrimitiveHttp = primitiveHealth.filter((item) => item.reachable === true)
@@ -3534,7 +3566,10 @@ function buildReport(input, options = {}) {
     : []
   const health = Array.isArray(snapshot.coordinator_health) ? snapshot.coordinator_health : []
   const primitiveHealth = Array.isArray(snapshot.primitive_runtime_health)
-    ? snapshot.primitive_runtime_health
+    ? snapshot.primitive_runtime_health.map((item) => ({
+        ...item,
+        report: normalizePrimitiveRuntimeHealthReport(item.report),
+      }))
     : []
   const activeSessionState = Array.isArray(snapshot.active_session_state)
     ? snapshot.active_session_state
@@ -3596,20 +3631,21 @@ function buildReport(input, options = {}) {
       configured_coordinators: launchAgents.filter((agent) => agent.kind === 'coordinator').length,
       runtime_versions_checked:
         runtimeVersionCheckEnabled(expectedRuntimeVersions, 'coordinator') ||
-        runtimeVersionCheckEnabled(expectedRuntimeVersions, 'primitive_runtime'),
+        runtimeVersionCheckEnabled(expectedRuntimeVersions, 'primitive_runtime') ||
+        runtimeVersionCheckEnabled(expectedRuntimeVersions, 'daemon'),
       coordinator_version_expected: expectedRuntimeVersion(expectedRuntimeVersions, 'coordinator'),
       coordinator_version_mismatches: versionMismatches(
         health,
         expectedRuntimeVersion(expectedRuntimeVersions, 'coordinator'),
         coordinatorVersion,
       ).length,
-      primitive_runtime_version_expected: expectedRuntimeVersion(
+      primitive_runtime_version_expected: expectedPrimitiveRuntimeVersion(
+        primitiveHealth,
         expectedRuntimeVersions,
-        'primitive_runtime',
       ),
       primitive_runtime_version_mismatches: versionMismatches(
         primitiveHealth,
-        expectedRuntimeVersion(expectedRuntimeVersions, 'primitive_runtime'),
+        expectedPrimitiveRuntimeVersion(primitiveHealth, expectedRuntimeVersions),
         primitiveRuntimeVersion,
       ).length,
       primitive_runtime_surface_contract_mismatches: primitiveRuntimeSurfaceContractMismatches(
@@ -3959,6 +3995,7 @@ export {
   collectRegisteredStartupSpawnConfigs,
   collectRouteRegistryDiagnostics,
   formatTextReport,
+  normalizePrimitiveRuntimeHealthReport,
   registeredLongLivedAgentsFromRegistry,
   registeredStartupSpawnConfigsFromRegistry,
   routeRegistryDiagnosticsFromRegistry,

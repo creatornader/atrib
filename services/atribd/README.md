@@ -62,7 +62,21 @@ atribd
 Health lives at `<endpoint>/health` and carries the [D127](../../DECISIONS.md#d127-primitive-runtime-health-gates-recall-contract-freshness)-[D130](../../DECISIONS.md#d130-primitive-runtime-health-uses-non-mutating-behavioral-probes) gates: recall
 contract freshness, per-package tool-surface contracts, non-mutating
 behavioral probes (write primitives stay skipped), plus request counters.
-There is no `sessions` block; the daemon has no sessions.
+There is no `sessions` block; the daemon has no sessions. The
+`report.compatibility` block separately counts modern and legacy requests,
+labels the declared protocol and client when known, and reports whether the
+legacy adapter has seen a regression after modern traffic.
+
+Compatibility observations persist by profile under
+`~/.atrib/state/atribd-mcp-compat-<profile>.json`. The file contains bounded
+counts, labels, and timestamps. It never contains request bodies, arguments,
+context IDs, network addresses, or user-agent strings. Set
+`ATRIBD_MCP_COMPAT_STATE_FILE` to choose another local path. Set it to an empty
+string to disable persistence. `ATRIBD_MCP_EXPECT_MODERN=1` makes the updater
+reject legacy traffic observed after modern traffic. The default removal gate
+requires 30 days with no legacy request followed by an explicit deprecation
+announcement. `ATRIBD_MCP_LEGACY_ZERO_WINDOW_MS` changes that local evidence
+window; it does not remove the announcement requirement.
 
 ## Stateless transport
 
@@ -149,7 +163,9 @@ and mirror stay on the host.
 - **Old MCP clients.** Session-era clients work through the v1 compatibility
   adapter on HTTP, or through the stdio shim indefinitely. Modern HTTP
   clients negotiate `server/discover` without `initialize` or
-  `Mcp-Session-Id`.
+  `Mcp-Session-Id`. Remove the HTTP adapter only after every expected-modern
+  profile reports zero regressions, the sustained-zero window completes, and
+  the removal has been announced.
 - **Rollback.** Re-point the harness MCP config at the per-primitive
   binaries or at `atrib-primitives`. Rollback is a config change, not a data
   migration; no signed byte differs between the topologies.
