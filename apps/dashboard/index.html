@@ -94,19 +94,22 @@
        no part of this product. Four of them now come from the design system's
        deep ramp, at the same contrast they had before.
 
-       --warn is the exception and is deliberately unchanged. The system's
-       "needs review" colour is #965800, hue 35, and the evidence mark is
-       #e8a04f, hue 32. On paper they are told apart by lightness, 5.3 against
-       2.0. Lifted to this ground they land two degrees apart and become the
-       same colour, which would break the rule that amber marks signed things
-       and nothing else. That is a design decision, not a mapping, so it is
-       left open rather than guessed at. See DESIGN-SYSTEM.md. */
+       --warn is now yellow rather than amber, and that is the whole point.
+       "Needs review" is #965800 at hue 35 and the evidence mark is #e8a04f at
+       hue 32; on paper lightness separates them, but lifted to this ground they
+       land two degrees apart and become one colour, breaking the rule that
+       amber marks signed things and nothing else. Saturation cannot fix it:
+       measured as CIEDE2000 against amber, raising it tops out at 15.8 and
+       lowering it only clears the bar by making the warning duller than the
+       thing it warns about. The bar is 19.1, the closest pair this palette
+       already accepts. Hue is the lever. #e0ca1f measures 20.8 from amber and
+       30.5 or more from every other state colour. See DESIGN-SYSTEM.md. */
     --ok: #99e0c3;
     --ok-subtle: rgba(153, 224, 195, 0.12);
     --ok-border: rgba(153, 224, 195, 0.3);
-    --warn: #fbbf24;
-    --warn-subtle: rgba(251, 191, 36, 0.12);
-    --warn-border: rgba(251, 191, 36, 0.3);
+    --warn: #e0ca1f;
+    --warn-subtle: rgba(224, 202, 31, 0.12);
+    --warn-border: rgba(224, 202, 31, 0.3);
     --err: #ffb4a3;
     --err-subtle: rgba(255, 180, 163, 0.12);
     --err-border: rgba(255, 180, 163, 0.3);
