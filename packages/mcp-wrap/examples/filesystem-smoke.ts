@@ -13,8 +13,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { canonicalRecord, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { Client } from '@modelcontextprotocol/client'
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 
 const EVENT_TYPE_TOOL_CALL = 'https://atrib.dev/v1/types/tool_call'
 
@@ -148,7 +148,10 @@ async function main(): Promise<void> {
   const recordFile = join(tempDir, 'records.jsonl')
   const logFile = join(tempDir, 'wrapper.log')
   const localLog = await startLocalLog()
-  const client = new Client({ name: 'mcp-wrap-smoke-host', version: '0.1.0' })
+  const client = new Client(
+    { name: 'mcp-wrap-smoke-host', version: '0.1.0' },
+    { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+  )
 
   try {
     mkdirSync(fixtureDir, { recursive: true })
@@ -190,6 +193,11 @@ async function main(): Promise<void> {
 
   try {
     await client.connect(transport)
+    if (client.getNegotiatedProtocolVersion() !== '2026-07-28') {
+      throw new Error(
+        `expected MCP 2026-07-28, got ${client.getNegotiatedProtocolVersion() ?? 'none'}`,
+      )
+    }
     const tools = await client.listTools()
     const toolNames = new Set(tools.tools.map((tool) => tool.name))
     if (!toolNames.has('read_file')) {

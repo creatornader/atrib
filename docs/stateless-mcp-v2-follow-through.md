@@ -393,12 +393,12 @@ The follow-through program is complete when:
 | 2B: independent interoperability          | complete        | Python's standard-library client interoperates with atribd. A separate stdlib-only Python server imports no atrib or MCP package and is consumed by the TypeScript SDK, which verifies modern negotiation plus token, record hash, creator key, context, chain root, and Ed25519 signature against the language-neutral corpus. |
 | 2C: human-facing propagation              | complete        | The daemon runbook diagnoses bounded requests, separates read and write retries, covers restart recovery, and states the wrapper boundary. The spec now distinguishes application-owned agent continuity from removed MCP transport sessions; the payments profile no longer frames duplicate prevention as one transaction per transport session. |
 | 3A: daemon consolidation study            | complete        | [D187](../DECISIONS.md#d187-keep-one-atribd-daemon-per-operator-profile) keeps one daemon per profile. Live LaunchAgents have distinct ports, agent identities, mirrors, autochain sources, and coordinator routes; atribd has no authenticated complete-profile selector or fairness scheduler. |
-| 3B: product propagation                   | deferred        | Begins after released SDK and interop proof                                                                                                                                                                                                                                                     |
+| 3B: product propagation                   | complete        | The root README and stateless MCP attribution guide map the native server, wrapper, TypeScript, Python, gateway, framework, cloud-agent, commerce, and audit paths to runnable proofs. The guide shows request, result, receipt, retry rules, durable-state framing, independent verification, and the signed-claim truth boundary. |
 
 ## Immediate next slice
 
-Release Tranches 0B, 1A, 1B, and 1C. Install the released daemon and SDKs on
-the three operator profiles. Confirm modern traffic with no post-modern legacy
-regression, then run the duplicate-write and cancellation proof matrix against
-the installed daemon. Begin the restart, concurrency, and performance tranche
-from that released baseline.
+Merge the completed follow-through tranches, publish the daemon, MCP, wrapper,
+and SDK packages plus the Python distribution, then install the released
+daemon on the three operator profiles. Confirm modern traffic with no
+post-modern legacy regression, then run the duplicate-write, cancellation,
+restart, and receipt proofs against the installed daemon.
