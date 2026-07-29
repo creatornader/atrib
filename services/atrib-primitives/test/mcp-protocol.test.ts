@@ -463,11 +463,11 @@ describe('atrib-primitives MCP runtime', () => {
       expect(starting.status).toBe(503)
       const startingPayload = (await starting.json()) as {
         status?: string
-        report?: { primitive_runtime?: { backend?: string; tool_count?: number } }
+        report?: { daemon?: { backend?: string; tool_count?: number } }
       }
       expect(startingPayload.status).toBe('starting')
-      expect(startingPayload.report?.primitive_runtime?.backend).toBe('starting')
-      expect(startingPayload.report?.primitive_runtime?.tool_count).toBe(0)
+      expect(startingPayload.report?.daemon?.backend).toBe('starting')
+      expect(startingPayload.report?.daemon?.tool_count).toBe(0)
 
       releaseBackend()
       for (let i = 0; i < 20; i += 1) {
@@ -475,10 +475,10 @@ describe('atrib-primitives MCP runtime', () => {
         if (ready.ok) {
           const readyPayload = (await ready.json()) as {
             status?: string
-            report?: { primitive_runtime?: { backend?: string } }
+            report?: { daemon?: { backend?: string } }
           }
           expect(readyPayload.status).toBe('healthy')
-          expect(readyPayload.report?.primitive_runtime?.backend).toBe('shared')
+          expect(readyPayload.report?.daemon?.backend).toBe('shared')
           return
         }
         await delay(10)
@@ -512,17 +512,15 @@ describe('atrib-primitives MCP runtime', () => {
       const health = (await (await fetch(host.healthEndpoint)).json()) as {
         status?: string
         report?: {
-          primitive_runtime?: {
-            recall_contract?: {
-              status?: string
-              reason?: string
-            }
+          recall_contract?: {
+            status?: string
+            reason?: string
           }
         }
       }
       expect(health.status).toBe('degraded')
-      expect(health.report?.primitive_runtime?.recall_contract?.status).toBe('fail')
-      expect(health.report?.primitive_runtime?.recall_contract?.reason).toContain(
+      expect(health.report?.recall_contract?.status).toBe('fail')
+      expect(health.report?.recall_contract?.reason).toContain(
         'getAtribRecallRuntimeContract',
       )
     } finally {
@@ -617,53 +615,49 @@ describe('atrib-primitives MCP runtime', () => {
       const health = (await (await fetch(host.healthEndpoint)).json()) as {
         status?: string
         report?: {
-          primitive_runtime?: {
+          daemon?: {
             backend?: string
-            recall_contract?: { status?: string; content_index_version?: string }
-            primitive_contracts?: Record<
-              string,
-              {
-                status?: string
-                package?: string
-                mounted_tools?: string[]
-                mutates_log_on_call?: boolean
-              }
-            >
-            behavioral_probes?: Record<
-              string,
-              {
-                status?: string
-                probe_kind?: string
-                mutates_log_on_call?: boolean
-                reason?: string
-              }
-            >
             mounted_primitive_count?: number
-            session_model?: string
             tool_count?: number
             transport?: string
           }
+          recall_contract?: { status?: string; content_index_version?: string }
+          primitive_contracts?: Record<
+            string,
+            {
+              status?: string
+              package?: string
+              mounted_tools?: string[]
+              mutates_log_on_call?: boolean
+            }
+          >
+          behavioral_probes?: Record<
+            string,
+            {
+              status?: string
+              probe_kind?: string
+              mutates_log_on_call?: boolean
+              reason?: string
+            }
+          >
           profile?: {
             agent?: string
             context_id_policy?: string
             requires_explicit_context_id?: boolean
           }
-          sessions?: { active_http_requests?: number; active_http_connections?: number }
+          requests?: { served?: number }
         }
       }
       expect(health.status).toBe('healthy')
-      expect(health.report?.primitive_runtime?.transport).toBe('streamable-http')
-      expect(health.report?.primitive_runtime?.backend).toBe('shared')
-      expect(health.report?.primitive_runtime?.session_model).toBe(
-        'per-session-transport-shared-backend',
-      )
-      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(3)
-      expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
-      expect(health.report?.primitive_runtime?.recall_contract?.status).toBe('pass')
-      expect(health.report?.primitive_runtime?.recall_contract?.content_index_version).toBe(
+      expect(health.report?.daemon?.transport).toBe('streamable-http-stateless')
+      expect(health.report?.daemon?.backend).toBe('shared')
+      expect(health.report?.daemon?.mounted_primitive_count).toBe(3)
+      expect(health.report?.daemon?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
+      expect(health.report?.recall_contract?.status).toBe('pass')
+      expect(health.report?.recall_contract?.content_index_version).toBe(
         'content-index-v1',
       )
-      const primitiveContracts = health.report?.primitive_runtime?.primitive_contracts ?? {}
+      const primitiveContracts = health.report?.primitive_contracts ?? {}
       expect(Object.keys(primitiveContracts).sort()).toEqual(
         Object.keys(EXPECTED_PRIMITIVE_CONTRACTS).sort(),
       )
@@ -673,7 +667,7 @@ describe('atrib-primitives MCP runtime', () => {
         expect(primitiveContracts[primitive]?.mounted_tools?.sort()).toEqual(expected.tools)
         expect(primitiveContracts[primitive]?.mutates_log_on_call).toBe(expected.mutates)
       }
-      const behavioralProbes = health.report?.primitive_runtime?.behavioral_probes ?? {}
+      const behavioralProbes = health.report?.behavioral_probes ?? {}
       expect(Object.keys(behavioralProbes).sort()).toEqual(
         Object.keys(EXPECTED_PRIMITIVE_CONTRACTS).sort(),
       )
@@ -685,8 +679,7 @@ describe('atrib-primitives MCP runtime', () => {
       expect(health.report?.profile?.agent).toBe('test-agent')
       expect(health.report?.profile?.context_id_policy).toBe('explicit-required')
       expect(health.report?.profile?.requires_explicit_context_id).toBe(true)
-      expect(health.report?.sessions?.active_http_requests).toBe(0)
-      expect(health.report?.sessions?.active_http_connections).toBe(0)
+      expect(health.report?.requests?.served).toBe(0)
 
       const client = await connectHttpClient(host.endpoint, 'atrib-primitives-http-test')
       try {
@@ -710,7 +703,7 @@ describe('atrib-primitives MCP runtime', () => {
     }
   })
 
-  it('shares one mounted primitive backend across HTTP sessions', { timeout: 30_000 }, async () => {
+  it('shares one mounted primitive backend across stateless requests', { timeout: 30_000 }, async () => {
     const host = await startHttpHost({ ATRIB_AGENT: 'test-agent', ATRIB_RECORD_FILE: recordFile })
     let first: Client | undefined
     let second: Client | undefined
@@ -720,26 +713,20 @@ describe('atrib-primitives MCP runtime', () => {
 
       const health = (await (await fetch(host.healthEndpoint)).json()) as {
         report?: {
-          primitive_runtime?: {
+          daemon?: {
             backend?: string
             mounted_primitive_count?: number
             tool_count?: number
           }
-          sessions?: {
-            active?: number
-            opened?: number
-            active_http_requests?: number
-            active_http_connections?: number
+          requests?: {
+            served?: number
           }
         }
       }
-      expect(health.report?.primitive_runtime?.backend).toBe('shared')
-      expect(health.report?.primitive_runtime?.mounted_primitive_count).toBe(3)
-      expect(health.report?.primitive_runtime?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
-      expect(health.report?.sessions?.active).toBe(2)
-      expect(health.report?.sessions?.opened).toBe(2)
-      expect(health.report?.sessions?.active_http_requests).toBeGreaterThanOrEqual(0)
-      expect(health.report?.sessions?.active_http_connections).toBeGreaterThanOrEqual(0)
+      expect(health.report?.daemon?.backend).toBe('shared')
+      expect(health.report?.daemon?.mounted_primitive_count).toBe(3)
+      expect(health.report?.daemon?.tool_count).toBe(EXPECTED_TOOL_NAMES.length)
+      expect(health.report?.requests?.served).toBeGreaterThanOrEqual(2)
 
       const [firstTools, secondTools] = await Promise.all([first.listTools(), second.listTools()])
       expect(firstTools.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES)

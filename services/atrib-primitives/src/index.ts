@@ -1446,6 +1446,7 @@ export async function bindAtribPrimitivesHttpHost(
     path: options.path,
     jsonReady: options.jsonReady,
     toolTimeoutMs: options.toolTimeoutMs,
+    backendFactory: options.backendFactory,
   })
 
   const toolTimeoutMs = options.toolTimeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
