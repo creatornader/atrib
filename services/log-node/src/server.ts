@@ -231,7 +231,7 @@ async function handleRequest(
   // Strip query string before path equality so cache-bust suffixes like
   // /?v=2026-05-01 (commonly used to bypass browser/CDN caches) still hit
   // the dashboard route rather than falling through to a 404.
-  const urlPath = (req.url ?? '').split('?')[0]
+  const urlPath = (req.url ?? '').split('?')[0] ?? ''
   const isExplorerHost = req.headers.host?.startsWith('explore.atrib.dev') === true
   const isHead = req.method === 'HEAD'
   if (
@@ -468,16 +468,43 @@ async function handleRequest(
   if (isGetOrHead(req.method) && urlPath === '/favicon.ico') {
     return handleStaticAsset(res, 'favicon.ico', 'image/x-icon', 60, false, isHead)
   }
-  const staticMatch = req.url?.match(/^\/static\/([A-Za-z0-9._-]+)$/)
+  // Matched against urlPath, not req.url. req.url carries the query string and
+  // this pattern is $-anchored, so /static/icon.svg?v=abc123 fell through to a
+  // 404. That mattered more than it looks: /static/* is the only asset class
+  // served `immutable`, so it is the one class a stale edge copy cannot be
+  // revalidated out of, and it was also the one class that could not be
+  // cache-busted. A wrong icon was unfixable for 24h. The urlPath above exists
+  // for exactly this and says so.
+  //
+  // The optional fonts/ segment is the second half. apps/dashboard/static/fonts
+  // ships four woff2 files and the Dockerfile copies them, but the name pattern
+  // forbids "/", so every @font-face src 404'd and the explorer rendered in
+  // fallback faces the whole time. document.fonts reported all four rules in
+  // `error` status, and Literata, Libre Franklin and IoskeleyMono all measured
+  // an identical 261.07px for the same string: three declared faces, one
+  // generic fallback actually drawing.
+  const staticMatch = urlPath.match(/^\/static\/(fonts\/)?([A-Za-z0-9._-]+)$/)
   if (isGetOrHead(req.method) && staticMatch) {
-    const name = staticMatch[1]!
+    const name = `${staticMatch[1] ?? ''}${staticMatch[2]!}`
+    // The name segment cannot contain "/", so the only traversal it could spell
+    // is a bare "..", which resolves to a directory and fails the read. Reject
+    // it anyway rather than rely on that.
+    if (name.split('/').some((part) => part === '..')) {
+      res.statusCode = 404
+      res.end()
+      return
+    }
     const contentType = name.endsWith('.svg')
       ? 'image/svg+xml'
       : name.endsWith('.png')
         ? 'image/png'
         : name.endsWith('.ico')
           ? 'image/x-icon'
-          : 'application/octet-stream'
+          : name.endsWith('.woff2')
+            ? 'font/woff2'
+            : name.endsWith('.txt')
+              ? 'text/plain; charset=utf-8'
+              : 'application/octet-stream'
     return handleStaticAsset(res, name, contentType, 86400, true, isHead)
   }
 

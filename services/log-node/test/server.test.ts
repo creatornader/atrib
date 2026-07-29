@@ -1104,6 +1104,15 @@ describe('GET /dashboard', () => {
     expect(staticFavicon.headers.get('content-type')).toContain('image/x-icon')
     expect(staticFavicon.headers.get('cache-control')).toBe('public, max-age=86400, immutable')
 
+    // /static/* is the only asset class served `immutable`, so it is the only
+    // one a stale edge copy cannot be revalidated out of. It therefore has to
+    // accept a cache-bust suffix. It used to 404 on one, because the route
+    // matched req.url, which carries the query string, against a $-anchored
+    // pattern. That combination made a wrong icon unfixable for 24 hours.
+    const bustedFavicon = await fetch(`${server.url}/static/favicon.ico?v=5766155`)
+    expect(bustedFavicon.status).toBe(200)
+    expect(bustedFavicon.headers.get('content-type')).toContain('image/x-icon')
+
     const icon = await fetch(`${server.url}/static/apple-touch-icon.png`)
     expect(icon.status).toBe(200)
     expect(icon.headers.get('content-type')).toContain('image/png')
@@ -1111,6 +1120,76 @@ describe('GET /dashboard', () => {
     const socialCard = await fetch(`${server.url}/static/opengraph-image.png`)
     expect(socialCard.status).toBe(200)
     expect(socialCard.headers.get('content-type')).toContain('image/png')
+  })
+
+  // The explorer's @font-face rules point at /static/fonts/*.woff2. The files
+  // ship in apps/dashboard/static/fonts and the Dockerfile copies them, but the
+  // route's name pattern forbade "/", so all four 404'd and the surface
+  // rendered in fallback faces. document.fonts reported every rule in `error`
+  // status on the live site while the declared font-family still read
+  // "Literata", which is why reading the declaration instead of the result
+  // missed it for as long as it did.
+  it('serves the vendored webfonts the explorer declares', async () => {
+    for (const file of [
+      'Literata-Variable.woff2',
+      'LibreFranklin-Variable.woff2',
+      'IoskeleyMono-Regular.woff2',
+      'IoskeleyMono-Medium.woff2',
+    ]) {
+      const res = await fetch(`${server.url}/static/fonts/${file}`)
+      expect(res.status, `${file} should be served`).toBe(200)
+      expect(res.headers.get('content-type')).toContain('font/woff2')
+      expect(Number(res.headers.get('content-length'))).toBeGreaterThan(0)
+    }
+  })
+
+  // Every ?v= in the explorer's HTML is a content hash of the file it points
+  // at, and nothing recomputes it, so it goes stale exactly when the asset
+  // changes and nobody notices. That has now happened twice: the favicon
+  // version sat at a prefix from two revisions earlier while the icon itself
+  // changed under it. Asserting the string against the bytes turns a silent
+  // staleness into a failing test.
+  it('keeps every cache-bust version in step with the file it names', async () => {
+    const { createHash } = await import('node:crypto')
+    const { readFile: read } = await import('node:fs/promises')
+    const root = new URL('../../../', import.meta.url)
+    const html = await read(new URL('apps/dashboard/index.html', root), 'utf8')
+
+    // Only the hash-versioned assets. Some references carry a human version
+    // like ?v=2026, which is not a claim about bytes and nothing to check.
+    const refs = [...html.matchAll(/"(\/[A-Za-z0-9._\-/]+)\?v=([a-f0-9]{8,})"/g)]
+    expect(
+      refs.length,
+      'expected hash-versioned asset references in the explorer HTML',
+    ).toBeGreaterThan(0)
+
+    for (const [, urlPath, version] of refs) {
+      // /favicon.ico and /static/x both resolve into apps/dashboard/static.
+      const rel = urlPath!.startsWith('/static/')
+        ? urlPath!.slice('/static/'.length)
+        : urlPath!.slice(1)
+      const bytes = await read(new URL(`apps/dashboard/static/${rel}`, root))
+      const digest = createHash('sha256').update(bytes).digest('hex')
+      expect(
+        digest.startsWith(version!),
+        `${urlPath}?v=${version} is stale; the file hashes to ${digest.slice(0, 8)}`,
+      ).toBe(true)
+    }
+  })
+
+  // Percent-encoded, because fetch normalises a literal "../" out of the path
+  // before it ever reaches the server: /static/fonts/../favicon.ico arrives as
+  // /static/favicon.ico and is served, correctly. Only the encoded form tests
+  // the route rather than the client's URL parser.
+  it('refuses encoded traversal through the static route', async () => {
+    for (const path of [
+      '/static/%2e%2e/package.json',
+      '/static/fonts/%2e%2e/%2e%2e/package.json',
+      '/static/..%2fpackage.json',
+    ]) {
+      const res = await fetch(`${server.url}${path}`)
+      expect(res.status, `${path} must not resolve`).toBe(404)
+    }
   })
 
   it('serves static asset HEAD requests with the same headers and no body', async () => {
