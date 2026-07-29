@@ -235,6 +235,12 @@
 
     /* Layout */
     --container: 1180px;
+    /* The header is the estate's element, not this surface's, so it sits on the
+       same 1024px column as the other two atrib surfaces. The page below keeps
+       1180 because its tables are dense and need it. Sharing the header width
+       is what makes the mark and the ladder land in the same place when a
+       reader crosses between the three. */
+    --estate-container: 1024px;
     --radius: 8px;
     --radius-sm: 5px;
   }
@@ -328,7 +334,7 @@
     display: flex; align-items: center; justify-content: space-between;
     gap: 16px;
     height: 56px; box-sizing: border-box;
-    padding: 0 max(24px, calc((100vw - var(--container)) / 2 + 24px));
+    padding: 0 max(24px, calc((100vw - var(--estate-container)) / 2 + 24px));
     border-bottom: 1px solid var(--border);
     background: rgba(5, 9, 20, 0.85);
     backdrop-filter: saturate(180%) blur(12px);
@@ -365,8 +371,8 @@
   body > header nav.ladder a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
   body > header nav.ladder [aria-current] { color: var(--text); }
   nav.local {
-    position: sticky; top: 53px; z-index: 49;
-    padding: 8px max(20px, calc((100vw - var(--container)) / 2 + 20px));
+    position: sticky; top: 56px; z-index: 49;
+    padding: 8px max(24px, calc((100vw - var(--estate-container)) / 2 + 24px));
     border-bottom: 1px solid var(--border);
     background: rgba(5, 9, 20, 0.85);
     backdrop-filter: saturate(180%) blur(12px);
