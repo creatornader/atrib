@@ -343,6 +343,7 @@ export interface AtribdServerFactoryOptions {
     onInjected?: () => void
     onRejected?: () => void
   }
+  requestMeta?: unknown
 }
 
 /**
@@ -465,7 +466,9 @@ export function createAtribdModernServer(options: AtribdServerFactoryOptions): M
     if (internalRecord) {
       applyAttributionReceipt(
         result as Record<string, unknown>,
-        (request as { _meta?: unknown })._meta ?? (request.params as { _meta?: unknown })._meta,
+        options.requestMeta ??
+          (request as { _meta?: unknown })._meta ??
+          (request.params as { _meta?: unknown })._meta,
         internalRecord,
       )
       delete (result as { _meta?: Record<string, unknown> })._meta?.[INTERNAL_RECORD_META_KEY]
@@ -504,7 +507,7 @@ export async function bindAtribdHttpHost(
   let endpoint = ''
   let healthEndpoint = ''
 
-  const modernServerFactory = () =>
+  const modernServerFactory = (requestMeta?: unknown) =>
     createAtribdModernServer({
       getBackend: backendProvider.get,
       toolsListTtlMs,
@@ -514,6 +517,7 @@ export async function bindAtribdHttpHost(
           counters.rejected_missing_context += 1
         },
       },
+      requestMeta,
     })
   const legacyServerFactory = () =>
     createAtribdServer({
