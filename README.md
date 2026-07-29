@@ -109,6 +109,20 @@ second `tool_call` record. The private integration package pins this rule in
 [`packages/integration/src/host-runtime-proof.ts`](packages/integration/src/host-runtime-proof.ts)
 so future OpenClaw, Hermes, and other host proofs share the same vocabulary.
 
+## Stateless MCP attribution
+
+Add verifiable records to a tool call without adopting a new agent runtime or
+maintaining an atrib transport session. A native server can advertise
+`dev.atrib/attribution`; an existing server can sit behind `@atrib/mcp-wrap`;
+and the TypeScript and Python SDKs carry the complete request envelope
+automatically. The tool result can include a signed receipt that a verifier
+checks without trusting atrib's hosted service.
+
+The [stateless MCP attribution guide](docs/stateless-mcp-attribution-guide.md)
+shows the request, result, receipt, integration choices, runnable proofs, retry
+rules, and the boundary between proof of a signed claim and proof that the
+claim is true.
+
 ## How it works
 
 - Each record is signed by the actor's Ed25519 key and JCS-canonicalized
