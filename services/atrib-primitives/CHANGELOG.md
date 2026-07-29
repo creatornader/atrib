@@ -1,5 +1,14 @@
 # @atrib/primitives-runtime
 
+## 0.2.13
+
+### Patch Changes
+
+- Updated dependencies [c4b6d5a]
+  - @atrib/attest@0.4.3
+  - @atrib/summarize@0.5.3
+  - @atrib/daemon@0.4.1
+
 ## 0.2.12
 
 ### Patch Changes

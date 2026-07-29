@@ -1,5 +1,11 @@
 # @atrib/sdk
 
+## 7.1.1
+
+### Patch Changes
+
+- @atrib/emit@1.2.3
+
 ## 7.1.0
 
 ### Minor Changes

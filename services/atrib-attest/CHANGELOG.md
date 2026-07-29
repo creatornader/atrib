@@ -1,5 +1,11 @@
 # @atrib/attest
 
+## 0.4.3
+
+### Patch Changes
+
+- c4b6d5a: Install Zod v4 with the standalone MCP servers so fresh npm installs can register their tools and negotiate MCP 2026-07-28.
+
 ## 0.4.2
 
 ### Patch Changes

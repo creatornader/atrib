@@ -1,5 +1,11 @@
 # @atrib/operating-graph
 
+## 0.1.13
+
+### Patch Changes
+
+- @atrib/sdk@7.1.1
+
 ## 0.1.12
 
 ### Patch Changes
