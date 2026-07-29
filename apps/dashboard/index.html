@@ -273,12 +273,18 @@
   a:hover { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 2px; }
   a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 
+  /* Parked by its own height plus a fixed margin, never by a percentage of
+     itself. translateY(-140%) against top:16px only clears the viewport when
+     the pill is at least 40px tall. This one is 33px, so 2.8px of it sat above
+     the header on every page load, as a cream sliver at the top left. It is
+     position:fixed, so scrolling never moved it. Matches the pattern in
+     packages/integration/examples/google-stack-chain/visual/styles.css. */
   .skip-link {
     position: fixed;
     left: 16px;
-    top: 16px;
+    top: 0;
     z-index: 1000;
-    transform: translateY(-140%);
+    transform: translateY(calc(-100% - 16px));
     border-radius: var(--radius-sm);
     background: var(--text);
     color: var(--bg);
@@ -287,7 +293,7 @@
   }
   .skip-link:focus,
   .skip-link:focus-visible {
-    transform: translateY(0);
+    transform: translateY(16px);
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
