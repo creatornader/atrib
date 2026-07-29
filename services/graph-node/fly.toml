@@ -42,9 +42,12 @@ primary_region = 'iad'
   # alone is not enough: see NODE_OPTIONS above, V8 will not use the extra RAM
   # unless told. Both settings move together.
   #
-  # Headroom is finite and the log only grows (~4k records/day at 2026-07-29,
-  # ~4KB each in heap, so ~17MB/day). At a 768MB heap that is a few weeks
-  # before this becomes tight again. The durable fix is the disk-backed graph
-  # store already flagged in src/persistence.ts, which notes this in-memory
-  # shape is sustainable to ~10^5 records; the log passed that in July 2026.
+  # Headroom is finite and the log only grows (~4k to 7k records/day at
+  # 2026-07-29, ~3.4KB each in heap, so ~15-22MB/day). At a 768MB heap that is
+  # weeks, not quarters. The durable fix is the disk-backed graph store already
+  # flagged in src/persistence.ts, which notes this in-memory shape is
+  # sustainable to ~10^5 records; the log passed that in July 2026. Choosing
+  # the successor is tracked as P059 in DECISIONS.md, and the heap watchdog
+  # (src/heap-watchdog.ts) warns at 70% so the runway is observed, not guessed.
+  # If you raise this, raise NODE_OPTIONS above with it or nothing changes.
   memory = '1024mb'

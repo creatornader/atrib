@@ -10311,3 +10311,49 @@ pre-allocate.
 **Likely outcome (not committed):** accept at PR time; this entry exists so the ADR obligation is findable.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P059: graph-node's in-memory store needs a disk-backed successor before the heap ceiling returns
+
+**Filed 2026-07-29** after the graph-node outage fixed in
+[#599](https://github.com/creatornader/atrib/pull/599). That PR removed the
+trigger and raised the ceiling. It did not change the shape that produced the
+outage, so this entry exists so the shape is not forgotten between incidents.
+
+**Source:** graph-node holds every record and every derived index in memory. The
+live heap therefore grows linearly and without bound with the log. On 2026-07-29
+that live set reached the default V8 heap ceiling (`heap_size_limit` was 493MB on
+the 1024mb machine, because Node caps old-space near half a small machine's RAM
+regardless of the `[[vm]]` setting). Past that point the process aborted with
+"Ineffective mark-compacts near heap limit" on any further allocation, and Fly
+served the dead instance as 502s. `services/graph-node/src/persistence.ts` had
+already named the boundary: the in-memory shape is "sustainable until ~10^5
+records per graph-node instance; beyond that the sustainable shape is a
+disk-backed graph store." The log passed 10^5 in July 2026.
+
+**Measured position at filing.** 112,781 records, 439MB RSS, 780MB heap ceiling
+after the fix, so roughly half the ceiling consumed. Ingest was running about 4k
+to 7k records/day at roughly 3.4KB of heap each, which is 15MB to 22MB/day. That
+is a runway of weeks, not quarters. The heap watchdog added alongside this entry
+(`src/heap-watchdog.ts`, warn at 70%, error at 85%) exists to make the runway
+observable rather than inferred, and its warning is the intended trigger for
+acting on this entry.
+
+**The decision in question:** whether the successor is the disk-backed graph
+store persistence.ts anticipates, a bounded in-memory working set over the
+existing archive, sharding by `context_id` across instances, or simply
+continuing to raise the ceiling with machine size. The first three change the
+service's operational shape; the fourth is bounded by machine cost and only ever
+defers the same failure.
+
+**Not urgent as a correctness matter, and not open-ended either.** Whatever is
+chosen must preserve two properties the current design gets for free: [§3.2.4](atrib-spec.md#324-edge-derivation-rules)
+edge derivation stays deterministic over the full record set, and the [§1.9](atrib-spec.md#19-key-rotation-and-revocation)
+revocation registry stays a global scan, since a key revoked in one session
+retires it everywhere. A bounded working set is the option most in tension with
+both.
+
+**Likely outcome (not committed):** raise machine memory once more as a stopgap
+when the watchdog first warns, and treat that warning as the deadline for
+choosing among the three structural options rather than as the fix.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
