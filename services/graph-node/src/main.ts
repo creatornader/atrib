@@ -27,6 +27,14 @@ import { createRecordStore } from './store.js'
 import { createArchiveAppender, replayArchive } from './persistence.js'
 import { statfs } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { getHeapStatistics } from 'node:v8'
+import {
+  HEAP_ERROR_FRACTION,
+  HEAP_WARN_FRACTION,
+  heapAlertLevel,
+  shouldLogHeapTransition,
+  type HeapAlertLevel,
+} from './heap-watchdog.js'
 import type { AtribRecord } from '@atrib/mcp'
 
 const port = parseInt(process.env.PORT ?? '3200', 10)
@@ -121,6 +129,84 @@ if (archivePath) {
   // unref()'d so the process can exit cleanly without it.
   void checkDiskUtilization(target)
   const handle = setInterval(() => { void checkDiskUtilization(target) }, DISK_CHECK_INTERVAL_MS)
+  handle.unref()
+}
+
+// Periodic heap-utilization watchdog. Mirrors the disk watchdog above, for the
+// resource that actually takes this service down.
+//
+// graph-node keeps every record and every derived index in memory, so the live
+// heap grows linearly and without bound as the log grows. On 2026-07-29 that
+// live set reached the V8 heap ceiling at ~112k records and the process began
+// aborting on any further allocation ("Ineffective mark-compacts near heap
+// limit"), which Fly served as 502s. Nothing warned first: the service had a
+// disk watchdog, but disk was never the constraint (the archive was 68MB on a
+// 1GB volume) while the heap was at 91%.
+//
+// Thresholds are lower than the disk watchdog's 80/95 because heap has no
+// graceful degradation. Crossing the V8 limit is an immediate process abort,
+// per-request allocation sits on top of the live set so the usable ceiling is
+// below 100%, and recovery costs a full archive replay during which the service
+// serves errors. Warn early enough to act.
+//
+// record_count is in the message on purpose: heap headroom divided by growth in
+// records per day is the runway, and runway is what decides when the in-memory
+// store has to become the disk-backed store that persistence.ts describes.
+const HEAP_CHECK_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
+let lastHeapAlert: HeapAlertLevel = 'ok'
+
+function heapUtilization(): { usedMb: number; limitMb: number; fraction: number } {
+  const stats = getHeapStatistics()
+  return {
+    usedMb: Math.round(stats.used_heap_size / 1024 / 1024),
+    limitMb: Math.round(stats.heap_size_limit / 1024 / 1024),
+    fraction: stats.used_heap_size / stats.heap_size_limit,
+  }
+}
+
+function checkHeapUtilization(): void {
+  const { usedMb, limitMb, fraction } = heapUtilization()
+  const pct = (fraction * 100).toFixed(1)
+  const records = store.getRecordCount()
+  const level = heapAlertLevel(fraction)
+
+  if (!shouldLogHeapTransition(lastHeapAlert, level)) return
+
+  if (level === 'ok') {
+    // Reached only on a real transition, so this is a recovery from warn/error.
+    // eslint-disable-next-line no-console
+    console.log(
+      `atrib-graph: heap-watchdog recovered (${usedMb}MB/${limitMb}MB, ${pct}%, ${records} records)`,
+    )
+  } else {
+    const threshold = level === 'error' ? HEAP_ERROR_FRACTION : HEAP_WARN_FRACTION
+    const msg =
+      `atrib-graph: heap-watchdog ${level.toUpperCase()}: ${usedMb}MB/${limitMb}MB ` +
+      `(${pct}%, ${records} records, threshold: ${(threshold * 100).toFixed(0)}%). ` +
+      `Raise --max-old-space-size and the fly.toml [[vm]] memory together, ` +
+      `or move to the disk-backed store described in src/persistence.ts.`
+    if (level === 'error') {
+      // eslint-disable-next-line no-console
+      console.error(msg)
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn(msg)
+    }
+  }
+  lastHeapAlert = level
+}
+
+{
+  // One unconditional line per boot, so every restart leaves a heap datapoint
+  // in the logs even while utilization is healthy. Trending these across
+  // restarts is how the runway above gets measured.
+  const { usedMb, limitMb, fraction } = heapUtilization()
+  // eslint-disable-next-line no-console
+  console.log(
+    `atrib-graph: heap ${usedMb}MB/${limitMb}MB (${(fraction * 100).toFixed(1)}%) ` +
+      `at ${store.getRecordCount()} records`,
+  )
+  const handle = setInterval(checkHeapUtilization, HEAP_CHECK_INTERVAL_MS)
   handle.unref()
 }
 

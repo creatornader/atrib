@@ -25,6 +25,13 @@
  * per graph-node instance; beyond that the sustainable shape is a
  * disk-backed graph store (Layer 4 in the architecture roadmap), at
  * which point this archive becomes redundant and can be removed.
+ *
+ * The log passed 10^5 in July 2026, and the in-memory side of that boundary
+ * bit first: on 2026-07-29 the resident record set filled the V8 heap ceiling
+ * and graph-node began aborting on allocation. Disk was never the constraint
+ * (this archive was 68MB on a 1GB volume). Choosing the successor is tracked
+ * as P059 in DECISIONS.md; the heap watchdog in main.ts (src/heap-watchdog.ts)
+ * warns at 70% of the heap ceiling and that warning is P059's trigger.
  */
 
 import { open, mkdir, stat } from 'node:fs/promises'
