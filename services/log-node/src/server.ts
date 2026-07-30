@@ -468,6 +468,22 @@ async function handleRequest(
   if (isGetOrHead(req.method) && urlPath === '/favicon.ico') {
     return handleStaticAsset(res, 'favicon.ico', 'image/x-icon', 60, false, isHead)
   }
+  // The touch icon at the origin root, and under a hashed filename.
+  //
+  // iOS falls back to /apple-touch-icon.png at the root when a page declares
+  // none, and crawlers look there too. This surface served it only under
+  // /static/, so the fallback 404'd where the other two surfaces answered.
+  //
+  // The hashed name exists because a query string does not reliably dislodge a
+  // saved iOS tile: Safari keeps it against the site rather than the exact URL.
+  // Any hash resolves to the same bytes, so the icon can be re-versioned in the
+  // HTML without a route change.
+  const touchIconMatch = urlPath.match(
+    /^\/apple-touch-icon(?:-[a-f0-9]{6,})?(?:-precomposed)?\.png$/,
+  )
+  if (isGetOrHead(req.method) && touchIconMatch) {
+    return handleStaticAsset(res, 'apple-touch-icon.png', 'image/png', 86400, true, isHead)
+  }
   // Matched against urlPath, not req.url. req.url carries the query string and
   // this pattern is $-anchored, so /static/icon.svg?v=abc123 fell through to a
   // 404. That mattered more than it looks: /static/* is the only asset class
