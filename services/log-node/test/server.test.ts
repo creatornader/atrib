@@ -1129,6 +1129,30 @@ describe('GET /dashboard', () => {
   // status on the live site while the declared font-family still read
   // "Literata", which is why reading the declaration instead of the result
   // missed it for as long as it did.
+  // iOS falls back to /apple-touch-icon.png at the origin root when a page
+  // declares none, and crawlers look there too. This surface served the icon
+  // only under /static/, so the fallback 404'd where atrib.dev answered.
+  it('serves the touch icon at the origin root and under a hashed name', async () => {
+    for (const path of [
+      '/apple-touch-icon.png',
+      '/apple-touch-icon-precomposed.png',
+      '/apple-touch-icon-3bca73af.png',
+      '/apple-touch-icon-deadbeef.png',
+    ]) {
+      const res = await fetch(`${server.url}${path}`)
+      expect(res.status, `${path} should be served`).toBe(200)
+      expect(res.headers.get('content-type')).toContain('image/png')
+      expect(Number(res.headers.get('content-length'))).toBeGreaterThan(0)
+    }
+    // Any hash resolves to the same bytes, so re-versioning the HTML never
+    // needs a route change.
+    const [a, b] = await Promise.all([
+      fetch(`${server.url}/apple-touch-icon.png`).then((r) => r.arrayBuffer()),
+      fetch(`${server.url}/apple-touch-icon-3bca73af.png`).then((r) => r.arrayBuffer()),
+    ])
+    expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true)
+  })
+
   it('serves the vendored webfonts the explorer declares', async () => {
     for (const file of [
       'Literata-Variable.woff2',
@@ -1167,6 +1191,20 @@ describe('GET /dashboard', () => {
       refs.length,
       'expected hash-versioned asset references in the explorer HTML',
     ).toBeGreaterThan(0)
+
+    // The touch icon carries its hash in the filename rather than a query,
+    // because a query does not reliably dislodge a saved iOS tile. Check it the
+    // same way, or it would be the one icon nothing verifies.
+    const hashedNames = [...html.matchAll(/href="\/apple-touch-icon-([a-f0-9]{8,})\.png"/g)]
+    expect(hashedNames.length, 'expected a hashed touch-icon href').toBe(1)
+    for (const [, version] of hashedNames) {
+      const bytes = await read(new URL('apps/dashboard/static/apple-touch-icon.png', root))
+      const digest = createHash('sha256').update(bytes).digest('hex')
+      expect(
+        digest.startsWith(version!),
+        `apple-touch-icon-${version}.png is stale; the file hashes to ${digest.slice(0, 8)}`,
+      ).toBe(true)
+    }
 
     for (const [, urlPath, version] of refs) {
       // /favicon.ico and /static/x both resolve into apps/dashboard/static.
