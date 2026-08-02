@@ -169,16 +169,30 @@ jobs:
   # Same reasoning that moved the graph canary out of this job: a gate should
   # fail for its own reason, not inherit someone else's.
   #
-  # That isolation matters more than it looks, because part of this check is not
-  # under this repo's control and cannot currently go green on demand. The asset
-  # parity section compares live bytes across two independently deployed repos,
-  # so an icon change has an unavoidable red window between the two deploys. It
-  # also calls requireImmutableCache, while /static/* ships
-  # `max-age=86400, immutable`, so a CDN may serve stale bytes for up to a day
-  # AFTER a correct deploy (observed `age: 53617` on /static/favicon.ico while
-  # the check was failing). A policy that forbids revalidation cannot coexist
-  # with byte-equality on a stable path; reconciling that is its own change, and
-  # until then this gate has to be able to fail alone.
+  # That isolation matters because part of this check is not under this repo's
+  # control and cannot be forced green on demand. The asset parity section
+  # compares live bytes across two independently deployed origins: atrib.dev
+  # (Vercel, from the atrib-web repo) against explore.atrib.dev (Fly, serving
+  # apps/dashboard from here). An icon change is therefore red between the two
+  # deploys, and the lag is asymmetric: atrib.dev serves
+  # `max-age=0, must-revalidate` and picks up new bytes promptly, while the
+  # explorer's /static/* paths serve `max-age=86400, immutable`, so a CDN can
+  # keep returning the old bytes there until the TTL expires. That is the shape
+  # the 2026-07-29 failure had, marketing already on the new hash while
+  # explorer-static was still on the old one. It ran about 24 hours and cleared
+  # on its own with no purge, at `age: 0`.
+  #
+  # The check itself is sound and asserts nothing about cache policy. An earlier
+  # version of this comment claimed it called requireImmutableCache; it does
+  # not. That helper is applied only to Merkle-log tiles (lines ~187-188), which
+  # are immutable by construction. Do not reintroduce that reading.
+  #
+  # This is a per-icon-change cost, not a standing fault: the assets went
+  # unchanged from 2026-05-26, when the parity check landed, to 2026-07-29, and
+  # it passed throughout. Removing the window would be a small change (shorter
+  # TTL on these paths, or asserting on the hashed filenames rather than the
+  # stable ones), not a redesign. Until then the gate has to be able to fail
+  # without taking other jobs with it.
   log-smoke:
     needs: [changes, deploy-log-node]
     # !cancelled() rather than relying on the default cascade, so the guards
