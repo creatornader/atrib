@@ -174,9 +174,13 @@ jobs:
   # compares live bytes across two independently deployed origins: atrib.dev
   # (Vercel, from the atrib-web repo) against explore.atrib.dev (Fly, serving
   # apps/dashboard from here). An icon change is therefore red between the two
-  # deploys, and those paths are served `max-age=86400, immutable`, so a CDN can
-  # keep returning the old bytes until the TTL expires. On 2026-07-29 that was
-  # about 24 hours; it cleared on its own with no purge, at `age: 0`.
+  # deploys, and the lag is asymmetric: atrib.dev serves
+  # `max-age=0, must-revalidate` and picks up new bytes promptly, while the
+  # explorer's /static/* paths serve `max-age=86400, immutable`, so a CDN can
+  # keep returning the old bytes there until the TTL expires. That is the shape
+  # the 2026-07-29 failure had, marketing already on the new hash while
+  # explorer-static was still on the old one. It ran about 24 hours and cleared
+  # on its own with no purge, at `age: 0`.
   #
   # The check itself is sound and asserts nothing about cache policy. An earlier
   # version of this comment claimed it called requireImmutableCache; it does
