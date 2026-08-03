@@ -36,6 +36,12 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     groups:
+      witness-image-actions:
+        patterns:
+          - docker/setup-buildx-action
+          - docker/login-action
+          - docker/metadata-action
+          - docker/build-push-action
       actions-minor-patch:
         update-types:
           - minor
