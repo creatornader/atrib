@@ -60,8 +60,8 @@
     "@atrib/recall": "workspace:*",
     "@atrib/verify": "workspace:*",
     "@atrib/verify-mcp": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@types/node": "^26.1.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/node": "^26.1.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
