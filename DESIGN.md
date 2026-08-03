@@ -187,16 +187,16 @@ Explorer:
 - Current focus: mobile safety, accessible search, visible graph edges, clearer action states.
 - Target state: verification workflow should be the spine. Search result to record detail to graph to raw proof should feel like one investigation.
 
-YC demo:
+Walkthrough:
 
 - Job: show, in one stable reviewer-facing artifact, that signed causal history changes downstream agent behavior.
-- Current focus: `https://explore.atrib.dev/yc-demo`, a scripted signed-context graph where Agent B selects current Policy v2 and writes new signed records from that context.
+- Current focus: `https://explore.atrib.dev/walkthrough`, a scripted signed-context graph where Agent B selects current Policy v2 and writes new signed records from that context. Renamed from `/yc-demo` on 2026-08-03; the old path redirects.
 - Target state: visually and linguistically belongs to the same family as the website and explorer, while remaining stable enough for recordings and funding reviewers.
 
 Live replay:
 
 - Job: show recent public-log activity as an animated graph.
-- Current focus: `https://explore.atrib.dev/demo`, now labeled as live recent-action replay so it does not compete with the stable YC demo.
+- Current focus: `https://explore.atrib.dev/replay`, the live recent-action replay. Renamed from `/demo`, which served the page every label already called "live replay"; the old path redirects.
 - Target state: makes live substrate activity legible without looking like a separate demo product.
 
 Operating graph reference client:
@@ -251,7 +251,7 @@ This inventory is grounded in `apps/dashboard/index.html` as of 2026-07-23. Upda
 | Session `/session/<context_id>`    | Read one agent workflow as a sequence, graph, and revision state.                      | The public revision projection now exposes every visible head and partial root, but the dense session still asks readers to distinguish public commitments from receiver-accepted state. | Readiness row (source, graph, transaction, references, revision state), structural stats, current revision state, graph when useful, signed records, fallback reason. | Keep the receiver-policy and proof-basis boundary visible while simplifying large-session fallback copy.                      |
 | Trace `/trace/<record_hash>`       | Read one primary path first, then inspect trace and chain projections.                 | The primary path now helps first-time readers, but the view still needs to keep chronology and declared relationships visibly distinct.                                                  | Starting record, primary path, declared relationships, chronology chain, edge legend, direct action link.                                                             | Tune the labels around "claimed relationship" versus "observed order" and keep spec references secondary.                     |
 | Anchoring `/anchoring`             | Check signed checkpoint and directory anchor state.                                    | Anchoring is the most protocol-heavy view. It risks sounding like internal implementation unless it names what a checkpoint lets a verifier do.                                          | Protected history, checkpoint, directory anchor, endpoint state, raw proof material.                                                                                  | Rename labels around verifier jobs: "history checkpoint", "directory state anchor", "latest protected tree".                  |
-| Live replay `/demo`                | See a live replay of recent signed agent activity.                                     | It is useful as motion, but it can read as spectacle unless the selected records map back to verification. It must not be confused with the stable YC demo.                              | Selected session, timeline, replay graph, selected record inspector, action links.                                                                                    | Make the inspector more receipt-like. Add a clear link from replay state to the action receipt.                               |
+| Live replay `/replay`              | See a live replay of recent signed agent activity.                                     | It is useful as motion, but it can read as spectacle unless the selected records map back to verification. It must not be confused with the walkthrough, which is scripted.                              | Selected session, timeline, replay graph, selected record inspector, action links.                                                                                    | Make the inspector more receipt-like. Add a clear link from replay state to the action receipt.                               |
 | About `/about`                     | Learn what each view means and how to verify records.                                  | It covers the basics, but it should become the glossary for the design language: receipt, signer, log, proof, trace, anchor.                                                             | What this is, seven views, core vocabulary, manual verification steps.                                                                                                | Add a compact glossary and link terms back into view headers.                                                                 |
 
 ## Execution Backlog

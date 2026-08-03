@@ -92,6 +92,50 @@ async function readSseEvent(res: Response, eventName: string): Promise<Record<st
   throw new Error(`stream ended before ${eventName}`)
 }
 
+/**
+ * Markup with comment spans removed, HTML and CSS both.
+ *
+ * A substring assertion over a served page is answerable by prose in that page.
+ * Stripping comments first means a claim about the markup is tested against the
+ * markup and nothing else.
+ *
+ * Written as a scanner rather than a pair of regex replacements. Replacement
+ * cannot express this correctly: one pass over `<!--a<!--b-->` deletes the
+ * inner comment and re-forms the opener, so the construct survives its own
+ * removal. Scanning forward from each opener to its matching close never
+ * re-forms anything, and the result is built by copying the parts that are not
+ * comments rather than by deleting the parts that are.
+ *
+ * This is a comparison aid, not a sanitiser. Its input is a page this repo
+ * serves and its output is asserted against, never rendered.
+ */
+function stripComments(source: string): string {
+  const OPENERS: [string, string][] = [
+    ['<!--', '-->'],
+    ['/*', '*/'],
+  ]
+  let out = ''
+  let i = 0
+  while (i < source.length) {
+    let opened: [string, string] | null = null
+    for (const pair of OPENERS) {
+      if (source.startsWith(pair[0], i)) {
+        opened = pair
+        break
+      }
+    }
+    if (!opened) {
+      out += source[i]
+      i += 1
+      continue
+    }
+    const close = source.indexOf(opened[1], i + opened[0].length)
+    // An unterminated comment runs to the end, which is what a parser does too.
+    i = close === -1 ? source.length : close + opened[1].length
+  }
+  return out
+}
+
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
@@ -1153,6 +1197,69 @@ describe('GET /dashboard', () => {
     expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true)
   })
 
+  // Two surfaces, two registers. /replay shows real records off the public log
+  // and its claim is that nothing on it is staged; /walkthrough is entirely
+  // staged, which is what makes it teachable. Both names now match every label
+  // the UI puts on them, which was the whole problem: the URL saying "demo"
+  // served the page called "live replay" everywhere, and the actual demo sat at
+  // a funding-round slug.
+  it('serves the walkthrough and its trace bundle', async () => {
+    for (const path of ['/walkthrough', '/walkthrough/', '/walkthrough.html']) {
+      const res = await fetch(`${server.url}${path}`)
+      expect(res.status, `${path} should be served`).toBe(200)
+      expect(res.headers.get('content-type')).toContain('text/html')
+      const body = await res.text()
+      expect(body).toContain('atrib walkthrough')
+
+      // Assert against markup with comments removed, both HTML and CSS.
+      //
+      // Every check below is a substring search over a whole file, and prose
+      // in that file can answer it. The negative ones fail on a comment that
+      // merely names the retired value, which is annoying but safe. The
+      // positive ones are the dangerous half: a comment mentioning #050914
+      // satisfies "must be on the system ground" even if the ground is broken.
+      //
+      // That is the same defect that took atrib.dev's images down earlier
+      // today, where a comment describing an injected <base> convinced the
+      // staging script one already existed.
+      const markup = stripComments(body)
+      // It has to look like its sibling, not like its own former self.
+      expect(markup, 'must be on the system ground').toContain('#050914')
+      expect(markup, 'must not carry the retired ground').not.toContain('#0a0a0a')
+      expect(markup, 'must not fall back to Inter').not.toMatch(/font-family:\s*Inter/)
+      expect(markup, 'must load the vendored faces').toContain(
+        '/static/fonts/Literata-Variable.woff2',
+      )
+      expect(markup, 'must use the drawn wordmark').toContain('class="wm"')
+    }
+
+    const bundle = await fetch(`${server.url}/walkthrough-trace-bundle.json`)
+    expect(bundle.status).toBe(200)
+    expect(bundle.headers.get('content-type')).toContain('application/json')
+  })
+
+  it('redirects the renamed routes without changing what they mean', async () => {
+    const cases: [string, string][] = [
+      ['/yc-demo', '/walkthrough'],
+      ['/yc-demo/', '/walkthrough'],
+      ['/yc-demo.html', '/walkthrough'],
+      ['/demo', '/replay'],
+      ['/demo/', '/replay'],
+    ]
+    for (const [from, to] of cases) {
+      const res = await fetch(`${server.url}${from}`, { redirect: 'manual' })
+      expect(res.status, `${from} should redirect`).toBe(301)
+      expect(res.headers.get('location'), `${from} -> ${to}`).toBe(to)
+    }
+  })
+
+  it('serves the replay route the explorer app owns', async () => {
+    const res = await fetch(`${server.url}/replay`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/html')
+    expect(await res.text()).toContain('atrib explorer')
+  })
+
   it('serves the vendored webfonts the explorer declares', async () => {
     for (const file of [
       'Literata-Variable.woff2',
@@ -1244,35 +1351,25 @@ describe('GET /dashboard', () => {
     expect(await res.text()).toBe('')
   })
 
-  it('serves the YC demo page and trace bundle from the dashboard root', async () => {
-    const html = await fetch(`${server.url}/yc-demo`)
-    expect(html.status).toBe(200)
-    expect(html.headers.get('content-type')).toContain('text/html')
-    const body = await html.text()
-    expect(body).toMatch(/demo: signed context changes action/)
-    expect(body).toMatch(/yc-demo-trace-bundle\.json/)
-    expect(body).toMatch(/<a class="brand" href="\/" aria-label="atrib explorer home">/)
-
-    const legacyHtml = await fetch(`${server.url}/yc-demo.html`)
-    expect(legacyHtml.status).toBe(200)
-    expect(legacyHtml.headers.get('content-type')).toContain('text/html')
-
-    const bundle = await fetch(`${server.url}/yc-demo-trace-bundle.json`)
+  it('serves the walkthrough trace bundle from the dashboard root', async () => {
+    const bundle = await fetch(`${server.url}/walkthrough-trace-bundle.json`)
     expect(bundle.status).toBe(200)
     expect(bundle.headers.get('content-type')).toContain('application/json')
     const json = (await bundle.json()) as { schema: string; records: unknown[] }
+    // The schema string is the record format's own name and is untouched by the
+    // route rename: renaming a URL must not rewrite data already signed.
     expect(json.schema).toBe('atrib-yc-living-graph-trace-bundle-v1')
     expect(json.records.length).toBeGreaterThan(0)
   })
 
-  it('serves the YC demo HEAD routes with the same headers and no body', async () => {
-    const html = await fetch(`${server.url}/yc-demo`, { method: 'HEAD' })
+  it('serves the walkthrough HEAD routes with the same headers and no body', async () => {
+    const html = await fetch(`${server.url}/walkthrough`, { method: 'HEAD' })
     expect(html.status).toBe(200)
     expect(html.headers.get('content-type')).toContain('text/html')
     expect(Number(html.headers.get('content-length'))).toBeGreaterThan(0)
     expect(await html.text()).toBe('')
 
-    const bundle = await fetch(`${server.url}/yc-demo-trace-bundle.json`, { method: 'HEAD' })
+    const bundle = await fetch(`${server.url}/walkthrough-trace-bundle.json`, { method: 'HEAD' })
     expect(bundle.status).toBe(200)
     expect(bundle.headers.get('content-type')).toContain('application/json')
     expect(Number(bundle.headers.get('content-length'))).toBeGreaterThan(0)
@@ -1330,7 +1427,7 @@ describe('GET /dashboard', () => {
     const u = new URL(server.url)
     for (const path of [
       '/overview',
-      '/demo',
+      '/replay',
       '/anchoring',
       '/about',
       '/session/0123456789abcdef0123456789abcdef',
@@ -1369,7 +1466,7 @@ describe('GET /dashboard', () => {
 
   it('serves explorer path HEAD routes when Host=explore.atrib.dev', async () => {
     const u = new URL(server.url)
-    for (const path of ['/demo', '/yc-demo', '/session/0123456789abcdef0123456789abcdef']) {
+    for (const path of ['/replay', '/walkthrough', '/session/0123456789abcdef0123456789abcdef']) {
       const got = await new Promise<{ status: number; ct: string; len: string; body: string }>(
         (resolve, reject) => {
           const req = httpRequest(

@@ -1693,12 +1693,12 @@
 
   /* ─── Live demo mode ────────────────────────────────────────────────── */
 
-  body.demo-route main {
+  body.replay-route main {
     max-width: none;
     padding: 0 16px 48px;
   }
-  body.demo-route footer { display: none; }
-  .demo-shell {
+  body.replay-route footer { display: none; }
+  .replay-shell {
     display: grid;
     grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.28fr);
     gap: 16px;
@@ -1706,7 +1706,7 @@
     min-height: calc(100vh - 84px);
     padding-top: 16px;
   }
-  .demo-panel {
+  .replay-panel {
     min-width: 0;
     min-height: 0;
     display: flex;
@@ -1716,7 +1716,7 @@
     border-radius: var(--radius);
     overflow: hidden;
   }
-  .demo-panel-head {
+  .replay-panel-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1725,19 +1725,19 @@
     border-bottom: 1px solid var(--border-subtle);
     background: var(--surface-2);
   }
-  .demo-panel-head h1,
-  .demo-panel-head h2 {
+  .replay-panel-head h1,
+  .replay-panel-head h2 {
     margin: 0;
     color: var(--text);
     font: 600 13px/1 var(--font-sans);
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
-  .demo-panel-head .meta {
+  .replay-panel-head .meta {
     color: var(--text-3);
     font: 12px/1.2 var(--font-mono);
   }
-  .demo-agent-feed {
+  .replay-agent-feed {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
@@ -1746,7 +1746,7 @@
     overflow: auto;
     background: var(--border-subtle);
   }
-  .demo-step {
+  .replay-step {
     display: grid;
     grid-template-columns: 92px minmax(0, 1fr);
     gap: 12px;
@@ -1756,51 +1756,51 @@
     background: var(--surface);
     text-align: left;
   }
-  .demo-step.live {
+  .replay-step.live {
     animation: demoStepIn 800ms ease-out;
     background: color-mix(in srgb, var(--accent-subtle) 38%, var(--surface));
   }
-  .demo-step[type='button'] {
+  .replay-step[type='button'] {
     cursor: pointer;
   }
-  .demo-step[type='button']:hover,
-  .demo-step[type='button']:focus-visible {
+  .replay-step[type='button']:hover,
+  .replay-step[type='button']:focus-visible {
     outline: none;
     background: color-mix(in srgb, var(--accent-subtle) 28%, var(--surface));
   }
-  .demo-step .when {
+  .replay-step .when {
     color: var(--text-3);
     font: 11px/1.4 var(--font-mono);
     white-space: nowrap;
   }
-  .demo-step .main {
+  .replay-step .main {
     min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 7px;
   }
-  .demo-step .summary {
+  .replay-step .summary {
     color: var(--text);
     font: 500 13px/1.35 var(--font-sans);
     overflow-wrap: anywhere;
   }
-  .demo-step .hash {
+  .replay-step .hash {
     color: var(--text-3);
     font: 11px/1.35 var(--font-mono);
     overflow-wrap: anywhere;
   }
-  .demo-graph-frame {
+  .replay-graph-frame {
     position: relative;
     flex: 1 1 auto;
     min-height: 0;
     min-height: 520px;
     background: var(--surface);
   }
-  .demo-graph-frame .trace-graph {
+  .replay-graph-frame .trace-graph {
     height: 100%;
     min-height: 520px;
   }
-  .demo-inspector {
+  .replay-inspector {
     position: absolute;
     left: 14px;
     bottom: 14px;
@@ -1812,21 +1812,21 @@
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-md);
   }
-  .demo-inspector[hidden] { display: none; }
-  .demo-inspector .top {
+  .replay-inspector[hidden] { display: none; }
+  .replay-inspector .top {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 10px;
   }
-  .demo-inspector .title {
+  .replay-inspector .title {
     color: var(--text);
     font: 600 12px/1.2 var(--font-sans);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
-  .demo-inspector .close {
+  .replay-inspector .close {
     padding: 3px 7px;
     color: var(--text-3);
     background: transparent;
@@ -1834,17 +1834,17 @@
     border-radius: 3px;
     font: 11px/1 var(--font-sans);
   }
-  .demo-inspector .close:hover { color: var(--text); border-color: var(--border); }
-  .demo-inspector .details {
+  .replay-inspector .close:hover { color: var(--text); border-color: var(--border); }
+  .replay-inspector .details {
     display: grid;
     grid-template-columns: 74px minmax(0, 1fr);
     gap: 7px 10px;
     margin: 0;
     font-size: 12px;
   }
-  .demo-inspector dt { color: var(--text-3); }
-  .demo-inspector dd { margin: 0; min-width: 0; color: var(--text); overflow-wrap: anywhere; }
-  .demo-status {
+  .replay-inspector dt { color: var(--text-3); }
+  .replay-inspector dd { margin: 0; min-width: 0; color: var(--text); overflow-wrap: anywhere; }
+  .replay-status {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -1853,7 +1853,7 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
   }
-  .demo-status::before {
+  .replay-status::before {
     content: '';
     width: 7px;
     height: 7px;
@@ -1867,22 +1867,22 @@
     100% { transform: translateY(0); opacity: 1; }
   }
   @media (max-width: 900px) {
-    .demo-shell {
+    .replay-shell {
       grid-template-columns: 1fr;
       height: auto;
     }
-    .demo-graph-panel { order: 1; }
-    .demo-timeline-panel { order: 2; }
-    .demo-agent-feed,
-    .demo-graph-frame { height: auto; }
-    .demo-agent-feed { max-height: 260px; }
-    .demo-graph-frame,
-    .demo-graph-frame .trace-graph { min-height: 460px; }
-    .demo-inspector { position: static; width: auto; margin: 12px; }
+    .replay-graph-panel { order: 1; }
+    .replay-timeline-panel { order: 2; }
+    .replay-agent-feed,
+    .replay-graph-frame { height: auto; }
+    .replay-agent-feed { max-height: 260px; }
+    .replay-graph-frame,
+    .replay-graph-frame .trace-graph { min-height: 460px; }
+    .replay-inspector { position: static; width: auto; margin: 12px; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .demo-step.live,
-    .demo-status::before { animation: none; }
+    .replay-step.live,
+    .replay-status::before { animation: none; }
   }
 </style>
 </head>
@@ -1917,7 +1917,7 @@
 </header>
 <nav id="nav" class="local" aria-label="Explorer sections">
   <a href="/" data-route="overview">overview</a>
-  <a href="/demo" data-route="demo">live replay</a>
+  <a href="/replay" data-route="replay">live replay</a>
   <a href="/anchoring" data-route="anchoring">anchoring</a>
   <a href="/about" data-route="about">about</a>
 </nav>
@@ -1954,9 +1954,9 @@
       <h2>Check it yourself</h2>
       <ul>
       <li><span aria-current="page">explorer</span><p>The public log. Every signed action, checkable by anyone.</p></li>
-      <li><a href="https://explore.atrib.dev/demo" rel="noopener">live replay</a><p>A recorded session, replayed against the real log.</p></li>
+      <li><a href="https://explore.atrib.dev/replay" rel="noopener">live replay</a><p>The public log as it moves. Real records, nothing staged.</p></li>
       <li><a href="https://explore.atrib.dev/anchoring" rel="noopener">anchoring</a><p>How the log is anchored, and how to verify an anchor.</p></li>
-      <li><a href="https://explore.atrib.dev/yc-demo" rel="noopener">walkthrough</a><p>The story version: one goal, followed end to end.</p></li>
+      <li><a href="https://explore.atrib.dev/walkthrough" rel="noopener">walkthrough</a><p>A scripted scenario: one goal, followed end to end.</p></li>
       </ul>
     </nav>
     <nav aria-label="The source">
@@ -2006,8 +2006,8 @@ import {
   summarizeGraphNodes,
   summarizeReferenceEdges,
   buildReplayGraphFromEntries,
-  computeDemoGraphSignature,
-  computeDemoLaneOffset,
+  computeReplayGraphSignature,
+  computeReplayLaneOffset,
 } from '/graph-utils.mjs?v=2026-07-23-public-revision-state'
 import { signerProvenanceLabel } from '/signer-provenance.mjs?v=2026-07-29'
 
@@ -2034,7 +2034,7 @@ const DEFAULTS = {
 const POLL_INTERVAL_MS = 5000
 const RECENT_LIMIT = 25
 
-const STATIC_ROUTES = new Set(['/', '/overview', '/demo', '/anchoring', '/about'])
+const STATIC_ROUTES = new Set(['/', '/overview', '/replay', '/anchoring', '/about'])
 const DETAIL_ROUTE_PREFIXES = ['/identity/', '/session/', '/action/', '/trace/']
 
 function normalizeRoutePath(value) {
@@ -3184,7 +3184,7 @@ function populateQuickLinks(entries) {
   // renders the literal text "null". Filter optional links explicitly.
   const links = [
     el('a', { href: '/yc-demo' },
-      'Watch the signed-context demo ', el('span', { class: 'arrow' }, '→'),
+      'Watch the walkthrough ', el('span', { class: 'arrow' }, '→'),
     ),
     el('a', { href: `/action/${linkable.record_hash}` },
       'Open a recent record ', el('span', { class: 'arrow' }, '→'),
@@ -3202,16 +3202,16 @@ function populateQuickLinks(entries) {
   wrap.replaceChildren(...links)
 }
 
-// ─── Demo mode: agent timeline + living graph replay ─────────────────────
+// ─── Replay mode: agent timeline + live graph off the public log ─────────
 
 let demoReplayHandle = null
 let demoRefreshHandle = null
 let demoReplayToken = 0
-const DEMO_RECENT_LIMIT = 80
-const DEMO_REPLAY_LIMIT = 24
-const DEMO_LIVE_REFRESH_MS = 6000
+const REPLAY_RECENT_LIMIT = 80
+const REPLAY_NODE_LIMIT = 24
+const REPLAY_LIVE_REFRESH_MS = 6000
 
-function stopDemoReplay() {
+function stopReplayReplay() {
   if (demoReplayHandle) {
     clearInterval(demoReplayHandle)
     demoReplayHandle = null
@@ -3228,7 +3228,7 @@ function nodeTimestamp(node) {
   return typeof value === 'number' ? value : Date.parse(value || 0) || 0
 }
 
-function normalizeDemoGraph(graph) {
+function normalizeReplayGraph(graph) {
   const nodes = Array.isArray(graph?.nodes)
     ? graph.nodes
         .filter((node) => node?.id)
@@ -3252,7 +3252,7 @@ function normalizeDemoGraph(graph) {
   }
 }
 
-function chooseDemoContext(entries) {
+function chooseReplayContext(entries) {
   const counts = new Map()
   for (const entry of entries) {
     if (!entry.context_id) continue
@@ -3268,7 +3268,7 @@ function chooseDemoContext(entries) {
 function demoStepRow(node, isLive, onSelect = null) {
   const hash = graphNodeRecordHash(node)
   const attrs = {
-    class: isLive ? 'demo-step live' : 'demo-step',
+    class: isLive ? 'replay-step live' : 'replay-step',
     type: 'button',
     'data-node-id': node.id,
   }
@@ -3299,7 +3299,7 @@ function demoStepRow(node, isLive, onSelect = null) {
   )
 }
 
-function renderDemoTimeline(container, nodes, visibleCount, onSelect = null) {
+function renderReplayTimeline(container, nodes, visibleCount, onSelect = null) {
   const priorCount = container._demoVisibleCount ?? 0
   const mustReset = priorCount > visibleCount || !container._demoTimelineInitialized
   if (mustReset) {
@@ -3307,19 +3307,19 @@ function renderDemoTimeline(container, nodes, visibleCount, onSelect = null) {
     container._demoVisibleCount = 0
     container._demoTimelineInitialized = true
   }
-  for (const row of container.querySelectorAll('.demo-step.live')) row.classList.remove('live')
+  for (const row of container.querySelectorAll('.replay-step.live')) row.classList.remove('live')
   const start = container._demoVisibleCount ?? 0
   for (let i = start; i < visibleCount; i += 1) {
     const node = nodes[i]
     if (node) container.append(demoStepRow(node, i === visibleCount - 1, onSelect))
   }
   const last = container.lastElementChild
-  if (last && last.classList?.contains('demo-step')) last.classList.add('live')
+  if (last && last.classList?.contains('replay-step')) last.classList.add('live')
   container._demoVisibleCount = visibleCount
   container.scrollTop = container.scrollHeight
 }
 
-function renderDemoInspector(container, node, onClear = null, title = 'selected record') {
+function renderReplayInspector(container, node, onClear = null, title = 'selected record') {
   if (!node) {
     container.hidden = true
     container.replaceChildren()
@@ -3337,7 +3337,7 @@ function renderDemoInspector(container, node, onClear = null, title = 'selected 
         'aria-label': 'Clear selected record',
         onclick: () => {
           if (onClear) onClear()
-          renderDemoInspector(container, null, onClear)
+          renderReplayInspector(container, null, onClear)
         },
       }, 'clear'),
     ),
@@ -3353,38 +3353,38 @@ function renderDemoInspector(container, node, onClear = null, title = 'selected 
   )
 }
 
-async function renderDemo() {
+async function renderReplay() {
   setActiveNav('demo')
-  stopDemoReplay()
+  stopReplayReplay()
   stopPolling()
   const ep = endpoints()
   const myGen = currentRouteGeneration()
-  const root = el('div', { class: 'demo-shell' })
-  const timeline = el('div', { class: 'demo-agent-feed' },
+  const root = el('div', { class: 'replay-shell' })
+  const timeline = el('div', { class: 'replay-agent-feed' },
     el('div', { class: 'empty' }, 'loading signed agent actions…'))
-  const graphContainer = el('div', { class: 'trace-graph', id: 'demo-live-graph' },
+  const graphContainer = el('div', { class: 'trace-graph', id: 'replay-live-graph' },
     el('div', { class: 'loading' }, 'loading graph replay…'))
-  const inspector = el('aside', { class: 'demo-inspector', hidden: '', 'aria-live': 'polite' })
+  const inspector = el('aside', { class: 'replay-inspector', hidden: '', 'aria-live': 'polite' })
   const meta = el('span', { class: 'meta' }, 'warming up')
   root.append(
-    el('section', { class: 'demo-panel demo-timeline-panel' },
-      el('div', { class: 'demo-panel-head' },
+    el('section', { class: 'replay-panel replay-timeline-panel' },
+      el('div', { class: 'replay-panel-head' },
         el('h1', {}, 'live recent-action replay'),
-        el('span', { class: 'demo-status' }, 'public log'),
+        el('span', { class: 'replay-status' }, 'public log'),
       ),
       timeline,
     ),
-    el('section', { class: 'demo-panel demo-graph-panel' },
-      el('div', { class: 'demo-panel-head' },
+    el('section', { class: 'replay-panel replay-graph-panel' },
+      el('div', { class: 'replay-panel-head' },
         el('h2', {}, 'signed activity graph'),
         meta,
       ),
-      el('div', { class: 'demo-graph-frame' }, graphContainer, inspector),
+      el('div', { class: 'replay-graph-frame' }, graphContainer, inspector),
     ),
   )
   clearAndRender(root)
 
-  const recent = await fetchMaybe(`${ep.log}/recent?limit=${DEMO_RECENT_LIMIT}`)
+  const recent = await fetchMaybe(`${ep.log}/recent?limit=${REPLAY_RECENT_LIMIT}`)
   if (!routeGenerationStillCurrent(myGen)) return
   if (recent._error || !recent.entries?.length) {
     timeline.replaceChildren(el('div', { class: 'empty' }, recent._error || 'No recent signed actions returned.'))
@@ -3393,7 +3393,7 @@ async function renderDemo() {
     return
   }
 
-  const contextId = chooseDemoContext(recent.entries)
+  const contextId = chooseReplayContext(recent.entries)
   let latestRecentEntries = recent.entries
   const contextEntries = contextId
     ? recent.entries.filter((entry) => entry.context_id === contextId)
@@ -3406,10 +3406,10 @@ async function renderDemo() {
   let graph = null
   let sourceLabel = 'graph-node'
   if (graphResult && !graphResult._error && Array.isArray(graphResult.nodes) && graphResult.nodes.length > 1) {
-    graph = normalizeDemoGraph(graphResult)
+    graph = normalizeReplayGraph(graphResult)
   }
   if (!graph || graph.edges.length === 0) {
-    graph = normalizeDemoGraph(buildReplayGraphFromEntries(contextEntries.length > 1 ? contextEntries : recent.entries, { limit: DEMO_REPLAY_LIMIT }))
+    graph = normalizeReplayGraph(buildReplayGraphFromEntries(contextEntries.length > 1 ? contextEntries : recent.entries, { limit: REPLAY_NODE_LIMIT }))
     sourceLabel = 'log replay'
   }
   if (graph.nodes.length === 0) {
@@ -3417,9 +3417,9 @@ async function renderDemo() {
     return
   }
 
-  const trimDemoGraph = (candidate) => {
+  const trimReplayGraph = (candidate) => {
     const sortedNodes = candidate.nodes.slice().sort((a, b) => nodeTimestamp(a) - nodeTimestamp(b))
-    const maxNodes = Math.min(DEMO_REPLAY_LIMIT, sortedNodes.length)
+    const maxNodes = Math.min(REPLAY_NODE_LIMIT, sortedNodes.length)
     const nodes = sortedNodes.slice(Math.max(0, sortedNodes.length - maxNodes))
     const nodeIds = new Set(nodes.map((node) => node.id))
     const edges = candidate.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
@@ -3431,7 +3431,7 @@ async function renderDemo() {
       edge_count: edges.length,
     }
   }
-  graph = trimDemoGraph(graph)
+  graph = trimReplayGraph(graph)
 
   try {
     await loadGraphLibs()
@@ -3447,7 +3447,7 @@ async function renderDemo() {
   let selectGraphNode = null
   let inspectorPinned = false
   let demoLayoutMode = 'timeline'
-  let graphSignature = computeDemoGraphSignature(graph)
+  let graphSignature = computeReplayGraphSignature(graph)
   const token = demoReplayToken
   const visibleNodeIds = new Set()
   let nodeIndexById = new Map(graph.nodes.map((node, index) => [node.id, index]))
@@ -3458,10 +3458,10 @@ async function renderDemo() {
       if (node) visibleNodeIds.add(node.id)
     }
   }
-  const selectDemoNode = (node) => {
+  const selectReplayNode = (node) => {
     inspectorPinned = true
     if (selectGraphNode) selectGraphNode(node.id)
-    renderDemoInspector(inspector, node, () => {
+    renderReplayInspector(inspector, node, () => {
       inspectorPinned = false
       if (clearGraphSelection) clearGraphSelection()
     }, 'selected record')
@@ -3470,13 +3470,13 @@ async function renderDemo() {
     syncVisibleNodes()
     const visibleEdges = graph.edges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)).length
     meta.textContent = `${sourceLabel} · ${visibleNodeIds.size} nodes · ${visibleEdges} edges`
-    renderDemoTimeline(timeline, graph.nodes, visibleCount, selectDemoNode)
+    renderReplayTimeline(timeline, graph.nodes, visibleCount, selectReplayNode)
     if (!inspectorPinned) {
       const latestNode = graph.nodes[Math.max(0, visibleCount - 1)]
-      if (latestNode) renderDemoInspector(inspector, latestNode, null, 'latest record')
+      if (latestNode) renderReplayInspector(inspector, latestNode, null, 'latest record')
     }
   }
-  const renderDemoGraph = async () => {
+  const renderReplayGraph = async () => {
     nodeIndexById = new Map(graph.nodes.map((node, index) => [node.id, index]))
     syncVisibleNodes()
     graphContainer.replaceChildren()
@@ -3493,7 +3493,7 @@ async function renderDemo() {
       onNodeClick: (_nodeId, sourceRecord, controls) => {
         inspectorPinned = true
         clearGraphSelection = controls?.clearSelection || null
-        renderDemoInspector(inspector, sourceRecord, () => {
+        renderReplayInspector(inspector, sourceRecord, () => {
           inspectorPinned = false
           if (clearGraphSelection) clearGraphSelection()
         }, 'selected record')
@@ -3506,14 +3506,14 @@ async function renderDemo() {
     attachLayoutSwitcher(graphContainer, demoLayoutMode, (mode) => {
       demoLayoutMode = mode
       inspectorPinned = false
-      renderDemoGraph().catch((e) => {
+      renderReplayGraph().catch((e) => {
         renderGraphRenderError(graphContainer, e)
       })
     })
     updateReplayReadout()
   }
   try {
-    await renderDemoGraph()
+    await renderReplayGraph()
   } catch (e) {
     renderGraphRenderError(graphContainer, e)
     return
@@ -3532,7 +3532,7 @@ async function renderDemo() {
 
   demoRefreshHandle = setInterval(async () => {
     if (token !== demoReplayToken || !routeGenerationStillCurrent(myGen) || document.hidden) return
-    const nextRecent = await fetchMaybe(`${ep.log}/recent?limit=${DEMO_RECENT_LIMIT}`)
+    const nextRecent = await fetchMaybe(`${ep.log}/recent?limit=${REPLAY_RECENT_LIMIT}`)
     if (token !== demoReplayToken || !routeGenerationStillCurrent(myGen)) return
     if (nextRecent._error || !Array.isArray(nextRecent.entries) || nextRecent.entries.length === 0) return
     if (nextRecent.entries[0]?.record_hash === latestRecentEntries[0]?.record_hash) return
@@ -3547,15 +3547,15 @@ async function renderDemo() {
     const nextGraphResult = contextId ? await fetchMaybe(`${ep.graph}/graph/${contextId}?shape=compact`) : null
     if (token !== demoReplayToken || !routeGenerationStillCurrent(myGen)) return
     if (nextGraphResult && !nextGraphResult._error && Array.isArray(nextGraphResult.nodes) && nextGraphResult.nodes.length > 1) {
-      nextGraph = normalizeDemoGraph(nextGraphResult)
+      nextGraph = normalizeReplayGraph(nextGraphResult)
       nextSourceLabel = 'graph-node'
     }
     if (!nextGraph || nextGraph.edges.length === 0) {
-      nextGraph = normalizeDemoGraph(buildReplayGraphFromEntries(nextContextEntries.length > 1 ? nextContextEntries : nextRecent.entries, { limit: DEMO_REPLAY_LIMIT }))
+      nextGraph = normalizeReplayGraph(buildReplayGraphFromEntries(nextContextEntries.length > 1 ? nextContextEntries : nextRecent.entries, { limit: REPLAY_NODE_LIMIT }))
       nextSourceLabel = 'log replay'
     }
-    nextGraph = trimDemoGraph(nextGraph)
-    const nextSignature = computeDemoGraphSignature(nextGraph)
+    nextGraph = trimReplayGraph(nextGraph)
+    const nextSignature = computeReplayGraphSignature(nextGraph)
     if (nextSignature === graphSignature || nextGraph.nodes.length === 0) return
     const priorVisibleCount = visibleCount
     graph = nextGraph
@@ -3564,11 +3564,11 @@ async function renderDemo() {
     visibleCount = Math.min(Math.max(priorVisibleCount, 3), graph.nodes.length)
     inspectorPinned = false
     try {
-      await renderDemoGraph()
+      await renderReplayGraph()
     } catch (e) {
       console.warn('[atrib-dashboard] live demo refresh skipped:', e)
     }
-  }, DEMO_LIVE_REFRESH_MS)
+  }, REPLAY_LIVE_REFRESH_MS)
 }
 
 // ─── Live updates with polling fallback ──────────────────────────────────
@@ -3593,7 +3593,7 @@ function isOverviewRoute() {
 // state (action, trace, anchoring) keep silent-refresh.
 function isUserStatefulRoute() {
   const h = currentRoutePath()
-  return h.startsWith('/identity/') || h.startsWith('/session/') || h === '/demo'
+  return h.startsWith('/identity/') || h.startsWith('/session/') || h === '/replay'
 }
 
 function setFeedLiveStatus(label, tone = '') {
@@ -5595,7 +5595,7 @@ async function renderSigmaDAG(container, graphData, options = {}) {
       for (let i = 0; i < timelineOrder.length; i += 1) {
         const { id } = timelineOrder[i]
         const node = gx.getNodeAttribute(id, '_node')
-        gx.mergeNodeAttributes(id, { y: computeDemoLaneOffset(node, i, timelineOrder.length) })
+        gx.mergeNodeAttributes(id, { y: computeReplayLaneOffset(node, i, timelineOrder.length) })
       }
     }
   } else if (layoutMode === 'organic') {
@@ -6968,9 +6968,10 @@ function renderAbout() {
       el('p', {},
         'A single signed record. The action view shows the hash, identity, session, timestamp, verification state, and the raw JSON.'),
 
-      el('h3', {}, 'Demo'),
+      el('h3', {}, 'Live replay'),
       el('p', {},
-        'A live walkthrough view that pairs a concise agent-session timeline with a replaying graph. It prefers graph-node data for the busiest recent session, then falls back to a log-derived replay when graph data is unavailable.'),
+        'A view of the public log as it moves: a recent-action timeline beside a graph that builds from the same records. Nothing here is staged. It prefers graph-node data for the busiest recent session, then falls back to a log-derived replay when graph data is unavailable. For a scripted scenario instead, see the ',
+        el('a', { href: '/walkthrough' }, 'walkthrough'), '.'),
 
       el('h3', {}, 'Trace'),
       el('p', {},
@@ -7052,9 +7053,9 @@ async function route(opts = {}) {
   const myGen = _routeGeneration
   const routePath = currentRoutePath()
   if (routePath !== '/' && routePath !== '/overview') stopLiveUpdates()
-  const isDemoRoute = routePath === '/demo'
-  document.body.classList.toggle('demo-route', isDemoRoute)
-  if (!isDemoRoute) stopDemoReplay()
+  const isReplayRoute = routePath === '/replay'
+  document.body.classList.toggle('replay-route', isReplayRoute)
+  if (!isReplayRoute) stopReplayReplay()
   renderEndpoints()
   if (!isOverviewRoute()) stopPolling()
   // Cross-view soft refresh: turn ON for non-overview views, OFF when on
@@ -7073,7 +7074,7 @@ async function route(opts = {}) {
 
   try {
     if (!routePath || routePath === '/' || routePath === '/overview') return await renderOverview()
-    if (routePath === '/demo')                                      return await renderDemo()
+    if (routePath === '/replay')                                      return await renderReplay()
     if (routePath.startsWith('/identity/'))                         return await renderIdentity(routePath.slice('/identity/'.length))
     if (routePath.startsWith('/session/'))                          return await renderSession(routePath.slice('/session/'.length))
     if (routePath.startsWith('/action/'))                           return await renderAction(routePath.slice('/action/'.length))

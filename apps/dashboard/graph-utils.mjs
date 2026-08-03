@@ -826,7 +826,7 @@ export function buildReplayGraphFromEntries(entries, options = {}) {
  * Stable signature for deciding whether a demo graph's structure changed.
  * Node and edge order do not matter; only node ids and edge triples do.
  */
-export function computeDemoGraphSignature(graph) {
+export function computeReplayGraphSignature(graph) {
   const nodes = Array.isArray(graph?.nodes)
     ? graph.nodes
         .map((node) => node.id)
@@ -851,7 +851,7 @@ export function computeDemoGraphSignature(graph) {
  * long same-type chains, so growth reads as branching without changing
  * the graph structure.
  */
-export function computeDemoLaneOffset(node, index, totalNodes = 0) {
+export function computeReplayLaneOffset(node, index, totalNodes = 0) {
   const eventType = node?.event_type || 'unknown'
   const laneByEventType = {
     transaction: 0,
