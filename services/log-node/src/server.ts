@@ -202,9 +202,12 @@ function isGetOrHead(method: string | undefined): boolean {
 
 function isDashboardRoutePath(urlPath: string | undefined): boolean {
   if (!urlPath) return false
+  // /replay, not /demo. Every label on this view calls it "live replay" — the
+  // tab, the heading, the footer entry, its id in surfaces.json — so the one
+  // place it was called a demo was the URL. /demo now redirects here.
   if (
     urlPath === '/overview' ||
-    urlPath === '/demo' ||
+    urlPath === '/replay' ||
     urlPath === '/anchoring' ||
     urlPath === '/about'
   )
@@ -524,19 +527,44 @@ async function handleRequest(
     return handleStaticAsset(res, name, contentType, 86400, true, isHead)
   }
 
-  // YC demo recording surface. This is a dashboard-root artifact, not the
-  // live /demo route. Keep it allowlisted so the explorer can host the
-  // stable recording page without turning apps/dashboard into a file server.
+  // The walkthrough: a scripted scenario, one goal followed end to end. A
+  // dashboard-root artifact rather than a route in the explorer app, kept
+  // allowlisted so apps/dashboard does not become a file server.
+  //
+  // It answers a different question from /replay and therefore stays a separate
+  // surface. /replay shows real records off the public log and its claim is
+  // that nothing on it is staged; this one is entirely staged, and that is what
+  // makes it teachable. Explanation and Evidence, per DESIGN-SYSTEM.md.
   if (
     isGetOrHead(req.method) &&
-    (urlPath === '/yc-demo' || urlPath === '/yc-demo/' || urlPath === '/yc-demo.html')
+    (urlPath === '/walkthrough' || urlPath === '/walkthrough/' || urlPath === '/walkthrough.html')
   ) {
-    return handleDashboardRootFile(res, 'yc-demo.html', 'text/html; charset=utf-8', 60, isHead)
+    return handleDashboardRootFile(res, 'walkthrough.html', 'text/html; charset=utf-8', 60, isHead)
   }
-  if (isGetOrHead(req.method) && urlPath === '/yc-demo-trace-bundle.json') {
+
+  // Both renames redirect rather than 404, and each one preserves what its URL
+  // already meant. /yc-demo carried a funding-round artifact name on a public
+  // surface; /demo served the page every label calls "live replay", so the two
+  // URLs had their names crossed.
+  const renamed: Record<string, string> = {
+    '/yc-demo': '/walkthrough',
+    '/yc-demo/': '/walkthrough',
+    '/yc-demo.html': '/walkthrough',
+    '/demo': '/replay',
+    '/demo/': '/replay',
+  }
+  const renamedTo = renamed[urlPath]
+  if (isGetOrHead(req.method) && renamedTo) {
+    res.statusCode = 301
+    res.setHeader('location', renamedTo)
+    res.setHeader('cache-control', 'public, max-age=3600')
+    res.end()
+    return
+  }
+  if (isGetOrHead(req.method) && urlPath === '/walkthrough-trace-bundle.json') {
     return handleDashboardRootFile(
       res,
-      'yc-demo-trace-bundle.json',
+      'walkthrough-trace-bundle.json',
       'application/json; charset=utf-8',
       60,
       isHead,
