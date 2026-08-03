@@ -93,25 +93,46 @@ async function readSseEvent(res: Response, eventName: string): Promise<Record<st
 }
 
 /**
- * Markup with comments removed, HTML and CSS both.
+ * Markup with comment spans removed, HTML and CSS both.
  *
  * A substring assertion over a served page is answerable by prose in that page.
  * Stripping comments first means a claim about the markup is tested against the
  * markup and nothing else.
  *
- * Not a sanitiser, and never applied to untrusted input: the only thing passed
- * here is a page this repo serves, and the result is compared, never rendered.
- * It still runs to a fixed point, because one pass over `<!--a<!--b-->` leaves
- * a `<!--` behind, and a helper that half-removes a construct invites reuse
- * somewhere it would matter.
+ * Written as a scanner rather than a pair of regex replacements. Replacement
+ * cannot express this correctly: one pass over `<!--a<!--b-->` deletes the
+ * inner comment and re-forms the opener, so the construct survives its own
+ * removal. Scanning forward from each opener to its matching close never
+ * re-forms anything, and the result is built by copying the parts that are not
+ * comments rather than by deleting the parts that are.
+ *
+ * This is a comparison aid, not a sanitiser. Its input is a page this repo
+ * serves and its output is asserted against, never rendered.
  */
-function stripComments(html: string): string {
-  let out = html
-  let previous: string
-  do {
-    previous = out
-    out = out.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
-  } while (out !== previous)
+function stripComments(source: string): string {
+  const OPENERS: [string, string][] = [
+    ['<!--', '-->'],
+    ['/*', '*/'],
+  ]
+  let out = ''
+  let i = 0
+  while (i < source.length) {
+    let opened: [string, string] | null = null
+    for (const pair of OPENERS) {
+      if (source.startsWith(pair[0], i)) {
+        opened = pair
+        break
+      }
+    }
+    if (!opened) {
+      out += source[i]
+      i += 1
+      continue
+    }
+    const close = source.indexOf(opened[1], i + opened[0].length)
+    // An unterminated comment runs to the end, which is what a parser does too.
+    i = close === -1 ? source.length : close + opened[1].length
+  }
   return out
 }
 
