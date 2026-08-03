@@ -42,8 +42,8 @@ import {
   summarizeReferenceEdges,
   graphNodeLegendEntry,
   buildReplayGraphFromEntries,
-  computeDemoGraphSignature,
-  computeDemoLaneOffset,
+  computeReplayGraphSignature,
+  computeReplayLaneOffset,
 } from '../graph-utils.mjs'
 
 // Helper: build a graphData wire-format object.
@@ -1014,7 +1014,7 @@ describe('buildReplayGraphFromEntries', () => {
   })
 })
 
-describe('computeDemoGraphSignature', () => {
+describe('computeReplayGraphSignature', () => {
   it('returns the same signature when node and edge order changes', () => {
     const a = {
       nodes: [n('b'), n('a')],
@@ -1024,31 +1024,31 @@ describe('computeDemoGraphSignature', () => {
       nodes: [n('a'), n('b')],
       edges: [e('b', 'a', 'ANNOTATES'), e('a', 'b', 'CHAIN_PRECEDES')],
     }
-    expect(computeDemoGraphSignature(a)).toBe(computeDemoGraphSignature(b))
+    expect(computeReplayGraphSignature(a)).toBe(computeReplayGraphSignature(b))
   })
 
   it('changes when a new node or edge enters the demo graph', () => {
     const base = graph([n('a'), n('b')], [e('a', 'b')])
     const withNode = graph([n('a'), n('b'), n('c')], [e('a', 'b')])
     const withEdge = graph([n('a'), n('b'), n('c')], [e('a', 'b'), e('b', 'c')])
-    expect(computeDemoGraphSignature(base)).not.toBe(computeDemoGraphSignature(withNode))
-    expect(computeDemoGraphSignature(withNode)).not.toBe(computeDemoGraphSignature(withEdge))
+    expect(computeReplayGraphSignature(base)).not.toBe(computeReplayGraphSignature(withNode))
+    expect(computeReplayGraphSignature(withNode)).not.toBe(computeReplayGraphSignature(withEdge))
   })
 })
 
-describe('computeDemoLaneOffset', () => {
+describe('computeReplayLaneOffset', () => {
   it('puts annotation and revision records on opposite lanes', () => {
-    expect(computeDemoLaneOffset(n('a', 'annotation'), 2, 5)).toBeLessThan(0)
-    expect(computeDemoLaneOffset(n('r', 'revision'), 2, 5)).toBeGreaterThan(0)
+    expect(computeReplayLaneOffset(n('a', 'annotation'), 2, 5)).toBeLessThan(0)
+    expect(computeReplayLaneOffset(n('r', 'revision'), 2, 5)).toBeGreaterThan(0)
   })
 
   it('adds a deterministic wave to same-type chains', () => {
     const offsets = Array.from({ length: 6 }, (_, i) =>
-      computeDemoLaneOffset(n(`t${i}`, 'tool_call'), i, 6),
+      computeReplayLaneOffset(n(`t${i}`, 'tool_call'), i, 6),
     )
     expect(new Set(offsets).size).toBeGreaterThan(1)
     expect(offsets).toEqual(
-      Array.from({ length: 6 }, (_, i) => computeDemoLaneOffset(n(`t${i}`, 'tool_call'), i, 6)),
+      Array.from({ length: 6 }, (_, i) => computeReplayLaneOffset(n(`t${i}`, 'tool_call'), i, 6)),
     )
   })
 })

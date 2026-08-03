@@ -3207,9 +3207,9 @@ function populateQuickLinks(entries) {
 let demoReplayHandle = null
 let demoRefreshHandle = null
 let demoReplayToken = 0
-const DEMO_RECENT_LIMIT = 80
-const DEMO_REPLAY_LIMIT = 24
-const DEMO_LIVE_REFRESH_MS = 6000
+const REPLAY_RECENT_LIMIT = 80
+const REPLAY_NODE_LIMIT = 24
+const REPLAY_LIVE_REFRESH_MS = 6000
 
 function stopReplayReplay() {
   if (demoReplayHandle) {
@@ -3384,7 +3384,7 @@ async function renderReplay() {
   )
   clearAndRender(root)
 
-  const recent = await fetchMaybe(`${ep.log}/recent?limit=${DEMO_RECENT_LIMIT}`)
+  const recent = await fetchMaybe(`${ep.log}/recent?limit=${REPLAY_RECENT_LIMIT}`)
   if (!routeGenerationStillCurrent(myGen)) return
   if (recent._error || !recent.entries?.length) {
     timeline.replaceChildren(el('div', { class: 'empty' }, recent._error || 'No recent signed actions returned.'))
@@ -3409,7 +3409,7 @@ async function renderReplay() {
     graph = normalizeReplayGraph(graphResult)
   }
   if (!graph || graph.edges.length === 0) {
-    graph = normalizeReplayGraph(buildReplayGraphFromEntries(contextEntries.length > 1 ? contextEntries : recent.entries, { limit: DEMO_REPLAY_LIMIT }))
+    graph = normalizeReplayGraph(buildReplayGraphFromEntries(contextEntries.length > 1 ? contextEntries : recent.entries, { limit: REPLAY_NODE_LIMIT }))
     sourceLabel = 'log replay'
   }
   if (graph.nodes.length === 0) {
@@ -3419,7 +3419,7 @@ async function renderReplay() {
 
   const trimReplayGraph = (candidate) => {
     const sortedNodes = candidate.nodes.slice().sort((a, b) => nodeTimestamp(a) - nodeTimestamp(b))
-    const maxNodes = Math.min(DEMO_REPLAY_LIMIT, sortedNodes.length)
+    const maxNodes = Math.min(REPLAY_NODE_LIMIT, sortedNodes.length)
     const nodes = sortedNodes.slice(Math.max(0, sortedNodes.length - maxNodes))
     const nodeIds = new Set(nodes.map((node) => node.id))
     const edges = candidate.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
@@ -3532,7 +3532,7 @@ async function renderReplay() {
 
   demoRefreshHandle = setInterval(async () => {
     if (token !== demoReplayToken || !routeGenerationStillCurrent(myGen) || document.hidden) return
-    const nextRecent = await fetchMaybe(`${ep.log}/recent?limit=${DEMO_RECENT_LIMIT}`)
+    const nextRecent = await fetchMaybe(`${ep.log}/recent?limit=${REPLAY_RECENT_LIMIT}`)
     if (token !== demoReplayToken || !routeGenerationStillCurrent(myGen)) return
     if (nextRecent._error || !Array.isArray(nextRecent.entries) || nextRecent.entries.length === 0) return
     if (nextRecent.entries[0]?.record_hash === latestRecentEntries[0]?.record_hash) return
@@ -3551,7 +3551,7 @@ async function renderReplay() {
       nextSourceLabel = 'graph-node'
     }
     if (!nextGraph || nextGraph.edges.length === 0) {
-      nextGraph = normalizeReplayGraph(buildReplayGraphFromEntries(nextContextEntries.length > 1 ? nextContextEntries : nextRecent.entries, { limit: DEMO_REPLAY_LIMIT }))
+      nextGraph = normalizeReplayGraph(buildReplayGraphFromEntries(nextContextEntries.length > 1 ? nextContextEntries : nextRecent.entries, { limit: REPLAY_NODE_LIMIT }))
       nextSourceLabel = 'log replay'
     }
     nextGraph = trimReplayGraph(nextGraph)
@@ -3568,7 +3568,7 @@ async function renderReplay() {
     } catch (e) {
       console.warn('[atrib-dashboard] live demo refresh skipped:', e)
     }
-  }, DEMO_LIVE_REFRESH_MS)
+  }, REPLAY_LIVE_REFRESH_MS)
 }
 
 // ─── Live updates with polling fallback ──────────────────────────────────
