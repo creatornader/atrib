@@ -98,9 +98,21 @@ async function readSseEvent(res: Response, eventName: string): Promise<Record<st
  * A substring assertion over a served page is answerable by prose in that page.
  * Stripping comments first means a claim about the markup is tested against the
  * markup and nothing else.
+ *
+ * Not a sanitiser, and never applied to untrusted input: the only thing passed
+ * here is a page this repo serves, and the result is compared, never rendered.
+ * It still runs to a fixed point, because one pass over `<!--a<!--b-->` leaves
+ * a `<!--` behind, and a helper that half-removes a construct invites reuse
+ * somewhere it would matter.
  */
 function stripComments(html: string): string {
-  return html.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+  let out = html
+  let previous: string
+  do {
+    previous = out
+    out = out.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+  } while (out !== previous)
+  return out
 }
 
 // ---------------------------------------------------------------------------
