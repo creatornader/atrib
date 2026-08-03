@@ -92,6 +92,17 @@ async function readSseEvent(res: Response, eventName: string): Promise<Record<st
   throw new Error(`stream ended before ${eventName}`)
 }
 
+/**
+ * Markup with comments removed, HTML and CSS both.
+ *
+ * A substring assertion over a served page is answerable by prose in that page.
+ * Stripping comments first means a claim about the markup is tested against the
+ * markup and nothing else.
+ */
+function stripComments(html: string): string {
+  return html.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
@@ -1166,12 +1177,27 @@ describe('GET /dashboard', () => {
       expect(res.headers.get('content-type')).toContain('text/html')
       const body = await res.text()
       expect(body).toContain('atrib walkthrough')
+
+      // Assert against markup with comments removed, both HTML and CSS.
+      //
+      // Every check below is a substring search over a whole file, and prose
+      // in that file can answer it. The negative ones fail on a comment that
+      // merely names the retired value, which is annoying but safe. The
+      // positive ones are the dangerous half: a comment mentioning #050914
+      // satisfies "must be on the system ground" even if the ground is broken.
+      //
+      // That is the same defect that took atrib.dev's images down earlier
+      // today, where a comment describing an injected <base> convinced the
+      // staging script one already existed.
+      const markup = stripComments(body)
       // It has to look like its sibling, not like its own former self.
-      expect(body, 'must be on the system ground').toContain('#050914')
-      expect(body, 'must not carry the retired ground').not.toContain('#0a0a0a')
-      expect(body, 'must not fall back to Inter').not.toMatch(/font-family:\s*Inter/)
-      expect(body, 'must load the vendored faces').toContain('/static/fonts/Literata-Variable.woff2')
-      expect(body, 'must use the drawn wordmark').toContain('class="wm"')
+      expect(markup, 'must be on the system ground').toContain('#050914')
+      expect(markup, 'must not carry the retired ground').not.toContain('#0a0a0a')
+      expect(markup, 'must not fall back to Inter').not.toMatch(/font-family:\s*Inter/)
+      expect(markup, 'must load the vendored faces').toContain(
+        '/static/fonts/Literata-Variable.woff2',
+      )
+      expect(markup, 'must use the drawn wordmark').toContain('class="wm"')
     }
 
     const bundle = await fetch(`${server.url}/walkthrough-trace-bundle.json`)
