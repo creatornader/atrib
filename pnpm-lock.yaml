@@ -22,7 +22,7 @@ overrides:
   form-data@>=4.0.0 <4.0.6: 4.0.6
   js-yaml@<4.3.0: 4.3.0
   ws@>=8.0.0 <8.21.0: 8.21.0
-  brace-expansion@<=5.0.7: 5.0.8
+  brace-expansion@<=5.0.8: 5.0.9
   '@opentelemetry/core@<2.8.0': 2.8.0
   esbuild@>=0.27.3 <0.28.1: 0.28.1
   undici@>=7.0.0 <7.28.0: 7.28.0
@@ -3950,10 +3950,6 @@ packages:
 
   bowser@2.14.1:
     resolution: {integrity: sha512-tzPjzCxygAKWFOJP011oxFHs57HzIhOEracIgAePE4pqB3LikALKnSzUyU4MGs9/iCEUuHlAJTjTc5M+u7YEGg==}
-
-  brace-expansion@5.0.8:
-    resolution: {integrity: sha512-JZyDyq3D4AUifKTPOB7DELf6XsB3WdPuNxCtob1vFXPsSXhdAiHBWJ/tJ8HAc9aH84BK+5JFZLNkJKx3G9kzQg==}
-    engines: {node: 20 || >=22}
 
   brace-expansion@5.0.9:
     resolution: {integrity: sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==}
@@ -10971,10 +10967,6 @@ snapshots:
 
   bowser@2.14.1: {}
 
-  brace-expansion@5.0.8:
-    dependencies:
-      balanced-match: 4.0.4
-
   brace-expansion@5.0.9:
     dependencies:
       balanced-match: 4.0.4
@@ -13307,7 +13299,7 @@ snapshots:
 
   minimatch@10.2.5:
     dependencies:
-      brace-expansion: 5.0.8
+      brace-expansion: 5.0.9
 
   minimatch@10.2.6:
     dependencies:
@@ -13315,12 +13307,12 @@ snapshots:
 
   minimatch@3.1.5(patch_hash=oewu6bm64l7gihpzb3brhaa674):
     dependencies:
-      brace-expansion: 5.0.8
+      brace-expansion: 5.0.9
     optional: true
 
   minimatch@9.0.9(patch_hash=sluxonnfq3bvveyxjbu7g6vifi):
     dependencies:
-      brace-expansion: 5.0.8
+      brace-expansion: 5.0.9
 
   minimist@1.2.8: {}
 
