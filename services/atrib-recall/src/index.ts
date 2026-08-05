@@ -477,6 +477,22 @@ function getContentSearchSnapshotForRecall(
     return contentSearchIndexSnapshot
   }
 
+  if (
+    cached &&
+    !cached.partial &&
+    isAppendOnlyMirrorChange(cached.stats, fingerprint.stats)
+  ) {
+    contentSearchIndexSnapshot = contentSearchSnapshotFromLoaded(
+      loadedSnapshot,
+      contentIndexStatus(
+        'memory_only',
+        indexPath,
+        'durable index write deferred after an append-only mirror update',
+      ),
+    )
+    return contentSearchIndexSnapshot
+  }
+
   const indexFile = contentIndexFileFromLoaded(loadedSnapshot)
   const writeStatus = writeContentIndex(indexPath, indexFile)
   contentSearchIndexSnapshot = contentSearchSnapshotFromIndexFile(
@@ -776,6 +792,16 @@ function sameMirrorFiles(a: MirrorFileStat[], b: MirrorFileStat[]): boolean {
     if (a[i]!.path !== b[i]!.path) return false
   }
   return true
+}
+
+function isAppendOnlyMirrorChange(previous: MirrorFileStat[], next: MirrorFileStat[]): boolean {
+  if (!sameMirrorFiles(previous, next)) return false
+  let appended = false
+  for (let index = 0; index < previous.length; index += 1) {
+    if (next[index]!.size < previous[index]!.size) return false
+    if (next[index]!.size > previous[index]!.size) appended = true
+  }
+  return appended
 }
 
 function getBm25IndexForNewestLimit(snapshot: LoadedMirrorSnapshot, limit: number): BM25Index {
