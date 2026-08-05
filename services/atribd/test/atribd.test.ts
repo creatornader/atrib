@@ -176,6 +176,7 @@ function emptyDiagnostics(toolTimeoutMs = 45_000): AtribdDiagnostics {
     calls_settled_after_timeout: 0,
     calls_settled_after_cancel: 0,
     in_flight_tool_calls: [],
+    recent_tool_calls: [],
     idempotency: {
       schema: 'atrib.mcp-write-idempotency.v1',
       window_ms: 7 * 24 * 60 * 60 * 1000,
@@ -1137,6 +1138,34 @@ describe('atribd request cancellation', () => {
 })
 
 describe('atribd health surface', () => {
+  it('serves a minimal readiness projection without backend diagnostics', async () => {
+    const host = await bindAtribdHttpHost({ port: 0, backendFactory: async () => fakeBackend() })
+    try {
+      const response = await fetch(host.readyEndpoint)
+      expect(response.status).toBe(200)
+      const ready = (await response.json()) as {
+        status?: string
+        report?: {
+          daemon?: {
+            ready_endpoint?: string
+            event_loop_lag_ms?: { mean?: number; p95?: number; max?: number }
+          }
+          compatibility?: unknown
+          tool_calls?: unknown
+          primitive_contracts?: unknown
+        }
+      }
+      expect(ready.status).toBe('ready')
+      expect(ready.report?.daemon?.ready_endpoint).toBe(host.readyEndpoint)
+      expect(ready.report?.daemon?.event_loop_lag_ms?.mean).toEqual(expect.any(Number))
+      expect(ready.report?.compatibility).toBeDefined()
+      expect(ready.report?.tool_calls).toBeUndefined()
+      expect(ready.report?.primitive_contracts).toBeUndefined()
+    } finally {
+      await host.close()
+    }
+  })
+
   it('answers health while the shared backend is still mounting', async () => {
     let releaseBackend!: () => void
     const backendGate = new Promise<void>((resolveBackend) => {
@@ -1158,6 +1187,10 @@ describe('atribd health surface', () => {
       }
       expect(startingPayload.status).toBe('starting')
       expect(startingPayload.report?.daemon?.backend).toBe('starting')
+
+      const readyStarting = await fetch(host.readyEndpoint)
+      expect(readyStarting.status).toBe(503)
+      expect((await readyStarting.json()).status).toBe('starting')
 
       releaseBackend()
       for (let i = 0; i < 20; i += 1) {
@@ -1330,6 +1363,12 @@ describe('atribd health surface', () => {
       expect(health.report?.tool_calls?.calls_timed_out).toBe(1)
       expect(health.report?.tool_calls?.calls_settled_after_timeout).toBe(1)
       expect(health.report?.tool_calls?.active_tool_calls).toBe(0)
+      expect(health.report?.tool_calls?.recent_tool_calls).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ tool: 'slow_tool', outcome: 'timed_out' }),
+          expect.objectContaining({ tool: 'slow_tool', outcome: 'settled_after_timeout' }),
+        ]),
+      )
     } finally {
       await client?.close().catch(() => {})
       await host.close()

@@ -463,12 +463,12 @@ function getContentSearchSnapshotForRecall(
   if (!requireComplete) {
     contentSearchIndexSnapshot = contentSearchSnapshotFromLoaded(
       loadedSnapshot,
-      contentIndexStatus('memory_only', contentIndexPath(fingerprint)),
+      contentIndexStatus('memory_only', contentIndexPath()),
     )
     return contentSearchIndexSnapshot
   }
 
-  const indexPath = contentIndexPath(fingerprint)
+  const indexPath = contentIndexPath()
   if (!ATRIB_RECALL_CONTENT_INDEX_ENABLED) {
     contentSearchIndexSnapshot = contentSearchSnapshotFromLoaded(
       loadedSnapshot,
@@ -491,7 +491,7 @@ function tryLoadDurableContentIndex(
   fingerprint: MirrorFingerprint,
 ): ContentSearchSnapshot | undefined {
   if (!ATRIB_RECALL_CONTENT_INDEX_ENABLED) return undefined
-  const path = contentIndexPath(fingerprint)
+  const path = contentIndexPath()
   if (!path) return undefined
   if (!existsSync(path)) return undefined
   let parsed: unknown
@@ -505,11 +505,23 @@ function tryLoadDurableContentIndex(
   return contentSearchSnapshotFromIndexFile(indexFile, fingerprint, contentIndexStatus('hit', path))
 }
 
-function contentIndexPath(fingerprint: MirrorFingerprint): string | undefined {
+function contentIndexPath(): string | undefined {
   if (!ATRIB_RECALL_CONTENT_INDEX_ENABLED) return undefined
   if (ATRIB_RECALL_CONTENT_INDEX_FILE) return ATRIB_RECALL_CONTENT_INDEX_FILE
-  const hash = createHash('sha256').update(fingerprint.signature).digest('hex')
+  // The index validates the complete mutable mirror fingerprint before use.
+  // Its filename must instead remain stable across append-only mirror writes,
+  // otherwise every new record leaves behind a full, obsolete index file.
+  const hash = createHash('sha256').update(contentIndexCacheIdentity()).digest('hex')
   return join(ATRIB_RECALL_CONTENT_INDEX_DIR, `recall-content-${hash}.json`)
+}
+
+function contentIndexCacheIdentity(): string {
+  const explicitFile = process.env.ATRIB_RECORD_FILE
+  if (explicitFile) return JSON.stringify({ mode: 'file', file: explicitFile })
+  return JSON.stringify({
+    mode: 'dir',
+    dir: process.env.ATRIB_MIRROR_DIR ?? join(process.env.HOME ?? '', '.atrib', 'records'),
+  })
 }
 
 function contentIndexStatus(

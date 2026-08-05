@@ -74,7 +74,11 @@ async function inspectEndpoint(endpoint) {
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   const reports = await Promise.all(options.endpoints.map(inspectEndpoint))
-  const status = reports.every((report) => report.status === 'pass') ? 'pass' : 'alert'
+  const status = reports.some((report) => report.status === 'alert')
+    ? 'alert'
+    : reports.some((report) => report.status !== 'pass')
+      ? 'unavailable'
+      : 'pass'
   const output = {
     schema: 'atrib.mcp-compatibility-alert.v1',
     checked_at: new Date().toISOString(),
@@ -90,7 +94,9 @@ async function main() {
       )
     }
   }
-  if (status !== 'pass') process.exitCode = 1
+  // Transport reachability belongs to the availability monitor. This command
+  // exits nonzero only for the protocol regression it is named to detect.
+  if (status === 'alert') process.exitCode = 1
 }
 
 const isDirect =

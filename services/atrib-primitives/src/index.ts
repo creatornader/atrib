@@ -71,6 +71,21 @@ export interface AtribPrimitivesToolCallDiagnostic {
   cancelled_at?: string
 }
 
+export interface AtribPrimitivesCompletedToolCallDiagnostic {
+  primitive: string
+  tool: string
+  kind: 'write' | 'read'
+  outcome:
+    | 'succeeded'
+    | 'failed'
+    | 'timed_out'
+    | 'cancelled'
+    | 'settled_after_timeout'
+    | 'settled_after_cancel'
+  elapsed_ms: number
+  completed_at: string
+}
+
 export interface AtribPrimitivesDiagnostics {
   tool_timeout_ms: number
   active_tool_calls: number
@@ -82,6 +97,7 @@ export interface AtribPrimitivesDiagnostics {
   calls_settled_after_timeout: number
   calls_settled_after_cancel: number
   in_flight_tool_calls: AtribPrimitivesToolCallDiagnostic[]
+  recent_tool_calls: AtribPrimitivesCompletedToolCallDiagnostic[]
 }
 
 export interface AtribPrimitiveRuntimeContractDiagnostic {
@@ -847,6 +863,22 @@ export async function createAtribPrimitivesBackend(
   let callsFailed = 0
   let callsTimedOut = 0
   let callsSettledAfterTimeout = 0
+  const recentToolCalls: AtribPrimitivesCompletedToolCallDiagnostic[] = []
+
+  const recordCompletedToolCall = (
+    call: InFlightToolCall,
+    outcome: AtribPrimitivesCompletedToolCallDiagnostic['outcome'],
+  ): void => {
+    recentToolCalls.push({
+      primitive: call.primitive,
+      tool: call.tool,
+      kind: call.kind,
+      outcome,
+      elapsed_ms: Date.now() - call.startedAt,
+      completed_at: new Date().toISOString(),
+    })
+    if (recentToolCalls.length > 32) recentToolCalls.shift()
+  }
 
   for (const primitive of mounted) {
     const kind =
@@ -905,6 +937,7 @@ export async function createAtribPrimitivesBackend(
           timedOut = true
           call.timedOutAt = Date.now()
           callsTimedOut += 1
+          recordCompletedToolCall(call, 'timed_out')
           logToolCall({
             event: 'tool_call_timed_out',
             id,
@@ -923,6 +956,7 @@ export async function createAtribPrimitivesBackend(
         if (timeoutHandle) clearTimeout(timeoutHandle)
         callsSucceeded += 1
         inFlightToolCalls.delete(id)
+        recordCompletedToolCall(call, 'succeeded')
         logToolCall({
           event: 'tool_call_completed',
           id,
@@ -938,6 +972,7 @@ export async function createAtribPrimitivesBackend(
             .then(
               () => {
                 callsSettledAfterTimeout += 1
+                recordCompletedToolCall(call, 'settled_after_timeout')
                 logToolCall({
                   event: 'tool_call_settled_after_timeout',
                   id,
@@ -949,6 +984,7 @@ export async function createAtribPrimitivesBackend(
               },
               (lateError: unknown) => {
                 callsSettledAfterTimeout += 1
+                recordCompletedToolCall(call, 'settled_after_timeout')
                 logToolCall({
                   event: 'tool_call_settled_after_timeout',
                   id,
@@ -967,6 +1003,7 @@ export async function createAtribPrimitivesBackend(
         }
         callsFailed += 1
         inFlightToolCalls.delete(id)
+        recordCompletedToolCall(call, 'failed')
         logToolCall({
           event: 'tool_call_failed',
           id,
@@ -993,6 +1030,7 @@ export async function createAtribPrimitivesBackend(
         in_flight_tool_calls: [...inFlightToolCalls.values()].map((call) =>
           serializeInFlightToolCall(call, now),
         ),
+        recent_tool_calls: recentToolCalls.map((call) => ({ ...call })),
       }
     },
     runtimeContracts: () => runtimeContracts,
