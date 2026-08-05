@@ -58,9 +58,13 @@ function loadState(path) {
     return {
       compatibility_alert: parsed?.compatibility_alert === true,
       availability_alert: parsed?.availability_alert === true,
+      availability_failures:
+        Number.isSafeInteger(parsed?.availability_failures) && parsed.availability_failures > 0
+          ? parsed.availability_failures
+          : 0,
     }
   } catch {
-    return { compatibility_alert: false, availability_alert: false }
+    return { compatibility_alert: false, availability_alert: false, availability_failures: 0 }
   }
 }
 
@@ -125,9 +129,13 @@ function main() {
     ...endpointArgs,
   ])
   const prior = loadState(options.stateFile)
+  const availabilityFailing = availability.status !== 'pass'
+  const availabilityFailures = availabilityFailing ? prior.availability_failures + 1 : 0
   const next = {
     compatibility_alert: compatibility.status === 'alert',
-    availability_alert: availability.status !== 'pass',
+    availability_alert:
+      availabilityFailing && (prior.availability_alert || availabilityFailures >= 2),
+    availability_failures: availabilityFailures,
   }
   const notifications = []
   if (next.compatibility_alert && !prior.compatibility_alert) {
@@ -158,7 +166,7 @@ function main() {
       ...notify(
         options.notifier,
         'atribd profile availability degraded',
-        `Three readiness probes failed before alerting. ${summary(availability.reports)}`,
+        `Readiness probes failed in two scheduled monitor cycles. ${summary(availability.reports)}`,
         options.dryRun,
       ),
     })

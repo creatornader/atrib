@@ -21,7 +21,7 @@
     "lint": "eslint . --max-warnings 809",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "doc-sync": "node scripts/check-doc-sync.mjs && node packages/integration/scripts/check-demo-record-surfaces.mjs && node scripts/check-local-substrate-coordinator-fixtures.mjs && node scripts/check-local-substrate-topology-report.mjs && node scripts/check-local-substrate-default-trial-measurement.mjs && node scripts/check-primitives-runtime-update.mjs && node scripts/check-mcp-v2-owned-surfaces.mjs && node scripts/check-mcp-v2-owned-surfaces.test.mjs && node scripts/check-mcp-compatibility-alerts.test.mjs && node scripts/check-atribd-availability.test.mjs",
+    "doc-sync": "node scripts/check-doc-sync.mjs && node packages/integration/scripts/check-demo-record-surfaces.mjs && node scripts/check-local-substrate-coordinator-fixtures.mjs && node scripts/check-local-substrate-topology-report.mjs && node scripts/check-local-substrate-default-trial-measurement.mjs && node scripts/check-primitives-runtime-update.mjs && node scripts/check-mcp-v2-owned-surfaces.mjs && node scripts/check-mcp-v2-owned-surfaces.test.mjs && node scripts/check-mcp-compatibility-alerts.test.mjs && node scripts/check-atribd-availability.test.mjs && node scripts/monitor-atribd-mcp.test.mjs",
     "report:local-substrate": "node scripts/report-local-substrate-topology.mjs",
     "measure:local-substrate": "node scripts/measure-local-substrate-default-trial.mjs",
     "prove:local-substrate": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/emit build && node scripts/prove-local-substrate-process-health.mjs",
