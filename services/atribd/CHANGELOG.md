@@ -1,5 +1,14 @@
 # @atrib/daemon
 
+## 0.4.3
+
+### Patch Changes
+
+- b9daa8b: Add a lightweight readiness endpoint, recent tool-call latency diagnostics, and a stable durable recall-index path that replaces stale snapshots.
+- Updated dependencies [e443d05]
+- Updated dependencies [b9daa8b]
+  - @atrib/recall@5.1.4
+
 ## 0.4.2
 
 ### Patch Changes

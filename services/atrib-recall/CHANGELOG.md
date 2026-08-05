@@ -1,5 +1,12 @@
 # @atrib/recall
 
+## 5.1.4
+
+### Patch Changes
+
+- e443d05: Defer durable index rewrites after append-only mirror updates while retaining the refreshed complete index in memory.
+- b9daa8b: Add a lightweight readiness endpoint, recent tool-call latency diagnostics, and a stable durable recall-index path that replaces stale snapshots.
+
 ## 5.1.3
 
 ### Patch Changes
