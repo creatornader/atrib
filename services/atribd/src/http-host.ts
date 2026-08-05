@@ -34,6 +34,7 @@ import {
   type ServerResponse,
 } from 'node:http'
 import type { AddressInfo, Socket } from 'node:net'
+import { monitorEventLoopDelay } from 'node:perf_hooks'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import {
   CallToolRequestSchema,
@@ -149,6 +150,7 @@ export type AtribdRateLimit = (
 export interface AtribdHttpHost {
   endpoint: string
   healthEndpoint: string
+  readyEndpoint: string
   server: HttpServer
   requestCounters(): AtribdRequestCounters
   close(): Promise<void>
@@ -234,6 +236,25 @@ export function normalizeMcpPath(raw: string): string {
 
 export function healthPathFor(mcpPath: string): string {
   return mcpPath === '/' ? '/health' : `${mcpPath}/health`
+}
+
+export function readyPathFor(mcpPath: string): string {
+  return mcpPath === '/' ? '/ready' : `${mcpPath}/ready`
+}
+
+function eventLoopLagMs(histogram: ReturnType<typeof monitorEventLoopDelay>): {
+  mean: number
+  p95: number
+  max: number
+} {
+  // Node reports this histogram in nanoseconds. A new process has not yet
+  // collected a sample, which is represented as NaN rather than an error.
+  const milliseconds = (value: number): number => (Number.isFinite(value) ? value / 1_000_000 : 0)
+  return {
+    mean: milliseconds(histogram.mean),
+    p95: milliseconds(histogram.percentile(95)),
+    max: milliseconds(histogram.max),
+  }
 }
 
 function requestPath(req: IncomingMessage): string {
@@ -649,7 +670,10 @@ export async function bindAtribdHttpHost(
   const port = options.port ?? DEFAULT_HTTP_PORT
   const mcpPath = normalizeMcpPath(options.path ?? DEFAULT_HTTP_PATH)
   const healthPath = healthPathFor(mcpPath)
+  const readyPath = readyPathFor(mcpPath)
   const sockets = new Set<Socket>()
+  const eventLoopDelay = monitorEventLoopDelay({ resolution: 20 })
+  eventLoopDelay.enable()
   const version = readPackageVersion()
   const counters: AtribdRequestCounters = {
     served: 0,
@@ -665,6 +689,7 @@ export async function bindAtribdHttpHost(
   }
   let endpoint = ''
   let healthEndpoint = ''
+  let readyEndpoint = ''
 
   const modernServerFactory = (requestMeta?: unknown) =>
     createAtribdModernServer({
@@ -700,18 +725,47 @@ export async function bindAtribdHttpHost(
 
   const server = createServer(async (req, res) => {
     const path = requestPath(req)
+    const backendStatus = backendProvider.status()
+    const compatibilityReport = compatibility.report()
+    const compatibilityRegression =
+      compatibilityReport.expected_modern && compatibilityReport.legacy_after_modern_requests > 0
+    const daemon = {
+      name: 'atribd',
+      version,
+      pid: process.pid,
+      transport: 'streamable-http-stateless',
+      transport_adapter: adapter.name,
+      protocol_version: adapter.protocolVersion,
+      endpoint,
+      health_endpoint: healthEndpoint,
+      ready_endpoint: readyEndpoint,
+      uptime_ms: Math.round(process.uptime() * 1_000),
+      event_loop_lag_ms: eventLoopLagMs(eventLoopDelay),
+    }
+    if (path === readyPath || path === '/ready') {
+      const status =
+        backendStatus.state === 'starting'
+          ? 'starting'
+          : backendStatus.state === 'error'
+            ? 'error'
+            : compatibilityRegression
+              ? 'degraded'
+              : 'ready'
+      const code =
+        backendStatus.state === 'starting' ? 503 : backendStatus.state === 'error' ? 500 : 200
+      sendJson(res, code, {
+        status,
+        report: {
+          daemon: {
+            ...daemon,
+            backend: backendStatus.state === 'ready' ? 'shared' : backendStatus.state,
+          },
+          compatibility: compatibilityReport,
+        },
+      })
+      return
+    }
     if (path === healthPath || path === '/health') {
-      const backendStatus = backendProvider.status()
-      const daemon = {
-        name: 'atribd',
-        version,
-        pid: process.pid,
-        transport: 'streamable-http-stateless',
-        transport_adapter: adapter.name,
-        protocol_version: adapter.protocolVersion,
-        endpoint,
-        health_endpoint: healthEndpoint,
-      }
       if (backendStatus.state === 'starting') {
         sendJson(res, 503, {
           status: 'starting',
@@ -724,7 +778,7 @@ export async function bindAtribdHttpHost(
               backend_started_at: backendStatus.startedAt,
             },
             requests: { ...counters },
-            compatibility: compatibility.report(),
+            compatibility: compatibilityReport,
           },
         })
         return
@@ -741,7 +795,7 @@ export async function bindAtribdHttpHost(
               backend_error_at: backendStatus.errorAt,
             },
             requests: { ...counters },
-            compatibility: compatibility.report(),
+            compatibility: compatibilityReport,
           },
         })
         return
@@ -749,9 +803,6 @@ export async function bindAtribdHttpHost(
       const backend = backendStatus.backend
       const toolCalls = backend.diagnostics()
       const runtimeContracts = backend.runtimeContracts()
-      const compatibilityReport = compatibility.report()
-      const compatibilityRegression =
-        compatibilityReport.expected_modern && compatibilityReport.legacy_after_modern_requests > 0
       const status =
         toolCallDiagnosticsDegraded(toolCalls) ||
         runtimeContractsDegraded(runtimeContracts) ||
@@ -914,6 +965,14 @@ export async function bindAtribdHttpHost(
   const boundPort = actualPort(server)
   endpoint = httpEndpoint(host, boundPort, mcpPath)
   healthEndpoint = httpEndpoint(host, boundPort, healthPath)
+  readyEndpoint = httpEndpoint(host, boundPort, readyPath)
+
+  // Exclude one-time primitive mounting from the operational event-loop view.
+  // The monitor needs latency after the daemon is ready, not startup cost.
+  void backendProvider
+    .get()
+    .then(() => eventLoopDelay.reset())
+    .catch(() => undefined)
 
   if (options.jsonReady) {
     void backendProvider
@@ -929,6 +988,7 @@ export async function bindAtribdHttpHost(
             transport_adapter: adapter.name,
             endpoint,
             health_endpoint: healthEndpoint,
+            ready_endpoint: readyEndpoint,
             tool_count: backend.toolNames.length,
             mounted_primitive_count: backend.mountedPrimitiveCount,
           })}\n`,
@@ -942,12 +1002,14 @@ export async function bindAtribdHttpHost(
   return {
     endpoint,
     healthEndpoint,
+    readyEndpoint,
     server,
     requestCounters: () => ({ ...counters }),
     close: async () => {
       try {
         await closeHttpServer(server)
       } finally {
+        eventLoopDelay.disable()
         await compatibility.flush()
         await backendProvider.close()
       }

@@ -12,7 +12,15 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
@@ -917,6 +925,56 @@ describe('MCP protocol surface', () => {
     } finally {
       second.close()
     }
+  })
+
+  it('replaces the default durable index after an append instead of retaining one per snapshot', async () => {
+    writeFileSync(recordFile, (await makeContentSearchCorpus(3)).join('\n'))
+    const indexDir = join(tmp, 'content-index-cache')
+    const env = {
+      ATRIB_RECORD_FILE: recordFile,
+      ATRIB_RECALL_CONTENT_INDEX_DIR: indexDir,
+    }
+
+    const first = new McpClient(env)
+    try {
+      await first.initialize()
+      const res = await first.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: { query: 'critical path recall', evidence_mode: 'require_complete' },
+        },
+        1,
+      )
+      expect(res.error).toBeUndefined()
+    } finally {
+      first.close()
+    }
+
+    appendFileSync(recordFile, `\n${(await makeContentSearchCorpus(1))[0]!}`)
+    const second = new McpClient(env)
+    try {
+      await second.initialize()
+      const res = await second.send(
+        'tools/call',
+        {
+          name: 'recall_by_content',
+          arguments: { query: 'critical path recall', evidence_mode: 'require_complete' },
+        },
+        2,
+      )
+      expect(res.error).toBeUndefined()
+      const payload = JSON.parse(
+        (res.result as { content: { type: string; text: string }[] }).content[0]!.text,
+      ) as { coverage: { index: { status: string } } }
+      expect(payload.coverage.index.status).toBe('rebuilt')
+    } finally {
+      second.close()
+    }
+
+    expect(readdirSync(indexDir).filter((name) => name.startsWith('recall-content-'))).toHaveLength(
+      1,
+    )
   })
 
   it('recall_by_content rejects a stale durable index when the mirror changes', async () => {

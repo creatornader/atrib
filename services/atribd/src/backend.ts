@@ -80,6 +80,21 @@ export interface AtribdToolCallDiagnostic {
   cancelled_at?: string
 }
 
+export interface AtribdCompletedToolCallDiagnostic {
+  primitive: string
+  tool: string
+  kind: AtribdHandlerKind
+  outcome:
+    | 'succeeded'
+    | 'failed'
+    | 'timed_out'
+    | 'cancelled'
+    | 'settled_after_timeout'
+    | 'settled_after_cancel'
+  elapsed_ms: number
+  completed_at: string
+}
+
 export interface AtribdDiagnostics {
   tool_timeout_ms: number
   active_tool_calls: number
@@ -91,6 +106,7 @@ export interface AtribdDiagnostics {
   calls_settled_after_timeout: number
   calls_settled_after_cancel: number
   in_flight_tool_calls: AtribdToolCallDiagnostic[]
+  recent_tool_calls: AtribdCompletedToolCallDiagnostic[]
   idempotency?: ReturnType<WriteIdempotencyStore['report']>
 }
 
@@ -926,6 +942,7 @@ export async function createAtribdBackend(
   const routeByTool = new Map<string, ToolRoute>()
   const tools: Tool[] = []
   const inFlightToolCalls = new Map<string, InFlightToolCall>()
+  const recentToolCalls: AtribdCompletedToolCallDiagnostic[] = []
   const writeLocks = new ContextWriteLocks()
   const idempotencyStore =
     options.idempotencyStore ??
@@ -945,6 +962,21 @@ export async function createAtribdBackend(
   let callsCancelled = 0
   let callsSettledAfterTimeout = 0
   let callsSettledAfterCancel = 0
+
+  const recordCompletedToolCall = (
+    call: InFlightToolCall,
+    outcome: AtribdCompletedToolCallDiagnostic['outcome'],
+  ): void => {
+    recentToolCalls.push({
+      primitive: call.primitive,
+      tool: call.tool,
+      kind: call.kind,
+      outcome,
+      elapsed_ms: Math.max(0, Date.now() - call.startedAt),
+      completed_at: new Date().toISOString(),
+    })
+    if (recentToolCalls.length > 32) recentToolCalls.splice(0, recentToolCalls.length - 32)
+  }
 
   for (const primitive of mounted) {
     // Route kind is per TOOL, not per mount: any tool name the write
@@ -1010,6 +1042,7 @@ export async function createAtribdBackend(
         abandoned = 'cancel'
         call.cancelledAt = Date.now()
         callsCancelled += 1
+        recordCompletedToolCall(call, 'cancelled')
         const error = toolCancelledError(request.name)
         logDaemonEvent({
           event: 'tool_call_cancelled',
@@ -1033,6 +1066,7 @@ export async function createAtribdBackend(
         abandoned = 'timeout'
         call.timedOutAt = Date.now()
         callsTimedOut += 1
+        recordCompletedToolCall(call, 'timed_out')
         const error = toolTimeoutError(request.name, toolTimeoutMs)
         logDaemonEvent({
           event: 'tool_call_timed_out',
@@ -1056,6 +1090,7 @@ export async function createAtribdBackend(
         removeAbortListener?.()
         callsSucceeded += 1
         inFlightToolCalls.delete(id)
+        recordCompletedToolCall(call, 'succeeded')
         logDaemonEvent({
           event: 'tool_call_completed',
           id,
@@ -1074,6 +1109,10 @@ export async function createAtribdBackend(
               () => {
                 if (abandonedBy === 'timeout') callsSettledAfterTimeout += 1
                 else callsSettledAfterCancel += 1
+                recordCompletedToolCall(
+                  call,
+                  abandonedBy === 'timeout' ? 'settled_after_timeout' : 'settled_after_cancel',
+                )
                 logDaemonEvent({
                   event:
                     abandonedBy === 'timeout'
@@ -1090,6 +1129,10 @@ export async function createAtribdBackend(
               (lateError: unknown) => {
                 if (abandonedBy === 'timeout') callsSettledAfterTimeout += 1
                 else callsSettledAfterCancel += 1
+                recordCompletedToolCall(
+                  call,
+                  abandonedBy === 'timeout' ? 'settled_after_timeout' : 'settled_after_cancel',
+                )
                 logDaemonEvent({
                   event:
                     abandonedBy === 'timeout'
@@ -1112,6 +1155,7 @@ export async function createAtribdBackend(
         }
         callsFailed += 1
         inFlightToolCalls.delete(id)
+        recordCompletedToolCall(call, 'failed')
         logDaemonEvent({
           event: 'tool_call_failed',
           id,
@@ -1234,6 +1278,7 @@ export async function createAtribdBackend(
         in_flight_tool_calls: [...inFlightToolCalls.values()].map((call) =>
           serializeInFlightToolCall(call, now),
         ),
+        recent_tool_calls: recentToolCalls.map((call) => ({ ...call })),
         idempotency: idempotencyStore.report(),
       }
     },
