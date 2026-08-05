@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { appendFileSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -523,6 +523,62 @@ describe('recall result shape', () => {
       expect(files.sort()).toEqual([f1, f2].sort())
     } finally {
       rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('complete content index refresh', () => {
+  it('defers a durable rewrite after an append-only mirror update', async () => {
+    const indexFile = join(tmp, 'content-index.json')
+    const originalRecordFile = process.env.ATRIB_RECORD_FILE
+    const originalIndexFile = process.env.ATRIB_RECALL_CONTENT_INDEX_FILE
+    const originalIndexEnabled = process.env.ATRIB_RECALL_CONTENT_INDEX
+    process.env.ATRIB_RECORD_FILE = recordFile
+    process.env.ATRIB_RECALL_CONTENT_INDEX_FILE = indexFile
+    delete process.env.ATRIB_RECALL_CONTENT_INDEX
+
+    const first = await makeSigned({
+      timestamp: 1,
+      content_id: `sha256:${'1'.repeat(64)}`,
+    })
+    const second = await makeSigned({
+      timestamp: 2,
+      content_id: `sha256:${'2'.repeat(64)}`,
+    })
+    writeFileSync(recordFile, JSON.stringify(first))
+
+    vi.resetModules()
+    const recallModule = await import('../src/index.js')
+    try {
+      const initial = await recallModule.runRecallByContent({
+        query: '',
+        evidence_mode: 'require_complete',
+      })
+      const initialIndex = initial.coverage as { index?: { status?: string } }
+      expect(initialIndex.index?.status).toBe('rebuilt')
+      const durableBeforeAppend = readFileSync(indexFile, 'utf8')
+
+      appendFileSync(recordFile, `\n${JSON.stringify(second)}`)
+      const refreshed = await recallModule.runRecallByContent({
+        query: '',
+        evidence_mode: 'require_complete',
+      })
+      const refreshedIndex = refreshed.coverage as {
+        index?: { status?: string; reason?: string }
+      }
+      expect(refreshed.total_records).toBe(2)
+      expect(refreshedIndex.index?.status).toBe('memory_only')
+      expect(refreshedIndex.index?.reason).toContain('append-only mirror update')
+      expect(readFileSync(indexFile, 'utf8')).toBe(durableBeforeAppend)
+    } finally {
+      recallModule.clearRecallMirrorCache()
+      if (originalRecordFile === undefined) delete process.env.ATRIB_RECORD_FILE
+      else process.env.ATRIB_RECORD_FILE = originalRecordFile
+      if (originalIndexFile === undefined) delete process.env.ATRIB_RECALL_CONTENT_INDEX_FILE
+      else process.env.ATRIB_RECALL_CONTENT_INDEX_FILE = originalIndexFile
+      if (originalIndexEnabled === undefined) delete process.env.ATRIB_RECALL_CONTENT_INDEX
+      else process.env.ATRIB_RECALL_CONTENT_INDEX = originalIndexEnabled
+      vi.resetModules()
     }
   })
 })
