@@ -5,7 +5,9 @@ name: security-scan
 # Caller for the reusable workflow at creatornader/oss-security-scan,
 # which runs typos + gitleaks + trufflehog + osv-scanner. OSV-Scanner
 # is gated to the scheduled run (Sunday 09:00 UTC) so PRs and pushes
-# stay fast.
+# stay fast. TruffleHog remains on pushes and PRs, where GitHub provides
+# a commit range. Scheduled and manually dispatched runs have no range and
+# would rescan all history, including known false positives from test names.
 #
 # pre-commit job runs textleaks + oss-twin-check + the existing
 # hygiene + prettier hooks at PR time as the CI-side enforcement of
@@ -25,7 +27,7 @@ on:
     branches: [main]
   schedule:
     - cron: '0 9 * * 0'
-  workflow_dispatch:  # operator-triggered re-runs (matches atrib-log-pp-cli + note-to-self)
+  workflow_dispatch: # operator-triggered re-runs (matches atrib-log-pp-cli + note-to-self)
 
 permissions:
   contents: read
@@ -38,6 +40,7 @@ jobs:
     with:
       gitleaks-version: '8.30.1'
       gitleaks-config: '.gitleaks.toml'
+      run-trufflehog: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
       run-osv-scanner: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
 
   pre-commit:
