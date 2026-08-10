@@ -42,7 +42,7 @@
     "@atrib/verify": "workspace:*",
     "@noble/secp256k1": "^3.1.0",
     "@types/node": "^26.1.2",
-    "tsx": "^4.23.1",
+    "tsx": "^4.23.9",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
