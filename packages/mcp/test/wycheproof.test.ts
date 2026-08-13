@@ -77,7 +77,7 @@ describe('Wycheproof Ed25519 vectors', () => {
 
         let verified: boolean
         try {
-          verified = ed.verify(sig, msg, pk)
+          verified = ed.verify(sig, msg, pk, { zip215: false })
         } catch {
           verified = false
         }
