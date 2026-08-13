@@ -218,7 +218,10 @@ export async function delegationCertErrors(cert: DelegationCertificate): Promise
   try {
     const pub = base64urlDecode(cert.principal_key)
     const sig = base64urlDecode(cert.signature)
-    if (sig.length !== 64 || !(await ed.verifyAsync(sig, delegationCertSigningInput(cert), pub))) {
+    if (
+      sig.length !== 64 ||
+      !(await ed.verifyAsync(sig, delegationCertSigningInput(cert), pub, { zip215: false }))
+    ) {
       errors.push('principal_signature_invalid')
     }
   } catch {

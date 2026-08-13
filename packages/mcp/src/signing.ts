@@ -124,7 +124,7 @@ export async function verifyRecord(record: AtribRecord): Promise<boolean> {
       const sigBytes = base64urlDecode(creatorSigner.signature)
       if (sigBytes.length !== 64) return false
       const verifyInput = canonicalCrossAttestationInput(record)
-      const valid = await ed.verifyAsync(sigBytes, verifyInput, pubKeyBytes)
+      const valid = await ed.verifyAsync(sigBytes, verifyInput, pubKeyBytes, { zip215: false })
       if (!valid) return false
     } else {
       // Step 2: Decode signature → 64-byte signature
@@ -135,7 +135,7 @@ export async function verifyRecord(record: AtribRecord): Promise<boolean> {
       const verifyInput = canonicalSigningInput(record)
 
       // Step 4: Verify Ed25519 signature (RFC 8032 §5.1.7)
-      const valid = await ed.verifyAsync(sigBytes, verifyInput, pubKeyBytes)
+      const valid = await ed.verifyAsync(sigBytes, verifyInput, pubKeyBytes, { zip215: false })
       if (!valid) return false
     }
 

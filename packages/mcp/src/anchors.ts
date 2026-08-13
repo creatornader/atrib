@@ -355,7 +355,7 @@ export async function verifyAnchoringClaim(
     const publicKey = base64urlToBytes(claim.public_key_b64url)
     const signature = base64urlToBytes(claim.signature_b64url)
     if (publicKey.length !== 32 || signature.length !== 64) return false
-    return await ed.verifyAsync(signature, artifactBytes, publicKey)
+    return await ed.verifyAsync(signature, artifactBytes, publicKey, { zip215: false })
   } catch {
     return false
   }
