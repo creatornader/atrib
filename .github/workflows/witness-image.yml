@@ -60,7 +60,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build image without publishing
-        uses: docker/build-push-action@cb941d0b895b09c17fa011d41c411b33c752cf28
+        uses: docker/build-push-action@b9769986761dfcf8828a58eadbd440d1738476f9
         with:
           context: .
           file: services/witness-node/Dockerfile
@@ -100,7 +100,7 @@ jobs:
 
       - name: Build and publish image
         id: push
-        uses: docker/build-push-action@cb941d0b895b09c17fa011d41c411b33c752cf28
+        uses: docker/build-push-action@b9769986761dfcf8828a58eadbd440d1738476f9
         with:
           context: .
           file: services/witness-node/Dockerfile
