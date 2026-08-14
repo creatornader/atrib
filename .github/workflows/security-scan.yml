@@ -43,6 +43,14 @@ jobs:
       run-trufflehog: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
       run-osv-scanner: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
 
+  extract-zip-exception:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check for an extract-zip release requiring review
+        run: node scripts/check-extract-zip-exception.mjs
+
   pre-commit:
     # Scoped to the two NEW hooks this PR adds (textleaks + oss-twin-check).
     # The existing prettier + hygiene hooks in .pre-commit-config.yaml run

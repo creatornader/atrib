@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { verifyRecord } from '@atrib/mcp'
-import { buildCanaryRecord, readCanarySeed, runLiveGraphCanary } from '../scripts/live-graph-canary.mjs'
+import {
+  buildCanaryRecord,
+  GraphCanaryError,
+  readCanarySeed,
+  runLiveGraphCanary,
+  writeGraphCanaryFailureDiagnostics,
+} from '../scripts/live-graph-canary.mjs'
 
 describe('live graph canary', () => {
   it('refuses to use the public derivable development seed for a live run', () => {
@@ -62,9 +71,10 @@ describe('live graph canary', () => {
     expect(calls.map((c) => c.method)).toEqual(['POST', 'GET', 'GET'])
   })
 
-  it('fails when graph never indexes the submitted canary record', async () => {
-    await expect(
-      runLiveGraphCanary({
+  it('retains graph response diagnostics when the canary never indexes', async () => {
+    let failure: unknown
+    try {
+      await runLiveGraphCanary({
         logEndpoint: 'https://log.example.test/v1',
         graphEndpoint: 'https://graph.example.test/v1',
         now: () => 1_780_000_000_000,
@@ -87,8 +97,49 @@ describe('live graph canary', () => {
         },
         pollDelayMs: 1,
         timeoutMs: 20,
-      }),
-    ).rejects.toThrow(/graph did not index canary/)
+      })
+    } catch (error) {
+      failure = error
+    }
+
+    expect(failure).toBeInstanceOf(GraphCanaryError)
+    expect(failure).toHaveProperty('message', expect.stringMatching(/graph did not index canary/))
+    expect((failure as GraphCanaryError).diagnostics).toMatchObject({
+      status: 'graph-indexing-timeout',
+      record_hash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      context_id: '2'.repeat(32),
+      log_index: 124,
+      last_status: '404',
+    })
+    expect((failure as GraphCanaryError).diagnostics.retries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          attempt: 1,
+          status: 404,
+          indexed: false,
+          response: { error: 'not found' },
+        }),
+      ]),
+    )
+  })
+
+  it('writes a failure artifact for workflow upload', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'atrib-graph-canary-'))
+    const filePath = join(directory, 'diagnostics.json')
+    const error = new GraphCanaryError('graph did not index canary', {
+      schema_version: 1,
+      status: 'graph-indexing-timeout',
+      record_hash: 'sha256:test',
+      log_index: 125,
+    })
+
+    try {
+      await writeGraphCanaryFailureDiagnostics(filePath, error)
+      await expect(readFile(filePath, 'utf8')).resolves.toContain('graph-indexing-timeout')
+      await expect(readFile(filePath, 'utf8')).resolves.toContain('sha256:test')
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 })
 

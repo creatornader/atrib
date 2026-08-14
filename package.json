@@ -33,6 +33,8 @@
     "version-packages": "changeset version",
     "mcp-v2:packed-runtime": "node scripts/check-mcp-v2-packed-runtime.mjs",
     "monitor:mcp-compatibility": "node scripts/check-mcp-compatibility-alerts.mjs",
+    "security:extract-zip-exception": "node scripts/check-extract-zip-exception.mjs",
+    "test:extract-zip-exception": "node scripts/check-extract-zip-exception.test.mjs",
     "release": "node scripts/check-release-publish-readiness.mjs && pnpm -r build && node scripts/check-mcp-v2-owned-surfaces.mjs --require-built --packed && pnpm mcp-v2:packed-runtime && changeset publish"
   },
   "devDependencies": {

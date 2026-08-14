@@ -12,6 +12,8 @@ import {
   sha256,
   signRecord,
 } from '@atrib/mcp'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 
 const DEFAULT_LOG_ENDPOINT = 'https://log.atrib.dev/v1'
 const DEFAULT_GRAPH_ENDPOINT = 'https://graph.atrib.dev/v1'
@@ -20,6 +22,14 @@ const DEFAULT_POLL_DELAY_MS = 2_000
 const CANARY_TOOL_NAME = 'live_graph_canary'
 const CANARY_SERVER_URL = 'mcp://atrib-live-graph-canary.local'
 const CANARY_SEED_LABEL = 'atrib-live-graph-canary-v1-public-non-authoritative-signer'
+
+export class GraphCanaryError extends Error {
+  constructor(message, diagnostics) {
+    super(message)
+    this.name = 'GraphCanaryError'
+    this.diagnostics = diagnostics
+  }
+}
 
 function normalizeEndpoint(value) {
   return String(value ?? '').replace(/\/$/, '')
@@ -105,6 +115,42 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function responseRequestIds(response) {
+  return Object.fromEntries(
+    ['x-request-id', 'cf-ray', 'x-amzn-trace-id']
+      .map((name) => [name, response.headers.get(name)])
+      .filter(([, value]) => value),
+  )
+}
+
+async function readTraceBody(response) {
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+function summarizeTraceBody(body) {
+  if (body === null) return null
+  const serialized = JSON.stringify(body)
+  return serialized.length <= 1_000 ? body : `${serialized.slice(0, 1_000)}…`
+}
+
+export async function writeGraphCanaryFailureDiagnostics(filePath, error) {
+  if (!filePath) return
+  const diagnostics =
+    error instanceof GraphCanaryError
+      ? error.diagnostics
+      : {
+          schema_version: 1,
+          status: 'failed-before-graph-poll',
+          error: error instanceof Error ? error.message : String(error),
+        }
+  await mkdir(dirname(filePath), { recursive: true })
+  await writeFile(filePath, `${JSON.stringify(diagnostics, null, 2)}\n`)
+}
+
 export async function runLiveGraphCanary({
   logEndpoint = DEFAULT_LOG_ENDPOINT,
   graphEndpoint = DEFAULT_GRAPH_ENDPOINT,
@@ -130,30 +176,55 @@ export async function runLiveGraphCanary({
     throw new Error(`log submit response missing numeric log_index: ${JSON.stringify(proof)}`)
   }
 
+  const startedAt = new Date().toISOString()
   const deadline = Date.now() + timeoutMs
   let attempts = 0
   let lastStatus = 'not-requested'
+  const retryObservations = []
   while (Date.now() <= deadline) {
     attempts += 1
     const traceResponse = await fetchImpl(`${graphBase}/trace/${recordHash}`)
     lastStatus = String(traceResponse.status)
-    if (traceResponse.ok) {
-      const traceBody = await traceResponse.json()
-      if (traceHasRecord(traceBody, recordHash, logIndex)) {
-        return {
-          record_hash: recordHash,
-          context_id: record.context_id,
-          creator_key: record.creator_key,
-          log_index: logIndex,
-          attempts,
-        }
+    const traceBody = await readTraceBody(traceResponse)
+    const indexed = traceResponse.ok && traceHasRecord(traceBody, recordHash, logIndex)
+    retryObservations.push({
+      attempt: attempts,
+      observed_at: new Date().toISOString(),
+      status: traceResponse.status,
+      request_ids: responseRequestIds(traceResponse),
+      indexed,
+      response: summarizeTraceBody(traceBody),
+    })
+    if (indexed) {
+      return {
+        record_hash: recordHash,
+        context_id: record.context_id,
+        creator_key: record.creator_key,
+        log_index: logIndex,
+        attempts,
       }
     }
     await delay(pollDelayMs)
   }
 
-  throw new Error(
+  throw new GraphCanaryError(
     `graph did not index canary ${recordHash} at log_index ${logIndex} after ${attempts} attempts; last_status=${lastStatus}`,
+    {
+      schema_version: 1,
+      status: 'graph-indexing-timeout',
+      started_at: startedAt,
+      log_endpoint: logBase,
+      graph_endpoint: graphBase,
+      record_hash: recordHash,
+      context_id: record.context_id,
+      creator_key: record.creator_key,
+      log_index: logIndex,
+      timeout_ms: timeoutMs,
+      poll_delay_ms: pollDelayMs,
+      attempts,
+      last_status: lastStatus,
+      retries: retryObservations,
+    },
   )
 }
 
@@ -169,7 +240,13 @@ async function main() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((err) => {
+  main().catch(async (err) => {
+    try {
+      await writeGraphCanaryFailureDiagnostics(process.env.GRAPH_CANARY_DIAGNOSTICS_FILE, err)
+    } catch (writeError) {
+      // eslint-disable-next-line no-console
+      console.error(`could not write graph canary diagnostics: ${String(writeError)}`)
+    }
     console.error(err instanceof Error ? err.message : String(err))
     process.exit(1)
   })

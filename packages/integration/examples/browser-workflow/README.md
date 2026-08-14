@@ -37,9 +37,9 @@ meant to exercise that browser session directly.
   through a real `browser-use` `BrowserSession`, using browser-use navigation,
   state capture, coordinate clicks, and keyboard input on a local page.
 - The `stagehand-workflow-receipt-smoke` command runs the same receipt shape
-  through a real `@browserbasehq/stagehand` local session. It uses Stagehand's
-  page snapshot and extraction surface, then executes pre-resolved Stagehand
-  `act` actions for click, fill, and submit.
+  through a real local v4 `@browserbasehq/stagehand` browser. It creates the
+  SDK through the supported factory, captures a protocol page snapshot and
+  body text, then uses the local browser protocol for click, fill, and submit.
 
 ## What It Does Not Prove Yet
 
@@ -52,8 +52,9 @@ The browser-use smoke closes the real browser-use host gap for a direct
 Use cloud task, Browserbase, Stagehand, OpenHands, OpenAI Computer Use,
 Anthropic computer use, or Operator automation.
 
-The Stagehand smoke closes the local Stagehand session gap for pre-resolved
-`act` actions. It is not a Browserbase cloud session, Browserbase session
-replay, autonomous Stagehand agent, or LLM-planned Stagehand `observe` / `act`
-run. A later proof can pair the same record hashes with screenshots, DOM
-excerpts, action replay artifacts, or Browserbase session metadata.
+The Stagehand smoke covers a local Stagehand session with protocol page
+inspection and deterministic browser-protocol actions. It is not a Browserbase
+cloud session, Browserbase session replay, autonomous Stagehand agent, or an
+LLM-planned Stagehand `observe` / `act` run. A later proof can pair the same
+record hashes with screenshots, DOM excerpts, action replay artifacts, or
+Browserbase session metadata.

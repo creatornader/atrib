@@ -170,6 +170,11 @@ The default signer is a public, non-authoritative canary key so repeated
 deploy checks use one stable creator. Set `ATRIB_GRAPH_CANARY_KEY` to a
 base64url-encoded 32-byte Ed25519 seed to use a private canary signer.
 
+On a graph-indexing timeout, set `GRAPH_CANARY_DIAGNOSTICS_FILE` to retain a
+JSON artifact. It records the canary hash, context ID, log index, graph status
+and request IDs for every retry. The deploy workflow uploads that artifact and
+opens an owned `graph-canary-alert` issue for the failure.
+
 ## Tests
 
 The test suite covers entry serialization, Merkle tree correctness, checkpoint signing and parsing, HTTP server behavior, and proof verification.
