@@ -41,6 +41,16 @@ Instead, email **security@atrib.dev** with:
 | ------- | --------- |
 | 0.1.x   | Yes       |
 
+## Monitored dependency exceptions
+
+Dependabot alert [#72](https://github.com/creatornader/atrib/security/dependabot/72)
+for `extract-zip@2.0.1` remains mitigated rather than patched. The package is
+a development-only transitive dependency of the private integration package.
+The two extraction call sites reject traversal and symbolic-link entries. The
+scheduled security workflow runs `pnpm security:extract-zip-exception`; it
+fails when npm publishes a version other than `2.0.1`, requiring a fresh review
+of the alert and mitigation.
+
 ## Credit
 
 We credit security researchers in release notes (unless you prefer anonymity). Let us know your preference when reporting.
@@ -62,11 +72,11 @@ No custom cryptography.
 
 The protocol is about provable signed records; the project's own release artifacts are signed end-to-end so consumers can verify what they're running matches what was committed.
 
-| Surface                   | Mechanism                          | How to verify                                                                                                            |
-| ------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Commits                   | SSH commit signing (Ed25519 key uploaded to GitHub) | `git log --pretty='%h %G? %GS %s'` locally; "Verified" badge on github.com per GitHub's commit-signature-verification |
-| npm packages (`@atrib/*`) | npm publish `--provenance` (Sigstore + SLSA L3) | `npm view @atrib/<pkg> dist.attestations`; visible as "verified" badges on npmjs.com; transparency-log entries in Rekor |
-| WASM artifact (directory) | `--remap-path-prefix` (build-time) | `strings packages/directory/wasm/atrib_directory_bridge_bg.wasm` should contain no `/Users/` or `/home/` paths           |
-| CI workflows              | GitHub Actions OIDC                | Security-scan results visible at github.com/creatornader/atrib/actions; SARIF uploaded to GHAS Code Scanning when public |
+| Surface                   | Mechanism                                           | How to verify                                                                                                            |
+| ------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Commits                   | SSH commit signing (Ed25519 key uploaded to GitHub) | `git log --pretty='%h %G? %GS %s'` locally; "Verified" badge on github.com per GitHub's commit-signature-verification    |
+| npm packages (`@atrib/*`) | npm publish `--provenance` (Sigstore + SLSA L3)     | `npm view @atrib/<pkg> dist.attestations`; visible as "verified" badges on npmjs.com; transparency-log entries in Rekor  |
+| WASM artifact (directory) | `--remap-path-prefix` (build-time)                  | `strings packages/directory/wasm/atrib_directory_bridge_bg.wasm` should contain no `/Users/` or `/home/` paths           |
+| CI workflows              | GitHub Actions OIDC                                 | Security-scan results visible at github.com/creatornader/atrib/actions; SARIF uploaded to GHAS Code Scanning when public |
 
 The release-artifact surface (npm packages) carries Sigstore-anchored provenance attestations recorded in the public Rekor transparency log. Anyone can independently verify that a published `@atrib/*` package was built from the claimed source at the claimed time, without trusting any central issuer. This is the same trust model atrib provides for agent actions: cryptographic primitives plus a public log, no central authority required. Commits use industry-standard SSH signing for the same identity-binding property at the level GitHub's UI recognizes; npm provenance is the transparency-log surface downstream consumers rely on, because it affects what those consumers run.

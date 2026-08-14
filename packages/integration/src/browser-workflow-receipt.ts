@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { randomBytes } from 'node:crypto'
-import { Stagehand } from '@browserbasehq/stagehand'
+import { localBrowser, Stagehand } from '@browserbasehq/stagehand'
 import canonicalize from 'canonicalize'
 import { BrowserSession } from 'browser-use/browser'
 import {
@@ -258,43 +258,10 @@ export interface StagehandWorkflowSmokeResult extends BrowserWorkflowSmokeResult
     package_version: string
     environment: 'LOCAL'
     session_id: string
-    action_mode: 'pre-resolved-stagehand-act'
+    action_mode: 'local-browser-protocol'
     extracted_page_text_chars: number
     extracted_confirmation_seen: boolean
   }
-}
-
-type StagehandAction = {
-  selector: string
-  description: string
-  method: 'click' | 'fill'
-  arguments: string[]
-}
-
-type StagehandActResult = {
-  success: boolean
-  message?: string
-  actionDescription?: string
-  actions?: StagehandAction[]
-}
-
-type StagehandLocalPage = {
-  goto(url: string): Promise<unknown>
-  waitForSelector(selector: string, options?: { timeout?: number }): Promise<unknown>
-  snapshot(): Promise<{ formattedTree?: string; xpathMap?: unknown; urlMap?: unknown }>
-  evaluate<TResult>(fn: () => TResult | Promise<TResult>): Promise<TResult>
-  url(): Promise<string>
-}
-
-type StagehandLocalRuntime = {
-  init(): Promise<void>
-  close(): Promise<void>
-  sessionId?: string
-  context: {
-    pages(): StagehandLocalPage[]
-  }
-  act(action: StagehandAction): Promise<StagehandActResult>
-  extract(options: { page: StagehandLocalPage }): Promise<{ pageText?: string }>
 }
 
 export async function runBrowserWorkflowReceiptSmoke(): Promise<BrowserWorkflowSmokeResult> {
@@ -581,14 +548,9 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
   const privateKey = new Uint8Array(32).fill(26)
   const contextId = '737461676568616e642d70726f6f6630'
   const privatePhrase = 'private stagehand note: vendor risk reviewed'
-  const stagehandPackageVersion = '3.5.0'
-  const stagehand = new Stagehand({
-    env: 'LOCAL',
-    verbose: 0,
-    localBrowserLaunchOptions: {
-      headless: true,
-    },
-  }) as unknown as StagehandLocalRuntime
+  const stagehandPackageVersion = '4.0.0'
+  const browser = await localBrowser.launch({ headless: true })
+  const stagehand = await Stagehand.create({ browser })
   const recorder = new BrowserWorkflowReceiptRecorder({
     privateKey,
     contextId,
@@ -599,11 +561,12 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
 
   let actionFailed = false
   try {
-    await stagehand.init()
-    const page = stagehand.context.pages()[0]
+    const page = (await browser.context.pages())[0]
     if (!page) throw new Error('Stagehand local session did not expose a page')
     await page.goto(`data:text/html,${encodeURIComponent(stagehandVendorApprovalHtml())}`)
-    await page.waitForSelector('#approve-vendor', { timeout: 5000 })
+    if (!(await page.waitForSelector('#approve-vendor', { timeout: 5000 }))) {
+      throw new Error('Stagehand local session did not render the approval button')
+    }
     const stagehandPageUrl = await page.url()
     const pageUrl = 'stagehand://local/vendor-approval'
 
@@ -613,22 +576,21 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
       args: {
         framework: 'stagehand',
         environment: 'LOCAL',
-        stagehand_session_id: stagehand.sessionId ?? null,
+        stagehand_session_id: browser.sessionId ?? null,
         stagehand_page_url_hash: hashCanonical(stagehandPageUrl),
         include_screenshot: false,
       },
       run: async () => {
-        const [snapshot, extraction] = await Promise.all([
+        const [snapshot, pageText] = await Promise.all([
           page.snapshot(),
-          stagehand.extract({ page }),
+          page.locator('body').innerText(),
         ])
         return {
           framework: 'stagehand',
           snapshot_node_count: countSnapshotLines(snapshot.formattedTree),
-          page_text_chars: extraction.pageText?.length ?? 0,
-          page_text_has_approval_form:
-            extraction.pageText?.includes('Approve vendor invoice') ?? false,
-          page_text_has_private_note: extraction.pageText?.includes(privatePhrase) ?? false,
+          page_text_chars: pageText.length,
+          page_text_has_approval_form: pageText.includes('Approve vendor invoice'),
+          page_text_has_private_note: pageText.includes(privatePhrase),
         }
       },
     })
@@ -638,7 +600,7 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
       pageUrl,
       args: {
         framework: 'stagehand',
-        action_mode: 'pre-resolved-stagehand-act',
+        action_mode: 'local-browser-protocol',
         action: {
           selector: '#approve-vendor',
           method: 'click',
@@ -646,14 +608,13 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
         },
       },
       run: async () => {
-        const action = stagehandAction('#approve-vendor', 'click', 'click approve vendor button')
-        const result = await stagehand.act(action)
+        await page.locator('#approve-vendor').click()
         const pageState = await page.evaluate(() => ({
           approved: document.body.dataset.approved === 'true',
           active_panel: document.body.dataset.activePanel ?? null,
         }))
         return {
-          stagehand_result: result,
+          browser_result: { method: 'click', selector: '#approve-vendor' },
           page_state: pageState,
         }
       },
@@ -664,7 +625,7 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
       pageUrl,
       args: {
         framework: 'stagehand',
-        action_mode: 'pre-resolved-stagehand-act',
+        action_mode: 'local-browser-protocol',
         action: {
           selector: '#approval-note',
           method: 'fill',
@@ -673,13 +634,7 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
         },
       },
       run: async () => {
-        const action = stagehandAction(
-          '#approval-note',
-          'fill',
-          'fill approval note',
-          privatePhrase,
-        )
-        const result = await stagehand.act(action)
+        await page.locator('#approval-note').fill(privatePhrase)
         const pageState = await page.evaluate(() => {
           const field = document.querySelector<HTMLTextAreaElement>('#approval-note')
           return {
@@ -688,7 +643,7 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
           }
         })
         return {
-          stagehand_result: result,
+          browser_result: { method: 'fill', selector: '#approval-note' },
           page_state: pageState,
         }
       },
@@ -699,7 +654,7 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
       pageUrl,
       args: {
         framework: 'stagehand',
-        action_mode: 'pre-resolved-stagehand-act',
+        action_mode: 'local-browser-protocol',
         action: {
           selector: '#submit-approval',
           method: 'click',
@@ -707,8 +662,7 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
         },
       },
       run: async () => {
-        const action = stagehandAction('#submit-approval', 'click', 'submit approval form')
-        const result = await stagehand.act(action)
+        await page.locator('#submit-approval').click()
         const pageState = await page.evaluate(() => ({
           status: document.body.dataset.submitted === 'true' ? 'submitted' : 'not-submitted',
           confirmation_id:
@@ -718,7 +672,7 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
           page_url: 'stagehand://local/vendor-approval',
         }))
         return {
-          stagehand_result: result,
+          browser_result: { method: 'click', selector: '#submit-approval' },
           ...pageState,
         }
       },
@@ -765,15 +719,15 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
       },
       caveats: [
         'This proof runs Stagehand env LOCAL, not a Browserbase cloud session.',
-        'This proof uses pre-resolved Stagehand act actions, not LLM-planned observe or act calls.',
+        'This proof uses the Stagehand-managed local browser protocol, not LLM-planned Stagehand observe or act calls.',
         'This proof does not use Browserbase session replay, autonomous Stagehand agents, OpenHands, OpenAI Computer Use, or Anthropic computer use.',
       ],
       host: {
         framework: 'stagehand',
         package_version: stagehandPackageVersion,
         environment: 'LOCAL',
-        session_id: stagehand.sessionId ?? 'missing',
-        action_mode: 'pre-resolved-stagehand-act',
+        session_id: browser.sessionId ?? 'local',
+        action_mode: 'local-browser-protocol',
         extracted_page_text_chars: observed.page_text_chars,
         extracted_confirmation_seen:
           finalReceipt.confirmation_id === 'stagehand-workflow-receipt-001',
@@ -785,6 +739,7 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
   } finally {
     try {
       await stagehand.close()
+      await browser.close()
     } catch (error) {
       if (!actionFailed) {
         throw error
@@ -971,20 +926,6 @@ function stagehandVendorApprovalHtml(): string {
     </script>
   </body>
 </html>`
-}
-
-function stagehandAction(
-  selector: string,
-  method: 'click' | 'fill',
-  description: string,
-  value?: string,
-): StagehandAction {
-  return {
-    selector,
-    description,
-    method,
-    arguments: value === undefined ? [] : [value],
-  }
 }
 
 function countSnapshotLines(formattedTree: string | undefined): number {

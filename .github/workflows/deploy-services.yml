@@ -291,6 +291,9 @@ jobs:
       && needs.deploy-log-node.result != 'cancelled'
       && needs.deploy-graph-node.result != 'cancelled'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -318,9 +321,86 @@ jobs:
         run: pnpm --filter @atrib/mcp build
 
       - name: Smoke test log to graph indexing
+        id: graph-canary
+        continue-on-error: true
         env:
           ATRIB_GRAPH_CANARY_KEY: ${{ secrets.ATRIB_GRAPH_CANARY_KEY }}
+          GRAPH_CANARY_DIAGNOSTICS_FILE: ${{ runner.temp }}/graph-canary-diagnostics.json
         run: pnpm --filter @atrib/log-node graph-canary
+
+      - name: Upload graph canary diagnostics
+        if: always() && steps.graph-canary.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: graph-canary-diagnostics-${{ github.run_id }}
+          path: ${{ runner.temp }}/graph-canary-diagnostics.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Open or update graph canary alert
+        if: always() && steps.graph-canary.outcome == 'failure'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const label = 'graph-canary-alert';
+            const title = 'alert: graph indexing canary failed';
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = [
+              '@creatornader: graph indexing canary failed.',
+              `Run: ${runUrl}`,
+              `Diagnostic artifact: graph-canary-diagnostics-${context.runId}`,
+              'The artifact retains the canary record hash, context ID, log index, graph response statuses, request IDs, and retry observations.'
+            ].join('\n\n');
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              labels: label,
+              per_page: 100,
+            });
+            const existing = issues.find((issue) => issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: existing.number, body });
+            } else {
+              await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+                labels: ['bug', label],
+              });
+            }
+
+      - name: Resolve graph canary alert after recovery
+        if: steps.graph-canary.outcome == 'success'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const label = 'graph-canary-alert';
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              labels: label,
+              per_page: 100,
+            });
+            for (const issue of issues) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issue.number,
+                body: `Graph indexing canary recovered in ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}. Closing this active alert; retain the failure artifact for RCA.`,
+              });
+              await github.rest.issues.update({ owner, repo, issue_number: issue.number, state: 'closed' });
+            }
+
+      - name: Fail deployment after graph canary failure
+        if: steps.graph-canary.outcome == 'failure'
+        run: exit 1
 
   deploy-directory-node:
     needs: changes
