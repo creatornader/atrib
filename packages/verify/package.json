@@ -46,7 +46,7 @@
     "@noble/secp256k1": "^3.1.0",
     "@sd-jwt/core": "0.20.0",
     "@sd-jwt/sd-jwt-vc": "0.20.0",
-    "canonicalize": "^3.0.0",
+    "canonicalize": "^4.0.0",
     "jose": "6.2.8"
   },
   "devDependencies": {

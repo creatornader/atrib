@@ -102,7 +102,7 @@
     "@atrib/runtime-log": "workspace:*",
     "@atrib/sdk": "workspace:*",
     "@atrib/verify": "workspace:*",
-    "canonicalize": "^3.0.0"
+    "canonicalize": "^4.0.0"
   },
   "devDependencies": {
     "@ai-sdk/openai-compatible": "^3.0.25",

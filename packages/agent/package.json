@@ -47,7 +47,7 @@
     "@atrib/verify": "workspace:*",
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.3.0",
-    "canonicalize": "^3.0.0"
+    "canonicalize": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

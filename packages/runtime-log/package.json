@@ -59,7 +59,7 @@
   "dependencies": {
     "@atrib/verify": "workspace:*",
     "@noble/hashes": "^2.3.0",
-    "canonicalize": "^3.0.0"
+    "canonicalize": "^4.0.0"
   },
   "devDependencies": {
     "@atrib/mcp": "workspace:*",
