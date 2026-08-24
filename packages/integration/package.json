@@ -102,7 +102,7 @@
     "@atrib/runtime-log": "workspace:*",
     "@atrib/sdk": "workspace:*",
     "@atrib/verify": "workspace:*",
-    "canonicalize": "^3.0.0"
+    "canonicalize": "^4.0.0"
   },
   "devDependencies": {
     "@ai-sdk/openai-compatible": "^3.0.33",
@@ -111,7 +111,7 @@
     "@atrib/openinference": "workspace:^",
     "@atrib/operating-graph": "workspace:*",
     "@browserbasehq/stagehand": "4.0.2",
-    "@google/adk": "1.6.0",
+    "@google/adk": "2.0.0",
     "@langchain/core": "1.2.9",
     "@langchain/langgraph": "1.4.12",
     "@mastra/core": "1.61.0",
