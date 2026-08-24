@@ -47,7 +47,7 @@
     "@sd-jwt/core": "0.20.0",
     "@sd-jwt/sd-jwt-vc": "0.20.0",
     "canonicalize": "^4.0.0",
-    "jose": "6.2.9"
+    "jose": "6.2.10"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
