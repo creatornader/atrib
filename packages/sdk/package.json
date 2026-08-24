@@ -61,9 +61,9 @@
     "@atrib/verify": "workspace:*",
     "@atrib/verify-mcp": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.2.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "repository": {
     "type": "git",
