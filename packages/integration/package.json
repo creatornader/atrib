@@ -105,7 +105,7 @@
     "canonicalize": "^4.0.0"
   },
   "devDependencies": {
-    "@ai-sdk/openai-compatible": "^3.0.33",
+    "@ai-sdk/openai-compatible": "^3.0.34",
     "@arizeai/openinference-semantic-conventions": "^2.7.0",
     "@arizeai/openinference-vercel": "^3.1.5",
     "@atrib/openinference": "workspace:^",
@@ -130,9 +130,9 @@
     "@proof.com/proof-vc-server": "0.4.3",
     "@proof.com/x401-node": "^0.3.1",
     "@types/node": "^26.2.0",
-    "ai": "^7.0.71",
+    "ai": "^7.0.76",
     "browser-use": "0.8.0",
-    "jose": "6.2.9",
+    "jose": "6.2.10",
     "llamaindex": "0.12.1",
     "mem0ai": "3.1.6",
     "openai": "7.5.0",
