@@ -1,7 +1,7 @@
 # Google ADK TypeScript decision ledger and plugin examples
 
 This example targets the TypeScript `@google/adk` plugin lifecycle. The primary
-proof runs a real `@google/adk@1.2.0` `InMemoryRunner`, registers a
+proof runs a real installed `@google/adk` `InMemoryRunner`, registers a
 `BasePlugin`, signs an authority decision from `beforeToolCallback`, and then
 signs the allowed `FunctionTool` outcome from `afterToolCallback` with the
 decision record in `informed_by`.
@@ -21,7 +21,7 @@ pnpm --filter @atrib/integration google-adk-typescript-plugin-smoke
 Both commands are local and credential-free. They do not call Gemini, Google
 Cloud, BigQuery, or a database. The fake part is only the scripted model
 response; the runner, plugin manager, function-tool path, and callback
-lifecycle come from `@google/adk@1.2.0`.
+lifecycle come from the installed `@google/adk` package.
 
 ## What The Decision-Ledger Proof Shows
 

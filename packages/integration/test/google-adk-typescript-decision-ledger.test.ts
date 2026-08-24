@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runGoogleAdkTypeScriptDecisionLedgerProof } from '../examples/google-adk-typescript/google-adk-typescript-decision-ledger-proof.js'
 import {
@@ -15,15 +16,20 @@ type FixtureCorpus = {
   entries: Record<string, GoogleAdkDecisionLedgerEntry>
 }
 
+const googleAdkPackagePath = join(process.cwd(), 'node_modules', '@google', 'adk', 'package.json')
+
 describe('Google ADK TypeScript decision ledger proof', () => {
   it('signs ADK authority decisions before tool execution', async () => {
+    const installedGoogleAdk = JSON.parse(await readFile(googleAdkPackagePath, 'utf8')) as {
+      version: string
+    }
     const result = await runGoogleAdkTypeScriptDecisionLedgerProof()
 
     expect(result.ok).toBe(true)
     expect(result.strategy).toBe('atrib-google-adk-typescript-decision-ledger-proof-v1')
     expect(result.adk).toMatchObject({
       package: '@google/adk',
-      version: '1.6.0',
+      version: installedGoogleAdk.version,
       runner: 'InMemoryRunner',
       plugin: 'BasePlugin',
       tool: 'FunctionTool',
