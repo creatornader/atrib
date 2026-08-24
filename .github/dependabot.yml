@@ -89,6 +89,11 @@ updates:
       - dependency-name: typescript
         versions:
           - '>=7.0.0'
+      # Dependabot cannot resolve the repository's pnpm patchedDependencies
+      # while attempting this major migration. Review Changesets v3 manually.
+      - dependency-name: '@changesets/cli'
+        versions:
+          - '>=3.0.0'
     commit-message:
       prefix: deps
       include: scope
