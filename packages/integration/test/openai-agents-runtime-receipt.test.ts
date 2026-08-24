@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execFile } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { canonicalRecord, genesisChainRoot, hexEncode, sha256, verifyRecord } from '@atrib/mcp'
@@ -15,9 +16,19 @@ const tsxBin = join(
   '.bin',
   process.platform === 'win32' ? 'tsx.cmd' : 'tsx',
 )
+const openAIAgentsPackagePath = join(
+  process.cwd(),
+  'node_modules',
+  '@openai',
+  'agents',
+  'package.json',
+)
 
 describe('OpenAI Agents runtime receipt example', () => {
   it('signs an OpenAI Agents SDK function tool call through the runnable smoke', async () => {
+    const installedOpenAIAgents = JSON.parse(await readFile(openAIAgentsPackagePath, 'utf8')) as {
+      version: string
+    }
     const { stdout } = await execFileAsync(
       tsxBin,
       ['examples/openai-agents-runtime/openai-agents-runtime-smoke.ts'],
@@ -77,7 +88,7 @@ describe('OpenAI Agents runtime receipt example', () => {
     expect(result.ok).toBe(true)
     expect(result.openai_agents).toMatchObject({
       package: '@openai/agents',
-      version: '0.14.3',
+      version: installedOpenAIAgents.version,
       runner: 'run',
       agent: 'Agent',
       model: 'scripted',
