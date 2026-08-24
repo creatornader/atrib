@@ -33,12 +33,13 @@
     "version-packages": "changeset version",
     "mcp-v2:packed-runtime": "node scripts/check-mcp-v2-packed-runtime.mjs",
     "monitor:mcp-compatibility": "node scripts/check-mcp-compatibility-alerts.mjs",
+    "test:changesets-release-contract": "node scripts/check-changesets-release-contract.test.mjs",
     "security:extract-zip-exception": "node scripts/check-extract-zip-exception.mjs",
     "test:extract-zip-exception": "node scripts/check-extract-zip-exception.test.mjs",
     "release": "node scripts/check-release-publish-readiness.mjs && pnpm -r build && node scripts/check-mcp-v2-owned-surfaces.mjs --require-built --packed && pnpm mcp-v2:packed-runtime && changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.1",
+    "@changesets/cli": "^3.0.1",
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/client": "^2.0.0",
     "eslint": "^10.8.1",
@@ -107,8 +108,7 @@
     "patchedDependencies": {
       "@ai-sdk/provider-utils@3.1.0-beta.9": "patches/@ai-sdk__provider-utils@3.1.0-beta.9.patch",
       "minimatch@3.1.5": "patches/minimatch@3.1.5.patch",
-      "minimatch@9.0.9": "patches/minimatch@9.0.9.patch",
-      "read-yaml-file@1.1.0": "patches/read-yaml-file@1.1.0.patch"
+      "minimatch@9.0.9": "patches/minimatch@9.0.9.patch"
     }
   }
 }

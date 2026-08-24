@@ -21,9 +21,9 @@ name: Release
 #   Repository: creatornader/atrib
 #   Workflow:   release.yml
 #
-# `commitMode: github-api` on changesets/action makes the release commit go
-# through the GitHub REST API so it's auto-signed by GitHub. No GPG/SSH key
-# wrangling, no commit-signature-rule exceptions.
+# `push-with-git-cli: false` on changesets/action keeps release commits and tags
+# on the GitHub API path, so GitHub signs them for the release App. No GPG/SSH
+# key wrangling or commit-signature-rule exceptions are needed.
 #
 # Node 24+ is required: Node 22's bundled npm 10.x can sign provenance
 # attestations but cannot use OIDC tokens to authenticate the publish itself,
@@ -114,15 +114,15 @@ jobs:
 
       - name: Create release PR or publish to npm
         id: changesets
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0, compatible with @changesets/cli v2
+        uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1, compatible with @changesets/cli v3
         with:
-          publish: pnpm release
-          version: pnpm version-packages
-          commitMode: github-api
+          publish-script: pnpm release
+          version-script: pnpm version-packages
+          push-with-git-cli: false
           # Per D060: per-package GitHub Release per version bump alongside the
           # npm publish. Tags + release notes auto-derived from each package's
           # CHANGELOG.md entry by changesets/action.
-          createGithubReleases: true
+          create-github-releases: true
         env:
           NPM_CONFIG_PROVENANCE: "true"
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
