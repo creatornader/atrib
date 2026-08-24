@@ -54,6 +54,9 @@ jobs:
 
       - run: pnpm -r test
 
+      - name: Check Changesets release contract
+        run: pnpm test:changesets-release-contract
+
       - name: Run local Stagehand browser receipt smoke
         run: >-
           ATRIB_RUN_STAGEHAND_BROWSER_SMOKE=1

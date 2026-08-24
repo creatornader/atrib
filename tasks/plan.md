@@ -23,19 +23,20 @@ releases, npm provenance, and snapshot publishing behavior.
 
 ## Task list
 
-### Phase 1: Release outage checkpoint
+### Release outage checkpoint
 
 - [ ] Merge the compatible action pin from PR #662.
 - [ ] Verify the post-merge Release run reaches Changesets instead of failing
       its CLI compatibility guard.
 
-### Phase 2: CLI and workflow migration
+### CLI and workflow migration
 
-- [ ] Update `@changesets/cli` to the current v3 release and regenerate the
+- [x] Update `@changesets/cli` to the current v3 release and regenerate the
       lockfile.
-- [ ] Update the release action inputs and comments to the v2 contract.
-- [ ] Remove the temporary Dependabot v3 ignore.
-- [ ] Add a small release-tool contract test that checks the CLI version and
+- [x] Update the release action inputs and comments to the v2 contract.
+- [x] Remove the temporary Dependabot v3 ignore.
+- [x] Remove the obsolete read-yaml-file patch.
+- [x] Add a small release-tool contract test that checks the CLI version and
       required workflow input names remain aligned.
 
 ### Checkpoint: local release behavior
@@ -45,7 +46,7 @@ releases, npm provenance, and snapshot publishing behavior.
 - [ ] Run the snapshot version/build path without publishing or creating tags.
 - [ ] Run the full workspace build, typecheck, lint, tests, and doc-sync.
 
-### Phase 3: Remote release verification
+### Remote release verification
 
 - [ ] Open the migration PR and require all normal CI checks.
 - [ ] Merge only after CI passes.
