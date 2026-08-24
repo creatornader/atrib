@@ -25,9 +25,10 @@ releases, npm provenance, and snapshot publishing behavior.
 
 ### Release outage checkpoint
 
-- [ ] Merge the compatible action pin from PR #662.
-- [ ] Verify the post-merge Release run reaches Changesets instead of failing
-      its CLI compatibility guard.
+- [x] Merge the compatible action pin from PR #662 and the v2 token fix from
+      PR #664.
+- [x] Verify post-merge Release runs reach Changesets without CLI or token
+      compatibility errors.
 
 ### CLI and workflow migration
 
@@ -41,18 +42,18 @@ releases, npm provenance, and snapshot publishing behavior.
 
 ### Checkpoint: local release behavior
 
-- [ ] Run `changeset status` and a temporary version dry-run with the custom
-      changelog formatter.
-- [ ] Run the snapshot version/build path without publishing or creating tags.
-- [ ] Run the full workspace build, typecheck, lint, tests, and doc-sync.
+- [x] Run the v3 status/version probe and a temporary snapshot version dry-run
+      with the custom changelog formatter. The empty repository correctly has
+      no unreleased changesets.
+- [x] Run the snapshot version/build path without publishing or creating tags.
+- [x] Run the full workspace build, typecheck, lint, tests, and doc-sync.
 
 ### Remote release verification
 
-- [ ] Open the migration PR and require all normal CI checks.
-- [ ] Merge only after CI passes.
-- [ ] Verify the first post-merge Release run opens or updates the version PR
-      without the v2/v3 compatibility error.
-- [ ] Confirm no package was published accidentally during the migration.
+- [x] Open migration PR #663 and token follow-up PR #664 with normal CI gates.
+- [x] Merge only after CI passes.
+- [x] Verify post-merge Release run 32786530297 completes with Changesets v3.
+- [x] Confirm no package was published accidentally during the migration.
 
 ## Risks and mitigations
 
