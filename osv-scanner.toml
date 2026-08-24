@@ -1,0 +1,4 @@
+[[IgnoredVulns]]
+id = "GHSA-jmr9-qjv8-65gv"
+ignoreUntil = 2026-11-24
+reason = "extract-zip has no patched release. It is a private integration-only transitive dependency; browser-use rejects traversal and symbolic-link archive entries. scripts/check-extract-zip-exception.mjs fails when npm publishes a new release."

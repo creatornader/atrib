@@ -49,7 +49,9 @@ a development-only transitive dependency of the private integration package.
 The two extraction call sites reject traversal and symbolic-link entries. The
 scheduled security workflow runs `pnpm security:extract-zip-exception`; it
 fails when npm publishes a version other than `2.0.1`, requiring a fresh review
-of the alert and mitigation.
+of the alert and mitigation. `osv-scanner.toml` records the same exception for
+OSV Scanner through November 24, 2026. The exception must be reviewed before
+that date even if the weekly monitor has not detected a release.
 
 ## Credit
 
