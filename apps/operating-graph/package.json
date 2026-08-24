@@ -41,10 +41,10 @@
   "devDependencies": {
     "@atrib/verify": "workspace:*",
     "@noble/secp256k1": "^3.1.0",
-    "@types/node": "^26.1.2",
-    "tsx": "^4.23.9",
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "repository": {
     "type": "git",
