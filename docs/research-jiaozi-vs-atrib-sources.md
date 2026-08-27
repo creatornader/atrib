@@ -24,7 +24,7 @@ Terms used in this note:
 | Record signer | The design signs the tree head. It does not require a separate signature on each lifecycle entry; the detail is retained by the issuer. | The creator signs each attribution record. A transaction record can carry multiple counterparty signatures. The log operator signs checkpoints. |
 | Merkle construction | SHA-256 with RFC 9162 MTH, `0x00` leaf and `0x01` node prefixes, and no odd-leaf duplication. | SHA-256 with RFC 6962 MTH, the same domain-separated prefixes and non-duplicating tree decomposition. |
 | Checkpoint surface | JSON STH with a protocol-specific Ed25519 shell, plus a C2SP `tlog-checkpoint` signed-note representation in revision -02. The design explicitly says this is not RFC 9162 wire compatibility. | C2SP `tlog-checkpoint` and `signed-note` are the primary checkpoint format; the read path is C2SP `tlog-tiles`. |
-| Write path | Only the issuer's internal lifecycle pipeline may register entries. The public API is read-only; COSE Receipts and SCRAPI are phase-2 work. | A signed record is submitted to `POST /v1/entries`; duplicate `record_hash` submission is idempotent and returns the existing proof. Producer SDK submission is asynchronous and non-blocking. |
+| Write path | Only the issuer's internal lifecycle pipeline may register entries. The public API is read-only; COSE Receipts and SCRAPI are planned for the second phase. | A signed record is submitted to `POST /v1/entries`; duplicate `record_hash` submission is idempotent and returns the existing proof. Producer SDK submission is asynchronous and non-blocking. |
 | Public metadata tradeoff | Does not publish subject identity, public keys, or free-text reasons, but the sequential certificate ID exposes ordering and approximate issuance volume. | Publishes creator key, context ID, event type, and timestamp in every log entry. Producers can coarsen timestamps, hide tool names, and salt or HMAC args/result commitments. |
 | Identity/status relationship | The transparency log supplements short-TTL signed `jiaozi.status.v1` current-state credentials. | atrib has no equivalent short-TTL credential. It has a public-key directory, signed records, key-revocation records, and verifier-side identity/capability facts. |
 
@@ -41,7 +41,7 @@ attestation layer for AI agents with Ed25519 `did:web` documents, short-TTL
 signed status credentials, an open specification, and conformance vectors. It
 proposes a transparency log for four credential lifecycle events so the issuing
 service cannot silently present different histories. The post describes a
-read-only REST API, daily Git anchoring of signed tree heads, and a phase-1
+read-only REST API, daily Git anchoring of signed tree heads, and an initial
 single-Postgres design with database-enforced append-only behavior. It asks for
 review of the JSON STH encoding, the per-certificate lookup privacy risk, and
 Git anchoring precedent. ([J-0008])
@@ -77,7 +77,7 @@ The 2026-08-26 reply accepts nearly all of those points. It says revision -02:
 - classifies Git anchoring as a weak broadcast channel and makes independent
   retention and comparison normative for monitors and witnesses; and
 - publishes a C2SP checkpoint signed note alongside each JSON STH, with witness
-  cosigning and tlog-tiles on the phase-2 roadmap. ([J-0027])
+  cosigning and tlog-tiles on the second-phase roadmap. ([J-0027])
 
 ### 1.2 Jiaozi log object and lifecycle semantics
 
@@ -150,7 +150,7 @@ UTC 00:10. The design now calls Git a weak broadcast channel: it provides
 author provenance and a weak external timestamp, but no global consistency. A
 monitor or witness must retain checkpoints and compare adjacent anchors, live
 STHs, and the two checkpoint representations. Witness cosigning is planned as a
-separate phase-2 track. ([J-Design], §§10-11, 14.2)
+separate second-phase track. ([J-Design], §§10-11, 14.2)
 
 ### 1.4 Jiaozi status credential context
 
@@ -334,7 +334,7 @@ protocol behavior.
   routes. ([J-tree])
 - The pinned Jiaozi tree has source tests and an independent vector runner, but
   this note did not execute that test suite. Passing the package tests would not
-  prove that the phase-2 HTTP, anchor, or witness surfaces exist.
+  prove that the second-phase HTTP, anchor, or witness surfaces exist.
 - No cited Jiaozi source defines a cryptographic binding from `certId`, DID, or
   status credential to atrib's `creator_key`, `context_id`, or 90-byte log entry.
 - No cited atrib source defines a Jiaozi credential verifier, a Jiaozi tlog leaf

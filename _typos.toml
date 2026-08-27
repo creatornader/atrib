@@ -34,6 +34,7 @@ extend-ignore-re = [
 # Project-specific terms typos doesn't recognize. Add sparingly.
 atrib = "atrib"
 JCS = "JCS"  # JSON Canonicalization Scheme (RFC 8785)
+COSE = "COSE"  # CBOR Object Signing and Encryption
 ist = "ist"  # appears in legitimate contexts, not "is"
 
 [default.extend-identifiers]
