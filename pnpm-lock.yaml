@@ -25,6 +25,7 @@ overrides:
   ws@>=8.0.0 <8.21.0: 8.21.0
   brace-expansion@<=5.0.8: 5.0.9
   '@opentelemetry/core@<2.8.0': 2.8.0
+  mariadb: 3.5.3
   esbuild@>=0.27.3 <0.28.1: 0.28.1
   undici@>=7.0.0 <7.29.0: 7.29.0
   '@tootallnate/once@<2.0.1': 2.0.1
@@ -288,7 +289,7 @@ importers:
         version: 4.0.2(encoding@0.1.13)
       '@google/adk':
         specifier: 2.0.0
-        version: 2.0.0(gs74bhhnfartsq2uavvpfpfzse)
+        version: 2.0.0(k7f25ctu3qulrzz2f5se6ftmr4)
       '@langchain/core':
         specifier: 1.2.9
         version: 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.221.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(openai@7.5.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(ws@8.21.0(bufferutil@4.1.0))(zod@4.4.3))(ws@8.21.0(bufferutil@4.1.0))
@@ -2288,7 +2289,6 @@ packages:
   '@google-cloud/opentelemetry-cloud-monitoring-exporter@0.21.0':
     resolution: {integrity: sha512-+lAew44pWt6rA4l8dQ1gGhH7Uo95wZKfq/GBf9aEyuNDDLQ2XppGEEReu6ujesSqTtZ8ueQFt73+7SReSHbwqg==}
     engines: {node: '>=18'}
-    deprecated: Google Cloud Platform now supports native OpenTelemetry Protocol (OTLP) endpoints via the Telemetry API. Please follow https://github.com/GoogleCloudPlatform/opentelemetry-operations-js/blob/main/MIGRATION.md
     peerDependencies:
       '@opentelemetry/api': ^1.9.0
       '@opentelemetry/core': 2.8.0
@@ -2298,7 +2298,6 @@ packages:
   '@google-cloud/opentelemetry-cloud-trace-exporter@3.0.0':
     resolution: {integrity: sha512-mUfLJBFo+ESbO0dAGboErx2VyZ7rbrHcQvTP99yH/J72dGaPbH2IzS+04TFbTbEd1VW5R9uK3xq2CqawQaG+1Q==}
     engines: {node: '>=18'}
-    deprecated: Google Cloud Platform now supports native OpenTelemetry Protocol (OTLP) endpoints via the Telemetry API. Please follow https://github.com/GoogleCloudPlatform/opentelemetry-operations-js/blob/main/MIGRATION.md
     peerDependencies:
       '@opentelemetry/api': ^1.0.0
       '@opentelemetry/core': 2.8.0
@@ -2787,7 +2786,7 @@ packages:
       '@mikro-orm/core': ^6.0.0
       better-sqlite3: '*'
       libsql: '*'
-      mariadb: '*'
+      mariadb: 3.5.3
     peerDependenciesMeta:
       better-sqlite3:
         optional: true
@@ -5624,9 +5623,9 @@ packages:
     resolution: {integrity: sha512-+zopwDy7DNknmwPQplem5lAZX/eCOzSvSNNcSKm5eVwTkOBzoktEfXsa9L23J/GIRhxRsaxzkPEhrJEpE2F4Gg==}
     engines: {node: '>= 10'}
 
-  mariadb@3.4.5:
-    resolution: {integrity: sha512-gThTYkhIS5rRqkVr+Y0cIdzr+GRqJ9sA2Q34e0yzmyhMCwyApf3OKAC1jnF23aSlIOqJuyaUFUcj7O1qZslmmQ==}
-    engines: {node: '>= 14'}
+  mariadb@3.5.3:
+    resolution: {integrity: sha512-i053Kc0MgdUv/hu9mCyq67TYfPXFj3/MV8I7ZW5wvJNixIyXC0VztMPUjIVj/449nQo+BsxFD4Fdk/sA/uqKPQ==}
+    engines: {node: '>= 20.0.0'}
 
   markdown-table@3.0.4:
     resolution: {integrity: sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw==}
@@ -8792,7 +8791,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@google/adk@2.0.0(gs74bhhnfartsq2uavvpfpfzse)':
+  '@google/adk@2.0.0(k7f25ctu3qulrzz2f5se6ftmr4)':
     dependencies:
       '@a2a-js/sdk': 0.3.14(@grpc/grpc-js@1.14.4)(express@5.2.1)
       '@google-cloud/vertexai': 1.12.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(bufferutil@4.1.0)(encoding@0.1.13)
@@ -8823,10 +8822,10 @@ snapshots:
       '@google-cloud/opentelemetry-cloud-trace-exporter': 3.0.0(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/resources@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(encoding@0.1.13)
       '@google-cloud/storage': 7.21.0(encoding@0.1.13)
       '@mikro-orm/mariadb': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)
-      '@mikro-orm/mssql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)
-      '@mikro-orm/mysql': 6.6.14(@mikro-orm/core@6.6.16)(@types/node@26.2.0)(better-sqlite3@12.10.0)(mariadb@3.4.5)(pg@8.21.0)
-      '@mikro-orm/postgresql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))
-      '@mikro-orm/sqlite': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)
+      '@mikro-orm/mssql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)
+      '@mikro-orm/mysql': 6.6.14(@mikro-orm/core@6.6.16)(@types/node@26.2.0)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)
+      '@mikro-orm/postgresql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))
+      '@mikro-orm/sqlite': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)
       '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
       express: 5.2.1
     transitivePeerDependencies:
@@ -9291,7 +9290,7 @@ snapshots:
       mikro-orm: 6.6.16
       reflect-metadata: 0.2.2
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.20.0)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.20.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
@@ -9299,7 +9298,7 @@ snapshots:
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
-      mariadb: 3.4.5
+      mariadb: 3.5.3
     transitivePeerDependencies:
       - mysql
       - mysql2
@@ -9311,7 +9310,7 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
@@ -9319,7 +9318,7 @@ snapshots:
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
-      mariadb: 3.4.5
+      mariadb: 3.5.3
     transitivePeerDependencies:
       - mysql
       - mysql2
@@ -9331,7 +9330,7 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)(sqlite3@5.1.7)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)(sqlite3@5.1.7)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
@@ -9339,7 +9338,7 @@ snapshots:
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
-      mariadb: 3.4.5
+      mariadb: 3.5.3
     transitivePeerDependencies:
       - mysql
       - mysql2
@@ -9351,7 +9350,7 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)(tedious@19.2.1)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)(tedious@19.2.1)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
@@ -9359,7 +9358,7 @@ snapshots:
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
-      mariadb: 3.4.5
+      mariadb: 3.5.3
     transitivePeerDependencies:
       - mysql
       - mysql2
@@ -9374,8 +9373,8 @@ snapshots:
   '@mikro-orm/mariadb@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)
-      mariadb: 3.4.5
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)
+      mariadb: 3.5.3
     transitivePeerDependencies:
       - better-sqlite3
       - libsql
@@ -9389,10 +9388,10 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/mssql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)':
+  '@mikro-orm/mssql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)(tedious@19.2.1)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)(tedious@19.2.1)
       tedious: 19.2.1
       tsqlstring: 1.0.1
     transitivePeerDependencies:
@@ -9408,10 +9407,10 @@ snapshots:
       - supports-color
     optional: true
 
-  '@mikro-orm/mysql@6.6.14(@mikro-orm/core@6.6.16)(@types/node@26.2.0)(better-sqlite3@12.10.0)(mariadb@3.4.5)(pg@8.21.0)':
+  '@mikro-orm/mysql@6.6.14(@mikro-orm/core@6.6.16)(@types/node@26.2.0)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)
       mysql2: 3.20.0(@types/node@26.2.0)
     transitivePeerDependencies:
       - '@types/node'
@@ -9427,10 +9426,10 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/postgresql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))':
+  '@mikro-orm/postgresql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.20.0)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.20.0)
       pg: 8.20.0
       postgres-array: 3.0.4
       postgres-date: 2.1.0
@@ -9454,10 +9453,10 @@ snapshots:
       globby: 11.1.0
       ts-morph: 27.0.2
 
-  '@mikro-orm/sqlite@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)':
+  '@mikro-orm/sqlite@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.4.5)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)(sqlite3@5.1.7)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.2.0))(pg@8.21.0)(sqlite3@5.1.7)
       fs-extra: 11.3.3
       sqlite3: 5.1.7
       sqlstring-sqlite: 0.1.1
@@ -12736,13 +12735,13 @@ snapshots:
       - supports-color
     optional: true
 
-  mariadb@3.4.5:
+  mariadb@3.5.3:
     dependencies:
       '@types/geojson': 7946.0.16
-      '@types/node': 24.13.3
+      '@types/node': 26.3.0
       denque: 2.1.0
-      iconv-lite: 0.6.3
-      lru-cache: 10.4.3
+      iconv-lite: 0.7.3
+      lru-cache: 11.5.2
     optional: true
 
   markdown-table@3.0.4: {}
