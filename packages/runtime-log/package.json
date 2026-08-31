@@ -58,13 +58,13 @@
   },
   "dependencies": {
     "@atrib/verify": "workspace:*",
-    "@noble/hashes": "^2.3.0",
+    "@noble/hashes": "^2.4.0",
     "canonicalize": "^4.0.0"
   },
   "devDependencies": {
     "@atrib/mcp": "workspace:*",
     "@noble/secp256k1": "^3.1.0",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   }

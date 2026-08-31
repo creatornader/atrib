@@ -22,11 +22,11 @@
   "dependencies": {
     "@atrib/directory": "workspace:*",
     "@atrib/mcp": "workspace:*",
-    "@noble/ed25519": "^3.1.0",
-    "@noble/hashes": "^2.3.0"
+    "@noble/ed25519": "^3.2.0",
+    "@noble/hashes": "^2.4.0"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "canonicalize": "^4.0.0",
     "fast-check": "^4.9.0",
     "tsx": "^4.23.12",

@@ -35,9 +35,9 @@
   },
   "devDependencies": {
     "@atrib/verify": "workspace:*",
-    "@noble/ed25519": "^3.1.0",
-    "@noble/hashes": "^2.3.0",
-    "@types/node": "^26.2.0",
+    "@noble/ed25519": "^3.2.0",
+    "@noble/hashes": "^2.4.0",
+    "@types/node": "^26.4.0",
     "canonicalize": "^4.0.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
