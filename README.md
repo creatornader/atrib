@@ -72,7 +72,7 @@ can point at several different objects. The boundary matters.
 | Pre-action policy gates, approval hooks, or host lifecycle hooks                                 | [`@atrib/action-gate`](packages/action-gate/README.md), [`@atrib/mcp-wrap`](packages/mcp-wrap/README.md) `preCallTransform`, host-specific adapters, and [signer proxies](packages/integration/examples/signer-proxy/README.md)                                  | Verifiable control points around high-impact actions. The host records the decision, execution result, outcome hash, and selected evidence.                        |
 | OpenTelemetry or OpenInference spans                                                             | [`@atrib/openinference`](packages/openinference/README.md)                                                                                                                                                                                                       | Signed records and recall-readable sidecars from the span stream, while Langfuse, Phoenix, LangSmith, Braintrust, or another backend keeps the operations view.    |
 | A host-owned run log, event stream, session history, checkpoint log, fork log, or compaction log | [`@atrib/runtime-log`](packages/runtime-log/README.md), including [`buzz`](packages/runtime-log/README.md#buzz-observer-source) and [live observation adapters](packages/runtime-log/README.md#live-observation-adapters)                                        | A bounded manifest or cursor-bound observation batch without publishing raw log bodies by default. Observation stays separate from execution and accepted state.   |
-| A hosted runtime API that exports session events after the fact                                  | A future per-runtime adapter under [Pattern 5](ARCHITECTURE.md#runtime-integration-patterns)                                                                                                                                                                     | Consumer-side attestation over what the vendor reported, not a claim that the vendor's private runtime state is itself true.                                       |
+| A runtime API that exports session events after the fact                                         | A future per-runtime adapter under [Pattern 5](ARCHITECTURE.md#runtime-integration-patterns)                                                                                                                                                                     | Consumer-side attestation over what the vendor reported, not a claim that the vendor's private runtime state is itself true.                                       |
 | Application or service code with no MCP wrapper in the path                                      | [`@atrib/sdk`](packages/sdk/README.md) (TypeScript) or the [`atrib` Python SDK](python/README.md)                                                                                                                                                                | One-import cognitive writes and reads. TypeScript also provides `action()` for a paired signed request and outcome around an application-owned execution boundary. |
 | A handoff, support investigation, or continuation packet                                         | [`@atrib/verify`](packages/verify/README.md), the `recall` verification parameter ([`@atrib/recall`](services/atrib-recall/README.md)), and [continuation packets](packages/verify/README.md#verifyhandoffclaimsclaims-options-promisehandoffverificationresult) | Verifier-accepted record hashes that the receiving agent can cite through `informed_by`.                                                                           |
 
@@ -116,7 +116,7 @@ maintaining an atrib transport session. A native server can advertise
 `dev.atrib/attribution`; an existing server can sit behind `@atrib/mcp-wrap`;
 and the TypeScript and Python SDKs carry the complete request envelope
 automatically. The tool result can include a signed receipt that a verifier
-checks without trusting atrib's hosted service.
+checks without trusting any single log operator.
 
 The [stateless MCP attribution guide](docs/stateless-mcp-attribution-guide.md)
 shows the request, result, receipt, integration choices, runnable proofs, retry
@@ -414,7 +414,7 @@ the public record format.
 
 ## Status
 
-Four services are deployed today: [`services/log-node/`](services/log-node/) (`https://log.atrib.dev/v1`), [`services/graph-node/`](services/graph-node/) (`https://graph.atrib.dev/v1`), [`services/directory-node/`](services/directory-node/) (`https://directory.atrib.dev/v6`), and [`services/archive-node/`](services/archive-node/) (`https://archive.atrib.dev/v1`). The public explorer at [`https://explore.atrib.dev/`](https://explore.atrib.dev/) composes their read APIs into one product surface, and a 13-gate end-to-end verifier runs daily in CI against the deployed log.
+Four public services are deployed today: [`services/log-node/`](services/log-node/) ([service README](services/log-node/README.md), `https://log.atrib.dev/v1`), [`services/graph-node/`](services/graph-node/) ([service README](services/graph-node/README.md), `https://graph.atrib.dev/v1`), [`services/directory-node/`](services/directory-node/) ([service README](services/directory-node/README.md), `https://directory.atrib.dev/v6`), and [`services/archive-node/`](services/archive-node/) (`https://archive.atrib.dev/v1`). The public explorer at [`https://explore.atrib.dev/`](https://explore.atrib.dev/) composes their read APIs into a public reference surface, and a 13-gate end-to-end verifier runs daily in CI against the deployed log.
 
 The record layer, transparency log, graph, key directory, payments profile, and
 verifier evidence checks are implemented, deployed, and pinned by conformance
@@ -461,7 +461,7 @@ Store the output as `ATRIB_PRIVATE_KEY`. The public key is derived at runtime.
 2. **Accountability without content exposure.** The log stores hashes, not content.
 3. **Settlement is separate from attribution.** The protocol records what happened. It does not move money.
 4. **No central arbiter of value.** Trust from math and open spec, not from trusting atrib.
-5. **The protocol is open. The product is commercial.** Spec, signing libraries, calculation algorithm, and log software are open. Anyone can self-host. atrib operates a hosted service as a commercial product built on the open protocol.
+5. **The protocol is open. Deployments are independent.** The spec, signing libraries, calculation algorithm, service software, explorer, and reference clients are open. Anyone can run the public services or build an independent deployment. No hosted analytics or SaaS application is part of the protocol requirement.
 
 ## Product design
 

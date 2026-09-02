@@ -35,7 +35,7 @@ Contents
 - [Principle II: Accountability without content exposure](#principle-ii-accountability-without-content-exposure)
 - [Principle III: Settlement is separate from attribution](#principle-iii-settlement-is-separate-from-attribution)
 - [Principle IV: No central arbiter of value](#principle-iv-no-central-arbiter-of-value)
-- [Principle V: The protocol is open. The product is commercial.](#principle-v-the-protocol-is-open-the-product-is-commercial)
+- [Principle V: The protocol is open. Deployments are independent.](#principle-v-the-protocol-is-open-deployments-are-independent)
 - [What the Substrate Enables](#what-the-substrate-enables)
   - [I. Provable cognition (recall)](#i-provable-cognition-recall)
   - [II. Independent audit and compliance](#ii-independent-audit-and-compliance)
@@ -107,9 +107,9 @@ atrib records what happened and who contributed. It does not move money, enforce
 
 The attribution chain is verifiable by any party with the relevant records. No single operator can alter it, suppress it, or adjudicate disputes about it. The Merkle log provides global verifiability without global visibility. Trust comes from mathematics and open specification, not from trusting atrib.
 
-### Principle V: The protocol is open. The product is commercial.
+### Principle V: The protocol is open. Deployments are independent.
 
-The specification, the signing libraries, the calculation algorithm, and the log software are open. Anyone can run their own log, build their own graph service, and run the calculation locally. atrib operates a hosted graph service, analytics, and managed log at `atrib.dev` as a commercial product built on the open protocol. Using the hosted service is a convenience, not a requirement.
+The specification, signing libraries, calculation algorithm, and service software are open. Anyone can run a log, graph service, directory, archive, explorer, or reference client on their own infrastructure, or use an independently operated public deployment. No hosted analytics, SaaS application, or commercial operator is required by this protocol.
 
 ---
 
