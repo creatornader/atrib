@@ -2681,13 +2681,12 @@ async function renderOverview() {
 
   clearAndRender(root)
 
-  const [stats, recent, checkpoint] = await Promise.all([
-    fetchMaybe(`${ep.log}/stats`),
-    fetchMaybe(`${ep.log}/recent?limit=${RECENT_LIMIT}`),
-    fetchTextMaybe(`${ep.log}/checkpoint`),
-  ])
-
-  updatePulseStrip(stats, checkpoint, recent)
+  // The activity feed is the first useful Explorer surface. Do not hold it
+  // behind the slower health summary, checkpoint, or optional identity labels.
+  const statsPromise = fetchMaybe(`${ep.log}/stats`)
+  const recentPromise = fetchMaybe(`${ep.log}/recent?limit=${RECENT_LIMIT}`)
+  const checkpointPromise = fetchTextMaybe(`${ep.log}/checkpoint`)
+  const recent = await recentPromise
 
   if (recent._error || !recent.entries) {
     document.getElementById('feed-body').replaceChildren(
@@ -2706,14 +2705,25 @@ async function renderOverview() {
     )
     document.getElementById('feed-meta').textContent = 'empty'
   } else {
-    await resolveIdentities(recent.entries.map(e => e.creator_key))
     renderFeed(recent.entries, false, recent.tree_size ?? null)
     lastFeedCursor = recent.entries.reduce(
       (max, entry) => Number.isInteger(entry.index) ? Math.max(max, entry.index) : max,
       -1,
     )
     populateQuickLinks(recent.entries)
+
+    // Directory claims enrich the feed but do not change which records are
+    // visible. Refresh labels in place after the first usable table renders.
+    void resolveIdentities(recent.entries.map(e => e.creator_key)).then(() => {
+      if (!isOverviewRoute()) return
+      renderFeed(feedEntries, false, feedTreeSize)
+    })
   }
+
+  void Promise.all([statsPromise, checkpointPromise]).then(([stats, checkpoint]) => {
+    if (!isOverviewRoute()) return
+    updatePulseStrip(stats, checkpoint, recent)
+  })
 
   startLiveUpdates()
 }
