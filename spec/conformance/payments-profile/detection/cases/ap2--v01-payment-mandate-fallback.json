@@ -1,9 +1,9 @@
 {
-  "name": "v01-payment-mandate-fallback",
+  "name": "v01-payment-mandate-not-detected",
   "corpus": "payments-profile/detection",
   "rail": "ap2",
   "profile_section": "2.5",
-  "description": "AP2 v0.1 compatibility fallback: an A2A Message DataPart whose data carries ap2.mandates.PaymentMandate. Implementations MAY keep this fallback; the reference implementation does.",
+  "description": "An AP2 v0.1 A2A PaymentMandate DataPart authorizes a future payment but is not completion evidence and must not emit a transaction.",
   "input": {
     "tool_name": "agent_payment",
     "response": {
@@ -30,7 +30,7 @@
     }
   },
   "expected": {
-    "detected": true,
-    "protocol": "AP2"
+    "detected": false,
+    "protocol": null
   }
 }

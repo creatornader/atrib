@@ -1,20 +1,10 @@
 {
   "corpus": "payments-profile/detection",
   "profile": "docs/payments-profile.md",
-  "profile_version": "1.0.0",
-  "profile_sections": [
-    "2",
-    "3"
-  ],
+  "profile_version": "1.1.0",
+  "profile_sections": ["2", "3"],
   "decision_link": "D147 (payments profile spin-out, promoted from P048)",
-  "rails": [
-    "ACP",
-    "UCP",
-    "x402",
-    "MPP",
-    "AP2",
-    "a2a-x402"
-  ],
+  "rails": ["ACP", "UCP", "x402", "MPP", "AP2", "a2a-x402"],
   "reference_consumer": "packages/agent/test/conformance-payments-profile-detection.test.ts",
   "cases": [
     {
@@ -38,8 +28,18 @@
       "rail": "acp"
     },
     {
+      "file": "cases/acp--terminal-order-webhook.json",
+      "name": "terminal-order-webhook",
+      "rail": "acp"
+    },
+    {
       "file": "cases/ucp--completion-with-ucp-envelope.json",
       "name": "completion-with-ucp-envelope",
+      "rail": "ucp"
+    },
+    {
+      "file": "cases/ucp--async-completion-not-detected.json",
+      "name": "async-completion-not-detected",
       "rail": "ucp"
     },
     {
@@ -78,6 +78,11 @@
       "rail": "mpp"
     },
     {
+      "file": "cases/mpp--mcp-receipt-metadata.json",
+      "name": "mcp-receipt-metadata",
+      "rail": "mpp"
+    },
+    {
       "file": "cases/ap2--payment-receipt-decoded.json",
       "name": "payment-receipt-decoded",
       "rail": "ap2"
@@ -94,7 +99,7 @@
     },
     {
       "file": "cases/ap2--v01-payment-mandate-fallback.json",
-      "name": "v01-payment-mandate-fallback",
+      "name": "v01-payment-mandate-not-detected",
       "rail": "ap2"
     },
     {
@@ -115,12 +120,12 @@
     {
       "file": "cases/heuristic--tool-name-fallback.json",
       "name": "tool-name-fallback",
-      "rail": "heuristic"
+      "rail": "none"
     },
     {
       "file": "cases/heuristic--no-signal-no-detection.json",
       "name": "no-signal-no-detection",
-      "rail": "heuristic"
+      "rail": "none"
     }
   ]
 }

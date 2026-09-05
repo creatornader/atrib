@@ -17,7 +17,8 @@ a2a-x402 extension.
 - a2a-x402: https://github.com/google-agentic-commerce/a2a-x402
   - Spec: `spec/v0.1/spec.md`
 
-**Verified:** 2026-05-27 for source links. Synthetic VI corpus generated 2026-05-28.
+**Verified:** 2026-09-02 for source links and the current AP2 v0.2 repository.
+Synthetic VI corpus generated 2026-05-28.
 
 ## What AP2 actually is
 
@@ -32,8 +33,8 @@ The detector accepts:
 - signed receipt JWT fields in the AP2 sample result envelopes, such as
   `payment_receipt` or `checkout_receipt`, when the envelope has
   `status: "success"`;
-- the older v0.1 `ap2.mandates.PaymentMandate` DataPart shape as a
-  compatibility fallback.
+- the older v0.1 `ap2.mandates.PaymentMandate` DataPart shape as a negative
+  authorization-only fixture. It does not emit a transaction.
 
 The detector rejects AP2 mandate-only payloads, including `vct: "mandate.payment.1"`
 and `vct: "mandate.checkout.1"`. Those payloads
@@ -63,12 +64,12 @@ lives at [`spec/conformance/ap2-vi-crypto/`](../../../../../spec/conformance/ap2
 
 ## What a2a-x402 is
 
-a2a-x402 is the AP2 extension for crypto payments via x402. When the
+a2a-x402 is an A2A extension for crypto payments via x402. When the
 merchant agent settles a payment on-chain, it returns an A2A task with
 `status.message.metadata["x402.payment.status"] === "payment-completed"`
 and a `x402.payment.receipts` array containing at least one entry with
-`success: true`. atrib reports this as `protocol: 'AP2'` since a2a-x402
-is the AP2 crypto payment path.
+`success: true`. atrib reports this as `protocol: 'a2a-x402'` so the
+extension remains distinguishable from native AP2 receipts.
 
 ## Files
 
@@ -106,7 +107,8 @@ is the AP2 crypto payment path.
   generation.
 - `payment_mandate_message.json`: Real example AP2 PaymentMandate Message
   from the v0.1 `docs/a2a-extension.md` compatibility path. Detection
-  signal: `parts[].data["ap2.mandates.PaymentMandate"]` exists.
+  signal: none. The mandate is authorization input and is not a transaction
+  completion signal.
 - `a2a_x402_payment_completed.json`: Real example a2a-x402 payment-completed
   task message from `spec/v0.1/spec.md`. Detection signal:
   `status.message.metadata["x402.payment.status"] === "payment-completed"`
@@ -122,6 +124,5 @@ fake values. Shape is exact to the published examples.
 The original atrib spec [§1.7.5](../../../../../atrib-spec.md#175-ap2-and-a2a-x402) and the v1 SDK both assumed AP2 would use
 W3C Verifiable Credentials with `type: "VerifiableCredential"` and
 `credentialSubject.type: "PaymentMandate"`. AP2 v0.2 uses SD-JWT Mandates,
-but the current transaction detector still does not treat mandate payloads
-as receipts. The VC string-form check remains as a backward-compatible
-fallback for older research forks only.
+and the current transaction detector does not treat mandate payloads as
+receipts. Legacy VC mandate envelopes are also authorization input only.
