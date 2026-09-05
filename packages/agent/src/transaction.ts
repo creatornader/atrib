@@ -4,33 +4,36 @@
  * Transaction detection (§5.4.5).
  *
  * Detects transaction events from response shapes for ACP, UCP, x402, MPP,
- * AP2, and heuristic tool name matching.
+ * AP2, and the a2a-x402 extension. A caller may still provide a custom
+ * heuristic detector, but the default detector requires published completion
+ * evidence.
  *
- * Protocol shape sources (verified 2026-05-27):
+ * Protocol shape sources (verified 2026-09-02 against current upstream sources):
  * - ACP: github.com/agentic-commerce-protocol/agentic-commerce-protocol
  *        rfcs/rfc.agentic_checkout.md
- * - UCP: github.com/universal-commerce-protocol/ucp
- *        docs/specification/checkout-rest.md (version 2026-01-11)
+ * - UCP: github.com/Universal-Commerce-Protocol/ucp
+ *        v2026-08-25 checkout response and schema
  * - AP2: github.com/google-agentic-commerce/AP2 (v0.2). Current AP2 uses
  *        SD-JWT Mandates for authorization and signed CheckoutReceipt /
  *        PaymentReceipt JWTs for acceptance. Detection fires on successful
- *        receipt shapes, not mandate-only payloads. The legacy v0.1 A2A
- *        DataPart key `ap2.mandates.PaymentMandate` remains supported as a
- *        compatibility fallback.
+ *        receipt shapes, not mandate-only payloads. Mandates, including the
+ *        legacy v0.1 A2A DataPart form, are authorization inputs and never
+ *        completion signals.
  * - a2a-x402: github.com/google-agentic-commerce/a2a-x402. extension that
  *        layers x402 crypto payments over A2A. Detection signal is
  *        `status.message.metadata["x402.payment.status"] === "payment-completed"`
  *        with at least one `success: true` entry in
  *        `status.message.metadata["x402.payment.receipts"]`. Both shapes are
- *        reported as `protocol: 'AP2'` since a2a-x402 is the AP2 crypto path.
- * - x402: github.com/coinbase/x402. response header `PAYMENT-RESPONSE` (v2)
+ *        reported as `protocol: 'a2a-x402'` so the extension identity is
+ *        preserved in emitted observations.
+ * - x402: github.com/x402-foundation/x402. response header `PAYMENT-RESPONSE` (v2)
  *        or `X-PAYMENT-RESPONSE` (v1 legacy). Value is base64-encoded JSON
  *        with shape { success: bool, transaction, network, payer, requirements }.
  * - MPP: IETF draft-ryan-httpauth-payment-01 ("The 'Payment' HTTP Authentication
  *        Scheme"), per Section 5.3. Response header is `Payment-Receipt` on a
  *        200 success after the client retries with Authorization: Payment.
- *        Value is base64url-nopad JSON with required field { status: "success",
- *        method, timestamp, reference }.
+ *        MCP carries the native receipt object at result._meta under
+ *        `org.paymentauth/receipt`.
  *
  * x402 and MPP are different protocols that use different headers. Earlier
  * versions of this code conflated them on a fictitious shared `Payment-Receipt`
@@ -40,7 +43,7 @@
 import canonicalize from 'canonicalize'
 import { hexEncode, sha256 } from '@atrib/mcp'
 
-export type TransactionProtocol = 'ACP' | 'UCP' | 'x402' | 'MPP' | 'AP2' | 'heuristic'
+export type TransactionProtocol = 'ACP' | 'UCP' | 'x402' | 'MPP' | 'AP2' | 'a2a-x402' | 'heuristic'
 
 export interface TransactionDetection {
   detected: boolean
@@ -49,15 +52,16 @@ export interface TransactionDetection {
    * For Path 2 content_id derivation (§5.4.5):
    * - ACP/UCP: the order permalink URL from the response (if present)
    * - x402/MPP: not available here (caller must use HTTP endpoint URL)
-   * - AP2: usually null because AP2 identity is carried in `contentId`
+   * - AP2/a2a-x402: usually null because receipt identity is carried in
+   *   `contentId`
    * - Heuristic: not available here (caller uses MCP server URL)
    */
   checkoutUrl: string | null
   /**
-   * Optional protocol-specific content_id. AP2 can expose stable receipt or
-   * mandate identifiers directly in the response; the detector hashes the
-   * canonical identity ladder and returns the final content_id here. Null
-   * means the caller should keep the generic §5.4.5 fallback.
+   * Optional protocol-specific content_id. AP2, a2a-x402, and MPP MCP can
+   * expose stable receipt identifiers directly in the response; the detector
+   * hashes the identity and returns the final content_id here. Null means the
+   * caller should keep the generic §5.4.5 fallback.
    */
   contentId: string | null
 }
@@ -68,15 +72,6 @@ export type TransactionDetector = (
   response: unknown,
   headers?: Record<string, string | undefined>,
 ) => TransactionDetection
-
-const HEURISTIC_KEYWORDS = [
-  'create_order',
-  'complete_checkout',
-  'process_payment',
-  'place_order',
-  'purchase',
-  'checkout',
-]
 
 const AP2_PAYMENT_RECEIPT_KEYS = ['ap2.PaymentReceipt', 'payment_receipt'] as const
 const AP2_CHECKOUT_RECEIPT_KEYS = ['ap2.CheckoutReceipt', 'checkout_receipt'] as const
@@ -123,12 +118,6 @@ function ap2ContentId(source: string, fields: Record<string, string>): string | 
     source,
     fields,
   })
-  if (!canonical) return null
-  return sha256Utf8(canonical)
-}
-
-function ap2ObjectHash(value: unknown): string | null {
-  const canonical = canonicalize(value)
   if (!canonical) return null
   return sha256Utf8(canonical)
 }
@@ -271,12 +260,6 @@ function findAp2V02ReceiptContentId(value: unknown): string | null {
   return best?.contentId ?? null
 }
 
-function legacyAp2MandateContentId(value: unknown): string | null {
-  const mandateHash = ap2ObjectHash(value)
-  if (!mandateHash) return null
-  return ap2ContentId('legacy_payment_mandate', { mandate_hash: mandateHash })
-}
-
 function a2aX402ContentId(receipts: unknown): string | null {
   if (!Array.isArray(receipts)) return null
   for (const receipt of receipts) {
@@ -286,7 +269,66 @@ function a2aX402ContentId(receipts: unknown): string | null {
     const fields: Record<string, string> = { transaction }
     if (isNonEmptyString(receipt['network'])) fields['network'] = receipt['network']
     if (isNonEmptyString(receipt['payer'])) fields['payer'] = receipt['payer']
-    return ap2ContentId('a2a_x402_receipt', fields)
+    const canonical = canonicalize({
+      protocol: 'a2a-x402',
+      version: 1,
+      source: 'x402_receipt',
+      fields,
+    })
+    return canonical ? sha256Utf8(canonical) : null
+  }
+  return null
+}
+
+interface MppMcpReceipt {
+  method: string
+  timestamp: string
+  challengeId: string
+  reference?: string
+}
+
+const RFC3339_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
+
+function isMppMcpReceipt(value: unknown): value is MppMcpReceipt {
+  if (!isRecord(value)) return false
+  if (value['status'] !== 'success') return false
+  if (!isNonEmptyString(value['method']) || !isNonEmptyString(value['challengeId'])) return false
+  if (
+    !isNonEmptyString(value['timestamp']) ||
+    !RFC3339_TIMESTAMP.test(value['timestamp']) ||
+    Number.isNaN(Date.parse(value['timestamp']))
+  ) {
+    return false
+  }
+  return value['reference'] === undefined || isNonEmptyString(value['reference'])
+}
+
+function mppMcpContentId(receipt: MppMcpReceipt): string | null {
+  const fields: Record<string, string> = {
+    method: receipt.method,
+    challenge_id: receipt.challengeId,
+    timestamp: receipt.timestamp,
+  }
+  if (receipt.reference !== undefined) fields['reference'] = receipt.reference
+  const canonical = canonicalize({
+    protocol: 'MPP',
+    version: 1,
+    source: 'mcp_receipt',
+    fields,
+  })
+  return canonical ? sha256Utf8(canonical) : null
+}
+
+function findMppMcpReceipt(response: Record<string, unknown>): MppMcpReceipt | null {
+  const metadataCandidates: Record<string, unknown>[] = []
+  if (isRecord(response['_meta'])) metadataCandidates.push(response['_meta'])
+  const nestedResult = response['result']
+  if (isRecord(nestedResult) && isRecord(nestedResult['_meta'])) {
+    metadataCandidates.push(nestedResult['_meta'])
+  }
+  for (const metadata of metadataCandidates) {
+    const receipt = metadata['org.paymentauth/receipt']
+    if (isMppMcpReceipt(receipt)) return receipt
   }
   return null
 }
@@ -303,27 +345,40 @@ export function detectTransaction(
 
   // ACP / UCP completion response shape:
   //   { id: "...", status: "completed", order: { id, permalink_url? }, ... }
-  // UCP additionally has a top-level `ucp: { version, capabilities }` envelope.
+  // UCP also has a top-level `ucp` envelope with a versioned metadata
+  // object, including capability and payment-handler maps in v2026-08-25.
   // Both shapes are produced by POST /checkout_sessions/{id}/complete (ACP)
   // or POST /checkout-sessions/{id}/complete (UCP).
   if (resp) {
     const status = resp['status'] as string | undefined
     const order = resp['order'] as Record<string, unknown> | undefined
-    if (status === 'completed' && order && typeof order['id'] === 'string') {
-      const ucpEnvelope = resp['ucp'] as Record<string, unknown> | undefined
-      const isUcp = !!ucpEnvelope && typeof ucpEnvelope['version'] === 'string'
+    const ucpEnvelope = resp['ucp'] as Record<string, unknown> | undefined
+    const isUcp = !!ucpEnvelope && typeof ucpEnvelope['version'] === 'string'
+    if (status === 'completed' && order && isNonEmptyString(order['id'])) {
       const checkoutUrl =
         typeof order['permalink_url'] === 'string' ? (order['permalink_url'] as string) : null
       return detection(isUcp ? 'UCP' : 'ACP', checkoutUrl)
     }
 
-    // ACP webhook event shapes (server → merchant): order_create / order_update.
-    //   { type: "order_create", data: { type: "order", checkout_session_id, permalink_url, status, refunds } }
+    // A recognized UCP response owns the checkout classification decision.
+    // In particular, v2026-08-25 uses `complete_in_progress` for asynchronous
+    // completion before an order exists. Do not let a generic tool-name
+    // heuristic turn that nonterminal response into a transaction.
+    if (isUcp) return noDetection()
+
+    // ACP webhook events are lifecycle notifications. Only a terminal Order
+    // with a stable id closes a transaction. Current ACP schemas use
+    // `status: "completed"` for that terminal state.
     if (resp['type'] === 'order_create' || resp['type'] === 'order_update') {
       const data = resp['data'] as Record<string, unknown> | undefined
-      const checkoutUrl =
-        typeof data?.['permalink_url'] === 'string' ? (data['permalink_url'] as string) : null
-      return detection('ACP', checkoutUrl)
+      if (
+        data?.['type'] === 'order' &&
+        data['status'] === 'completed' &&
+        isNonEmptyString(data['id'])
+      ) {
+        const checkoutUrl = isNonEmptyString(data['permalink_url']) ? data['permalink_url'] : null
+        return detection('ACP', checkoutUrl)
+      }
     }
   }
 
@@ -361,33 +416,22 @@ export function detectTransaction(
   // - { status: "success", checkout_receipt: "<signed JWT>" }
   // - { parts: [{ kind: "data", data: { "ap2.PaymentReceipt": { status: "Success", ... } } }] }
   if (resp) {
+    const mppReceipt = findMppMcpReceipt(resp)
+    if (isMppMcpReceipt(mppReceipt)) {
+      return detection('MPP', null, mppMcpContentId(mppReceipt))
+    }
+  }
+
+  if (resp) {
     const ap2Content = findAp2V02ReceiptContentId(resp)
     if (ap2Content) {
       return detection('AP2', null, ap2Content)
     }
   }
 
-  // AP2 v0.1 compatibility. PaymentMandate Message inside an A2A DataPart.
-  // Source: github.com/google-agentic-commerce/ap2 docs/specification.md
-  // Shape: { ..., parts: [{ kind: "data", data: { "ap2.mandates.PaymentMandate": {...} } }, ...] }
+  // AP2 mandates in every version are authorization inputs, never completion
+  // signals. Do not add mandate-only compatibility fallbacks here.
   if (resp) {
-    const parts = resp['parts']
-    if (Array.isArray(parts)) {
-      for (const part of parts) {
-        if (part && typeof part === 'object') {
-          const data = (part as Record<string, unknown>)['data']
-          if (
-            data &&
-            typeof data === 'object' &&
-            'ap2.mandates.PaymentMandate' in (data as Record<string, unknown>)
-          ) {
-            const mandate = (data as Record<string, unknown>)['ap2.mandates.PaymentMandate']
-            return detection('AP2', null, legacyAp2MandateContentId(mandate))
-          }
-        }
-      }
-    }
-
     // a2a-x402 extension. payment-completed via A2A task status metadata.
     // Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
     // Shape: { kind: "task", status: { message: { metadata: { "x402.payment.status": "payment-completed", "x402.payment.receipts": [{success, transaction, ...}] } } } }
@@ -404,43 +448,16 @@ export function detectTransaction(
             (r) => isRecord(r) && (r as Record<string, unknown>)['success'] === true,
           )
           if (accepted) {
-            return detection('AP2', null, a2aX402ContentId(receipts))
+            return detection('a2a-x402', null, a2aX402ContentId(receipts))
           }
         }
       }
     }
-
-    // Legacy: W3C Verifiable Credential PaymentMandate. AP2 v0.1 does NOT use
-    // VCs, but research forks and earlier drafts may. Kept as a backward-
-    // compatible fallback. Accepts both VC v2 array form and v1 string form.
-    const respType = resp['type']
-    const credentialSubject = resp['credentialSubject'] as Record<string, unknown> | undefined
-    const subjectType = credentialSubject?.['type']
-
-    const isVcArray =
-      Array.isArray(respType) &&
-      respType.includes('VerifiableCredential') &&
-      respType.some((t) => typeof t === 'string' && /paymentmandate/i.test(t))
-    const isVcStringLegacy = respType === 'VerifiableCredential'
-
-    const subjectIsPaymentMandate =
-      (typeof subjectType === 'string' && /paymentmandate/i.test(subjectType)) ||
-      (Array.isArray(subjectType) &&
-        subjectType.some((t) => typeof t === 'string' && /paymentmandate/i.test(t)))
-
-    // For v2 array form: the PaymentMandate type is in the type array itself,
-    // so no credentialSubject check needed. For v1 string form: type is just
-    // "VerifiableCredential" so we need credentialSubject to confirm it's a PaymentMandate.
-    if (isVcArray || (isVcStringLegacy && subjectIsPaymentMandate)) {
-      return detection('AP2', null, legacyAp2MandateContentId(resp))
-    }
   }
 
-  // Heuristic: tool name keywords (last resort)
-  const lowerName = toolName.toLowerCase()
-  if (HEURISTIC_KEYWORDS.some((k) => lowerName.includes(k))) {
-    return detection('heuristic')
-  }
+  // Tool names are not completion evidence. Caller-provided detectors can
+  // still return `heuristic`, but the default detector never does so.
+  void toolName
 
   return noDetection()
 }

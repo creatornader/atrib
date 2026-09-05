@@ -3,7 +3,7 @@
   "corpus": "payments-profile/detection",
   "rail": "acp",
   "profile_section": "2.1",
-  "description": "ACP order_update webhook event (post-creation state change). Detected as ACP.",
+  "description": "An ACP order_update webhook in the non-terminal shipped state is a lifecycle notification, not completion evidence.",
   "input": {
     "tool_name": "webhook_handler",
     "response": {
@@ -23,8 +23,7 @@
     }
   },
   "expected": {
-    "detected": true,
-    "protocol": "ACP",
-    "checkout_url": "https://www.testshop.com/orders/checkout_session_123"
+    "detected": false,
+    "protocol": null
   }
 }

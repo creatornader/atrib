@@ -1,10 +1,10 @@
 # atrib Payments Profile
 
-**payments-profile v1.0.0**
+**payments-profile v1.1.0**
 
 Editor: Nader Helmy
 
-This profile defines the payment-rail layer of the atrib protocol: per-rail transaction detection hooks, the SDK detection contract, the attribution policy format, the calculation algorithm, the settlement recommendation document, settlement verification, and the AP2 / Verifiable Intent evidence-check catalog. The material relocated here from the core specification under [D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core); every vacated core section keeps a stable tombstone anchor that points at its new home.
+This profile defines the payment-related transaction and settlement layer of the atrib protocol: completion-detection hooks for payment, commerce, and agent-to-agent surfaces, the SDK detection contract, the attribution policy format, the calculation algorithm, the settlement recommendation document, settlement verification, and the AP2 / Verifiable Intent evidence-check catalog. The material relocated here from the core specification under [D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core); every vacated core section keeps a stable tombstone anchor that points at its new home.
 
 The core protocol accommodates payments through exactly three retained elements:
 
@@ -37,7 +37,20 @@ A payments-capable deployment is core plus this profile. Rail churn (header rena
 
 Requirements language follows core [§1.1](../atrib-spec.md#11-normative-requirements-language) (RFC 2119). Normative statements in this profile bind implementations that claim payments-profile conformance. Core conformance does not require this profile: a core-only SDK never classifies a response as a transaction and never blocks, per the degradation contract ([§5.8](../atrib-spec.md#58-degradation-contract)).
 
-**Supported rails.** This profile detects six payment protocols: ACP, UCP, x402, MPP, AP2, and a2a-x402. This enumeration is the canonical source for the "six payment protocols" count used across repository documentation. atrib reports a2a-x402 detections as `protocol: 'AP2'` because a2a-x402 is the AP2 crypto path ([§2.5](#25-ap2-and-a2a-x402)); the enumeration counts it separately because it has its own detection rule.
+**Detection cases.** This profile defines six payment-related completion-detection cases: ACP, UCP, x402, MPP, AP2, and a2a-x402. This enumeration is the canonical source for the payments-profile detection corpus, not a market-wide list of payment protocols. atrib preserves a2a-x402 as `protocol: 'a2a-x402'` because it is an A2A extension with its own published completion condition ([§2.5](#25-ap2-and-a2a-x402)).
+
+**First-class support boundary.** In this profile, support means recognizing a
+published completion signal in a response or protocol message and emitting a
+core `transaction` record. The public packages do not implement payment
+methods, wallets, facilitators, PSP processing, or settlement execution.
+
+| Capability | Current public support |
+|---|---|
+| Runtime completion detection | Six detection cases listed above, shipped in `@atrib/agent` and exposed through `@atrib/agent/payments`. |
+| AP2 / Verifiable Intent evidence | `@atrib/verify` checks supplied AP2 receipts, receipt JWTs, VI credentials, mandate constraints, and bindings. |
+| x401 authorization evidence | `@atrib/verify` treats x401 as verifier-side authorization evidence, never as payment completion. |
+| Protocol-specific payment execution | Out of scope. atrib records and verifies evidence around a host-owned payment flow. |
+| Protocol-wide market measurement | Out of scope for public packages. A protocol adapter is a separate ecosystem-observation project. |
 
 **Section map.** Except for [§1](#1-scope-and-position-in-the-protocol), [§12](#12-evidence-profiles), [§14](#14-conformance), and parts of [§13](#13-scope-boundaries), every section of this profile relocated verbatim from the core spec:
 
@@ -64,7 +77,7 @@ Requirements language follows core [§1.1](../atrib-spec.md#11-normative-require
 
 The core fact/policy separation ([§3.6](../atrib-spec.md#36-implementation-notes)) is what makes this profile detachable. The [§3](../atrib-spec.md#3-graph-query-interface) graph is a pure fact layer that never returns weighted data; this profile's policy and calculation layer is a consumer of that graph, never a producer of facts. Re-attaching or re-merging the profile later requires zero change to any signed record, log entry, edge derivation rule, or deployed service.
 
-**Versioning.** This document versions as `payments-profile vMAJOR.MINOR.PATCH`, independent of the core spec. Adding or changing a rail's detection hook is a MINOR change. Removing a rail or changing calculation semantics is a MAJOR change. Editorial fixes are PATCH.
+**Versioning.** This document versions as `payments-profile vMAJOR.MINOR.PATCH`, independent of the core spec. Adding or changing a payment-related surface's detection hook is a MINOR change. Removing a detection case or changing calculation semantics is a MAJOR change. Editorial fixes are PATCH.
 
 **Packaging.** Detection currently ships inside `@atrib/agent` and the settlement verifier surface inside `@atrib/verify`. The subpath split (`@atrib/agent/payments` and `@atrib/verify/payments` with root re-exports) and any later standalone package follow the schedule in [D147](../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). This document is the normative home for the contracts regardless of packaging.
 
@@ -72,11 +85,11 @@ The core fact/policy separation ([§3.6](../atrib-spec.md#36-implementation-note
 
 ## §2 Transaction Detection Hooks
 
-The attribution chain is complete when a transaction event closes the loop, connecting the tool calls that contributed to the commerce session to the actual moment of purchase. This section defines how atrib attaches to each supported commerce protocol.
+The attribution chain is complete when a transaction event closes the loop, connecting the tool calls that contributed to the commerce session to the actual moment of purchase. This section defines how atrib attaches to each supported payment-related surface.
 
-In every case, the linking mechanism is the same: the `context_id` of the agent session must be embedded in the transaction metadata when the checkout is initiated, so that the transaction event webhook can be matched back to the attribution chain.
+In every case, the linking mechanism is the same: the `context_id` of the agent session must travel in request, response, or protocol metadata when the flow begins, so that the completion event can be matched back to the attribution chain.
 
-When a hook fires, the emitted record is a core `transaction` record. Its format, signing, cross-attestation, and log submission are core-normative ([§1.2](../atrib-spec.md#12-the-attribution-record), [§1.7.6](../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records), [§5.3.5](../atrib-spec.md#535-log-submission)); this profile defines only what counts as a detection signal per rail.
+When a hook fires, the emitted record is a core `transaction` record. Its format, signing, cross-attestation, and log submission are core-normative ([§1.2](../atrib-spec.md#12-the-attribution-record), [§1.7.6](../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records), [§5.3.5](../atrib-spec.md#535-log-submission)); this profile defines only what counts as a detection signal per supported surface.
 
 ### 2.1 ACP (Agentic Commerce Protocol)
 
@@ -130,19 +143,27 @@ The server-to-merchant order webhook events use snake_case event types, NOT dot-
 }
 ```
 
-Detection MUST match all three shapes (completion response, `order_create`, `order_update`).
+Detection MUST match the completion response. An ACP webhook event MUST be
+detected only when its full Order payload carries the terminal `status:
+"completed"` and a non-empty stable `id`. Non-terminal `order_create` and
+`order_update` lifecycle notifications MUST NOT emit transaction records.
 
 ### 2.2 UCP (Universal Commerce Protocol)
 
-UCP is the open standard published at `github.com/universal-commerce-protocol/ucp`. As of UCP version `2026-01-11`, the on-wire shape of a UCP checkout completion response is identical to ACP's, with one structural addition: a top-level `ucp` envelope carrying the protocol version and capability list. Detection MUST therefore use the presence of `ucp.version` to distinguish UCP from ACP when both produce a `status: "completed"` payload.
+UCP is the open standard published at `github.com/universal-commerce-protocol/ucp`. The current released snapshot is [v2026-08-25](https://github.com/Universal-Commerce-Protocol/ucp/releases/tag/v2026-08-25). Its synchronous checkout completion response retains `status: "completed"` and an `order` object with a string `id`, while the top-level `ucp` envelope carries the current version and capability or payment-handler metadata. Detection MUST use the presence of `ucp.version` to distinguish UCP from ACP when both produce a completed checkout shape. An asynchronous `complete_in_progress` response has no order and is not a completed transaction event.
 
 ```jsonc
 // POST /checkout-sessions/{id}/complete success response (UCP)
 {
   "ucp": {
     // distinguishes UCP from ACP
-    "version": "2026-01-11",
-    "capabilities": [{ "name": "dev.ucp.shopping.checkout", "version": "2026-01-11" }],
+    "version": "2026-08-25",
+    "capabilities": {
+      "dev.ucp.shopping.checkout": [{ "version": "2026-08-25" }]
+    },
+    "payment_handlers": {
+      "dev.ucp.common.payment": [{ "version": "2026-08-25", "id": "handler_1" }]
+    },
   },
   "id": "chk_123456789",
   "status": "completed", // detection signal (same as ACP)
@@ -161,7 +182,7 @@ UCP does not yet expose a documented free-form metadata field for arbitrary agen
 
 ### 2.3 x402
 
-x402 is the Coinbase open payment protocol published at `github.com/coinbase/x402`. It uses HTTP 402 / 200 request-response cycles. The transaction event is the HTTP 200 response containing a **`PAYMENT-RESPONSE`** header (x402 v2), or the legacy **`X-PAYMENT-RESPONSE`** header (x402 v1, deprecated per RFC 6648 but still in deployment). Detection MUST accept both names case-insensitively.
+x402 is the open payment protocol maintained by the [x402 Foundation](https://github.com/x402-foundation/x402). It uses HTTP 402 / 200 request-response cycles. The transaction event is the HTTP 200 response containing a **`PAYMENT-RESPONSE`** header (x402 v2), or the legacy **`X-PAYMENT-RESPONSE`** header (x402 v1, deprecated per RFC 6648 but still in deployment). Detection MUST accept both names case-insensitively.
 
 The header value is base64-encoded JSON containing a `SettlementResponse` object: `{ success, transaction, network, payer, requirements }`. atrib treats header presence as the on-wire detection signal; the body is not decoded for detection purposes (decoding is appropriate when extracting `transaction` or `payer` for content_id derivation in higher-fidelity downstream tooling).
 
@@ -188,7 +209,16 @@ Content-Type: application/json
 
 MPP is a separate protocol from x402, also built on HTTP 402, formally specified in IETF `draft-ryan-httpauth-payment-01` ("The 'Payment' HTTP Authentication Scheme") authored by engineers from Tempo Labs and Stripe and launched in March 2026. MPP uses the standard HTTP authentication scheme with `WWW-Authenticate: Payment` challenges and `Authorization: Payment` credentials.
 
-The transaction event is the HTTP 200 response containing a **`Payment-Receipt`** header (per section 5.3 of the draft). The header value is base64url-nopad JSON with the required fields `{ status: "success", method, timestamp, reference }`. The draft specifies: _"Servers MUST NOT return a Payment-Receipt header on error responses,"_ so header presence is a reliable detection signal.
+The HTTP transaction event is the HTTP 200 response containing a **`Payment-Receipt`** header (per section 5.3 of the draft). The header value is base64url-nopad JSON with the required fields `{ status: "success", method, timestamp, reference }`. The draft specifies: _"Servers MUST NOT return a Payment-Receipt header on error responses,"_ so header presence is a reliable detection signal.
+
+MPP also defines a JSON-RPC/MCP transport. A successful paid `tools/call`
+result carries a native receipt at
+`result._meta["org.paymentauth/receipt"]` with `status: "success"`, non-empty
+`method` and `challengeId`, and an RFC 3339 `timestamp`. `reference` is
+optional on this transport. The detector records structural receipt presence
+as declared completion evidence. It does not verify a payment method or
+settlement rail. `@atrib/verify/payments` exposes structural inspection for
+HTTP objects, HTTP header values, and MCP results.
 
 **`PAYMENT-RESPONSE` (x402) and `Payment-Receipt` (MPP) are different headers for different protocols.** Earlier drafts of this specification incorrectly attributed `Payment-Receipt` to both protocols; this has been corrected after verification against the published x402 docs and the IETF MPP draft.
 
@@ -207,8 +237,9 @@ Cache-Control: private                      // required by draft §5.3
 Content-Type: application/json
 
 // For MCP transport (draft-payment-transport-mcp-00):
-// The context_id travels in params._meta as defined in §1.5.4
-// The MPP payment-completed message carries it in the task metadata.
+// The context_id travels in params._meta as defined in §1.5.4.
+// The paid result carries the receipt at:
+// result._meta["org.paymentauth/receipt"]
 ```
 
 ### 2.5 AP2 and a2a-x402
@@ -228,7 +259,6 @@ For Path 2 agent-side transaction records, AP2 implementations SHOULD derive `co
 2. compact payment receipt JWT: `{ "protocol": "AP2", "version": 1, "source": "payment_receipt_jwt", "fields": { "jwt_hash": "sha256:<compact-jwt-sha256>" } }`;
 3. decoded CheckoutReceipt: `{ "protocol": "AP2", "version": 1, "source": "checkout_receipt", "fields": { "iss", "reference", "order_id" } }`;
 4. compact checkout receipt JWT: `{ "protocol": "AP2", "version": 1, "source": "checkout_receipt_jwt", "fields": { "jwt_hash": "sha256:<compact-jwt-sha256>" } }`;
-5. AP2 v0.1 or legacy VC PaymentMandate fallback: `{ "protocol": "AP2", "version": 1, "source": "legacy_payment_mandate", "fields": { "mandate_hash": "sha256:<jcs-mandate-sha256>" } }`.
 
 PaymentReceipt forms take precedence over CheckoutReceipt forms when both are present. Decoded receipt fields take precedence over compact JWT fields. If no stable AP2 identity is present, Path 2 falls back to the generic AP2 rule in [§3](#3-sdk-transaction-detection): use the MCP server URL and `"checkout"`. See [D095](../DECISIONS.md#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder).
 
@@ -282,10 +312,10 @@ Implementations SHOULD embed the `context_id` in the agent protocol envelope whe
 }
 ```
 
-Older AP2 v0.1 deployments used an A2A v0.3 (Agent2Agent) Message with a data part whose `data` object contains the key `ap2.mandates.PaymentMandate`. Implementations MAY keep this compatibility fallback. If they do, they MUST NOT detect `IntentMandate` or `CartMandate`.
+Older AP2 v0.1 deployments used an A2A v0.3 (Agent2Agent) Message with a data part whose `data` object contains the key `ap2.mandates.PaymentMandate`. That payload is authorization input, not completion evidence, and MUST NOT emit a transaction. The same rule applies to legacy W3C VC envelopes carrying PaymentMandate types.
 
 ```jsonc
-// AP2 v0.1 compatibility fallback
+// AP2 v0.1 mandate-only negative (never a detection signal)
 {
   "messageId": "b5951b1a-8d5b-4ad3-a06f-92bf74e76589",
   "contextId": "sample-payment-context",
@@ -296,7 +326,7 @@ Older AP2 v0.1 deployments used an A2A v0.3 (Agent2Agent) Message with a data pa
       "kind": "data",
       "data": {
         "ap2.mandates.PaymentMandate": {
-          // detection signal
+          // authorization input only
           "payment_details": {
             "cart_mandate": "<user-signed hash>",
             "payment_request_id": "order_shoes_123",
@@ -314,7 +344,7 @@ Older AP2 v0.1 deployments used an A2A v0.3 (Agent2Agent) Message with a data pa
 }
 ```
 
-**a2a-x402** (`github.com/google-agentic-commerce/a2a-x402`) is the AP2 extension for crypto payments via x402. When the merchant agent settles a payment on-chain it returns an A2A task whose `status.message.metadata` carries `x402.payment.status: "payment-completed"` and a `x402.payment.receipts` array with at least one entry where `success: true`. atrib reports this as `protocol: 'AP2'` because a2a-x402 is the AP2 crypto path; it is not a separate protocol.
+**a2a-x402** (`github.com/google-agentic-commerce/a2a-x402`) is an extension for crypto payments via x402. When the merchant agent settles a payment on-chain it returns an A2A task whose `status.message.metadata` carries `x402.payment.status: "payment-completed"` and a `x402.payment.receipts` array with at least one entry where `success: true`. atrib reports this as `protocol: 'a2a-x402'`, preserving the extension identity.
 
 ```jsonc
 // a2a-x402 payment-completed task message
@@ -347,9 +377,15 @@ Older AP2 v0.1 deployments used an A2A v0.3 (Agent2Agent) Message with a data pa
 
 Detection MUST require BOTH the `payment-completed` status AND at least one receipt with `success: true`. A task that says "payment-completed" but contains only `success: false` receipts represents a failed settlement and is NOT a transaction event.
 
-For Path 2 `content_id`, an a2a-x402 success receipt MAY use the same [D095](../DECISIONS.md#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder) AP2 identity envelope with `source: "a2a_x402_receipt"` and fields `{ transaction, network?, payer? }` when the receipt exposes a transaction id. If no transaction id is present, use the generic AP2 fallback in [§3](#3-sdk-transaction-detection).
+For Path 2 `content_id`, an a2a-x402 success receipt uses a protocol-specific
+identity envelope with `protocol: "a2a-x402"`, `source: "x402_receipt"`, and
+fields `{ transaction, network?, payer? }` when the receipt exposes a
+transaction id. If no transaction id is present, use the generic server URL
+and `"checkout"` fallback in [§3](#3-sdk-transaction-detection).
 
-For backward compatibility with research forks of AP2 that may have implemented Payment Mandates as W3C Verifiable Credentials (matching the obsolete spec language), atrib's detector also accepts the legacy VC envelope shape:
+Legacy research forks may wrap Payment Mandates as W3C Verifiable Credentials.
+These are mandate-only authorization payloads and MUST NOT be accepted as
+completion signals:
 
 ```jsonc
 // Legacy / non-canonical: VC-wrapped PaymentMandate (research forks only)
@@ -366,7 +402,7 @@ For backward compatibility with research forks of AP2 that may have implemented 
 }
 ```
 
-Implementations MAY skip the v0.1 and legacy VC fallbacks if they target only AP2 v0.2 deployments.
+Implementations MUST wait for a published terminal receipt signal after either mandate form.
 
 ---
 
@@ -376,7 +412,7 @@ The middleware detects transaction events automatically from the response shapes
 
 ```
 function detectTransaction(toolName, response, headers):
-  // ACP / UCP: completion response with embedded order, OR ACP webhook event.
+  // ACP / UCP: completion response with embedded order.
   // Per [§2.1](#21-acp-agentic-commerce-protocol) and [§2.2](#22-ucp-universal-commerce-protocol), both protocols converged on the same shape; UCP
   // is distinguished by the top-level `ucp.version` envelope.
   if (response?.status === 'completed' && typeof response?.order?.id === 'string'):
@@ -386,7 +422,10 @@ function detectTransaction(toolName, response, headers):
       protocol: isUcp ? 'UCP' : 'ACP',
       checkoutUrl: response.order.permalink_url ?? null,
     }
-  if (response?.type === 'order_create' || response?.type === 'order_update'):
+  if ((response?.type === 'order_create' || response?.type === 'order_update')
+      && response?.data?.type === 'order'
+      && response?.data?.status === 'completed'
+      && nonEmptyString(response?.data?.id)):
     return {
       detected: true,
       protocol: 'ACP',
@@ -402,6 +441,12 @@ function detectTransaction(toolName, response, headers):
     return { detected: true, protocol: 'x402' }
   if (lower['payment-receipt']):
     return { detected: true, protocol: 'MPP' }
+  const mppReceipt = response?._meta?.['org.paymentauth/receipt']
+  if (mppReceipt?.status === 'success'
+      && nonEmptyString(mppReceipt?.method)
+      && nonEmptyString(mppReceipt?.challengeId)
+      && parseableRfc3339(mppReceipt?.timestamp)):
+    return { detected: true, protocol: 'MPP' }
 
   // AP2 v0.2: successful CheckoutReceipt or PaymentReceipt.
   // Source: google-agentic-commerce/AP2 receipt schemas and sample agents.
@@ -411,14 +456,6 @@ function detectTransaction(toolName, response, headers):
       || hasAp2SuccessEnvelopeWithReceiptJwt(response)):
     return { detected: true, protocol: 'AP2' }
 
-  // AP2 v0.1 compatibility: PaymentMandate Message inside an A2A v0.3 data part.
-  // Source: github.com/google-agentic-commerce/ap2 docs/specification.md v0.1
-  if (Array.isArray(response?.parts)):
-    for (part in response.parts):
-      if (typeof part?.data === 'object'
-          && 'ap2.mandates.PaymentMandate' in part.data):
-        return { detected: true, protocol: 'AP2' }
-
   // a2a-x402 extension: payment-completed via A2A task status metadata.
   // Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
   // Requires BOTH the payment-completed status AND a successful receipt.
@@ -426,26 +463,10 @@ function detectTransaction(toolName, response, headers):
   if (meta?.['x402.payment.status'] === 'payment-completed'
       && Array.isArray(meta?.['x402.payment.receipts'])
       && meta['x402.payment.receipts'].some(r => r?.success === true)):
-    return { detected: true, protocol: 'AP2' }
+    return { detected: true, protocol: 'a2a-x402' }
 
-  // Legacy / non-canonical: W3C VC envelope around a PaymentMandate
-  // (research forks only; AP2 v0.1 itself does NOT use W3C VCs).
-  // Accepts both v2 array form and v1 string form.
-  if (Array.isArray(response?.type)
-      && response.type.includes('VerifiableCredential')
-      && response.type.some(t => /paymentmandate/i.test(t))):
-    return { detected: true, protocol: 'AP2' }
-  if (response?.type === 'VerifiableCredential'
-      && /paymentmandate/i.test(response?.credentialSubject?.type ?? '')):
-    return { detected: true, protocol: 'AP2' }
-
-  // Tool name heuristic, last resort only, lower reliability
-  // Note: this local list is NOT the transactionTools init option from @atrib/mcp.
-  // transactionTools is merchant-configured; this list is agent-side pattern matching.
-  const heuristicKeywords = ['create_order', 'complete_checkout', 'process_payment',
-                              'place_order', 'purchase', 'checkout']
-  if (heuristicKeywords.some(k => toolName.toLowerCase().includes(k))):
-    return { detected: true, protocol: 'heuristic' }
+  // Mandates and tool names are not completion evidence. A caller-provided
+  // detector may still expose a separate heuristic observation path.
 
   return { detected: false }
 ```
@@ -456,15 +477,13 @@ When a transaction is detected, the middleware emits a `transaction` attribution
 
 **Path 2:** Agent-side detection (fallback).\*\* When the merchant has no atrib integration, the agent detects the transaction and emits the record itself. The record carries an agent `signers[]` entry over the [§1.7.6](../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) canonical transaction bytes. Until a counterparty signs the same bytes, verifiers still report `cross_attestation.missing: true`. The `content_id` is derived as follows by protocol:
 
-- **ACP / UCP:** use `order.permalink_url` from the completion response as the server_url, with tool_name `"checkout"`. If the response is an `order_create` / `order_update` webhook event, use `data.permalink_url`. If neither is available (e.g., the merchant returned a minimal completion without an order URL), fall back to the MCP server URL of the tool that was called.
+- **ACP / UCP:** use `order.permalink_url` from the completion response as the server_url, with tool_name `"checkout"`. For a terminal, stable-identity ACP webhook, use `data.permalink_url`. If neither is available, fall back to the MCP server URL of the tool that was called.
 
 - **x402:** use the HTTP endpoint URL that returned the `PAYMENT-RESPONSE` header as the server_url, with tool_name `"checkout"`.
 
-- **MPP:** use the HTTP endpoint URL that returned the `Payment-Receipt` header as the server_url, with tool_name `"checkout"`.
+- **MPP:** use the HTTP endpoint URL that returned the `Payment-Receipt` header or the MCP receipt metadata as the server_url, with tool_name `"checkout"`. An MCP receipt may supply a stable receipt-derived `content_id` directly.
 
-- **AP2 / a2a-x402:** if the detector returns a protocol-specific `content_id` from the AP2 receipt identity ladder in [§2.5](#25-ap2-and-a2a-x402), use it as-is. Otherwise use the MCP server URL of the tool that returned the successful AP2 receipt as the server_url, with tool_name `"checkout"`.
-
-- **Heuristic:** use the MCP server URL of the tool that was called as the server_url, with the actual tool_name. This is the weakest case; the content_id identifies the tool, not the checkout endpoint specifically.
+- **AP2 / a2a-x402:** if the detector returns a protocol-specific `content_id` from the receipt identity rules in [§2.5](#25-ap2-and-a2a-x402), use it as-is. Otherwise use the MCP server URL of the tool that returned the successful receipt as the server_url, with tool_name `"checkout"`.
 
 The session policy record MUST include a warning: `"transaction_emitted_by_agent"` when this path is taken.
 
@@ -474,7 +493,10 @@ AP2 receipt JWT signatures and Verifiable Intent credentials are not Path 2 coun
 
 In both paths, when Path 2 is taken, the record MUST be submitted to the log immediately, because the transaction event is the closing anchor of the attribution graph.
 
-**Note (Heuristic detection is a fallback):** The tool name heuristic fires only when no protocol-level transaction signal is present. It is less reliable; a tool named `checkout` might be a UI component, not a payment completion. When heuristic detection fires, the transaction record's `event_type` is still `https://atrib.dev/v1/types/transaction` but the session policy record includes a warning: `"transaction_detected_by_heuristic"`. Merchants may choose to require protocol-level detection for settlement purposes by filtering on this warning in their verification workflow.
+**Custom detector note:** The default detector does not infer completion from a
+tool name. A caller-provided heuristic detector remains possible through the
+composable detector option. Such a detector is outside the six published
+completion cases and keeps the `transaction_detected_by_heuristic` warning.
 
 ---
 
@@ -764,7 +786,7 @@ The session policy record ([§7.3](#73-session-policy-record)) is created at ses
 
 - `applied_constraints.minimum_floors`: populated with all `minimum_own_share` values from creator policies that survived negotiation (Rules 1-5 of [§7.2](#72-conflict-resolution)).
 
-- `warnings`: appended throughout the session, on policy fetch failures, heuristic transaction detection, agent-side transaction emission (path 2 of [§3](#3-sdk-transaction-detection)), unknown modifier types, negotiation skips, and policy negotiation timeouts.
+- `warnings`: appended throughout the session, on policy fetch failures, custom heuristic transaction detection, agent-side transaction emission (path 2 of [§3](#3-sdk-transaction-detection)), unknown modifier types, negotiation skips, and policy negotiation timeouts.
 
 The session policy record is stored in memory and SHOULD be persisted to disk or a database at session end. It is made available to the merchant via a call to `interceptor.getSessionPolicyRecord(context_id)` on the object returned by `atrib()` ([§5.4.1](../atrib-spec.md#541-init-interface)).
 
@@ -1274,7 +1296,7 @@ Example detection-facts envelope on a transaction record (the envelope schema an
 {
   "envelope": 1,
   "profile": "https://atrib.dev/v1/evidence/payments-detection",
-  "profile_version": "1.0.0",
+  "profile_version": "1.1.0",
   "tier": "verified",
   "facts": {
     "protocol": "AP2",
@@ -1322,5 +1344,5 @@ Corpus paths are stable identifiers; relocating this profile moved no corpus.
 
 - [`spec/conformance/4.6/`](../spec/conformance/4.6/) stays at its historical path. Its vectors are unchanged; the normative owner is now [§8](#8-the-calculation-algorithm). The determinism requirement continues to hold: two runs on identical input MUST produce identical output.
 - [`spec/conformance/ap2-vi-crypto/`](../spec/conformance/ap2-vi-crypto/) ([D096](../DECISIONS.md#d096-ap2--vi-crypto-conformance-uses-a-pinned-offline-corpus)) is referenced by [§11](#11-ap2--verifiable-intent-evidence-checks), not moved.
-- [`spec/conformance/payments-profile/detection/`](../spec/conformance/payments-profile/detection/) pins per-rail positive and negative detection vectors for [§2](#2-transaction-detection-hooks) and [§3](#3-sdk-transaction-detection): ACP completion with and without an embedded order, UCP `ucp.version` discrimination against an ACP-identical body, x402 v2 and legacy v1 headers with case-insensitivity, MPP `Payment-Receipt` with an x402/MPP cross-contamination negative, AP2 v0.2 receipts with the v0.1 mandate fallback, and the a2a-x402 dual condition.
+- [`spec/conformance/payments-profile/detection/`](../spec/conformance/payments-profile/detection/) pins positive and negative detection vectors for [§2](#2-transaction-detection-hooks) and [§3](#3-sdk-transaction-detection): ACP completion and non-terminal webhook lifecycle negatives, UCP v2026-08-25 synchronous completion plus asynchronous `complete_in_progress` and `ucp.version` discrimination against an ACP-identical body, x402 v2 and legacy v1 headers with case-insensitivity, MPP HTTP and MCP receipts with an x402/MPP cross-contamination negative, AP2 v0.2 receipts with mandate-only negatives, the a2a-x402 dual condition, and tool-name false-positive prevention.
 - The evidence-envelope corpus at [`spec/conformance/evidence-envelope/`](../spec/conformance/evidence-envelope/) carries the `payments-detection--*` and `payments-settlement--*` case families for [§12](#12-evidence-profiles), including the degradation family: records verified with no payments profile loaded keep valid signatures and unchanged cross-attestation semantics while each payments block reports `profile_unrecognized: true` at tier `declared`.
