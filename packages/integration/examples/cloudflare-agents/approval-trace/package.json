@@ -20,17 +20,17 @@
     "@cloudflare/codemode": "^0.5.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "agents": "^0.22.0",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@atrib/graph-node": "workspace:*",
     "@cloudflare/vitest-pool-workers": "^0.22.0",
-    "@cloudflare/workers-types": "^5.20260827.1",
+    "@cloudflare/workers-types": "^5.20260904.1",
     "@playwright/test": "^1.62.1",
-    "@types/node": "^26.4.0",
-    "tsx": "^4.23.12",
+    "@types/node": "^26.4.1",
+    "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11",
-    "wrangler": "^4.127.0"
+    "wrangler": "^4.129.0"
   }
 }
