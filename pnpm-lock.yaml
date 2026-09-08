@@ -6,10 +6,11 @@ settings:
 
 overrides:
   ip-address@<10.1.1: ^10.1.1
-  fast-uri@<3.1.5: 3.1.5
+  fast-uri@<3.1.6: 3.1.6
   hono@<4.12.34: 4.12.34
   '@hono/node-server@<2.0.10': 2.0.10
-  qs@<6.15.2: ^6.15.2
+  qs@<6.16.0: 6.16.0
+  mysql2@<3.23.1: 3.23.1
   uuid@<11.1.1: 11.1.1
   langsmith@<0.6.0: 0.7.3
   tar@<7.5.21: 7.5.21
@@ -289,7 +290,7 @@ importers:
         version: 4.0.2(encoding@0.1.13)
       '@google/adk':
         specifier: 2.0.0
-        version: 2.0.0(w6wnhyn2c3vq57tc6ufiof7ecq)
+        version: 2.0.0(3qhtsrryrtoudmlvextbm7ly34)
       '@langchain/core':
         specifier: 1.2.9
         version: 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.221.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(openai@7.8.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(undici@7.29.0)(ws@8.21.0(bufferutil@4.1.0))(zod@4.4.3))(ws@8.21.0(bufferutil@4.1.0))
@@ -358,7 +359,7 @@ importers:
         version: 0.12.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.12.34)(tree-sitter@0.22.4)(web-tree-sitter@0.24.7)(zod@4.4.3)
       mem0ai:
         specifier: 3.1.7
-        version: 3.1.7(abawyzfqvjhqm7pf24z4uo3zu4)
+        version: 3.1.7(@azure/identity@4.13.2)(@azure/search-documents@12.2.0)(@cloudflare/workers-types@5.20260827.1)(@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(bufferutil@4.1.0))(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.221.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(openai@7.8.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(undici@7.29.0)(ws@8.21.0(bufferutil@4.1.0))(zod@4.4.3))(ws@8.21.0(bufferutil@4.1.0)))(@mistralai/mistralai@1.15.1(bufferutil@4.1.0))(@qdrant/js-client-rest@1.18.0(typescript@6.0.3))(@supabase/supabase-js@2.106.2)(@types/jest@29.5.14)(@types/pg@8.11.0)(better-sqlite3@12.10.0)(cloudflare@4.5.0(encoding@0.1.13))(compromise@14.15.1)(encoding@0.1.13)(mongodb@7.5.0(@mongodb-js/zstd@7.0.0)(socks@2.8.9))(natural@8.1.1(@mongodb-js/zstd@7.0.0)(@opentelemetry/api@1.9.1)(socks@2.8.9))(pg@8.21.0)(ws@8.21.0(bufferutil@4.1.0))
       openai:
         specifier: 7.8.0
         version: 7.8.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(undici@7.29.0)(ws@8.21.0(bufferutil@4.1.0))(zod@4.4.3)
@@ -4722,8 +4723,8 @@ packages:
   fast-string-width@3.0.2:
     resolution: {integrity: sha512-gX8LrtNEI5hq8DVUfRQMbr5lpaS4nMIWV+7XEbXk2b8kiQIizgnlr12B4dA3ZEx3308ze0O4Q1R+cHts8kyUJg==}
 
-  fast-uri@3.1.5:
-    resolution: {integrity: sha512-gHwA1O9LDIcKunMKhObS/HimwtehO1nPUECKAu5TpKgaO19fcWEl4bliWe1jWxVFvIXztJjjQ4L8XQ1EU9f7Jw==}
+  fast-uri@3.1.6:
+    resolution: {integrity: sha512-7Ical1vFEMr0onbVzEDIreM22I4khW+fzyQPwvAFWBp1iwdshSZRsL4jjRvPG9JP1uiqMHRto+YU6R2/CzDz5Q==}
 
   fast-wrap-ansi@0.2.2:
     resolution: {integrity: sha512-7F2Fl+TjRSenLqlU3UjSH0iyqopqoZIu7eZVpEirP2g1GtWa2G/ecEmBdgz31+Mxr+ELclgg6sokpSFIQiZ02Q==}
@@ -5714,7 +5715,7 @@ packages:
       groq-sdk: 0.3.0
       iovalkey: ^0.3.3
       mongodb: ^7.0.0
-      mysql2: ^3.0.0
+      mysql2: 3.23.1
       natural: ^8.0.1
       ollama: ^0.5.14
       oracledb: ^6.5.0 || ^7.0.0
@@ -6056,8 +6057,8 @@ packages:
     resolution: {integrity: sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ==}
     hasBin: true
 
-  mysql2@3.20.0:
-    resolution: {integrity: sha512-eCLUs7BNbgA6nf/MZXsaBO1SfGs0LtLVrJD3WeWq+jPLDWkSufTD+aGMwykfUVPdZnblaUK1a8G/P63cl9FkKg==}
+  mysql2@3.23.1:
+    resolution: {integrity: sha512-tTuRnC7qCet2IOfSNMYZ5SwXuBnfvBPAcIA28P0gtruXyZlU1LMxA6uha32kYypoFgyYklMqhLWwt4laYwXR/Q==}
     engines: {node: '>= 8.0'}
     peerDependencies:
       '@types/node': '>= 8'
@@ -6616,10 +6617,6 @@ packages:
 
   pure-rand@8.4.2:
     resolution: {integrity: sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng==}
-
-  qs@6.15.3:
-    resolution: {integrity: sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==}
-    engines: {node: '>=0.6'}
 
   qs@6.16.0:
     resolution: {integrity: sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA==}
@@ -8792,7 +8789,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@google/adk@2.0.0(w6wnhyn2c3vq57tc6ufiof7ecq)':
+  '@google/adk@2.0.0(3qhtsrryrtoudmlvextbm7ly34)':
     dependencies:
       '@a2a-js/sdk': 0.3.14(@grpc/grpc-js@1.14.4)(express@5.2.1)
       '@google-cloud/vertexai': 1.12.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(bufferutil@4.1.0)(encoding@0.1.13)
@@ -8822,11 +8819,11 @@ snapshots:
       '@google-cloud/opentelemetry-cloud-monitoring-exporter': 0.21.0(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/resources@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.10.0(@opentelemetry/api@1.9.1))(encoding@0.1.13)
       '@google-cloud/opentelemetry-cloud-trace-exporter': 3.0.0(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/resources@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(encoding@0.1.13)
       '@google-cloud/storage': 7.21.0(encoding@0.1.13)
-      '@mikro-orm/mariadb': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
-      '@mikro-orm/mssql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
+      '@mikro-orm/mariadb': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(pg@8.21.0)
+      '@mikro-orm/mssql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)
       '@mikro-orm/mysql': 6.6.14(@mikro-orm/core@6.6.16)(@types/node@26.4.0)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)
-      '@mikro-orm/postgresql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))
-      '@mikro-orm/sqlite': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
+      '@mikro-orm/postgresql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)
+      '@mikro-orm/sqlite': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)
       '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
       express: 5.2.1
     transitivePeerDependencies:
@@ -9293,11 +9290,11 @@ snapshots:
       mikro-orm: 6.6.16
       reflect-metadata: 0.2.2
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.20.0)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
-      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.20.0)
+      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
@@ -9313,11 +9310,11 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.20.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
-      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
+      knex: 3.2.10(better-sqlite3@12.10.0)(pg@8.20.0)
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
@@ -9333,11 +9330,11 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
-      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7)
+      knex: 3.2.10(better-sqlite3@12.10.0)(pg@8.21.0)
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
@@ -9353,11 +9350,11 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)(sqlite3@5.1.7)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
-      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1)
+      knex: 3.2.10(better-sqlite3@12.10.0)(pg@8.21.0)(sqlite3@5.1.7)
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
@@ -9373,10 +9370,30 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/mariadb@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)(tedious@19.2.1)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
+      fs-extra: 11.3.3
+      knex: 3.2.10(better-sqlite3@12.10.0)(pg@8.21.0)(tedious@19.2.1)
+      sqlstring: 2.3.3
+    optionalDependencies:
+      better-sqlite3: 12.10.0
+      mariadb: 3.5.3
+    transitivePeerDependencies:
+      - mysql
+      - mysql2
+      - pg
+      - pg-native
+      - pg-query-stream
+      - sqlite3
+      - supports-color
+      - tedious
+    optional: true
+
+  '@mikro-orm/mariadb@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(pg@8.21.0)':
+    dependencies:
+      '@mikro-orm/core': 6.6.16
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)
       mariadb: 3.5.3
     transitivePeerDependencies:
       - better-sqlite3
@@ -9391,10 +9408,10 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/mssql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)':
+  '@mikro-orm/mssql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)(tedious@19.2.1)
       tedious: 19.2.1
       tsqlstring: 1.0.1
     transitivePeerDependencies:
@@ -9413,8 +9430,8 @@ snapshots:
   '@mikro-orm/mysql@6.6.14(@mikro-orm/core@6.6.16)(@types/node@26.4.0)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
-      mysql2: 3.20.0(@types/node@26.4.0)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)
+      mysql2: 3.23.1(@types/node@26.4.0)
     transitivePeerDependencies:
       - '@types/node'
       - better-sqlite3
@@ -9429,10 +9446,10 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/postgresql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))':
+  '@mikro-orm/postgresql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.20.0)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.20.0)
       pg: 8.20.0
       postgres-array: 3.0.4
       postgres-date: 2.1.0
@@ -9456,10 +9473,10 @@ snapshots:
       globby: 11.1.0
       ts-morph: 27.0.2
 
-  '@mikro-orm/sqlite@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)':
+  '@mikro-orm/sqlite@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)(sqlite3@5.1.7)
       fs-extra: 11.3.3
       sqlite3: 5.1.7
       sqlstring-sqlite: 0.1.1
@@ -10691,7 +10708,7 @@ snapshots:
   ajv@8.20.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.5
+      fast-uri: 3.1.6
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -10819,7 +10836,7 @@ snapshots:
       http-errors: 2.0.1
       iconv-lite: 0.7.3
       on-finished: 2.4.1
-      qs: 6.15.3
+      qs: 6.16.0
       raw-body: 3.0.2
       type-is: 2.1.0
     transitivePeerDependencies:
@@ -11544,7 +11561,7 @@ snapshots:
       once: 1.4.0
       parseurl: 1.3.3
       proxy-addr: 2.0.7
-      qs: 6.15.3
+      qs: 6.16.0
       range-parser: 1.3.0
       router: 2.2.0
       send: 1.2.1
@@ -11599,7 +11616,7 @@ snapshots:
     dependencies:
       fast-string-truncated-width: 3.0.3
 
-  fast-uri@3.1.5: {}
+  fast-uri@3.1.6: {}
 
   fast-wrap-ansi@0.2.2:
     dependencies:
@@ -11989,7 +12006,7 @@ snapshots:
       gaxios: 7.1.3
       google-auth-library: 10.5.0
       google-logging-utils: 1.1.3
-      qs: 6.15.3
+      qs: 6.16.0
       url-template: 2.0.8
     transitivePeerDependencies:
       - supports-color
@@ -12448,7 +12465,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.20.0):
+  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -12466,37 +12483,13 @@ snapshots:
       tildify: 2.0.0
     optionalDependencies:
       better-sqlite3: 12.10.0
-      mysql2: 3.20.0(@types/node@26.4.0)
-      pg: 8.20.0
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
-
-  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0):
-    dependencies:
-      colorette: 2.0.19
-      commander: 10.0.1
-      debug: 4.3.4
-      escalade: 3.2.0
-      esm: 3.2.25
-      get-package-type: 0.1.0
-      getopts: 2.3.0
-      interpret: 2.2.0
-      lodash: 4.18.1
-      pg-connection-string: 2.6.2
-      rechoir: 0.8.0
-      resolve-from: 5.0.0
-      tarn: 3.1.2
-      tildify: 2.0.0
-    optionalDependencies:
-      better-sqlite3: 12.10.0
-      mysql2: 3.20.0(@types/node@26.4.0)
+      mysql2: 3.23.1(@types/node@26.4.0)
       pg: 8.21.0
     transitivePeerDependencies:
       - supports-color
     optional: true
 
-  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7):
+  knex@3.2.10(better-sqlite3@12.10.0)(pg@8.20.0):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -12514,14 +12507,59 @@ snapshots:
       tildify: 2.0.0
     optionalDependencies:
       better-sqlite3: 12.10.0
-      mysql2: 3.20.0(@types/node@26.4.0)
+      pg: 8.20.0
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
+
+  knex@3.2.10(better-sqlite3@12.10.0)(pg@8.21.0):
+    dependencies:
+      colorette: 2.0.19
+      commander: 10.0.1
+      debug: 4.3.4
+      escalade: 3.2.0
+      esm: 3.2.25
+      get-package-type: 0.1.0
+      getopts: 2.3.0
+      interpret: 2.2.0
+      lodash: 4.18.1
+      pg-connection-string: 2.6.2
+      rechoir: 0.8.0
+      resolve-from: 5.0.0
+      tarn: 3.1.2
+      tildify: 2.0.0
+    optionalDependencies:
+      better-sqlite3: 12.10.0
+      pg: 8.21.0
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
+
+  knex@3.2.10(better-sqlite3@12.10.0)(pg@8.21.0)(sqlite3@5.1.7):
+    dependencies:
+      colorette: 2.0.19
+      commander: 10.0.1
+      debug: 4.3.4
+      escalade: 3.2.0
+      esm: 3.2.25
+      get-package-type: 0.1.0
+      getopts: 2.3.0
+      interpret: 2.2.0
+      lodash: 4.18.1
+      pg-connection-string: 2.6.2
+      rechoir: 0.8.0
+      resolve-from: 5.0.0
+      tarn: 3.1.2
+      tildify: 2.0.0
+    optionalDependencies:
+      better-sqlite3: 12.10.0
       pg: 8.21.0
       sqlite3: 5.1.7
     transitivePeerDependencies:
       - supports-color
     optional: true
 
-  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1):
+  knex@3.2.10(better-sqlite3@12.10.0)(pg@8.21.0)(tedious@19.2.1):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -12539,7 +12577,6 @@ snapshots:
       tildify: 2.0.0
     optionalDependencies:
       better-sqlite3: 12.10.0
-      mysql2: 3.20.0(@types/node@26.4.0)
       pg: 8.21.0
       tedious: 19.2.1
     transitivePeerDependencies:
@@ -12855,7 +12892,7 @@ snapshots:
 
   media-typer@1.1.1: {}
 
-  mem0ai@3.1.7(abawyzfqvjhqm7pf24z4uo3zu4):
+  mem0ai@3.1.7(@azure/identity@4.13.2)(@azure/search-documents@12.2.0)(@cloudflare/workers-types@5.20260827.1)(@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(bufferutil@4.1.0))(@langchain/core@1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.221.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(openai@7.8.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(undici@7.29.0)(ws@8.21.0(bufferutil@4.1.0))(zod@4.4.3))(ws@8.21.0(bufferutil@4.1.0)))(@mistralai/mistralai@1.15.1(bufferutil@4.1.0))(@qdrant/js-client-rest@1.18.0(typescript@6.0.3))(@supabase/supabase-js@2.106.2)(@types/jest@29.5.14)(@types/pg@8.11.0)(better-sqlite3@12.10.0)(cloudflare@4.5.0(encoding@0.1.13))(compromise@14.15.1)(encoding@0.1.13)(mongodb@7.5.0(@mongodb-js/zstd@7.0.0)(socks@2.8.9))(natural@8.1.1(@mongodb-js/zstd@7.0.0)(@opentelemetry/api@1.9.1)(socks@2.8.9))(pg@8.21.0)(ws@8.21.0(bufferutil@4.1.0)):
     dependencies:
       '@cloudflare/workers-types': 5.20260827.1
       '@types/jest': 29.5.14
@@ -12878,7 +12915,6 @@ snapshots:
       '@supabase/supabase-js': 2.106.2
       cloudflare: 4.5.0(encoding@0.1.13)
       mongodb: 7.5.0(@mongodb-js/zstd@7.0.0)(socks@2.8.9)
-      mysql2: 3.20.0(@types/node@26.4.0)
     transitivePeerDependencies:
       - debug
       - encoding
@@ -13258,7 +13294,7 @@ snapshots:
 
   mustache@4.2.0: {}
 
-  mysql2@3.20.0(@types/node@26.4.0):
+  mysql2@3.23.1(@types/node@26.4.0):
     dependencies:
       '@types/node': 26.4.0
       aws-ssl-profiles: 1.1.2
@@ -13819,16 +13855,10 @@ snapshots:
 
   pure-rand@8.4.2: {}
 
-  qs@6.15.3:
-    dependencies:
-      es-define-property: 1.0.1
-      side-channel: 1.1.1
-
   qs@6.16.0:
     dependencies:
       es-define-property: 1.0.1
       side-channel: 1.1.1
-    optional: true
 
   queue-microtask@1.2.3: {}
 
