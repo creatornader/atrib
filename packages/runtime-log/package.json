@@ -63,8 +63,8 @@
   },
   "devDependencies": {
     "@atrib/mcp": "workspace:*",
-    "@noble/secp256k1": "^3.1.0",
-    "@types/node": "^26.4.0",
+    "@noble/secp256k1": "^3.2.0",
+    "@types/node": "^26.4.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   }
