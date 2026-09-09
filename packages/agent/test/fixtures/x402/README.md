@@ -1,15 +1,15 @@
 # x402 test fixtures
 
-Real captured payload shapes from the x402 protocol (Coinbase).
+Real captured payload shapes from the x402 protocol (x402 Foundation).
 
 **Sources:**
 
-- https://github.com/coinbase/x402
-- https://github.com/coinbase/x402/blob/main/docs/core-concepts/http-402.md
-- https://github.com/coinbase/x402/blob/main/typescript/site/CHANGELOG-v2.md (v1 → v2 header rename)
+- https://github.com/x402-foundation/x402
+- https://github.com/x402-foundation/x402/blob/main/docs/core-concepts/http-402.md
+- https://github.com/x402-foundation/x402/blob/main/typescript/site/CHANGELOG-v2.md (v1 → v2 header rename)
 
 **Protocol version:** x402 v2 (current). v1 is also supported by the detector.
-**Verified:** 2026-04-06
+**Verified:** 2026-09-02
 
 ## Headers
 

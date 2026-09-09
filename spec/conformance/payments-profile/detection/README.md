@@ -21,15 +21,15 @@ MUST produce the same `detected` and `protocol` result.
 
 ## What the cases pin
 
-| Rail | Cases pin |
-| --- | --- |
-| `acp--*` | Completion with an embedded order (with checkout URL), completion without an order (negative), and both snake_case webhook events (`order_create`, `order_update`). |
-| `ucp--*` | The `ucp.version` envelope discrimination: the same completion body detects as UCP with the envelope and as ACP without it. |
-| `x402--*` | The v2 `PAYMENT-RESPONSE` header, the legacy v1 `X-PAYMENT-RESPONSE` name, RFC 7230 case-insensitivity, a no-header negative, and x402 precedence when both x402 and MPP headers appear. |
-| `mpp--*` | The `Payment-Receipt` header detecting as MPP, never x402 (the corrected header misattribution), with case-insensitivity. |
-| `ap2--*` | The v0.2 decoded PaymentReceipt hook, the receipt-JWT result envelope, a failed receipt negative, the v0.1 `ap2.mandates.PaymentMandate` compatibility fallback, and the mandate-only negative (IntentMandate never detects). |
-| `a2a-x402--*` | The dual condition: `payment-completed` status AND at least one `success: true` receipt; only-failed-receipts is a negative. Reported as protocol `AP2` (the AP2 crypto path). |
-| `heuristic--*` | The tool-name keyword fallback (protocol `heuristic`) and the no-signal negative. |
+| Rail          | Cases pin                                                                                                                                                                                |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `acp--*`      | Completion with an embedded order, completion without an order (negative), non-terminal webhook lifecycle events (negative), and a terminal webhook with a stable Order id.              |
+| `ucp--*`      | The `ucp.version` envelope discrimination: the same completion body detects as UCP with the envelope and as ACP without it.                                                              |
+| `x402--*`     | The v2 `PAYMENT-RESPONSE` header, the legacy v1 `X-PAYMENT-RESPONSE` name, RFC 7230 case-insensitivity, a no-header negative, and x402 precedence when both x402 and MPP headers appear. |
+| `mpp--*`      | The `Payment-Receipt` header, case-insensitivity, x402 precedence, and the MCP `org.paymentauth/receipt` result metadata path.                                                           |
+| `ap2--*`      | The v0.2 decoded PaymentReceipt hook, the receipt-JWT result envelope, failed-receipt negatives, and mandate-only negatives including v0.1 `PaymentMandate`.                             |
+| `a2a-x402--*` | The dual condition: `payment-completed` status AND at least one `success: true` receipt; only-failed-receipts is a negative. Emitted as protocol `a2a-x402`.                             |
+| `none`        | Tool names and ordinary responses without published completion evidence remain negative cases.                                                                                           |
 
 ## Reference consumer
 

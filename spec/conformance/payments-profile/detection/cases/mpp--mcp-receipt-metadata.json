@@ -1,0 +1,26 @@
+{
+  "name": "mcp-receipt-metadata",
+  "corpus": "payments-profile/detection",
+  "rail": "mpp",
+  "profile_section": "2.4",
+  "description": "A successful MPP MCP result carries the native receipt at result._meta[org.paymentauth/receipt].",
+  "input": {
+    "tool_name": "paid_tool",
+    "response": {
+      "content": [{ "type": "text", "text": "paid result" }],
+      "_meta": {
+        "org.paymentauth/receipt": {
+          "status": "success",
+          "method": "tempo",
+          "timestamp": "2026-09-02T12:00:15Z",
+          "reference": "0xtx789",
+          "challengeId": "ch_mcp_789"
+        }
+      }
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "MPP"
+  }
+}

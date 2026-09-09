@@ -13,6 +13,7 @@ import {
   type AtribRecord,
 } from '@atrib/mcp'
 import ap2PaymentReceiptArtifactFixture from './fixtures/ap2/payment_receipt_artifact.json'
+import mppMcpReceiptFixture from './fixtures/mpp/payment_receipt_mcp.json'
 
 const TEST_KEY = new Uint8Array(32).fill(42)
 const TEST_KEY_B64 = base64urlEncode(TEST_KEY)
@@ -188,9 +189,10 @@ describe('atrib() agent middleware', () => {
 
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
 
-      // ACP response shape WITHOUT atrib token → Path 2
+      // ACP completion response WITHOUT atrib token → Path 2
       const checkoutResponse = {
-        data: { object: { object: 'checkout_session' }, url: 'https://merchant.com/checkout/abc' },
+        status: 'completed',
+        order: { id: 'ord_abc123', permalink_url: 'https://merchant.com/orders/ord_abc123' },
       }
       interceptor.onAfterToolResponse('checkout', checkoutResponse, {})
 
@@ -226,7 +228,10 @@ describe('atrib() agent middleware', () => {
 
       interceptor.onAfterToolResponse(
         'checkout',
-        { data: { object: { object: 'checkout_session' } } },
+        {
+          status: 'completed',
+          order: { id: 'ord_abc123', permalink_url: 'https://merchant.com/orders/ord_abc123' },
+        },
         {},
       )
       await interceptor.flush()
@@ -259,7 +264,10 @@ describe('atrib() agent middleware', () => {
       // First call ever. checkout. No prior context.
       interceptor.onAfterToolResponse(
         'checkout',
-        { data: { object: { object: 'checkout_session' } } },
+        {
+          status: 'completed',
+          order: { id: 'ord_abc123', permalink_url: 'https://merchant.com/orders/ord_abc123' },
+        },
         {},
       )
       await interceptor.flush()
@@ -319,7 +327,7 @@ describe('atrib() agent middleware', () => {
       expect(txn.content_id).toBe(expectedContentId)
     })
 
-    it('Path 2 heuristic uses serverUrl + tool name', async () => {
+    it('does not emit Path 2 from a tool name alone', async () => {
       const submissions: any[] = []
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         const body = JSON.parse((init as any)?.body as string)
@@ -335,11 +343,8 @@ describe('atrib() agent middleware', () => {
         )
       })
 
-      const { computeContentId } = await import('@atrib/mcp')
-      const expectedContentId = computeContentId('https://tools.example.com', 'place_order')
-
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
-      // No protocol signal, just tool name match
+      // No published completion signal, only a commerce-looking tool name.
       interceptor.onAfterToolResponse(
         'place_order',
         { result: 'ok' },
@@ -351,8 +356,7 @@ describe('atrib() agent middleware', () => {
       const txn = submissions.find(
         (s) => s?.event_type === 'https://atrib.dev/v1/types/transaction',
       )
-      expect(txn).toBeDefined()
-      expect(txn.content_id).toBe(expectedContentId)
+      expect(txn).toBeUndefined()
     })
 
     it('Path 2 AP2 uses protocol-specific receipt content_id when available', async () => {
@@ -394,6 +398,34 @@ describe('atrib() agent middleware', () => {
       expect(txn).toBeDefined()
       expect(txn.content_id).toBe(expectedContentId)
       expect(txn.content_id).not.toBe(genericFallback)
+    })
+
+    it('Path 2 MPP MCP uses the receipt identity when available', async () => {
+      const submissions: AtribRecord[] = []
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+        const bodyText = typeof init?.body === 'string' ? init.body : '{}'
+        submissions.push(JSON.parse(bodyText) as AtribRecord)
+        return new Response(JSON.stringify({ logIndex: 1 }), { status: 200 })
+      })
+
+      const expectedContentId = detectTransaction('paid_tool', mppMcpReceiptFixture).contentId
+      const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
+      interceptor.onAfterToolResponse(
+        'paid_tool',
+        mppMcpReceiptFixture,
+        {},
+        {
+          serverUrl: 'https://paid.example.com/mcp',
+        },
+      )
+      await interceptor.flush()
+
+      const txn = submissions.find(
+        (s) => s?.event_type === 'https://atrib.dev/v1/types/transaction',
+      )
+      expect(txn).toBeDefined()
+      expect(txn!.content_id).toBe(expectedContentId)
+      expect(JSON.stringify(txn)).not.toContain('org.paymentauth/receipt')
     })
 
     it('Path 2 AP2 emits an agent signer but not a receipt-as-signer', async () => {
@@ -471,14 +503,17 @@ describe('atrib() agent middleware', () => {
   })
 
   describe('warnings', () => {
-    it('records transaction_emitted_by_agent warning on Path 2', async () => {
+    it('records transaction_emitted_by_agent warning on protocol Path 2', async () => {
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
       // Trigger init first
       await interceptor.onBeforeToolCall('search', {})
 
       interceptor.onAfterToolResponse(
         'checkout',
-        { data: { object: { object: 'checkout_session' } } },
+        {
+          status: 'completed',
+          order: { id: 'ord_warning', permalink_url: 'https://merchant.com/orders/ord_warning' },
+        },
         {},
       )
       await interceptor.flush()
@@ -489,11 +524,11 @@ describe('atrib() agent middleware', () => {
       expect(record!.warnings).toContain('transaction_emitted_by_agent')
     })
 
-    it('records transaction_detected_by_heuristic warning when heuristic fires', async () => {
+    it('does not record transaction warnings from a tool name alone', async () => {
       const interceptor = atrib({ creatorKey: TEST_KEY_B64 })
       await interceptor.onBeforeToolCall('search', {})
 
-      // Heuristic-only detection (tool name match, no protocol signal)
+      // Commerce-looking tool name with no published completion signal.
       interceptor.onAfterToolResponse(
         'place_order',
         { result: 'ok' },
@@ -503,8 +538,8 @@ describe('atrib() agent middleware', () => {
       await interceptor.flush()
 
       const record = interceptor.getSessionPolicyRecord()
-      expect(record!.warnings).toContain('transaction_emitted_by_agent')
-      expect(record!.warnings).toContain('transaction_detected_by_heuristic')
+      expect(record!.warnings).not.toContain('transaction_emitted_by_agent')
+      expect(record!.warnings).not.toContain('transaction_detected_by_heuristic')
     })
 
     it('does not duplicate warnings across multiple Path 2 emissions', async () => {
@@ -519,12 +554,12 @@ describe('atrib() agent middleware', () => {
       // Two Path 2 transactions in the same session
       interceptor.onAfterToolResponse(
         'checkout',
-        { data: { object: { object: 'checkout_session' } } },
+        { status: 'completed', order: { id: 'ord_one' } },
         {},
       )
       interceptor.onAfterToolResponse(
         'checkout2',
-        { data: { object: { object: 'checkout_session' } } },
+        { status: 'completed', order: { id: 'ord_two' } },
         {},
       )
       await interceptor.flush()

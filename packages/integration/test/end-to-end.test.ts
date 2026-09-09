@@ -286,9 +286,12 @@ describe('End-to-end attribution flow', () => {
     // Unwrapped merchant. no atrib middleware
     const unwrappedMerchant = createMockMcpServer()
     unwrappedMerchant.registerToolHandler(async () => ({
-      data: {
-        object: { object: 'checkout_session' },
-        url: 'https://unprotected.example.com/order/1',
+      // Publish the ACP completion signal that Path 2 requires. A checkout
+      // tool name or an incomplete checkout-session shape is not enough.
+      status: 'completed',
+      order: {
+        id: 'ord_unprotected_1',
+        permalink_url: 'https://unprotected.example.com/order/1',
       },
     }))
 

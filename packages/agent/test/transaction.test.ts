@@ -10,6 +10,7 @@ import ap2PaymentReceiptArtifactFixture from './fixtures/ap2/payment_receipt_art
 import ap2PaymentReceiptResultFixture from './fixtures/ap2/payment_receipt_result.json'
 import ap2CheckoutReceiptResultFixture from './fixtures/ap2/checkout_receipt_result.json'
 import a2aX402PaymentCompletedFixture from './fixtures/ap2/a2a_x402_payment_completed.json'
+import mppMcpReceiptFixture from './fixtures/mpp/payment_receipt_mcp.json'
 
 describe('detectTransaction', () => {
   describe('ACP detection', () => {
@@ -23,22 +24,39 @@ describe('detectTransaction', () => {
       })
     })
 
-    it('detects a real ACP order_create webhook event', () => {
+    it('does not detect a non-terminal ACP order_create webhook event', () => {
       const result = detectTransaction('webhook', acpOrderCreateFixture)
+      expect(result.detected).toBe(false)
+    })
+
+    it('does not detect a non-terminal ACP order_update webhook event', () => {
+      const result = detectTransaction('webhook', acpOrderUpdateFixture)
+      expect(result.detected).toBe(false)
+    })
+
+    it('detects a terminal ACP webhook with stable order identity', () => {
+      const result = detectTransaction('webhook', {
+        type: 'order_update',
+        data: {
+          type: 'order',
+          id: 'ord_abc123',
+          status: 'completed',
+          permalink_url: 'https://example.com/orders/ord_abc123',
+        },
+      })
       expect(result).toMatchObject({
         detected: true,
         protocol: 'ACP',
-        checkoutUrl: 'https://www.testshop.com/orders/checkout_session_123',
+        checkoutUrl: 'https://example.com/orders/ord_abc123',
       })
     })
 
-    it('detects a real ACP order_update webhook event', () => {
-      const result = detectTransaction('webhook', acpOrderUpdateFixture)
-      expect(result).toMatchObject({
-        detected: true,
-        protocol: 'ACP',
-        checkoutUrl: 'https://www.testshop.com/orders/checkout_session_123',
+    it('does not detect a terminal ACP webhook without stable order identity', () => {
+      const result = detectTransaction('webhook', {
+        type: 'order_update',
+        data: { type: 'order', status: 'completed' },
       })
+      expect(result.detected).toBe(false)
     })
 
     it('does not detect a checkout session that is still incomplete', () => {
@@ -53,11 +71,20 @@ describe('detectTransaction', () => {
       const result = detectTransaction('get_session', orderless)
       expect(result.detected).toBe(false)
     })
+
+    it('does not detect a completed checkout session with an empty order id', () => {
+      const result = detectTransaction('get_session', {
+        id: 'checkout_session_999',
+        status: 'completed',
+        order: { id: '' },
+      })
+      expect(result.detected).toBe(false)
+    })
   })
 
   describe('UCP detection', () => {
     it('detects a real UCP completed checkout session response', () => {
-      // Source: ucp/docs/specification/checkout-rest.md (UCP version 2026-01-11)
+      // Source: Universal-Commerce-Protocol/ucp v2026-08-25 checkout response
       const result = detectTransaction('checkout', ucpCompletedFixture)
       expect(result).toMatchObject({
         detected: true,
@@ -69,7 +96,13 @@ describe('detectTransaction', () => {
     it('distinguishes UCP from ACP by the top-level ucp envelope', () => {
       const noEnvelope = { id: 'chk_x', status: 'completed', order: { id: 'ord_x' } }
       const withEnvelope = {
-        ucp: { version: '2026-01-11', capabilities: [] },
+        ucp: {
+          version: '2026-08-25',
+          capabilities: { 'dev.ucp.shopping.checkout': [{ version: '2026-08-25' }] },
+          payment_handlers: {
+            'dev.ucp.common.payment': [{ version: '2026-08-25', id: 'handler_1' }],
+          },
+        },
         id: 'chk_x',
         status: 'completed',
         order: { id: 'ord_x' },
@@ -80,7 +113,7 @@ describe('detectTransaction', () => {
   })
 
   describe('x402 detection', () => {
-    // Source: github.com/coinbase/x402. v2 response header is PAYMENT-RESPONSE
+    // Source: github.com/x402-foundation/x402. v2 response header is PAYMENT-RESPONSE
     it('detects PAYMENT-RESPONSE header (v2, exact case from spec)', () => {
       const result = detectTransaction(
         'api_call',
@@ -150,6 +183,49 @@ describe('detectTransaction', () => {
       )
       expect(result.protocol).toBe('x402')
     })
+
+    it('detects the official successful MPP MCP receipt metadata', () => {
+      const result = detectTransaction('paid_tool', mppMcpReceiptFixture)
+      expect(result).toMatchObject({ detected: true, protocol: 'MPP' })
+      expect(result.contentId).toMatch(/^sha256:[0-9a-f]{64}$/)
+    })
+
+    it('detects nested MCP metadata even when the root metadata has no receipt', () => {
+      const result = detectTransaction('paid_tool', {
+        _meta: { unrelated: true },
+        result: mppMcpReceiptFixture,
+      })
+      expect(result).toMatchObject({ detected: true, protocol: 'MPP' })
+    })
+
+    it('accepts an MCP receipt without the optional reference field', () => {
+      const result = detectTransaction('paid_tool', {
+        _meta: {
+          'org.paymentauth/receipt': {
+            status: 'success',
+            method: 'tempo',
+            timestamp: '2026-09-02T12:00:15Z',
+            challengeId: 'ch_without_reference',
+          },
+        },
+      })
+      expect(result).toMatchObject({ detected: true, protocol: 'MPP' })
+      expect(result.contentId).toMatch(/^sha256:[0-9a-f]{64}$/)
+    })
+
+    it('does not detect malformed MPP MCP receipt metadata', () => {
+      const result = detectTransaction('paid_tool', {
+        _meta: {
+          'org.paymentauth/receipt': {
+            status: 'success',
+            method: 'tempo',
+            timestamp: 'not-a-date',
+            challengeId: 'ch_123',
+          },
+        },
+      })
+      expect(result.detected).toBe(false)
+    })
   })
 
   describe('AP2 detection', () => {
@@ -192,17 +268,16 @@ describe('detectTransaction', () => {
       expect(payment.contentId).not.toBe(checkout.contentId)
     })
 
-    it('detects a real AP2 PaymentMandate Message (A2A DataPart)', () => {
+    it('does not detect an AP2 PaymentMandate Message (A2A DataPart)', () => {
       // Source: github.com/google-agentic-commerce/ap2 docs/specification.md v0.1
       const result = detectTransaction('payment_tool', ap2PaymentMandateFixture)
-      expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
-      expect(result.contentId).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(result).toMatchObject({ detected: false, protocol: null, contentId: null })
     })
 
     it('detects a real a2a-x402 payment-completed task message', () => {
       // Source: github.com/google-agentic-commerce/a2a-x402 spec/v0.1/spec.md
       const result = detectTransaction('payment_tool', a2aX402PaymentCompletedFixture)
-      expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
+      expect(result).toMatchObject({ detected: true, protocol: 'a2a-x402' })
     })
 
     it('does NOT detect an AP2 IntentMandate (upstream funnel, not transaction)', () => {
@@ -301,26 +376,24 @@ describe('detectTransaction', () => {
       expect(result.detected).toBe(false)
     })
 
-    // Backward-compat fallback path for any research fork that wraps
-    // PaymentMandate in a W3C Verifiable Credential envelope.
-    describe('legacy W3C VC fallback (research forks)', () => {
-      it('detects v2 array-form Payment Mandate credential', () => {
+    describe('legacy W3C VC mandate payloads', () => {
+      it('does not detect v2 array-form Payment Mandate credential', () => {
         const response = {
           '@context': ['https://www.w3.org/ns/credentials/v2'],
           type: ['VerifiableCredential', 'PaymentMandateCredential'],
           credentialSubject: { 'io.atrib/context_id': 'abc' },
         }
         const result = detectTransaction('credential_tool', response)
-        expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
+        expect(result.detected).toBe(false)
       })
 
-      it('detects v1-style string type with PaymentMandate credentialSubject', () => {
+      it('does not detect v1-style string type with PaymentMandate credentialSubject', () => {
         const response = {
           type: 'VerifiableCredential',
           credentialSubject: { type: 'PaymentMandate' },
         }
         const result = detectTransaction('credential_tool', response)
-        expect(result).toMatchObject({ detected: true, protocol: 'AP2' })
+        expect(result.detected).toBe(false)
       })
 
       it('does not detect a non-PaymentMandate VC', () => {
@@ -334,7 +407,7 @@ describe('detectTransaction', () => {
     })
   })
 
-  describe('heuristic detection', () => {
+  describe('tool names without completion evidence', () => {
     it.each([
       'create_order',
       'complete_checkout',
@@ -342,14 +415,14 @@ describe('detectTransaction', () => {
       'place_order',
       'purchase_item',
       'checkout',
-    ])('detects heuristic keyword: %s', (toolName) => {
+    ])('does not detect keyword: %s', (toolName) => {
       const result = detectTransaction(toolName, {})
-      expect(result).toMatchObject({ detected: true, protocol: 'heuristic' })
+      expect(result).toMatchObject({ detected: false, protocol: null })
     })
 
     it('is case-insensitive', () => {
       const result = detectTransaction('Complete_Checkout', {})
-      expect(result).toMatchObject({ detected: true, protocol: 'heuristic' })
+      expect(result).toMatchObject({ detected: false, protocol: null })
     })
 
     it('does not match non-transaction tools', () => {
@@ -358,9 +431,8 @@ describe('detectTransaction', () => {
     })
   })
 
-  describe('priority', () => {
-    it('protocol detection takes priority over heuristic', () => {
-      // Tool name matches heuristic, but ACP completion shape is present
+  describe('published completion evidence', () => {
+    it('detects protocol evidence even when the tool name is generic', () => {
       const result = detectTransaction('checkout', acpCompletedFixture)
       expect(result.protocol).toBe('ACP')
     })

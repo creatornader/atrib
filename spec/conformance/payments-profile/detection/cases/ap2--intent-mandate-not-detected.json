@@ -3,7 +3,7 @@
   "corpus": "payments-profile/detection",
   "rail": "ap2",
   "profile_section": "2.5",
-  "description": "Mandate-only payloads other than the v0.1 PaymentMandate fallback are never transaction events: IntentMandate authorizes a future action, it does not prove settlement.",
+  "description": "Mandate-only payloads, including IntentMandate, are never transaction events: they authorize a future action but do not prove settlement.",
   "input": {
     "tool_name": "agent_intent",
     "response": {

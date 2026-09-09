@@ -3,7 +3,7 @@
 /**
  * Transaction detection conformance corpus (Gap #8).
  *
- * Tests every payment protocol detection shape defined in §5.4.5 against
+ * Tests every payment-related completion detection shape defined in §5.4.5 against
  * the canonical response shapes from the protocol specs. This is the
  * equivalent of the log's §2.6.1 conformance corpus but for the agent's
  * transaction detection.
@@ -31,25 +31,44 @@ describe('ACP detection corpus', () => {
     expect(result.checkoutUrl).toBe('https://merchant.com/orders/456')
   })
 
-  it('detects order_create webhook event', () => {
+  it('does not detect a non-terminal order_create webhook event', () => {
     const response = {
       type: 'order_create',
-      data: { type: 'order', checkout_session_id: 'cs_123', permalink_url: 'https://merchant.com/o/789', status: 'open', refunds: [] },
+      data: {
+        type: 'order',
+        checkout_session_id: 'cs_123',
+        permalink_url: 'https://merchant.com/o/789',
+        status: 'open',
+        refunds: [],
+      },
     }
     const result = detectTransaction('webhook_handler', response)
-    expect(result.detected).toBe(true)
-    expect(result.protocol).toBe('ACP')
-    expect(result.checkoutUrl).toBe('https://merchant.com/o/789')
+    expect(result.detected).toBe(false)
   })
 
-  it('detects order_update webhook event', () => {
+  it('does not detect a non-terminal order_update webhook event', () => {
     const response = {
       type: 'order_update',
       data: { type: 'order', status: 'paid' },
     }
     const result = detectTransaction('webhook_handler', response)
+    expect(result.detected).toBe(false)
+  })
+
+  it('detects a terminal order webhook with stable identity', () => {
+    const response = {
+      type: 'order_update',
+      data: {
+        type: 'order',
+        id: 'ord_456',
+        permalink_url: 'https://merchant.com/o/456',
+        status: 'completed',
+      },
+    }
+    const result = detectTransaction('webhook_handler', response)
     expect(result.detected).toBe(true)
     expect(result.protocol).toBe('ACP')
+    expect(result.checkoutUrl).toBe('https://merchant.com/o/456')
   })
 
   it('does not detect incomplete checkout', () => {
@@ -75,7 +94,13 @@ describe('UCP detection corpus', () => {
       id: 'cs_ucp_1',
       status: 'completed',
       order: { id: 'order_ucp_1' },
-      ucp: { version: '1.0', capabilities: [] },
+      ucp: {
+        version: '2026-08-25',
+        capabilities: { 'dev.ucp.shopping.checkout': [{ version: '2026-08-25' }] },
+        payment_handlers: {
+          'dev.ucp.common.payment': [{ version: '2026-08-25', id: 'handler_1' }],
+        },
+      },
     }
     const result = detectTransaction('checkout', response)
     expect(result.detected).toBe(true)
@@ -95,7 +120,7 @@ describe('UCP detection corpus', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// x402. Coinbase
+// x402. x402 Foundation
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('x402 detection corpus', () => {
@@ -155,6 +180,23 @@ describe('MPP detection corpus', () => {
     const result = detectTransaction('api_call', {}, headers)
     expect(result.detected).toBe(false)
   })
+
+  it('detects successful MCP receipt metadata', () => {
+    const result = detectTransaction('paid_tool', {
+      _meta: {
+        'org.paymentauth/receipt': {
+          status: 'success',
+          method: 'tempo',
+          timestamp: '2026-09-02T12:00:15Z',
+          reference: '0xtx789',
+          challengeId: 'ch_mcp_789',
+        },
+      },
+    })
+    expect(result.detected).toBe(true)
+    expect(result.protocol).toBe('MPP')
+    expect(result.contentId).toMatch(/^sha256:[0-9a-f]{64}$/)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -211,22 +253,19 @@ describe('AP2 detection corpus', () => {
     expect(result.protocol).toBe('AP2')
   })
 
-  it('detects PaymentMandate in A2A DataPart', () => {
+  it('does not detect PaymentMandate in A2A DataPart', () => {
     const response = {
       parts: [
         { kind: 'data', data: { 'ap2.mandates.PaymentMandate': { amount: 100, currency: 'USD' } } },
       ],
     }
     const result = detectTransaction('agent_payment', response)
-    expect(result.detected).toBe(true)
-    expect(result.protocol).toBe('AP2')
+    expect(result.detected).toBe(false)
   })
 
   it('does not detect IntentMandate (upstream funnel, not transaction)', () => {
     const response = {
-      parts: [
-        { kind: 'data', data: { 'ap2.mandates.IntentMandate': { intent: 'purchase' } } },
-      ],
+      parts: [{ kind: 'data', data: { 'ap2.mandates.IntentMandate': { intent: 'purchase' } } }],
     }
     const result = detectTransaction('agent_intent', response)
     expect(result.detected).toBe(false)
@@ -234,9 +273,7 @@ describe('AP2 detection corpus', () => {
 
   it('does not detect CartMandate (upstream funnel)', () => {
     const response = {
-      parts: [
-        { kind: 'data', data: { 'ap2.mandates.CartMandate': { items: [] } } },
-      ],
+      parts: [{ kind: 'data', data: { 'ap2.mandates.CartMandate': { items: [] } } }],
     }
     const result = detectTransaction('agent_cart', response)
     expect(result.detected).toBe(false)
@@ -274,7 +311,7 @@ describe('AP2 detection corpus', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// a2a-x402. Google AP2 crypto path
+// a2a-x402. Google A2A/x402 extension
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('a2a-x402 detection corpus', () => {
@@ -285,16 +322,14 @@ describe('a2a-x402 detection corpus', () => {
         message: {
           metadata: {
             'x402.payment.status': 'payment-completed',
-            'x402.payment.receipts': [
-              { success: true, transaction: '0xabc', network: 'base' },
-            ],
+            'x402.payment.receipts': [{ success: true, transaction: '0xabc', network: 'base' }],
           },
         },
       },
     }
     const result = detectTransaction('a2a_task', response)
     expect(result.detected).toBe(true)
-    expect(result.protocol).toBe('AP2') // a2a-x402 is the AP2 crypto path
+    expect(result.protocol).toBe('a2a-x402')
   })
 
   it('does not detect when kind !== "task"', () => {
@@ -349,7 +384,7 @@ describe('a2a-x402 detection corpus', () => {
 // Heuristic detection
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('heuristic detection corpus', () => {
+describe('tool-name false-positive corpus', () => {
   const keywords = [
     'create_order',
     'complete_checkout',
@@ -360,17 +395,17 @@ describe('heuristic detection corpus', () => {
   ]
 
   for (const keyword of keywords) {
-    it(`detects tool name containing "${keyword}"`, () => {
+    it(`does not detect tool name containing "${keyword}"`, () => {
       const result = detectTransaction(keyword, {})
-      expect(result.detected).toBe(true)
-      expect(result.protocol).toBe('heuristic')
+      expect(result.detected).toBe(false)
+      expect(result.protocol).toBeNull()
     })
   }
 
   it('detects case-insensitive match', () => {
     const result = detectTransaction('Process_Payment', {})
-    expect(result.detected).toBe(true)
-    expect(result.protocol).toBe('heuristic')
+    expect(result.detected).toBe(false)
+    expect(result.protocol).toBeNull()
   })
 
   it('does not detect unrelated tool names', () => {
@@ -390,21 +425,21 @@ describe('heuristic detection corpus', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('detection precedence', () => {
-  it('ACP body takes precedence over heuristic tool name', () => {
+  it('ACP body is detected independently of tool name', () => {
     const response = { status: 'completed', order: { id: 'o1' } }
     const result = detectTransaction('checkout', response)
     expect(result.protocol).toBe('ACP')
   })
 
-  it('x402 header takes precedence over heuristic', () => {
+  it('x402 header is detected independently of tool name', () => {
     const headers = { 'PAYMENT-RESPONSE': 'receipt' }
     const result = detectTransaction('purchase', {}, headers)
     expect(result.protocol).toBe('x402')
   })
 
-  it('null response and no headers falls back to heuristic', () => {
+  it('null response and no headers is not completion evidence', () => {
     const result = detectTransaction('create_order', null)
-    expect(result.detected).toBe(true)
-    expect(result.protocol).toBe('heuristic')
+    expect(result.detected).toBe(false)
+    expect(result.protocol).toBeNull()
   })
 })

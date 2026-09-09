@@ -1,6 +1,6 @@
 # Payments integration
 
-> atrib is not a payment rail. It is a verifiable action layer and protocol substrate that records cryptographically signed evidence of payments on top of whatever rail (x402, ACP, UCP, AP2, MPP, a2a-x402) actually moved the money. The transaction record is the multi-party-signed receipt that any third party can verify.
+> atrib is not a payment rail. It is a verifiable action layer and protocol substrate that records cryptographically signed evidence around payment and commerce flows. The transaction record is the multi-party-signed receipt that any third party can verify.
 
 **Status**: DRAFT (v1, 2026-05-22; not promoted to REVIEW)
 **Spec anchors**: [§1.7 Transaction Event Hooks](../../atrib-spec.md#17-transaction-event-hooks) · [§1.7.6 Cross-attestation requirement](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) · [D052](../../DECISIONS.md)
@@ -17,7 +17,7 @@ Three layers:
 | --------------------------- | --------------------------------------------- | ---------------------------------- |
 | Identity (above atrib)      | Who is this agent                             | W3C DIDs, agent identity standards |
 | **atrib**                   | **Verifiable action + transaction substrate** | The signed Merkle-log records      |
-| Payment rail (below atrib)  | Move the money                                | x402, ACP, UCP, AP2, MPP           |
+| Payment or commerce system  | Move funds or complete checkout               | x402, MPP, ACP, UCP, AP2           |
 | Settlement (below the rail) | Land the funds                                | Banks, on-chain rails              |
 
 ## What atrib does NOT do
@@ -33,15 +33,16 @@ These are bordering layers atrib composes with but does not subsume. Previous at
 
 ## When the transaction record gets triggered
 
-Per [§1.7](../../atrib-spec.md#17-transaction-event-hooks), the trigger is a commerce protocol firing its completion signal. Each rail has a specific on-wire event atrib watches for:
+Per [§1.7](../../atrib-spec.md#17-transaction-event-hooks), the trigger is a payment-related system firing its completion signal. Each supported surface has a specific on-wire event atrib watches for:
 
 | Rail           | Trigger event                                                                                      |
 | -------------- | -------------------------------------------------------------------------------------------------- |
 | ACP            | `POST /checkout_sessions/{id}/complete` returns `status: "completed"` with embedded `order` object |
-| UCP            | Same shape as ACP, distinguished by the `ucp.version` envelope (since UCP `2026-01-11`)            |
-| x402           | HTTP 200 response carrying a `PAYMENT-RESPONSE` header (v2) or legacy `X-PAYMENT-RESPONSE` (v1)    |
-| AP2            | `PaymentMandate` finalization                                                                      |
-| MPP / a2a-x402 | Each with its own completion signal                                                                |
+| UCP            | Synchronous completed checkout with `order.id`, distinguished by the `ucp.version` envelope (v2026-08-25) |
+| x402           | HTTP 200 response carrying a `PAYMENT-RESPONSE` header (v2) or legacy `X-PAYMENT-RESPONSE` (v1)             |
+| AP2            | Successful `PaymentReceipt` or `CheckoutReceipt`, not a mandate alone                                      |
+| MPP            | HTTP 200 response carrying a `Payment-Receipt` header, or MCP `result._meta["org.paymentauth/receipt"]` metadata |
+| a2a-x402       | A2A task metadata with `payment-completed` plus a successful receipt, preserved as the `a2a-x402` extension identity |
 
 Why this particular event: it's the moment the commerce loop closes. Before completion, the agent has taken tool_calls (look up product, compare prices, etc.). The transaction record ties those prior actions to the spend they justified, with a cryptographic chain back through `informed_by` / `provenance_token` edges.
 

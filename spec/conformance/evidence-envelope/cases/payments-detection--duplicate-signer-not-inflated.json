@@ -7,7 +7,7 @@
     "envelope": {
       "envelope": 1,
       "profile": "https://atrib.dev/v1/evidence/payments-detection",
-      "profile_version": "1.0.0",
+      "profile_version": "1.1.0",
       "tier": "declared",
       "payload": {
         "hash": "sha256:ce8ff3ed7f857db9d2ab350115e47f9115bc6e04d2f3076d4ad1c51c20677a6c",
