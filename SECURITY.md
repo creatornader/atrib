@@ -41,17 +41,15 @@ Instead, email **security@atrib.dev** with:
 | ------- | --------- |
 | 0.1.x   | Yes       |
 
-## Monitored dependency exceptions
+## Dependency remediation notes
 
-Dependabot alert [#72](https://github.com/creatornader/atrib/security/dependabot/72)
-for `extract-zip@2.0.1` remains mitigated rather than patched. The package is
-a development-only transitive dependency of the private integration package.
-The two extraction call sites reject traversal and symbolic-link entries. The
-scheduled security workflow runs `pnpm security:extract-zip-exception`; it
-fails when npm publishes a version other than `2.0.1`, requiring a fresh review
-of the alert and mitigation. `osv-scanner.toml` records the same exception for
-OSV Scanner through November 24, 2026. The exception must be reviewed before
-that date even if the weekly monitor has not detected a release.
+The previous `extract-zip` and `adm-zip` alerts are resolved in the dependency
+graph. The private `browser-use` integration now reads DOCX entries in memory
+with `adm-zip@0.6.1`; it no longer depends on `extract-zip` or writes archive
+entries to disk. The scheduled security workflow runs
+`pnpm security:archive-dependencies`, which fails if either vulnerable shape is
+reintroduced. A future browser-use upgrade must preserve this boundary and pass
+the OSV scan before it lands.
 
 ## Credit
 

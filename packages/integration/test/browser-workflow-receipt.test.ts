@@ -76,7 +76,7 @@ describe('browser workflow receipt example', () => {
     expect(result.ok).toBe(true)
     expect(result.host).toMatchObject({
       framework: 'browser-use',
-      package_version: '0.7.1',
+      package_version: '0.8.0',
       page_title: 'Browser Use vendor approval',
       page_url: 'about:blank',
     })

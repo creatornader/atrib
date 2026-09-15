@@ -15,7 +15,7 @@ overrides:
   langsmith@<0.6.0: 0.7.3
   tar@<7.5.21: 7.5.21
   protobufjs@<7.6.5: 7.6.5
-  adm-zip@<0.6.0: 0.6.0
+  adm-zip@<0.6.1: 0.6.1
   body-parser@<2.3.0: 2.3.0
   fast-xml-parser@<5.10.1: 5.10.1
   sharp@<0.35.4: 0.35.4
@@ -43,6 +43,9 @@ patchedDependencies:
   '@ai-sdk/provider-utils@3.1.0-beta.9':
     hash: nlp4uak3riqdhuejm64gljdh3m
     path: patches/@ai-sdk__provider-utils@3.1.0-beta.9.patch
+  browser-use@0.8.0:
+    hash: n56d53bqx4bb376utv2lpnt4kq
+    path: patches/browser-use@0.8.0.patch
   minimatch@3.1.5:
     hash: oewu6bm64l7gihpzb3brhaa674
     path: patches/minimatch@3.1.5.patch
@@ -350,7 +353,7 @@ importers:
         version: 7.0.83(zod@4.4.3)
       browser-use:
         specifier: 0.8.0
-        version: 0.8.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(bufferutil@4.1.0)(encoding@0.1.13)(ws@8.21.0(bufferutil@4.1.0))
+        version: 0.8.0(patch_hash=n56d53bqx4bb376utv2lpnt4kq)(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(bufferutil@4.1.0)(encoding@0.1.13)(ws@8.21.0(bufferutil@4.1.0))
       jose:
         specifier: 6.2.10
         version: 6.2.10
@@ -3843,8 +3846,8 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
-  adm-zip@0.6.0:
-    resolution: {integrity: sha512-XleryMhbuksdKtofnWZ9Sk+4CUTbms4Mb/EU32SZwToAyZ5RgVos/ki8n+yr0LWHOGKuakbXTuuYNHLQjhddgg==}
+  adm-zip@0.6.1:
+    resolution: {integrity: sha512-Xwrja8nx9e5o2N1my4DsKCeKpdrnACyr1wtbPxBDgGzKzKyE9kRtBFA8mWldI+RVlD7CBZNWY/wQ2+ydwOR6kQ==}
     engines: {node: '>=14.0'}
 
   afinn-165-financialmarketnews@3.0.0:
@@ -4687,11 +4690,6 @@ packages:
 
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
-
-  extract-zip@2.0.1:
-    resolution: {integrity: sha512-GDhU9ntwuKyGXdZBUgTIe+vXnWj0fppUEtMDL0+idd5Sta8TGpHssn/eusA9mrPr9qNDym6SxAYZjNvCn/9RBg==}
-    engines: {node: '>= 10.17.0'}
-    hasBin: true
 
   extsprintf@1.3.0:
     resolution: {integrity: sha512-11Ndz7Nv+mvAC1j0ktTa7fAb0vLyGGX+rMHNBYQviQDGU0Hw7lhctJANqbPhu9nV9/izT/IntTgZ7Im/9LJs9g==}
@@ -8807,7 +8805,7 @@ snapshots:
       '@opentelemetry/sdk-metrics': 2.10.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-base': 2.10.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-node': 2.10.0(@opentelemetry/api@1.9.0)
-      adm-zip: 0.6.0
+      adm-zip: 0.6.1
       google-auth-library: 10.9.1
       js-yaml: 4.3.2
       jsonpath-plus: 10.4.0
@@ -10608,7 +10606,7 @@ snapshots:
 
   acorn@8.18.0: {}
 
-  adm-zip@0.6.0: {}
+  adm-zip@0.6.1: {}
 
   afinn-165-financialmarketnews@3.0.0: {}
 
@@ -10836,19 +10834,18 @@ snapshots:
     dependencies:
       base64-js: 1.5.1
 
-  browser-use@0.8.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(bufferutil@4.1.0)(encoding@0.1.13)(ws@8.21.0(bufferutil@4.1.0)):
+  browser-use@0.8.0(patch_hash=n56d53bqx4bb376utv2lpnt4kq)(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(bufferutil@4.1.0)(encoding@0.1.13)(ws@8.21.0(bufferutil@4.1.0)):
     dependencies:
       '@anthropic-ai/sdk': 0.74.0(zod@4.4.3)
       '@aws-sdk/client-bedrock-runtime': 3.1089.0
       '@cfworker/json-schema': 4.1.1
       '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(bufferutil@4.1.0)
       '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
-      adm-zip: 0.6.0
+      adm-zip: 0.6.1
       axios: 1.18.1
       canvas: 3.2.3
       dotenv: 17.4.2
       eventemitter3: 5.0.4
-      extract-zip: 2.0.1
       gif-encoder-2: 1.0.5
       googleapis: 171.4.0
       gpt-tokenizer: 3.4.0
@@ -11557,16 +11554,6 @@ snapshots:
       is-extendable: 0.1.1
 
   extend@3.0.2: {}
-
-  extract-zip@2.0.1:
-    dependencies:
-      debug: 4.4.3
-      get-stream: 5.2.0
-      yauzl: 2.10.0
-    optionalDependencies:
-      '@types/yauzl': 2.10.3
-    transitivePeerDependencies:
-      - supports-color
 
   extsprintf@1.3.0: {}
 

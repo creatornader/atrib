@@ -1,0 +1,120 @@
+diff --git a/dist/filesystem/file-system.js b/dist/filesystem/file-system.js
+index a15970fac46ad1f7c4824adc00865f50c52ada51..22c06b200e24b0205b8de8d25b750d12faa8a741 100644
+--- a/dist/filesystem/file-system.js
++++ b/dist/filesystem/file-system.js
+@@ -1,10 +1,7 @@
+ import fsSync from 'node:fs';
+ import { promises as fsp } from 'node:fs';
+ import path from 'node:path';
+-import os from 'node:os';
+-import { randomUUID } from 'node:crypto';
+ import AdmZip from 'adm-zip';
+-import extract from 'extract-zip';
+ import PDFDocument from 'pdfkit';
+ import { createRequire } from 'node:module';
+ import { spawnSync } from 'node:child_process';
+@@ -276,58 +273,44 @@ const buildDocxBuffer = (content) => {
+     return zip.toBuffer();
+ };
+ const readDocxText = async (archive) => {
+-    const tempDir = path.join(os.tmpdir(), `browser-use-docx-${randomUUID()}`);
+-    const extractDir = path.join(tempDir, 'content');
+-    const archivePath = path.join(tempDir, 'input.docx');
++    const zip = new AdmZip(archive);
+     let entryCount = 0;
+     let uncompressedBytes = 0;
+-    try {
+-        await fsp.mkdir(extractDir, { recursive: true, mode: 0o700 });
+-        await writePrivateBufferFileAsync(archivePath, archive);
+-        await extract(archivePath, {
+-            dir: extractDir,
+-            onEntry(entry) {
+-                entryCount += 1;
+-                uncompressedBytes += entry.uncompressedSize;
+-                const unixMode = (entry.externalFileAttributes >>> 16) & 0xffff;
+-                const normalizedName = entry.fileName.replace(/\\/g, '/');
+-                if (!Number.isSafeInteger(entry.uncompressedSize) ||
+-                    entry.uncompressedSize < 0 ||
+-                    entryCount > MAX_DOCX_ARCHIVE_ENTRIES ||
+-                    entry.uncompressedSize > MAX_DOCX_ENTRY_BYTES ||
+-                    uncompressedBytes > MAX_DOCX_UNCOMPRESSED_BYTES ||
+-                    !normalizedName ||
+-                    normalizedName.includes('\0') ||
+-                    normalizedName.startsWith('/') ||
+-                    /^[a-zA-Z]:\//.test(normalizedName) ||
+-                    normalizedName.split('/').includes('..') ||
+-                    (unixMode & 0o170000) === 0o120000) {
+-                    throw new FileSystemError('Error: DOCX archive exceeds safe extraction limits.');
+-                }
+-            },
+-        });
+-        const documentPath = path.join(extractDir, 'word', 'document.xml');
+-        const documentStat = await fsp.lstat(documentPath);
+-        if (!documentStat.isFile() || documentStat.size > MAX_DOCX_ENTRY_BYTES) {
+-            throw new FileSystemError('Error: Could not parse DOCX file content.');
++    for (const entry of zip.getEntries()) {
++        entryCount += 1;
++        const size = entry.header.size;
++        uncompressedBytes += size;
++        const normalizedName = entry.entryName.replace(/\\/g, '/');
++        const unixMode = (entry.attr >>> 16) & 0xffff;
++        if (!Number.isSafeInteger(size) ||
++            size < 0 ||
++            entryCount > MAX_DOCX_ARCHIVE_ENTRIES ||
++            size > MAX_DOCX_ENTRY_BYTES ||
++            uncompressedBytes > MAX_DOCX_UNCOMPRESSED_BYTES ||
++            !normalizedName ||
++            normalizedName.includes('\0') ||
++            normalizedName.startsWith('/') ||
++            /^[a-zA-Z]:\//.test(normalizedName) ||
++            normalizedName.split('/').includes('..') ||
++            (unixMode & 0o170000) === 0o120000) {
++            throw new FileSystemError('Error: DOCX archive exceeds safe extraction limits.');
+         }
+-        const xml = await fsp.readFile(documentPath, 'utf-8');
+-        const normalizedXml = xml.replace(/<w:p\b([^>]*)\/>/g, '<w:p$1></w:p>');
+-        const paragraphMatches = normalizedXml.match(/<w:p[\s\S]*?<\/w:p>/g) ?? [];
+-        const lines = paragraphMatches.map((paragraph) => {
+-            const textMatches = Array.from(paragraph.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g));
+-            if (!textMatches.length) {
+-                return '';
+-            }
+-            return textMatches.map((match) => decodeXmlText(match[1] ?? '')).join('');
+-        });
+-        return lines.join('\n').trim();
+-    }
+-    finally {
+-        await fsp
+-            .rm(tempDir, { recursive: true, force: true })
+-            .catch(() => undefined);
+     }
++    const documentEntry = zip.getEntry('word/document.xml');
++    if (!documentEntry || documentEntry.isDirectory || documentEntry.header.size > MAX_DOCX_ENTRY_BYTES) {
++        throw new FileSystemError('Error: Could not parse DOCX file content.');
++    }
++    const xml = documentEntry.getData().toString('utf-8');
++    const normalizedXml = xml.replace(/<w:p\b([^>]*)\/>/g, '<w:p$1></w:p>');
++    const paragraphMatches = normalizedXml.match(/<w:p[\s\S]*?<\/w:p>/g) ?? [];
++    const lines = paragraphMatches.map((paragraph) => {
++        const textMatches = Array.from(paragraph.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g));
++        if (!textMatches.length) {
++            return '';
++        }
++        return textMatches.map((match) => decodeXmlText(match[1] ?? '')).join('');
++    });
++    return lines.join('\n').trim();
+ };
+ const truncateExternalText = (content) => {
+     if (content.length <= MAX_EXTERNAL_TEXT_CHARS) {
+diff --git a/package.json b/package.json
+index b7d167c2d9af07b4508958f98bb5c006970735bc..b933156a64e96cbd9bbfe5548eb7098313b6c071 100644
+--- a/package.json
++++ b/package.json
+@@ -337,7 +337,6 @@
+     "canvas": "^3.2.1",
+     "dotenv": "^17.2.4",
+     "eventemitter3": "^5.0.4",
+-    "extract-zip": "^2.0.1",
+     "gif-encoder-2": "^1.0.5",
+     "googleapis": "^171.4.0",
+     "gpt-tokenizer": "^3.4.0",
