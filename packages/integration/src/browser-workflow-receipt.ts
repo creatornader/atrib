@@ -358,7 +358,7 @@ export async function runBrowserUseWorkflowReceiptSmoke(): Promise<BrowserUseWor
   const privateKey = new Uint8Array(32).fill(25)
   const contextId = '62726f777365722d7573652d70726f6f'
   const privatePhrase = 'private browser-use note: vendor risk reviewed'
-  const browserUsePackageVersion = '0.7.1'
+  const browserUsePackageVersion = '0.8.0'
   const session = new BrowserSession({
     profile: {
       headless: true,
