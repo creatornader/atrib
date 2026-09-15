@@ -46,14 +46,14 @@
     "@noble/secp256k1": "^3.1.0",
     "@sd-jwt/core": "0.20.0",
     "@sd-jwt/sd-jwt-vc": "0.20.0",
-    "canonicalize": "^4.0.0",
+    "canonicalize": "^5.0.0",
     "jose": "6.2.10"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
     "fast-check": "^4.9.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   },
   "repository": {
     "type": "git",
