@@ -13,15 +13,15 @@
   "dependencies": {
     "@atrib/mcp": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "agents": "^0.22.0",
-    "zod": "^4.4.3"
+    "agents": "^0.23.0",
+    "zod": "^4.6.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260827.1",
-    "@types/node": "^26.4.0",
-    "tsx": "^4.23.12",
+    "@cloudflare/workers-types": "^5.20260911.1",
+    "@types/node": "^26.5.1",
+    "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11",
-    "wrangler": "^4.127.0"
+    "wrangler": "^4.131.1"
   }
 }
