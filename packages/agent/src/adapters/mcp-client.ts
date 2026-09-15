@@ -27,6 +27,7 @@
  */
 
 import type { ToolCallInterceptor } from '../middleware.js'
+import { extractResponseHeaders } from '../response-headers.js'
 
 /**
  * The minimal subset of `@modelcontextprotocol/sdk/client/index.js` Client
@@ -48,6 +49,8 @@ export interface MinimalMcpClient {
   ): Promise<{
     content?: unknown
     _meta?: Record<string, unknown>
+    headers?: Record<string, string | undefined>
+    responseHeaders?: Record<string, string | undefined>
     isError?: boolean
     [key: string]: unknown
   }>
@@ -138,10 +141,12 @@ export function wrapMcpClient<C extends MinimalMcpClient>(
     // transaction detection if the response shape matches a known protocol.
     try {
       const responseMeta = (result?._meta ?? {}) as Record<string, unknown>
+      const responseHeaders = extractResponseHeaders(result)
       // exactOptionalPropertyTypes: only include serverUrl when it's set,
       // because the interceptor's option type doesn't accept undefined.
       const responseOptions = {
         ...(serverUrl !== undefined ? { serverUrl } : {}),
+        ...(responseHeaders !== undefined ? { headers: responseHeaders } : {}),
         isError: (result as Record<string, unknown>)?.isError === true,
       }
       interceptor.onAfterToolResponse(toolName, result, responseMeta, responseOptions)

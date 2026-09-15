@@ -1,7 +1,7 @@
 # Evidence profile: `payments-detection`
 
 - **Type URI:** `https://atrib.dev/v1/evidence/payments-detection`
-- **Profile version:** `1.0.0` (semver of this document)
+- **Profile version:** `1.1.0` (semver of this document)
 - **Status:** atrib-maintained, registered after the initial [D137](../../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model) set per [D147](../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core). No legacy [§5.5.6](../../atrib-spec.md#556-generic-authorization-evidence-blocks) protocol string exists; the legacy set is frozen. This profile is envelope-native. Its normative owner is the [atrib Payments Profile](../payments-profile.md) ([§12](../payments-profile.md#12-evidence-profiles)).
 
 Carries detection facts for a `transaction` record: which rail fired, which hook matched, and the receipt identity source from the [D095](../../DECISIONS.md#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder) ladder. The typical payload is the detection material (the completion response, receipt artifact, or header set the hook matched against); `payload.hash` commits to it while the body stays private. Evidence never alters `verifyRecord().valid`, and a detection envelope never substitutes for a counterparty signature: the [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records) cross-attestation minimum is satisfied only by `signers[]` entries over canonical transaction bytes ([D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records)).
@@ -21,7 +21,19 @@ Carries detection facts for a `transaction` record: which rail fired, which hook
 | `hook`                    | string    | producer-declared |
 | `receipt_identity_source` | string    | producer-declared |
 
-`protocol` names the detected rail: `ACP`, `UCP`, `x402`, `MPP`, `AP2`, or `heuristic`. a2a-x402 detections report `AP2` per [payments profile §2.5](../payments-profile.md#25-ap2-and-a2a-x402). `hook` names the matched detection rule from [payments profile §2](../payments-profile.md#2-transaction-detection-hooks); recommended values are `completion_response`, `order_webhook`, `payment_response_header`, `payment_receipt_header`, `payment_receipt`, `checkout_receipt`, `receipt_jwt_envelope`, `payment_mandate_v01`, `a2a_x402_receipt`, `legacy_vc_mandate`, and `tool_name_heuristic`. `receipt_identity_source` is the [D095](../../DECISIONS.md#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder) ladder rung that produced the record's `content_id` (`payment_receipt`, `payment_receipt_jwt`, `checkout_receipt`, `checkout_receipt_jwt`, `legacy_payment_mandate`, `a2a_x402_receipt`, or `generic`); it is OPTIONAL for rails without a receipt identity ladder.
+`protocol` names the detected rail: `ACP`, `UCP`, `x402`, `MPP`, `AP2`, or
+`a2a-x402`. A producer MAY use `heuristic` for a caller-owned custom detector,
+but that value is outside the default payments-profile cases. `hook` names the
+matched detection rule from [payments profile §2](../payments-profile.md#2-transaction-detection-hooks);
+recommended values are `completion_response`, `terminal_order_webhook`,
+`payment_response_header`, `payment_receipt_header`, `mcp_receipt_metadata`,
+`payment_receipt`, `checkout_receipt`, `receipt_jwt_envelope`, and
+`a2a_x402_receipt`. Mandate-only and tool-name inputs are negative cases, not
+hook values. `receipt_identity_source` is the [D095](../../DECISIONS.md#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder)
+ladder rung that produced the record's `content_id`
+(`payment_receipt`, `payment_receipt_jwt`, `checkout_receipt`,
+`checkout_receipt_jwt`, `mcp_receipt`, `a2a_x402_receipt`, or `generic`); it is
+OPTIONAL for rails without a receipt identity ladder.
 
 ## Tier semantics
 
@@ -42,5 +54,5 @@ A verifier with this profile loaded recomputes the payload hash from retrieved d
 
 - [payments profile §2](../payments-profile.md#2-transaction-detection-hooks), [§3](../payments-profile.md#3-sdk-transaction-detection), [§12](../payments-profile.md#12-evidence-profiles)
 - [§5.5.7](../../atrib-spec.md#557-universal-evidence-envelope), [§1.7.6](../../atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
-- [D147](../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core), [D137](../../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model), [D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records), [D095](../../DECISIONS.md#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder)
+- [D188](../../DECISIONS.md#d188-default-payment-detection-requires-published-completion-evidence), [D147](../../DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core), [D137](../../DECISIONS.md#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model), [D052](../../DECISIONS.md#d052-cross-attestation-requirement-for-transaction-records), [D095](../../DECISIONS.md#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder)
 - Envelope corpus: [`spec/conformance/evidence-envelope/`](../../spec/conformance/evidence-envelope/) (`payments-detection--*` family); hook semantics: [`spec/conformance/payments-profile/detection/`](../../spec/conformance/payments-profile/detection/)

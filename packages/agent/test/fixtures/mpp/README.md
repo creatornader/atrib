@@ -6,11 +6,11 @@ Real captured payload shapes from the Machine Payments Protocol (MPP).
 
 - https://github.com/tempoxyz/mpp-specs
 - https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/ (`draft-ryan-httpauth-payment-01`; "The 'Payment' HTTP Authentication Scheme", co-authored by engineers from Tempo Labs and Stripe)
-- https://mpp.dev/overview
+- https://mpp.dev/protocol
 - https://stripe.com/blog/machine-payments-protocol (March 2026 launch)
 
 **Protocol version:** `draft-ryan-httpauth-payment-01`
-**Verified:** 2026-04-06
+**Verified:** 2026-09-02
 
 ## Protocol shape
 
@@ -26,7 +26,7 @@ The detector triggers on step 5; presence of the `Payment-Receipt` header on a s
 
 ## Required fields in the decoded receipt
 
-Per draft [§5.3](../../../../../atrib-spec.md#53-atribmcp-mcp-server-middleware):
+Per [§5.3 of the current IETF draft](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/):
 
 | Field       | Type   | Value                                                       |
 | ----------- | ------ | ----------------------------------------------------------- |
@@ -37,9 +37,19 @@ Per draft [§5.3](../../../../../atrib-spec.md#53-atribmcp-mcp-server-middleware
 
 The spec says: _"Servers MUST NOT return a Payment-Receipt header on error responses."_ So header presence is a reliable detection signal.
 
+## MCP transport
+
+MPP's JSON-RPC/MCP transport places a successful receipt at
+`result._meta["org.paymentauth/receipt"]`. The current detector requires
+`status: "success"`, non-empty `method` and `challengeId`, and an RFC 3339
+`timestamp`; `reference` is optional on this transport. The receipt is
+structural declared evidence. It is not a universal settlement proof.
+
 ## Files
 
 - `payment_receipt_decoded.json`: Example decoded `Payment-Receipt` payload. We do NOT decode this in detection (header presence is the on-wire signal); fixture is here for future shape validation.
+- `payment_receipt_mcp.json`: Example successful MCP result with the native
+  `org.paymentauth/receipt` metadata.
 
 ## How MPP differs from x402
 

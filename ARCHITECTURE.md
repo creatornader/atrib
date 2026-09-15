@@ -258,20 +258,20 @@ The decision is documented in [D006](DECISIONS.md#d006-merkle-log-c2sp-tlog-tile
 
 ## Payment protocol integration
 
-The split is: core accommodates, profile implements. The core spec keeps three payment-facing elements: the `transaction` event type (URI and 0x02 log-entry byte), the cross-attestation rule ([§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)), and the universal evidence envelope ([§5.5.7](atrib-spec.md#557-universal-evidence-envelope)). Everything rail-specific (per-rail detection hooks, the SDK detection contract, the policy format, the calculation algorithm, and settlement documents) lives in the independently versioned [atrib Payments Profile](docs/payments-profile.md) ([D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)), so rail churn never edits the core spec.
+The split is: core accommodates, profile implements. The core spec keeps three payment-facing elements: the `transaction` event type (URI and 0x02 log-entry byte), the cross-attestation rule ([§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)), and the universal evidence envelope ([§5.5.7](atrib-spec.md#557-universal-evidence-envelope)). Everything payment-related (completion detection hooks, the SDK detection contract, the policy format, the calculation algorithm, and settlement documents) lives in the independently versioned [atrib Payments Profile](docs/payments-profile.md) ([D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)), so rail churn never edits the core spec.
 
-atrib detects transaction events from six agent commerce protocols simultaneously:
+atrib detects transaction events from six payment-related completion cases simultaneously:
 
 | Protocol                | Detection signal                                          | Source                       |
 | ----------------------- | --------------------------------------------------------- | ---------------------------- |
-| ACP (Stripe/OpenAI)     | `status === "completed"` + embedded `order`               | Checkout completion response |
+| ACP (Stripe/OpenAI)     | `status === "completed"` + embedded `order`; terminal webhook requires Order `status: "completed"` + non-empty `id` | Checkout completion response or terminal webhook |
 | UCP                     | Same as ACP + top-level `ucp.version` envelope            | Checkout completion response |
-| x402 (Coinbase)         | `PAYMENT-RESPONSE` HTTP header                            | Tool call response headers   |
-| MPP (Tempo Labs/Stripe) | `Payment-Receipt` HTTP header                             | Tool call response headers   |
+| x402 (x402 Foundation)  | `PAYMENT-RESPONSE` HTTP header                            | Tool call response headers   |
+| MPP (Tempo Labs/Stripe) | `Payment-Receipt` HTTP header or MCP `result._meta["org.paymentauth/receipt"]` | HTTP/MCP tool response |
 | AP2 (Google)            | Successful CheckoutReceipt or PaymentReceipt              | A2A task or tool response    |
-| a2a-x402 (Google)       | `metadata["x402.payment.status"] === "payment-completed"` | A2A task metadata            |
+| a2a-x402 (Google)       | `metadata["x402.payment.status"] === "payment-completed"` plus a successful receipt | A2A task metadata |
 
-The design principle: detect, don't implement. atrib pattern-matches on tool call responses to identify when a transaction occurred. It doesn't initiate payments, move money, hold funds, or enforce settlement. The detection logic for all six protocols is in `@atrib/agent`'s `transaction.ts` and runs simultaneously. You don't choose a payment protocol at install time.
+The design principle: detect, don't implement. atrib pattern-matches on tool call responses to identify when a transaction occurred. It doesn't initiate payments, move money, hold funds, or enforce settlement. The six payment-related completion cases are in `@atrib/agent`'s `transaction.ts` and run simultaneously. You don't choose a payment protocol at install time. Tool-name inference is not part of the default detector.
 
 AP2 has a second verifier-side surface. `@atrib/agent` treats successful CheckoutReceipt or PaymentReceipt as the transaction close signal. `@atrib/verify` can then inspect AP2 / Verifiable Intent evidence after detection: signed receipt JWTs, receipt references, VI SD-JWT signatures, `sd_hash` links, disclosure digests, delegated agent keys, and checkout/payment hash binding. That keeps authorization checks out of the detector while still giving merchants dispute-grade evidence.
 

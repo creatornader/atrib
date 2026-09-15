@@ -3,18 +3,18 @@
   "corpus": "payments-profile/detection",
   "rail": "ucp",
   "profile_section": "2.2",
-  "description": "UCP checkout completion: identical on-wire shape to ACP plus the top-level ucp.version envelope. The envelope discriminates UCP from ACP.",
+  "description": "UCP v2026-08-25 synchronous checkout completion: status completed and an order, plus the versioned ucp envelope with capability and payment-handler metadata. The envelope discriminates UCP from ACP.",
   "input": {
     "tool_name": "complete_checkout",
     "response": {
       "ucp": {
-        "version": "2026-01-11",
-        "capabilities": [
-          {
-            "name": "dev.ucp.shopping.checkout",
-            "version": "2026-01-11"
-          }
-        ]
+        "version": "2026-08-25",
+        "capabilities": {
+          "dev.ucp.shopping.checkout": [{ "version": "2026-08-25" }]
+        },
+        "payment_handlers": {
+          "dev.ucp.common.payment": [{ "version": "2026-08-25", "id": "handler_1" }]
+        }
       },
       "id": "chk_123456789",
       "status": "completed",

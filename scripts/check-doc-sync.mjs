@@ -1146,14 +1146,13 @@ function buildInlineCodeMask(line) {
   return mask
 }
 
-// ─── Check: payment protocol count consistency ─────────────────────────────
+// ─── Check: payment detection-case count consistency ───────────────────────
 //
 // Ground truth: the payments-profile detection corpus manifest's `rails`
 // array (spec/conformance/payments-profile/detection/manifest.json), which
-// mirrors the canonical rail enumeration in docs/payments-profile.md §1
-// (P048). Cross-check the profile document's own sentence, then scan the
-// hub docs for "<word> payment protocols" / "<word> agent commerce
-// protocols" / "<word> protocols" claims.
+// mirrors the canonical detection-case enumeration in docs/payments-profile.md
+// §1 (P048). Cross-check the profile document's own sentence, then scan the
+// hub docs for stale number-word protocol claims.
 
 function checkPaymentProtocolCount() {
   const check = 'payment-protocol-count'
@@ -1177,15 +1176,15 @@ function checkPaymentProtocolCount() {
   // The profile's canonical sentence must agree with the manifest, both in
   // count word and in rail set.
   const profile = read('docs/payments-profile.md')
-  const claim = profile.match(/This profile detects (\w+) payment protocols: ([^.]+)\./)
+  const claim = profile.match(/This profile defines (\w+) payment-related completion-detection cases: ([^.]+)\./)
   if (!claim) {
-    fail(check, 'docs/payments-profile.md canonical "This profile detects <word> payment protocols: ..." sentence not found')
+    fail(check, 'docs/payments-profile.md canonical detection-case sentence not found')
     return
   }
   if (claim[1].toLowerCase() !== expectedWord) {
     fail(
       check,
-      `docs/payments-profile.md claims "${claim[1]} payment protocols" but the detection corpus manifest enumerates ${actualCount} rails`,
+      `docs/payments-profile.md claims "${claim[1]} detection cases" but the detection corpus manifest enumerates ${actualCount} cases`,
       { claimed: claim[1], actualCount, rails },
     )
     mismatchCount += 1
@@ -1227,7 +1226,7 @@ function checkPaymentProtocolCount() {
     }
   }
   if (mismatchCount === 0) {
-    ok(check, `${actualCount} payment protocols, profile enumeration and hub docs agree`)
+    ok(check, `${actualCount} payment detection cases, profile enumeration and hub docs agree`)
   }
 }
 

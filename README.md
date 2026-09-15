@@ -298,20 +298,31 @@ your stack.
 | Trace repair suspect                    | [`packages/integration/examples/trace-repair-suspect/`](packages/integration/examples/trace-repair-suspect/)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | End-to-end demo                         | [`packages/integration/examples/end-to-end/`](packages/integration/examples/end-to-end/)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
-## Payment protocol detection
+## Payment-related completion detection
 
-atrib detects transaction events from all six simultaneously. It does not move money or enforce transactions. The per-rail hooks are defined by the [atrib Payments Profile](docs/payments-profile.md), which versions independently of the core spec ([D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core)); core keeps the `transaction` event type, the cross-attestation rule, and the evidence envelope.
+atrib detects transaction events from six payment-related completion cases. It
+does not implement payment methods, move money, or enforce transactions. The
+per-surface hooks are defined by the [atrib Payments Profile](docs/payments-profile.md),
+which versions independently of the core spec ([D147](DECISIONS.md#d147-payments-profile-spin-out-from-protocol-core));
+core keeps the `transaction` event type, the cross-attestation rule, and the
+evidence envelope. The public packages provide runtime observation and
+verification of supplied evidence, not a payment client or protocol-wide
+market measurement system.
 
 | Protocol     | Sponsor             | Detection signal                             | Profile ref                                                         |
 | ------------ | ------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
 | **ACP**      | Stripe / OpenAI     | `status === "completed"` + embedded `order`  | [§2.1](docs/payments-profile.md#21-acp-agentic-commerce-protocol)   |
 | **UCP**      | Google / Shopify    | Same as ACP + `ucp.version` envelope         | [§2.2](docs/payments-profile.md#22-ucp-universal-commerce-protocol) |
-| **x402**     | Coinbase            | `PAYMENT-RESPONSE` HTTP header               | [§2.3](docs/payments-profile.md#23-x402)                            |
-| **MPP**      | Tempo Labs / Stripe | `Payment-Receipt` HTTP header                | [§2.4](docs/payments-profile.md#24-mpp-machine-payments-protocol)   |
+| **x402**     | x402 Foundation     | `PAYMENT-RESPONSE` HTTP header               | [§2.3](docs/payments-profile.md#23-x402)                            |
+| **MPP**      | Tempo Labs / Stripe | `Payment-Receipt` HTTP header or MCP `result._meta["org.paymentauth/receipt"]` | [§2.4](docs/payments-profile.md#24-mpp-machine-payments-protocol)   |
 | **AP2**      | Google              | Successful CheckoutReceipt or PaymentReceipt | [§2.5](docs/payments-profile.md#25-ap2-and-a2a-x402)                |
-| **a2a-x402** | Google              | A2A task metadata `payment-completed`        | [§2.5](docs/payments-profile.md#25-ap2-and-a2a-x402)                |
+| **a2a-x402** | Google              | A2A task `payment-completed` plus a successful receipt | [§2.5](docs/payments-profile.md#25-ap2-and-a2a-x402)                |
 
-x401 is intentionally not in this table. It is a `401` proof-requirement protocol for credential-gated HTTP routes, so [`@atrib/verify`](packages/verify/README.md) treats x401 artifacts as authorization evidence rather than transaction signals. The current Proof issue and PR map lives in [`docs/proof-x401-open-threads.md`](docs/proof-x401-open-threads.md).
+x401 is intentionally not in this table. It is a `401` proof-requirement
+protocol for credential-gated HTTP routes, so
+[`@atrib/verify`](packages/verify/README.md) treats x401 artifacts as
+authorization evidence rather than transaction signals. The current Proof
+issue and PR map lives in [`docs/proof-x401-open-threads.md`](docs/proof-x401-open-threads.md).
 
 ## Packages
 

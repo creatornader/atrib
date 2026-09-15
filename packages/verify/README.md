@@ -76,8 +76,12 @@ Per the [§5.8](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#58
 ## API reference
 
 Payment-specific APIs now also ship at `@atrib/verify/payments`:
-`verifySettlementRecommendation`, `calculate`, `verifyAp2ViEvidence`, and
-`verifyAp2ViEvidenceAsync`. Root exports remain during the deprecation cycle.
+`verifySettlementRecommendation`, `calculate`, `verifyAp2ViEvidence`,
+`verifyAp2ViEvidenceAsync`, and structural MPP receipt inspection helpers
+(`inspectMppReceipt`, `inspectMppHttpReceiptHeader`, and
+`inspectMppMcpResult`). MPP inspection is declared evidence only. It does not
+verify a payment method or settlement rail. Root exports remain during the
+deprecation cycle.
 
 Nostr and Buzz event evidence APIs ship at the package root:
 `deriveNostrEventId`, `verifyNostrEvent`, `verifyBuzzOwnerAttestation`, and

@@ -9681,6 +9681,76 @@ operable through the profile-aware runtime updater.
 **Protocol impact.** None. This is a deployment boundary. It changes no MCP
 message and no atrib signed byte.
 
+## D188: Default payment detection requires published completion evidence
+
+**Date:** 2026-09-02
+
+**Status:** Accepted
+
+**Supersedes:** The AP2 v0.1 mandate-detection fallback and related identity
+ladder entries in [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt)
+and [D095](#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder).
+
+**Context.** A current review of the payment-related protocol sources found
+that several old compatibility paths could close an atrib transaction before a
+protocol published a completion outcome. AP2 mandates authorize an action but
+do not prove acceptance. ACP order webhooks expose lifecycle states such as
+`created` and `shipped`, not only completed purchases. The a2a-x402 project is
+an A2A extension with a distinct transport identity. MPP now has a published
+JSON-RPC/MCP transport whose receipt lives in result metadata.
+
+**Decision.** The default `detectTransaction()` implementation requires a
+published completion signal for every payment-related transaction event:
+
+1. AP2 mandate-only payloads, including v0.1 DataParts and legacy W3C VC
+   wrappers, are authorization evidence and never transaction events.
+2. Tool names never produce a transaction in the default detector. The public
+   custom-detector hook remains available for host-owned heuristics, which are
+   outside the six payments-profile detection cases.
+3. a2a-x402 emits `protocol: 'a2a-x402'` so consumers can distinguish the A2A
+   extension from native AP2 receipts.
+4. ACP order webhooks require a full Order with `status: "completed"` and a
+   non-empty stable `id`. Other lifecycle states remain nonterminal.
+5. MPP detection accepts both the HTTP `Payment-Receipt` header and the
+   JSON-RPC/MCP `result._meta["org.paymentauth/receipt"]` receipt. The MCP
+   path uses structural, declared evidence. It does not verify a payment
+   method or settlement rail.
+
+The public packages still observe and verify evidence around host-owned
+payment flows. They do not execute payments, operate wallets, run
+facilitators, or measure protocol-wide usage.
+
+**Alternatives considered.**
+
+- _Keep mandate and tool-name fallbacks for compatibility._ Rejected. Both
+  paths create false transaction events without a published completion.
+- _Report a2a-x402 as AP2._ Rejected. The extension is a distinct upstream
+  wire surface and consumers need to preserve that distinction.
+- _Make mppx a runtime dependency._ Rejected. atrib consumes the stable MPP
+  wire contract and keeps method-specific settlement verification injectable.
+
+**Consequences.**
+
+- The payments-profile corpus now contains negative cases for mandate-only,
+  nonterminal webhook, and tool-name inputs.
+- MPP MCP receipts have a structural inspection surface in
+  `@atrib/verify/payments` without exposing receipt or credential bodies in
+  signed atrib records.
+- Existing callers that supplied their own heuristic detector can retain that
+  detector, but the default profile no longer treats heuristics as a payment
+  protocol.
+
+**Cross-references.**
+
+- [D088](#d088-ap2-v02-transaction-hook-is-the-successful-receipt), previous
+  AP2 receipt boundary.
+- [D095](#d095-ap2-path-2-content_id-uses-a-stable-receipt-identity-ladder),
+  previous AP2 identity ladder.
+- [D147](#d147-payments-profile-spin-out-from-protocol-core), payments-profile
+  ownership and corpus.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
