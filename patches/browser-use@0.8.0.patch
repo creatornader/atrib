@@ -1,3 +1,45 @@
+diff --git a/dist/browser/extension-security.js b/dist/browser/extension-security.js
+index 06a46049e408947d656fc7a6104f3adef60f7d7b..112741ac79158398fac08a28280d7fb30c4a41e5 100644
+--- a/dist/browser/extension-security.js
++++ b/dist/browser/extension-security.js
+@@ -3,7 +3,7 @@ import path from 'node:path';
+ import { randomUUID } from 'node:crypto';
+ import { Transform } from 'node:stream';
+ import { pipeline } from 'node:stream/promises';
+-import extract from 'extract-zip';
++import AdmZip from 'adm-zip';
+ export const MAX_EXTENSION_DOWNLOAD_BYTES = 50 * 1024 * 1024;
+ export const MAX_EXTENSION_ARCHIVE_ENTRIES = 10_000;
+ export const MAX_EXTENSION_ENTRY_BYTES = 100 * 1024 * 1024;
+@@ -275,18 +275,17 @@ export const extractExtensionArchive = async (archivePath, extractDir, options =
+         if (offset > 0) {
+             await writeLimitedExtensionStream(fs.createReadStream(archiveSnapshotPath, { start: offset }), zipPath);
+         }
++        const zip = new AdmZip(zipPath);
+         const budget = new ExtensionArchiveBudget();
+-        await extract(zipPath, {
+-            dir: path.resolve(stagingDir),
+-            onEntry(entry) {
+-                budget.addEntry({
+-                    fileName: entry.fileName,
+-                    uncompressedSize: entry.uncompressedSize,
+-                    compressedSize: entry.compressedSize,
+-                    externalFileAttributes: entry.externalFileAttributes,
+-                });
+-            },
+-        });
++        for (const entry of zip.getEntries()) {
++            budget.addEntry({
++                fileName: entry.entryName,
++                uncompressedSize: entry.header.size,
++                compressedSize: entry.header.compressedSize,
++                externalFileAttributes: entry.attr,
++            });
++        }
++        zip.extractAllTo(path.resolve(stagingDir), false);
+         const manifestPath = path.join(stagingDir, 'manifest.json');
+         const manifestStat = await fsp.lstat(manifestPath);
+         if (!manifestStat.isFile() ||
 diff --git a/dist/filesystem/file-system.js b/dist/filesystem/file-system.js
 index a15970fac46ad1f7c4824adc00865f50c52ada51..22c06b200e24b0205b8de8d25b750d12faa8a741 100644
 --- a/dist/filesystem/file-system.js
