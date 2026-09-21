@@ -50,11 +50,11 @@
     "@atrib/mcp": "workspace:*",
     "@atrib/verify": "workspace:*",
     "@noble/hashes": "^2.4.0",
-    "canonicalize": "^4.0.0"
+    "canonicalize": "^5.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.1"
   }
 }
