@@ -1,5 +1,12 @@
 # @atrib/recall
 
+## 5.1.5
+
+### Patch Changes
+
+- Updated dependencies [8811d2c]
+  - @atrib/verify@0.14.0
+
 ## 5.1.4
 
 ### Patch Changes
