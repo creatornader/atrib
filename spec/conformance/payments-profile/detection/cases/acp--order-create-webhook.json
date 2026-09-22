@@ -3,7 +3,7 @@
   "corpus": "payments-profile/detection",
   "rail": "acp",
   "profile_section": "2.1",
-  "description": "ACP server-to-merchant order_create webhook event (snake_case event type, not dot-notation). Detected as ACP with data.permalink_url as the checkout URL.",
+  "description": "An ACP order_create webhook in the non-terminal created state is a lifecycle notification, not completion evidence.",
   "input": {
     "tool_name": "webhook_handler",
     "response": {
@@ -18,8 +18,7 @@
     }
   },
   "expected": {
-    "detected": true,
-    "protocol": "ACP",
-    "checkout_url": "https://www.testshop.com/orders/checkout_session_123"
+    "detected": false,
+    "protocol": null
   }
 }

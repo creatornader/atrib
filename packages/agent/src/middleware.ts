@@ -72,7 +72,7 @@ export interface ToolCallInterceptor {
     options?: {
       headers?: Record<string, string | undefined>
       isError?: boolean
-      /** The MCP server URL of the tool that was called (for heuristic content_id). */
+      /** The MCP server URL of the tool that was called (for protocol fallback content_id). */
       serverUrl?: string
     },
   ): void
@@ -335,8 +335,8 @@ function detectWithDetectors(
  * Derives content_id per protocol:
  * - ACP/UCP: checkout URL from response, tool_name = "checkout"
  * - x402/MPP: HTTP endpoint URL, tool_name = "checkout"
- * - AP2: protocol-specific receipt or mandate identity when present
- * - Heuristic: MCP server URL of tool, actual tool_name
+ * - AP2/a2a-x402: protocol-specific receipt identity when present
+ * - Heuristic: MCP server URL of tool, actual tool_name (custom detectors only)
  */
 async function emitTransactionRecord(
   toolName: string,
@@ -372,6 +372,7 @@ async function emitTransactionRecord(
         contentIdToolName = 'checkout'
         break
       case 'AP2':
+      case 'a2a-x402':
         contentIdServerUrl = callServerUrl ?? ''
         contentIdToolName = 'checkout'
         break

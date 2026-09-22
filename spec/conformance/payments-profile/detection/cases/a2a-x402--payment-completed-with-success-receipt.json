@@ -3,7 +3,7 @@
   "corpus": "payments-profile/detection",
   "rail": "a2a-x402",
   "profile_section": "2.5",
-  "description": "a2a-x402: an A2A task whose status.message.metadata carries x402.payment.status \"payment-completed\" and at least one receipt with success true. Reported as protocol AP2 because a2a-x402 is the AP2 crypto path.",
+  "description": "a2a-x402: an A2A task whose status.message.metadata carries x402.payment.status \"payment-completed\" and at least one receipt with success true. The emitted protocol identity remains a2a-x402.",
   "input": {
     "tool_name": "agent_settle",
     "response": {
@@ -37,6 +37,6 @@
   },
   "expected": {
     "detected": true,
-    "protocol": "AP2"
+    "protocol": "a2a-x402"
   }
 }

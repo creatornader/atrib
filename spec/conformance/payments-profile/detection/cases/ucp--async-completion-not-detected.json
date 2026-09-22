@@ -1,0 +1,25 @@
+{
+  "name": "async-completion-not-detected",
+  "corpus": "payments-profile/detection",
+  "rail": "ucp",
+  "profile_section": "2.2",
+  "description": "UCP v2026-08-25 asynchronous completion remains complete_in_progress and has no order. It is not a completed transaction event.",
+  "input": {
+    "tool_name": "complete_checkout",
+    "response": {
+      "ucp": {
+        "version": "2026-08-25",
+        "payment_handlers": {
+          "dev.ucp.common.payment": [{ "version": "2026-08-25", "id": "handler_1" }]
+        }
+      },
+      "id": "chk_123456789",
+      "status": "complete_in_progress",
+      "currency": "USD"
+    }
+  },
+  "expected": {
+    "detected": false,
+    "protocol": null
+  }
+}

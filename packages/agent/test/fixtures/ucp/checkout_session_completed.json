@@ -1,7 +1,12 @@
 {
   "ucp": {
-    "version": "2026-01-11",
-    "capabilities": [{ "name": "dev.ucp.shopping.checkout", "version": "2026-01-11" }]
+    "version": "2026-08-25",
+    "capabilities": {
+      "dev.ucp.shopping.checkout": [{ "version": "2026-08-25" }]
+    },
+    "payment_handlers": {
+      "dev.ucp.common.payment": [{ "version": "2026-08-25", "id": "handler_1" }]
+    }
   },
   "id": "chk_123456789",
   "status": "completed",

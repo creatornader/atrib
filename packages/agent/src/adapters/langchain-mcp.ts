@@ -63,6 +63,7 @@
  */
 
 import type { ToolCallInterceptor } from '../middleware.js'
+import { extractResponseHeaders } from '../response-headers.js'
 
 /**
  * Marker symbol set on a patched client to make repeated patches idempotent.
@@ -264,8 +265,10 @@ function patchClient(
         string,
         unknown
       >
+      const responseHeaders = extractResponseHeaders(result)
       const responseOptions = {
         ...(serverUrl !== undefined ? { serverUrl } : {}),
+        ...(responseHeaders !== undefined ? { headers: responseHeaders } : {}),
         isError: (result as Record<string, unknown>)?.isError === true,
       }
       interceptor.onAfterToolResponse(toolName, result, responseMeta, responseOptions)

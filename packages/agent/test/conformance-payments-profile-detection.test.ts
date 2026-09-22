@@ -48,7 +48,7 @@ interface Manifest {
 const manifest = JSON.parse(readFileSync(join(CORPUS, 'manifest.json'), 'utf8')) as Manifest
 
 describe('payments profile detection conformance: manifest', () => {
-  it('pins the six-rail enumeration and every committed case', () => {
+  it('pins the six detection-case enumeration and every committed case', () => {
     expect(manifest.corpus).toBe('payments-profile/detection')
     expect(manifest.rails).toEqual(['ACP', 'UCP', 'x402', 'MPP', 'AP2', 'a2a-x402'])
     // Every manifest case exists on disk and self-describes.

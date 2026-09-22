@@ -1,0 +1,26 @@
+{
+  "name": "terminal-order-webhook",
+  "corpus": "payments-profile/detection",
+  "rail": "acp",
+  "profile_section": "2.1",
+  "description": "An ACP order webhook with a full terminal Order, completed status, and stable id is completion evidence.",
+  "input": {
+    "tool_name": "webhook_handler",
+    "response": {
+      "type": "order_update",
+      "data": {
+        "type": "order",
+        "id": "ord_456",
+        "checkout_session_id": "checkout_session_456",
+        "permalink_url": "https://www.testshop.com/orders/ord_456",
+        "status": "completed",
+        "adjustments": []
+      }
+    }
+  },
+  "expected": {
+    "detected": true,
+    "protocol": "ACP",
+    "checkout_url": "https://www.testshop.com/orders/ord_456"
+  }
+}

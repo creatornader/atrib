@@ -25,3 +25,14 @@ export type {
   VerifyRecommendationOptions,
 } from './verifier.js'
 export type * from './ap2-vi-evidence.js'
+export {
+  inspectMppHttpReceipt,
+  inspectMppHttpReceiptHeader,
+  inspectMppMcpResult,
+  inspectMppReceipt,
+} from './mpp-receipt.js'
+export type {
+  MppReceipt,
+  MppReceiptInspection,
+  MppReceiptInspectionOptions,
+} from './mpp-receipt.js'

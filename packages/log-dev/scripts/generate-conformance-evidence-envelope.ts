@@ -1375,7 +1375,7 @@ async function main(): Promise<void> {
   const detectionEnvelope: EvidenceEnvelope = {
     envelope: 1,
     profile: `${ATRIB_PROFILE_BASE}payments-detection`,
-    profile_version: '1.0.0',
+    profile_version: '1.1.0',
     tier: 'declared',
     payload: {
       hash: detectionHash,
