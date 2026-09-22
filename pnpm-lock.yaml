@@ -6,21 +6,22 @@ settings:
 
 overrides:
   ip-address@<10.1.1: ^10.1.1
-  fast-uri@<3.1.5: 3.1.5
-  hono@<4.12.34: 4.12.34
+  fast-uri@<3.1.6: 3.1.6
+  hono@<4.13.5: 4.13.5
   '@hono/node-server@<2.0.10': 2.0.10
-  qs@<6.15.2: ^6.15.2
+  qs@<6.16.0: 6.16.0
+  mysql2@<3.23.1: 3.23.1
   uuid@<11.1.1: 11.1.1
   langsmith@<0.6.0: 0.7.3
   tar@<7.5.21: 7.5.21
   protobufjs@<7.6.5: 7.6.5
-  adm-zip@<0.6.0: 0.6.0
+  adm-zip@<0.6.1: 0.6.1
   body-parser@<2.3.0: 2.3.0
   fast-xml-parser@<5.10.1: 5.10.1
-  sharp@<0.35.3: 0.35.3
+  sharp@<0.35.4: 0.35.4
   form-data@<2.5.6: 2.5.6
   form-data@>=4.0.0 <4.0.6: 4.0.6
-  js-yaml: 4.3.1
+  js-yaml: 4.3.2
   nanoid@<4.0.0: 3.3.18
   ws@>=8.0.0 <8.21.0: 8.21.0
   brace-expansion@<=5.0.8: 5.0.9
@@ -42,6 +43,9 @@ patchedDependencies:
   '@ai-sdk/provider-utils@3.1.0-beta.9':
     hash: nlp4uak3riqdhuejm64gljdh3m
     path: patches/@ai-sdk__provider-utils@3.1.0-beta.9.patch
+  browser-use@0.8.0:
+    hash: 63bs3oj54x6xuykl5z2w7trcle
+    path: patches/browser-use@0.8.0.patch
   minimatch@3.1.5:
     hash: oewu6bm64l7gihpzb3brhaa674
     path: patches/minimatch@3.1.5.patch
@@ -289,7 +293,7 @@ importers:
         version: 4.0.2(encoding@0.1.13)
       '@google/adk':
         specifier: 2.0.0
-        version: 2.0.0(w6wnhyn2c3vq57tc6ufiof7ecq)
+        version: 2.0.0(doc3rqbmpivb2wyxiql3cp4uim)
       '@langchain/core':
         specifier: 1.2.9
         version: 1.2.9(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-proto@0.221.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(openai@7.8.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(undici@7.29.0)(ws@8.21.0(bufferutil@4.1.0))(zod@4.4.3))(ws@8.21.0(bufferutil@4.1.0))
@@ -301,7 +305,7 @@ importers:
         version: 1.63.0(@grpc/grpc-js@1.14.4)(ai@7.0.83(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(zod@4.4.3)
       '@mastra/mcp':
         specifier: 1.17.2
-        version: 1.17.2(@cfworker/json-schema@4.1.1)(@mastra/core@1.63.0(@grpc/grpc-js@1.14.4)(ai@7.0.83(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(zod@4.4.3))(express@5.2.1)(hono@4.12.34)(react@19.2.6)(zod@4.4.3)
+        version: 1.17.2(@cfworker/json-schema@4.1.1)(@mastra/core@1.63.0(@grpc/grpc-js@1.14.4)(ai@7.0.83(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(zod@4.4.3))(express@5.2.1)(hono@4.13.5)(react@19.2.6)(zod@4.4.3)
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
@@ -349,16 +353,16 @@ importers:
         version: 7.0.83(zod@4.4.3)
       browser-use:
         specifier: 0.8.0
-        version: 0.8.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(bufferutil@4.1.0)(encoding@0.1.13)(ws@8.21.0(bufferutil@4.1.0))
+        version: 0.8.0(patch_hash=63bs3oj54x6xuykl5z2w7trcle)(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(bufferutil@4.1.0)(encoding@0.1.13)(ws@8.21.0(bufferutil@4.1.0))
       jose:
         specifier: 6.2.10
         version: 6.2.10
       llamaindex:
         specifier: 0.12.1
-        version: 0.12.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.12.34)(tree-sitter@0.22.4)(web-tree-sitter@0.24.7)(zod@4.4.3)
+        version: 0.12.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.13.5)(tree-sitter@0.22.4)(web-tree-sitter@0.24.7)(zod@4.4.3)
       mem0ai:
         specifier: 3.1.7
-        version: 3.1.7(abawyzfqvjhqm7pf24z4uo3zu4)
+        version: 3.1.7(hzfpgv6nshut4mtlzqdvvgqygy)
       openai:
         specifier: 7.8.0
         version: 7.8.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(undici@7.29.0)(ws@8.21.0(bufferutil@4.1.0))(zod@4.4.3)
@@ -1087,7 +1091,7 @@ importers:
         version: 2.0.0
       '@modelcontextprotocol/node':
         specifier: ^2.0.0
-        version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.34)
+        version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.5)
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
@@ -2424,7 +2428,7 @@ packages:
     resolution: {integrity: sha512-ZcnNVhKTmyDJeg0UlnZjvM73JBsTAuhrH/J4fjwGOw59PwOW51r4J+p6CsKZWXdKSme4MFqU62CZMOsdDrU4CA==}
     engines: {node: '>=20'}
     peerDependencies:
-      hono: 4.12.34
+      hono: 4.13.5
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -2450,144 +2454,144 @@ packages:
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
     engines: {node: '>=18'}
 
-  '@img/sharp-darwin-arm64@0.35.3':
-    resolution: {integrity: sha512-RMnFX7YQsMoh7lWfcM4NEHHymBX/rLuKNPVM84XE9ONPcaSCDgE7CHIHpSgPcO2xcRthgBy1HfNO319mwhIAkg==}
+  '@img/sharp-darwin-arm64@0.35.4':
+    resolution: {integrity: sha512-Uhfl4V4lhP2nbUVF9+hyH1+luj86f1gUFeo8ALYxFoULoU+G87D43BfeMP8XHsk9boxAnCY/bf2EHwhA7MuGsA==}
     engines: {node: '>=20.9.0'}
     cpu: [arm64]
     os: [darwin]
 
-  '@img/sharp-darwin-x64@0.35.3':
-    resolution: {integrity: sha512-Xo+5uFBtLN0BKqieTxiFzFPQAUlBbbH5iBKyRX/z1JrbnYsHTfKJnUfL8+p2TPXr1pXqao4eeL4Rl144uDpK9w==}
+  '@img/sharp-darwin-x64@0.35.4':
+    resolution: {integrity: sha512-hWniXY3bG5qKpkKrAwPe4y+VTPmf086YQAnkxWh7uA1YrlRouWGa0M0Mxj3ZjnXFkv7/TD1bTy9lGUK26vRvWw==}
     engines: {node: '>=20.9.0'}
     cpu: [x64]
     os: [darwin]
 
-  '@img/sharp-freebsd-wasm32@0.35.3':
-    resolution: {integrity: sha512-lUxcqWIj2wMQ9BrwNjngcr1gWUr5xgaGThBRqPPalIC2n67Cqj1uPh8NnA/ZhAg8hUbKl+kVHKwgUIwe6ZYPrg==}
+  '@img/sharp-freebsd-wasm32@0.35.4':
+    resolution: {integrity: sha512-lIsKw/BU+kjB4eZjxrYrZmwOJYi3Ajrv66iAlBmUPyKc3HpnloevB1g3wxGD9P/5BbQ1brBGl65VRRrCvQDEqA==}
     engines: {node: '>=20.9.0'}
     os: [freebsd]
 
-  '@img/sharp-libvips-darwin-arm64@1.3.2':
-    resolution: {integrity: sha512-9J6ypZFpQBj4YnePGoq/S38w6nz+vqg5WZLrLGY4YuSemdMq47GMLBPO42MzwdGwpg/agZ7xzZcFHa48xlywfg==}
+  '@img/sharp-libvips-darwin-arm64@1.3.3':
+    resolution: {integrity: sha512-suTBPTDGrI9WodccaDdwZItTSaBYASlBk1NSfElSHrUfzu3szG6lvIF58+WiFvnfzuK8ZBFS5zE00PxqxnRiPg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@img/sharp-libvips-darwin-x64@1.3.2':
-    resolution: {integrity: sha512-m2pW1n6cns9VaubNwsZ+c3CRYjxNQWgJ5gPlnL1nbBcpkBvFm6SCFN5o0psFHI8w9n11NKhFkeEDns98tiqbEw==}
+  '@img/sharp-libvips-darwin-x64@1.3.3':
+    resolution: {integrity: sha512-FVJZ5mITMobmXIz/hPDTw0EintTW5H3WfrxwLqEqjiIihlu+hVRyGrFQ60xl0Lxn7Bt3zdpevPaQi0HEzqz9fw==}
     cpu: [x64]
     os: [darwin]
 
-  '@img/sharp-libvips-linux-arm64@1.3.2':
-    resolution: {integrity: sha512-dqVSFynCox4C/J8kT16V7SIFAns0IjgLwkvYT7p8LQVmJ5OS5b6tI9IGflxTeuBS//zXeFIUbwt5dwxyZ17cnA==}
+  '@img/sharp-libvips-linux-arm64@1.3.3':
+    resolution: {integrity: sha512-0DaL0A6Xu6sQSQFwe4iVCrKWU2cCTItnRsYsCdxAMm9NF6twAA9BKnoqy4hqz4+azQ0JHuA26qiUKsf1XJ/v5A==}
     cpu: [arm64]
     os: [linux]
 
-  '@img/sharp-libvips-linux-arm@1.3.2':
-    resolution: {integrity: sha512-1eMLzy92I4J6rmi4mAT8yC3HxOtniyGELlzGbNMLLeqe052ahFQ0h6LFq+lh5DsDIdYViIDst08abvSbcEdLXQ==}
+  '@img/sharp-libvips-linux-arm@1.3.3':
+    resolution: {integrity: sha512-3rbU4vqXXc3hY/OiXdl52xZvT0F1yEngWfvqudtPJg/KkyiaQw2DRsFrNzpmLvfavbwOq3qXn36GP8obHRULQA==}
     cpu: [arm]
     os: [linux]
 
-  '@img/sharp-libvips-linux-ppc64@1.3.2':
-    resolution: {integrity: sha512-3z0NHDxD6n5I9gc05U1eW1AyRm+Gznzq3naMrthPNqE6oYykcogW0l/jfpJdjYnuNl8R7yI9pNbE1XiUeyq0Aw==}
+  '@img/sharp-libvips-linux-ppc64@1.3.3':
+    resolution: {integrity: sha512-cdn1OvUBwsXhbC0zSzJnNzf5MZ/mTrobawDvNXBTxe8VtqKAm0sRuEY2Evzovb/w9JMk4TvRxqt1mekSuJz64w==}
     cpu: [ppc64]
     os: [linux]
 
-  '@img/sharp-libvips-linux-riscv64@1.3.2':
-    resolution: {integrity: sha512-bsb4rI+NldGOsXuej2r8OdSS8+zXDVaCWxyWrcv6kneTOlgAHtZABRzBBCwdsPiD90J4myNJuHpg6kA20ImW/w==}
+  '@img/sharp-libvips-linux-riscv64@1.3.3':
+    resolution: {integrity: sha512-HjPVx7yKz+0lqdhDlTw1tt90wamBoxhiXpvl1XZpJLiHH4RCJ5yDTqH+VlYPv2fwFs89JFw4c1IexYOcQUi4IQ==}
     cpu: [riscv64]
     os: [linux]
 
-  '@img/sharp-libvips-linux-s390x@1.3.2':
-    resolution: {integrity: sha512-/ABshyj8gCpyIrNXnHn4LorDJ0HHm1VhXPBlxZ8zAtfVPAaSafXPGn+sUSIRiwaSBy0mmFjSjiXI5mkcwdChKQ==}
+  '@img/sharp-libvips-linux-s390x@1.3.3':
+    resolution: {integrity: sha512-neWLh+3yCNThxnfy3c4BbVBeGgt9aftno+XbT56iK28RgeDs3UOFWviLWlUu0bArYVYJaFDK+RRohbicUNCm8Q==}
     cpu: [s390x]
     os: [linux]
 
-  '@img/sharp-libvips-linux-x64@1.3.2':
-    resolution: {integrity: sha512-ITPEtgffGJ0S6G9dRyw/366tJQqFRcHWPHhC+Stpg3Z8AEMrDrTr2lhdz4f/Y/HMbRh//7Z5mBzEpVdi62Oc3w==}
+  '@img/sharp-libvips-linux-x64@1.3.3':
+    resolution: {integrity: sha512-4vKmvAst9nrowcqquKFAyZJUDolUaIp8uRiN0mWFguJ1IplC9/pitXtlnnlU4aa/eJw3J7i67V+pwUL+wZGdsA==}
     cpu: [x64]
     os: [linux]
 
-  '@img/sharp-libvips-linuxmusl-arm64@1.3.2':
-    resolution: {integrity: sha512-zE9EdiUzUmg5mDT5a1rk5fYJ6GWPloTwWBYDS14naqHsL+EaMpDj1AWnpLgh3u0YCORv2Tt50wrcrpYqkP97Kw==}
+  '@img/sharp-libvips-linuxmusl-arm64@1.3.3':
+    resolution: {integrity: sha512-Y9kQaLMuNoB0bPYOOdcZMaseNrFpPodIWWMrx+CZyydf2xn68j9WYc6sWWRrDwNkzCQjKYfc68L7jKjGlHMibw==}
     cpu: [arm64]
     os: [linux]
 
-  '@img/sharp-libvips-linuxmusl-x64@1.3.2':
-    resolution: {integrity: sha512-m0lrLiUt+lBYnCFr8qV/65yMR4E/c7/wf78I5eKTdkEakFAlZ9QlzEM3QIhhAwVeUhLAHLcCq7a7Vszq/oFNZQ==}
+  '@img/sharp-libvips-linuxmusl-x64@1.3.3':
+    resolution: {integrity: sha512-fj8Mv0HHfD1Rr+4I68+3agJynxDWtBFgicTbSOb9Bke6pIwzGcJ+RX/yHjmiEGFMCavY/dxvem7MyNaJF+wDiw==}
     cpu: [x64]
     os: [linux]
 
-  '@img/sharp-linux-arm64@0.35.3':
-    resolution: {integrity: sha512-QgKDspHPnrU+GQ55XPhGwyhC8acLVOOSyAvo1oVfFmrIXLkDNmGWzAfDZ4xK8oSA1qBQrALcHX0G5UZni/SuFQ==}
+  '@img/sharp-linux-arm64@0.35.4':
+    resolution: {integrity: sha512-De4jpEnAU8Hd5oT0j1G3uL4ZvTuipVMn7YC6vPaJhy6/7EwEae0SVAoBrUMYQbkLGDm85taVWwuPc1a44LTzCQ==}
     engines: {node: '>=20.9.0'}
     cpu: [arm64]
     os: [linux]
 
-  '@img/sharp-linux-arm@0.35.3':
-    resolution: {integrity: sha512-affVWCTLooy8TSxbDx2qkzuDeaWLNVBA+P//FNBirHsXpP2fuBhk5AuboYUnrDnzoXes8GFjpTx0SBFOCRg+FA==}
+  '@img/sharp-linux-arm@0.35.4':
+    resolution: {integrity: sha512-7OAS8gI0EReKGVN2HssHlM6umJgxF5VI3xN0p9FA91p/YO+ou5hiNghLdZ5BEHztwaaK5+bLKRf8x/o2L2nk9A==}
     engines: {node: '>=20.9.0'}
     cpu: [arm]
     os: [linux]
 
-  '@img/sharp-linux-ppc64@0.35.3':
-    resolution: {integrity: sha512-sMd8rDxmpLOwv/7N44klFjOD5DUO7FLdjiXDI0hoxYaf7Ar262dQIEkosE98bps+5HPLtp/EvNqeqQtOycP/IA==}
+  '@img/sharp-linux-ppc64@0.35.4':
+    resolution: {integrity: sha512-2oYZJeIl4kCcMGk4ouZVjnkCtFrpQFlNEtJ6GbxzhHQchwH0NH/qEb9ykmOl29dqwMq+JhFdZn+1ak2FKhI9fQ==}
     engines: {node: '>=20.9.0'}
     cpu: [ppc64]
     os: [linux]
 
-  '@img/sharp-linux-riscv64@0.35.3':
-    resolution: {integrity: sha512-0Eob78yjlYPfL5vMNWAW55l3R9Y6BQS/gOfe0ZcP9mEz9ohhKSt4im1hayiknXgf8AWrFqMvJcKIdmLmEe7yeQ==}
+  '@img/sharp-linux-riscv64@0.35.4':
+    resolution: {integrity: sha512-cPbNChoRURAWdebDIHSenxRpgEdy7JkPydSnUxRm9VvKD7m0/xVaR/8Fzlu81pk5nHEvHH87UZUA7cTtwnbJSA==}
     engines: {node: '>=20.9.0'}
     cpu: [riscv64]
     os: [linux]
 
-  '@img/sharp-linux-s390x@0.35.3':
-    resolution: {integrity: sha512-KgAxQ0DxpNOq1rG2t5cgTgShJFGSuU7XO45cqC+1NVOuZnP6tlgZRuSYOfNupGkHID0o3cJOsw4DVeJpMovcGw==}
+  '@img/sharp-linux-s390x@0.35.4':
+    resolution: {integrity: sha512-RY0JFY8Fd6RonCBtHz+DvadaPkXDSI1AUn6yWL9TipqkZ1vY8w8evqdgyDFnkm4/K1ve1TvZiaePP5oSd4+WVQ==}
     engines: {node: '>=20.9.0'}
     cpu: [s390x]
     os: [linux]
 
-  '@img/sharp-linux-x64@0.35.3':
-    resolution: {integrity: sha512-8pqvxubL2PGdhlPy6GLqzDYMUjyRmKAwKHYKixpdJYBUK7PJ0C029XdsnpFIdgRZG68fZiGdHVWcKPvtiPB4cA==}
+  '@img/sharp-linux-x64@0.35.4':
+    resolution: {integrity: sha512-9qvvEAuk8k89TfWUoX2htWjbAMX8p+NxCppjpcg5k6xMsjhBQPTsoIh36h9Qde4WRuGpJeYnOjdosDn/cnv+OA==}
     engines: {node: '>=20.9.0'}
     cpu: [x64]
     os: [linux]
 
-  '@img/sharp-linuxmusl-arm64@0.35.3':
-    resolution: {integrity: sha512-Vz0iQjzzcSX3HCbfwFfCSG/9SCIqyO0mH2sXyiHaAYfBk0cRsCWXRyQYX0ovCK/PAQBbTzQ0dsPQHh5MAFL59w==}
+  '@img/sharp-linuxmusl-arm64@0.35.4':
+    resolution: {integrity: sha512-KB5jxpfWQTr0nc3xdHtWChdbifHrBGsd2SM62Eyxrl8afikm+f5qGBU75SJIZBT/S1MC8XyacdlXBMSWq6OURA==}
     engines: {node: '>=20.9.0'}
     cpu: [arm64]
     os: [linux]
 
-  '@img/sharp-linuxmusl-x64@0.35.3':
-    resolution: {integrity: sha512-6O1NPKcDVj9QEdg7Hx549EX8U0rp6yXQERqru6yRN7fGBn32UvIRJUlWnk+8xDCiG76hXVBbX82NZ/ZKr0euIg==}
+  '@img/sharp-linuxmusl-x64@0.35.4':
+    resolution: {integrity: sha512-f+eZJZIQNEEd26RPSW+76chwOf1XtA2Y/O+5ocVyLliHkeih3e+jhLVBdNTd2rS3IbNXK8+ug93Vf5ZXtF5Lxg==}
     engines: {node: '>=20.9.0'}
     cpu: [x64]
     os: [linux]
 
-  '@img/sharp-wasm32@0.35.3':
-    resolution: {integrity: sha512-cZ0XkcYGpHZkqW6iCkqTcmUC0CD9DhD5d/qeZlZkfRBn6GnHniZXLUo5+9xw8Iv76YE6LQFN9YNBlKREcCG76w==}
+  '@img/sharp-wasm32@0.35.4':
+    resolution: {integrity: sha512-zQnl4Kwp7Q6NHsENtU2T/00Zi+w3AQNwz3+UaTyVBy2FpXrzXzGjndpK61onhZjRtRpQXxCTeqw19bVyXOh7jA==}
     engines: {node: '>=20.9.0'}
 
-  '@img/sharp-webcontainers-wasm32@0.35.3':
-    resolution: {integrity: sha512-2rnq7bX3NzeR2T4YWgz8qiG4h3TSdMe+vN1iQXpJleSJ3SM5zQ8Fy2SyyXAWlbxpEZ2Y+Z4u1BePgJEYbSy80Q==}
+  '@img/sharp-webcontainers-wasm32@0.35.4':
+    resolution: {integrity: sha512-ESfNkywmCfPNyaZjxooddJQiQ+l/nTpGEOGthxiLnIHXC/CmcBixnfwUleX9mCz9ovrUUvKMap/pm8RYbzfwaA==}
     engines: {node: '>=20.9.0'}
     cpu: [wasm32]
 
-  '@img/sharp-win32-arm64@0.35.3':
-    resolution: {integrity: sha512-4bPwFdMbeC4JQ8L8LOyWp6nsHcboP5fxkp6iPOXz2Vg49R42TuMs2whkJ5OAP4/Ul035qOzy0AecOF9VOscn4w==}
+  '@img/sharp-win32-arm64@0.35.4':
+    resolution: {integrity: sha512-iNdlBX9gLVvqe2I3uIJSIKTq6wckP/DYxZtcqxm09x5Gi24DnFBmPAWZmr60ZyYMG0xlzo6goG3670ar+RXvRw==}
     engines: {node: '>=20.9.0'}
     cpu: [arm64]
     os: [win32]
 
-  '@img/sharp-win32-ia32@0.35.3':
-    resolution: {integrity: sha512-r53mXsBN6lFUDiST764SvgwUdHAqM4rPAiDzAmf4fLoB6X/rkfyTrLCg6+g17wJJiCmB3JYgHuUldCWUIRFSXw==}
+  '@img/sharp-win32-ia32@0.35.4':
+    resolution: {integrity: sha512-kqRsbaa5CS6KHlpxnN7WhE6vAAugXyZButpRdvDWetlv6Qv4N9WTcrWzF7tXfB9T7MsoadqdI8hmwLq6UlLvtw==}
     engines: {node: ^20.9.0}
     cpu: [ia32]
     os: [win32]
 
-  '@img/sharp-win32-x64@0.35.3':
-    resolution: {integrity: sha512-D4y1vNeZrIIJCN+uHaWVtH86B+aCrdMYYjicy9pXHvbGZeGYLLSd3wdVuC37FxVXlU1ARsk84eKWfWMXGYEqvA==}
+  '@img/sharp-win32-x64@0.35.4':
+    resolution: {integrity: sha512-XtmnYhBcrORsJ4XJngyzr/EWP0hRZLAZRFaApdKuviyqF78+ylxh2y06ZmtULAMOnObJ3ucpN0AcwSWnMowTRg==}
     engines: {node: '>=20.9.0'}
     cpu: [x64]
     os: [win32]
@@ -2733,7 +2737,7 @@ packages:
     deprecated: 'This package is deprecated. Please use LlamaAgents (Python Workflows) instead: https://developers.llamaindex.ai/python/llamaagents/overview/'
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.7.0
-      hono: 4.12.34
+      hono: 4.13.5
       next: ^15.2.2
       p-retry: ^6.2.1
       rxjs: ^7.8.2
@@ -2885,7 +2889,7 @@ packages:
     engines: {node: '>=20'}
     peerDependencies:
       '@modelcontextprotocol/server': ^2.0.0
-      hono: 4.12.34
+      hono: 4.13.5
     peerDependenciesMeta:
       hono:
         optional: true
@@ -3842,8 +3846,8 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
-  adm-zip@0.6.0:
-    resolution: {integrity: sha512-XleryMhbuksdKtofnWZ9Sk+4CUTbms4Mb/EU32SZwToAyZ5RgVos/ki8n+yr0LWHOGKuakbXTuuYNHLQjhddgg==}
+  adm-zip@0.6.1:
+    resolution: {integrity: sha512-Xwrja8nx9e5o2N1my4DsKCeKpdrnACyr1wtbPxBDgGzKzKyE9kRtBFA8mWldI+RVlD7CBZNWY/wQ2+ydwOR6kQ==}
     engines: {node: '>=14.0'}
 
   afinn-165-financialmarketnews@3.0.0:
@@ -4687,11 +4691,6 @@ packages:
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
 
-  extract-zip@2.0.1:
-    resolution: {integrity: sha512-GDhU9ntwuKyGXdZBUgTIe+vXnWj0fppUEtMDL0+idd5Sta8TGpHssn/eusA9mrPr9qNDym6SxAYZjNvCn/9RBg==}
-    engines: {node: '>= 10.17.0'}
-    hasBin: true
-
   extsprintf@1.3.0:
     resolution: {integrity: sha512-11Ndz7Nv+mvAC1j0ktTa7fAb0vLyGGX+rMHNBYQviQDGU0Hw7lhctJANqbPhu9nV9/izT/IntTgZ7Im/9LJs9g==}
     engines: {'0': node >=0.6.0}
@@ -4722,8 +4721,8 @@ packages:
   fast-string-width@3.0.2:
     resolution: {integrity: sha512-gX8LrtNEI5hq8DVUfRQMbr5lpaS4nMIWV+7XEbXk2b8kiQIizgnlr12B4dA3ZEx3308ze0O4Q1R+cHts8kyUJg==}
 
-  fast-uri@3.1.5:
-    resolution: {integrity: sha512-gHwA1O9LDIcKunMKhObS/HimwtehO1nPUECKAu5TpKgaO19fcWEl4bliWe1jWxVFvIXztJjjQ4L8XQ1EU9f7Jw==}
+  fast-uri@3.1.6:
+    resolution: {integrity: sha512-7Ical1vFEMr0onbVzEDIreM22I4khW+fzyQPwvAFWBp1iwdshSZRsL4jjRvPG9JP1uiqMHRto+YU6R2/CzDz5Q==}
 
   fast-wrap-ansi@0.2.2:
     resolution: {integrity: sha512-7F2Fl+TjRSenLqlU3UjSH0iyqopqoZIu7eZVpEirP2g1GtWa2G/ecEmBdgz31+Mxr+ELclgg6sokpSFIQiZ02Q==}
@@ -5053,8 +5052,8 @@ packages:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
 
-  hono@4.12.34:
-    resolution: {integrity: sha512-GqXJqY/xJkJmuloTrnV1ZEXG3fqte+VjkUqoRNZXcrUidiUOP4fMSIHHY4tsqZBK++kVyWmt/AAfSUuy57/eSA==}
+  hono@4.13.5:
+    resolution: {integrity: sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw==}
     engines: {node: '>=16.9.0'}
 
   html-entities@2.6.0:
@@ -5312,8 +5311,8 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  js-yaml@4.3.1:
-    resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
+  js-yaml@4.3.2:
+    resolution: {integrity: sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==}
     hasBin: true
 
   jsbn@0.1.1:
@@ -5714,7 +5713,7 @@ packages:
       groq-sdk: 0.3.0
       iovalkey: ^0.3.3
       mongodb: ^7.0.0
-      mysql2: ^3.0.0
+      mysql2: 3.23.1
       natural: ^8.0.1
       ollama: ^0.5.14
       oracledb: ^6.5.0 || ^7.0.0
@@ -6056,8 +6055,8 @@ packages:
     resolution: {integrity: sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ==}
     hasBin: true
 
-  mysql2@3.20.0:
-    resolution: {integrity: sha512-eCLUs7BNbgA6nf/MZXsaBO1SfGs0LtLVrJD3WeWq+jPLDWkSufTD+aGMwykfUVPdZnblaUK1a8G/P63cl9FkKg==}
+  mysql2@3.23.1:
+    resolution: {integrity: sha512-tTuRnC7qCet2IOfSNMYZ5SwXuBnfvBPAcIA28P0gtruXyZlU1LMxA6uha32kYypoFgyYklMqhLWwt4laYwXR/Q==}
     engines: {node: '>= 8.0'}
     peerDependencies:
       '@types/node': '>= 8'
@@ -6617,10 +6616,6 @@ packages:
   pure-rand@8.4.2:
     resolution: {integrity: sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng==}
 
-  qs@6.15.3:
-    resolution: {integrity: sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==}
-    engines: {node: '>=0.6'}
-
   qs@6.16.0:
     resolution: {integrity: sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA==}
     engines: {node: '>=0.6'}
@@ -6793,8 +6788,8 @@ packages:
   setprototypeof@1.2.0:
     resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
 
-  sharp@0.35.3:
-    resolution: {integrity: sha512-ej0zVHuZGHCiABXcNxeYhpRnPNPAcvbG8RMdBAhDAxLKkCRVSpK3Iyu7qbqw3JMzoj0REeM6f3tJLtVwl0023Q==}
+  sharp@0.35.4:
+    resolution: {integrity: sha512-n++8XWcj+jCOr2IOl7h8LbKnGBDY4aPbmprMONBNFdn0ImXqpGVv5zliDs0V9HbmbCQLpbuo2ej9rAoOQTvMDA==}
     engines: {node: '>=20.9.0'}
     peerDependencies:
       '@types/node': '*'
@@ -8792,7 +8787,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@google/adk@2.0.0(w6wnhyn2c3vq57tc6ufiof7ecq)':
+  '@google/adk@2.0.0(doc3rqbmpivb2wyxiql3cp4uim)':
     dependencies:
       '@a2a-js/sdk': 0.3.14(@grpc/grpc-js@1.14.4)(express@5.2.1)
       '@google-cloud/vertexai': 1.12.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(bufferutil@4.1.0)(encoding@0.1.13)
@@ -8810,9 +8805,9 @@ snapshots:
       '@opentelemetry/sdk-metrics': 2.10.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-base': 2.10.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-node': 2.10.0(@opentelemetry/api@1.9.0)
-      adm-zip: 0.6.0
+      adm-zip: 0.6.1
       google-auth-library: 10.9.1
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       jsonpath-plus: 10.4.0
       lodash-es: 4.18.1
       winston: 3.19.0
@@ -8822,11 +8817,11 @@ snapshots:
       '@google-cloud/opentelemetry-cloud-monitoring-exporter': 0.21.0(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/resources@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.10.0(@opentelemetry/api@1.9.1))(encoding@0.1.13)
       '@google-cloud/opentelemetry-cloud-trace-exporter': 3.0.0(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/resources@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(encoding@0.1.13)
       '@google-cloud/storage': 7.21.0(encoding@0.1.13)
-      '@mikro-orm/mariadb': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
-      '@mikro-orm/mssql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
+      '@mikro-orm/mariadb': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)
+      '@mikro-orm/mssql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)
       '@mikro-orm/mysql': 6.6.14(@mikro-orm/core@6.6.16)(@types/node@26.4.0)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)
-      '@mikro-orm/postgresql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))
-      '@mikro-orm/sqlite': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
+      '@mikro-orm/postgresql': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))
+      '@mikro-orm/sqlite': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)
       '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
       express: 5.2.1
     transitivePeerDependencies:
@@ -8877,9 +8872,9 @@ snapshots:
       yargs: 17.7.3
     optional: true
 
-  '@hono/node-server@2.0.10(hono@4.12.34)':
+  '@hono/node-server@2.0.10(hono@4.13.5)':
     dependencies:
-      hono: 4.12.34
+      hono: 4.13.5
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -8899,108 +8894,108 @@ snapshots:
 
   '@img/colour@1.1.0': {}
 
-  '@img/sharp-darwin-arm64@0.35.3':
+  '@img/sharp-darwin-arm64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-darwin-arm64': 1.3.2
+      '@img/sharp-libvips-darwin-arm64': 1.3.3
     optional: true
 
-  '@img/sharp-darwin-x64@0.35.3':
+  '@img/sharp-darwin-x64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-darwin-x64': 1.3.2
+      '@img/sharp-libvips-darwin-x64': 1.3.3
     optional: true
 
-  '@img/sharp-freebsd-wasm32@0.35.3':
+  '@img/sharp-freebsd-wasm32@0.35.4':
     dependencies:
-      '@img/sharp-wasm32': 0.35.3
+      '@img/sharp-wasm32': 0.35.4
     optional: true
 
-  '@img/sharp-libvips-darwin-arm64@1.3.2':
+  '@img/sharp-libvips-darwin-arm64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-darwin-x64@1.3.2':
+  '@img/sharp-libvips-darwin-x64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-arm64@1.3.2':
+  '@img/sharp-libvips-linux-arm64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-arm@1.3.2':
+  '@img/sharp-libvips-linux-arm@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-ppc64@1.3.2':
+  '@img/sharp-libvips-linux-ppc64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-riscv64@1.3.2':
+  '@img/sharp-libvips-linux-riscv64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-s390x@1.3.2':
+  '@img/sharp-libvips-linux-s390x@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-x64@1.3.2':
+  '@img/sharp-libvips-linux-x64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linuxmusl-arm64@1.3.2':
+  '@img/sharp-libvips-linuxmusl-arm64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linuxmusl-x64@1.3.2':
+  '@img/sharp-libvips-linuxmusl-x64@1.3.3':
     optional: true
 
-  '@img/sharp-linux-arm64@0.35.3':
+  '@img/sharp-linux-arm64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-arm64': 1.3.2
+      '@img/sharp-libvips-linux-arm64': 1.3.3
     optional: true
 
-  '@img/sharp-linux-arm@0.35.3':
+  '@img/sharp-linux-arm@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-arm': 1.3.2
+      '@img/sharp-libvips-linux-arm': 1.3.3
     optional: true
 
-  '@img/sharp-linux-ppc64@0.35.3':
+  '@img/sharp-linux-ppc64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-ppc64': 1.3.2
+      '@img/sharp-libvips-linux-ppc64': 1.3.3
     optional: true
 
-  '@img/sharp-linux-riscv64@0.35.3':
+  '@img/sharp-linux-riscv64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-riscv64': 1.3.2
+      '@img/sharp-libvips-linux-riscv64': 1.3.3
     optional: true
 
-  '@img/sharp-linux-s390x@0.35.3':
+  '@img/sharp-linux-s390x@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-s390x': 1.3.2
+      '@img/sharp-libvips-linux-s390x': 1.3.3
     optional: true
 
-  '@img/sharp-linux-x64@0.35.3':
+  '@img/sharp-linux-x64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-x64': 1.3.2
+      '@img/sharp-libvips-linux-x64': 1.3.3
     optional: true
 
-  '@img/sharp-linuxmusl-arm64@0.35.3':
+  '@img/sharp-linuxmusl-arm64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linuxmusl-arm64': 1.3.2
+      '@img/sharp-libvips-linuxmusl-arm64': 1.3.3
     optional: true
 
-  '@img/sharp-linuxmusl-x64@0.35.3':
+  '@img/sharp-linuxmusl-x64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linuxmusl-x64': 1.3.2
+      '@img/sharp-libvips-linuxmusl-x64': 1.3.3
     optional: true
 
-  '@img/sharp-wasm32@0.35.3':
+  '@img/sharp-wasm32@0.35.4':
     dependencies:
       '@emnapi/runtime': 1.11.3
     optional: true
 
-  '@img/sharp-webcontainers-wasm32@0.35.3':
+  '@img/sharp-webcontainers-wasm32@0.35.4':
     dependencies:
-      '@img/sharp-wasm32': 0.35.3
+      '@img/sharp-wasm32': 0.35.4
     optional: true
 
-  '@img/sharp-win32-arm64@0.35.3':
+  '@img/sharp-win32-arm64@0.35.4':
     optional: true
 
-  '@img/sharp-win32-ia32@0.35.3':
+  '@img/sharp-win32-ia32@0.35.4':
     optional: true
 
-  '@img/sharp-win32-x64@0.35.3':
+  '@img/sharp-win32-x64@0.35.4':
     optional: true
 
   '@isaacs/cliui@8.0.2':
@@ -9170,17 +9165,17 @@ snapshots:
       tree-sitter: 0.22.4
       web-tree-sitter: 0.24.7
 
-  '@llamaindex/workflow-core@1.3.4(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.12.34)(zod@4.4.3)':
+  '@llamaindex/workflow-core@1.3.4(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.13.5)(zod@4.4.3)':
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
-      hono: 4.12.34
+      hono: 4.13.5
       zod: 4.4.3
 
-  '@llamaindex/workflow@1.1.24(@llamaindex/core@0.6.22)(@llamaindex/env@0.1.30)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.12.34)(zod@4.4.3)':
+  '@llamaindex/workflow@1.1.24(@llamaindex/core@0.6.22)(@llamaindex/env@0.1.30)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.13.5)(zod@4.4.3)':
     dependencies:
       '@llamaindex/core': 0.6.22
       '@llamaindex/env': 0.1.30
-      '@llamaindex/workflow-core': 1.3.4(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.12.34)(zod@4.4.3)
+      '@llamaindex/workflow-core': 1.3.4(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.13.5)(zod@4.4.3)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - hono
@@ -9256,13 +9251,13 @@ snapshots:
       - utf-8-validate
       - workflow
 
-  '@mastra/mcp@1.17.2(@cfworker/json-schema@4.1.1)(@mastra/core@1.63.0(@grpc/grpc-js@1.14.4)(ai@7.0.83(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(zod@4.4.3))(express@5.2.1)(hono@4.12.34)(react@19.2.6)(zod@4.4.3)':
+  '@mastra/mcp@1.17.2(@cfworker/json-schema@4.1.1)(@mastra/core@1.63.0(@grpc/grpc-js@1.14.4)(ai@7.0.83(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(zod@4.4.3))(express@5.2.1)(hono@4.13.5)(react@19.2.6)(zod@4.4.3)':
     dependencies:
       '@mastra/core': 1.63.0(@grpc/grpc-js@1.14.4)(ai@7.0.83(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(zod@4.4.3)
       '@modelcontextprotocol/client': 2.0.0
       '@modelcontextprotocol/core': 2.0.0
       '@modelcontextprotocol/ext-apps': 1.7.5(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(react@19.2.6)(zod@4.4.3)
-      '@modelcontextprotocol/node': 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.34)
+      '@modelcontextprotocol/node': 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.5)
       '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
       '@modelcontextprotocol/server': 2.0.0
       '@modelcontextprotocol/server-legacy': 2.0.0(express@5.2.1)
@@ -9293,11 +9288,11 @@ snapshots:
       mikro-orm: 6.6.16
       reflect-metadata: 0.2.2
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.20.0)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.20.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
-      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.20.0)
+      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.20.0)
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
@@ -9313,11 +9308,11 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
-      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
+      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
@@ -9333,11 +9328,11 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
-      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7)
+      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7)
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
@@ -9353,11 +9348,11 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1)':
+  '@mikro-orm/knex@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1)':
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
-      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1)
+      knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1)
       sqlstring: 2.3.3
     optionalDependencies:
       better-sqlite3: 12.10.0
@@ -9373,10 +9368,10 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/mariadb@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)':
+  '@mikro-orm/mariadb@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)
       mariadb: 3.5.3
     transitivePeerDependencies:
       - better-sqlite3
@@ -9391,10 +9386,10 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/mssql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)':
+  '@mikro-orm/mssql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1)
       tedious: 19.2.1
       tsqlstring: 1.0.1
     transitivePeerDependencies:
@@ -9413,8 +9408,8 @@ snapshots:
   '@mikro-orm/mysql@6.6.14(@mikro-orm/core@6.6.16)(@types/node@26.4.0)(better-sqlite3@12.10.0)(mariadb@3.5.3)(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)
-      mysql2: 3.20.0(@types/node@26.4.0)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)
+      mysql2: 3.23.1(@types/node@26.4.0)
     transitivePeerDependencies:
       - '@types/node'
       - better-sqlite3
@@ -9429,10 +9424,10 @@ snapshots:
       - tedious
     optional: true
 
-  '@mikro-orm/postgresql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))':
+  '@mikro-orm/postgresql@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.20.0)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.20.0)
       pg: 8.20.0
       postgres-array: 3.0.4
       postgres-date: 2.1.0
@@ -9456,10 +9451,10 @@ snapshots:
       globby: 11.1.0
       ts-morph: 27.0.2
 
-  '@mikro-orm/sqlite@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)':
+  '@mikro-orm/sqlite@6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)':
     dependencies:
       '@mikro-orm/core': 6.6.16
-      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7)
+      '@mikro-orm/knex': 6.6.14(@mikro-orm/core@6.6.16)(better-sqlite3@12.10.0)(mariadb@3.5.3)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7)
       fs-extra: 11.3.3
       sqlite3: 5.1.7
       sqlstring-sqlite: 0.1.1
@@ -9511,16 +9506,16 @@ snapshots:
     optionalDependencies:
       react: 19.2.6
 
-  '@modelcontextprotocol/node@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.34)':
+  '@modelcontextprotocol/node@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.5)':
     dependencies:
-      '@hono/node-server': 2.0.10(hono@4.12.34)
+      '@hono/node-server': 2.0.10(hono@4.13.5)
       '@modelcontextprotocol/server': 2.0.0
     optionalDependencies:
-      hono: 4.12.34
+      hono: 4.13.5
 
   '@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)':
     dependencies:
-      '@hono/node-server': 2.0.10(hono@4.12.34)
+      '@hono/node-server': 2.0.10(hono@4.13.5)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -9530,7 +9525,7 @@ snapshots:
       eventsource-parser: 3.1.0
       express: 5.2.1
       express-rate-limit: 8.6.1(express@5.2.1)
-      hono: 4.12.34
+      hono: 4.13.5
       jose: 6.2.10
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -9544,7 +9539,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.5.4)':
     dependencies:
-      '@hono/node-server': 2.0.10(hono@4.12.34)
+      '@hono/node-server': 2.0.10(hono@4.13.5)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -9554,7 +9549,7 @@ snapshots:
       eventsource-parser: 3.1.0
       express: 5.2.1
       express-rate-limit: 8.6.1(express@5.2.1)
-      hono: 4.12.34
+      hono: 4.13.5
       jose: 6.2.10
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -10611,7 +10606,7 @@ snapshots:
 
   acorn@8.18.0: {}
 
-  adm-zip@0.6.0: {}
+  adm-zip@0.6.1: {}
 
   afinn-165-financialmarketnews@3.0.0: {}
 
@@ -10691,7 +10686,7 @@ snapshots:
   ajv@8.20.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.5
+      fast-uri: 3.1.6
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -10819,7 +10814,7 @@ snapshots:
       http-errors: 2.0.1
       iconv-lite: 0.7.3
       on-finished: 2.4.1
-      qs: 6.15.3
+      qs: 6.16.0
       raw-body: 3.0.2
       type-is: 2.1.0
     transitivePeerDependencies:
@@ -10839,19 +10834,18 @@ snapshots:
     dependencies:
       base64-js: 1.5.1
 
-  browser-use@0.8.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(bufferutil@4.1.0)(encoding@0.1.13)(ws@8.21.0(bufferutil@4.1.0)):
+  browser-use@0.8.0(patch_hash=63bs3oj54x6xuykl5z2w7trcle)(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(bufferutil@4.1.0)(encoding@0.1.13)(ws@8.21.0(bufferutil@4.1.0)):
     dependencies:
       '@anthropic-ai/sdk': 0.74.0(zod@4.4.3)
       '@aws-sdk/client-bedrock-runtime': 3.1089.0
       '@cfworker/json-schema': 4.1.1
       '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(bufferutil@4.1.0)
       '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
-      adm-zip: 0.6.0
+      adm-zip: 0.6.1
       axios: 1.18.1
       canvas: 3.2.3
       dotenv: 17.4.2
       eventemitter3: 5.0.4
-      extract-zip: 2.0.1
       gif-encoder-2: 1.0.5
       googleapis: 171.4.0
       gpt-tokenizer: 3.4.0
@@ -11544,7 +11538,7 @@ snapshots:
       once: 1.4.0
       parseurl: 1.3.3
       proxy-addr: 2.0.7
-      qs: 6.15.3
+      qs: 6.16.0
       range-parser: 1.3.0
       router: 2.2.0
       send: 1.2.1
@@ -11560,16 +11554,6 @@ snapshots:
       is-extendable: 0.1.1
 
   extend@3.0.2: {}
-
-  extract-zip@2.0.1:
-    dependencies:
-      debug: 4.4.3
-      get-stream: 5.2.0
-      yauzl: 2.10.0
-    optionalDependencies:
-      '@types/yauzl': 2.10.3
-    transitivePeerDependencies:
-      - supports-color
 
   extsprintf@1.3.0: {}
 
@@ -11599,7 +11583,7 @@ snapshots:
     dependencies:
       fast-string-truncated-width: 3.0.3
 
-  fast-uri@3.1.5: {}
+  fast-uri@3.1.6: {}
 
   fast-wrap-ansi@0.2.2:
     dependencies:
@@ -11989,7 +11973,7 @@ snapshots:
       gaxios: 7.1.3
       google-auth-library: 10.5.0
       google-logging-utils: 1.1.3
-      qs: 6.15.3
+      qs: 6.16.0
       url-template: 2.0.8
     transitivePeerDependencies:
       - supports-color
@@ -12020,7 +12004,7 @@ snapshots:
 
   gray-matter@4.0.3:
     dependencies:
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       kind-of: 6.0.3
       section-matter: 1.0.0
       strip-bom-string: 1.0.0
@@ -12067,7 +12051,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.12.34: {}
+  hono@4.13.5: {}
 
   html-entities@2.6.0:
     optional: true
@@ -12332,7 +12316,7 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  js-yaml@4.3.1:
+  js-yaml@4.3.2:
     dependencies:
       argparse: 2.0.1
 
@@ -12448,7 +12432,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.20.0):
+  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.20.0):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -12466,13 +12450,13 @@ snapshots:
       tildify: 2.0.0
     optionalDependencies:
       better-sqlite3: 12.10.0
-      mysql2: 3.20.0(@types/node@26.4.0)
+      mysql2: 3.23.1(@types/node@26.4.0)
       pg: 8.20.0
     transitivePeerDependencies:
       - supports-color
     optional: true
 
-  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0):
+  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -12490,13 +12474,13 @@ snapshots:
       tildify: 2.0.0
     optionalDependencies:
       better-sqlite3: 12.10.0
-      mysql2: 3.20.0(@types/node@26.4.0)
+      mysql2: 3.23.1(@types/node@26.4.0)
       pg: 8.21.0
     transitivePeerDependencies:
       - supports-color
     optional: true
 
-  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7):
+  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)(sqlite3@5.1.7):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -12514,14 +12498,14 @@ snapshots:
       tildify: 2.0.0
     optionalDependencies:
       better-sqlite3: 12.10.0
-      mysql2: 3.20.0(@types/node@26.4.0)
+      mysql2: 3.23.1(@types/node@26.4.0)
       pg: 8.21.0
       sqlite3: 5.1.7
     transitivePeerDependencies:
       - supports-color
     optional: true
 
-  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.20.0(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1):
+  knex@3.2.10(better-sqlite3@12.10.0)(mysql2@3.23.1(@types/node@26.4.0))(pg@8.21.0)(tedious@19.2.1):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -12539,7 +12523,7 @@ snapshots:
       tildify: 2.0.0
     optionalDependencies:
       better-sqlite3: 12.10.0
-      mysql2: 3.20.0(@types/node@26.4.0)
+      mysql2: 3.23.1(@types/node@26.4.0)
       pg: 8.21.0
       tedious: 19.2.1
     transitivePeerDependencies:
@@ -12631,12 +12615,12 @@ snapshots:
       base64-js: 0.0.8
       unicode-trie: 2.0.0
 
-  llamaindex@0.12.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.12.34)(tree-sitter@0.22.4)(web-tree-sitter@0.24.7)(zod@4.4.3):
+  llamaindex@0.12.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.13.5)(tree-sitter@0.22.4)(web-tree-sitter@0.24.7)(zod@4.4.3):
     dependencies:
       '@llamaindex/core': 0.6.22
       '@llamaindex/env': 0.1.30
       '@llamaindex/node-parser': 2.0.22(@llamaindex/core@0.6.22)(@llamaindex/env@0.1.30)(tree-sitter@0.22.4)(web-tree-sitter@0.24.7)
-      '@llamaindex/workflow': 1.1.24(@llamaindex/core@0.6.22)(@llamaindex/env@0.1.30)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.12.34)(zod@4.4.3)
+      '@llamaindex/workflow': 1.1.24(@llamaindex/core@0.6.22)(@llamaindex/env@0.1.30)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(hono@4.13.5)(zod@4.4.3)
       '@types/lodash': 4.17.24
       '@types/node': 24.13.3
       lodash: 4.18.1
@@ -12855,7 +12839,7 @@ snapshots:
 
   media-typer@1.1.1: {}
 
-  mem0ai@3.1.7(abawyzfqvjhqm7pf24z4uo3zu4):
+  mem0ai@3.1.7(hzfpgv6nshut4mtlzqdvvgqygy):
     dependencies:
       '@cloudflare/workers-types': 5.20260827.1
       '@types/jest': 29.5.14
@@ -12878,7 +12862,7 @@ snapshots:
       '@supabase/supabase-js': 2.106.2
       cloudflare: 4.5.0(encoding@0.1.13)
       mongodb: 7.5.0(@mongodb-js/zstd@7.0.0)(socks@2.8.9)
-      mysql2: 3.20.0(@types/node@26.4.0)
+      mysql2: 3.23.1(@types/node@26.4.0)
     transitivePeerDependencies:
       - debug
       - encoding
@@ -13118,7 +13102,7 @@ snapshots:
   miniflare@5.20260815.0-alpha(@types/node@26.4.0)(bufferutil@4.1.0):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
-      sharp: 0.35.3(@types/node@26.4.0)
+      sharp: 0.35.4(@types/node@26.4.0)
       undici: 7.29.0
       workerd: 1.20260815.1
       ws: 8.21.0(bufferutil@4.1.0)
@@ -13131,7 +13115,7 @@ snapshots:
   miniflare@5.20260826.0-alpha(@types/node@26.4.0)(bufferutil@4.1.0):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
-      sharp: 0.35.3(@types/node@26.4.0)
+      sharp: 0.35.4(@types/node@26.4.0)
       undici: 7.29.0
       workerd: 1.20260826.1
       ws: 8.21.0(bufferutil@4.1.0)
@@ -13258,7 +13242,7 @@ snapshots:
 
   mustache@4.2.0: {}
 
-  mysql2@3.20.0(@types/node@26.4.0):
+  mysql2@3.23.1(@types/node@26.4.0):
     dependencies:
       '@types/node': 26.4.0
       aws-ssl-profiles: 1.1.2
@@ -13819,16 +13803,10 @@ snapshots:
 
   pure-rand@8.4.2: {}
 
-  qs@6.15.3:
-    dependencies:
-      es-define-property: 1.0.1
-      side-channel: 1.1.1
-
   qs@6.16.0:
     dependencies:
       es-define-property: 1.0.1
       side-channel: 1.1.1
-    optional: true
 
   queue-microtask@1.2.3: {}
 
@@ -14067,37 +14045,37 @@ snapshots:
 
   setprototypeof@1.2.0: {}
 
-  sharp@0.35.3(@types/node@26.4.0):
+  sharp@0.35.4(@types/node@26.4.0):
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
       semver: 7.8.5
     optionalDependencies:
-      '@img/sharp-darwin-arm64': 0.35.3
-      '@img/sharp-darwin-x64': 0.35.3
-      '@img/sharp-freebsd-wasm32': 0.35.3
-      '@img/sharp-libvips-darwin-arm64': 1.3.2
-      '@img/sharp-libvips-darwin-x64': 1.3.2
-      '@img/sharp-libvips-linux-arm': 1.3.2
-      '@img/sharp-libvips-linux-arm64': 1.3.2
-      '@img/sharp-libvips-linux-ppc64': 1.3.2
-      '@img/sharp-libvips-linux-riscv64': 1.3.2
-      '@img/sharp-libvips-linux-s390x': 1.3.2
-      '@img/sharp-libvips-linux-x64': 1.3.2
-      '@img/sharp-libvips-linuxmusl-arm64': 1.3.2
-      '@img/sharp-libvips-linuxmusl-x64': 1.3.2
-      '@img/sharp-linux-arm': 0.35.3
-      '@img/sharp-linux-arm64': 0.35.3
-      '@img/sharp-linux-ppc64': 0.35.3
-      '@img/sharp-linux-riscv64': 0.35.3
-      '@img/sharp-linux-s390x': 0.35.3
-      '@img/sharp-linux-x64': 0.35.3
-      '@img/sharp-linuxmusl-arm64': 0.35.3
-      '@img/sharp-linuxmusl-x64': 0.35.3
-      '@img/sharp-webcontainers-wasm32': 0.35.3
-      '@img/sharp-win32-arm64': 0.35.3
-      '@img/sharp-win32-ia32': 0.35.3
-      '@img/sharp-win32-x64': 0.35.3
+      '@img/sharp-darwin-arm64': 0.35.4
+      '@img/sharp-darwin-x64': 0.35.4
+      '@img/sharp-freebsd-wasm32': 0.35.4
+      '@img/sharp-libvips-darwin-arm64': 1.3.3
+      '@img/sharp-libvips-darwin-x64': 1.3.3
+      '@img/sharp-libvips-linux-arm': 1.3.3
+      '@img/sharp-libvips-linux-arm64': 1.3.3
+      '@img/sharp-libvips-linux-ppc64': 1.3.3
+      '@img/sharp-libvips-linux-riscv64': 1.3.3
+      '@img/sharp-libvips-linux-s390x': 1.3.3
+      '@img/sharp-libvips-linux-x64': 1.3.3
+      '@img/sharp-libvips-linuxmusl-arm64': 1.3.3
+      '@img/sharp-libvips-linuxmusl-x64': 1.3.3
+      '@img/sharp-linux-arm': 0.35.4
+      '@img/sharp-linux-arm64': 0.35.4
+      '@img/sharp-linux-ppc64': 0.35.4
+      '@img/sharp-linux-riscv64': 0.35.4
+      '@img/sharp-linux-s390x': 0.35.4
+      '@img/sharp-linux-x64': 0.35.4
+      '@img/sharp-linuxmusl-arm64': 0.35.4
+      '@img/sharp-linuxmusl-x64': 0.35.4
+      '@img/sharp-webcontainers-wasm32': 0.35.4
+      '@img/sharp-win32-arm64': 0.35.4
+      '@img/sharp-win32-ia32': 0.35.4
+      '@img/sharp-win32-x64': 0.35.4
       '@types/node': 26.4.0
 
   shebang-command@2.0.0:

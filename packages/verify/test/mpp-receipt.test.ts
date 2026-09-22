@@ -14,6 +14,41 @@ const receipt = {
 }
 
 describe('MPP receipt inspection', () => {
+  it.each([
+    '2026-02-30T12:00:15Z',
+    '2026-02-29T12:00:15Z',
+    '2100-02-29T12:00:15Z',
+    '2026-04-31T12:00:15+05:30',
+    '2026-09-02T24:00:00Z',
+    '2026-09-02T24:00:00.000-04:00',
+    '2026-09-02T12:60:00Z',
+    '2026-09-02T12:00:60Z',
+    '2026-09-02T12:00:15+24:00',
+    '2026-09-02T12:00:15+05:60',
+    '2026-09-02T12:00:15Z\n',
+  ])('rejects invalid calendar or clock components in %s', (timestamp) => {
+    expect(inspectMppReceipt({ ...receipt, timestamp })).toMatchObject({
+      evidence: 'malformed',
+      receipt: null,
+      errors: ['mpp_receipt_timestamp_invalid'],
+    })
+  })
+
+  it.each([
+    '2024-02-29T12:00:15Z',
+    '2000-02-29T12:00:15.123456789Z',
+    '2026-04-30T23:59:59.001+05:30',
+    '2026-01-01T00:00:00-04:00',
+    '2024-02-29T00:00:00+23:59',
+    '2026-09-02T12:00:15-00:00',
+  ])('preserves valid receipt timestamp %s', (timestamp) => {
+    expect(inspectMppReceipt({ ...receipt, timestamp })).toEqual({
+      evidence: 'declared',
+      receipt: { ...receipt, timestamp },
+      errors: [],
+    })
+  })
+
   it('inspects the common receipt object as declared evidence', () => {
     expect(inspectMppReceipt(receipt)).toEqual({ evidence: 'declared', receipt, errors: [] })
   })

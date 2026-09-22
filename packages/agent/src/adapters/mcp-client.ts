@@ -49,8 +49,8 @@ export interface MinimalMcpClient {
   ): Promise<{
     content?: unknown
     _meta?: Record<string, unknown>
-    headers?: Record<string, string | undefined>
-    responseHeaders?: Record<string, string | undefined>
+    headers?: unknown
+    responseHeaders?: unknown
     isError?: boolean
     [key: string]: unknown
   }>
