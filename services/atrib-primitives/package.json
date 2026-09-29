@@ -22,13 +22,13 @@
     "@atrib/recall": "workspace:*",
     "@atrib/summarize": "workspace:*",
     "@atrib/verify": "workspace:*",
-    "@modelcontextprotocol/client": "^2.0.0",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "@modelcontextprotocol/server": "^2.0.0"
+    "@modelcontextprotocol/client": "^2.1.0",
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "@modelcontextprotocol/server": "^2.1.0"
   },
   "devDependencies": {
-    "@types/node": "^26.4.0",
-    "tsx": "^4.23.12",
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   },
