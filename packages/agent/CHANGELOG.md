@@ -1,5 +1,17 @@
 # @atrib/agent
 
+## 0.5.0
+
+### Minor Changes
+
+- 8811d2c: Refine payment-related completion detection and add structural MPP receipt
+  inspection for HTTP and MCP response paths.
+
+### Patch Changes
+
+- Updated dependencies [8811d2c]
+  - @atrib/verify@0.14.0
+
 ## 0.4.10
 
 ### Patch Changes
