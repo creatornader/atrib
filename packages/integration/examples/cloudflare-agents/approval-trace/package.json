@@ -17,20 +17,20 @@
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
-    "@cloudflare/codemode": "^0.5.1",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "agents": "^0.22.0",
-    "zod": "^4.4.3"
+    "@cloudflare/codemode": "^0.5.3",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "agents": "^0.27.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@atrib/graph-node": "workspace:*",
-    "@cloudflare/vitest-pool-workers": "^0.22.0",
-    "@cloudflare/workers-types": "^5.20260827.1",
-    "@playwright/test": "^1.62.1",
-    "@types/node": "^26.4.0",
-    "tsx": "^4.23.12",
+    "@cloudflare/vitest-pool-workers": "^0.23.0",
+    "@cloudflare/workers-types": "^5.20261009.1",
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11",
-    "wrangler": "^4.127.0"
+    "wrangler": "^4.149.0"
   }
 }
