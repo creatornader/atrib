@@ -116,7 +116,7 @@
     "@langchain/langgraph": "1.4.13",
     "@mastra/core": "1.63.0",
     "@mastra/mcp": "1.17.2",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@noble/ed25519": "^3.2.0",
     "@noble/hashes": "^2.4.0",
     "@noble/secp256k1": "^3.1.0",
