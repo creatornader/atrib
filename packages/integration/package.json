@@ -12,7 +12,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && pnpm typecheck:openai-examples",
+    "typecheck": "tsc --noEmit && pnpm typecheck:openai-examples && pnpm typecheck:mem0-examples",
     "build": "tsc --noEmit",
     "demo": "tsx examples/end-to-end/demo.ts",
     "openinference-cognitive-loop": "tsx examples/openinference/cognitive-loop.ts",
@@ -87,7 +87,8 @@
     "proof-vc-common-x401-interop": "tsx scripts/proof-vc-common-x401-interop.ts",
     "proof-vc-token-capture": "tsx scripts/proof-vc-token-capture.ts",
     "proof-repo-interop": "tsx scripts/check-proof-repo-interop.ts",
-    "typecheck:openai-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck examples/openai-responses/openai-responses-tool-call-smoke.ts examples/openai-agents-runtime/openai-agents-runtime-smoke.ts"
+    "typecheck:openai-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck examples/openai-responses/openai-responses-tool-call-smoke.ts examples/openai-agents-runtime/openai-agents-runtime-smoke.ts",
+    "typecheck:mem0-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck examples/mem0/mem0-oss-full-cycle-smoke.ts examples/mem0/mem0-oss-compat-smoke.ts examples/mem0/mem0-client-smoke.ts examples/mem0/mem0-mutation-assurance-smoke.ts"
   },
   "dependencies": {
     "@a2a-js/sdk": "1.1.0",
@@ -135,7 +136,7 @@
     "browser-use": "0.8.0",
     "jose": "6.2.10",
     "llamaindex": "0.12.1",
-    "mem0ai": "3.1.7",
+    "mem0ai": "3.3.1",
     "openai": "7.32.0",
     "playwright": "1.62.1",
     "tslib": "^2.8.1",

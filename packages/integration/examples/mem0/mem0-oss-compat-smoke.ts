@@ -90,7 +90,7 @@ try {
       {
         ok: true,
         note: 'Imports real mem0ai/oss Memory and proves atrib signs the add boundary when mem0 provider execution fails.',
-        mem0_package: 'mem0ai@3.1.0',
+        mem0_package: 'mem0ai@3.3.1',
         context_id: contextId,
         signed_records: records.length,
         operations: records.map((record) => record.tool_name),

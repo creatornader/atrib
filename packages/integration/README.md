@@ -359,6 +359,8 @@ Run with `pnpm --filter @atrib/integration test`. The package typecheck also com
 
 Focused cross-package tests include:
 
+- **[`test/mem0-real-package.test.ts`](test/mem0-real-package.test.ts)** runs the installed Mem0 OSS and client smokes, provider rejection, mutation/readback and two-tenant filtering checks. The [Mem0 example guide](examples/mem0/README.md) lists commands and validation limits. These TypeScript examples also run through the package typecheck.
+
 - **`test/end-to-end.test.ts`** (3 tests), full attribution chain across the public packages: agent calls a tool, server emits a signed record, the record's chain hash links to the previous step, the verifier re-runs the calculation against the resulting graph.
 - **`test/hostile-operating-graph.test.ts`** (6 tests), composed hostile-case
   coverage for the open operating graph. It detects checkpoint rollback,
