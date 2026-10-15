@@ -82,7 +82,7 @@ atrib/
     collect-npm-downloads.mjs # METRICS.md Tier 2 collector. Writes metrics/npm-downloads-<date>.json with last-week npm downloads per designed-public package (current/deprecated from package.json descriptions) plus the PyPI atrib distribution.
     check-release-publish-readiness.mjs # Release preflight. Verifies every Changesets-publishable workspace package already exists on npm, while first-publish-pending packages stay in `.changeset/config.json` ignore.
     check-mcp-v2-owned-surfaces.mjs # MCP v2 source and publish-archive inventory gate. Uses pnpm pack so workspace dependencies match the publish-ready manifest.
-    check-mcp-v2-packed-runtime.mjs # Fresh-installs every published MCP v2 surface and its atrib dependency closure from local pnpm archives, then requires modern 2026-07-28 negotiation and tools/list from each stdio binary.
+    check-mcp-v2-packed-runtime.mjs # Fresh-installs every published MCP v2 surface and its atrib dependency closure from local pnpm archives. Checks stdio and daemon HTTP negotiation, tool execution, invalid-input rejection, recovery, signed mirrors, and wrapper configuration with the installed client and isolated local endpoints.
   metrics/                     # Dated JSON snapshots from `pnpm --filter @atrib/log-node metrics` and `pnpm metrics:npm-downloads` (npm + PyPI download counts per package, current/deprecated tagged)
   packages/
     mcp/                       # @atrib/mcp: MCP server middleware (public)

@@ -114,6 +114,13 @@ Work:
   atribd stdio, the stdio-to-HTTP proxy, and `atrib-wrap`.
 - Scan shipped entrypoints for direct legacy SDK transport connections.
 - Inspect packed npm artifacts, not only workspace builds.
+- Run `pnpm mcp-v2:packed-runtime` with a client loaded from the fresh
+  install. Every published stdio surface and the daemon HTTP binary must
+  execute a valid tool call, reject malformed arguments with valid context,
+  and accept a subsequent valid call. The gate verifies signed writes in
+  isolated mirrors and checks the installed wrapper's configuration parser.
+  Log submission and summary generation use local fixtures, with no operator
+  credentials or records inherited.
 - Make release readiness fail when an inventory item lacks a pinned process
   proof or when the published entrypoint does not contain the v2 negotiator.
 - Keep upstream simulation fixtures explicitly classified as fixtures.
@@ -124,6 +131,8 @@ Acceptance:
 - CI and release readiness run that command.
 - A deliberately reintroduced direct legacy transport causes the gate to fail.
 - Registry-artifact inspection covers every publishable MCP package.
+- The packed-runtime gate checks tool behavior as well as negotiation and
+  listing. Its scope and command are indexed in [CLAUDE.md](../CLAUDE.md).
 
 ### Tranche 0B: Observe the compatibility window
 
