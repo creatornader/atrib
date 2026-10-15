@@ -13,16 +13,16 @@
   "dependencies": {
     "@atrib/agent": "workspace:*",
     "@atrib/mcp": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.31.0",
-    "agents": "^0.22.0",
-    "zod": "^4.4.3"
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "agents": "^0.28.0",
+    "zod": "^4.6.6"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260827.1",
+    "@cloudflare/workers-types": "^5.20261012.1",
     "@types/node": "^26.6.5",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11",
-    "wrangler": "^4.127.0"
+    "wrangler": "^4.149.0"
   }
 }
