@@ -367,6 +367,7 @@ function responseBase({
   return {
     id,
     object: 'response',
+    access_programs: null,
     created_at: 1_779_840_300,
     status: 'completed',
     error: null,
@@ -386,12 +387,12 @@ function responseBase({
     previous_response_id,
     reasoning: null,
     service_tier: 'default',
-    store: false,
     truncation: 'disabled',
     usage: {
       input_tokens: 12,
       input_tokens_details: {
         cached_tokens: 0,
+        cache_write_tokens: 0,
       },
       output_tokens: 8,
       output_tokens_details: {
@@ -412,7 +413,7 @@ function findFunctionCallOutput(input: ResponseCreateParamsNonStreaming['input']
     (item): item is Extract<ResponseInputItem, { type: 'function_call_output' }> =>
       item.type === 'function_call_output',
   )
-  if (!output || typeof output.output !== 'string') {
+  if (!output || typeof output.output !== 'string' || typeof output.call_id !== 'string') {
     throw new Error(`missing Responses function_call_output item: ${JSON.stringify(input)}`)
   }
   return {

@@ -4,6 +4,9 @@ import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { createServer } from 'node:http'
+import { once } from 'node:events'
+import OpenAI, { APIError } from 'openai'
 import { canonicalRecord, genesisChainRoot, hexEncode, sha256, verifyRecord } from '@atrib/mcp'
 import { describe, expect, it } from 'vitest'
 import { OpenAIResponsesToolCallReceiptRecorder } from '../src/openai-responses-tool-call-receipt.js'
@@ -21,6 +24,43 @@ const tsxBin = join(
 )
 
 describe('OpenAI Responses tool-call receipt example', () => {
+  it.each([400, 429])('preserves a Responses HTTP %i failure from the real SDK', async (status) => {
+    let requests = 0
+    const server = createServer((req, res) => {
+      req.resume()
+      requests += 1
+      res.writeHead(status, { 'content-type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          error: {
+            message: 'fixture request rejected',
+            code: 'fixture_rejected',
+            type: 'invalid_request_error',
+          },
+        }),
+      )
+    })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') throw new Error('fixture did not bind')
+      const client = new OpenAI({
+        apiKey: 'local-fixture',
+        baseURL: `http://127.0.0.1:${address.port}/v1`,
+        maxRetries: 0,
+      })
+      const response = client.responses.create({ model: 'fixture', input: 'negative request' })
+      await expect(response).rejects.toBeInstanceOf(APIError)
+      await expect(response).rejects.toMatchObject({ status, code: 'fixture_rejected' })
+      expect(requests).toBe(1)
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      )
+    }
+  })
+
   it('signs a Responses API tool call through the runnable smoke', async () => {
     const { stdout } = await execFileAsync(
       tsxBin,
