@@ -8,7 +8,7 @@ const LOCKFILE = new URL('../pnpm-lock.yaml', import.meta.url)
 export async function checkArchiveDependencies({ readFileImpl = readFile } = {}) {
   const lockfile = await readFileImpl(LOCKFILE, 'utf8')
 
-  if (/extract-zip(?:@|:)/m.test(lockfile)) {
+  if (/^\s*['"]?extract-zip(?:@|['"]?:)/m.test(lockfile)) {
     throw new Error(
       'pnpm-lock.yaml reintroduced extract-zip; use the patched browser-use archive reader',
     )

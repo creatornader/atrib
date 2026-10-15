@@ -4,9 +4,13 @@ import assert from 'node:assert/strict'
 import { checkArchiveDependencies } from './check-archive-dependencies.mjs'
 
 const safeLockfile = `
+overrides:
+  browser-use@0.8.0>extract-zip: '-'
+packages:
   adm-zip@0.6.1:
     resolution: {}
-  browser-use:
+snapshots:
+  browser-use@0.8.0:
     dependencies:
       adm-zip: 0.6.1
 `
@@ -19,6 +23,19 @@ assert.deepEqual(await checkArchiveDependencies({ readFileImpl: async () => safe
 
 await assert.rejects(
   () => checkArchiveDependencies({ readFileImpl: async () => 'extract-zip@2.0.1:' }),
+  /reintroduced extract-zip/,
+)
+
+await assert.rejects(
+  () =>
+    checkArchiveDependencies({
+      readFileImpl: async () => `${safeLockfile}\n      extract-zip: 2.0.1\n`,
+    }),
+  /reintroduced extract-zip/,
+)
+
+await assert.rejects(
+  () => checkArchiveDependencies({ readFileImpl: async () => "  'extract-zip@2.0.1':" }),
   /reintroduced extract-zip/,
 )
 

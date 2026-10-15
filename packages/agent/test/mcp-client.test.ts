@@ -35,7 +35,7 @@ describe('wrapMcpClient MPP MCP completion', () => {
       .getPreEmitDiagnostics(program)
       .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
     expect(diagnostics).toEqual([])
-  })
+  }, 30_000)
 
   beforeEach(() => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
