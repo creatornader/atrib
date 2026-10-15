@@ -6,6 +6,20 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { canonicalRecord, genesisChainRoot, hexEncode, sha256, verifyRecord } from '@atrib/mcp'
 import { describe, expect, it } from 'vitest'
+import {
+  Agent,
+  handoff,
+  run,
+  setTracingDisabled,
+  tool,
+  Usage,
+  type Model,
+  type ModelRequest,
+  type ModelResponse,
+  type StreamEvent,
+} from '@openai/agents'
+import { z } from 'zod'
+import canonicalize from 'canonicalize'
 import { OpenAIAgentsRuntimeReceiptRecorder } from '../src/openai-agents-runtime-receipt.js'
 
 const execFileAsync = promisify(execFile)
@@ -25,6 +39,115 @@ const openAIAgentsPackagePath = join(
 )
 
 describe('OpenAI Agents runtime receipt example', () => {
+  it.each([
+    { label: 'malformed JSON', args: '{', executes: false, message: null, observations: 0 },
+    {
+      label: 'schema-invalid arguments',
+      args: '{"quantity":0}',
+      executes: false,
+      message: /invalid|validation|positive|greater/i,
+      observations: 1,
+    },
+    {
+      label: 'a throwing tool',
+      args: '{"quantity":2}',
+      executes: true,
+      message: /fixture tool failure/,
+      observations: 1,
+    },
+  ])(
+    'handles $label without a successful tool receipt or handoff',
+    async ({ args, executes, message, observations }) => {
+      setTracingDisabled(true)
+      const recorder = new OpenAIAgentsRuntimeReceiptRecorder({
+        privateKey: new Uint8Array(32).fill(26),
+        contextId: '44444444444444444444444444444444',
+        logSubmission: 'disabled',
+      })
+      let executions = 0
+      let handoffs = 0
+      const quoteTool = tool({
+        name: 'quote_price',
+        description: 'Reject invalid input or simulate an execution failure.',
+        parameters: z.object({ quantity: z.number().int().positive() }),
+        errorFunction: null,
+        execute: async () => {
+          executions += 1
+          throw new Error('fixture tool failure')
+        },
+      })
+      const target = new Agent({ name: 'Target', model: new SingleCallModel('unexpected', '{}') })
+      const model = new SingleCallModel('quote_price', args)
+      const agent = recorder.attachAgent(
+        new Agent({
+          name: 'Reviewer',
+          model,
+          tools: [quoteTool],
+          handoffs: [
+            handoff(target, {
+              onHandoff: async () => {
+                handoffs += 1
+              },
+            }),
+          ],
+        }),
+      )
+      const result = run(agent, 'negative tool request', { maxTurns: 2 })
+      if (message) await expect(result).rejects.toThrow(message)
+      else {
+        expect((await result).finalOutput).toBe('negative tool feedback received')
+        expect(JSON.stringify(model.followupInput)).toMatch(/invalid|error/i)
+      }
+      await recorder.flushAtrib()
+      expect(executions).toBe(executes ? 1 : 0)
+      expect(handoffs).toBe(0)
+      const records = recorder.getSignedRecords()
+      const sidecars = recorder.getSidecars()
+      expect(records).toHaveLength(observations)
+      expect(sidecars).toHaveLength(observations)
+      for (const [index, record] of records.entries()) {
+        expect(sidecars[index]!.status).toBe('observed')
+        expect(await verifyRecord(record)).toBe(true)
+        const outcome = canonicalize({ status: 'observed', result: sidecars[index]!.result })!
+        expect(record.result_hash).toBe(
+          `sha256:${hexEncode(sha256(new TextEncoder().encode(outcome)))}`,
+        )
+      }
+    },
+  )
+
+  it('propagates a failed handoff callback without a transferred receipt', async () => {
+    setTracingDisabled(true)
+    const recorder = new OpenAIAgentsRuntimeReceiptRecorder({
+      privateKey: new Uint8Array(32).fill(26),
+      contextId: '44444444444444444444444444444444',
+      logSubmission: 'disabled',
+    })
+    let handoffs = 0
+    const target = new Agent({ name: 'Target', model: new SingleCallModel('unexpected', '{}') })
+    const transfer = handoff(target, {
+      toolNameOverride: 'transfer_to_target',
+      onHandoff: async () => {
+        handoffs += 1
+        throw new Error('fixture handoff failure')
+      },
+    })
+    const agent = recorder.attachAgent(
+      new Agent({
+        name: 'Reviewer',
+        model: new SingleCallModel('transfer_to_target', '{}'),
+        handoffs: [transfer],
+      }),
+    )
+    await expect(run(agent, 'negative handoff request', { maxTurns: 2 })).rejects.toThrow(
+      'fixture handoff failure',
+    )
+    await recorder.flushAtrib()
+    expect(handoffs).toBe(1)
+    expect(recorder.getSignedRecords()).toEqual([])
+    expect(recorder.getSidecars()).toEqual([])
+  })
+
   it('signs an OpenAI Agents SDK function tool call through the runnable smoke', async () => {
     const installedOpenAIAgents = JSON.parse(await readFile(openAIAgentsPackagePath, 'utf8')) as {
       version: string
@@ -169,6 +292,7 @@ describe('OpenAI Agents runtime receipt example', () => {
 
     const records = recorder.getSignedRecords()
     const sidecars = recorder.getSidecars()
+    expect(sidecars.map((entry) => entry.status)).toEqual(['ok', 'ok', 'transferred'])
     const firstHash = `sha256:${hexEncode(sha256(canonicalRecord(records[0]!)))}`
     const secondHash = `sha256:${hexEncode(sha256(canonicalRecord(records[1]!)))}`
 
@@ -190,3 +314,47 @@ describe('OpenAI Agents runtime receipt example', () => {
     expect(await verifyRecord(records[2]!)).toBe(true)
   })
 })
+
+class SingleCallModel implements Model {
+  private calls = 0
+  followupInput: ModelRequest['input'] | undefined
+  constructor(
+    private readonly name: string,
+    private readonly args: string,
+  ) {}
+
+  async getResponse(request: ModelRequest): Promise<ModelResponse> {
+    if (this.calls++ > 0) {
+      this.followupInput = request.input
+      return {
+        usage: new Usage({ requests: 1 }),
+        responseId: 'negative-feedback-response',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            status: 'completed',
+            content: [{ type: 'output_text', text: 'negative tool feedback received' }],
+          },
+        ],
+      }
+    }
+    return {
+      usage: new Usage({ requests: 1 }),
+      responseId: 'negative-response',
+      output: [
+        {
+          type: 'function_call',
+          callId: 'negative-call',
+          name: this.name,
+          arguments: this.args,
+          status: 'completed',
+        },
+      ],
+    }
+  }
+
+  getStreamedResponse(_request: ModelRequest): AsyncIterable<StreamEvent> {
+    throw new Error('streaming is not used by this test')
+  }
+}

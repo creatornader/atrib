@@ -12,7 +12,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && pnpm typecheck:openai-examples",
     "build": "tsc --noEmit",
     "demo": "tsx examples/end-to-end/demo.ts",
     "openinference-cognitive-loop": "tsx examples/openinference/cognitive-loop.ts",
@@ -86,7 +86,8 @@
     "proof-x401-node-runtime-interop": "tsx scripts/proof-x401-node-runtime-interop.ts",
     "proof-vc-common-x401-interop": "tsx scripts/proof-vc-common-x401-interop.ts",
     "proof-vc-token-capture": "tsx scripts/proof-vc-token-capture.ts",
-    "proof-repo-interop": "tsx scripts/check-proof-repo-interop.ts"
+    "proof-repo-interop": "tsx scripts/check-proof-repo-interop.ts",
+    "typecheck:openai-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck examples/openai-responses/openai-responses-tool-call-smoke.ts examples/openai-agents-runtime/openai-agents-runtime-smoke.ts"
   },
   "dependencies": {
     "@a2a-js/sdk": "1.1.0",
@@ -120,7 +121,7 @@
     "@noble/ed25519": "^3.2.0",
     "@noble/hashes": "^2.4.0",
     "@noble/secp256k1": "^3.1.0",
-    "@openai/agents": "0.17.0",
+    "@openai/agents": "0.20.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/context-async-hooks": "^2.10.0",
     "@opentelemetry/exporter-trace-otlp-proto": "^0.221.0",
@@ -135,7 +136,7 @@
     "jose": "6.2.10",
     "llamaindex": "0.12.1",
     "mem0ai": "3.1.7",
-    "openai": "7.8.0",
+    "openai": "7.32.0",
     "playwright": "1.62.1",
     "tslib": "^2.8.1",
     "tsx": "^4.23.15",
