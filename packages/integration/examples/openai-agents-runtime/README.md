@@ -21,8 +21,12 @@ tool execution without `OPENAI_API_KEY`.
 - `@openai/agents` can run an `Agent` through the public `run()` API.
 - A local `tool()` function executes through the SDK's normal function-tool
   loop.
-- The SDK exposes the successful tool execution through `agent_tool_end` with
-  the tool call id, function name, arguments, and result.
+- The SDK exposes a tool-end observation through `agent_tool_end` with the
+  tool call id, function name, arguments, and result. That event can also fire
+  for a rejected or throwing call and has no typed success/failure flag.
+  Automatic tool receipts therefore commit `status: observed`. They do not
+  infer success from result text. Direct caller-owned `recordToolEnd` calls
+  retain `status: ok` for explicitly reported success.
 - A real SDK `handoff()` transfers control from the source agent to the receiver
   agent.
 - The SDK exposes the transfer through `agent_handoff` after the handoff target
@@ -36,6 +40,12 @@ tool execution without `OPENAI_API_KEY`.
   arguments, result, handoff source, and handoff target.
 
 ## What It Does Not Prove Yet
+
+The lifecycle hook alone does not prove that a tool succeeded or failed. The
+local fixture separately checks its expected quote result. Negative tests in
+[`openai-agents-runtime-receipt.test.ts`](../../test/openai-agents-runtime-receipt.test.ts)
+cover malformed JSON, schema rejection, execution errors and failed handoff
+callbacks. Failed transfers must not produce a `transferred` receipt.
 
 This is not a Python Agents SDK proof. It also does not call a hosted OpenAI
 model, the Responses API, computer-use tools, MCP transports, sessions, or

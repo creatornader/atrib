@@ -150,7 +150,7 @@
       "path": "examples/openai-agents-runtime",
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
-      "commands": ["openai-agents-runtime-smoke"]
+      "commands": ["openai-agents-runtime-smoke", "typecheck:openai-examples"]
     },
     {
       "id": "openai-responses",
@@ -346,7 +346,8 @@
         "mem0-oss-full-cycle-smoke",
         "mem0-client-smoke",
         "mem0-python-oss-smoke",
-        "mem0-mutation-assurance"
+        "mem0-mutation-assurance",
+        "typecheck:mem0-examples"
       ]
     },
     {

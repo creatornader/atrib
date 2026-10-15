@@ -29,7 +29,7 @@ export type OpenAIAgentsRuntimeSurface = 'function-tool' | 'handoff'
 
 export type OpenAIAgentsRuntimeOutcome =
   | {
-      status: 'ok'
+      status: 'ok' | 'observed'
       result: unknown
     }
   | {
@@ -192,20 +192,26 @@ export class OpenAIAgentsRuntimeReceiptRecorder implements OpenAIAgentsRuntimeRe
   ): Promise<void> {
     const args = parseJsonMaybe(toolCall.arguments)
     const output = parseToolResult(result)
-    await this.signToolEnd({
-      surface: 'function-tool',
-      agentName: agent.name,
-      toolName: tool.name,
-      toolCallId: toolCall.callId,
-      args,
-      result: output,
-    })
+    await this.signToolEnd(
+      {
+        surface: 'function-tool',
+        agentName: agent.name,
+        toolName: tool.name,
+        toolCallId: toolCall.callId,
+        args,
+        result: output,
+      },
+      'observed',
+    )
   }
 
-  private async signToolEnd(call: OpenAIAgentsRuntimeToolEnd): Promise<void> {
+  private async signToolEnd(
+    call: OpenAIAgentsRuntimeToolEnd,
+    status: 'ok' | 'observed' = 'ok',
+  ): Promise<void> {
     const argsSnapshot = snapshotCanonical(call.args)
     const outcomeSnapshot = snapshotCanonical({
-      status: 'ok',
+      status,
       result: call.result,
     }) as OpenAIAgentsRuntimeOutcome | undefined
     if (argsSnapshot === undefined || outcomeSnapshot === undefined) return
@@ -357,7 +363,8 @@ function buildSidecar({
     args,
     record_hash: recordHash,
     status: outcome.status,
-    result: outcome.status === 'ok' ? outcome.result : { to_agent_name: outcome.to_agent_name },
+    result:
+      outcome.status === 'transferred' ? { to_agent_name: outcome.to_agent_name } : outcome.result,
   } satisfies Omit<
     OpenAIAgentsRuntimeSidecar,
     'agent_name' | 'lifecycle' | 'tool_name' | 'tool_call_id' | 'from_agent_name' | 'to_agent_name'

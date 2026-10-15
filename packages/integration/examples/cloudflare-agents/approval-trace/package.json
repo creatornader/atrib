@@ -18,9 +18,9 @@
   "dependencies": {
     "@atrib/mcp": "workspace:*",
     "@cloudflare/codemode": "^0.5.1",
-    "@modelcontextprotocol/sdk": "^1.31.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "agents": "^0.22.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@atrib/graph-node": "workspace:*",
