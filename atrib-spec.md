@@ -1428,6 +1428,10 @@ _This section is normative._
 
 The [source-bound evidence contract](docs/source-bound-evidence.md) defines normative private-body schemas, type URIs, exact request bindings, source policies, and independent receiver conclusions. These URIs use the existing extension event byte. This section allocates no new log-entry byte or signature format. Ordinary cognitive records do not acquire an action lifecycle by implication.
 
+The [offline conformance corpus](spec/conformance/1.12/README.md) supplies canonical
+JSON vectors, jointly normative with Appendix A, and distinguishes test-only
+receiver semantics from the separate operational producer obligations.
+
 Signing, retention, disclosure and submission are separate operations. An evidence producer MAY retain a signed record and opening privately without submitting either to a public service. A submission uses [§2](#2-merkle-log-protocol) unchanged. An unsubmitted record MUST NOT be represented as log-included. Checkpoint inclusion covers its specified records, not every action at a source.
 
 ## §2 Merkle Log Protocol
@@ -3960,6 +3964,11 @@ visible as degraded capture. A protected executor explicitly requiring durable
 intent MUST refuse its mediated effect if retention fails. Log submission failure
 alone MUST NOT refuse an effect whose required local intent is durable. Ordinary
 middleware remains non-blocking; this exception does not silently enable a gate.
+
+The protected durable-intent check MUST execute on the executor's own awaited
+path outside observational triggers. It MUST refuse before invoking the effect
+handler when retention fails. A trigger exception swallowed by middleware cannot
+be used as evidence that this protected check succeeded.
 
 The degradation contract is:
 

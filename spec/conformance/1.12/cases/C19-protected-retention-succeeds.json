@@ -1,0 +1,20 @@
+{
+  "name": "C19-protected-retention-succeeds",
+  "protects": "refusal precedes the mediated effect in the contract model",
+  "fails_when": "the failed protected path invokes the handler",
+  "no_claim": "no installed executor, actual filesystem atomicity or bypass coverage",
+  "rules": [
+    "E03",
+    "E14"
+  ],
+  "input": {
+    "mode": "executor",
+    "protected": true,
+    "fail_retention": false
+  },
+  "expected": {
+    "refused": false,
+    "gap": false,
+    "handler_calls": 1
+  }
+}

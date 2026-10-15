@@ -1,0 +1,599 @@
+{
+  "name": "schema-request-assertion-descriptor",
+  "protects": "schema-request-assertion-descriptor",
+  "fails_when": "the required evidence distinction is erased",
+  "no_claim": "offline fixture sources, not installed capture or host durability",
+  "rules": [
+    "grammar"
+  ],
+  "input": {
+    "records": [
+      {
+        "spec_version": "atrib/1.0",
+        "creator_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "content_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "chain_root": "sha256:8a83665f3798727f14f92ad0e6c99fdab08ee731d6cd644c131223fd2f4fed2a",
+        "context_id": "11111111111111111111111111111111",
+        "event_type": "https://atrib.dev/evidence/v1/request",
+        "timestamp": 1700000000000,
+        "args_hash": "sha256:c7fe925c78609b7fb31b551462b92587a3687e0fe9a7d3a5e57567897450ef2e",
+        "signature": "m8fS0SHi7DSpX7Y8geRRFUGmzSfxKUZYAvFPrWewK0hjdMR08PJWCF5R3stbH0HfnrkLv3Y1CJLEFjFg-fa8Bw"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "creator_key": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        "content_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "chain_root": "sha256:8a83665f3798727f14f92ad0e6c99fdab08ee731d6cd644c131223fd2f4fed2a",
+        "context_id": "11111111111111111111111111111111",
+        "event_type": "https://atrib.dev/evidence/v1/authorization",
+        "timestamp": 1700000000000,
+        "args_hash": "sha256:56c5398d6b6e00ef90865cb096e6aa271a7c2222b53ed26b8398224fa545f22f",
+        "signature": "nCu8vNIayOHZQb3-i_gHFRJjvWbngcAOIy2R9E4vEI5eFcDb08nL5jcWV7AnGqFzoYoOleXhjQ9_EoYTmn1xCw"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "creator_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
+        "content_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "chain_root": "sha256:8a83665f3798727f14f92ad0e6c99fdab08ee731d6cd644c131223fd2f4fed2a",
+        "context_id": "11111111111111111111111111111111",
+        "event_type": "https://atrib.dev/evidence/v1/observation",
+        "timestamp": 1700000000000,
+        "args_hash": "sha256:c5d5ef1ba86abc4f4b9f4970b1c3d280cea644a3079913a6e21cf7acdc7cd592",
+        "signature": "63jpzFiv1FCpY4NCVu8vZvS2f4_5PmdNeie0BLlNrIpRMSY4bZjgQvWl20W3_9AEQe3Ms4bLdf45I9AkPpFVDA"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "creator_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
+        "content_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "chain_root": "sha256:8a83665f3798727f14f92ad0e6c99fdab08ee731d6cd644c131223fd2f4fed2a",
+        "context_id": "11111111111111111111111111111111",
+        "event_type": "https://atrib.dev/evidence/v1/observation",
+        "timestamp": 1700000000000,
+        "args_hash": "sha256:2b52c4ce35e1df9554ea3240a56e5ffb410002cbd63aa9533f50e62d5fdaf77a",
+        "signature": "ptOPc-zCbyHRRLxX5QIZTc3YyZXXSgzmm92cNdsVh5QwCzmT8lpNoHVEeaA1T60Dqz4CiOIVHQ6zxuC9EP-3Dg"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "creator_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "content_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "chain_root": "sha256:8a83665f3798727f14f92ad0e6c99fdab08ee731d6cd644c131223fd2f4fed2a",
+        "context_id": "11111111111111111111111111111111",
+        "event_type": "https://atrib.dev/evidence/v1/report",
+        "timestamp": 1700000000000,
+        "args_hash": "sha256:bda41cedc75c36e984a9ecd21950538d72582f4a86289aecb07c69cc372adb1d",
+        "signature": "UaYOH6jBPdP30cJLSX-ZohlnvE3kXHnAU883TxRlBmZXhzEzYCmDbzou0Y8IpAhLOh2X3IwnuqL99eraZN1FDg"
+      },
+      {
+        "spec_version": "atrib/1.0",
+        "creator_key": "ypOsFwUYcHHWe4PH_w7-gQjo7EUwV113JoeTM9vavnw",
+        "content_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "chain_root": "sha256:8a83665f3798727f14f92ad0e6c99fdab08ee731d6cd644c131223fd2f4fed2a",
+        "context_id": "11111111111111111111111111111111",
+        "event_type": "https://atrib.dev/evidence/v1/effect",
+        "timestamp": 1700000000000,
+        "args_hash": "sha256:d23220e92863a13f0c36580153724d64ff477e7b04c57385f66d6d451524c3b5",
+        "signature": "0FXun0yY56VgmM_E_ngqJk7wP_a5qimkjxVezPiy2fyikh2i8yd1Wf_qiNfebJIpYTRG6LlLUJwOtAFNWWjzDA"
+      }
+    ],
+    "openings": {
+      "sha256:a64a89d1f972dc9c659a82650c6ccda4da28468102deccc917974ebd25f3d29c": {
+        "nonce": "AAAAAAAAAAAAAAAAAAAAAA",
+        "subject": {
+          "namespace": "urn:invocation",
+          "id": "call-1"
+        },
+        "assertion": {
+          "execution": {
+            "namespace": "urn:execution",
+            "id": "attempt-1"
+          }
+        },
+        "source": {
+          "kind": "declared",
+          "identity": {
+            "namespace": "urn:source",
+            "id": "agent"
+          },
+          "method": "https://atrib.dev/evidence/v1/method/declared"
+        },
+        "basis": []
+      },
+      "sha256:d10a9f755f4986f80d9d929a816dffac8f5098c9f951cbc8feb5597e5254bb10": {
+        "nonce": "AAAAAAAAAAAAAAAAAAAAAA",
+        "subject": {
+          "namespace": "urn:invocation",
+          "id": "call-1"
+        },
+        "assertion": {
+          "decision": "allow",
+          "authority_version": "v1",
+          "not_before": 1699999999950,
+          "expires_at": 1700000001000
+        },
+        "target": {
+          "record_hash": "sha256:a64a89d1f972dc9c659a82650c6ccda4da28468102deccc917974ebd25f3d29c"
+        },
+        "source": {
+          "kind": "declared",
+          "identity": {
+            "namespace": "urn:source",
+            "id": "owner"
+          },
+          "method": "https://atrib.dev/evidence/v1/method/declared"
+        },
+        "basis": [
+          {
+            "relation": "authority",
+            "kind": "artifact",
+            "hash": "sha256:eee0ecf43655d3cd4c5f5eb71dcaf9918204bc703ca4ea8b0ef828373546e5fb"
+          }
+        ]
+      },
+      "sha256:f443967801361a8775e37657b31cc45a24e2027cefcebb3d9a605037de1e69d7": {
+        "nonce": "AAAAAAAAAAAAAAAAAAAAAA",
+        "subject": {
+          "namespace": "urn:invocation",
+          "id": "call-1"
+        },
+        "assertion": {
+          "phase": "dispatch",
+          "descriptor": {
+            "service": "https://api.example.test",
+            "operation": "deploy",
+            "resource": {
+              "namespace": "urn:environment",
+              "id": "staging"
+            },
+            "parameters": {
+              "image": "build-1",
+              "mode": "safe"
+            },
+            "version": "v1"
+          },
+          "execution": {
+            "namespace": "urn:execution",
+            "id": "attempt-1"
+          },
+          "native_invocation": {
+            "namespace": "urn:native",
+            "id": "native-1"
+          },
+          "delivery": {
+            "namespace": "urn:delivery",
+            "id": "delivery-1"
+          },
+          "destination_request": {
+            "namespace": "urn:destination-request",
+            "id": "request-1"
+          },
+          "outcome": "pending"
+        },
+        "target": {
+          "record_hash": "sha256:a64a89d1f972dc9c659a82650c6ccda4da28468102deccc917974ebd25f3d29c"
+        },
+        "source": {
+          "kind": "boundary",
+          "identity": {
+            "namespace": "urn:source",
+            "id": "host"
+          },
+          "method": "https://atrib.dev/conformance/method/signed-snapshot-v1",
+          "observed_at": 1700000000010
+        },
+        "basis": [
+          {
+            "relation": "authority",
+            "kind": "record",
+            "hash": "sha256:d10a9f755f4986f80d9d929a816dffac8f5098c9f951cbc8feb5597e5254bb10"
+          },
+          {
+            "relation": "source",
+            "kind": "artifact",
+            "hash": "sha256:62be3827de7315515d581feace6f490d6e0c206b4fa8356f5d9b44ab4af7a075"
+          }
+        ]
+      },
+      "sha256:260453b2937e65a2ec12922dff9e57b753fe54c43a9806ca13d99bc7db7569a1": {
+        "nonce": "AAAAAAAAAAAAAAAAAAAAAA",
+        "subject": {
+          "namespace": "urn:invocation",
+          "id": "call-1"
+        },
+        "assertion": {
+          "phase": "response",
+          "descriptor": {
+            "service": "https://api.example.test",
+            "operation": "deploy",
+            "resource": {
+              "namespace": "urn:environment",
+              "id": "staging"
+            },
+            "parameters": {
+              "image": "build-1",
+              "mode": "safe"
+            },
+            "version": "v1"
+          },
+          "execution": {
+            "namespace": "urn:execution",
+            "id": "attempt-1"
+          },
+          "native_invocation": {
+            "namespace": "urn:native",
+            "id": "native-1"
+          },
+          "delivery": {
+            "namespace": "urn:delivery",
+            "id": "delivery-1"
+          },
+          "destination_request": {
+            "namespace": "urn:destination-request",
+            "id": "request-1"
+          },
+          "outcome": "success"
+        },
+        "target": {
+          "record_hash": "sha256:a64a89d1f972dc9c659a82650c6ccda4da28468102deccc917974ebd25f3d29c"
+        },
+        "source": {
+          "kind": "boundary",
+          "identity": {
+            "namespace": "urn:source",
+            "id": "host"
+          },
+          "method": "https://atrib.dev/conformance/method/signed-snapshot-v1",
+          "observed_at": 1700000000010
+        },
+        "basis": [
+          {
+            "relation": "source",
+            "kind": "artifact",
+            "hash": "sha256:019c83285aa2853b318d2dd00f0e71cfc84e5576df94fe76dc137a7c64eaa0ff"
+          }
+        ]
+      },
+      "sha256:6ca6e6d59623c92bcd83b1b7a3a3b29a096dd414f89fb79b98cd25ab046e397f": {
+        "nonce": "AAAAAAAAAAAAAAAAAAAAAA",
+        "subject": {
+          "namespace": "urn:invocation",
+          "id": "call-1"
+        },
+        "assertion": {
+          "status": "success",
+          "text": "Agent reports done"
+        },
+        "target": {
+          "record_hash": "sha256:a64a89d1f972dc9c659a82650c6ccda4da28468102deccc917974ebd25f3d29c"
+        },
+        "source": {
+          "kind": "declared",
+          "identity": {
+            "namespace": "urn:source",
+            "id": "agent"
+          },
+          "method": "https://atrib.dev/evidence/v1/method/declared"
+        },
+        "basis": []
+      },
+      "sha256:4e1717aea4c45cdb8b54b34e7d88131739f0cbd8ff9e3c3bc55665a8c02ab4f9": {
+        "nonce": "AAAAAAAAAAAAAAAAAAAAAA",
+        "subject": {
+          "namespace": "urn:invocation",
+          "id": "call-1"
+        },
+        "assertion": {
+          "object": {
+            "namespace": "urn:deployment",
+            "id": "deployment-1"
+          },
+          "version": {
+            "kind": "native",
+            "value": "revision-1"
+          },
+          "state": {
+            "deployed": true
+          },
+          "binding": {
+            "observation_record": "sha256:260453b2937e65a2ec12922dff9e57b753fe54c43a9806ca13d99bc7db7569a1",
+            "destination_request": {
+              "namespace": "urn:destination-request",
+              "id": "request-1"
+            }
+          },
+          "payload_hash": "sha256:672158a39775dbd0e4a988d7a288c239f27f0843ee5beafe8d89dd9f42780add"
+        },
+        "target": {
+          "record_hash": "sha256:a64a89d1f972dc9c659a82650c6ccda4da28468102deccc917974ebd25f3d29c"
+        },
+        "source": {
+          "kind": "query",
+          "identity": {
+            "namespace": "urn:source",
+            "id": "destination"
+          },
+          "method": "https://atrib.dev/conformance/method/signed-snapshot-v1",
+          "observed_at": 1700000000020
+        },
+        "basis": [
+          {
+            "relation": "source",
+            "kind": "artifact",
+            "hash": "sha256:672158a39775dbd0e4a988d7a288c239f27f0843ee5beafe8d89dd9f42780add"
+          },
+          {
+            "relation": "source",
+            "kind": "artifact",
+            "hash": "sha256:0958704c966996461346a801c8f0670a399ab51ac067eeee622c8dbb69257ef3"
+          }
+        ]
+      }
+    },
+    "artifacts": {
+      "sha256:eee0ecf43655d3cd4c5f5eb71dcaf9918204bc703ca4ea8b0ef828373546e5fb": "eyJleHBpcmVzX2F0IjoxNzAwMDAwMDEwMDAwLCJub3RfYmVmb3JlIjoxNjk5OTk5OTk5OTAwLCJyZXZva2VkIjpmYWxzZSwidmVyc2lvbiI6InYxIn0=",
+      "sha256:62be3827de7315515d581feace6f490d6e0c206b4fa8356f5d9b44ab4af7a075": "eyJwYXlsb2FkIjp7ImF1dGhvcml0eSI6WyJzaGEyNTY6ZDEwYTlmNzU1ZjQ5ODZmODBkOWQ5MjlhODE2ZGZmYWM4ZjUwOThjOWY5NTFjYmM4ZmViNTU5N2U1MjU0YmIxMCJdLCJjbGFpbSI6eyJhc3NlcnRpb24iOnsiZGVsaXZlcnkiOnsiaWQiOiJkZWxpdmVyeS0xIiwibmFtZXNwYWNlIjoidXJuOmRlbGl2ZXJ5In0sImRlc2NyaXB0b3IiOnsib3BlcmF0aW9uIjoiZGVwbG95IiwicGFyYW1ldGVycyI6eyJpbWFnZSI6ImJ1aWxkLTEiLCJtb2RlIjoic2FmZSJ9LCJyZXNvdXJjZSI6eyJpZCI6InN0YWdpbmciLCJuYW1lc3BhY2UiOiJ1cm46ZW52aXJvbm1lbnQifSwic2VydmljZSI6Imh0dHBzOi8vYXBpLmV4YW1wbGUudGVzdCIsInZlcnNpb24iOiJ2MSJ9LCJkZXN0aW5hdGlvbl9yZXF1ZXN0Ijp7ImlkIjoicmVxdWVzdC0xIiwibmFtZXNwYWNlIjoidXJuOmRlc3RpbmF0aW9uLXJlcXVlc3QifSwiZXhlY3V0aW9uIjp7ImlkIjoiYXR0ZW1wdC0xIiwibmFtZXNwYWNlIjoidXJuOmV4ZWN1dGlvbiJ9LCJuYXRpdmVfaW52b2NhdGlvbiI6eyJpZCI6Im5hdGl2ZS0xIiwibmFtZXNwYWNlIjoidXJuOm5hdGl2ZSJ9LCJvdXRjb21lIjoicGVuZGluZyIsInBoYXNlIjoiZGlzcGF0Y2gifSwic291cmNlIjp7ImlkZW50aXR5Ijp7ImlkIjoiaG9zdCIsIm5hbWVzcGFjZSI6InVybjpzb3VyY2UifSwia2luZCI6ImJvdW5kYXJ5IiwibWV0aG9kIjoiaHR0cHM6Ly9hdHJpYi5kZXYvY29uZm9ybWFuY2UvbWV0aG9kL3NpZ25lZC1zbmFwc2hvdC12MSIsIm9ic2VydmVkX2F0IjoxNzAwMDAwMDAwMDEwfSwic3ViamVjdCI6eyJpZCI6ImNhbGwtMSIsIm5hbWVzcGFjZSI6InVybjppbnZvY2F0aW9uIn0sInRhcmdldCI6eyJyZWNvcmRfaGFzaCI6InNoYTI1NjphNjRhODlkMWY5NzJkYzljNjU5YTgyNjUwYzZjY2RhNGRhMjg0NjgxMDJkZWNjYzkxNzk3NGViZDI1ZjNkMjljIn19LCJjdXJzb3IiOjV9LCJzaWduYXR1cmUiOiJPdFN3OUh4NGVlaC1XZ01jeFFzS2Zya1dRZnFpb09jS3gwTzZRTVhKRGp1UUJDeDJZQkh1eW1RWTh2b1Q2ay1McWx2Um9VdmJsWlBsaF8wZURxWmJEUSIsInNpZ25lcl9rZXkiOiI3VWtveGlqUndzYnE2UU00a0ZtVllTbFpKenBjWV9rMk5zRkdGS3lITjlFIn0=",
+      "sha256:019c83285aa2853b318d2dd00f0e71cfc84e5576df94fe76dc137a7c64eaa0ff": "eyJwYXlsb2FkIjp7ImF1dGhvcml0eSI6W10sImNsYWltIjp7ImFzc2VydGlvbiI6eyJkZWxpdmVyeSI6eyJpZCI6ImRlbGl2ZXJ5LTEiLCJuYW1lc3BhY2UiOiJ1cm46ZGVsaXZlcnkifSwiZGVzY3JpcHRvciI6eyJvcGVyYXRpb24iOiJkZXBsb3kiLCJwYXJhbWV0ZXJzIjp7ImltYWdlIjoiYnVpbGQtMSIsIm1vZGUiOiJzYWZlIn0sInJlc291cmNlIjp7ImlkIjoic3RhZ2luZyIsIm5hbWVzcGFjZSI6InVybjplbnZpcm9ubWVudCJ9LCJzZXJ2aWNlIjoiaHR0cHM6Ly9hcGkuZXhhbXBsZS50ZXN0IiwidmVyc2lvbiI6InYxIn0sImRlc3RpbmF0aW9uX3JlcXVlc3QiOnsiaWQiOiJyZXF1ZXN0LTEiLCJuYW1lc3BhY2UiOiJ1cm46ZGVzdGluYXRpb24tcmVxdWVzdCJ9LCJleGVjdXRpb24iOnsiaWQiOiJhdHRlbXB0LTEiLCJuYW1lc3BhY2UiOiJ1cm46ZXhlY3V0aW9uIn0sIm5hdGl2ZV9pbnZvY2F0aW9uIjp7ImlkIjoibmF0aXZlLTEiLCJuYW1lc3BhY2UiOiJ1cm46bmF0aXZlIn0sIm91dGNvbWUiOiJzdWNjZXNzIiwicGhhc2UiOiJyZXNwb25zZSJ9LCJzb3VyY2UiOnsiaWRlbnRpdHkiOnsiaWQiOiJob3N0IiwibmFtZXNwYWNlIjoidXJuOnNvdXJjZSJ9LCJraW5kIjoiYm91bmRhcnkiLCJtZXRob2QiOiJodHRwczovL2F0cmliLmRldi9jb25mb3JtYW5jZS9tZXRob2Qvc2lnbmVkLXNuYXBzaG90LXYxIiwib2JzZXJ2ZWRfYXQiOjE3MDAwMDAwMDAwMTB9LCJzdWJqZWN0Ijp7ImlkIjoiY2FsbC0xIiwibmFtZXNwYWNlIjoidXJuOmludm9jYXRpb24ifSwidGFyZ2V0Ijp7InJlY29yZF9oYXNoIjoic2hhMjU2OmE2NGE4OWQxZjk3MmRjOWM2NTlhODI2NTBjNmNjZGE0ZGEyODQ2ODEwMmRlY2NjOTE3OTc0ZWJkMjVmM2QyOWMifX0sImN1cnNvciI6NX0sInNpZ25hdHVyZSI6Ik5nZnl1SkF1M2VsQnd3WUZjdkRzNVZkR0hMRnl5ME8zN0NOMkNkcG5vc05fQ3BvazA3WjVHSDAxNEtqY18xR0JyVHRxb0tTN2Z1YW43ZUVlbXhfU0F3Iiwic2lnbmVyX2tleSI6IjdVa294aWpSd3NicTZRTTRrRm1WWVNsWkp6cGNZX2syTnNGR0ZLeUhOOUUifQ==",
+      "sha256:672158a39775dbd0e4a988d7a288c239f27f0843ee5beafe8d89dd9f42780add": "eyJvYmplY3QiOnsiaWQiOiJkZXBsb3ltZW50LTEiLCJuYW1lc3BhY2UiOiJ1cm46ZGVwbG95bWVudCJ9LCJzdGF0ZSI6eyJkZXBsb3llZCI6dHJ1ZX0sInZlcnNpb24iOiJyZXZpc2lvbi0xIn0=",
+      "sha256:0958704c966996461346a801c8f0670a399ab51ac067eeee622c8dbb69257ef3": "eyJwYXlsb2FkIjp7ImF1dGhvcml0eSI6W10sImNsYWltIjp7ImFzc2VydGlvbiI6eyJiaW5kaW5nIjp7ImRlc3RpbmF0aW9uX3JlcXVlc3QiOnsiaWQiOiJyZXF1ZXN0LTEiLCJuYW1lc3BhY2UiOiJ1cm46ZGVzdGluYXRpb24tcmVxdWVzdCJ9LCJvYnNlcnZhdGlvbl9yZWNvcmQiOiJzaGEyNTY6MjYwNDUzYjI5MzdlNjVhMmVjMTI5MjJkZmY5ZTU3Yjc1M2ZlNTRjNDNhOTgwNmNhMTNkOTliYzdkYjc1NjlhMSJ9LCJvYmplY3QiOnsiaWQiOiJkZXBsb3ltZW50LTEiLCJuYW1lc3BhY2UiOiJ1cm46ZGVwbG95bWVudCJ9LCJwYXlsb2FkX2hhc2giOiJzaGEyNTY6NjcyMTU4YTM5Nzc1ZGJkMGU0YTk4OGQ3YTI4OGMyMzlmMjdmMDg0M2VlNWJlYWZlOGQ4OWRkOWY0Mjc4MGFkZCIsInN0YXRlIjp7ImRlcGxveWVkIjp0cnVlfSwidmVyc2lvbiI6eyJraW5kIjoibmF0aXZlIiwidmFsdWUiOiJyZXZpc2lvbi0xIn19LCJzb3VyY2UiOnsiaWRlbnRpdHkiOnsiaWQiOiJkZXN0aW5hdGlvbiIsIm5hbWVzcGFjZSI6InVybjpzb3VyY2UifSwia2luZCI6InF1ZXJ5IiwibWV0aG9kIjoiaHR0cHM6Ly9hdHJpYi5kZXYvY29uZm9ybWFuY2UvbWV0aG9kL3NpZ25lZC1zbmFwc2hvdC12MSIsIm9ic2VydmVkX2F0IjoxNzAwMDAwMDAwMDIwfSwic3ViamVjdCI6eyJpZCI6ImNhbGwtMSIsIm5hbWVzcGFjZSI6InVybjppbnZvY2F0aW9uIn0sInRhcmdldCI6eyJyZWNvcmRfaGFzaCI6InNoYTI1NjphNjRhODlkMWY5NzJkYzljNjU5YTgyNjUwYzZjY2RhNGRhMjg0NjgxMDJkZWNjYzkxNzk3NGViZDI1ZjNkMjljIn19LCJjdXJzb3IiOjV9LCJzaWduYXR1cmUiOiJoSnM1X1BrWlhsUXpUOEFkdEdQSG80UXR3eHVEc1oxeWxIQi13TUNJMU5McWpJMkhwTTRsVG9Oc1JqN2ZsUWhqT3RfOWFFTkNYNEhPY1VJeHdwN2FBQSIsInNpZ25lcl9rZXkiOiJ5cE9zRndVWWNISFdlNFBIX3c3LWdRam83RVV3VjExM0pvZVRNOXZhdm53In0="
+    },
+    "policy": {
+      "id": "fixture-policy-v1",
+      "rules": [
+        {
+          "type": "https://atrib.dev/evidence/v1/request",
+          "signer_keys": [
+            "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w"
+          ],
+          "source_keys": [
+            "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+            "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E"
+          ],
+          "source": {
+            "namespace": "urn:source",
+            "id": "agent"
+          },
+          "methods": [
+            "https://atrib.dev/evidence/v1/method/declared"
+          ],
+          "subject_namespace": "urn:invocation",
+          "max_age_ms": 10000,
+          "authority_versions": [
+            "v1"
+          ],
+          "authorized_descriptors": [
+            {
+              "service": "https://api.example.test",
+              "operation": "deploy",
+              "resource": {
+                "namespace": "urn:environment",
+                "id": "staging"
+              },
+              "parameters": {
+                "image": "build-1",
+                "mode": "safe"
+              },
+              "version": "v1"
+            }
+          ],
+          "authority_basis": [
+            "sha256:eee0ecf43655d3cd4c5f5eb71dcaf9918204bc703ca4ea8b0ef828373546e5fb"
+          ]
+        },
+        {
+          "type": "https://atrib.dev/evidence/v1/authorization",
+          "signer_keys": [
+            "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q"
+          ],
+          "source_keys": [
+            "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+            "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E"
+          ],
+          "source": {
+            "namespace": "urn:source",
+            "id": "owner"
+          },
+          "methods": [
+            "https://atrib.dev/evidence/v1/method/declared"
+          ],
+          "subject_namespace": "urn:invocation",
+          "max_age_ms": 10000,
+          "authority_versions": [
+            "v1"
+          ],
+          "authorized_descriptors": [
+            {
+              "service": "https://api.example.test",
+              "operation": "deploy",
+              "resource": {
+                "namespace": "urn:environment",
+                "id": "staging"
+              },
+              "parameters": {
+                "image": "build-1",
+                "mode": "safe"
+              },
+              "version": "v1"
+            }
+          ],
+          "authority_basis": [
+            "sha256:eee0ecf43655d3cd4c5f5eb71dcaf9918204bc703ca4ea8b0ef828373546e5fb"
+          ]
+        },
+        {
+          "type": "https://atrib.dev/evidence/v1/report",
+          "signer_keys": [
+            "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w"
+          ],
+          "source_keys": [
+            "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+            "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E"
+          ],
+          "source": {
+            "namespace": "urn:source",
+            "id": "agent"
+          },
+          "methods": [
+            "https://atrib.dev/evidence/v1/method/declared"
+          ],
+          "subject_namespace": "urn:invocation",
+          "max_age_ms": 10000,
+          "authority_versions": [
+            "v1"
+          ],
+          "authorized_descriptors": [
+            {
+              "service": "https://api.example.test",
+              "operation": "deploy",
+              "resource": {
+                "namespace": "urn:environment",
+                "id": "staging"
+              },
+              "parameters": {
+                "image": "build-1",
+                "mode": "safe"
+              },
+              "version": "v1"
+            }
+          ],
+          "authority_basis": [
+            "sha256:eee0ecf43655d3cd4c5f5eb71dcaf9918204bc703ca4ea8b0ef828373546e5fb"
+          ]
+        },
+        {
+          "type": "https://atrib.dev/evidence/v1/observation",
+          "signer_keys": [
+            "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E"
+          ],
+          "source_keys": [
+            "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
+            "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E"
+          ],
+          "source": {
+            "namespace": "urn:source",
+            "id": "host"
+          },
+          "methods": [
+            "https://atrib.dev/conformance/method/signed-snapshot-v1"
+          ],
+          "subject_namespace": "urn:invocation",
+          "max_age_ms": 10000,
+          "authority_versions": [
+            "v1"
+          ],
+          "authorized_descriptors": [
+            {
+              "service": "https://api.example.test",
+              "operation": "deploy",
+              "resource": {
+                "namespace": "urn:environment",
+                "id": "staging"
+              },
+              "parameters": {
+                "image": "build-1",
+                "mode": "safe"
+              },
+              "version": "v1"
+            }
+          ],
+          "authority_basis": [
+            "sha256:eee0ecf43655d3cd4c5f5eb71dcaf9918204bc703ca4ea8b0ef828373546e5fb"
+          ]
+        },
+        {
+          "type": "https://atrib.dev/evidence/v1/effect",
+          "signer_keys": [
+            "ypOsFwUYcHHWe4PH_w7-gQjo7EUwV113JoeTM9vavnw"
+          ],
+          "source_keys": [
+            "ypOsFwUYcHHWe4PH_w7-gQjo7EUwV113JoeTM9vavnw",
+            "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E"
+          ],
+          "source": {
+            "namespace": "urn:source",
+            "id": "destination"
+          },
+          "methods": [
+            "https://atrib.dev/conformance/method/signed-snapshot-v1"
+          ],
+          "subject_namespace": "urn:invocation",
+          "max_age_ms": 10000,
+          "authority_versions": [
+            "v1"
+          ],
+          "authorized_descriptors": [
+            {
+              "service": "https://api.example.test",
+              "operation": "deploy",
+              "resource": {
+                "namespace": "urn:environment",
+                "id": "staging"
+              },
+              "parameters": {
+                "image": "build-1",
+                "mode": "safe"
+              },
+              "version": "v1"
+            }
+          ],
+          "authority_basis": [
+            "sha256:eee0ecf43655d3cd4c5f5eb71dcaf9918204bc703ca4ea8b0ef828373546e5fb"
+          ]
+        },
+        {
+          "type": "https://atrib.dev/evidence/v1/coverage",
+          "signer_keys": [
+            "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E"
+          ],
+          "source_keys": [
+            "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
+            "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E"
+          ],
+          "source": {
+            "namespace": "urn:source",
+            "id": "host"
+          },
+          "methods": [
+            "https://atrib.dev/conformance/method/signed-snapshot-v1"
+          ],
+          "subject_namespace": "urn:source",
+          "max_age_ms": 10000,
+          "authority_versions": [
+            "v1"
+          ],
+          "authorized_descriptors": [
+            {
+              "service": "https://api.example.test",
+              "operation": "deploy",
+              "resource": {
+                "namespace": "urn:environment",
+                "id": "staging"
+              },
+              "parameters": {
+                "image": "build-1",
+                "mode": "safe"
+              },
+              "version": "v1"
+            }
+          ],
+          "authority_basis": [
+            "sha256:eee0ecf43655d3cd4c5f5eb71dcaf9918204bc703ca4ea8b0ef828373546e5fb"
+          ]
+        }
+      ],
+      "required": [
+        "source",
+        "binding",
+        "authority",
+        "effect"
+      ]
+    },
+    "evaluation": {
+      "purpose": "historical",
+      "evaluated_at": 1700000000100,
+      "dispatch_record": "sha256:f443967801361a8775e37657b31cc45a24e2027cefcebb3d9a605037de1e69d7"
+    },
+    "request_hash": "sha256:a64a89d1f972dc9c659a82650c6ccda4da28468102deccc917974ebd25f3d29c"
+  },
+  "expected": {
+    "invalid_kind": "request"
+  }
+}

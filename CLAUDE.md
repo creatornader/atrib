@@ -219,6 +219,11 @@ verifyRecord.valid establishes action truth. See STATUS.md for the implementatio
 boundary. Keep its acceptance cases synchronized with the receiver corpus when
 that implementation lands.
 
+The [offline evidence corpus](spec/conformance/1.12/README.md) has a test-only
+schema/receiver model under `packages/verify/test/source-bound-*`. It does not
+export a public receiver API. Keep its signed fixtures, explicit operational
+obligations and source-mechanism description synchronized with the contract.
+
 ## Authoritative docs
 
 | Doc                                       | Responsible for                                                                                                                                                                                                                      |

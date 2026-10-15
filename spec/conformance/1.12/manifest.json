@@ -1,0 +1,579 @@
+{
+  "spec_section": "1.12",
+  "generator": "packages/verify/test/generate-source-bound-corpus.ts",
+  "cases": [
+    {
+      "file": "cases/C01-complete.json",
+      "name": "C01-complete"
+    },
+    {
+      "file": "cases/C02-body-withheld.json",
+      "name": "C02-body-withheld"
+    },
+    {
+      "file": "cases/C03-body-modified.json",
+      "name": "C03-body-modified"
+    },
+    {
+      "file": "cases/C05-dispatch-substitution.json",
+      "name": "C05-dispatch-substitution"
+    },
+    {
+      "file": "cases/C06-execution-substitution.json",
+      "name": "C06-execution-substitution"
+    },
+    {
+      "file": "cases/C07-redelivery.json",
+      "name": "C07-redelivery"
+    },
+    {
+      "file": "cases/C08-timeout-success-report.json",
+      "name": "C08-timeout-success-report"
+    },
+    {
+      "file": "cases/C09-unbound-destination.json",
+      "name": "C09-unbound-destination"
+    },
+    {
+      "file": "cases/C10-untrusted-injection.json",
+      "name": "C10-untrusted-injection"
+    },
+    {
+      "file": "cases/C11-policy-missing.json",
+      "name": "C11-policy-missing"
+    },
+    {
+      "file": "cases/C12-expired-at-dispatch.json",
+      "name": "C12-expired-at-dispatch"
+    },
+    {
+      "file": "cases/C13-expected-set-missing.json",
+      "name": "C13-expected-set-missing"
+    },
+    {
+      "file": "cases/C14-capture-gap.json",
+      "name": "C14-capture-gap"
+    },
+    {
+      "file": "cases/C15-native-version-conflict.json",
+      "name": "C15-native-version-conflict"
+    },
+    {
+      "file": "cases/C16-private-unpublished.json",
+      "name": "C16-private-unpublished"
+    },
+    {
+      "file": "cases/C04-result-not-opening.json",
+      "name": "C04-result-not-opening"
+    },
+    {
+      "file": "cases/C17-unknown-extension.json",
+      "name": "C17-unknown-extension"
+    },
+    {
+      "file": "cases/C18-artifact-substitution.json",
+      "name": "C18-artifact-substitution"
+    },
+    {
+      "file": "cases/C20-unrelated-receipt.json",
+      "name": "C20-unrelated-receipt"
+    },
+    {
+      "file": "cases/C21-request-free-capture.json",
+      "name": "C21-request-free-capture"
+    },
+    {
+      "file": "cases/C22-authority-scope.json",
+      "name": "C22-authority-scope"
+    },
+    {
+      "file": "cases/C23-other-window.json",
+      "name": "C23-other-window"
+    },
+    {
+      "file": "cases/C24-forbidden-args-salt.json",
+      "name": "C24-forbidden-args-salt"
+    },
+    {
+      "file": "cases/C24-forbidden-result-hash.json",
+      "name": "C24-forbidden-result-hash"
+    },
+    {
+      "file": "cases/F02-posthoc-allow.json",
+      "name": "F02-posthoc-allow"
+    },
+    {
+      "file": "cases/F03-current-after-dispatch.json",
+      "name": "F03-current-after-dispatch"
+    },
+    {
+      "file": "cases/F03-current-before-dispatch.json",
+      "name": "F03-current-before-dispatch"
+    },
+    {
+      "file": "cases/F05-terminal-conflict.json",
+      "name": "F05-terminal-conflict"
+    },
+    {
+      "file": "cases/F06-destination-progression.json",
+      "name": "F06-destination-progression"
+    },
+    {
+      "file": "cases/F07-overlapping-policy.json",
+      "name": "F07-overlapping-policy"
+    },
+    {
+      "file": "cases/F07-principal-not-run-key.json",
+      "name": "F07-principal-not-run-key"
+    },
+    {
+      "file": "cases/F08-stale-source.json",
+      "name": "F08-stale-source"
+    },
+    {
+      "file": "cases/coverage-complete.json",
+      "name": "coverage-complete"
+    },
+    {
+      "file": "cases/coverage-captured-material-missing.json",
+      "name": "coverage-captured-material-missing"
+    },
+    {
+      "file": "cases/coverage-other-surface.json",
+      "name": "coverage-other-surface"
+    },
+    {
+      "file": "cases/revoked-authority.json",
+      "name": "revoked-authority"
+    },
+    {
+      "file": "cases/opening-dependency-missing.json",
+      "name": "opening-dependency-missing"
+    },
+    {
+      "file": "cases/non-tool-content-id-omitted.json",
+      "name": "non-tool-content-id-omitted"
+    },
+    {
+      "file": "cases/schema-request-nonce.json",
+      "name": "schema-request-nonce"
+    },
+    {
+      "file": "cases/schema-request-subject.json",
+      "name": "schema-request-subject"
+    },
+    {
+      "file": "cases/schema-request-source.json",
+      "name": "schema-request-source"
+    },
+    {
+      "file": "cases/schema-request-basis.json",
+      "name": "schema-request-basis"
+    },
+    {
+      "file": "cases/schema-request-assertion.json",
+      "name": "schema-request-assertion"
+    },
+    {
+      "file": "cases/schema-request-unknown.json",
+      "name": "schema-request-unknown"
+    },
+    {
+      "file": "cases/schema-request-nonce_short.json",
+      "name": "schema-request-nonce_short"
+    },
+    {
+      "file": "cases/schema-request-source.kind.json",
+      "name": "schema-request-source.kind"
+    },
+    {
+      "file": "cases/schema-request-source.identity.json",
+      "name": "schema-request-source.identity"
+    },
+    {
+      "file": "cases/schema-request-source.method.json",
+      "name": "schema-request-source.method"
+    },
+    {
+      "file": "cases/schema-request-subject.namespace.json",
+      "name": "schema-request-subject.namespace"
+    },
+    {
+      "file": "cases/schema-request-subject.id.json",
+      "name": "schema-request-subject.id"
+    },
+    {
+      "file": "cases/schema-authorization-nonce.json",
+      "name": "schema-authorization-nonce"
+    },
+    {
+      "file": "cases/schema-authorization-subject.json",
+      "name": "schema-authorization-subject"
+    },
+    {
+      "file": "cases/schema-authorization-source.json",
+      "name": "schema-authorization-source"
+    },
+    {
+      "file": "cases/schema-authorization-basis.json",
+      "name": "schema-authorization-basis"
+    },
+    {
+      "file": "cases/schema-authorization-assertion.json",
+      "name": "schema-authorization-assertion"
+    },
+    {
+      "file": "cases/schema-authorization-unknown.json",
+      "name": "schema-authorization-unknown"
+    },
+    {
+      "file": "cases/schema-authorization-nonce_short.json",
+      "name": "schema-authorization-nonce_short"
+    },
+    {
+      "file": "cases/schema-authorization-source.kind.json",
+      "name": "schema-authorization-source.kind"
+    },
+    {
+      "file": "cases/schema-authorization-source.identity.json",
+      "name": "schema-authorization-source.identity"
+    },
+    {
+      "file": "cases/schema-authorization-source.method.json",
+      "name": "schema-authorization-source.method"
+    },
+    {
+      "file": "cases/schema-authorization-subject.namespace.json",
+      "name": "schema-authorization-subject.namespace"
+    },
+    {
+      "file": "cases/schema-authorization-subject.id.json",
+      "name": "schema-authorization-subject.id"
+    },
+    {
+      "file": "cases/schema-observation-nonce.json",
+      "name": "schema-observation-nonce"
+    },
+    {
+      "file": "cases/schema-observation-subject.json",
+      "name": "schema-observation-subject"
+    },
+    {
+      "file": "cases/schema-observation-source.json",
+      "name": "schema-observation-source"
+    },
+    {
+      "file": "cases/schema-observation-basis.json",
+      "name": "schema-observation-basis"
+    },
+    {
+      "file": "cases/schema-observation-assertion.json",
+      "name": "schema-observation-assertion"
+    },
+    {
+      "file": "cases/schema-observation-unknown.json",
+      "name": "schema-observation-unknown"
+    },
+    {
+      "file": "cases/schema-observation-nonce_short.json",
+      "name": "schema-observation-nonce_short"
+    },
+    {
+      "file": "cases/schema-observation-source.kind.json",
+      "name": "schema-observation-source.kind"
+    },
+    {
+      "file": "cases/schema-observation-source.identity.json",
+      "name": "schema-observation-source.identity"
+    },
+    {
+      "file": "cases/schema-observation-source.method.json",
+      "name": "schema-observation-source.method"
+    },
+    {
+      "file": "cases/schema-observation-subject.namespace.json",
+      "name": "schema-observation-subject.namespace"
+    },
+    {
+      "file": "cases/schema-observation-subject.id.json",
+      "name": "schema-observation-subject.id"
+    },
+    {
+      "file": "cases/schema-report-nonce.json",
+      "name": "schema-report-nonce"
+    },
+    {
+      "file": "cases/schema-report-subject.json",
+      "name": "schema-report-subject"
+    },
+    {
+      "file": "cases/schema-report-source.json",
+      "name": "schema-report-source"
+    },
+    {
+      "file": "cases/schema-report-basis.json",
+      "name": "schema-report-basis"
+    },
+    {
+      "file": "cases/schema-report-assertion.json",
+      "name": "schema-report-assertion"
+    },
+    {
+      "file": "cases/schema-report-unknown.json",
+      "name": "schema-report-unknown"
+    },
+    {
+      "file": "cases/schema-report-nonce_short.json",
+      "name": "schema-report-nonce_short"
+    },
+    {
+      "file": "cases/schema-report-source.kind.json",
+      "name": "schema-report-source.kind"
+    },
+    {
+      "file": "cases/schema-report-source.identity.json",
+      "name": "schema-report-source.identity"
+    },
+    {
+      "file": "cases/schema-report-source.method.json",
+      "name": "schema-report-source.method"
+    },
+    {
+      "file": "cases/schema-report-subject.namespace.json",
+      "name": "schema-report-subject.namespace"
+    },
+    {
+      "file": "cases/schema-report-subject.id.json",
+      "name": "schema-report-subject.id"
+    },
+    {
+      "file": "cases/schema-effect-nonce.json",
+      "name": "schema-effect-nonce"
+    },
+    {
+      "file": "cases/schema-effect-subject.json",
+      "name": "schema-effect-subject"
+    },
+    {
+      "file": "cases/schema-effect-source.json",
+      "name": "schema-effect-source"
+    },
+    {
+      "file": "cases/schema-effect-basis.json",
+      "name": "schema-effect-basis"
+    },
+    {
+      "file": "cases/schema-effect-assertion.json",
+      "name": "schema-effect-assertion"
+    },
+    {
+      "file": "cases/schema-effect-unknown.json",
+      "name": "schema-effect-unknown"
+    },
+    {
+      "file": "cases/schema-effect-nonce_short.json",
+      "name": "schema-effect-nonce_short"
+    },
+    {
+      "file": "cases/schema-effect-source.kind.json",
+      "name": "schema-effect-source.kind"
+    },
+    {
+      "file": "cases/schema-effect-source.identity.json",
+      "name": "schema-effect-source.identity"
+    },
+    {
+      "file": "cases/schema-effect-source.method.json",
+      "name": "schema-effect-source.method"
+    },
+    {
+      "file": "cases/schema-effect-subject.namespace.json",
+      "name": "schema-effect-subject.namespace"
+    },
+    {
+      "file": "cases/schema-effect-subject.id.json",
+      "name": "schema-effect-subject.id"
+    },
+    {
+      "file": "cases/schema-coverage-nonce.json",
+      "name": "schema-coverage-nonce"
+    },
+    {
+      "file": "cases/schema-coverage-subject.json",
+      "name": "schema-coverage-subject"
+    },
+    {
+      "file": "cases/schema-coverage-source.json",
+      "name": "schema-coverage-source"
+    },
+    {
+      "file": "cases/schema-coverage-basis.json",
+      "name": "schema-coverage-basis"
+    },
+    {
+      "file": "cases/schema-coverage-assertion.json",
+      "name": "schema-coverage-assertion"
+    },
+    {
+      "file": "cases/schema-coverage-unknown.json",
+      "name": "schema-coverage-unknown"
+    },
+    {
+      "file": "cases/schema-coverage-nonce_short.json",
+      "name": "schema-coverage-nonce_short"
+    },
+    {
+      "file": "cases/schema-coverage-source.kind.json",
+      "name": "schema-coverage-source.kind"
+    },
+    {
+      "file": "cases/schema-coverage-source.identity.json",
+      "name": "schema-coverage-source.identity"
+    },
+    {
+      "file": "cases/schema-coverage-source.method.json",
+      "name": "schema-coverage-source.method"
+    },
+    {
+      "file": "cases/schema-coverage-subject.namespace.json",
+      "name": "schema-coverage-subject.namespace"
+    },
+    {
+      "file": "cases/schema-coverage-subject.id.json",
+      "name": "schema-coverage-subject.id"
+    },
+    {
+      "file": "cases/schema-request-assertion-descriptor.json",
+      "name": "schema-request-assertion-descriptor"
+    },
+    {
+      "file": "cases/schema-request-assertion-execution.json",
+      "name": "schema-request-assertion-execution"
+    },
+    {
+      "file": "cases/schema-authorization-assertion-decision.json",
+      "name": "schema-authorization-assertion-decision"
+    },
+    {
+      "file": "cases/schema-authorization-assertion-authority_version.json",
+      "name": "schema-authorization-assertion-authority_version"
+    },
+    {
+      "file": "cases/schema-authorization-assertion-not_before.json",
+      "name": "schema-authorization-assertion-not_before"
+    },
+    {
+      "file": "cases/schema-authorization-assertion-expires_at.json",
+      "name": "schema-authorization-assertion-expires_at"
+    },
+    {
+      "file": "cases/schema-authorization-target.json",
+      "name": "schema-authorization-target"
+    },
+    {
+      "file": "cases/schema-observation-assertion-phase.json",
+      "name": "schema-observation-assertion-phase"
+    },
+    {
+      "file": "cases/schema-observation-assertion-descriptor.json",
+      "name": "schema-observation-assertion-descriptor"
+    },
+    {
+      "file": "cases/schema-observation-assertion-execution.json",
+      "name": "schema-observation-assertion-execution"
+    },
+    {
+      "file": "cases/schema-observation-assertion-native_invocation.json",
+      "name": "schema-observation-assertion-native_invocation"
+    },
+    {
+      "file": "cases/schema-observation-assertion-delivery.json",
+      "name": "schema-observation-assertion-delivery"
+    },
+    {
+      "file": "cases/schema-observation-assertion-outcome.json",
+      "name": "schema-observation-assertion-outcome"
+    },
+    {
+      "file": "cases/schema-observation-target.json",
+      "name": "schema-observation-target"
+    },
+    {
+      "file": "cases/schema-report-assertion-status.json",
+      "name": "schema-report-assertion-status"
+    },
+    {
+      "file": "cases/schema-report-assertion-text.json",
+      "name": "schema-report-assertion-text"
+    },
+    {
+      "file": "cases/schema-report-target.json",
+      "name": "schema-report-target"
+    },
+    {
+      "file": "cases/schema-effect-assertion-object.json",
+      "name": "schema-effect-assertion-object"
+    },
+    {
+      "file": "cases/schema-effect-assertion-payload_hash.json",
+      "name": "schema-effect-assertion-payload_hash"
+    },
+    {
+      "file": "cases/schema-effect-assertion-version.json",
+      "name": "schema-effect-assertion-version"
+    },
+    {
+      "file": "cases/schema-effect-assertion-state.json",
+      "name": "schema-effect-assertion-state"
+    },
+    {
+      "file": "cases/schema-effect-target.json",
+      "name": "schema-effect-target"
+    },
+    {
+      "file": "cases/schema-coverage-assertion-surface.json",
+      "name": "schema-coverage-assertion-surface"
+    },
+    {
+      "file": "cases/schema-coverage-assertion-start.json",
+      "name": "schema-coverage-assertion-start"
+    },
+    {
+      "file": "cases/schema-coverage-assertion-end.json",
+      "name": "schema-coverage-assertion-end"
+    },
+    {
+      "file": "cases/schema-coverage-assertion-expected.json",
+      "name": "schema-coverage-assertion-expected"
+    },
+    {
+      "file": "cases/schema-coverage-assertion-captured.json",
+      "name": "schema-coverage-assertion-captured"
+    },
+    {
+      "file": "cases/schema-coverage-assertion-gaps.json",
+      "name": "schema-coverage-assertion-gaps"
+    },
+    {
+      "file": "cases/C19-protected-retention-fails.json",
+      "name": "C19-protected-retention-fails"
+    },
+    {
+      "file": "cases/C19-observational-retention-fails.json",
+      "name": "C19-observational-retention-fails"
+    },
+    {
+      "file": "cases/C19-protected-retention-succeeds.json",
+      "name": "C19-protected-retention-succeeds"
+    }
+  ],
+  "fixture_keys": {
+    "agent": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+    "owner": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+    "host": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
+    "destination": "ypOsFwUYcHHWe4PH_w7-gQjo7EUwV113JoeTM9vavnw",
+    "expected": "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E",
+    "rogue": "iodf_x6zhFFXes1a_uQFRWVo3XyJ4JCGOgVXvHr0nxc"
+  },
+  "scope": "offline corpus model; not a production receiver or host conformance claim"
+}

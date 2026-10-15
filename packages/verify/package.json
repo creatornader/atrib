@@ -50,6 +50,7 @@
     "jose": "6.2.10"
   },
   "devDependencies": {
+    "zod": "^4.4.3",
     "@types/node": "^26.6.5",
     "fast-check": "^4.10.2",
     "typescript": "^6.0.3",

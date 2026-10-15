@@ -1,0 +1,20 @@
+{
+  "name": "C19-observational-retention-fails",
+  "protects": "refusal precedes the mediated effect in the contract model",
+  "fails_when": "the failed protected path invokes the handler",
+  "no_claim": "no installed executor, actual filesystem atomicity or bypass coverage",
+  "rules": [
+    "E03",
+    "E14"
+  ],
+  "input": {
+    "mode": "executor",
+    "protected": false,
+    "fail_retention": true
+  },
+  "expected": {
+    "refused": false,
+    "gap": true,
+    "handler_calls": 1
+  }
+}
