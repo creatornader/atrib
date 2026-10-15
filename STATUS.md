@@ -108,6 +108,8 @@ The package inventory, grouped current / deprecated / private, lives in the [REA
 
 ## Spec-defined, not yet implemented
 
+- Proposed source-bound evidence contract ([§1.12](atrib-spec.md#112-source-bound-evidence-statements), [contract and acceptance cases](docs/source-bound-evidence.md)): committed private body grammar, six extension URIs, pinned source policy, exact request/authority/effect bindings and separate receiver dimensions. No reference package claims this conformance yet. The executable E01-E22 corpus, producer/receiver APIs and relaxed non-tool content_id admission are implementation work. Existing signatures and generic verification do not imply this evidence contract is implemented.
+
 - Cross-log replication ([§2.11](atrib-spec.md#211-cross-log-replication), [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense); spec-defined; second log-node deployment + verifier multi-log proof bundles forthcoming).
 - An independently controlled witness deployment. The reference image workflow, deployment proof, endpoint-aware verifier, operator lifecycle tools, Fly and Compose templates, monitor, operator contract, and public recruitment path are ready. No external operator currently appears in an atrib-maintained reference verification profile.
 - Historical and verified non-membership directory lookups at the selected anchor epoch. The AKD bridge and directory endpoint currently return a latest-state membership proof or an unproved miss. `resolveIdentity()` rejects a known lookup-to-anchor epoch mismatch, but the reference service cannot yet complete [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) steps 6 and 7 for historical state or absent keys.
