@@ -76,7 +76,9 @@ async function readSseEvent(res: Response, eventName: string): Promise<Record<st
       ])
       if (next.done) break
       text += decoder.decode(next.value, { stream: true })
-      for (const chunk of text.split('\n\n')) {
+      const chunks = text.split('\n\n')
+      text = chunks.pop() ?? ''
+      for (const chunk of chunks) {
         if (!chunk.includes(`event: ${eventName}`)) continue
         const data = chunk
           .split('\n')
@@ -91,6 +93,23 @@ async function readSseEvent(res: Response, eventName: string): Promise<Record<st
   }
   throw new Error(`stream ended before ${eventName}`)
 }
+
+describe('SSE test reader', () => {
+  it('waits for a complete event when its data arrives in a later chunk', async () => {
+    const encoder = new TextEncoder()
+    const chunks = ['event: log_entry\n', 'data: {"log_index": 1}\n\n']
+    const response = new Response(
+      new ReadableStream({
+        pull(controller) {
+          const chunk = chunks.shift()
+          if (chunk === undefined) controller.close()
+          else controller.enqueue(encoder.encode(chunk))
+        },
+      }),
+    )
+    expect(await readSseEvent(response, 'log_entry')).toEqual({ log_index: 1 })
+  })
+})
 
 /**
  * Markup with comment spans removed, HTML and CSS both.
