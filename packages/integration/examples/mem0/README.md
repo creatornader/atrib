@@ -13,7 +13,7 @@ Run the real-package mutation proof:
 pnpm --filter @atrib/integration mem0-mutation-assurance
 ```
 
-The smoke imports `Memory` from `mem0ai/oss@3.1.0` and uses its in-memory vector
+The smoke imports `Memory` from `mem0ai/oss@3.3.1` and uses its in-memory vector
 store with a local OpenAI-compatible embedding endpoint. It then runs four
 operations against the real SDK:
 
@@ -85,6 +85,9 @@ pnpm --filter @atrib/integration mem0-oss-full-cycle-smoke
 That smoke imports `Memory` from `mem0ai/oss`, starts a local
 OpenAI-compatible provider, lets mem0's extraction branch write to the in-memory
 vector store, then searches the stored memory through `attributeMem0Memory()`.
+It adds equally relevant data under a second tenant and checks each tenant sees
+only its own memory. An absent tenant returns no results. A missing identity
+filter is rejected before a provider request, with a signed error receipt.
 It proves the wrapper signs both `mem0.memory.add` and `mem0.memory.search`
 records, verifies those records, preserves mem0's normal result values, and
 keeps private message text out of public records. It does not need an OpenAI
@@ -122,6 +125,16 @@ It proves the Python OSS boundary can be recorded as hash-only atrib history
 while the raw memory payload stays in local sidecars. It does not need an
 OpenAI key, Mem0 API key, vector database server, or hosted service.
 
+### CI coverage
+
+The four TypeScript SDK smokes run through
+[`mem0-real-package.test.ts`](../../test/mem0-real-package.test.ts), alongside
+the wrapper and mutation unit tests. Run them with
+`pnpm --filter @atrib/integration exec vitest run test/mem0-real-package.test.ts test/mem0-attribution.test.ts test/mem0-mutation-assurance.test.ts`.
+The package's normal typecheck also compiles these four smoke files. These
+checks cover the in-memory store and local API fixtures. Other vector-store
+backends and the hosted Mem0 service need their own validation.
+
 ### Use the add/search wrapper
 
 The same wrapper targets the public `add` and `search` shape:
@@ -141,13 +154,13 @@ await memory.add(messages, {
 })
 
 const results = await memory.search('What do you know about me?', {
-  filters: { userId: 'alice' },
+  filters: { user_id: 'alice' },
 })
 ```
 
 ## What the examples prove
 
-- The real `mem0ai/oss@3.1.0` package can run a policy-gated update and a
+- The real `mem0ai/oss@3.3.1` package can run a policy-gated update and a
   read-back-verified delete.
 - Freeform metadata that contains an identity-scope field can be blocked before
   the mem0 mutation executes.

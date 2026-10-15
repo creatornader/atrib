@@ -97,6 +97,7 @@ try {
   })
 
   const afterBlocked = await mem0.get(memoryId)
+  assert.ok(afterBlocked, 'blocked mutation must preserve the original memory')
   assert.equal(blocked.state, 'blocked')
   assert.equal(blockedBodyExecuted, false)
   assert.equal(readIdentity(afterBlocked, 'user_id'), tenantId)
@@ -117,6 +118,7 @@ try {
     summarizeResult: () => ({ mem0_reported_success: true }),
     verifyPostcondition: async () => {
       const current = await mem0.get(memoryId)
+      assert.ok(current, 'updated memory must be readable')
       return [
         { name: 'text_updated', passed: current.memory === updatedText },
         {
@@ -172,7 +174,7 @@ try {
       {
         ok: true,
         strategy: 'mem0-mutation-assurance-v1',
-        mem0_package: 'mem0ai@3.1.0',
+        mem0_package: 'mem0ai@3.3.1',
         context_id: contextId,
         real_mem0_oss_memory: true,
         operations: ['add', 'blocked_update', 'allowed_update', 'verified_delete'],
@@ -207,8 +209,8 @@ try {
 }
 
 function readIdentity(
-  memory: { metadata?: Record<string, unknown> } & Record<string, unknown>,
-  key: string,
+  memory: { user_id?: unknown; metadata?: Record<string, unknown> },
+  key: 'user_id',
 ) {
   return memory[key] ?? memory.metadata?.[key]
 }

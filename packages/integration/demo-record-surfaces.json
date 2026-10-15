@@ -346,7 +346,8 @@
         "mem0-oss-full-cycle-smoke",
         "mem0-client-smoke",
         "mem0-python-oss-smoke",
-        "mem0-mutation-assurance"
+        "mem0-mutation-assurance",
+        "typecheck:mem0-examples"
       ]
     },
     {

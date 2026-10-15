@@ -90,13 +90,49 @@ try {
   assert.ok(provider.paths.some((path) => path.includes('/chat/completions')))
   assert.ok(provider.paths.some((path) => path.includes('/embeddings')))
 
+  const bobAdd = await attributed.add('Bob prefers loud sci-fi movies.', {
+    userId: 'bob',
+    infer: false,
+  })
+  const bobSearch = await attributed.search('movie preference', {
+    filters: { user_id: 'bob' },
+    threshold: 0,
+  })
+  const aliceSearch = await attributed.search('movie preference', {
+    filters: { user_id: 'alice' },
+    threshold: 0,
+  })
+  const absentTenant = await attributed.search('movie preference', {
+    filters: { user_id: 'nobody' },
+    threshold: 0,
+  })
+  assert.deepEqual(
+    bobSearch.results.map((item) => item.id),
+    [bobAdd.results[0]!.id],
+  )
+  assert.deepEqual(
+    aliceSearch.results.map((item) => item.id),
+    [addResult.results[0]!.id],
+  )
+  assert.deepEqual(absentTenant.results, [])
+  const requestsBeforeRejection = provider.paths.length
+  await assert.rejects(
+    attributed.search('movie preference', { filters: {} }),
+    /filters must contain at least one/,
+  )
+  assert.equal(provider.paths.length, requestsBeforeRejection)
+  assert.equal(records.length, 7)
+  assert.equal(sidecars[6]!.status, 'error')
+
   for (const record of records) {
     assert.equal(await verifyRecord(record), true)
   }
 
   const publicRecordJson = JSON.stringify(records)
   assert.equal(publicRecordJson.includes('quiet sci-fi'), false)
+  assert.equal(publicRecordJson.includes('Bob prefers'), false)
   assert.equal(JSON.stringify(sidecars[0]!.args).includes('quiet sci-fi'), true)
+  assert.equal(JSON.stringify(sidecars[2]!.args).includes('Bob prefers'), true)
 
   const recordHashes = records.map(
     (record) => `sha256:${hexEncode(sha256(canonicalRecord(record)))}`,
@@ -107,7 +143,7 @@ try {
       {
         ok: true,
         note: 'Imports real mem0ai/oss Memory and proves atrib signs a successful add/search cycle through a local OpenAI-compatible provider.',
-        mem0_package: 'mem0ai@3.1.0',
+        mem0_package: 'mem0ai@3.3.1',
         context_id: contextId,
         signed_records: records.length,
         operations: records.map((record) => record.tool_name),
@@ -115,6 +151,12 @@ try {
         last_record_hash: attributed.getLastRecordHash(),
         mem0_add_results: addResult.results.length,
         mem0_search_results: searchResult.results.length,
+        tenant_checks: {
+          alice_only: true,
+          bob_only: true,
+          absent_tenant_empty: true,
+          missing_scope_rejected_before_provider: true,
+        },
         provider_paths_seen: provider.paths,
         public_records_hash_only: true,
       },
