@@ -1,6 +1,8 @@
 ---
 '@atrib/mcp': minor
 '@atrib/verify': minor
+'@atrib/sdk': major
+'@atrib/emit': major
 ---
 
 Add closed source-bound evidence body schemas, cryptographic nonces and body
@@ -23,3 +25,6 @@ This changes TypeScript source compatibility. Callers must handle optional
 transactions without a top-level `signature`. The minor release for these `0.x`
 packages includes these breaking source changes. Signing and log-leaf algorithms
 remain unchanged; accepted record shapes and the submission clock window change.
+
+The stable `@atrib/sdk` and `@atrib/emit` APIs expose these changed record fields.
+Their major releases mark the same source compatibility break.
