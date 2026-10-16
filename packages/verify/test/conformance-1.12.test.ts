@@ -65,7 +65,7 @@ describe('source-bound evidence offline contract corpus', () => {
             .every((statement) => statement.dimensions.integrity.body.state === 'supported'),
         ).toBe(true)
       } else {
-        const { statements, ...expected } = fixture.expected
+        const { statements: _statements, ...expected } = fixture.expected
         expect(result).toMatchObject(expected)
       }
       for (const statement of fixture.expected.statements ?? []) {
