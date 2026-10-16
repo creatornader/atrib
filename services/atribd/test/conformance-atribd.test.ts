@@ -438,7 +438,17 @@ describe('atribd corpus: context-resolution', () => {
           const forwarded = applyStdioProxyContext(params, () =>
             resolveProxySessionContext(fixture.input.env as NodeJS.ProcessEnv),
           )
-          expect(forwarded.arguments?.['context_id']).toBe(fixture.expected.context_id ?? undefined)
+          // A null expectation means "absent" unless the fixture itself passes
+          // a null context_id, which must be forwarded unchanged.
+          const suppliedContext = Object.prototype.hasOwnProperty.call(
+            params.arguments,
+            'context_id',
+          )
+          expect(forwarded.arguments?.['context_id']).toBe(
+            suppliedContext
+              ? fixture.expected.context_id
+              : (fixture.expected.context_id ?? undefined),
+          )
           if (forwarded.arguments?.['context_id'] === params.arguments['context_id']) {
             expect(forwarded).toBe(params)
           }

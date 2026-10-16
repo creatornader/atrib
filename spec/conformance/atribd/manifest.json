@@ -44,6 +44,11 @@
         "cases/context-resolution/stdio-proxy-profile-rung-skipped.json",
         "cases/context-resolution/stdio-proxy-parent-pid-file-skipped.json",
         "cases/context-resolution/stdio-proxy-env-wins-over-session-files.json",
+        "cases/context-resolution/stdio-proxy-extension-carrier-not-injected.json",
+        "cases/context-resolution/stdio-proxy-x-atrib-chain-carrier-not-injected.json",
+        "cases/context-resolution/stdio-proxy-traceparent-only-not-injected.json",
+        "cases/context-resolution/stdio-proxy-empty-context-not-replaced.json",
+        "cases/context-resolution/stdio-proxy-null-context-not-replaced.json",
         "cases/context-resolution/resolve-chain-root-unchanged.json"
       ]
     },

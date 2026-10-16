@@ -137,8 +137,9 @@ variables (`CLAUDE_CODE_SESSION_ID`, `CODEX_THREAD_ID`). On a write call whose
 arguments omit `context_id` and that carries no `_meta` carrier, the proxy
 forwards that value as an explicit `context_id`, so a strict daemon accepts the
 write under the calling session without `--ambient-context`. A present but
-invalid `context_id`, any `_meta` carrier, or no session variable passes
-through unchanged and the daemon decides.
+invalid `context_id`, any `_meta` context carrier (`dev.atrib/attribution`,
+`atrib`, `traceparent`, `tracestate` or `X-Atrib-Chain`, valid or not), or no
+session variable passes through unchanged and the daemon decides.
 
 The proxy never reads the active-session files. The parent-process file and the
 profile file each name whichever session wrote them last, and a harness that
@@ -146,9 +147,10 @@ runs several sessions under one parent process shares both, so forwarding them
 would sign one session's write under another's context. Two limits follow from
 using the environment:
 
-- A harness that starts MCP children once per app process rather than once per
-  session gives the child no session variable. Writes through such a proxy
-  still need an explicit `context_id`.
+- The proxy forwards only what the harness exports to its MCP children. Claude
+  Code sets `CLAUDE_CODE_SESSION_ID` there. Codex starts one child per thread
+  but does not set `CODEX_THREAD_ID` in it, and Claude Desktop chat sets no
+  session variable, so writes from those still need an explicit `context_id`.
 - The variable is fixed when the child starts. If the harness keeps the child
   across a session change, such as clearing the conversation, the proxy keeps
   forwarding the earlier session until the child restarts. Processes the

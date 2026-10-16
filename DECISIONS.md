@@ -7857,7 +7857,9 @@ Full draft: [docs/adr-draft-p048-payments-spinout.md](docs/adr-draft-p048-paymen
   child, and forwards an explicit `context_id` on writes that omit one and carry
   no `_meta` carrier. It reads neither active-session file, because a harness
   that runs several sessions under one parent process shares them. Where the
-  child has no session variable, the write is refused as before. Pinned by the
+  child has no session variable, the write is refused as before. Claude Code
+  exports its session to MCP children; Codex and Claude Desktop chat do not
+  today, so their writes still need an explicit `context_id`. Pinned by the
   `stdio-proxy-*` context-resolution cases.
 - Coordinator residual duties: none remain to merge into the daemon. The
   [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)

@@ -141,9 +141,19 @@ function hasContextCarrier(params: CallToolRequest['params']): boolean {
   if (readInboundContext(params as unknown as Record<string, unknown>)) return true
   const meta = (params as { _meta?: unknown })._meta
   if (!meta || typeof meta !== 'object') return false
-  const record = meta as Record<string, unknown>
-  return ['atrib', 'traceparent', 'tracestate'].some((key) => record[key] !== undefined)
+  // Any present carrier key counts, valid or not: the daemon decides what a
+  // malformed carrier means, and the proxy never substitutes for it.
+  return Object.keys(meta).some((key) => CONTEXT_CARRIER_META_KEYS.has(key.toLowerCase()))
 }
+
+/** `_meta` keys that can carry context per the §1.5.4 ladders, lowercased. */
+const CONTEXT_CARRIER_META_KEYS: ReadonlySet<string> = new Set([
+  'dev.atrib/attribution',
+  'atrib',
+  'traceparent',
+  'tracestate',
+  'x-atrib-chain',
+])
 
 /**
  * The proxy's session ladder: `ATRIB_CONTEXT_ID`, then each registered harness
