@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { appendFileSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import {
+  appendFileSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+  mkdtempSync,
+  rmSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -680,6 +687,29 @@ describe('content index cache reuse', () => {
         evidence_mode: 'require_complete',
       })
       expect(complete.total_records).toBe(4)
+    })
+  })
+
+  it('rebuilds instead of appending when a mirror file is replaced by a larger one', async () => {
+    const first = await makeSigned({ timestamp: 1, content_id: `sha256:${'1'.repeat(64)}` })
+    const replacements = [
+      await makeSigned({ timestamp: 2, content_id: `sha256:${'2'.repeat(64)}` }),
+      await makeSigned({ timestamp: 3, content_id: `sha256:${'3'.repeat(64)}` }),
+    ]
+    writeFileSync(recordFile, JSON.stringify(first))
+    await withIndexEnv(async (recallModule) => {
+      await recallModule.runRecallByContent({ query: '', evidence_mode: 'require_complete' })
+      const replacementFile = `${recordFile}.next`
+      writeFileSync(replacementFile, replacements.map((r) => JSON.stringify(r)).join('\n'))
+      renameSync(replacementFile, recordFile)
+
+      const result = await recallModule.runRecallByContent({
+        query: '',
+        evidence_mode: 'require_complete',
+      })
+      expect(result.total_records).toBe(2)
+      const hashes = (result.results as Array<{ record_hash: string }>).map((r) => r.record_hash)
+      expect(hashes).not.toContain(`sha256:${hexEncode(sha256(canonicalRecord(first)))}`)
     })
   })
 

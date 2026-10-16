@@ -219,6 +219,7 @@ type MirrorFileStat = {
   path: string
   size: number
   mtimeMs: number
+  ino: number
 }
 
 type MirrorFingerprint = {
@@ -356,7 +357,7 @@ function statMirrorFile(path: string): MirrorFileStat | null {
   try {
     const stat = statSync(path)
     if (!stat.isFile()) return null
-    return { path, size: stat.size, mtimeMs: stat.mtimeMs }
+    return { path, size: stat.size, mtimeMs: stat.mtimeMs, ino: stat.ino }
   } catch {
     return null
   }
@@ -836,6 +837,9 @@ function sameMirrorFiles(a: MirrorFileStat[], b: MirrorFileStat[]): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i += 1) {
     if (a[i]!.path !== b[i]!.path) return false
+    // A replaced file can be larger than the one it replaced; only the same
+    // inode can be treated as an append.
+    if (a[i]!.ino !== b[i]!.ino) return false
   }
   return true
 }
