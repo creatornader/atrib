@@ -343,14 +343,14 @@ importers:
         specifier: ^1.43.0
         version: 1.43.0
       '@proof.com/proof-vc-common':
-        specifier: 0.4.3
-        version: 0.4.3
+        specifier: 0.6.0
+        version: 0.6.0
       '@proof.com/proof-vc-server':
-        specifier: 0.4.3
-        version: 0.4.3
+        specifier: 0.6.0
+        version: 0.6.0
       '@proof.com/x401-node':
-        specifier: ^0.3.1
-        version: 0.3.1
+        specifier: 0.3.3
+        version: 0.3.3
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
@@ -3247,17 +3247,23 @@ packages:
     resolution: {integrity: sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg==}
     engines: {node: '>=14'}
 
-  '@owf/crypto@0.3.2':
-    resolution: {integrity: sha512-t8/ai0n23A2lFSbAELF7PDGtpLQxWPfkiLGL/iqGimx3wf8he4niGpkIRGC0iitKql7qVOoO8YL/zUcHOiVWIQ==}
+  '@owf/cose@0.4.2':
+    resolution: {integrity: sha512-ISjH/NFxgI2p0jiCY462JdL5m2bHg850iehvYj8sL9dHra06sJy0RTO1dwx78xqpCkFc/4h9Oo8XXLQD1eyLMg==}
+
+  '@owf/crypto@0.4.2':
+    resolution: {integrity: sha512-fyzz5CkfP0JPUPBG0UnOax+UsLA3elNplPDe/lOmYHVnm4JPHBFHx/9BJ4+QM2yzACW/vjVgjV+sWqPxLuPiMg==}
 
   '@owf/identity-common@0.1.0-alpha-20260422101556':
     resolution: {integrity: sha512-0CJhMHXWf+Dn0MpZCeachjFjMjBI2uCJl56Po3dnGiJDis5wVkfWPeCdPJZ2h4fBWwXV0+Owa8nJRxXeruRwrA==}
 
-  '@owf/identity-common@0.3.2':
-    resolution: {integrity: sha512-XH5Bg6zuXc9SeimTe2ZD/+54GnhSyenFSy2Qe/z2HY1ul5j+6/lDNIhI83xct5aOkCD0uZ7zHbMhTI4Nq8YJOQ==}
+  '@owf/identity-common@0.4.2':
+    resolution: {integrity: sha512-z+iFDpBYo2Z2uVnE5UytKlAHPaKHReijHaVXl45Yb9LbeR12hGg5CdfzfY0Tfm5m/Dr8iClfAiFizA9JYuUJ0Q==}
 
   '@owf/token-status-list@0.1.0-alpha-20260422101556':
     resolution: {integrity: sha512-cwZHQPqBaXt3pTbllI6GLafE+Ws8HfEYoOgmpiQiK1sFElkF07mFZt1FTt1YElbMWtEV6YLTh+MjEWdJdRNklA==}
+
+  '@owf/token-status-list@0.4.2':
+    resolution: {integrity: sha512-vBIpSRvfgRTWq1pjs7ERafdEjKpkRRcPdMRpKM1BEsKp1mwB6p6cinf95oWOgXKWq8s3l0I4yTzZ1SdIM8/z0Q==}
 
   '@oxc-project/types@0.154.0':
     resolution: {integrity: sha512-KYOUGQFlLWR+s4QMV2Q9ko38TZm7EdO87Qm7rvZLqk/webse/cDjtyxKhg/47l0byCbs/k46LT8qc4PKjAikzA==}
@@ -3296,16 +3302,17 @@ packages:
   '@posthog/types@1.407.1':
     resolution: {integrity: sha512-WhbkXPC2rgylXqmxHqv70ffI3k+KxyR6s7DBIfr5NvIqHkxp6v0pk31D/jbz0DNVbzwkLjyll2pxr4FNbJiYzg==}
 
-  '@proof.com/proof-vc-common@0.4.3':
-    resolution: {integrity: sha512-QWaplnFBRwez+h6Ws7ugsW08CnrAXkX+7c3eZRNCrqeDRlp170siTZ1PolXfYeafkVf3EJSWIvYmaxyX8hHZdA==}
-    engines: {node: '>=22.0.0'}
+  '@proof.com/proof-vc-common@0.6.0':
+    resolution: {integrity: sha512-mDLPT8W6yMxDO9pcTRwJr1zKAbdZ6BAiOPC0MuDcDJdYUGX7ebzj6m3JkbnFcIR2wLBei0k1BmgsFwKrzvWtrg==}
+    engines: {node: '>=22.12.0'}
 
-  '@proof.com/proof-vc-server@0.4.3':
-    resolution: {integrity: sha512-lnrjZF4JhW9unQGw65Pml+isf0Adaut5sJHz/tXGAKO1PgaJNJJotdGyoxXbu8JCVGxm5Yzk12eS7rlIWP5F0w==}
-    engines: {node: '>=22.0.0'}
+  '@proof.com/proof-vc-server@0.6.0':
+    resolution: {integrity: sha512-zfZsOikz8GaQXy9aVPDjx6vmlZTzs13HtJgqD+WNCgJreQm/nVKkskQ9UPNNCtsJq5jqdq+c8CRZ/K/g4b2zeg==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
 
-  '@proof.com/x401-node@0.3.1':
-    resolution: {integrity: sha512-r4jOUQRYgs70SSbIm2HfkWve5uqqt10NpzAo+Bs3MXq/PwjWyaHX+ON7AhJYt6qJdKqqLKJFq8thRUnMIbZbVw==}
+  '@proof.com/x401-node@0.3.3':
+    resolution: {integrity: sha512-jLS9kVKgCo1GPg+xfD5mCjg4cFzpxb3Y4pBXu/B0SVIzg64BHfZ3wp2AEehpMpkXw246wryaq+mlZFGjMI+Kbw==}
     engines: {node: '>=22.0.0'}
 
   '@protobufjs/aspromise@1.1.2':
@@ -3495,9 +3502,15 @@ packages:
     resolution: {integrity: sha512-thTj5xtKqOvqnULELJGvCa64Hf+Hf7v0Dlao6mTh198rmZcyFCBop3vT1ShgWMhg5cL04ofXeiEhnQR10/8wjA==}
     engines: {node: '>=20'}
 
+  '@sd-jwt/core@0.21.1':
+    resolution: {integrity: sha512-lQfUOWTQGrHPVreWvs9ZhLznQqARK+VlkB64eqqKUL9QPJ2v5sEX/LN9yr61mfkDsYCU5veCUxCLd0GT6hGk6g==}
+
   '@sd-jwt/sd-jwt-vc@0.20.0':
     resolution: {integrity: sha512-V+pwRt4nRPDPnrHPRCbZubM3jL1Yn2DOT/AM/N/AawbFLWxsIf2HM7ioTrhpXRFC2kVFnWFmgNcq4mXXAzOBCA==}
     engines: {node: '>=20'}
+
+  '@sd-jwt/sd-jwt-vc@0.21.1':
+    resolution: {integrity: sha512-fB+tm3ldm0XSPpMLbUhvpHyUssp48B8k+MsoSPpp7TRVsTXLfZC16yxRTA40Hnh+tRBdvkNtdAUGrWz1y+8BuQ==}
 
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
@@ -4176,6 +4189,9 @@ packages:
 
   cbor-x@1.6.4:
     resolution: {integrity: sha512-UGKHjp6RHC6QuZ2yy5LCKm7MojM4716DwoSaqwQpaH4DvZvbBTGcoDNTiG9Y2lByXZYFEs9WRkS5tLl96IrF1Q==}
+
+  cbor-x@1.6.6:
+    resolution: {integrity: sha512-8QiD9PGOxyQHo7s2pzwTBH6lTjqekxPdl9Aq6fXvZgCuCJHOht1puDEA/fTr6mciB76c+M+Gi0qT2i1a4pm4Wg==}
 
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
@@ -5261,6 +5277,9 @@ packages:
   jose@6.2.10:
     resolution: {integrity: sha512-iiW7J9qRFlGxvCOIBDBDxFePQSn7ZMAnrYGhrrOo6siO/MIqwfyilLR27pkfDgUk+raLuzADS8A3S/KLBisc0g==}
 
+  jose@6.2.12:
+    resolution: {integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==}
+
   jpeg-exif@1.1.4:
     resolution: {integrity: sha512-a+bKEcCjtuW5WTdgeXFzswSrdqi0jk4XlEtZlx5A94wCoBpFjfFTbo/Tra5SpNCl/YFZPvcV1dJc+TAYeg6ROQ==}
     deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
@@ -6299,6 +6318,9 @@ packages:
 
   pako@2.2.0:
     resolution: {integrity: sha512-zJq6RP/5q+TO2OpFV3FHzlPnFjmkb7Nc99a5SNjJE+uu/PkpChs+NIZSSzbBoD+6kjiISXjfYdwj1ZRQ81dz/w==}
+
+  pako@3.0.2:
+    resolution: {integrity: sha512-uBv6IT2aT1A78iU6dpNEbf6+CyhlV/6g9JlJs9kpgjFGFhruIICVRysF/W0SLzXg5+hCl+KroH7e4YUyfEmgLg==}
 
   papaparse@5.7.0:
     resolution: {integrity: sha512-qBGxg/7Q3Kl9Wfhrz2Z74UnvnHTXLNG6jmKJFeBvP2+y4lV7So+7SR62+Zd47JvdrCkX+nDcnr0ObPzek/+6RA==}
@@ -7477,6 +7499,12 @@ packages:
 
   zod-to-json-schema@3.25.2:
     resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
+    peerDependencies:
+      zod: ^4.6.6
+
+  zod-validation-error@5.0.0:
+    resolution: {integrity: sha512-hmk+pkyKq7Q71PiWVSDUc3VfpzpvcRHZ3QPw9yEMVvmtCekaMeOHnbr3WbxfrgEnQTv6haGP4cmv0Ojmihzsxw==}
+    engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.6.6
 
@@ -9931,20 +9959,35 @@ snapshots:
 
   '@opentelemetry/semantic-conventions@1.43.0': {}
 
-  '@owf/crypto@0.3.2':
+  '@owf/cose@0.4.2':
+    dependencies:
+      '@owf/identity-common': 0.4.2
+      cbor-x: 1.6.6
+      zod: 4.6.7
+      zod-validation-error: 5.0.0(zod@4.6.7)
+
+  '@owf/crypto@0.4.2':
     dependencies:
       '@noble/hashes': 2.4.0
-      '@owf/identity-common': 0.3.2
+      '@owf/identity-common': 0.4.2
 
   '@owf/identity-common@0.1.0-alpha-20260422101556': {}
 
-  '@owf/identity-common@0.3.2': {}
+  '@owf/identity-common@0.4.2': {}
 
   '@owf/token-status-list@0.1.0-alpha-20260422101556':
     dependencies:
       '@owf/identity-common': 0.1.0-alpha-20260422101556
       cbor-x: 1.6.4
       pako: 2.2.0
+
+  '@owf/token-status-list@0.4.2':
+    dependencies:
+      '@owf/cose': 0.4.2
+      '@owf/identity-common': 0.4.2
+      cbor-x: 1.6.6
+      pako: 3.0.2
+      zod: 4.6.7
 
   '@oxc-project/types@0.154.0': {}
 
@@ -9981,20 +10024,20 @@ snapshots:
 
   '@posthog/types@1.407.1': {}
 
-  '@proof.com/proof-vc-common@0.4.3': {}
+  '@proof.com/proof-vc-common@0.6.0': {}
 
-  '@proof.com/proof-vc-server@0.4.3':
+  '@proof.com/proof-vc-server@0.6.0':
     dependencies:
-      '@owf/crypto': 0.3.2
-      '@owf/identity-common': 0.3.2
-      '@proof.com/proof-vc-common': 0.4.3
-      '@sd-jwt/core': 0.20.0
-      '@sd-jwt/sd-jwt-vc': 0.20.0
-      jose: 6.2.10
+      '@owf/crypto': 0.4.2
+      '@owf/identity-common': 0.4.2
+      '@proof.com/proof-vc-common': 0.6.0
+      '@sd-jwt/core': 0.21.1
+      '@sd-jwt/sd-jwt-vc': 0.21.1
+      jose: 6.2.12
 
-  '@proof.com/x401-node@0.3.1':
+  '@proof.com/x401-node@0.3.3':
     dependencies:
-      '@owf/identity-common': 0.3.2
+      '@owf/identity-common': 0.4.2
 
   '@protobufjs/aspromise@1.1.2': {}
 
@@ -10113,10 +10156,21 @@ snapshots:
     dependencies:
       '@owf/identity-common': 0.1.0-alpha-20260422101556
 
+  '@sd-jwt/core@0.21.1':
+    dependencies:
+      '@owf/identity-common': 0.4.2
+
   '@sd-jwt/sd-jwt-vc@0.20.0':
     dependencies:
       '@owf/token-status-list': 0.1.0-alpha-20260422101556
       '@sd-jwt/core': 0.20.0
+      zod: 4.6.7
+
+  '@sd-jwt/sd-jwt-vc@0.21.1':
+    dependencies:
+      '@owf/identity-common': 0.4.2
+      '@owf/token-status-list': 0.4.2
+      '@sd-jwt/core': 0.21.1
       zod: 4.6.7
 
   '@sec-ant/readable-stream@0.4.1': {}
@@ -10926,6 +10980,10 @@ snapshots:
     optional: true
 
   cbor-x@1.6.4:
+    optionalDependencies:
+      cbor-extract: 2.2.2
+
+  cbor-x@1.6.6:
     optionalDependencies:
       cbor-extract: 2.2.2
 
@@ -12183,6 +12241,8 @@ snapshots:
 
   jose@6.2.10: {}
 
+  jose@6.2.12: {}
+
   jpeg-exif@1.1.4: {}
 
   jpeg-js@0.4.4: {}
@@ -13404,6 +13464,8 @@ snapshots:
   pako@1.0.11: {}
 
   pako@2.2.0: {}
+
+  pako@3.0.2: {}
 
   papaparse@5.7.0:
     optional: true
@@ -14699,6 +14761,10 @@ snapshots:
       zod: 4.6.7
 
   zod-to-json-schema@3.25.2(zod@4.6.7):
+    dependencies:
+      zod: 4.6.7
+
+  zod-validation-error@5.0.0(zod@4.6.7):
     dependencies:
       zod: 4.6.7
 

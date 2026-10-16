@@ -7,7 +7,9 @@ import {
   X401_VERSION,
 } from '@proof.com/x401-node'
 import { createVerifier as createProofVcVerifier } from '@proof.com/proof-vc-server'
-import type { ProofCredential, TrustRoot, VPToken } from '@proof.com/proof-vc-server'
+import type { ProofCredential, VPToken } from '@proof.com/proof-vc-server'
+import type { Environment } from '@proof.com/proof-vc-common'
+import { proofSdkVersions } from './proof-sdk-versions.js'
 import {
   encodeX401HeaderObject,
   verifyAuthorizationEvidence,
@@ -16,6 +18,7 @@ import {
 } from '@atrib/verify'
 
 export type ProofVcCommonFixtureMode = 'fixture' | 'native'
+export type ProofVcCommonTrustRoot = 'development' | 'production'
 
 export interface ProofVcCommonVerifierInput {
   encodedVPToken: string
@@ -30,7 +33,8 @@ export interface ProofVcCommonX401InteropOptions {
   encodedVPToken?: string
   verifier?: ProofVcCommonVerifier
   nonce?: string
-  trustRoot?: TrustRoot
+  trustRoot?: ProofVcCommonTrustRoot
+  environment?: Environment
   aud?: string
 }
 
@@ -73,18 +77,33 @@ export interface ProofVcCommonX401InteropResult {
   }
 }
 
-const PROOF_VC_COMMON_VERSION = '0.3.0'
+const PROOF_VC_COMMON_VERSION = proofSdkVersions.common
 const PROOF_VC_COMMON_REF = `npm:@proof.com/proof-vc-common@${PROOF_VC_COMMON_VERSION}`
-const PROOF_VC_SERVER_VERSION = '0.3.0'
+const PROOF_VC_SERVER_VERSION = proofSdkVersions.server
 const PROOF_VC_SERVER_REF = `npm:@proof.com/proof-vc-server@${PROOF_VC_SERVER_VERSION}`
-const X401_NODE_VERSION = '0.3.0'
+const X401_NODE_VERSION = proofSdkVersions.x401
 const X401_NODE_REF = `npm:@proof.com/x401-node@${X401_NODE_VERSION}`
 const REQUEST_ID = 'proof-vc-common-x401-basic-v1'
 const AGENT_ID = 'did:web:agent.example'
 const DEFAULT_NONCE = 'proof-vc-common-x401-nonce-1'
 
-function createNativeProofVcVerifier(trustRoot: TrustRoot): ProofVcCommonVerifier {
-  const verifier = createProofVcVerifier({ trustRoot })
+export function resolveProofVcEnvironment(
+  options: Pick<ProofVcCommonX401InteropOptions, 'trustRoot' | 'environment'>,
+): Environment {
+  const environment =
+    options.environment ?? (options.trustRoot === 'development' ? 'sandbox' : 'production')
+  if (!['localhost', 'next', 'staging', 'sandbox', 'production'].includes(environment)) {
+    throw new Error('unsupported Proof verifier environment')
+  }
+  const root = environment === 'production' ? 'production' : 'development'
+  if (options.trustRoot !== undefined && options.trustRoot !== root) {
+    throw new Error('Proof environment and legacy trustRoot select different trust roots')
+  }
+  return environment
+}
+
+function createNativeProofVcVerifier(environment: Environment): ProofVcCommonVerifier {
+  const verifier = createProofVcVerifier({ environment })
   return ({ encodedVPToken, aud }) =>
     verifier.verifyVPToken({
       encodedVPToken,
@@ -103,10 +122,11 @@ function fixtureCredential(over18: boolean) {
     credentialType: () => 'ProofCredentialV1' as const,
     format: () => 'dc+sd-jwt' as const,
     getClaims: () => ({
-      age_is_over: { '18': over18 },
+      age_equal_or_over: { '18': over18 },
     }),
     getSDJWT: () => ({}) as never,
     getNonce: () => DEFAULT_NONCE,
+    toJSON: () => ({ isOver18: over18 }),
     isOver18: over18,
   }
 }
@@ -119,6 +139,7 @@ export async function verifyFixtureVPToken({
   }
   return {
     proof_id_default: [fixtureCredential(true)],
+    proof_id_nationality_us: [],
   }
 }
 
@@ -192,7 +213,7 @@ export async function runProofVcCommonX401Interop(
   const verifyVPToken =
     options.verifier ??
     (mode === 'native'
-      ? createNativeProofVcVerifier(options.trustRoot ?? 'production')
+      ? createNativeProofVcVerifier(resolveProofVcEnvironment(options))
       : verifyFixtureVPToken)
 
   const proofRequest = buildProofRequest(nonce)

@@ -6,6 +6,7 @@ import {
   verifier as proofVerifier,
   X401_VERSION,
 } from '@proof.com/x401-node'
+import { proofSdkVersions } from './proof-sdk-versions.js'
 import {
   base64urlEncode,
   canonicalRecord,
@@ -68,7 +69,7 @@ const REQUEST_ID = 'proof-sdk-runtime-basic-v1'
 const AGENT_ID = 'did:web:agent.example'
 const NONCE = 'proof-sdk-runtime-nonce-1'
 const PROTECTED_URL = 'https://verifier.example/sdk-protected'
-const SDK_PACKAGE_VERSION = '0.3.0'
+const SDK_PACKAGE_VERSION = proofSdkVersions.x401
 const SDK_PACKAGE_REF = `npm:@proof.com/x401-node@${SDK_PACKAGE_VERSION}`
 
 const CURRENT_HEADERS = {

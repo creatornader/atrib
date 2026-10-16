@@ -12,7 +12,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && pnpm typecheck:openai-examples && pnpm typecheck:mem0-examples",
+    "typecheck": "tsc --noEmit && pnpm typecheck:openai-examples && pnpm typecheck:mem0-examples && pnpm typecheck:proof-scripts",
     "build": "tsc --noEmit",
     "demo": "tsx examples/end-to-end/demo.ts",
     "openinference-cognitive-loop": "tsx examples/openinference/cognitive-loop.ts",
@@ -88,7 +88,8 @@
     "proof-vc-token-capture": "tsx scripts/proof-vc-token-capture.ts",
     "proof-repo-interop": "tsx scripts/check-proof-repo-interop.ts",
     "typecheck:openai-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck examples/openai-responses/openai-responses-tool-call-smoke.ts examples/openai-agents-runtime/openai-agents-runtime-smoke.ts",
-    "typecheck:mem0-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck examples/mem0/mem0-oss-full-cycle-smoke.ts examples/mem0/mem0-oss-compat-smoke.ts examples/mem0/mem0-client-smoke.ts examples/mem0/mem0-mutation-assurance-smoke.ts"
+    "typecheck:mem0-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck examples/mem0/mem0-oss-full-cycle-smoke.ts examples/mem0/mem0-oss-compat-smoke.ts examples/mem0/mem0-client-smoke.ts examples/mem0/mem0-mutation-assurance-smoke.ts",
+    "typecheck:proof-scripts": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --types node --strict --skipLibCheck scripts/proof-vc-token-capture.ts scripts/proof-vc-common-x401-interop.ts scripts/open-x401-credential-packet.ts"
   },
   "dependencies": {
     "@a2a-js/sdk": "1.1.0",
@@ -128,9 +129,9 @@
     "@opentelemetry/exporter-trace-otlp-proto": "^0.221.0",
     "@opentelemetry/sdk-trace-base": "^2.10.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
-    "@proof.com/proof-vc-common": "0.4.3",
-    "@proof.com/proof-vc-server": "0.4.3",
-    "@proof.com/x401-node": "^0.3.1",
+    "@proof.com/proof-vc-common": "0.6.0",
+    "@proof.com/proof-vc-server": "0.6.0",
+    "@proof.com/x401-node": "0.3.3",
     "@types/node": "^26.6.5",
     "ai": "^7.0.83",
     "browser-use": "0.8.0",

@@ -404,7 +404,7 @@
       "path": "scripts/proof-vc-common-x401-interop.ts",
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
-      "commands": ["proof-vc-common-x401-interop"]
+      "commands": ["proof-vc-common-x401-interop", "typecheck:proof-scripts"]
     },
     {
       "id": "proof-vc-token-capture",
