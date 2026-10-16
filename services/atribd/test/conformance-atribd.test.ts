@@ -134,22 +134,24 @@ async function fakeToolBackend(): Promise<{ backend: AtribdBackend; calls: Recor
         'emit',
         () => {
           const mcp = new McpServer({ name: 'fake-emit', version: '0.0.0' })
-          mcp.registerTool(
-            'emit',
-            {
-              description: 'Fake write primitive',
-              inputSchema: {
-                context_id: z.string().optional(),
-                chain_root: z.string().optional(),
-                content: z.record(z.string(), z.unknown()).optional(),
-                event_type: z.string().optional(),
+          for (const name of ['emit', 'attest']) {
+            mcp.registerTool(
+              name,
+              {
+                description: 'Fake write primitive',
+                inputSchema: {
+                  context_id: z.string().optional(),
+                  chain_root: z.string().optional(),
+                  content: z.record(z.string(), z.unknown()).optional(),
+                  event_type: z.string().optional(),
+                },
               },
-            },
-            async (args) => {
-              calls.push({ tool: 'emit', args: args as Record<string, unknown> })
-              return { content: [{ type: 'text', text: JSON.stringify({ ok: true }) }] }
-            },
-          )
+              async (args) => {
+                calls.push({ tool: name, args: args as Record<string, unknown> })
+                return { content: [{ type: 'text', text: JSON.stringify({ ok: true }) }] }
+              },
+            )
+          }
           return { mcp }
         },
       ],

@@ -1,0 +1,29 @@
+{
+  "name": "explicit-empty-context-not-replaced",
+  "spec_section": "D148",
+  "check": "http-carrier",
+  "description": "An empty context_id argument is left for the primitive's schema to refuse. A valid traceparent does not replace it.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 35,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "content": {
+            "what": "explicit-empty-context-not-replaced"
+          },
+          "context_id": ""
+        },
+        "_meta": {
+          "traceparent": "00-dddddddddddddddddddddddddddddddd-00f067aa0ba902b7-01"
+        }
+      }
+    }
+  },
+  "expected": {
+    "received_context_id": "",
+    "received_chain_root": null
+  }
+}

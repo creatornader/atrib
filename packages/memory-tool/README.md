@@ -61,10 +61,13 @@ or archive policy.
 
 ```ts
 const records = []
-const memory = await createAtribMemoryTool(fsMemory, { // fsMemory from the quick-start above
+const memory = await createAtribMemoryTool(fsMemory, {
+  // fsMemory from the quick-start above
   privateKey,
   logSubmission: 'disabled',
-  onRecord: (record) => records.push(record),
+  onRecord: (record) => {
+    records.push(record)
+  },
 })
 ```
 
@@ -86,10 +89,27 @@ signed record offline.
 pnpm --filter @atrib/memory-tool smoke
 ```
 
+The native SDK compatibility suite is
+[`test/sdk-compat.test.ts`](test/sdk-compat.test.ts). It exercises all six commands
+through `betaMemoryTool`, checks filesystem readback and signed receipt chains,
+and verifies that private content stays out of public records. It also checks
+duplicate files, invalid edits, path and symlink escapes, and a failing record
+callback. The SDK's Messages tool runner uses a localhost provider fixture to
+check successful tool results, tool errors, and provider failures. These checks
+do not call a hosted model or validate hosted Claude behavior.
+
+```bash
+pnpm --filter @atrib/memory-tool test
+pnpm --filter @atrib/memory-tool typecheck
+```
+
+Typechecking covers the wrapper, both test suites, and the filesystem example.
+
 ## Caveat
 
-This package wraps Anthropic's TypeScript handler shape from
-`@anthropic-ai/sdk@0.100.1`. The Memory Tool is a beta surface, so callers should
+This package originally targeted the TypeScript handler shape in
+`@anthropic-ai/sdk@0.100.1`. The native compatibility checks currently exercise
+`@anthropic-ai/sdk@0.133.0`. The Memory Tool is a beta surface, so callers should
 pin the SDK version they test against.
 
 ## Part of atrib

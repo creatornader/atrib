@@ -1,0 +1,32 @@
+{
+  "name": "explicit-malformed-context-not-replaced",
+  "spec_section": "D148",
+  "check": "http-carrier",
+  "description": "A present but malformed context_id argument is left for the primitive's schema to refuse. A valid extension block does not replace it.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 34,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "content": {
+            "what": "explicit-malformed-context-not-replaced"
+          },
+          "context_id": "NOT-HEX"
+        },
+        "_meta": {
+          "dev.atrib/attribution": {
+            "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "token": "zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw.BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "received_context_id": "NOT-HEX",
+    "received_chain_root": null
+  }
+}
