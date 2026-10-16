@@ -42,11 +42,9 @@ import {
   verifyRecord,
   type AtribRecord,
 } from '@atrib/mcp'
-import {
-  AtribSpanProcessor,
-  verifyOpenTelemetryContextPropagation,
-} from '@atrib/openinference'
+import { AtribSpanProcessor, verifyOpenTelemetryContextPropagation } from '@atrib/openinference'
 import { generateText, tool, stepCountIs } from 'ai'
+import { LegacyOpenTelemetry } from '@ai-sdk/otel'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { z } from 'zod'
 
@@ -124,10 +122,7 @@ async function main() {
   const provider = new BasicTracerProvider({
     spanProcessors: [arizeProcessor, atribProcessor],
   })
-  // Get the tracer from THIS provider directly. In a real Vercel AI SDK
-  // pipeline you'd call `provider.register()` to install it as the global,
-  // and OpenInference's instrumentation hooks would emit spans through
-  // `trace.getTracer(...)` automatically.
+  // Pass this provider's tracer to the AI SDK telemetry integration.
   const tracer = provider.getTracer('atrib-openinference-pilot')
 
   // 5a. SYNTHETIC PATH (default, offline-runnable). Emit a synthetic
@@ -148,9 +143,8 @@ async function main() {
 
   // 5b. LIVE PATH (set ATRIB_OPENINFERENCE_RUN_LIVE=1). Real Vercel AI
   //     SDK call to NIM-served Qwen with a tool the model invokes. The
-  //     AI SDK's `experimental_telemetry: { isEnabled: true }` produces
-  //     spans through the global tracer; this script reads them via the
-  //     local provider since both processors are wired here. Requires
+  //     registered AI SDK telemetry integration uses this provider's
+  //     tracer, so both processors receive the generated spans. Requires
   //     NVIDIA_API_KEY in env.
   if (process.env.ATRIB_OPENINFERENCE_RUN_LIVE === '1') {
     const apiKey = process.env.NVIDIA_API_KEY
@@ -160,9 +154,6 @@ async function main() {
       baseURL: 'https://integrate.api.nvidia.com/v1',
       apiKey,
     })
-
-    // Register provider globally so AI SDK's telemetry hooks find it.
-    provider.register()
 
     console.log('live: calling generateText with NIM Qwen + 1 tool...')
     const result = await generateText({
@@ -177,7 +168,8 @@ async function main() {
         }),
       },
       prompt: "What's the weather in Austin? Use the get_weather tool.",
-      experimental_telemetry: {
+      telemetry: {
+        integrations: [new LegacyOpenTelemetry({ tracer })],
         isEnabled: true,
         functionId: 'atrib-openinference-pilot',
         recordInputs: true,

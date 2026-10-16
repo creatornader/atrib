@@ -363,6 +363,8 @@ Run with `pnpm --filter @atrib/integration test`. The package typecheck also com
 
 Focused cross-package tests include:
 
+- **`test/ai-instrumentation-compat.test.ts`**, real AI SDK 7 calls against a localhost OpenAI-compatible provider. Checks simple and batch signing, shared trace identity, LLM-to-tool links, streaming, invalid tool arguments, and provider errors. See the [OpenInference example](examples/openinference/README.md).
+
 - **[`test/cloudflare-local-runtime.test.ts`](test/cloudflare-local-runtime.test.ts)** runs actual Cloudflare MCP server/client Workers on localhost, checking tool calls, invalid input, context propagation, unsigned gaps and signed fallback records. See the [Cloudflare compatibility guide](examples/cloudflare-agents/README.md#local-sdk-compatibility-checks) for the dev-log proof limit and Worker/browser commands.
 
 - **[`test/mem0-real-package.test.ts`](test/mem0-real-package.test.ts)** runs the installed Mem0 OSS and client smokes, provider rejection, mutation/readback and two-tenant filtering checks. The [Mem0 example guide](examples/mem0/README.md) lists commands and validation limits. These TypeScript examples also run through the package typecheck.

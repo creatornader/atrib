@@ -88,10 +88,7 @@ async function main(): Promise<void> {
       llmSpan.setAttribute('llm.token_count.completion', 29)
       llmSpan.setAttribute('llm.cost.total', 0.0013)
       llmSpan.setAttribute('metadata', '{"release":"cognitive-loop","user_id":"example"}')
-      llmSpan.setAttribute(
-        'llm.output_messages.0.message.tool_calls.0.tool_call.id',
-        TOOL_CALL_ID,
-      )
+      llmSpan.setAttribute('llm.output_messages.0.message.tool_calls.0.tool_call.id', TOOL_CALL_ID)
       llmSpan.setStatus({ code: SpanStatusCode.OK })
       llmSpan.end()
 
@@ -102,7 +99,10 @@ async function main(): Promise<void> {
       toolSpan.setAttribute('tool.name', 'search_web')
       toolSpan.setAttribute('tool_call.id', TOOL_CALL_ID)
       toolSpan.setAttribute('input.value', '{"query":"Langfuse OpenTelemetry traces observations"}')
-      toolSpan.setAttribute('output.value', '{"top_result":"Langfuse maps spans into observations"}')
+      toolSpan.setAttribute(
+        'output.value',
+        '{"top_result":"Langfuse maps spans into observations"}',
+      )
       toolSpan.setStatus({ code: SpanStatusCode.OK })
       toolSpan.end()
     })
@@ -157,7 +157,7 @@ async function main(): Promise<void> {
       `trace must walk from TOOL back to LLM: ${JSON.stringify({
         visited: traced.visited.map((entry) => ({
           hash: entry.record_hash,
-          informed_by: entry.record.informed_by,
+          informed_by: entry.record?.informed_by,
         })),
         dangling: traced.dangling,
         warnings: traced.warnings,

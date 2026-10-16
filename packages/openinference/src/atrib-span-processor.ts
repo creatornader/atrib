@@ -23,35 +23,23 @@
  * size-based or time-based batch submission.
  */
 
-import type {
-  ReadableSpan,
-  Span,
-  SpanProcessor,
-} from '@opentelemetry/sdk-trace-base'
+import type { ReadableSpan, Span, SpanProcessor } from '@opentelemetry/sdk-trace-base'
 import type { Context } from '@opentelemetry/api'
-import {
-  type AtribRecord,
-  signRecord,
-  canonicalRecord,
-  sha256,
-  hexEncode,
-} from '@atrib/mcp'
+import { type AtribRecord, signRecord, canonicalRecord, sha256, hexEncode } from '@atrib/mcp'
 import {
   spanToUnsignedRecord,
   readLlmOutputToolCallId,
   readToolCallId,
   readIoValues,
 } from './span-to-record.js'
-import {
-  buildAtribSpanSidecar,
-  type AtribSpanSidecar,
-} from './sidecar.js'
+import { buildAtribSpanSidecar, type AtribSpanSidecar } from './sidecar.js'
 import { isOpenInferenceSpan } from './openinference-filter.js'
-import { InformedByTracker, type InformedByTrackerOptions } from './informed-by-tracker.js'
 import {
-  deriveArgsResultHashFields,
-  type ArgsResultHashPosture,
-} from './args-result-hash.js'
+  DeferredToolSpans,
+  InformedByTracker,
+  type InformedByTrackerOptions,
+} from './informed-by-tracker.js'
+import { deriveArgsResultHashFields, type ArgsResultHashPosture } from './args-result-hash.js'
 
 export type AtribSubmission = (
   signed: AtribRecord,
@@ -146,12 +134,13 @@ export class AtribSpanProcessor implements SpanProcessor {
   private inflight: Set<Promise<void>> = new Set()
   private shutdownRequested = false
 
+  private readonly deferredTools = new DeferredToolSpans()
+
   constructor(opts: AtribSpanProcessorOptions) {
     this.opts = opts
     if (opts.autoInformedBy === true) {
       this.tracker =
-        opts.informedByTracker ??
-        new InformedByTracker(opts.informedByTrackerOptions ?? {})
+        opts.informedByTracker ?? new InformedByTracker(opts.informedByTrackerOptions ?? {})
     } else {
       this.tracker = null
     }
@@ -182,14 +171,21 @@ export class AtribSpanProcessor implements SpanProcessor {
   }
 
   async forceFlush(): Promise<void> {
-    // Simple processor has no buffer, but it may have async sign/submit
-    // work still running from onEnd.
+    // Wait for async signing and submission before draining unmatched tools.
     while (this.inflight.size > 0) {
       await Promise.allSettled([...this.inflight])
     }
+    // An unmatched tool still produces a record, without an invented link.
+    for (const pending of this.deferredTools.take(() => true)) {
+      try {
+        await this.process(pending, false)
+      } catch (error) {
+        this.logError('flush', error)
+      }
+    }
   }
 
-  private async process(span: ReadableSpan): Promise<void> {
+  private async process(span: ReadableSpan, allowDefer = true): Promise<void> {
     const mappingCtx = {
       creatorKey: this.opts.creatorKey,
       serverUrl: this.opts.serverUrl,
@@ -205,6 +201,21 @@ export class AtribSpanProcessor implements SpanProcessor {
     const toolCallId = readToolCallId(span)
     const llmOutputToolCallId = readLlmOutputToolCallId(span)
 
+    // AI SDK 7 ends the tool before its enclosing model step. Hold only
+    // these native tool spans until the matching model record is signed.
+    if (
+      allowDefer &&
+      this.tracker !== null &&
+      result.kind === 'TOOL' &&
+      span.attributes['ai.operationId'] === 'ai.toolCall' &&
+      toolCallId !== undefined &&
+      this.tracker.lookup(traceId, toolCallId) === undefined
+    ) {
+      const evicted = this.deferredTools.add(span)
+      if (evicted !== undefined) await this.process(evicted, false)
+      return
+    }
+
     // For TOOL spans with a tool_call.id matching a previously-tracked
     // LLM emission, derive the informed_by edge BEFORE signing (the
     // signature covers informed_by per JCS canonical form).
@@ -216,11 +227,7 @@ export class AtribSpanProcessor implements SpanProcessor {
       }
     }
 
-    if (
-      this.tracker !== null &&
-      result.kind === 'TOOL' &&
-      toolCallId !== undefined
-    ) {
+    if (this.tracker !== null && result.kind === 'TOOL' && toolCallId !== undefined) {
       const llmRecordHash = this.tracker.lookup(traceId, toolCallId)
       if (llmRecordHash !== undefined) {
         unsignedRecord = { ...unsignedRecord, informed_by: [llmRecordHash] }
@@ -232,10 +239,7 @@ export class AtribSpanProcessor implements SpanProcessor {
       this.opts.argsResultHashPosture !== 'none'
     ) {
       const ioForHash = readIoValues(span)
-      const hashFields = deriveArgsResultHashFields(
-        this.opts.argsResultHashPosture,
-        ioForHash,
-      )
+      const hashFields = deriveArgsResultHashFields(this.opts.argsResultHashPosture, ioForHash)
       unsignedRecord = { ...unsignedRecord, ...hashFields }
     }
 
@@ -246,14 +250,10 @@ export class AtribSpanProcessor implements SpanProcessor {
     const signed = await signRecord(recordWithPlaceholder, this.opts.privateKey)
 
     // For LLM spans whose output emitted a tool_call, register this
-    // record's hash so the corresponding TOOL span (which fires next)
-    // can pick it up as informed_by. The record_hash is sha256 of the
+    // record's hash so the corresponding TOOL span can pick it up as
+    // informed_by when it is signed. The record_hash is sha256 of the
     // canonical signed record per spec §1.4.
-    if (
-      this.tracker !== null &&
-      result.kind === 'LLM' &&
-      llmOutputToolCallId !== undefined
-    ) {
+    if (this.tracker !== null && result.kind === 'LLM' && llmOutputToolCallId !== undefined) {
       const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(signed)))}`
       this.tracker.recordLlmToolCallEmission(traceId, llmOutputToolCallId, recordHash)
     }
@@ -261,6 +261,14 @@ export class AtribSpanProcessor implements SpanProcessor {
     const sidecar = buildAtribSpanSidecar(span, result.kind)
 
     await this.opts.submit(signed, sidecar)
+    if (result.kind === 'LLM' && llmOutputToolCallId !== undefined) {
+      const ready = this.deferredTools.take(
+        (pending) =>
+          pending.spanContext().traceId === traceId &&
+          readToolCallId(pending) === llmOutputToolCallId,
+      )
+      for (const pending of ready) await this.process(pending, false)
+    }
   }
 
   private logError(stage: string, err: unknown): void {

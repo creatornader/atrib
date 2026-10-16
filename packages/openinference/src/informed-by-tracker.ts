@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
+
 /**
  * Tracks `tool_call.id` -> atrib `record_hash` per trace, so that when a
  * TOOL span fires after an LLM span emitted a tool_call with the same id,
@@ -42,8 +44,7 @@ export class InformedByTracker {
 
   constructor(opts: InformedByTrackerOptions = {}) {
     this.maxTracedTraceIds = opts.maxTracedTraceIds ?? DEFAULT_MAX_TRACED_TRACE_IDS
-    this.maxToolCallsPerTrace =
-      opts.maxToolCallsPerTrace ?? DEFAULT_MAX_TOOL_CALLS_PER_TRACE
+    this.maxToolCallsPerTrace = opts.maxToolCallsPerTrace ?? DEFAULT_MAX_TOOL_CALLS_PER_TRACE
   }
 
   /**
@@ -51,11 +52,7 @@ export class InformedByTracker {
    * tool_call_id `toolCallId`. The record_hash MUST be the full
    * `sha256:<64-hex>` form per spec.
    */
-  recordLlmToolCallEmission(
-    traceId: string,
-    toolCallId: string,
-    recordHash: string,
-  ): void {
+  recordLlmToolCallEmission(traceId: string, toolCallId: string, recordHash: string): void {
     let inner = this.traces.get(traceId)
     if (inner === undefined) {
       // Evict oldest trace if at capacity.
@@ -103,5 +100,21 @@ export class InformedByTracker {
    */
   clear(): void {
     this.traces.clear()
+  }
+}
+
+/** Bounded hold for AI SDK tools whose model span has not ended yet. */
+export class DeferredToolSpans {
+  private spans: ReadableSpan[] = []
+
+  add(span: ReadableSpan): ReadableSpan | undefined {
+    this.spans.push(span)
+    return this.spans.length > 256 ? this.spans.shift() : undefined
+  }
+
+  take(matches: (span: ReadableSpan) => boolean): ReadableSpan[] {
+    const ready = this.spans.filter(matches)
+    this.spans = this.spans.filter((span) => !matches(span))
+    return ready
   }
 }
