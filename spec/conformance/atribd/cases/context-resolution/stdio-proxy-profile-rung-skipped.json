@@ -1,0 +1,22 @@
+{
+  "name": "stdio-proxy-profile-rung-skipped",
+  "spec_section": "D148",
+  "check": "stdio-proxy",
+  "description": "stdio-to-HTTP proxy: with no session in the child's environment, ATRIB_AGENT or ATRIB_ACTIVE_SESSION_PROFILE alone never selects the profile active-session file; that last-writer rung stays behind --ambient-context.",
+  "input": {
+    "tool": "attest",
+    "arguments": {
+      "content": {
+        "what": "profile only"
+      }
+    },
+    "env": {
+      "ATRIB_AGENT": "atribd-corpus-profile",
+      "ATRIB_ACTIVE_SESSION_PROFILE": "atribd-corpus-profile"
+    },
+    "profile_file_context_id": "cccccccccccccccccccccccccccccccc"
+  },
+  "expected": {
+    "context_id": null
+  }
+}

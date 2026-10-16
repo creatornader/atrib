@@ -1,0 +1,25 @@
+{
+  "name": "stdio-proxy-env-wins-over-session-files",
+  "spec_section": "D148",
+  "check": "stdio-proxy",
+  "description": "stdio-to-HTTP proxy: when the child's environment names its session (here CODEX_THREAD_ID) and the parent-PID and profile active-session files name other sessions, the environment value is forwarded and the files are ignored.",
+  "input": {
+    "tool": "emit",
+    "arguments": {
+      "event_type": "observation",
+      "content": {
+        "what": "env beats files"
+      }
+    },
+    "env": {
+      "CODEX_THREAD_ID": "0199A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A5B",
+      "ATRIB_AGENT": "atribd-corpus-profile",
+      "ATRIB_ACTIVE_SESSION_PROFILE": "atribd-corpus-profile"
+    },
+    "profile_file_context_id": "cccccccccccccccccccccccccccccccc",
+    "parent_pid_file_context_id": "dddddddddddddddddddddddddddddddd"
+  },
+  "expected": {
+    "context_id": "0199a1b2c3d47e5f8a9b0c1d2e3f4a5b"
+  }
+}

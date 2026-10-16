@@ -1,0 +1,17 @@
+{
+  "name": "stdio-proxy-explicit-context-wins",
+  "spec_section": "D148",
+  "check": "stdio-proxy",
+  "description": "stdio-to-HTTP proxy: an explicit context_id argument is forwarded unchanged even when the child's ambient ladder resolves a different session.",
+  "input": {
+    "tool": "emit",
+    "arguments": {
+      "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content": { "what": "explicit" }
+    },
+    "env": { "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129" }
+  },
+  "expected": {
+    "context_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+}

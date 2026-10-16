@@ -1,0 +1,21 @@
+{
+  "name": "stdio-proxy-malformed-context-not-replaced",
+  "spec_section": "D148",
+  "check": "stdio-proxy",
+  "description": "stdio-to-HTTP proxy: a present but invalid context_id is forwarded unchanged so the daemon or primitive schema rejects it; it is never silently replaced by the ambient session.",
+  "input": {
+    "tool": "attest",
+    "arguments": {
+      "context_id": "ZZZ",
+      "content": {
+        "what": "typo"
+      }
+    },
+    "env": {
+      "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129"
+    }
+  },
+  "expected": {
+    "context_id": "ZZZ"
+  }
+}

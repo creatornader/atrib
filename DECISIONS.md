@@ -6292,6 +6292,30 @@ profile-routed primitive supervisor only when it advertises
 `profile_routing.mode: "explicit"` and `profile_routing.isolated_backends:
 true`; a single endpoint without that contract remains `mixed`.
 
+**Update 2026-10-16: the dogfood default trial closed.** The trial reached
+`ready_for_default_trial` intermittently from June 13 to July 2, then lost
+readiness and did not regain it. It never held a stable green history window and
+was never promoted to the default. In the last configuration the coordinators
+were set to `shadow_probe` mode, and no commit delegation from the daemons was
+observed, so each producer kept its own mirror write and log submission.
+[D148](#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime)
+has since moved the operator primitive runtime to atribd. The operator
+coordinators and the trial sampler are retired. Hosts whose
+`ATRIB_LOCAL_SUBSTRATE_*` settings are removed use the ordinary producer path:
+their own signing, mirror write and log queue.
+
+This ADR stays accepted as an optional deployment pattern, and the reopen
+conditions below still apply. The local-substrate client in `@atrib/mcp` and
+the fixture corpus in
+[`spec/conformance/local-substrate-coordinator/`](spec/conformance/local-substrate-coordinator/)
+stay, so re-enabling means installing a coordinator per profile and setting
+`ATRIB_LOCAL_SUBSTRATE_ENDPOINT` and `ATRIB_LOCAL_SUBSTRATE_MODE` again.
+`scripts/report-local-substrate-topology.mjs` stays because the
+[D128](#d128-host-owned-primitive-runtime-updates-are-build-restart-direct-probe)
+updater uses it. Scripts that only measured the trial, such as
+`scripts/measure-local-substrate-default-trial.mjs`, may leave in a later change
+that also updates their doc-sync checks; this note records the trial's outcome.
+
 **Consequences.**
 
 - [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
@@ -7820,6 +7844,38 @@ Full draft: [docs/adr-draft-p048-payments-spinout.md](docs/adr-draft-p048-paymen
 **Alternatives considered:** keeping seven standalone stdio processes as the public default (rejected: measured spawn storms, ppid-fragile session discovery, seven mirror writers, and the fork evidence above); patching the session machinery in place indefinitely (rejected: it builds on machinery the 2026-07-28 spec removes); waiting for the SDK before building anything (rejected: the gate binds only the transport binding, and the adapter is the ADR's own fallback path); dropping the `X-Atrib-Chain` fallback rung (rejected: [§1.5.3](atrib-spec.md#153-http-fallback-x-atrib-chain) callers would break silently); collapsing the visible tool surface to two tools now (rejected by [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface); the rename is P047's decision); hosting the surface as a cloud service (rejected: keys and mirror must stay on the host); folding the daemon into the [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned) coordinator (rejected as-is: the coordinator is optional topology glue, the daemon is the signing owner).
 
 **Open questions (operator):** final npm name (`atribd` vs `@atrib/daemon`); fate of the private `@atrib/primitives-runtime` package after cutover; the single-tenant ambient-context flag name and default; length and sunset criteria of the legacy-initialize window; whether the coordinator's residual duties merge into the daemon.
+
+**Status of the open questions (2026-10-16).**
+
+- npm name: settled as `@atrib/daemon`, with the `atribd` binary. It has shipped
+  under that name since 0.1.0; the unscoped `atribd` 0.1.0 is deprecated.
+- Ambient context: `--ambient-context` or `ATRIBD_AMBIENT_CONTEXT=1`, off by
+  default, and the operator profiles run without it. The flag would attribute
+  writes without a `context_id` to whichever session of the profile last wrote
+  the profile's active-session file. Instead the stdio-to-HTTP proxy resolves
+  only the environment rungs of the
+  [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)
+  ladder (`ATRIB_CONTEXT_ID` and the harness session variables) in its own
+  child, and forwards an explicit `context_id` on writes that omit one and carry
+  no `_meta` carrier. It reads neither active-session file, because a harness
+  that runs several sessions under one parent process shares them. Where the
+  child has no session variable, the write is refused as before. Claude Code
+  exports its session to MCP children; Codex and Claude Desktop chat do not
+  today, so their writes still need an explicit `context_id`. Pinned by the
+  `stdio-proxy-*` context-resolution cases.
+- Coordinator residual duties: none remain to merge into the daemon. The
+  [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
+  default trial closed and the operator coordinators retired.
+- `@atrib/primitives-runtime`: still open, and deletion is an owner decision.
+  Some operator client configs still use its stdio proxy, so they move to the
+  atribd proxy first. Deleting it also requires moving the
+  [D128](#d128-host-owned-primitive-runtime-updates-are-build-restart-direct-probe)
+  updater default to `--runtime atribd`, pointing the
+  [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness)
+  through [D130](#d130-primitive-runtime-health-uses-non-mutating-behavioral-probes)
+  health references at atribd, and updating the doc-sync
+  inventories and the workspace package count.
+- The length and sunset criteria of the legacy-initialize window stay open.
 
 ## D149: Cross-attestation composes with a trust set for Sybil resistance
 
@@ -9682,6 +9738,14 @@ operable through the profile-aware runtime updater.
 
 **Protocol impact.** None. This is a deployment boundary. It changes no MCP
 message and no atrib signed byte.
+
+**Update 2026-10-16.** All three profiles remain: `claude-code`, `claude-desktop`
+and `codex`. The
+[D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
+coordinators retired, so the daemons no longer set any
+`ATRIB_LOCAL_SUBSTRATE_*` variable. The coordinator route in Decision item 2 and
+the `ATRIB_LOCAL_SUBSTRATE_ENDPOINT` difference in the Evidence paragraph
+describe the July 29 topology and no longer apply. The decision is unchanged.
 
 ## D188: Default payment detection requires published completion evidence
 

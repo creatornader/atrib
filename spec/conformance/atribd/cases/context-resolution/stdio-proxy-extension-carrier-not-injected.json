@@ -1,0 +1,25 @@
+{
+  "name": "stdio-proxy-extension-carrier-not-injected",
+  "spec_section": "D148",
+  "check": "stdio-proxy",
+  "description": "stdio-to-HTTP proxy: a write carrying context in the dev.atrib/attribution extension block is forwarded unchanged; the environment session never replaces a caller-supplied extension context.",
+  "input": {
+    "tool": "attest",
+    "arguments": {
+      "content": {
+        "what": "extension context"
+      }
+    },
+    "env": {
+      "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129"
+    },
+    "meta": {
+      "dev.atrib/attribution": {
+        "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    }
+  },
+  "expected": {
+    "context_id": null
+  }
+}

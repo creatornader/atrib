@@ -130,9 +130,38 @@ Write primitives require an explicit context per request:
 Read primitives that support unscoped queries proceed per their own scope
 rules. A single-tenant daemon can opt back into ambient env and profile-file
 discovery ([D078](../../DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)) with `--ambient-context` or `ATRIBD_AMBIENT_CONTEXT=1`;
-the flag name is a
-[D148](../../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime)
-open question. The stdio surfaces keep the ambient ladder unchanged.
+it is off by default. The stdio surfaces keep the ambient ladder unchanged.
+The stdio-to-HTTP proxy resolves only the environment rungs of that ladder in
+its own child process: `ATRIB_CONTEXT_ID`, then the registered harness session
+variables (`CLAUDE_CODE_SESSION_ID`, `CODEX_THREAD_ID`). On a write call whose
+arguments omit `context_id` and that carries no `_meta` carrier, the proxy
+forwards that value as an explicit `context_id`, so a strict daemon accepts the
+write under the calling session without `--ambient-context`. A present but
+invalid `context_id`, any `_meta` context carrier (`dev.atrib/attribution`,
+`atrib`, `traceparent`, `tracestate` or `X-Atrib-Chain`, valid or not), or no
+session variable passes through unchanged and the daemon decides. That includes
+an ordinary OpenTelemetry `tracestate` with no `atrib=` entry, so such a write
+reaches a strict daemon without context and is refused. The daemon does not
+read the `dev.atrib/attribution` block yet, so a write whose only context is
+that block is refused too.
+
+The proxy never reads the active-session files. The parent-process file and the
+profile file each name whichever session wrote them last, and a harness that
+runs several sessions under one parent process shares both, so forwarding them
+would sign one session's write under another's context. Two limits follow from
+using the environment:
+
+- The proxy forwards only what the harness exports to its MCP children. Claude
+  Code sets `CLAUDE_CODE_SESSION_ID` there. Codex starts one child per thread
+  but does not set `CODEX_THREAD_ID` in it, and Claude Desktop chat sets no
+  session variable, so writes from those still need an explicit `context_id`.
+- The variable is fixed when the child starts. If the harness keeps the child
+  across a session change, such as clearing the conversation, the proxy keeps
+  forwarding the earlier session until the child restarts. Processes the
+  session spawns inherit the variable, so a subagent writes under its parent's
+  context unless it is given its own, as in the
+  [D115](../../DECISIONS.md#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)
+  bundle.
 
 ## Write serialization
 
