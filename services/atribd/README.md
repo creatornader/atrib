@@ -121,9 +121,12 @@ and clients pinned to 2026-07-28.
 Write primitives require an explicit context per request:
 
 1. An explicit 32-hex `context_id` tool argument wins.
-2. Otherwise the daemon resolves the inbound `_meta` carriers; a resolved
-   trace context injects `context_id`, and a resolved propagation token
-   seeds `chain_root` on tools that accept it.
+2. Otherwise the daemon resolves the inbound `_meta` carriers with both
+   [§1.5.4](../../atrib-spec.md#154-mcp-transport-params_meta) ladders. The
+   `dev.atrib/attribution` block's `context_id`, then the `traceparent`
+   trace-id, injects `context_id`. The propagation token (the extension
+   block's `token`, then `_meta.atrib`, the `atrib=` tracestate entry, then
+   `X-Atrib-Chain`) seeds `chain_root` on tools that accept it.
 3. Otherwise the write returns a typed tool error:
    `atrib: context_id required on stateless transport`.
 
@@ -140,10 +143,9 @@ write under the calling session without `--ambient-context`. A present but
 invalid `context_id`, any `_meta` context carrier (`dev.atrib/attribution`,
 `atrib`, `traceparent`, `tracestate` or `X-Atrib-Chain`, valid or not), or no
 session variable passes through unchanged and the daemon decides. That includes
-an ordinary OpenTelemetry `tracestate` with no `atrib=` entry, so such a write
-reaches a strict daemon without context and is refused. The daemon does not
-read the `dev.atrib/attribution` block yet, so a write whose only context is
-that block is refused too.
+an ordinary OpenTelemetry `tracestate` with no `atrib=` entry and no
+`traceparent`, so such a write reaches a strict daemon without context and is
+refused.
 
 The proxy never reads the active-session files. The parent-process file and the
 profile file each name whichever session wrote them last, and a harness that
