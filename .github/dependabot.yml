@@ -8,7 +8,7 @@
 #
 # 2. npm, the pnpm-workspace TypeScript monorepo (13 workspace packages,
 #    86+ published @atrib/* packages). Weekly with minor/patch vs major
-#    split: minor/patch auto-mergeable, major reviewed manually.
+#    split: grouped npm updates and all majors reviewed manually.
 #
 # 3. cargo, the Rust bridge at packages/directory-bridge/ (compiled to
 #    WASM and shipped inside @atrib/directory). Security-relevant since
@@ -20,8 +20,9 @@
 #    pins drift silently. (Pattern from the 2026-05-17 OSS pin-audit
 #    consolidation.)
 #
-# Strategy: minor/patch versions are auto-merge candidates (low risk,
-# security patches). Major versions get manually reviewed. TypeScript and A2A
+# Strategy: individual minor/patch updates and non-npm groups may auto-merge.
+# Grouped npm updates need separate compatibility review, including SDK minor
+# and patch versions. Major versions get manual review. TypeScript and A2A
 # majors each receive their own review path because either can require parser
 # or protocol migrations. SHA-pinned actions get their SHA re-pinned
 # automatically by Dependabot when a new tag version is detected (Dependabot
