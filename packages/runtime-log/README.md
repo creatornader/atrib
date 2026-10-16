@@ -179,6 +179,47 @@ The shared conformance corpus lives at
 authors can run their own verifier against those cases before publishing a new
 runtime-log source.
 
+### Source-bound projection
+
+`projectCoverageEvidence()` projects the existing [D168 manifest](../../DECISIONS.md#d168-coverage-manifests-make-capture-scope-verifiable) into a
+[§1.12 coverage body](../../docs/source-bound-evidence.md). Its output contains
+the body and exact artifact bytes for private retention. It accepts the coverage
+manifest, runtime-window manifest, event refs, both existing signed commitment
+records, and captured host wrappers. Register `runtimeCoverageSourceVerifier`
+under `RUNTIME_COVERAGE_METHOD` when calling `verifyEvidenceSet()`. The CLI
+registers this method for retained-journal inspection.
+
+The versioned method is
+`https://atrib.dev/evidence/v1/method/runtime-coverage/1`. Its bounded profile
+requires one surface with exactly one `action_kinds` entry and at most 128 native
+events. Event positions must be positive, contiguous safe integers. The coverage
+start cursor is the first position minus one, and the end is the last position.
+Both cursors use canonical decimal strings. Other cursor profiles are rejected.
+
+`sourceIdentity.id` must equal the runtime manifest's source ID. Native
+invocations use `sourceIdentity.namespace + '/invocations'`. Each signed host
+wrapper retains a `payload.runtime_event` containing `event_id`, `context_id`,
+`position`, `kind`, and the exact normalized `descriptor` observed at dispatch.
+Its context must equal the signed observation's context and the runtime
+manifest's session ID. The native ID and descriptor must match the execution
+observation. Capture this frame at
+the host interception boundary through the protected executor's optional
+`strictEvidence.capture` callback.
+
+The verifier authenticates both manifest commitments with receiver-pinned host
+keys. Coverage `observed_at` must equal the signed coverage attestation's
+timestamp. It replays the native event root and derives the expected set from those
+events. Captured actions must resolve to signed host wrappers whose native bytes
+match the event inventory. Request coverage also compares the selected dispatch's
+authenticated native-event hash with that inventory. Reusing an ID and position
+for different bytes cannot satisfy the join.
+
+Skipped, degraded, and omitted expected actions remain explicit gaps. Missing
+expected or captured evidence leaves completeness unresolved. The proof covers
+only this named host surface and window. The same host may sign both inventories;
+expected-set provenance is independent of the captured list, not independent
+administrative corroboration.
+
 ## Live observation adapters
 
 The `@atrib/runtime-log/observation` subpath defines a source-neutral contract
@@ -299,6 +340,12 @@ atrib-runtime-log verify \
 atrib-runtime-log inspect --manifest manifest.json
 
 atrib-runtime-log inspect \
+  --mirror private-records.jsonl \
+  --policy receiver-policy.json \
+  --request sha256:REQUEST_RECORD_HASH \
+  --evaluated-at 1792108800000
+
+atrib-runtime-log inspect \
   --manifest manifest.json \
   --events events.jsonl \
   --session-definition session.json \
@@ -314,6 +361,36 @@ inspection packet shows manifest hash, source identity, window bounds, event
 root, projection root, receipt root, fork and compaction bindings, redaction
 posture, optional signed record refs, supplied evidence, and verifier issue
 codes. It never shows raw runtime-log bodies by default.
+
+For retained evidence, `inspect --mirror` reads the existing private JSONL
+mirror envelopes: each line contains a signed `record` and optional
+`_local.evidence` metadata with an `opening` and `artifacts` entries containing
+`hash` and canonical `base64` bytes. The CLI reads only the selected local
+file. It does not fetch missing material.
+
+Supply your receiver policy with `--policy` and pin the evaluation time with
+`--evaluated-at`. The mirror cannot supply its own trusted policy. The CLI
+passes records, openings, artifacts, and the authenticated host capture and
+runtime coverage adapters to `@atrib/verify`'s `verifyEvidenceSet`. Each matching dispatch gets
+its own historical evaluation. Use `--dispatch HASH` to select one explicitly.
+Without an observed dispatch, inspection verifies retained intent and
+authorization at the supplied evaluation time and marks execution unknown.
+Select `--dispatch HASH` to evaluate missing evidence for a known dispatch.
+
+JSON is the default. It retains record references, verifier dimensions,
+delivery outcomes, destination states, reasons, and policy identity. Use
+`--format text` for a short explanation of claims, observations, authority,
+remote effect, and capture coverage. A captured response can support a local
+execution observation while remote effect remains unresolved.
+
+Exit 0 means the selected inspections satisfy the pinned policy. Missing or
+invalid unrelated statements retain their own verdicts and do not reject an
+otherwise supported request. Exit 1 preserves partial
+inspection output when required evidence is missing or invalid. Exit 2 reports
+invalid arguments or unreadable, malformed, torn, or corrupt mirror input.
+The reader rejects a final line without a newline and limits its snapshot to
+64 MiB. Private openings and artifacts stay in the mirror. Inspection does not
+publish them or prove independent control of the host.
 
 ## Boundary
 

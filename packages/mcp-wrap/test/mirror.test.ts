@@ -90,8 +90,10 @@ describe('loadAutoChainSeed, backward compatibility with legacy bare-record entr
     const file = join(tmpDir, 'legacy.jsonl')
     writeFileSync(
       file,
-      JSON.stringify(VALID_RECORD) + '\n' +
-        JSON.stringify({ ...VALID_RECORD, timestamp: 2000 }) + '\n',
+      JSON.stringify(VALID_RECORD) +
+        '\n' +
+        JSON.stringify({ ...VALID_RECORD, timestamp: 2000 }) +
+        '\n',
     )
     const records = loadAutoChainSeed(file, () => {})
     expect(records).toHaveLength(2)
@@ -113,6 +115,18 @@ describe('loadAutoChainSeed, backward compatibility with legacy bare-record entr
 })
 
 describe('loadAutoChainSeed', () => {
+  it('retains a transaction whose signature is in signers', () => {
+    const { signature, ...base } = VALID_RECORD
+    const record = {
+      ...base,
+      event_type: 'https://atrib.dev/v1/types/transaction',
+      signers: [{ creator_key: base.creator_key, signature }],
+    }
+    const file = join(tmpDir, 'transaction.jsonl')
+    writeFileSync(file, JSON.stringify({ record }) + '\n')
+    expect(loadAutoChainSeed(file, () => {})).toEqual([record])
+  })
+
   it('returns empty array when file does not exist', () => {
     expect(loadAutoChainSeed(join(tmpDir, 'missing.jsonl'), () => {})).toEqual([])
   })
@@ -140,7 +154,10 @@ describe('loadAutoChainSeed', () => {
     const file = join(tmpDir, 'records.jsonl')
     writeFileSync(
       file,
-      JSON.stringify(VALID_RECORD) + '\nnot json\n' + JSON.stringify({ ...VALID_RECORD, timestamp: 2000 }) + '\n',
+      JSON.stringify(VALID_RECORD) +
+        '\nnot json\n' +
+        JSON.stringify({ ...VALID_RECORD, timestamp: 2000 }) +
+        '\n',
     )
     const records = loadAutoChainSeed(file, () => {})
     expect(records).toHaveLength(2)
@@ -150,9 +167,12 @@ describe('loadAutoChainSeed', () => {
     const file = join(tmpDir, 'records.jsonl')
     writeFileSync(
       file,
-      JSON.stringify(VALID_RECORD) + '\n' +
-        JSON.stringify({ context_id: 'x' }) + '\n' + // missing fields → skipped
-        JSON.stringify({ ...VALID_RECORD, timestamp: 2000 }) + '\n',
+      JSON.stringify(VALID_RECORD) +
+        '\n' +
+        JSON.stringify({ context_id: 'x' }) +
+        '\n' + // missing fields → skipped
+        JSON.stringify({ ...VALID_RECORD, timestamp: 2000 }) +
+        '\n',
     )
     const records = loadAutoChainSeed(file, () => {})
     expect(records).toHaveLength(2)

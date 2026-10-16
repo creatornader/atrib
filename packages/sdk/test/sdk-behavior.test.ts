@@ -332,6 +332,8 @@ describe('attest() in-process fallback (daemon off)', () => {
       anchors: [logEndpoint],
       allowSingleAnchor: true,
       contextId: CONTEXT_B,
+      mirrorPath: mirrorFile,
+      autochainSource: mirrorFile,
     })
 
     const result = await client.action({

@@ -577,6 +577,9 @@ importers:
       canonicalize:
         specifier: ^4.0.0
         version: 4.0.0
+      zod:
+        specifier: ^4.6.6
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.6.5
@@ -683,6 +686,9 @@ importers:
 
   packages/runtime-log:
     dependencies:
+      '@atrib/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@atrib/verify':
         specifier: workspace:*
         version: link:../verify
@@ -693,9 +699,9 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0
     devDependencies:
-      '@atrib/mcp':
+      '@atrib/action-gate':
         specifier: workspace:*
-        version: link:../mcp
+        version: link:../action-gate
       '@noble/secp256k1':
         specifier: ^3.1.0
         version: 3.1.0

@@ -15,18 +15,20 @@ import {
 const TEST_KEY = new Uint8Array(32).fill(42)
 const CONTEXT_ID = 'a'.repeat(32)
 
-async function makeRecord(overrides: Partial<{
-  context_id: string
-  chain_root: string
-  event_type: string
-  timestamp: number
-  session_token: string
-  content_id: string
-  informed_by: string[]
-  provenance_token: string
-  annotates: string
-  revises: string
-}> = {}) {
+async function makeRecord(
+  overrides: Partial<{
+    context_id: string
+    chain_root: string
+    event_type: string
+    timestamp: number
+    session_token: string
+    content_id: string
+    informed_by: string[]
+    provenance_token: string
+    annotates: string
+    revises: string
+  }> = {},
+) {
   const pk = await getPublicKey(TEST_KEY)
   // JCS sorts keys lexicographically. `annotates` (a) sorts before
   // `chain_root` (c), so when present it must appear earlier in the
@@ -51,6 +53,15 @@ async function makeRecord(overrides: Partial<{
 }
 
 describe('buildGraph (section 3.2.4)', () => {
+  it('projects an observation without content_id as null', async () => {
+    const original = await makeRecord({ event_type: 'https://atrib.dev/v1/types/observation' })
+    const { content_id: _, ...withoutContentId } = original
+    const record = await signRecord(withoutContentId, TEST_KEY)
+    const graph = await buildGraph([record])
+    expect(graph.nodes[0]!.content_id).toBeNull()
+    expect(graph.nodes[0]!.verification_state).toBe('signature_valid')
+  })
+
   it('builds a single-node graph for a genesis record', async () => {
     const record = await makeRecord()
     const graph = await buildGraph([record])
@@ -255,7 +266,9 @@ describe('buildGraph (section 3.2.4)', () => {
       const graph = await buildGraph([upstream, consumer])
       const informedEdges = graph.edges.filter((e) => e.type === 'INFORMED_BY')
       expect(informedEdges).toHaveLength(1)
-      expect(informedEdges[0]!.source).toBe(`sha256:${hexEncode(sha256(canonicalRecord(consumer)))}`)
+      expect(informedEdges[0]!.source).toBe(
+        `sha256:${hexEncode(sha256(canonicalRecord(consumer)))}`,
+      )
       expect(informedEdges[0]!.target).toBe(`sha256:${upstreamHash}`)
       expect(informedEdges[0]!.directed).toBe(true)
       expect(informedEdges[0]!.dangling).toBeUndefined()
@@ -294,17 +307,18 @@ describe('buildGraph (section 3.2.4)', () => {
       })
 
       const graph = await buildGraph([consumer], [], {
-        resolveRecordReference: (hash) => hash === upstreamHash
-          ? {
-              record_hash: `sha256:${upstreamHash}`,
-              event_type: 'tool_call',
-              event_type_uri: upstream.event_type,
-              creator_key: upstream.creator_key,
-              context_id: upstream.context_id,
-              timestamp: upstream.timestamp,
-              log_index: 42,
-            }
-          : null,
+        resolveRecordReference: (hash) =>
+          hash === upstreamHash
+            ? {
+                record_hash: `sha256:${upstreamHash}`,
+                event_type: 'tool_call',
+                event_type_uri: upstream.event_type,
+                creator_key: upstream.creator_key,
+                context_id: upstream.context_id,
+                timestamp: upstream.timestamp,
+                log_index: 42,
+              }
+            : null,
       })
 
       const edge = graph.edges.find((e) => e.type === 'INFORMED_BY')!
@@ -452,14 +466,10 @@ describe('buildGraph (section 3.2.4)', () => {
 
       const graph = await buildGraph([upstream, descendant])
       // No PROVENANCE_OF edge to the in-same-context upstream
-      const resolvedProvEdges = graph.edges.filter(
-        (e) => e.type === 'PROVENANCE_OF' && !e.dangling,
-      )
+      const resolvedProvEdges = graph.edges.filter((e) => e.type === 'PROVENANCE_OF' && !e.dangling)
       expect(resolvedProvEdges).toHaveLength(0)
       // Per spec, dangling edge IS still emitted (the agent's claim is visible)
-      const danglingProvEdges = graph.edges.filter(
-        (e) => e.type === 'PROVENANCE_OF' && e.dangling,
-      )
+      const danglingProvEdges = graph.edges.filter((e) => e.type === 'PROVENANCE_OF' && e.dangling)
       expect(danglingProvEdges).toHaveLength(1)
     })
 
@@ -510,7 +520,9 @@ describe('buildGraph (section 3.2.4)', () => {
       const graph = await buildGraph([target, annotation])
       const annotateEdges = graph.edges.filter((e) => e.type === 'ANNOTATES')
       expect(annotateEdges).toHaveLength(1)
-      expect(annotateEdges[0]!.source).toBe(`sha256:${hexEncode(sha256(canonicalRecord(annotation)))}`)
+      expect(annotateEdges[0]!.source).toBe(
+        `sha256:${hexEncode(sha256(canonicalRecord(annotation)))}`,
+      )
       expect(annotateEdges[0]!.target).toBe(`sha256:${targetHash}`)
       expect(annotateEdges[0]!.directed).toBe(true)
       expect(annotateEdges[0]!.dangling).toBeUndefined()
@@ -748,10 +760,20 @@ describe('buildGraph (section 3.2.4)', () => {
       revises: `sha256:${toolA1Hash}`,
     })
 
-    const graph = await buildGraph([txA, toolA1, toolA2, toolB, toolB2, toolB3, genB, annotation, revision])
+    const graph = await buildGraph([
+      txA,
+      toolA1,
+      toolA2,
+      toolB,
+      toolB2,
+      toolB3,
+      genB,
+      annotation,
+      revision,
+    ])
 
     const present = new Set(graph.edges.map((e) => e.type))
-    const expected: Array<typeof graph.edges[number]['type']> = [
+    const expected: Array<(typeof graph.edges)[number]['type']> = [
       'CHAIN_PRECEDES',
       'SESSION_PRECEDES',
       'SESSION_PARALLEL',
@@ -805,11 +827,13 @@ describe('buildGraph (section 3.2.4)', () => {
       // genesis chain_root (no chain links between them).
       const records = [] as Awaited<ReturnType<typeof makeRecord>>[]
       for (let i = 0; i < n; i++) {
-        records.push(await makeRecord({
-          context_id: COMPACT_CTX,
-          timestamp: startTs + i,
-          content_id: `sha256:${('b' + i.toString().padStart(2, '0')).padEnd(64, '0')}`,
-        }))
+        records.push(
+          await makeRecord({
+            context_id: COMPACT_CTX,
+            timestamp: startTs + i,
+            content_id: `sha256:${('b' + i.toString().padStart(2, '0')).padEnd(64, '0')}`,
+          }),
+        )
       }
       return records
     }
@@ -1034,7 +1058,7 @@ describe('buildGraph (section 3.2.4)', () => {
         { compactIntraSessionEdges: true },
       )
       const present = new Set(graph.edges.map((e) => e.type))
-      const expected: Array<typeof graph.edges[number]['type']> = [
+      const expected: Array<(typeof graph.edges)[number]['type']> = [
         'CHAIN_PRECEDES',
         'SESSION_PRECEDES',
         'SESSION_PARALLEL',

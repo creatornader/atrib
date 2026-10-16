@@ -131,6 +131,16 @@ function extractLoaded(
       ? (obj.record as Record<string, unknown>)
       : null
   const candidate = envelopeRecord ?? obj
+  const hasCreatorSigner =
+    candidate.event_type === 'https://atrib.dev/v1/types/transaction' &&
+    Array.isArray(candidate.signers) &&
+    candidate.signers.some(
+      (entry) =>
+        entry !== null &&
+        typeof entry === 'object' &&
+        entry.creator_key === candidate.creator_key &&
+        typeof entry.signature === 'string',
+    )
   if (
     typeof candidate.spec_version !== 'string' ||
     typeof candidate.event_type !== 'string' ||
@@ -139,7 +149,7 @@ function extractLoaded(
     typeof candidate.chain_root !== 'string' ||
     typeof candidate.timestamp !== 'number' ||
     !Number.isFinite(candidate.timestamp) ||
-    typeof candidate.signature !== 'string'
+    (typeof candidate.signature !== 'string' && ('signature' in candidate || !hasCreatorSigner))
   ) {
     return null
   }

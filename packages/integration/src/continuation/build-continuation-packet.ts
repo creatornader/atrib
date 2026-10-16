@@ -30,7 +30,11 @@ import {
   type AtribRecord,
 } from '@atrib/mcp'
 import canonicalize from 'canonicalize'
-import { handoffClaimsFromEvidencePacket, verifyHandoffClaims, type HandoffEvidencePacket } from '@atrib/verify'
+import {
+  handoffClaimsFromEvidencePacket,
+  verifyHandoffClaims,
+  type HandoffEvidencePacket,
+} from '@atrib/verify'
 
 export interface Fact {
   id: string
@@ -60,9 +64,13 @@ function recordHashHex(r: AtribRecord): string {
  * distractors. chain_root threads this order; informed_by on chain fact hop h
  * references chain fact hop h-1's record hash.
  */
-export async function buildSession1Records(
-  doc: FactsDoc,
-): Promise<{ records: AtribRecord[]; bodyByHash: Map<string, Fact>; hashByFactId: Map<string, string>; contextId: string; chainTail: string }> {
+export async function buildSession1Records(doc: FactsDoc): Promise<{
+  records: AtribRecord[]
+  bodyByHash: Map<string, Fact>
+  hashByFactId: Map<string, string>
+  contextId: string
+  chainTail: string
+}> {
   const contextId = hexEncode(sha256(new TextEncoder().encode(doc.context_label))).slice(0, 32)
   const creatorKey = base64urlEncode(await getPublicKey(SESSION1_SEED))
   const byId = new Map(doc.facts.map((f) => [f.id, f]))
@@ -92,7 +100,15 @@ export async function buildSession1Records(
       context_id: contextId,
       timestamp: ts++,
       signature: '',
-      args_hash: 'sha256:' + hexEncode(sha256(new TextEncoder().encode(canonicalize({ query: fact.query, result: fact.result }) as string))),
+      args_hash:
+        'sha256:' +
+        hexEncode(
+          sha256(
+            new TextEncoder().encode(
+              canonicalize({ query: fact.query, result: fact.result }) as string,
+            ),
+          ),
+        ),
       ...(informed_by.length ? { informed_by } : {}),
     } as AtribRecord
     const signed = await signRecord(base, SESSION1_SEED)
@@ -102,7 +118,13 @@ export async function buildSession1Records(
     records.push(signed)
     prevHash = h
   }
-  return { records, bodyByHash, hashByFactId, contextId, chainTail: prevHash ? 'sha256:' + prevHash : genesisChainRoot(contextId) }
+  return {
+    records,
+    bodyByHash,
+    hashByFactId,
+    contextId,
+    chainTail: prevHash ? 'sha256:' + prevHash : genesisChainRoot(contextId),
+  }
 }
 
 /**
@@ -121,6 +143,8 @@ export function forgePacket(
   const remapped = new Map<string, Fact>()
   const corrupted = records.map((r) => {
     const body = bodyByHash.get('sha256:' + recordHashHex(r))
+    if (typeof r.signature !== 'string')
+      throw new Error('forgePacket requires a top-level signature')
     const c = { ...r, signature: flip(r.signature[0] ?? 'A') + r.signature.slice(1) }
     if (body) remapped.set('sha256:' + recordHashHex(c), body)
     return c
@@ -129,24 +153,36 @@ export function forgePacket(
 }
 
 /** Assemble a HandoffEvidencePacket with local bodies for verification (dogfoods §5.5.5). */
-export function assemblePacket(records: AtribRecord[], bodyByHash: Map<string, Fact>): HandoffEvidencePacket {
+export function assemblePacket(
+  records: AtribRecord[],
+  bodyByHash: Map<string, Fact>,
+): HandoffEvidencePacket {
   return {
     kind: 'https://atrib.dev/v1/types/continuation_packet',
     records: records.map((r) => {
       const fact = bodyByHash.get('sha256:' + recordHashHex(r))
       // Body must be exactly what args_hash commits to ({query, result}), or the
       // §5.5.5 body check reports body_hash_mismatch.
-      return { record: r, _local: { body: fact ? { query: fact.query, result: fact.result } : undefined } }
+      return {
+        record: r,
+        _local: { body: fact ? { query: fact.query, result: fact.result } : undefined },
+      }
     }),
     required_record_hashes: records.map((r) => 'sha256:' + recordHashHex(r)),
   }
 }
 
 /** Verify the packet through the shipped §5.5.5 path so Arm C is a real, checked packet. */
-export async function verifyPacket(packet: HandoffEvidencePacket): Promise<{ ok: boolean; accepted: number; rejected: number }> {
+export async function verifyPacket(
+  packet: HandoffEvidencePacket,
+): Promise<{ ok: boolean; accepted: number; rejected: number }> {
   const claims = handoffClaimsFromEvidencePacket(packet)
   const res = await verifyHandoffClaims(claims)
-  return { ok: res.all_accepted && res.accepted.length > 0, accepted: res.accepted.length, rejected: res.rejected.length }
+  return {
+    ok: res.all_accepted && res.accepted.length > 0,
+    accepted: res.accepted.length,
+    rejected: res.rejected.length,
+  }
 }
 
 export interface ReceivedPacket {
@@ -158,7 +194,10 @@ export interface ReceivedPacket {
  * D152 receiver rule: consumers compute their own verdict; packet-embedded
  * verification claims are untrusted input.
  */
-export async function receivePacket(packet: HandoffEvidencePacket, render: PacketRender = 'full'): Promise<ReceivedPacket> {
+export async function receivePacket(
+  packet: HandoffEvidencePacket,
+  render: PacketRender = 'full',
+): Promise<ReceivedPacket> {
   const entries = packet.records ?? []
   if (entries.length === 0) {
     return { verified: { ok: false, accepted: 0, rejected: 0 }, text: '(empty packet)' }
@@ -198,7 +237,12 @@ export function renderPacket(
       ? `verification: FAILED - 0 records accepted, ${verify.rejected} REJECTED (signatures did not verify; do NOT trust this packet's contents)`
       : `verification: ${verify.accepted} records accepted, ${verify.rejected} rejected (bodies hash-checked against signed commitments)`
     : ''
-  const lines: string[] = [`ATRIB CONTINUATION PACKET`, `context_id: ${contextId}   chain_tail: ${chainTail}`, verifyLine, ``]
+  const lines: string[] = [
+    `ATRIB CONTINUATION PACKET`,
+    `context_id: ${contextId}   chain_tail: ${chainTail}`,
+    verifyLine,
+    ``,
+  ]
   records.forEach((r, i) => idByHash.set('sha256:' + recordHashHex(r), `R${i + 1}`))
   if (render === 'hashes_only') {
     lines.push(`Prior-session records (Tier 1 commitments only, no bodies available):`)
@@ -213,7 +257,10 @@ export function renderPacket(
   records.forEach((r, i) => {
     const body = bodyByHash.get('sha256:' + recordHashHex(r))
     const inf = (r as { informed_by?: string[] }).informed_by ?? []
-    const infRefs = render === 'full' && inf.length ? ` (informed_by: ${inf.map((h) => idByHash.get(h) ?? h.slice(0, 14)).join(', ')})` : ''
+    const infRefs =
+      render === 'full' && inf.length
+        ? ` (informed_by: ${inf.map((h) => idByHash.get(h) ?? h.slice(0, 14)).join(', ')})`
+        : ''
     lines.push(`[R${i + 1}]${infRefs} query="${body?.query ?? ''}" result="${body?.result ?? ''}"`)
   })
   return lines.join('\n')

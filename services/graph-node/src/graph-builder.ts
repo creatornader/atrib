@@ -162,7 +162,8 @@ export async function buildGraph(
       verificationState = 'unsigned'
     }
 
-    const isGenesis = record.chain_root.startsWith('sha256:') &&
+    const isGenesis =
+      record.chain_root.startsWith('sha256:') &&
       record.chain_root === genesisChainRoot(record.context_id)
 
     const logIndex = options.logIndexLookup ? options.logIndexLookup(hash) : null
@@ -170,7 +171,7 @@ export async function buildGraph(
       id: nodeId,
       event_type: graphLabelFromEventTypeUri(record.event_type),
       event_type_uri: record.event_type,
-      content_id: record.content_id,
+      content_id: record.content_id ?? null,
       creator_key: record.creator_key,
       chain_root: record.chain_root,
       context_id: record.context_id,
@@ -343,7 +344,8 @@ export async function buildGraph(
             const pairKey = `${a.id}->${b.id}`
             const reversePairKey = `${b.id}->${a.id}`
             if (chainPrecedesPairs.has(pairKey) || chainPrecedesPairs.has(reversePairKey)) continue
-            if (sessionPrecedesPairs.has(pairKey) || sessionPrecedesPairs.has(reversePairKey)) continue
+            if (sessionPrecedesPairs.has(pairKey) || sessionPrecedesPairs.has(reversePairKey))
+              continue
             if (findChainRoot(a.id) === findChainRoot(b.id)) continue
             edges.push({ type: 'SESSION_PARALLEL', source: a.id, target: b.id, directed: false })
           }
@@ -360,7 +362,8 @@ export async function buildGraph(
           const reversePairKey = `${b.id}->${a.id}`
 
           if (chainPrecedesPairs.has(pairKey) || chainPrecedesPairs.has(reversePairKey)) continue
-          if (sessionPrecedesPairs.has(pairKey) || sessionPrecedesPairs.has(reversePairKey)) continue
+          if (sessionPrecedesPairs.has(pairKey) || sessionPrecedesPairs.has(reversePairKey))
+            continue
 
           edges.push({ type: 'SESSION_PARALLEL', source: a.id, target: b.id, directed: false })
         }
@@ -402,7 +405,12 @@ export async function buildGraph(
         if (!otherRecord || !('session_token' in otherRecord)) continue
         if (otherRecord.session_token !== txRecord.session_token) continue
 
-        edges.push({ type: 'CROSS_SESSION', source: otherNode.id, target: txNode.id, directed: true })
+        edges.push({
+          type: 'CROSS_SESSION',
+          source: otherNode.id,
+          target: txNode.id,
+          directed: true,
+        })
       }
     }
   }
@@ -429,7 +437,9 @@ export async function buildGraph(
       timestamp: target?.timestamp ?? 0,
       log_index: target?.log_index ?? null,
       verification_state: target
-        ? (target.log_index === null ? 'signature_valid' : 'log_committed')
+        ? target.log_index === null
+          ? 'signature_valid'
+          : 'log_committed'
         : 'unsigned',
       is_genesis: false,
       reference_status: status,
@@ -443,14 +453,19 @@ export async function buildGraph(
     nodeById.set(id, node)
   }
 
-  const classifyRecordReference = (refHash: string): { status: ReferenceStatus; target?: ReferenceTarget; reason?: string } => {
+  const classifyRecordReference = (
+    refHash: string,
+  ): { status: ReferenceStatus; target?: ReferenceTarget; reason?: string } => {
     const target = options.resolveRecordReference?.(refHash)
     if (target) return { status: 'external', target, reason: 'target_out_of_scope' }
     if (options.resolveRecordReference) return { status: 'missing', reason: 'target_not_found' }
     return { status: 'unresolved' }
   }
 
-  const classifyProvenanceReference = (token16: string, sourceContextId: string): { status: ReferenceStatus; target?: ReferenceTarget; reason?: string } => {
+  const classifyProvenanceReference = (
+    token16: string,
+    sourceContextId: string,
+  ): { status: ReferenceStatus; target?: ReferenceTarget; reason?: string } => {
     const target = options.resolveProvenanceReference?.(token16, sourceContextId)
     if (target) return { status: 'external', target, reason: 'target_out_of_scope' }
     if (options.resolveProvenanceReference) return { status: 'missing', reason: 'target_not_found' }
@@ -462,7 +477,17 @@ export async function buildGraph(
     ref: { hash?: string; token?: string },
     target?: ReferenceTarget,
     reason?: string,
-  ): Pick<GraphEdge, 'dangling' | 'reference_status' | 'reference_hash' | 'reference_token' | 'reference_context_id' | 'reference_event_type' | 'reference_log_index' | 'reason'> => ({
+  ): Pick<
+    GraphEdge,
+    | 'dangling'
+    | 'reference_status'
+    | 'reference_hash'
+    | 'reference_token'
+    | 'reference_context_id'
+    | 'reference_event_type'
+    | 'reference_log_index'
+    | 'reason'
+  > => ({
     dangling: true,
     reference_status: status,
     ...(ref.hash ? { reference_hash: ref.hash } : {}),
@@ -498,7 +523,12 @@ export async function buildGraph(
           source: sourceId,
           target: danglingId,
           directed: true,
-          ...danglingEdgeFields(classified.status, { hash: ref }, classified.target, classified.reason),
+          ...danglingEdgeFields(
+            classified.status,
+            { hash: ref },
+            classified.target,
+            classified.reason,
+          ),
         })
       }
     }
@@ -534,7 +564,12 @@ export async function buildGraph(
     } else {
       const danglingId = `dangling:provenance:${provenanceToken}`
       const classified = classifyProvenanceReference(provenanceToken, record.context_id)
-      ensureReferenceNode(danglingId, classified.status, { token: provenanceToken }, classified.target)
+      ensureReferenceNode(
+        danglingId,
+        classified.status,
+        { token: provenanceToken },
+        classified.target,
+      )
       edges.push({
         type: 'PROVENANCE_OF',
         source: sourceId,
@@ -579,7 +614,12 @@ export async function buildGraph(
         source: sourceId,
         target: danglingId,
         directed: true,
-        ...danglingEdgeFields(classified.status, { hash: annotates }, classified.target, classified.reason),
+        ...danglingEdgeFields(
+          classified.status,
+          { hash: annotates },
+          classified.target,
+          classified.reason,
+        ),
       })
     }
   }
@@ -614,7 +654,12 @@ export async function buildGraph(
         source: sourceId,
         target: danglingId,
         directed: true,
-        ...danglingEdgeFields(classified.status, { hash: revises }, classified.target, classified.reason),
+        ...danglingEdgeFields(
+          classified.status,
+          { hash: revises },
+          classified.target,
+          classified.reason,
+        ),
       })
     }
   }

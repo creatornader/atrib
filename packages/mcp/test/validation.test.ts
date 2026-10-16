@@ -48,7 +48,9 @@ describe('validateSubmission (§2.6.1 Steps 2-5)', () => {
 
   it('rejects content_id with the same family of malformations', () => {
     expect(validateSubmission({ ...valid, content_id: 'sha256:abc' }).ok).toBe(false)
-    expect(validateSubmission({ ...valid, content_id: 'wrongprefix:' + 'a'.repeat(64) }).ok).toBe(false)
+    expect(validateSubmission({ ...valid, content_id: 'wrongprefix:' + 'a'.repeat(64) }).ok).toBe(
+      false,
+    )
   })
 
   it('rejects malformed event_type (bare token, not absolute URI)', () => {
@@ -89,8 +91,8 @@ describe('validateSubmission (§2.6.1 Steps 2-5)', () => {
     expect(validateSubmission({ ...valid, timestamp: NaN }).ok).toBe(false)
   })
 
-  it('rejects timestamp more than 10 min in future', () => {
-    expect(validateSubmission({ ...valid, timestamp: Date.now() + 11 * 60 * 1000 }).ok).toBe(false)
+  it('rejects timestamp more than 5 min in future', () => {
+    expect(validateSubmission({ ...valid, timestamp: Date.now() + 6 * 60 * 1000 }).ok).toBe(false)
   })
 
   it('rejects invalid context_id format', () => {

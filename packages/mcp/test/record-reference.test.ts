@@ -13,6 +13,7 @@ import {
   recordReferenceResolverCacheStatsForTests,
   sha256,
   signRecord,
+  signTransactionRecord,
 } from '../src/index.js'
 import type { AtribRecord } from '../src/index.js'
 
@@ -60,6 +61,33 @@ afterEach(async () => {
 })
 
 describe('defaultRecordReferenceResolver', () => {
+  it.each(['statement', 'transaction'])(
+    'finds a %s with conditional fields omitted',
+    async (kind) => {
+      const original = (await makeRecord()).record
+      const { content_id: _, ...base } = original
+      const signed =
+        kind === 'statement'
+          ? await signRecord(
+              { ...base, event_type: 'https://atrib.dev/evidence/v1/request' },
+              TEST_KEY,
+            )
+          : await signTransactionRecord(
+              { ...original, event_type: 'https://atrib.dev/v1/types/transaction' },
+              TEST_KEY,
+            )
+      const { signature: _signature, ...withoutSignature } = signed
+      const record = kind === 'statement' ? signed : withoutSignature
+      const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(record as AtribRecord)))}`
+      await writeFile(join(tmpDir, 'producer.jsonl'), `${JSON.stringify({ record })}\n`)
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue({ ok: false, status: 404 } as Response)
+      await expect(defaultRecordReferenceResolver(recordHash)).resolves.toBe('found')
+      expect(fetchSpy).not.toHaveBeenCalled()
+    },
+  )
+
   it('finds records in local mirrors before consulting the log', async () => {
     const { record, recordHash } = await makeRecord()
     await writeFile(join(tmpDir, 'producer.jsonl'), `${JSON.stringify({ record })}\n`)

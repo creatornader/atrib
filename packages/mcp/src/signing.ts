@@ -37,6 +37,15 @@ export async function signRecord(
 ): Promise<AtribRecord> {
   const signingInput = canonicalSigningInput(record)
   const sigBytes = await ed.signAsync(signingInput, privateKey)
+  return finalizeSignedRecord(record, sigBytes)
+}
+
+/** Sign the same §1.4.2 bytes in a synchronous host persistence boundary. */
+export function signRecordSync(record: AtribRecord, privateKey: Uint8Array): AtribRecord {
+  return finalizeSignedRecord(record, ed.sign(canonicalSigningInput(record), privateKey))
+}
+
+function finalizeSignedRecord(record: AtribRecord, sigBytes: Uint8Array): AtribRecord {
   const sigEncoded = base64urlEncode(sigBytes)
   if ('session_token' in record && record.session_token !== undefined) {
     return { ...record, signature: sigEncoded }
@@ -106,8 +115,12 @@ export async function signTransactionAttestation(
 /**
  * Verify an attribution record (§1.4.3). All 8 steps.
  * Returns true if and only if all steps pass.
+ * Supply nowMs to replay the clock check at a receiver's fixed evaluation time.
  */
-export async function verifyRecord(record: AtribRecord): Promise<boolean> {
+export async function verifyRecord(
+  record: AtribRecord,
+  options: { nowMs?: number } = {},
+): Promise<boolean> {
   try {
     // Step 1: Decode creator_key → 32-byte public key
     const pubKeyBytes = base64urlDecode(record.creator_key)
@@ -128,6 +141,7 @@ export async function verifyRecord(record: AtribRecord): Promise<boolean> {
       if (!valid) return false
     } else {
       // Step 2: Decode signature → 64-byte signature
+      if (typeof record.signature !== 'string') return false
       const sigBytes = base64urlDecode(record.signature)
       if (sigBytes.length !== 64) return false
 
@@ -149,10 +163,11 @@ export async function verifyRecord(record: AtribRecord): Promise<boolean> {
 
     // Step 7: timestamp must be a finite number and not >5 min in the future.
     // NaN, Infinity, negative values are all invalid.
-    // The log server (§2.6.1 Step 4) uses a wider 10-minute window to
-    // account for network/queue delay between signing and log submission.
+    // Log admission (§2.6.1 Step 4) uses the same bound.
     if (!Number.isInteger(record.timestamp) || record.timestamp < 0) return false
-    const fiveMinutesFromNow = Date.now() + 5 * 60 * 1000
+    const nowMs = options.nowMs ?? Date.now()
+    if (!Number.isInteger(nowMs) || nowMs < 0) return false
+    const fiveMinutesFromNow = nowMs + 5 * 60 * 1000
     if (record.timestamp > fiveMinutesFromNow) return false
 
     // Step 8: context_id must be exactly 32 lowercase hex chars

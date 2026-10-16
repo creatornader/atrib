@@ -1429,8 +1429,10 @@ _This section is normative._
 The [source-bound evidence contract](docs/source-bound-evidence.md) defines normative private-body schemas, type URIs, exact request bindings, source policies, and independent receiver conclusions. These URIs use the existing extension event byte. This section allocates no new log-entry byte or signature format. Ordinary cognitive records do not acquire an action lifecycle by implication.
 
 The [offline conformance corpus](spec/conformance/1.12/README.md) supplies canonical
-JSON vectors, jointly normative with Appendix A, and distinguishes test-only
-receiver semantics from the separate operational producer obligations.
+JSON vectors, jointly normative with Appendix A. Receiver cases exercise the
+exported receiver through synthetic fixture sources. C19 uses a test-only
+executor model. These checks do not establish the separate operational producer
+or filesystem-durability obligations.
 
 Signing, retention, disclosure and submission are separate operations. An evidence producer MAY retain a signed record and opening privately without submitting either to a public service. A submission uses [§2](#2-merkle-log-protocol) unchanged. An unsubmitted record MUST NOT be represented as log-included. Checkpoint inclusion covers its specified records, not every action at a source.
 

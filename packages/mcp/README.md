@@ -12,6 +12,87 @@ pnpm add @atrib/mcp
 
 Verify a local build with `pnpm --filter @atrib/mcp test`.
 
+## Source-bound statement bodies
+
+`evidenceBodySchemas` validates the six closed bodies in
+[the source-bound evidence contract](../../docs/source-bound-evidence.md).
+`EVIDENCE_TYPES` maps each kind to its signed extension URI.
+`createEvidenceNonce()` generates an unpadded base64url nonce from 16 random
+bytes. `commitEvidenceBody(kind, body)` validates the body and returns its
+plain JCS SHA-256 commitment for `args_hash`. Keep the nonce in the private
+opening. These helpers neither sign nor retain the record/opening pair.
+Use the existing `signRecord` helper and a host-owned atomic store.
+
+`isEvidenceLocator` is the locator predicate used by body validation. It rejects
+bearer tokens, URL user information and recognized
+credential query or fragment keys in absolute and relative hints. Benign queries,
+fragments and relative hints remain valid. Only `source.locator` and
+`basis[].locator` use this rule. Arbitrary JSON parameters and destination state
+can contain unrelated properties named `locator`.
+
+### Strict private mirrors
+
+`createStrictMirrorRetention` retains complete signed record, opening and
+artifact units in the existing mirror envelope. Dedicate its file to strict
+units. Appending legacy Shape 1, 2 or 3 entries to that file makes strict
+validation fail and prevents protected dispatch. Other producers can use
+sibling files in the same mirror directory. See the
+[protected executor retention contract](../action-gate/README.md#strict-private-evidence-retention).
+
+The host must supply a local POSIX filesystem that honors exclusive creation
+and file and directory fsync. The mirror directory must be owned by the current
+user with mode 0700, and the file must have mode 0600. Use normalized absolute
+paths without symlinks. Ancestors must be owned by root or the current user and
+must not permit path replacement through group or world write access. A
+root-owned sticky temporary directory is allowed. The host must also ensure
+that ACLs do not grant path replacement access.
+
+A crashed writer leaves its lock for manual recovery. Exclude active writers
+and inspect the journal before removing a stale lock. Removing the lock does
+not authorize replay of a reserved execution. These are host prerequisites for
+the source implementation. This helper does not activate a daemon or install
+capture.
+
+## Host capture method, version 1
+
+The source method URI is
+`https://atrib.dev/evidence/v1/method/host-capture/1` (`HOST_CAPTURE_METHOD`).
+The host signs its intercepted claim after completing argument normalization.
+The source artifact is UTF-8 JCS of this closed object:
+
+```typescript
+{
+  record: AtribRecord,
+  payload: {
+    nonce: string,
+    claim: { subject, target, assertion, source },
+    authority: string[],
+    payload?: JsonValue
+  }
+}
+```
+
+The inner record uses `HOST_CAPTURE_TYPE`
+(`https://atrib.dev/source/host-capture/v1`) and only the eight required
+source-bound carrier fields, including `args_hash`. It signs the plain SHA-256 JCS
+commitment of the payload through the existing `signRecord` helper. Its
+timestamp equals `source.observed_at`. Its context equals the outer observation
+context. The nonce comes from 16 random bytes. `claim` contains the complete
+observation body except `nonce` and `basis`. `authority` contains the exact
+allow-record references cited by dispatch. The optional payload contains the
+intercepted handler response or failure text. The artifact is private and does
+not contain its own hash. The outer observation cites its exact byte hash.
+
+[`hostCaptureSourceVerifier`](../verify/README.md#host-capture-source)
+authenticates this artifact using only the receiving policy's `source_keys`.
+It checks the wrapper signature, commitment, source claim, time, context and
+authority references. This supports the named host's signed account of its
+interception. It does not establish independent administration, remote receipts,
+destination state or coverage beyond this configured path.
+This private source-wrapper extension uses the existing 0xFF extension byte.
+It is outside the six normative evidence statement type URIs and is not itself
+an evidence statement or an automatic log submission.
+
 ## Quick start
 
 ```typescript

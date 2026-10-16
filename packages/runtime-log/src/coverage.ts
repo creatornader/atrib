@@ -1,16 +1,377 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import canonicalize from 'canonicalize'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { verifyRecord, commitEvidenceBody, type AtribRecord } from '@atrib/mcp'
+import {
+  createHostCaptureSourceVerifier,
+  type EvidenceSourceVerifier,
+  type EvidenceSourceResult,
+} from '@atrib/verify'
+
 import {
   hashCanonical,
   hashLogWindowManifest,
   isSha256Uri,
+  verifyLogWindowManifest,
   type LogWindowBounds,
   type LogWindowManifest,
   type RuntimeLogRuntimeRef,
   type RuntimeLogSourceRef,
+  type RuntimeLogEventRef,
   type SessionDefinitionRef,
   type Sha256Uri,
 } from './index.js'
+
+export const RUNTIME_COVERAGE_METHOD =
+  'https://atrib.dev/evidence/v1/method/runtime-coverage/1' as const
+
+type ScopedId = { namespace: string; id: string }
+type SignedRecord = AtribRecord
+export interface CapturedCoverageEvent {
+  readonly record: SignedRecord
+  readonly payload: Record<string, unknown>
+}
+export interface ProjectCoverageEvidenceInput {
+  readonly manifest: CoverageManifest
+  readonly logWindowManifest: LogWindowManifest
+  readonly events: readonly RuntimeLogEventRef[]
+  readonly surfaceId: string
+  readonly sourceIdentity: ScopedId
+  readonly invocationNamespace: string
+  readonly nonce: string
+  readonly observedAt: number
+  readonly coverageAttestationRecord: SignedRecord
+  readonly logWindowRecord: SignedRecord
+  readonly capturedEvents: readonly CapturedCoverageEvent[]
+}
+
+/** Projects D168's inventory. The pinned native host remains the trust boundary. */
+export function projectCoverageEvidence(input: ProjectCoverageEvidenceInput) {
+  const assertion = coverageAssertion(input)
+  const artifacts = new Map<string, Uint8Array>()
+  const add = (value: unknown) => {
+    const bytes = new TextEncoder().encode(canonicalize(value)!)
+    const hash = hashCanonical(value)
+    artifacts.set(hash, bytes)
+    return hash
+  }
+  const body = {
+    nonce: input.nonce,
+    subject: input.sourceIdentity,
+    source: {
+      kind: 'manifest' as const,
+      identity: input.sourceIdentity,
+      method: RUNTIME_COVERAGE_METHOD,
+      observed_at: input.observedAt,
+    },
+    assertion,
+    basis: [
+      { relation: 'source', kind: 'artifact', hash: add(input.coverageAttestationRecord) },
+      { relation: 'source', kind: 'artifact', hash: add(input.logWindowRecord) },
+      { relation: 'captured', kind: 'artifact', hash: add(input.manifest) },
+      { relation: 'expected', kind: 'artifact', hash: add(input.logWindowManifest) },
+      { relation: 'expected', kind: 'artifact', hash: add(input.events) },
+      ...input.capturedEvents.map((event) => ({
+        relation: 'captured',
+        kind: 'artifact',
+        hash: add(event),
+      })),
+    ],
+  }
+  commitEvidenceBody('coverage', body)
+  return { body, artifacts }
+}
+
+function coverageAssertion(
+  input: Omit<
+    ProjectCoverageEvidenceInput,
+    'nonce' | 'observedAt' | 'coverageAttestationRecord' | 'logWindowRecord' | 'capturedEvents'
+  >,
+) {
+  const { manifest, logWindowManifest, events, surfaceId, sourceIdentity, invocationNamespace } =
+    input
+  const surface = manifest.surfaces[0]
+  if (
+    manifest.surfaces.length !== 1 ||
+    surface?.id !== surfaceId ||
+    surface.action_kinds?.length !== 1 ||
+    sourceIdentity.id !== manifest.source.id ||
+    invocationNamespace !== `${sourceIdentity.namespace}/invocations` ||
+    events.length === 0 ||
+    events.length > 128 ||
+    manifest.actions.some((action) => action.surface_id !== surfaceId)
+  )
+    throw new Error('unsupported_coverage_profile')
+  const first = events[0]!.position
+  if (
+    typeof first !== 'number' ||
+    !Number.isSafeInteger(first) ||
+    first <= 0 ||
+    events.some(
+      (event, index) =>
+        !event.event_id ||
+        event.kind !== surface.action_kinds![0] ||
+        typeof event.position !== 'number' ||
+        !Number.isSafeInteger(event.position) ||
+        event.position !== first + index,
+    ) ||
+    new Set(events.map((event) => event.event_id)).size !== events.length
+  )
+    throw new Error('unsupported_coverage_cursor')
+  if (!verifyLogWindowManifest(logWindowManifest, { events }).valid)
+    throw new Error('runtime_window_invalid')
+  const expected = events.map((event) => ({
+    action_id: event.event_id,
+    surface_id: surfaceId,
+    action_hash: event.event_hash,
+  }))
+  const validation = verifyCoverageManifest(
+    manifest,
+    { log_window_manifest: logWindowManifest, expected_actions: expected },
+    { allow_skipped_required: true, allow_degraded_required: true },
+  )
+  if (validation.issues.some((issue) => issue.code !== 'expected_action_omitted'))
+    throw new Error('coverage_manifest_invalid')
+  const id = (value: string): ScopedId => ({ namespace: invocationNamespace, id: value })
+  const actions = new Map(manifest.actions.map((action) => [action.action_id, action]))
+  return {
+    surface: sourceIdentity,
+    start: String(first - 1),
+    end: String(events.at(-1)!.position),
+    expected: events.map((event) => id(event.event_id)),
+    captured: events
+      .filter((event) => actions.get(event.event_id)?.state === 'captured')
+      .map((event) => id(event.event_id)),
+    gaps: events.flatMap((event) => {
+      const action = actions.get(event.event_id)
+      return action?.state === 'captured'
+        ? []
+        : [{ id: id(event.event_id), reason: action?.reason_code ?? 'expected_action_omitted' }]
+    }),
+  }
+}
+
+const coverageObject = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('coverage_artifact_invalid')
+  return value as Record<string, unknown>
+}
+const coverageBytesHash = (bytes: Uint8Array) =>
+  `sha256:${Array.from(sha256(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+const coverageFailure = (
+  state: 'rejected' | 'unresolved',
+  reason: string,
+): EvidenceSourceResult => ({
+  state,
+  reasons: [`https://atrib.dev/evidence/v1/reason/${reason}`],
+  basis: [],
+})
+const runtimeHostVerifier = createHostCaptureSourceVerifier(RUNTIME_COVERAGE_METHOD)
+
+async function nativeCapture(input: Parameters<EvidenceSourceVerifier['verify']>[0]) {
+  const result = await runtimeHostVerifier.verify(input)
+  if (result.state !== 'supported') return { result }
+  const refs = input.body.basis as Array<{ relation: string; hash: string }>
+  const hash = refs.find((ref) => ref.relation === 'source')!.hash
+  const wrapper = coverageObject(JSON.parse(new TextDecoder().decode(input.artifacts.get(hash)!)))
+  const captured = coverageObject(wrapper.payload)
+  if (
+    captured.payload === undefined ||
+    coverageObject(captured.payload).runtime_event === undefined
+  )
+    return { result: coverageFailure('unresolved', 'coverage-native-event-missing') }
+  const native = coverageObject(coverageObject(captured.payload).runtime_event)
+  const assertion = coverageObject(input.body.assertion)
+  const source = coverageObject(input.body.source)
+  const identity = coverageObject(source.identity)
+  const invocation = coverageObject(assertion.native_invocation)
+  if (
+    !Number.isSafeInteger(native.position) ||
+    Number(native.position) <= 0 ||
+    native.context_id !== input.record.context_id ||
+    !native.event_id ||
+    typeof native.kind !== 'string' ||
+    invocation.namespace !== `${identity.namespace}/invocations` ||
+    invocation.id !== native.event_id ||
+    canonicalize(native.descriptor) !== canonicalize(assertion.descriptor)
+  )
+    return { result: coverageFailure('rejected', 'coverage-native-event-mismatch') }
+  return {
+    result: {
+      ...result,
+      facts: {
+        ...result.facts!,
+        cursor: String(native.position),
+        native_event_hash: hashCanonical(native),
+      },
+    },
+    native,
+    wrapper,
+  }
+}
+
+/** Replays exact native inventory bytes and both existing host commitments. */
+export const runtimeCoverageSourceVerifier: EvidenceSourceVerifier = {
+  compareCursors(a, b) {
+    const cursor = (value: string) =>
+      /^(0|[1-9][0-9]*)$/.test(value) && Number.isSafeInteger(Number(value))
+        ? Number(value)
+        : undefined
+    const left = cursor(a),
+      right = cursor(b)
+    return left === undefined || right === undefined ? undefined : Math.sign(left - right)
+  },
+  async verify({ record, body, artifacts, sourceKeys, evaluatedAt }) {
+    try {
+      const source = coverageObject(body.source)
+      if (source.kind === 'boundary')
+        return (await nativeCapture({ record, body, artifacts, sourceKeys, evaluatedAt })).result
+      if (source.kind !== 'manifest' || source.method !== RUNTIME_COVERAGE_METHOD)
+        return coverageFailure('rejected', 'coverage-method-mismatch')
+      const refs = body.basis as Array<{ kind: string; relation: string; hash: string }>
+      if (!Array.isArray(refs) || refs.length > 256 || refs.some((ref) => ref.kind !== 'artifact'))
+        return coverageFailure('rejected', 'coverage-basis-invalid')
+      const parsed: Array<{ relation: string; hash: string; value: unknown }> = []
+      for (const ref of refs) {
+        const bytes = artifacts.get(ref.hash)
+        if (!bytes) return coverageFailure('unresolved', 'coverage-input-missing')
+        if (bytes.length > 1_048_576 || coverageBytesHash(bytes) !== ref.hash)
+          return coverageFailure('rejected', 'coverage-hash-mismatch')
+        parsed.push({
+          ...ref,
+          value: JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)),
+        })
+      }
+      if (
+        parsed.filter((entry) => entry.relation === 'source').length < 2 ||
+        parsed.filter((entry) => entry.relation === 'expected').length < 2
+      )
+        return coverageFailure('unresolved', 'coverage-input-missing')
+      const one = (relation: string, test: (value: unknown) => boolean) => {
+        const matches = parsed.filter((entry) => entry.relation === relation && test(entry.value))
+        if (matches.length !== 1) throw new Error('coverage_artifact_ambiguous')
+        return matches[0]!.value
+      }
+      const manifest = one(
+        'captured',
+        (value) =>
+          !Array.isArray(value) && coverageObject(value).schema === COVERAGE_MANIFEST_SCHEMA,
+      ) as CoverageManifest
+      const logWindowManifest = one(
+        'expected',
+        (value) =>
+          !Array.isArray(value) &&
+          coverageObject(value).schema ===
+            'https://atrib.dev/schemas/runtime-log/log-window-manifest/v0',
+      ) as LogWindowManifest
+      const events = one('expected', Array.isArray) as RuntimeLogEventRef[]
+      const coverageCommitment = hashCoverageAttestationContent(manifest)
+      for (const commitment of [coverageCommitment, hashLogWindowManifest(logWindowManifest)]) {
+        const signed = one(
+          'source',
+          (value) => coverageObject(value).args_hash === commitment,
+        ) as SignedRecord
+        if (!sourceKeys.includes(signed.creator_key))
+          return coverageFailure('rejected', 'coverage-key-untrusted')
+        if (
+          signed.context_id !== record.context_id ||
+          signed.timestamp > evaluatedAt ||
+          signed.timestamp > Number(source.observed_at) ||
+          (commitment === coverageCommitment && signed.timestamp !== source.observed_at) ||
+          signed.args_salt !== undefined ||
+          signed.event_type !== 'https://atrib.dev/v1/types/observation' ||
+          !(await verifyRecord(signed, { nowMs: evaluatedAt }))
+        )
+          return coverageFailure('rejected', 'coverage-signature-invalid')
+      }
+      if (manifest.session.id !== record.context_id)
+        return coverageFailure('rejected', 'coverage-session-mismatch')
+      const sourceIdentity = coverageObject(source.identity) as ScopedId
+      const assertion = coverageAssertion({
+        manifest,
+        logWindowManifest,
+        events,
+        surfaceId: manifest.surfaces[0]!.id,
+        sourceIdentity,
+        invocationNamespace: `${sourceIdentity.namespace}/invocations`,
+      })
+      const capturedRecordHashes: Sha256Uri[] = []
+      for (const action of manifest.actions.filter((action) => action.state === 'captured')) {
+        const item = parsed.find(
+          (entry) =>
+            entry.relation === 'captured' &&
+            !Array.isArray(entry.value) &&
+            coverageObject(entry.value).record &&
+            hashCanonical(coverageObject(entry.value).record) === action.record_hash,
+        )
+        if (!item) return coverageFailure('unresolved', 'coverage-captured-event-missing')
+        const wrapper = coverageObject(item.value)
+        const payload = coverageObject(wrapper.payload)
+        const claim = coverageObject(payload.claim)
+        const authorities = payload.authority as string[]
+        const native = await nativeCapture({
+          record,
+          body: {
+            ...claim,
+            basis: [
+              { relation: 'source', kind: 'artifact', hash: item.hash },
+              ...authorities.map((hash) => ({ relation: 'authority', kind: 'record', hash })),
+            ],
+          },
+          artifacts: new Map([[item.hash, artifacts.get(item.hash)!]]),
+          sourceKeys,
+          evaluatedAt,
+        })
+        if (native.result.state !== 'supported') return native.result
+        const event = events.find((event) => event.event_id === action.action_id)
+        if (
+          !event ||
+          event.event_hash !== hashCanonical(native.native) ||
+          event.position !== native.native!.position ||
+          event.kind !== native.native!.kind ||
+          canonicalize(coverageObject(claim.source).identity) !== canonicalize(sourceIdentity) ||
+          coverageObject(claim.assertion).phase !== 'dispatch'
+        )
+          return coverageFailure('rejected', 'coverage-native-event-mismatch')
+        capturedRecordHashes.push(action.record_hash!)
+      }
+      const compared = verifyCoverageManifest(
+        manifest,
+        { record_hashes: capturedRecordHashes },
+        {
+          require_record_evidence: true,
+          allow_skipped_required: true,
+          allow_degraded_required: true,
+        },
+      )
+      if (!compared.valid) return coverageFailure('rejected', 'coverage-captured-event-invalid')
+      if (
+        canonicalize(assertion) !== canonicalize(body.assertion) ||
+        canonicalize(sourceIdentity) !== canonicalize(body.subject)
+      )
+        return coverageFailure('rejected', 'coverage-projection-mismatch')
+      const { nonce: _nonce, basis: _basis, ...claim } = body
+      return {
+        state: 'supported',
+        reasons: [],
+        basis: parsed.map((entry) => entry.hash),
+        facts: {
+          claim,
+          coverage: {
+            ...assertion,
+            native_events: events.map((event) => ({
+              id: { namespace: `${sourceIdentity.namespace}/invocations`, id: event.event_id },
+              hash: event.event_hash,
+            })),
+          },
+        },
+      }
+    } catch {
+      return coverageFailure('rejected', 'coverage-input-invalid')
+    }
+  },
+}
 
 export const COVERAGE_MANIFEST_SCHEMA =
   'https://atrib.dev/schemas/runtime-log/coverage-manifest/v0' as const

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   signRecord,
+  signTransactionRecord,
   getPublicKey,
   base64urlEncode,
   genesisChainRoot,
@@ -91,6 +92,22 @@ describe('computeRecordHash', () => {
 })
 
 describe('loadLoaded', () => {
+  it('loads transaction signer entries without a top-level signature', async () => {
+    const signed = await signTransactionRecord(
+      await makeSigned({ event_type: 'https://atrib.dev/v1/types/transaction' }),
+      KEY,
+    )
+    const { signature: _, ...record } = signed
+    writeFileSync(
+      file,
+      JSON.stringify({ record, _local: { content: { what: 'transaction' } } }) + '\n',
+    )
+    const loaded = loadLoaded(file)
+    expect(loaded).toHaveLength(1)
+    expect(loaded[0]!.record).toEqual(record)
+    expect(loaded[0]!.content).toEqual({ what: 'transaction' })
+  })
+
   it('returns empty array when file missing', () => {
     expect(loadLoaded(join(tmp, 'missing.jsonl'))).toEqual([])
   })

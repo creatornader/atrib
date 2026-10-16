@@ -29,16 +29,365 @@
  * full scan.
  */
 
-import { createReadStream } from 'node:fs'
-import { open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { constants, createReadStream, type BigIntStats } from 'node:fs'
+import {
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import * as readline from 'node:readline'
 import { canonicalRecord } from './canon.js'
 import { resolveChainRoot, genesisChainRoot } from './chain-root.js'
 import { sha256, hexEncode } from './hash.js'
 import { SHA256_REF_PATTERN } from './refs.js'
 import type { AtribRecord } from './types.js'
+import {
+  commitEvidenceBody,
+  EVIDENCE_TYPES,
+  type EvidenceBody,
+  type EvidenceKind,
+} from './evidence-body.js'
+import { verifyRecord } from './signing.js'
+import { createJsonCommitment } from './commitment.js'
+import { base64urlDecode, base64urlEncode } from './base64url.js'
+
+export interface StrictMirrorUnit {
+  readonly record: AtribRecord
+  readonly opening: EvidenceBody
+  readonly artifacts: readonly { readonly hash: string; readonly bytes: Uint8Array }[]
+}
+
+export interface StrictMirrorRetention {
+  /** A previously reserved key always refuses redispatch, including after a crash. */
+  reserve(
+    key: string,
+    unit: StrictMirrorUnit,
+  ): Promise<{ acquired: boolean; unit: StrictMirrorUnit; units?: readonly StrictMirrorUnit[] }>
+  retain(unit: StrictMirrorUnit): Promise<void>
+}
+
+interface StrictMirrorEnvelope {
+  record: AtribRecord
+  _local: {
+    evidence: {
+      opening: EvidenceBody
+      artifacts: { hash: string; base64: string }[]
+      reservation?: string
+    }
+  }
+  written_at: number
+}
+
+// Keep at most one journal cached, including across short-lived host instances.
+let strictVerifiedHistory:
+  | {
+      path: string
+      version: BigIntStats
+      entries: StrictMirrorEnvelope[]
+      reservations: Map<string, StrictMirrorEnvelope>
+    }
+  | undefined
+
+function sameStrictMirrorVersion(left: BigIntStats, right: BigIntStats): boolean {
+  return (
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.size === right.size &&
+    left.mtimeNs === right.mtimeNs &&
+    left.ctimeNs === right.ctimeNs
+  )
+}
+
+function mirrorBase64(bytes: Uint8Array): string {
+  const encoded = base64urlEncode(bytes).replace(/-/g, '+').replace(/_/g, '/')
+  return encoded.padEnd(Math.ceil(encoded.length / 4) * 4, '=')
+}
+
+function mirrorArtifactBytes(encoded: string): Uint8Array {
+  const bytes = base64urlDecode(encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''))
+  if (mirrorBase64(bytes) !== encoded)
+    throw new Error('atrib: strict mirror invalid artifact encoding')
+  return bytes
+}
+
+function strictReservation(record: AtribRecord, opening: EvidenceBody): string | undefined {
+  if (record.event_type !== EVIDENCE_TYPES.request) return undefined
+  const assertion = opening.assertion as { execution: EvidenceBody['subject'] }
+  return createJsonCommitment(
+    { source: opening.source.identity, subject: opening.subject, execution: assertion.execution },
+    'plain-sha256',
+  ).hash
+}
+
+async function validateStrictEnvelope(value: unknown): Promise<StrictMirrorEnvelope> {
+  const envelope = value as StrictMirrorEnvelope
+  const record = envelope?.record
+  const evidence = envelope?._local?.evidence
+  const kind = Object.entries(EVIDENCE_TYPES).find(
+    ([, type]) => type === record?.event_type,
+  )?.[0] as EvidenceKind | undefined
+  if (
+    !kind ||
+    !evidence ||
+    !Array.isArray(evidence.artifacts) ||
+    commitEvidenceBody(kind, evidence.opening) !== record.args_hash ||
+    // Retention verifies signed history. Admission freshness belongs to the host.
+    !(await verifyRecord(record, { nowMs: record.timestamp }))
+  ) {
+    throw new Error('atrib: strict mirror unit failed record/opening verification')
+  }
+  for (const artifact of evidence.artifacts) {
+    const bytes = mirrorArtifactBytes(artifact.base64)
+    if (`sha256:${hexEncode(sha256(bytes))}` !== artifact.hash) {
+      throw new Error('atrib: strict mirror artifact hash mismatch')
+    }
+  }
+  const artifacts = new Set(evidence.artifacts.map((artifact) => artifact.hash))
+  if (evidence.opening.basis.some((ref) => ref.kind === 'artifact' && !artifacts.has(ref.hash))) {
+    throw new Error('atrib: strict mirror missing artifact')
+  }
+  if (
+    evidence.reservation !== undefined &&
+    (typeof evidence.reservation !== 'string' || !evidence.reservation)
+  ) {
+    throw new Error('atrib: strict mirror invalid reservation')
+  }
+  if (
+    evidence.reservation !== undefined &&
+    evidence.reservation !== strictReservation(record, evidence.opening)
+  ) {
+    throw new Error('atrib: strict mirror reservation does not match signed request')
+  }
+  return envelope
+}
+
+/** Strict evidence mirror readers reject incomplete or corrupt input instead of skipping it. */
+export async function readStrictMirror(path: string): Promise<StrictMirrorUnit[]> {
+  const text = await readFile(path, 'utf8')
+  return (await parseStrictMirror(text)).map(strictMirrorUnit)
+}
+
+function strictMirrorUnit(envelope: StrictMirrorEnvelope): StrictMirrorUnit {
+  return {
+    record: structuredClone(envelope.record),
+    opening: structuredClone(envelope._local.evidence.opening),
+    artifacts: envelope._local.evidence.artifacts.map((artifact) => ({
+      hash: artifact.hash,
+      bytes: mirrorArtifactBytes(artifact.base64),
+    })),
+  }
+}
+
+async function parseStrictMirror(text: string): Promise<StrictMirrorEnvelope[]> {
+  if (text && !text.endsWith('\n'))
+    throw new Error('atrib: strict mirror truncated; manual recovery required')
+  const values: StrictMirrorEnvelope[] = []
+  for (const line of text.split('\n').filter(Boolean))
+    values.push(await validateStrictEnvelope(JSON.parse(line)))
+  return values
+}
+
+/**
+ * Opt-in private evidence retention in the existing mirror envelope. The host
+ * dedicates this mirror to strict units. Fsync precedes return. An exclusive
+ * lock serializes processes with up to two seconds of contention wait before
+ * lock_busy. A crashed writer leaves its lock for manual recovery; no timeout
+ * removes it automatically.
+ * A single cached journal reuses verified history only while file identity,
+ * size and nanosecond change timestamps match. External changes require full
+ * verification, bounded to 64 MiB. Changed bytes never inherit cached trust.
+ */
+export function createStrictMirrorRetention({ path }: { path: string }): StrictMirrorRetention {
+  if (!isAbsolute(path) || resolve(path) !== path)
+    throw new Error('atrib: strict mirror requires a normalized absolute path')
+  const directory = dirname(path)
+  const lockPath = `${path}.lock`
+  const checkPrivate = (info: Awaited<ReturnType<typeof lstat>>, file: boolean) => {
+    if (
+      info.isSymbolicLink() ||
+      (file ? !info.isFile() : !info.isDirectory()) ||
+      info.uid !== process.getuid?.() ||
+      (Number(info.mode) & 0o777) !== (file ? 0o600 : 0o700) ||
+      (file && info.nlink !== 1)
+    )
+      throw new Error('atrib: strict mirror requires owner-only directory and file')
+  }
+  async function append(
+    unit: StrictMirrorUnit,
+    reservation?: string,
+  ): Promise<{ acquired: boolean; unit: StrictMirrorUnit; units?: readonly StrictMirrorUnit[] }> {
+    const envelope: StrictMirrorEnvelope = {
+      record: unit.record,
+      _local: {
+        evidence: {
+          opening: unit.opening,
+          artifacts: unit.artifacts.map((artifact) => ({
+            hash: artifact.hash,
+            base64: mirrorBase64(artifact.bytes),
+          })),
+          ...(reservation === undefined ? {} : { reservation }),
+        },
+      },
+      written_at: Date.now(),
+    }
+    // Snapshot and validate before taking the lock or touching private storage.
+    const line = JSON.stringify(envelope) + '\n'
+    const validated = await validateStrictEnvelope(JSON.parse(line))
+    let createdDirectory = false
+    try {
+      await mkdir(directory, { mode: 0o700 })
+      createdDirectory = true
+    } catch (error) {
+      if (errorCode(error) !== 'EEXIST') throw error
+    }
+    if ((await realpath(directory)) !== directory)
+      throw new Error('atrib: strict mirror refuses symlink paths')
+    checkPrivate(await lstat(directory), false)
+    for (let parent = dirname(directory); ; parent = dirname(parent)) {
+      const info = await lstat(parent)
+      if (
+        !info.isDirectory() ||
+        ![0, process.getuid?.()].includes(info.uid) ||
+        ((Number(info.mode) & 0o022) !== 0 &&
+          !(info.uid === 0 && (Number(info.mode) & 0o1000) !== 0))
+      ) {
+        throw new Error('atrib: strict mirror ancestor permits path replacement')
+      }
+      if (parent === dirname(parent)) break
+    }
+    const directoryHandle = await open(
+      directory,
+      constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+    )
+    let lock: Awaited<ReturnType<typeof open>> | undefined
+    try {
+      if (createdDirectory) {
+        const parentHandle = await open(
+          dirname(directory),
+          constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+        )
+        try {
+          await parentHandle.sync()
+        } finally {
+          await parentHandle.close()
+        }
+      }
+      const lockDeadline = performance.now() + 2_000
+      let backoffMs = 5
+      while (!lock) {
+        try {
+          lock = await open(
+            lockPath,
+            constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+            0o600,
+          )
+        } catch (error) {
+          if (errorCode(error) !== 'EEXIST') throw error
+          const remainingMs = lockDeadline - performance.now()
+          if (remainingMs <= 0)
+            throw new Error(
+              'atrib: strict mirror lock_busy; retry or recover stale lock manually',
+              {
+                cause: error,
+              },
+            )
+          await new Promise((resolve) => setTimeout(resolve, Math.min(backoffMs, remainingMs)))
+          backoffMs = Math.min(backoffMs * 2, 50)
+        }
+      }
+      await lock.sync()
+      await directoryHandle.sync()
+      const file = await open(
+        path,
+        constants.O_RDWR | constants.O_CREAT | constants.O_APPEND | constants.O_NOFOLLOW,
+        0o600,
+      )
+      try {
+        const info = await file.stat()
+        checkPrivate(info, true)
+        const directoryInfo = await directoryHandle.stat()
+        const pathDirectoryInfo = await lstat(directory)
+        const pathFileInfo = await lstat(path)
+        if (
+          directoryInfo.dev !== pathDirectoryInfo.dev ||
+          directoryInfo.ino !== pathDirectoryInfo.ino ||
+          info.dev !== pathFileInfo.dev ||
+          info.ino !== pathFileInfo.ino ||
+          (await realpath(directory)) !== directory
+        ) {
+          throw new Error('atrib: strict mirror path changed while opening')
+        }
+        if (info.size > 64 * 1024 * 1024)
+          throw new Error('atrib: strict mirror exceeds bounded reader limit')
+        const version = await file.stat({ bigint: true })
+        const cached =
+          strictVerifiedHistory?.path === path &&
+          sameStrictMirrorVersion(strictVerifiedHistory.version, version)
+            ? strictVerifiedHistory
+            : undefined
+        const prior = cached?.entries ?? (await parseStrictMirror(await file.readFile('utf8')))
+        if (!sameStrictMirrorVersion(version, await file.stat({ bigint: true })))
+          throw new Error('atrib: strict mirror changed during verification')
+        // Derive identity from the signed Request, even if local metadata was lost.
+        const reservations = cached?.reservations ?? new Map<string, StrictMirrorEnvelope>()
+        if (!cached) {
+          for (const entry of prior) {
+            const key = strictReservation(entry.record, entry._local.evidence.opening)
+            if (key && !reservations.has(key)) reservations.set(key, entry)
+          }
+        }
+        strictVerifiedHistory = { path, version, entries: prior, reservations }
+        const existing = reservation ? reservations.get(reservation) : undefined
+        if (existing)
+          return {
+            acquired: false,
+            unit: strictMirrorUnit(existing),
+            units: prior.map(strictMirrorUnit),
+          }
+        await file.writeFile(line)
+        await file.sync()
+        await directoryHandle.sync()
+        const appendedVersion = await file.stat({ bigint: true })
+        prior.push(validated)
+        const key = strictReservation(validated.record, validated._local.evidence.opening)
+        if (key && !reservations.has(key)) reservations.set(key, validated)
+        strictVerifiedHistory =
+          appendedVersion.size === version.size + BigInt(new TextEncoder().encode(line).length)
+            ? { path, version: appendedVersion, entries: prior, reservations }
+            : undefined
+        return { acquired: true, unit }
+      } finally {
+        await file.close()
+      }
+    } finally {
+      if (lock) {
+        await lock.close()
+        await unlink(lockPath)
+        await directoryHandle.sync()
+      }
+      await directoryHandle.close()
+    }
+  }
+  return {
+    reserve(key, unit) {
+      if (!key) return Promise.reject(new Error('atrib: strict mirror reservation key required'))
+      return append(unit, key)
+    },
+    async retain(unit) {
+      await append(unit)
+    },
+  }
+}
 
 /**
  * Read the most recent record from a JSONL mirror file.
@@ -625,11 +974,28 @@ function parseMirrorValue(value: unknown): AtribRecord | null {
   if (!isObject(value)) return null
   const wrapped = value['record']
   const candidate = isObject(wrapped) ? wrapped : value
+  const hasCreatorSigner =
+    candidate['event_type'] === 'https://atrib.dev/v1/types/transaction' &&
+    Array.isArray(candidate['signers']) &&
+    candidate['signers'].some(
+      (entry) =>
+        isObject(entry) &&
+        entry['creator_key'] === candidate['creator_key'] &&
+        typeof entry['signature'] === 'string',
+    )
+  const contentIdRequired = [
+    'https://atrib.dev/v1/types/tool_call',
+    'https://atrib.dev/v1/types/transaction',
+    'https://atrib.dev/v1/types/directory_anchor',
+    'https://atrib.dev/v1/types/session_checkpoint',
+  ].includes(candidate['event_type'] as string)
   if (
     candidate['spec_version'] !== 'atrib/1.0' ||
-    typeof candidate['content_id'] !== 'string' ||
+    (('content_id' in candidate || contentIdRequired) &&
+      typeof candidate['content_id'] !== 'string') ||
     typeof candidate['creator_key'] !== 'string' ||
-    typeof candidate['signature'] !== 'string' ||
+    (typeof candidate['signature'] !== 'string' &&
+      ('signature' in candidate || !hasCreatorSigner)) ||
     typeof candidate['chain_root'] !== 'string' ||
     typeof candidate['event_type'] !== 'string' ||
     typeof candidate['context_id'] !== 'string' ||

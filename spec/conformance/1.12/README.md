@@ -3,10 +3,9 @@
 This corpus exercises the proposed [source-bound evidence contract](../../../docs/source-bound-evidence.md)
 and [core §1.12](../../../atrib-spec.md#112-source-bound-evidence-statements).
 The JSON inputs and expected assertions are canonical vectors for these offline
-checks. Existing core Appendix A vectors still apply. Receiver cases use the
-test-only receiver and body schemas under `packages/verify/test/source-bound-*`.
-They do not export a public receiver API. C19 cases use the isolated executor
-model described below.
+checks. Existing core Appendix A vectors still apply. Receiver cases invoke the
+exported `@atrib/verify` receiver with the shared `@atrib/mcp` body schemas.
+C19 cases use the isolated executor model described below.
 The source adapter uses synthetic test artifacts. Passing it does not establish
 an installed capture/execution boundary or package publication.
 
@@ -47,7 +46,7 @@ complete receiver inputs before evaluation. Missing, malformed or mismatched
 entries fail the reader. Expected assertions remain explicit in each case. No
 URL is fetched.
 
-Expected objects are partial assertions against the receiver result, not a
+Expected objects are partial assertions against EvidenceSetResult, not a
 requirement that unrelated facts disappear. `invalid_kind` is a schema-vector
 shorthand: every record of that type must have rejected body integrity, and
 unmutated types must retain supported body integrity. It is not a receiver input.
@@ -84,11 +83,10 @@ Executor-model cases have `input.mode: executor`. They inject a retention failur
 and check whether the effect handler ran. They test the contract model's ordering,
 not filesystem durability or the installed middleware. They cannot establish a
 protected path exists in a deployment.
-The production strict host is separate implementation work in
-[PR #706](https://github.com/creatornader/atrib/pull/706), including
-`packages/action-gate/test/strict-protected-mcp.test.ts` and
-`packages/mcp/test/strict-mirror.test.ts`. Those package tests are outside this
-specification change and the canonical offline corpus.
+The production strict host has separate regressions in
+[`strict-protected-mcp.test.ts`](../../../packages/action-gate/test/strict-protected-mcp.test.ts)
+and [`strict-mirror.test.ts`](../../../packages/mcp/test/strict-mirror.test.ts).
+Those package tests are outside the canonical offline corpus.
 
 ## Synthetic source mechanism
 
@@ -146,9 +144,9 @@ independent operators. All fixture keys are controlled by one generator.
 | E21              | Evaluation leaves the input accounts unchanged and does not implement app-state transitions                                   | Real app reducers preserve report/observed/accepted distinctions                                                     |
 | E22, publication | Self-contained snapshots, explicit unpublished state, exact RFC 6962 inclusion and checkpoint signature rejection             | Production export/import UX and live public inclusion/checkpoint integration under core section 2                    |
 
-The receiver model has fixed defensive limits: 32 source-reference hops, 256
-source dependencies per statement and 1 MiB per artifact. These are this corpus
-profile's bounds, not universal deployment sizes. Coverage may use one hash-bound
+The receiver has fixed defensive limits: 32 dependency hops, 256
+references and 16 MiB of bytes per traversal, with 1 MiB per artifact.
+These are implementation bounds, not universal deployment sizes. Coverage may use one hash-bound
 manifest for many IDs. Missing or corrupt source/authority/coverage material must
 not be silently treated as complete. A known unavailable claim is not evidence
 that no event occurred.

@@ -57,12 +57,13 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@atrib/mcp": "workspace:*",
     "@atrib/verify": "workspace:*",
     "@noble/hashes": "^2.4.0",
     "canonicalize": "^4.0.0"
   },
   "devDependencies": {
-    "@atrib/mcp": "workspace:*",
+    "@atrib/action-gate": "workspace:*",
     "@noble/secp256k1": "^3.1.0",
     "@types/node": "^26.6.5",
     "typescript": "^6.0.3",

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // @atrib/mcp. Public API
+export * from './evidence-body.js'
 
 // Middleware (primary export)
 export { atrib, VERIFIABLE_ACTION_DISCLOSURE } from './middleware.js'
@@ -115,6 +116,7 @@ export { canonicalSigningInput, canonicalRecord, canonicalCrossAttestationInput 
 export {
   getPublicKey,
   signRecord,
+  signRecordSync,
   signTransactionAttestation,
   signTransactionRecord,
   verifyRecord,
@@ -132,6 +134,8 @@ export { ATRIB_CONTEXT_ID_ENV, buildSubagentProducerEnv, chainTailEnvName } from
 export type { BuildSubagentProducerEnvOptions } from './subagent.js'
 export { genesisChainRoot, chainRoot, resolveChainRoot } from './chain-root.js'
 export { readMirrorTail, inheritChainContext, recordHashExistsInMirror } from './mirror.js'
+export { createStrictMirrorRetention, readStrictMirror } from './mirror.js'
+export type { StrictMirrorUnit, StrictMirrorRetention } from './mirror.js'
 export type { ChainContext } from './mirror.js'
 export type { MirrorInheritanceScope } from './mirror.js'
 export {

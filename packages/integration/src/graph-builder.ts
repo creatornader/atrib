@@ -11,7 +11,13 @@
 
 import { sha256, hexEncode, canonicalRecord, base64urlEncode, verifyRecord } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
-import type { GraphNode, GraphEdge, GraphResponse, EdgeType, VerificationState } from '@atrib/verify'
+import type {
+  GraphNode,
+  GraphEdge,
+  GraphResponse,
+  EdgeType,
+  VerificationState,
+} from '@atrib/verify'
 import { graphLabelFromEventTypeUri } from '@atrib/verify'
 
 /**
@@ -83,7 +89,7 @@ export async function buildGraphFromRecords(
       id,
       event_type: graphLabelFromEventTypeUri(r.event_type),
       event_type_uri: r.event_type,
-      content_id: r.content_id,
+      content_id: r.content_id ?? null,
       creator_key: r.creator_key,
       chain_root: r.chain_root,
       context_id: r.context_id,
@@ -281,7 +287,7 @@ export async function buildGraphFromAllRecords(
       id,
       event_type: graphLabelFromEventTypeUri(r.event_type),
       event_type_uri: r.event_type,
-      content_id: r.content_id,
+      content_id: r.content_id ?? null,
       creator_key: r.creator_key,
       chain_root: r.chain_root,
       context_id: r.context_id,
@@ -404,7 +410,8 @@ export async function buildGraphFromAllRecords(
             const pairKey = `${a.id}->${b.id}`
             const reversePairKey = `${b.id}->${a.id}`
             if (chainPrecedesPairs.has(pairKey) || chainPrecedesPairs.has(reversePairKey)) continue
-            if (sessionPrecedesPairs.has(pairKey) || sessionPrecedesPairs.has(reversePairKey)) continue
+            if (sessionPrecedesPairs.has(pairKey) || sessionPrecedesPairs.has(reversePairKey))
+              continue
             if (findChainRoot(a.id) === findChainRoot(b.id)) continue
             edges.push({ type: 'SESSION_PARALLEL', source: a.id, target: b.id, directed: false })
           }
@@ -420,7 +427,8 @@ export async function buildGraphFromAllRecords(
           const pairKey = `${a.id}->${b.id}`
           const reversePairKey = `${b.id}->${a.id}`
           if (chainPrecedesPairs.has(pairKey) || chainPrecedesPairs.has(reversePairKey)) continue
-          if (sessionPrecedesPairs.has(pairKey) || sessionPrecedesPairs.has(reversePairKey)) continue
+          if (sessionPrecedesPairs.has(pairKey) || sessionPrecedesPairs.has(reversePairKey))
+            continue
           edges.push({ type: 'SESSION_PARALLEL', source: a.id, target: b.id, directed: false })
         }
       }
@@ -535,7 +543,12 @@ export async function buildGraphFromAllRecords(
       }
     }
     if (resolvedTargetId) {
-      edges.push({ type: 'PROVENANCE_OF', source: sourceId, target: resolvedTargetId, directed: true })
+      edges.push({
+        type: 'PROVENANCE_OF',
+        source: sourceId,
+        target: resolvedTargetId,
+        directed: true,
+      })
     } else {
       const danglingId = `dangling:provenance:${provenanceToken}`
       ensureDanglingNode(danglingId)

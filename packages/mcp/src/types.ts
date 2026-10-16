@@ -9,13 +9,13 @@
  */
 export type AtribRecord = {
   spec_version: 'atrib/1.0'
-  content_id: string
+  /** Required by tool_call, transaction and type-specific service records. */
+  content_id?: string
   creator_key: string
   chain_root: string
   event_type: string // absolute URI; see spec 1.2.4 and 1.4.5
   context_id: string
   timestamp: number
-  signature: string
   /**
    * Optional reference to the record this annotation describes (D058 / spec
    * §1.2.8). Required when event_type is the atrib-normative annotation URI
@@ -125,7 +125,15 @@ export type AtribRecord = {
    * "si-g-n-a-..." (position 4 'e' > 'a') and "si..." < "sp...".
    */
   signers?: SignerEntry[]
-} & ({ session_token: string } | { session_token?: never })
+} & ({ session_token: string } | { session_token?: never }) &
+  (
+    | { signature: string }
+    | {
+        event_type: 'https://atrib.dev/v1/types/transaction'
+        signers: SignerEntry[]
+        signature?: never
+      }
+  )
 
 /**
  * One entry in the §1.7.6 transaction-record signers array. Each entry

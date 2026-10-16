@@ -30,9 +30,37 @@ const span = (o: Partial<TraceSpan> & { span_id: string }): TraceSpan => ({
 const DOC: TraceDoc = {
   trace_id: 'a'.repeat(32),
   spans: [
-    span({ span_id: 'aaaaaaaaaaaaaaaa', span_name: 'main', kind: 'AGENT', timestamp_ms: 100, duration_ms: 900, input_value: 'solve the task' }),
-    span({ span_id: 'bbbbbbbbbbbbbbbb', parent_span_id: 'aaaaaaaaaaaaaaaa', span_name: 'llm', kind: 'LLM', timestamp_ms: 200, duration_ms: 50, input_value: 'prompt', output_value: 'thought', total_tokens: 42 }),
-    span({ span_id: 'cccccccccccccccc', parent_span_id: 'aaaaaaaaaaaaaaaa', span_name: 'search', kind: 'TOOL', timestamp_ms: 300, duration_ms: 800, input_value: 'query', output_value: 'HTTP 503 service unavailable', status_code: 'ERROR', status_message: 'upstream failed' }),
+    span({
+      span_id: 'aaaaaaaaaaaaaaaa',
+      span_name: 'main',
+      kind: 'AGENT',
+      timestamp_ms: 100,
+      duration_ms: 900,
+      input_value: 'solve the task',
+    }),
+    span({
+      span_id: 'bbbbbbbbbbbbbbbb',
+      parent_span_id: 'aaaaaaaaaaaaaaaa',
+      span_name: 'llm',
+      kind: 'LLM',
+      timestamp_ms: 200,
+      duration_ms: 50,
+      input_value: 'prompt',
+      output_value: 'thought',
+      total_tokens: 42,
+    }),
+    span({
+      span_id: 'cccccccccccccccc',
+      parent_span_id: 'aaaaaaaaaaaaaaaa',
+      span_name: 'search',
+      kind: 'TOOL',
+      timestamp_ms: 300,
+      duration_ms: 800,
+      input_value: 'query',
+      output_value: 'HTTP 503 service unavailable',
+      status_code: 'ERROR',
+      status_message: 'upstream failed',
+    }),
   ],
 }
 
@@ -47,13 +75,14 @@ describe('buildCausalBrief', () => {
     const { records, hashBySpan } = await buildCausalRecords(DOC)
     expect(records.length).toBe(3)
     // Every record signed and verifiable.
-    for (const r of records) expect(r.signature.length).toBeGreaterThan(0)
+    for (const r of records) expect(r.signature?.length).toBeGreaterThan(0)
     // Children carry informed_by pointing at the parent record hash.
     const child = records.find((r) => r.context_id === DOC.trace_id && 'informed_by' in r)
     expect(child).toBeDefined()
     const parentHash = 'sha256:' + hashBySpan.get('aaaaaaaaaaaaaaaa')!
     const anyChildInformedByParent = records.some(
-      (r) => Array.isArray((r as { informed_by?: string[] }).informed_by) &&
+      (r) =>
+        Array.isArray((r as { informed_by?: string[] }).informed_by) &&
         (r as { informed_by?: string[] }).informed_by!.includes(parentHash),
     )
     expect(anyChildInformedByParent).toBe(true)
@@ -104,7 +133,9 @@ describe('buildCausalBrief', () => {
     const big = 'x'.repeat(CONTENT_TRUNC * 3)
     const doc: TraceDoc = {
       trace_id: 'b'.repeat(32),
-      spans: [span({ span_id: 'd'.repeat(16), span_name: 'main', input_value: big, output_value: big })],
+      spans: [
+        span({ span_id: 'd'.repeat(16), span_name: 'main', input_value: big, output_value: big }),
+      ],
     }
     const flat = await buildCausalBrief(doc, 'flat')
     const atrib = await buildCausalBrief(doc, 'atrib')

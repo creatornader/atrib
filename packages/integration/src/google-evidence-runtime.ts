@@ -326,7 +326,7 @@ function buildAnalyticsRow(
     event_type: allowed ? 'atrib.ap2.next_action_allowed' : 'atrib.ap2.next_action_rejected',
     agent: GOOGLE_EVIDENCE_RUNTIME_SERVICE,
     session_id: record.context_id,
-    invocation_id: contentId ?? record.content_id,
+    invocation_id: contentId ?? record.content_id ?? recordHash,
     user_id: 'google-stack-demo-operator',
     trace_id: traceSeed.slice(0, 32),
     span_id: spanSeed.slice(0, 16),

@@ -212,34 +212,26 @@ Public packages are intended for npm publication. Private workspace packages and
 
 CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authoritative technical reference.
 
-The proposed [§1.12 source-bound evidence contract](docs/source-bound-evidence.md)
-defines committed bodies and receiver obligations. It is spec work ahead of
-implementation, not an added evidence-envelope profile or a claim that current
-verifyRecord.valid establishes action truth. See STATUS.md for the implementation
-boundary. Keep its acceptance cases synchronized with the receiver corpus when
-that implementation lands.
-
-The [offline evidence corpus](spec/conformance/1.12/README.md) has a test-only
-schema/receiver model under `packages/verify/test/source-bound-*`. It does not
-export a public receiver API. Keep its signed fixtures, explicit operational
-obligations and source-mechanism description synchronized with the contract.
+The [source-bound evidence contract](docs/source-bound-evidence.md) defines the
+statement bodies, receiver obligations and [offline corpus](spec/conformance/1.12/README.md).
+See [STATUS.md](STATUS.md) for implementation and release evidence.
 
 ## Authoritative docs
 
-| Doc                                       | Responsible for                                                                                                                                                                                                                      |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `atrib-spec.md`                           | Complete protocol specification: record format, Merkle log, graph model, policy format, SDK contract                                                                                                                                 |
-| `STATUS.md`                               | Implementation status: deployed services, published and deprecated package census, protocol surface implemented vs spec-defined-only                                                                                                 |
-| `CLAUDE.md`                               | Project conventions, invariants, implementation guidance                                                                                                                                                                             |
-| `ARCHITECTURE.md`                         | Technical architecture overview: trust model, protocol layers, payment integration, design decisions                                                                                                                                 |
-| `DESIGN.md`                               | Product design system: current surface inventory, north-star direction, tokens, components, UI writing rules, design backlog                                                                                                         |
-| `DECISIONS.md`                            | Architectural decision log: what was decided, why, what alternatives were considered                                                                                                                                                 |
-| `PRIOR-ART.md`                            | Every standard and protocol atrib builds on, extends, or hooks into, organized by layer                                                                                                                                              |
-| `METRICS.md`                              | Tiered metrics framework, metric lifecycle states, quarterly evolution review process, annual meta-review for the dogfood experiment                                                                                                 |
+| Doc                                       | Responsible for                                                                                                                                                                                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `atrib-spec.md`                           | Complete protocol specification: record format, Merkle log, graph model, policy format, SDK contract                                                                                                                                                   |
+| `STATUS.md`                               | Implementation status: deployed services, published and deprecated package census, protocol surface implemented vs spec-defined-only                                                                                                                   |
+| `CLAUDE.md`                               | Project conventions, invariants, implementation guidance                                                                                                                                                                                               |
+| `ARCHITECTURE.md`                         | Technical architecture overview: trust model, protocol layers, payment integration, design decisions                                                                                                                                                   |
+| `DESIGN.md`                               | Product design system: current surface inventory, north-star direction, tokens, components, UI writing rules, design backlog                                                                                                                           |
+| `DECISIONS.md`                            | Architectural decision log: what was decided, why, what alternatives were considered                                                                                                                                                                   |
+| `PRIOR-ART.md`                            | Every standard and protocol atrib builds on, extends, or hooks into, organized by layer                                                                                                                                                                |
+| `METRICS.md`                              | Tiered metrics framework, metric lifecycle states, quarterly evolution review process, annual meta-review for the dogfood experiment                                                                                                                   |
 | `docs/payments-profile.md`                | The atrib Payments Profile: payment-related completion detection hooks, SDK detection contract, policy format, calculation algorithm, settlement documents, settlement verification, AP2 / VI evidence checks. Versions independently of the core spec |
-| `docs/publishing-new-npm-package.md`      | Runsheet for creating and publishing a new public npm package                                                                                                                                                                        |
-| `docs/publishing-new-pypi-package.md`     | Runsheet for creating and publishing a new public PyPI distribution                                                                                                                                                                  |
-| `docs/stateless-mcp-v2-follow-through.md` | Active post-cutover execution program for MCP v2 correctness, operations, SDKs, interoperability, compatibility retirement, and product propagation                                                                                  |
+| `docs/publishing-new-npm-package.md`      | Runsheet for creating and publishing a new public npm package                                                                                                                                                                                          |
+| `docs/publishing-new-pypi-package.md`     | Runsheet for creating and publishing a new public PyPI distribution                                                                                                                                                                                    |
+| `docs/stateless-mcp-v2-follow-through.md` | Active post-cutover execution program for MCP v2 correctness, operations, SDKs, interoperability, compatibility retirement, and product propagation                                                                                                    |
 
 ## Sync triggers
 

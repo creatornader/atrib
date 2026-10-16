@@ -21,6 +21,92 @@ pnpm add @atrib/verify
 
 Verify a local build with `pnpm --filter @atrib/verify test`.
 
+Build workspace dependencies before package-local tests: run
+`pnpm --filter @atrib/mcp build` and `pnpm --filter @atrib/verify build`.
+The package entry points resolve built files. Root test orchestration already
+runs the required builds.
+
+## Source-bound statement reception
+
+`verifyEvidenceSet` evaluates complete signed records, private openings and
+exact artifact bytes under a supplied policy and evaluation time. Its
+[contract](../../docs/source-bound-evidence.md) separates record/body integrity,
+source, binding, authority, effect, coverage and publication. It leaves generic
+`verifyRecord.valid` unchanged and never changes application acceptance.
+
+Publication uses the existing anchor verifier with caller-pinned log keys.
+Absent proofs remain `unresolved / not_submitted`. Invalid supplied proofs are
+`rejected / dependency_invalid` without aborting other statement checks.
+
+Supplying openings discloses their nonce and private parameters to the receiver.
+Signing does not set retention or disclosure policy. Middleware public-log
+submission remains enabled by default. A public binary log entry exposes the
+record hash, signer, context, timestamp and event byte. Configured log-to-graph
+fanout forwards the full signed record, which the graph can archive. Optional
+record-body archive submission and local mirror storage are separate. The mirror
+can contain raw tool arguments and results in `_local`.
+
+```typescript
+import { verifyEvidenceSet } from '@atrib/verify'
+
+const result = await verifyEvidenceSet({
+  records,
+  openings: new Map(openingEntries),
+  artifacts: new Map(artifactByteEntries),
+  policy,
+  evaluation: { purpose: 'historical', evaluated_at, dispatch_record },
+  requestHash,
+  sourceVerifiers,
+})
+```
+
+Each exact source method URI selects an `EvidenceSourceVerifier`. Its `verify`
+method receives copied record/body data, hash-checked artifact bytes and the
+policy's pinned source keys. It returns authenticated facts and the hashes
+that support them. `facts.claim` binds the complete body except nonce/basis.
+`facts.authority` authenticates the sorted authority record references.
+Effects require `facts.effect` to map the raw payload hash to object, version
+and state. Coverage requires authenticated surface/window/expected/captured
+facts, an observation cursor and the method's `compareCursors` function.
+`singleDestinationPerDelivery` declares the method's native multiplicity rule.
+The adapter must verify its own artifact format and native authentication.
+The synthetic corpus adapter ships only in tests.
+
+Adapters receive the receiver's fixed `evaluatedAt` time. They must use it for
+time checks rather than consult the machine clock.
+
+Current-purpose authority is a pre-dispatch conclusion. Its
+`no_dispatch_observed` reason means no source-supported dispatch was supplied.
+It does not establish that no action ran. Consumers must inspect every statement
+and its missing-source or rejected-source facts before choosing the next action.
+Historical reception names one supported dispatch explicitly.
+
+Standard dimension states use bare values such as `supported` and `unresolved`.
+These values describe this result format, not source identities. Evidence type
+and method URIs identify contracts and namespaces. Source-native scoped IDs
+retain their namespace/id pair. Consumers should map dimension states separately
+from URI and scoped-ID values; neither spelling establishes source trust.
+
+Core reason codes such as `source_untrusted` use bare strings. Adapters may
+return namespaced diagnostic URIs, such as a method-specific signature failure.
+Preserve those complete values when mapping them to labels. A URI names the
+diagnostic contract; it does not make the source more trusted than a bare code.
+
+The receiver performs no fetching. Unknown methods, missing artifacts and
+freshness failures remain unresolved. It checks at most 32 dependency hops,
+256 references and 16 MiB of dependency bytes per traversal, with a 1 MiB
+artifact limit. Limit failures report `resource_limit`. Invalid evaluation
+objects are rejected at the API boundary. Only supplied publication proofs
+verified against explicitly pinned log keys can support publication.
+
+Direct API input must contain JSON records, openings and policy. A preflight
+rejects cycles and non-JSON objects with `TypeError`, and rejects inputs above
+64 levels, 100,000 JSON nodes, 4,096 records/openings/artifacts or 64 MiB of
+strings and artifact bytes with `RangeError('resource_limit')`. It runs before
+cloning, canonicalization or schema parsing. These input errors produce no
+evidence verdict. Dependency limits within accepted input remain unresolved
+dimensions with a named reason.
+
 ## Quick start
 
 ```typescript
@@ -686,5 +772,20 @@ The full protocol spec is at [`atrib-spec.md`](https://github.com/creatornader/a
 > **A note on documentation links.** The atrib protocol repository is currently private (in-progress public preparation). Links in this README to the spec and sister packages (`atrib-spec.md`, `packages/agent/README.md`, etc.) point at `github.com/creatornader/atrib/blob/main/...` URLs that will resolve once the repository goes public. Until then, see [`atrib.dev`](https://atrib.dev) for the protocol overview.
 
 ## Part of atrib
+
+### Host capture source
+
+`hostCaptureSourceVerifier` implements the versioned
+[`HOST_CAPTURE_METHOD` contract](../mcp/README.md#host-capture-method-version-1)
+for host-owned interception. Register it explicitly under that method
+in `sourceVerifiers` and pin the host signer in the matching policy rule's
+`source_keys`. The verifier uses only supplied artifact bytes and keys. It
+checks the host wrapper signature, exact captured claim, commitment, time,
+context and authorization references. Missing artifacts remain unresolved.
+It evaluates the source wrapper's clock bound against the supplied
+`evaluation.evaluated_at`, so the verifier's wall clock does not affect replay.
+Changed bytes, reused claims and unpinned keys cannot establish source support.
+This proves a signed host account. It does not prove independent control,
+remote effect, destination authentication or complete coverage.
 
 atrib is an open protocol for verifiable agent actions. Every action becomes a signed, chain-linked record that anyone can verify against a public Merkle log, with no operator to trust. This package is one entrypoint. See the [full package family](https://github.com/creatornader/atrib#packages) and the [protocol spec](https://github.com/creatornader/atrib/blob/main/atrib-spec.md).

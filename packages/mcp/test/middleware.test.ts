@@ -964,6 +964,46 @@ describe('atrib() middleware', () => {
   })
 
   describe('context propagation', () => {
+    it('keeps inbound W3C context ahead of ambient harness context', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+      const resolver = vi.fn(() => '1'.repeat(32))
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        submitToLog: false,
+        contextIdResolver: resolver,
+        onRecord: (record) => {
+          captured.push(record)
+        },
+      })
+      registerToolHandler(vi.fn().mockImplementation(async () => ({ content: [] })))
+      await getToolHandler()!(createToolCallRequest('search_web'), {})
+      expect(captured[0]!.context_id).toBe('4bf92f3577b34da6a3ce929d0e0e4736')
+      expect(resolver).not.toHaveBeenCalled()
+    })
+
+    it('isolates an orphan from a preceding propagated session', async () => {
+      const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
+      const captured: AtribRecord[] = []
+      atrib(mockServer, {
+        creatorKey: TEST_PRIVATE_KEY_B64,
+        serverUrl: 'https://test.example.com',
+        submitToLog: false,
+        onRecord: (record) => {
+          captured.push(record)
+        },
+      })
+      registerToolHandler(vi.fn().mockImplementation(async () => ({ content: [] })))
+      const handler = getToolHandler()!
+      await handler(createToolCallRequest('search_web'), {})
+      await handler({ method: 'tools/call', params: { name: 'search_web', arguments: {} } }, {})
+      expect(captured[1]!.context_id).not.toBe(captured[0]!.context_id)
+      expect(captured[1]!.chain_root).toBe(
+        `sha256:${hexEncode(sha256(new TextEncoder().encode(captured[1]!.context_id)))}`,
+      )
+    })
+
     it('extracts context_id from traceparent', async () => {
       const { mockServer, registerToolHandler, getToolHandler } = createMockServer()
       const resultObj = { content: [{ type: 'text', text: 'ok' }] }

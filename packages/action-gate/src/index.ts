@@ -15,8 +15,25 @@ import {
   signRecord,
   verifyRecord,
   EVENT_TYPE_TRANSACTION_URI,
+  createJsonCommitment,
+  createEvidenceNonce,
+  commitEvidenceBody,
+  EVIDENCE_TYPES,
+  DECLARED_METHOD,
+  HOST_CAPTURE_METHOD,
+  HOST_CAPTURE_TYPE,
+  createStrictMirrorRetention,
+  authoritySnapshotSchema,
+  inheritChainContext,
 } from '@atrib/mcp'
-import type { AtribRecord } from '@atrib/mcp'
+import type {
+  AtribRecord,
+  EvidenceBody,
+  EvidenceKind,
+  EvidenceDescriptor,
+  EvidenceScopedId,
+  StrictMirrorUnit,
+} from '@atrib/mcp'
 import {
   verifyRecord as verifyRecordAnnotated,
   isTrustedCrossAttested,
@@ -185,6 +202,83 @@ export interface RunGatedActionInput<TResult> {
   readonly now?: () => number
   readonly onRecord?: (record: AtribRecord, sidecar: ActionGateLocalSidecar) => MaybePromise<void>
 }
+
+export interface StrictActionIdentity {
+  readonly subject: EvidenceScopedId
+  readonly execution: EvidenceScopedId
+  readonly native_invocation: EvidenceScopedId
+  readonly delivery: EvidenceScopedId
+}
+
+export interface StrictActionEvidence {
+  readonly mirrorPath: string
+  readonly source: EvidenceScopedId
+  readonly identity: StrictActionIdentity
+  readonly descriptor: EvidenceDescriptor
+  readonly authoritySnapshot: StrictActionAuthoritySnapshot
+  /** Recheck the descriptor from the pinned dispatch input before execution. */
+  readonly describe: () => EvidenceDescriptor
+  readonly authorizationMaxAgeMs?: number
+  readonly capture?: StrictActionCaptureProfile
+}
+
+export type StrictActionAuthoritySnapshot = ReturnType<typeof authoritySnapshotSchema.parse>
+
+export interface StrictActionCaptureProfile {
+  readonly method: string
+  /** Read the source-native frame at interception, before asynchronous retention. */
+  readonly nativeEvent: (phase: 'dispatch' | 'response' | 'failure', observedAt: number) => unknown
+}
+
+export interface SignedStrictMirrorUnit extends StrictMirrorUnit {
+  readonly record_hash: Sha256Uri
+}
+
+export interface StrictActionGateResult<TResult> {
+  readonly status: 'success' | 'unknown' | 'refused'
+  readonly request?: SignedStrictMirrorUnit
+  readonly authorization?: SignedStrictMirrorUnit
+  readonly observations: readonly SignedStrictMirrorUnit[]
+  readonly gaps: readonly string[]
+  readonly result?: TResult
+  readonly replayed?: boolean
+}
+
+export type StrictRunGatedActionInput<TResult> = Omit<RunGatedActionInput<TResult>, 'execute'> & {
+  readonly contextId: string
+  readonly strictEvidence: StrictActionEvidence
+  /** Call intercepted exactly when the protected upstream callback begins. */
+  readonly execute: (intercepted: () => void) => MaybePromise<TResult>
+}
+
+export interface StrictProtectedMcpEvidence {
+  readonly mirrorPath: string
+  readonly source: EvidenceScopedId
+  readonly authoritySnapshot: StrictActionAuthoritySnapshot
+  /** These identities must come from host transport metadata. */
+  readonly identify: (
+    action: ProtectedMcpActionContext,
+    request: ProtectedMcpToolCall,
+  ) => StrictActionIdentity
+  readonly describe: (request: ProtectedMcpToolCall) => EvidenceDescriptor
+  readonly normalize?: (request: ProtectedMcpToolCall) => MaybePromise<ProtectedMcpToolCall>
+  readonly authorizationMaxAgeMs?: number
+  readonly capture?: StrictActionCaptureProfile
+}
+
+export interface StrictProtectedMcpExecutor<TResult> {
+  readonly authorizeAndExecute: (input: {
+    readonly action: ProtectedMcpActionContext
+    readonly request: ProtectedMcpToolCall
+  }) => Promise<StrictActionGateResult<TResult>>
+  readonly dispatch: ProtectedMcpExecutor<TResult>['dispatch']
+}
+
+export type StrictCreateProtectedMcpExecutorInput<TResult> =
+  CreateProtectedMcpExecutorInput<TResult> & {
+    readonly contextId: string
+    readonly strictEvidence: StrictProtectedMcpEvidence
+  }
 
 export interface ActionGateRunResult<TResult> {
   readonly state: ActionGateDecisionState
@@ -370,9 +464,479 @@ export interface ActionGateRecordDeliveryError {
   readonly message: string
 }
 
+export function runGatedAction<TResult>(
+  input: RunGatedActionInput<TResult> & { readonly strictEvidence?: never },
+): Promise<ActionGateRunResult<TResult>>
+// eslint-disable-next-line no-redeclare -- TypeScript overload.
+export function runGatedAction<TResult>(
+  input: StrictRunGatedActionInput<TResult>,
+): Promise<StrictActionGateResult<TResult>>
+// eslint-disable-next-line no-redeclare -- TypeScript overload implementation.
 export async function runGatedAction<TResult>(
-  input: RunGatedActionInput<TResult>,
-): Promise<ActionGateRunResult<TResult>> {
+  input: RunGatedActionInput<TResult> | StrictRunGatedActionInput<TResult>,
+): Promise<ActionGateRunResult<TResult> | StrictActionGateResult<TResult>> {
+  if ('strictEvidence' in input) {
+    const contextId = input.contextId
+    // Capture semantic inputs and callback references before the first await.
+    input = {
+      ...input,
+      privateKey: resolveActionGatePrivateKey(input.privateKey),
+      action: snapshotJson(input.action),
+      strictEvidence: Object.freeze({
+        ...input.strictEvidence,
+        identity: snapshotJson(input.strictEvidence.identity),
+        descriptor: snapshotJson(input.strictEvidence.descriptor),
+        source: snapshotJson(input.strictEvidence.source),
+        authoritySnapshot: snapshotJson(
+          authoritySnapshotSchema.parse(input.strictEvidence.authoritySnapshot),
+        ),
+        ...(input.strictEvidence.capture
+          ? { capture: Object.freeze({ ...input.strictEvidence.capture }) }
+          : {}),
+      }),
+    }
+    const strict = input.strictEvidence
+    const captureProfile = strict.capture
+      ? { method: strict.capture.method, nativeEvent: strict.capture.nativeEvent }
+      : undefined
+    if (!/^[0-9a-f]{32}$/.test(contextId))
+      throw new TypeError('action-gate: strict evidence requires explicit contextId')
+    const now = input.now ?? Date.now
+    const key = resolveActionGatePrivateKey(input.privateKey)
+    const inherited = await inheritChainContext({
+      callerContextId: contextId,
+      mirrorPath: strict.mirrorPath,
+      randomContextId,
+    })
+    const creatorKey = base64urlEncode(await getPublicKey(key))
+    const retention = createStrictMirrorRetention({ path: strict.mirrorPath })
+    const identity = snapshotJson(strict.identity)
+    const descriptor = snapshotJson(strict.descriptor)
+    const source = snapshotJson(strict.source)
+    const action = snapshotJson(input.action)
+    const observations: SignedStrictMirrorUnit[] = []
+    const gaps: string[] = []
+    const policyFailureText = 'action-gate: refused before dispatch: policy_invalid'
+    const retentionFailure = (phase: string, error: unknown) => {
+      gaps.push(
+        error instanceof Error && error.message.startsWith('atrib: strict mirror lock_busy;')
+          ? 'lock_busy'
+          : `${phase}_retention_failed`,
+      )
+    }
+    let request: SignedStrictMirrorUnit | undefined
+    let authorization: SignedStrictMirrorUnit | undefined
+    const result = (
+      status: StrictActionGateResult<TResult>['status'],
+      value?: TResult,
+    ): StrictActionGateResult<TResult> => ({
+      status,
+      ...(request ? { request } : {}),
+      ...(authorization ? { authorization } : {}),
+      observations,
+      gaps,
+      ...(value === undefined ? {} : { result: value }),
+    })
+    const sign = async (
+      kind: EvidenceKind,
+      body: unknown,
+      parent?: string,
+      artifacts: StrictMirrorUnit['artifacts'] = [],
+    ): Promise<SignedStrictMirrorUnit> => {
+      const opening = snapshotJson({
+        nonce: createEvidenceNonce(),
+        ...(body as object),
+      }) as EvidenceBody
+      const record = await signRecord(
+        {
+          spec_version: 'atrib/1.0',
+          creator_key: creatorKey,
+          context_id: contextId,
+          chain_root: parent
+            ? resolveChainRoot({ contextId, inboundRecordHashHex: parent.slice(7) })
+            : inherited.chainRoot,
+          timestamp: now(),
+          event_type: EVIDENCE_TYPES[kind],
+          args_hash: commitEvidenceBody(kind, opening),
+          signature: '',
+        },
+        key,
+      )
+      return {
+        record,
+        record_hash: `sha256:${hexEncode(sha256(canonicalRecord(record)))}`,
+        opening,
+        artifacts,
+      }
+    }
+    try {
+      request = await sign('request', {
+        subject: identity.subject,
+        assertion: { descriptor, execution: identity.execution },
+        source: { kind: 'declared', identity: source, method: DECLARED_METHOD },
+        basis: [],
+      })
+      const reservation = createJsonCommitment(
+        { source, subject: identity.subject, execution: identity.execution },
+        'plain-sha256',
+      ).hash
+      const claimed = await retention.reserve(reservation, request)
+      if (!claimed.acquired) {
+        const prior = claimed.unit.opening.assertion as { descriptor?: unknown }
+        request = {
+          ...claimed.unit,
+          record_hash: `sha256:${hexEncode(sha256(canonicalRecord(claimed.unit.record)))}`,
+        }
+        if (canonicalize(prior.descriptor) !== canonicalize(descriptor)) {
+          gaps.push('execution_descriptor_conflict')
+          return result('refused')
+        }
+        const retained = (claimed.units ?? []).filter((unit) => {
+          const body = unit.opening
+          return (
+            unit.record.creator_key === creatorKey &&
+            unit.record.context_id === contextId &&
+            'target' in body &&
+            body.target.record_hash === request!.record_hash &&
+            canonicalize(body.subject) === canonicalize(identity.subject) &&
+            canonicalize(body.source.identity) === canonicalize(source)
+          )
+        })
+        const signedUnit = (unit: StrictMirrorUnit): SignedStrictMirrorUnit => ({
+          ...unit,
+          record_hash: `sha256:${hexEncode(sha256(canonicalRecord(unit.record)))}`,
+        })
+        const authorizations = retained.filter(
+          (unit) => unit.record.event_type === EVIDENCE_TYPES.authorization,
+        )
+        authorization = authorizations.length ? signedUnit(authorizations.at(-1)!) : undefined
+        const retainedObservations = retained.filter(
+          (unit) =>
+            unit.record.event_type === EVIDENCE_TYPES.observation &&
+            'execution' in unit.opening.assertion &&
+            canonicalize(unit.opening.assertion.execution) === canonicalize(identity.execution),
+        )
+        observations.push(...retainedObservations.map(signedUnit))
+        const refused = authorizations.some(
+          (unit) =>
+            'decision' in unit.opening.assertion &&
+            ['deny', 'escalate'].includes(unit.opening.assertion.decision),
+        )
+        const policyFailed = retained.some(
+          (unit) =>
+            unit.record.event_type === EVIDENCE_TYPES.report &&
+            'status' in unit.opening.assertion &&
+            unit.opening.assertion.status === 'failure' &&
+            unit.opening.assertion.text === policyFailureText,
+        )
+        const succeeded = retainedObservations.some(
+          (unit) =>
+            'phase' in unit.opening.assertion &&
+            unit.opening.assertion.phase === 'response' &&
+            unit.opening.assertion.outcome === 'success',
+        )
+        const uncertain = retainedObservations.some(
+          (unit) =>
+            'phase' in unit.opening.assertion &&
+            'outcome' in unit.opening.assertion &&
+            ['response', 'failure'].includes(unit.opening.assertion.phase) &&
+            unit.opening.assertion.outcome !== 'success',
+        )
+        if (
+          (refused && (succeeded || retainedObservations.length)) ||
+          (succeeded && uncertain) ||
+          (policyFailed && (authorizations.length || retainedObservations.length))
+        ) {
+          gaps.push('retained_terminal_conflict')
+          return { ...result('unknown'), replayed: true }
+        }
+        if (policyFailed) {
+          gaps.push('policy_invalid')
+          return { ...result('refused'), replayed: true }
+        }
+        if (refused) return { ...result('refused'), replayed: true }
+        if (succeeded) {
+          gaps.push('result_not_replayed')
+          return { ...result('success'), replayed: true }
+        }
+        gaps.push('execution_already_reserved')
+        return { ...result('unknown'), replayed: true }
+      }
+    } catch (error) {
+      request = undefined
+      retentionFailure('request', error)
+      return result('refused')
+    }
+    const evaluatedPolicy = await resolvePolicyDecision({
+      evaluate: input.evaluate,
+      action,
+      timestamp: new Date(now()).toISOString(),
+    })
+    const policy = Object.freeze({
+      outcome: evaluatedPolicy.outcome,
+      policy_id: evaluatedPolicy.policy_id,
+      policy_version: evaluatedPolicy.policy_version,
+    })
+    if (
+      policy.outcome === 'error' ||
+      typeof policy.policy_id !== 'string' ||
+      !policy.policy_id ||
+      typeof policy.policy_version !== 'string' ||
+      !policy.policy_version
+    ) {
+      gaps.push('policy_invalid')
+      try {
+        // Only the reservation owner records its completed pre-dispatch refusal.
+        // A Request alone may still belong to an in-flight execution.
+        await retention.retain(
+          await sign(
+            'report',
+            {
+              subject: identity.subject,
+              target: { record_hash: request.record_hash },
+              assertion: { status: 'failure', text: policyFailureText },
+              source: { kind: 'declared', identity: source, method: DECLARED_METHOD },
+              basis: [],
+            },
+            request.record_hash,
+          ),
+        )
+      } catch (error) {
+        retentionFailure('report', error)
+      }
+      return result('refused')
+    }
+    const authorizedAt = now()
+    const maxAge = strict.authorizationMaxAgeMs ?? 30_000
+    if (!Number.isSafeInteger(maxAge) || maxAge <= 0)
+      throw new TypeError('action-gate: authorizationMaxAgeMs must be positive')
+    const authority = strict.authoritySnapshot
+    if (
+      authority.version !== `${policy.policy_id}:${policy.policy_version}` ||
+      authority.revoked ||
+      authorizedAt < authority.not_before ||
+      authorizedAt >= authority.expires_at
+    ) {
+      gaps.push('authority_snapshot_not_applicable')
+      return result('refused')
+    }
+    const authorizationExpiresAt = Math.min(authority.expires_at, authorizedAt + maxAge)
+    const authorityBytes = encoder.encode(canonicalize(authority)!)
+    const authorityHash = createJsonCommitment(authority, 'plain-sha256').hash
+    try {
+      authorization = await sign(
+        'authorization',
+        {
+          subject: identity.subject,
+          target: { record_hash: request.record_hash },
+          assertion: {
+            decision:
+              policy.outcome === 'allow'
+                ? 'allow'
+                : policy.outcome === 'escalate'
+                  ? 'escalate'
+                  : 'deny',
+            authority_version: authority.version,
+            not_before: authorizedAt,
+            expires_at: authorizationExpiresAt,
+          },
+          source: { kind: 'declared', identity: source, method: DECLARED_METHOD },
+          basis: [{ relation: 'authority', kind: 'artifact', hash: authorityHash }],
+        },
+        request.record_hash,
+        [{ hash: authorityHash, bytes: authorityBytes }],
+      )
+      await retention.retain(authorization)
+    } catch (error) {
+      authorization = undefined
+      retentionFailure('authorization', error)
+      return result('refused')
+    }
+    if (policy.outcome !== 'allow') return result('refused')
+    try {
+      if (canonicalize(snapshotJson(strict.describe())) !== canonicalize(descriptor)) {
+        gaps.push('dispatch_descriptor_mismatch')
+        return result('refused')
+      }
+    } catch {
+      gaps.push('dispatch_descriptor_unavailable')
+      return result('refused')
+    }
+    const dispatchedAt = now()
+    if (dispatchedAt < authorizedAt || dispatchedAt >= authorizationExpiresAt) {
+      gaps.push('authorization_expired_before_dispatch')
+      return result('refused')
+    }
+    const observe = (
+      phase: 'dispatch' | 'response' | 'failure',
+      outcome: 'pending' | 'success' | 'unknown',
+      observedAt: number,
+      payload?: unknown,
+      nativeEvent?: unknown,
+    ) => {
+      const { subject: _subject, ...execution } = identity
+      const claim = {
+        subject: identity.subject,
+        target: { record_hash: request!.record_hash },
+        assertion: { phase, outcome, descriptor, ...execution },
+        source: {
+          kind: 'boundary',
+          identity: source,
+          method: nativeEvent === undefined ? HOST_CAPTURE_METHOD : captureProfile!.method,
+          observed_at: observedAt,
+        },
+      }
+      const authorities = phase === 'dispatch' ? [authorization!.record_hash] : []
+      const capture = snapshotJson({
+        nonce: createEvidenceNonce(),
+        claim,
+        authority: authorities,
+        ...(nativeEvent === undefined
+          ? payload === undefined
+            ? {}
+            : { payload }
+          : {
+              payload: {
+                runtime_event: nativeEvent,
+                ...(payload === undefined ? {} : { value: payload }),
+              },
+            }),
+      })
+      const captureRecordInput = {
+        spec_version: 'atrib/1.0' as const,
+        creator_key: creatorKey,
+        context_id: contextId,
+        chain_root: request!.record_hash,
+        timestamp: observedAt,
+        event_type: HOST_CAPTURE_TYPE,
+        args_hash: createJsonCommitment(capture, 'plain-sha256').hash,
+        signature: '',
+      }
+      // Ed25519 signatures encode to exactly 86 base64url characters. Check the
+      // complete wrapper before dispatch interception returns to the upstream.
+      const captureSize = encoder.encode(
+        canonicalize({
+          record: { ...captureRecordInput, signature: 'A'.repeat(86) },
+          payload: capture,
+        })!,
+      ).length
+      if (captureSize > 1_048_576) {
+        gaps.push('capture_artifact_resource_limit')
+        throw new Error('action-gate: capture artifact exceeds receiver limit')
+      }
+      return (async () => {
+        const captureRecord = await signRecord(captureRecordInput, key)
+        const bytes = encoder.encode(canonicalize({ record: captureRecord, payload: capture })!)
+        const hash = `sha256:${hexEncode(sha256(bytes))}`
+        const unit = await sign(
+          'observation',
+          {
+            ...claim,
+            basis: [
+              { relation: 'source', kind: 'artifact', hash },
+              ...authorities.map((hash) => ({ relation: 'authority', kind: 'record', hash })),
+            ],
+          },
+          request!.record_hash,
+          [{ hash, bytes }],
+        )
+        await retention.retain(unit)
+        observations.push(unit)
+      })()
+    }
+    // Start the actual callback before claiming a dispatch observation. Only the
+    // Request and Authorization are prerequisites for the protected effect.
+    let settledAt = dispatchedAt
+    let dispatchTime: number | undefined
+    let dispatchRetention: Promise<void> | undefined
+    const captureFrame = (
+      phase: 'dispatch' | 'response' | 'failure',
+      observedAt: number,
+    ): unknown => {
+      try {
+        const frame = captureProfile?.nativeEvent(phase, observedAt)
+        return frame === undefined ? undefined : snapshotJson(frame)
+      } catch {
+        gaps.push('native_capture_failed')
+        return undefined
+      }
+    }
+    const execution = (async () => {
+      try {
+        const value = await input.execute(() => {
+          if (dispatchTime !== undefined)
+            throw new Error('action-gate: duplicate dispatch interception')
+          if (canonicalize(snapshotJson(strict.describe())) !== canonicalize(descriptor)) {
+            gaps.push('dispatch_descriptor_mismatch')
+            throw new Error('action-gate: descriptor changed at dispatch')
+          }
+          const observedAt = now()
+          if (observedAt < authorizedAt || observedAt >= authorizationExpiresAt)
+            throw new Error('action-gate: authorization expired at dispatch')
+          const nativeEvent = captureFrame('dispatch', observedAt)
+          dispatchRetention = observe(
+            'dispatch',
+            'pending',
+            observedAt,
+            undefined,
+            nativeEvent,
+          ).catch((error) => {
+            retentionFailure('dispatch', error)
+          })
+          dispatchTime = observedAt
+        })
+        settledAt = now()
+        const nativeEvent = captureFrame('response', settledAt)
+        let payload: unknown
+        try {
+          if (value !== undefined) {
+            const snapshot = snapshotJson(value)
+            const size = encoder.encode(canonicalize(snapshot)!).length
+            payload = {
+              encoding: 'jcs',
+              hash: createJsonCommitment(snapshot, 'plain-sha256').hash,
+              bytes: size,
+              ...(size <= 65_536 ? { value: snapshot } : { omitted: true }),
+            }
+            if (size > 65_536) gaps.push('response_payload_omitted')
+          }
+        } catch {
+          gaps.push('response_payload_unavailable')
+          gaps.push('response_payload_omitted')
+          payload = { omitted: true }
+        }
+        return {
+          ok: true as const,
+          value,
+          payload,
+          nativeEvent,
+        }
+      } catch {
+        settledAt = now()
+        return { ok: false as const, nativeEvent: captureFrame('failure', settledAt) }
+      }
+    })()
+    const completed = await execution
+    await dispatchRetention
+    if (dispatchTime === undefined) {
+      gaps.push('dispatch_not_observed')
+      return result('refused')
+    }
+    if (completed.ok) {
+      try {
+        await observe('response', 'success', settledAt, completed.payload, completed.nativeEvent)
+      } catch (error) {
+        retentionFailure('response', error)
+      }
+      return result('success', completed.value)
+    }
+    try {
+      await observe('failure', 'unknown', settledAt, undefined, completed.nativeEvent)
+    } catch (error) {
+      retentionFailure('failure', error)
+    }
+    return result('unknown')
+  }
   const recordDeliveryErrors: ActionGateRecordDeliveryError[] = []
   const privateKey = resolveActionGatePrivateKey(input.privateKey)
   const now = input.now ?? Date.now
@@ -525,9 +1089,42 @@ function protectedMcpBinding({
  * permits before invoking it.
  */
 export function createProtectedMcpExecutor<TResult>(
+  input: StrictCreateProtectedMcpExecutorInput<TResult>,
+): StrictProtectedMcpExecutor<TResult>
+// eslint-disable-next-line no-redeclare -- TypeScript overload.
+export function createProtectedMcpExecutor<TResult>(
   input: CreateProtectedMcpExecutorInput<TResult>,
-): ProtectedMcpExecutor<TResult> {
-  const store = input.permitStore ?? createMemoryProtectedMcpPermitStore()
+): ProtectedMcpExecutor<TResult>
+// eslint-disable-next-line no-redeclare -- TypeScript overload implementation.
+export function createProtectedMcpExecutor<TResult>(
+  input: CreateProtectedMcpExecutorInput<TResult> | StrictCreateProtectedMcpExecutorInput<TResult>,
+): ProtectedMcpExecutor<TResult> | StrictProtectedMcpExecutor<TResult> {
+  // Strict mode and its boundary configuration belong to this executor instance.
+  // Keep a live revocation provider, but prevent replacing it through the options.
+  if ('strictEvidence' in input) {
+    input = Object.freeze({
+      ...input,
+      privateKey: resolveActionGatePrivateKey(input.privateKey),
+      strictEvidence: Object.freeze({
+        ...input.strictEvidence,
+        source: snapshotJson(input.strictEvidence.source),
+        authoritySnapshot: snapshotJson(
+          authoritySnapshotSchema.parse(input.strictEvidence.authoritySnapshot),
+        ),
+        ...(input.strictEvidence.capture
+          ? { capture: Object.freeze({ ...input.strictEvidence.capture }) }
+          : {}),
+      }),
+    })
+  }
+  const suppliedStore = input.permitStore ?? createMemoryProtectedMcpPermitStore()
+  const store =
+    'strictEvidence' in input
+      ? {
+          issue: suppliedStore.issue.bind(suppliedStore),
+          consume: suppliedStore.consume.bind(suppliedStore),
+        }
+      : suppliedStore
   const now = input.now ?? Date.now
   const surface = input.surface ?? 'mcp'
   const permitMaxAgeMs = input.permitMaxAgeMs ?? 30_000
@@ -535,6 +1132,7 @@ export function createProtectedMcpExecutor<TResult>(
     throw new TypeError('action-gate: permitMaxAgeMs must be a non-negative safe integer')
   }
   const createPermitId = input.createPermitId ?? (() => base64urlEncode(randomBytes(32)))
+  const interceptions = new Map<string, () => void>()
 
   const actionEnvelopeFor = (
     action: ProtectedMcpActionContext,
@@ -672,6 +1270,9 @@ export function createProtectedMcpExecutor<TResult>(
     if (permit_id === undefined || permit_id.length === 0) {
       return rejectBypass({ action, request, reason: 'authorization_missing' })
     }
+    if ('strictEvidence' in input && !interceptions.has(permit_id)) {
+      return rejectBypass({ action, request, reason: 'authorization_unknown' })
+    }
     const authorization = await store.consume({
       permit_id,
       binding: protectedMcpBinding({ action, request, surface }),
@@ -680,6 +1281,7 @@ export function createProtectedMcpExecutor<TResult>(
     if (!authorization.ok) {
       return rejectBypass({ action, request, reason: authorization.reason })
     }
+    interceptions.get(permit_id)?.()
     return {
       ok: true,
       authorization: { reason: 'ok' },
@@ -689,7 +1291,70 @@ export function createProtectedMcpExecutor<TResult>(
 
   return {
     dispatch,
-    async authorizeAndExecute({ action, request }) {
+    async authorizeAndExecute({
+      action,
+      request,
+    }: {
+      action: ProtectedMcpActionContext
+      request: ProtectedMcpToolCall
+    }) {
+      if ('strictEvidence' in input) {
+        const options = input.strictEvidence
+        // Snapshot before any await so callers cannot mutate the eventual
+        // callback arguments while policy or private retention is pending.
+        const original = snapshotJson(request)
+        action = snapshotJson(action)
+        request = options.normalize ? snapshotJson(await options.normalize(original)) : original
+        const credential = await credentialAuthorization(action)
+        if (!credential.ok)
+          return { status: 'refused', observations: [], gaps: [credential.reason] }
+        const descriptor = snapshotJson(options.describe(request))
+        if (canonicalize(descriptor.parameters) !== canonicalize(request.arguments ?? {})) {
+          return { status: 'refused', observations: [], gaps: ['descriptor_parameters_mismatch'] }
+        }
+        const identity = snapshotJson(options.identify(action, request))
+        return runGatedAction({
+          ...(input.privateKey !== undefined ? { privateKey: input.privateKey } : {}),
+          contextId: input.contextId,
+          action: actionEnvelopeFor(action, request),
+          evaluate: input.evaluate,
+          strictEvidence: {
+            mirrorPath: options.mirrorPath,
+            source: options.source,
+            authoritySnapshot: options.authoritySnapshot,
+            identity,
+            descriptor,
+            describe: () => options.describe(request),
+            ...(options.capture === undefined ? {} : { capture: options.capture }),
+            ...(options.authorizationMaxAgeMs === undefined
+              ? {}
+              : { authorizationMaxAgeMs: options.authorizationMaxAgeMs }),
+          },
+          execute: async (intercepted: () => void) => {
+            const issuedAtMs = now()
+            const permitId = createPermitId()
+            if (!permitId) throw new Error('action-gate: empty permit id')
+            await store.issue({
+              permit_id: permitId,
+              binding: protectedMcpBinding({ action, request, surface }),
+              issued_at_ms: issuedAtMs,
+              expires_at_ms: issuedAtMs + permitMaxAgeMs,
+            })
+            interceptions.set(permitId, intercepted)
+            try {
+              const dispatched = await dispatch({ action, request, permit_id: permitId })
+              if (!dispatched.ok)
+                throw new Error(
+                  `action-gate: protected dispatch refused (${dispatched.authorization.reason})`,
+                )
+              return dispatched.result
+            } finally {
+              interceptions.delete(permitId)
+            }
+          },
+          now,
+        })
+      }
       const credential = await credentialAuthorization(action)
       if (!credential.ok) {
         return blockedCredentialResult(action, request, credential.reason)
@@ -728,7 +1393,7 @@ export function createProtectedMcpExecutor<TResult>(
         ...(input.onRecord !== undefined ? { onRecord: input.onRecord } : {}),
       })
     },
-  }
+  } as ProtectedMcpExecutor<TResult> | StrictProtectedMcpExecutor<TResult>
 }
 
 export function buildActionGateDecisionEntry({
@@ -1776,6 +2441,39 @@ function normalizeRecordHashes(values: readonly string[]): Sha256Uri[] {
 
 function randomContextId(): string {
   return randomBytes(16).toString('hex')
+}
+
+function snapshotJson<T>(value: T): T {
+  let nodes = 0
+  const validate = (item: unknown, depth: number): void => {
+    if (++nodes > 100_000 || depth > 64) throw new TypeError('action-gate: JSON resource limit')
+    if (
+      item === null ||
+      typeof item === 'string' ||
+      typeof item === 'boolean' ||
+      (typeof item === 'number' && Number.isFinite(item))
+    )
+      return
+    if (Array.isArray(item)) {
+      for (const child of item) validate(child, depth + 1)
+      return
+    }
+    if (item && typeof item === 'object' && Object.getPrototypeOf(item) === Object.prototype) {
+      for (const child of Object.values(item)) validate(child, depth + 1)
+      return
+    }
+    throw new TypeError('action-gate: strict boundary requires JSON values')
+  }
+  validate(value, 0)
+  const copy: T = JSON.parse(canonicalize(value)!)
+  const freeze = (item: unknown): void => {
+    if (item && typeof item === 'object') {
+      Object.values(item).forEach(freeze)
+      Object.freeze(item)
+    }
+  }
+  freeze(copy)
+  return copy
 }
 
 function normalizeError(error: unknown): { name: string; message: string } {
