@@ -126,7 +126,8 @@ Write primitives require an explicit context per request:
    `dev.atrib/attribution` block's `context_id`, then the `traceparent`
    trace-id, injects `context_id`. The propagation token (the extension
    block's `token`, then `_meta.atrib`, the `atrib=` tracestate entry, then
-   `X-Atrib-Chain`) seeds `chain_root` on tools that accept it.
+   `X-Atrib-Chain`) seeds `chain_root` on `emit` and `attest`, the write
+   tools that accept it.
 3. Otherwise the write returns a typed tool error:
    `atrib: context_id required on stateless transport`.
 

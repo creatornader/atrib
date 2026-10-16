@@ -33,6 +33,7 @@
         "cases/context-resolution/tracestate-beats-x-atrib-chain.json",
         "cases/context-resolution/x-atrib-chain-only-resolves.json",
         "cases/context-resolution/extension-block-resolves.json",
+        "cases/context-resolution/attest-chain-root-injected.json",
         "cases/context-resolution/extension-beats-legacy-carriers.json",
         "cases/context-resolution/traceparent-only-resolves-context.json",
         "cases/context-resolution/missing-context-write-rejected.json",

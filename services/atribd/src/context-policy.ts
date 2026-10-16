@@ -39,8 +39,8 @@ import { WRITE_TOOL_NAMES } from './backend.js'
 
 const CONTEXT_ID_PATTERN = /^[0-9a-f]{32}$/
 
-/** Write tools whose input schema accepts a caller-managed chain_root. */
-const CHAIN_ROOT_CAPABLE_TOOLS: ReadonlySet<string> = new Set(['emit'])
+/** Write tools whose input schema accepts a caller-managed chain_root (emit and the attest verb). */
+const CHAIN_ROOT_CAPABLE_TOOLS: ReadonlySet<string> = new Set(['emit', 'attest'])
 
 export const MISSING_CONTEXT_ERROR_TEXT = 'atrib: context_id required on stateless transport'
 
