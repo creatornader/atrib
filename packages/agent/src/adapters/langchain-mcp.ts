@@ -29,17 +29,12 @@
  *
  * ## Per-call fork propagation
  *
- * LangChain's internal `_callTool` function (verified at `dist/tools.js:384`)
- * supports per-call header changes via `client.fork(headers)`. this creates
- * a new Client instance with different HTTP headers and calls `callTool` on
- * the forked instance, not the original. A naive monkey-patch on the original
- * Client would silently lose attribution for any LangChain user whose tools
- * set per-call headers (the dominant pattern for per-user authentication).
- *
- * The patch therefore ALSO wraps `fork()` when present, so the forked Client
- * is recursively patched before being returned to `_callTool`. This means
- * every forked instance also flows through the atrib interceptor. no silent
- * attribution drop for header-changing tools.
+ * Some clients expose a mutable fork method; this helper patches those
+ * recursively. The native 1.1.3 client instead synthesizes fork through a
+ * Proxy getter, so assigning a replacement does not intercept it. This
+ * helper reports that limitation. For per-call headers, load tools with
+ * loadMcpTools(serverName, wrapMcpClient(client, interceptor), options).
+ * The outer wrapper owns the fork result and preserves attribution.
  *
  * ## Idempotency
  *
@@ -64,11 +59,19 @@
 
 import type { ToolCallInterceptor } from '../middleware.js'
 import { extractResponseHeaders } from '../response-headers.js'
+import { wrapMcpClient, type MinimalMcpClient } from './mcp-client.js'
 
 /**
  * Marker symbol set on a patched client to make repeated patches idempotent.
  */
 const ATRIB_PATCHED = Symbol.for('atrib.langchain-mcp.patched')
+const attributedTools = new WeakSet<object>()
+const loaderClients = new WeakSet<object>()
+
+export interface LangchainMcpToolLike {
+  name: string
+  func: (...args: never[]) => unknown
+}
 
 /**
  * Minimal structural type for a LangChain-extended MCP Client (from
@@ -89,9 +92,9 @@ export interface LangchainMcpClientLike {
     },
     resultSchema?: unknown,
     options?: {
-      signal?: AbortSignal | undefined
-      timeout?: number | undefined
-      onprogress?: ((progress: unknown) => void) | undefined
+      signal?: AbortSignal
+      timeout?: number
+      onprogress?: (progress: unknown) => void
     },
   ): Promise<unknown>
   fork?(headers: Record<string, string>): Promise<LangchainMcpClientLike>
@@ -107,13 +110,26 @@ export interface LangchainMcpClientLike {
  * discover which servers to patch without requiring the caller to list
  * them explicitly.
  */
-export interface LangchainMultiServerMcpClientLike {
+export interface LangchainMultiServerMcpClientLike<
+  C extends LangchainMcpClientLike = LangchainMcpClientLike,
+  T extends LangchainMcpToolLike = LangchainMcpToolLike,
+> {
   readonly config: { mcpServers?: Record<string, unknown> | undefined }
-  getClient(serverName: string, options?: unknown): Promise<LangchainMcpClientLike | undefined>
+  getClient(serverName: string, options?: unknown): Promise<C | undefined>
+  getTools?(serverName: string): Promise<T[]>
 }
 
 /** Options for `attributeLangchainMcp`. */
-export interface AttributeLangchainMcpOptions {
+export interface AttributeLangchainMcpOptions<
+  C extends LangchainMcpClientLike = LangchainMcpClientLike,
+  T extends LangchainMcpToolLike = LangchainMcpToolLike,
+> {
+  /**
+   * Rebuild native tool callbacks around a wrapped client, preserving cached
+   * tool objects. Forward the SDK's original tool naming and hook options.
+   * Use this mode on the first helper call for native proxy fork factories.
+   */
+  loadTools?: (serverName: string, client: C) => Promise<T[]>
   /** The atrib interceptor that observes tool calls on this client. */
   interceptor: ToolCallInterceptor
 
@@ -185,16 +201,19 @@ export interface AttributeLangchainMcpOptions {
  *     tools,
  *   })
  */
-export async function attributeLangchainMcp(
-  multiClient: LangchainMultiServerMcpClientLike,
-  options: AttributeLangchainMcpOptions,
+export async function attributeLangchainMcp<
+  C extends LangchainMcpClientLike,
+  T extends LangchainMcpToolLike,
+>(
+  multiClient: LangchainMultiServerMcpClientLike<C, T>,
+  options: AttributeLangchainMcpOptions<C, T>,
 ): Promise<number> {
   const { interceptor, serverUrls = {}, servers } = options
   const configuredServers = servers ?? Object.keys(multiClient.config.mcpServers ?? {})
 
   let newlyPatched = 0
   for (const serverName of configuredServers) {
-    let client: LangchainMcpClientLike | undefined
+    let client: C | undefined
     try {
       client = await multiClient.getClient(serverName)
     } catch (err) {
@@ -209,6 +228,43 @@ export async function attributeLangchainMcp(
         `atrib: langchain-mcp server '${serverName}' has no client (not initialized?), skipping`,
       )
       continue
+    }
+    if (options.loadTools !== undefined) {
+      if ((client as unknown as Record<symbol, unknown>)[ATRIB_PATCHED]) {
+        throw new TypeError(
+          'atrib: choose loadTools on the first call; do not combine attribution modes',
+        )
+      }
+      if (typeof multiClient.getTools !== 'function') {
+        throw new TypeError('atrib: langchain-mcp loadTools requires multiClient.getTools')
+      }
+      const tools = await multiClient.getTools(serverName)
+      if (tools.every((tool) => attributedTools.has(tool))) continue
+      // The SDK loader expects MCP results. Retain the concrete caller client
+      // type while bridging the legacy structural interface's unknown result.
+      const wrapped = wrapMcpClient(client as C & MinimalMcpClient, interceptor, {
+        ...(serverUrls[serverName] ? { serverUrl: serverUrls[serverName] } : {}),
+      })
+      const replacements = await options.loadTools(serverName, wrapped)
+      const byName = new Map(replacements.map((tool) => [tool.name, tool]))
+      for (const tool of tools) {
+        if (!byName.has(tool.name)) {
+          throw new Error(
+            `atrib: langchain-mcp loader omitted tool '${tool.name}'; preserve SDK tool naming options`,
+          )
+        }
+      }
+      for (const tool of tools) {
+        if (attributedTools.has(tool)) continue
+        tool.func = byName.get(tool.name)!.func
+        attributedTools.add(tool)
+      }
+      loaderClients.add(client)
+      newlyPatched++
+      continue
+    }
+    if (loaderClients.has(client)) {
+      throw new TypeError('atrib: do not combine loader and in-place attribution modes')
     }
     if (patchClient(client, interceptor, serverUrls[serverName])) {
       newlyPatched++
@@ -295,7 +351,17 @@ function patchClient(
       patchClient(forkedClient, interceptor, serverUrl)
       return forkedClient
     }
-    ;(client as unknown as { fork: typeof patchedFork }).fork = patchedFork
+    const descriptor = Object.getOwnPropertyDescriptor(client, 'fork')
+    const installed = Reflect.set(client, 'fork', patchedFork)
+    if (!installed || client.fork !== patchedFork) {
+      if (installed) {
+        if (descriptor) Object.defineProperty(client, 'fork', descriptor)
+        else Reflect.deleteProperty(client, 'fork')
+      }
+      console.warn(
+        'atrib: langchain-mcp cannot replace this client fork; supply loadTools or use loadMcpTools with wrapMcpClient for per-call headers',
+      )
+    }
   }
 
   ;(client as unknown as Record<symbol, unknown>)[ATRIB_PATCHED] = true

@@ -73,7 +73,7 @@
       "path": "examples/langchain-js",
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
-      "commands": []
+      "commands": ["typecheck:langchain-examples"]
     },
     {
       "id": "langgraph-store",

@@ -21,6 +21,7 @@ const workflow = entrypoint(
   { name: 'rememberPreference', store: attributedStore },
   async (input: { userId: string; fact: string }) => {
     const store = getStore()
+    if (!store) throw new Error('LangGraph store unavailable')
     const namespace = ['users', input.userId, 'memories']
     await store.put(namespace, 'movie-preference', {
       text: input.fact,

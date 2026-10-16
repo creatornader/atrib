@@ -363,6 +363,8 @@ Run with `pnpm --filter @atrib/integration test`. The package typecheck also com
 
 Focused cross-package tests include:
 
+- **`test/langchain-sdk-compat.test.ts`**, real LangChain core 1.2.17 and LangGraph 1.5.0 checks with MCP adapter 1.1.3. Covers native tool calls, header forks, invalid arguments, backend errors, thread checkpoints, interrupt/resume, and attributed store namespace isolation. See the [LangChain example](examples/langchain-js/README.md).
+
 - **`test/ai-instrumentation-compat.test.ts`**, real AI SDK 7 calls against a localhost OpenAI-compatible provider. Checks simple and batch signing, shared trace identity, LLM-to-tool links, streaming, invalid tool arguments, and provider errors. See the [OpenInference example](examples/openinference/README.md).
 
 - **[`test/cloudflare-local-runtime.test.ts`](test/cloudflare-local-runtime.test.ts)** runs actual Cloudflare MCP server/client Workers on localhost, checking tool calls, invalid input, context propagation, unsigned gaps and signed fallback records. See the [Cloudflare compatibility guide](examples/cloudflare-agents/README.md#local-sdk-compatibility-checks) for the dev-log proof limit and Worker/browser commands.
