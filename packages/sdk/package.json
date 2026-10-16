@@ -69,5 +69,8 @@
     "type": "git",
     "url": "git+https://github.com/creatornader/atrib.git",
     "directory": "packages/sdk"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

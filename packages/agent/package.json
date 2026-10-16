@@ -47,7 +47,7 @@
     "@atrib/verify": "workspace:*",
     "@noble/ed25519": "^3.2.0",
     "@noble/hashes": "^2.4.0",
-    "canonicalize": "^4.0.0"
+    "canonicalize": "^5.1.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
@@ -58,5 +58,8 @@
     "type": "git",
     "url": "git+https://github.com/creatornader/atrib.git",
     "directory": "packages/agent"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

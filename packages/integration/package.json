@@ -107,7 +107,7 @@
     "@atrib/runtime-log": "workspace:*",
     "@atrib/sdk": "workspace:*",
     "@atrib/verify": "workspace:*",
-    "canonicalize": "^4.0.0"
+    "canonicalize": "^5.1.0"
   },
   "devDependencies": {
     "@ai-sdk/openai-compatible": "3.0.68",
@@ -150,5 +150,8 @@
     "vitest": "^5.0.5",
     "wrangler": "4.151.0",
     "zod": "^4.6.6"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

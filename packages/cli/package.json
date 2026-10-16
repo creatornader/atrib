@@ -40,5 +40,8 @@
     "type": "git",
     "url": "git+https://github.com/creatornader/atrib.git",
     "directory": "packages/cli"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
