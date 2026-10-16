@@ -120,14 +120,16 @@ and clients pinned to 2026-07-28.
 
 Write primitives require an explicit context per request:
 
-1. An explicit 32-hex `context_id` tool argument wins.
-2. Otherwise the daemon resolves the inbound `_meta` carriers with both
+1. An explicit `context_id` tool argument wins. A malformed one is passed
+   through for the primitive's schema to refuse, never replaced.
+2. When the argument is absent, the daemon resolves the inbound `_meta`
+   carriers with both
    [§1.5.4](../../atrib-spec.md#154-mcp-transport-params_meta) ladders. The
-   `dev.atrib/attribution` block's `context_id`, then the `traceparent`
-   trace-id, injects `context_id`. The propagation token (the extension
-   block's `token`, then `_meta.atrib`, the `atrib=` tracestate entry, then
-   `X-Atrib-Chain`) seeds `chain_root` on `emit` and `attest`, the write
-   tools that accept it.
+   `dev.atrib/attribution` block's `context_id`, then a valid W3C
+   `traceparent` trace-id, injects `context_id`. The propagation token (the
+   extension block's `token`, then `_meta.atrib`, the `atrib=` tracestate
+   entry, then `X-Atrib-Chain`) seeds `chain_root` on `emit` and `attest`,
+   the write tools that accept it.
 3. Otherwise the write returns a typed tool error:
    `atrib: context_id required on stateless transport`.
 

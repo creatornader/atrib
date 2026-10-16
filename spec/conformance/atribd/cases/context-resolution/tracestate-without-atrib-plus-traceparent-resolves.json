@@ -1,0 +1,29 @@
+{
+  "name": "tracestate-without-atrib-plus-traceparent-resolves",
+  "spec_section": "D148",
+  "check": "http-carrier",
+  "description": "A tracestate with no atrib= entry carries no token, so the traceparent trace-id resolves context and no chain_root is injected.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 38,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "content": {
+            "what": "tracestate-without-atrib-plus-traceparent-resolves"
+          }
+        },
+        "_meta": {
+          "traceparent": "00-dddddddddddddddddddddddddddddddd-00f067aa0ba902b7-01",
+          "tracestate": "congo=t61rcWkgMzE"
+        }
+      }
+    }
+  },
+  "expected": {
+    "received_context_id": "dddddddddddddddddddddddddddddddd",
+    "received_chain_root": null
+  }
+}

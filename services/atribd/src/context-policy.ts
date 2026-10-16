@@ -6,8 +6,9 @@
  * Precedence per request, using both §1.5.4 ladders as @atrib/mcp's
  * `resolveContextIdentity` and `resolveInboundToken` implement them:
  *
- *   1. Explicit `context_id` tool argument (32-hex). Passed through
- *      untouched; the daemon adds nothing.
+ *   1. Explicit `context_id` tool argument. Passed through untouched,
+ *      even when malformed, so the primitive's schema refuses it; the
+ *      daemon adds nothing.
  *   2. Inbound carrier resolution from per-request `_meta`. When the
  *      carriers resolve a context_id (the extension block's context_id,
  *      then the traceparent trace-id) the daemon
@@ -69,9 +70,10 @@ export function applyHttpContextPolicy(
     return { kind: 'pass', params }
   }
 
+  // Rung 1: an explicit argument always wins. A present but malformed value
+  // is left for the primitive's schema to refuse, never replaced by a carrier.
   const args = argumentsRecord(params)
-  const explicit = args['context_id']
-  if (typeof explicit === 'string' && CONTEXT_ID_PATTERN.test(explicit)) {
+  if (args['context_id'] !== undefined) {
     return { kind: 'pass', params }
   }
 
