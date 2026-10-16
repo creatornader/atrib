@@ -1,5 +1,15 @@
 # @atrib/verify-mcp
 
+## 1.1.5
+
+### Patch Changes
+
+- 8a616d9: Align MCP client/server 2.3.1, Node transport 2.1.1, legacy SDK 1.32.1 and Zod 4.6.6 dependencies. Declare Zod 4 explicitly for the wrapper so fresh consumers match workspace validation.
+- Updated dependencies [8811d2c]
+- Updated dependencies [8a616d9]
+  - @atrib/verify@0.14.0
+  - @atrib/recall@5.1.5
+
 ## 1.1.4
 
 ### Patch Changes
