@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
@@ -1134,6 +1134,23 @@ describe('atribd request cancellation', () => {
       idempotency: { pending: 0, completed: 1 },
     })
     await backend.close()
+  })
+
+  it('routes a keyed write with a malformed context_id to the primitive schema', async () => {
+    for (const name of ['ATRIB_CONTEXT_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID']) {
+      vi.stubEnv(name, '')
+    }
+    const { backend, calls } = await fakeToolBackend()
+    const result = await backend.callTool({
+      name: 'emit',
+      arguments: { context_id: 'NOT-HEX', content: { what: 'malformed keyed write' } },
+      _meta: { 'dev.atrib/idempotencyKey': 'malformed-context-write-0001' },
+    })
+    expect(result.content).toEqual([{ type: 'text', text: JSON.stringify({ ok: true }) }])
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.args['context_id']).toBe('NOT-HEX')
+    await backend.close()
+    vi.unstubAllEnvs()
   })
 })
 
