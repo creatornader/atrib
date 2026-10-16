@@ -138,6 +138,25 @@ describe('mirror tail index under concurrent appends', () => {
     expect(hooks.readStreams).toBe(0)
   })
 
+  it('picks up a same-context append and a new sibling file made during the read', async () => {
+    const appendedA = await makeRecord(CTX_A, 2)
+    const racingA = await makeRecord(CTX_A, 5)
+    const newFileB = await makeRecord(CTX_B, 6)
+    appendFileSync(mirrorPath, JSON.stringify(appendedA) + '\n')
+    let fired = false
+    hooks.onOpen = () => {
+      if (fired) return
+      fired = true
+      appendFileSync(mirrorPath, JSON.stringify(racingA) + '\n')
+      writeFileSync(join(tmpDir, 'c.jsonl'), JSON.stringify(newFileB) + '\n')
+    }
+
+    expect((await resolve(CTX_A)).chainRoot).toBe(ref(racingA))
+    hooks.onOpen = undefined
+    expect((await resolve(CTX_B)).chainRoot).toBe(ref(newFileB))
+    expect(hooks.readStreams).toBe(0)
+  })
+
   it('still falls back to a full scan when a sibling is truncated during the read', async () => {
     const appendedA = await makeRecord(CTX_A, 2)
     const replacementB = await makeRecord(CTX_B, 4)

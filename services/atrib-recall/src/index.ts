@@ -391,22 +391,17 @@ function getContentSearchMirrorSnapshot(requestedMaxRecords: number): LoadedMirr
   // Bounded searches slice the newest records to their own limit, so a larger
   // cached window serves a smaller request. Keeping the larger window stops a
   // small probe and a normal call from evicting each other on every write.
+  // The retained size is capped at the default window so one oversized
+  // request cannot pin a full-corpus copy for the life of the process.
   const maxRecords = Math.max(
     requestedMaxRecords,
-    contentSearchMirrorSnapshot?.maxLoadedRecords ?? 0,
+    Math.min(contentSearchMirrorSnapshot?.maxLoadedRecords ?? 0, ATRIB_RECALL_CONTENT_MAX_RECORDS),
   )
   if (
     contentSearchMirrorSnapshot?.signature === fingerprint.signature &&
     contentSearchMirrorSnapshot.maxLoadedRecords === maxRecords
   ) {
     return contentSearchMirrorSnapshot
-  }
-  if (loadedMirrorSnapshot && !loadedMirrorSnapshot.partial) {
-    const refreshedComplete = tryAppendRefreshLoadedMirrorSnapshot(
-      loadedMirrorSnapshot,
-      fingerprint,
-    )
-    if (refreshedComplete) return refreshedComplete
   }
   const refreshed = tryAppendRefreshLoadedMirrorSnapshot(
     contentSearchMirrorSnapshot,
@@ -596,8 +591,12 @@ function writeContentIndex(
     // sidecar only misses the cache; the full validation still checks the
     // signature stored inside the index after a sidecar match.
     const sigTmpPath = `${tmpPath}.sig`
-    writeFileSync(sigTmpPath, indexFile.mirror_signature)
-    renameSync(sigTmpPath, contentIndexSignaturePath(path))
+    try {
+      writeFileSync(sigTmpPath, indexFile.mirror_signature)
+      renameSync(sigTmpPath, contentIndexSignaturePath(path))
+    } catch {
+      // The index itself was written; a missing sidecar only costs a cache miss.
+    }
     return contentIndexStatus('rebuilt', path)
   } catch (error) {
     return contentIndexStatus(

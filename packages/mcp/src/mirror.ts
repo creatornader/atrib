@@ -530,6 +530,14 @@ async function tryIndexedCorpusTail(
       after,
     )
     if (!next) return { usable: false, record: null }
+    // Same-inode growth after an in-place rewrite would look like an append.
+    // The byte before each new append must still end the line read earlier.
+    const boundaries = await Promise.all(
+      next
+        .filter((change) => change.start > 0)
+        .map((change) => fileEndsWithNewline(change.path, change.start)),
+    )
+    if (!boundaries.every(Boolean)) return { usable: false, record: null }
     if (round + 1 >= MAX_INCREMENTAL_ROUNDS) {
       // Still growing. The tails are complete for the state already read,
       // which is what a read that started slightly earlier would return.
