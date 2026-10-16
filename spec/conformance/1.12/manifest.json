@@ -131,6 +131,14 @@
       "name": "F16-relative-source-locator"
     },
     {
+      "file": "cases/F18-null-content-id.json",
+      "name": "F18-null-content-id"
+    },
+    {
+      "file": "cases/F18-junk-content-id.json",
+      "name": "F18-junk-content-id"
+    },
+    {
       "file": "cases/F17-policy-descriptor-proto-key.json",
       "name": "F17-policy-descriptor-proto-key"
     },

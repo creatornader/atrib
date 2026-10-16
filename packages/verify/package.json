@@ -36,7 +36,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && pnpm typecheck:conformance",
+    "typecheck:conformance": "tsc --project tsconfig.conformance.json",
     "clean": "rm -rf dist"
   },
   "dependencies": {

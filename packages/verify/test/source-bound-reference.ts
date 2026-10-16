@@ -178,7 +178,7 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
     ),
     policy: input.policy,
     evaluation: input.evaluation as Parameters<typeof verifyEvidenceSet>[0]['evaluation'],
-    requestHash: input.request_hash,
+    ...(input.request_hash === undefined ? {} : { requestHash: input.request_hash }),
     sourceVerifiers: {
       [SNAPSHOT_METHOD]: fixtureSourceVerifier,
       [MULTI_DESTINATION_METHOD]: { ...fixtureSourceVerifier, singleDestinationPerDelivery: false },
@@ -190,7 +190,7 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
           publication: {
             proofs: new Map(Object.entries(input.publication.proofs)),
             trust: input.publication.trust,
-          } as VerifyEvidenceSetInput['publication'],
+          } as NonNullable<VerifyEvidenceSetInput['publication']>,
         }
       : {}),
   })

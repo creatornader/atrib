@@ -125,6 +125,7 @@ describe('record admission alignment', () => {
       const record = { ...base, content_id: 'sha256:' + 'b'.repeat(64) }
       expect(validateSubmission({ ...record, timestamp: now + 5 * 60_000 }).ok).toBe(true)
       expect(validateSubmission({ ...record, timestamp: now + 5 * 60_000 + 1 }).ok).toBe(false)
+      expect(validateSubmission({ ...record, timestamp: now + 7 * 60_000 }).ok).toBe(false)
     } finally {
       clock.mockRestore()
     }

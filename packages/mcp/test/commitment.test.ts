@@ -115,6 +115,19 @@ describe('evidence body commitments', () => {
       'resource_limit',
     )
   })
+
+  it('commits encoded locator hints without changing their values', () => {
+    const request = body('request', {})
+    const opening = {
+      ...request,
+      source: { ...request.source, locator: 'artifacts/receipt%20one.json' },
+    }
+    const original = JSON.stringify(opening)
+    expect(commitEvidenceBody('request', opening)).toBe(
+      createJsonCommitment(opening, 'plain-sha256').hash,
+    )
+    expect(JSON.stringify(opening)).toBe(original)
+  })
 })
 
 describe('evidence locators', () => {
@@ -126,6 +139,13 @@ describe('evidence locators', () => {
     ['https://', ['reader', 'secret'].join(':'), '@example.test/path'].join(''),
     'https://example.test/path?token=secret',
     'https://example.test/path#api_key=secret',
+    'Bearer fixture',
+    'bearer%20fixture',
+    'BEARER%09fixture',
+    '%42earer%20fixture',
+    'https://example.test/items/bearer%20fixture',
+    'bearer%20fixture%zz',
+    '%42earer%20fixture%FF',
   ])('rejects malformed or credential-bearing locator %s', (value) => {
     expect(isEvidenceLocator(value)).toBe(false)
   })
@@ -135,6 +155,10 @@ describe('evidence locators', () => {
     '../receipts/one',
     '/artifacts/one?revision=2',
     'https://example.test/receipt#section',
+    'artifacts/receipt%20one.json',
+    'https://example.test/items/receipt%20one',
+    'artifacts/100%complete.json',
+    'artifacts/receipt%2.json',
   ])('accepts a retrieval hint %s', (value) => {
     expect(isEvidenceLocator(value)).toBe(true)
   })

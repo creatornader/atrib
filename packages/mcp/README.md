@@ -24,9 +24,12 @@ opening. These helpers neither sign nor retain the record/opening pair.
 Use the existing `signRecord` helper and a host-owned atomic store.
 
 `isEvidenceLocator` is the locator predicate used by body validation. It rejects
-bearer tokens, URL user information and recognized
-credential query or fragment keys in absolute and relative hints. Benign queries,
-fragments and relative hints remain valid. Only `source.locator` and
+recognizable raw and percent-encoded bearer forms, URL user information and
+recognized credential query or fragment keys in absolute and relative hints.
+It checks bearer forms after one decoding pass without changing the locator or
+its commitment. Benign queries, fragments and relative hints remain valid.
+The predicate cannot establish that an opaque path or value contains no credential.
+Producers must keep credentials out of locators. Only `source.locator` and
 `basis[].locator` use this rule. Arbitrary JSON parameters and destination state
 can contain unrelated properties named `locator`.
 

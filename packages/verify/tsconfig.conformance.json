@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": [
+    "test/conformance-1.12.test.ts",
+    "test/source-bound-*.ts",
+    "test/generate-source-bound-corpus.ts",
+    "test/run-source-bound-fixture.ts"
+  ]
+}

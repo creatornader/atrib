@@ -125,6 +125,23 @@ async function checkFixtureSignatures(input: FixtureInput) {
 }
 
 describe('independent adversarial source-bound regressions', () => {
+  it.each([null, []])('rejects a signed non-object opening: %j', async (opening) => {
+    const input = load()
+    const prior = find(input, 'request')
+    const record = await signRecord(
+      { ...prior, args_hash: digest(opening) } as unknown as AtribRecord,
+      await seedFor(String(prior.creator_key)),
+    )
+    const hash = digest(record)
+    input.records = [record as unknown as Obj]
+    input.openings = { [hash]: opening }
+    input.request_hash = hash
+    await checkFixtureSignatures(input)
+    const result = await evaluateEvidenceFixture(input)
+    expect(result.statements[0]?.dimensions.integrity.body.state).toBe('rejected')
+    expect(result.statements[0]?.dimensions.source.state).toBe('rejected')
+  })
+
   it('does not accept an allow targeting a different exact request', async () => {
     const input = load()
     const request = find(input, 'request')
