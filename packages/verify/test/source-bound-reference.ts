@@ -193,8 +193,7 @@ async function inspectSource(
     }
     return
   }
-  if (!policy)
-    return set('unresolved', input.policy == null ? 'policy_missing' : 'policy_invalid')
+  if (!policy) return set('unresolved', input.policy == null ? 'policy_missing' : 'policy_invalid')
   const src = source(info)
   const rule = policy.rules.find(
     (rule) =>
@@ -280,7 +279,8 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
     if (!existing) uniqueRecords.set(hash, { canonical, record })
   }
   for (const [hash, { record }] of uniqueRecords) {
-    const body = object(input.openings[hash])
+    const opening = input.openings[hash]
+    const body = object(opening)
     const kind = String(record.event_type).startsWith(EVIDENCE_PREFIX)
       ? String(record.event_type).slice(EVIDENCE_PREFIX.length)
       : 'unknown'
@@ -314,12 +314,15 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
     else if (
       forbidden.some((key) => key in record) ||
       requiredCarrier.some((key) => !(key in record)) ||
+      ('content_id' in record &&
+        (typeof record.content_id !== 'string' ||
+          !/^sha256:[0-9a-f]{64}$/.test(record.content_id))) ||
       !/^sha256:[0-9a-f]{64}$/.test(String(record.chain_root))
     )
       bodyResult = dim('rejected', 'schema_invalid')
     else if (!(hash in input.openings)) bodyResult = dim('unresolved', 'body_missing')
-    else if (digest(body) !== record.args_hash) bodyResult = dim('rejected', 'opening_mismatch')
-    else if (!evidenceBodySchemas[kind as EvidenceKind].safeParse(body).success)
+    else if (digest(opening) !== record.args_hash) bodyResult = dim('rejected', 'opening_mismatch')
+    else if (!evidenceBodySchemas[kind as EvidenceKind].safeParse(opening).success)
       bodyResult = dim('rejected', 'schema_invalid')
     dimensions_.integrity.body = bodyResult
     dimensions_.integrity.state =
@@ -666,11 +669,9 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
       source(info).method === UNKNOWN_CURSOR_METHOD
     )
       return undefined
-    const [start, cursor, end] = [
-      info.assertion.start,
-      dispatch.facts.cursor,
-      info.assertion.end,
-    ].map(Number)
+    const start = Number(info.assertion.start)
+    const cursor = Number(dispatch.facts.cursor)
+    const end = Number(info.assertion.end)
     if (![start, cursor, end].every(Number.isSafeInteger)) return undefined
     return start < cursor && cursor <= end
   }

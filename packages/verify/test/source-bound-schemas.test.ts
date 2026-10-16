@@ -4,8 +4,30 @@ import {
   DECLARED_METHOD,
   evidenceBodySchemas,
   evaluationSchema,
+  isEvidenceLocator,
   policySchema,
 } from './source-bound-schemas.js'
+
+it.each([
+  'Bearer fixture',
+  'bearer%20fixture',
+  'BEARER%09fixture',
+  '%42earer%20fixture',
+  'https://example.test/items/bearer%20fixture',
+  'bearer%20fixture%zz',
+  '%42earer%20fixture%FF',
+])('rejects a recognizable bearer locator %s', (value) => {
+  expect(isEvidenceLocator(value)).toBe(false)
+})
+
+it.each([
+  'artifacts/receipt%20one.json',
+  'https://example.test/items/receipt%20one',
+  'artifacts/100%complete.json',
+  'artifacts/receipt%2.json',
+])('accepts an encoded or literal percent retrieval hint %s', (value) => {
+  expect(isEvidenceLocator(value)).toBe(true)
+})
 
 it('rejects observed_at on a declared source', () => {
   const id = { namespace: 'urn:test', id: 'request' }

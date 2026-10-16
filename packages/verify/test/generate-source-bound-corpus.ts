@@ -133,6 +133,9 @@ async function bundle(v: Variant): Promise<FixtureInput> {
             : digest(value),
         signature: '',
         ...extra,
+        ...(kind === 'request' && v.invalid_content
+          ? { content_id: v.invalid_content === 'null' ? null : 'junk' }
+          : {}),
       } as AtribRecord,
       seeds[role]!,
     )
@@ -734,6 +737,8 @@ const definitions: Array<[string, Variant, Obj, string[]]> = [
     ['E01', 'E02'],
   ],
   ['F16-relative-source-locator', { relative_locator: true }, {}, ['E10']],
+  ['F18-null-content-id', { invalid_content: 'null' }, {}, ['E01', 'E02']],
+  ['F18-junk-content-id', { invalid_content: 'junk' }, {}, ['E01', 'E02']],
   [
     'F17-policy-descriptor-proto-key',
     { raw_policy_proto: true },
@@ -1012,6 +1017,17 @@ const cases = []
 for (const [name, variant, expectation, rules] of definitions) {
   const input = await bundle(variant)
   const expected_ = name.startsWith('schema-') ? { invalid_kind: variant.mutate_kind } : expectation
+  if (variant.invalid_content) {
+    expected_.statements = [
+      {
+        record_hash: input.request_hash!,
+        dimensions: {
+          integrity: { record: d('supported'), body: d('rejected', 'schema_invalid') },
+          source: d('rejected', 'schema_invalid'),
+        },
+      },
+    ]
+  }
   if (variant.no_policy) {
     expected_.statements = [
       {
@@ -1113,7 +1129,7 @@ for (const [name, variant, expectation, rules] of definitions) {
   if (variant.selected_untrusted) {
     expected_.statements = [
       {
-        record_hash: input.evaluation.dispatch_record,
+        record_hash: (input.evaluation as Obj).dispatch_record,
         dimensions: { integrity: d('supported'), source: d('rejected', 'source_untrusted') },
       },
     ]

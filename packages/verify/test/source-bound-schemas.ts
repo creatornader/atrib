@@ -11,6 +11,16 @@ const text = z.string().min(1)
 export function isEvidenceLocator(value: unknown): value is string {
   if (typeof value !== 'string' || value.length === 0) return false
   if (/\bbearer\s+/i.test(value)) return false
+  let decoded = value
+  try {
+    decoded = decodeURIComponent(value)
+  } catch {
+    // Recognize ASCII bearer forms even beside malformed or non-UTF-8 escapes.
+    decoded = value.replace(/%([0-7][0-9a-f])/gi, (_, hex: string) =>
+      String.fromCharCode(parseInt(hex, 16)),
+    )
+  }
+  if (/\bbearer\s+/i.test(decoded)) return false
   try {
     const parsed = new URL(value, 'https://atrib.invalid/')
     return (

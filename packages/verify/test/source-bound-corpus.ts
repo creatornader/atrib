@@ -21,7 +21,14 @@ export interface CorpusFixtureInput {
 type StoredReference = `sha256:${string}`
 type StoredArtifactMap = { $type: 'atrib-artifact-map/1'; $ref: StoredReference }
 type CorpusCase = {
+  name: string
+  protects: string
   input: CorpusFixtureInput
+  expected: {
+    invalid_kind?: string
+    statements?: Array<{ record_hash: string; [key: string]: unknown }>
+    [key: string]: unknown
+  }
   [key: string]: unknown
 }
 type CorpusStore = {
@@ -131,8 +138,7 @@ function loadStoredJson(store: CorpusStore, reference: StoredReference): Record<
 
 function loadStoredArtifact(store: CorpusStore, reference: StoredReference): string {
   const encoded = store.artifacts[reference.slice(7)]
-  if (encoded === undefined && !Object.hasOwn(store.artifacts, reference.slice(7)))
-    throw new Error(`Missing conformance artifact ${reference}`)
+  if (encoded === undefined) throw new Error(`Missing conformance artifact ${reference}`)
   const bytes = Buffer.from(encoded, 'base64')
   if (
     bytes.toString('base64') !== encoded ||

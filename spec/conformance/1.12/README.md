@@ -18,6 +18,7 @@ From the repository root, after dependency installation:
 
 ```sh
 pnpm --filter @atrib/mcp build
+pnpm --filter @atrib/verify typecheck
 pnpm --filter @atrib/verify test -- conformance-1.12.test.ts source-bound-schemas.test.ts source-bound-adversarial.test.ts
 pnpm --filter @atrib/verify exec tsx test/run-source-bound-fixture.ts ../../spec/conformance/1.12/cases/C01-complete.json
 ```
@@ -65,8 +66,10 @@ response leaves the selected trusted dispatch's reliance intact. C23 and the
 other-surface variant assert rejected statement coverage with `target_mismatch`
 and unresolved request coverage with `dependency_missing`.
 
-The October 16 corpus revision retains all 167 prior case IDs and adds eight
-cases, for 175 total. Four cases cover raw JCS openings with an own
+The October 16 corpus revision retains all 167 prior case IDs and adds ten
+cases, for 177 total. Two signed carrier cases reject null and malformed
+`content_id` values. C01 retains a valid optional hash, and the omitted-content
+case covers absence. Four cases cover raw JCS openings with an own
 `__proto__` property in request parameters and effect state, including a valid
 opening and a same-hash mutated opening for each assertion. Two cases reject
 invalid-port and malformed-IPv6 locators. One positive case accepts a relative

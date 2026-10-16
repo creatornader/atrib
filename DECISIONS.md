@@ -9914,10 +9914,14 @@ This decision introduces no host refusal mode.
   with the same fields retain their bytes. Acceptance is not identical:
   conditional field checks and the tighter admission window change which inputs
   pass.
-- TypeScript callers must handle optional `content_id` on non-tool statements
-  and the signature union, including signers-only transactions. These are source
-  compatibility changes for callers that assumed both fields were always strings.
-  A minor changeset for packages at `0.x` does not make those changes nonbreaking.
+- Reference implementations must support optional `content_id` on non-tool
+  statements and the signature union, including signers-only transactions.
+  The planned TypeScript types require callers to handle those shapes. Callers
+  that assumed both fields were always strings face source compatibility changes.
+  [PR #706](https://github.com/creatornader/atrib/pull/706) carries the pending
+  implementation. This spec and corpus change does not change public TypeScript
+  types or publish packages. A future minor release at `0.x` still requires
+  callers to account for those source compatibility changes.
 - Receiver JSON vectors are normative. The three C19 executor cases are
   non-normative examples of one configured host policy. Offline vectors do not
   prove operational capture or filesystem durability. Public packages do not yet

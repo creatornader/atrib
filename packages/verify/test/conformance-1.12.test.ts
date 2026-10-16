@@ -26,6 +26,11 @@ describe('source-bound evidence offline contract corpus', () => {
     const fixture = loadSourceBoundFixture(join(root, item.file))
     it(`${fixture.name}: ${fixture.protects}`, async () => {
       if (fixture.input.mode === 'executor') {
+        if (
+          typeof fixture.input.protected !== 'boolean' ||
+          typeof fixture.input.fail_retention !== 'boolean'
+        )
+          throw new TypeError('Executor fixture requires retention flags')
         expect(
           await exerciseRetentionFixture(fixture.input.protected, fixture.input.fail_retention),
         ).toEqual(fixture.expected)
