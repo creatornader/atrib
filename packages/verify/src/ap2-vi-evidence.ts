@@ -1496,6 +1496,11 @@ async function verifyCredentialSdJwtConformance(
     try {
       const verifier = sdJwtVerifier(key)
       const verifyOptions = { currentDate: nowSeconds, skewSeconds: clockSkewSeconds }
+      // SD-JWT 0.22 requires a separator for a disclosure-free presentation.
+      // Keep original VI bytes for signature and parent sd_hash verification.
+      const presentation = parsed.input.sdJwt.includes('~')
+        ? parsed.input.sdJwt
+        : `${parsed.input.sdJwt}~`
 
       if (profile === 'sd-jwt-vc') {
         const vcOptions = options.sdJwtVc ?? {}
@@ -1525,16 +1530,16 @@ async function verifyCredentialSdJwtConformance(
         if (vctFetcher !== undefined) Object.assign(vcConfig, { vctFetcher })
 
         const verifierInstance = new SDJwtVcInstance(vcConfig)
-        await verifierInstance.verify(parsed.input.sdJwt, verifyOptions)
-        await verifierInstance.getClaims(parsed.input.sdJwt)
+        await verifierInstance.verify(presentation, verifyOptions)
+        await verifierInstance.getClaims(presentation)
       } else {
         const verifierInstance = new SDJwtInstance<Record<string, unknown>>({
           hasher: sdJwtHasher,
           hashAlg: 'sha-256',
           verifier,
         })
-        await verifierInstance.verify(parsed.input.sdJwt, verifyOptions)
-        await verifierInstance.getClaims(parsed.input.sdJwt)
+        await verifierInstance.verify(presentation, verifyOptions)
+        await verifierInstance.getClaims(presentation)
       }
 
       checks[checkIndex] = sdJwtConformanceCheck('verified', profile)
