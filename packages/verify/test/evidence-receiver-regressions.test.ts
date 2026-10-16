@@ -110,6 +110,68 @@ async function addObservation(input: Input, original: FixtureRecord, body: Evide
 }
 
 describe('receiver finding regressions', () => {
+  it.each(['C01-complete', 'coverage-complete'])(
+    'uses one authenticated normalized claim without duplicate projections: %s',
+    async (name) => {
+      const input = fixture(name)
+      const expected = await verifyEvidenceSet(input)
+      input.sourceVerifiers[SNAPSHOT_METHOD] = {
+        ...fixtureSourceVerifier,
+        async verify(args) {
+          const result = await fixtureSourceVerifier.verify(args)
+          if (!result.facts) return result
+          expect(result.facts).not.toHaveProperty('effect')
+          expect(result.facts).not.toHaveProperty('coverage')
+          return result
+        },
+      }
+      expect(await verifyEvidenceSet(input)).toEqual(expected)
+    },
+  )
+  it('rejects a normalized claim that differs from its opened assertion', async () => {
+    const input = fixture()
+    input.sourceVerifiers[SNAPSHOT_METHOD] = {
+      ...fixtureSourceVerifier,
+      async verify(args) {
+        const result = await fixtureSourceVerifier.verify(args)
+        if (result.facts && args.record.event_type === 'https://atrib.dev/evidence/v1/effect')
+          result.facts.claim = { ...result.facts.claim, assertion: { state: 'invented' } }
+        return result
+      },
+    }
+    const result = await verifyEvidenceSet(input)
+    expect(result.request!.dimensions.effect.state).toBe('unresolved')
+    expect(result.request!.reliance.accepted).toBe(false)
+  })
+  it('preserves a custom source signed by a separate pinned key', async () => {
+    const input = fixture()
+    const dispatch = dispatchOf(input)
+    const body = executionBodyOf(input, dispatch)
+    const ref = body.basis.find((ref) => ref.relation === 'source' && ref.kind === 'artifact')!
+    const wrapper = sourceWrapperSchema.parse(
+      JSON.parse(input.artifacts.get(ref.hash)!.toString('utf8')),
+    )
+    const sourceSeed = new Uint8Array(32).fill(8)
+    wrapper.signer_key = Buffer.from(await ed.getPublicKeyAsync(sourceSeed)).toString('base64url')
+    wrapper.signature = Buffer.from(
+      await ed.signAsync(new TextEncoder().encode(canonicalize(wrapper.payload)!), sourceSeed),
+    ).toString('base64url')
+    ref.hash = digest(wrapper)
+    input.artifacts.set(ref.hash, Buffer.from(canonicalize(wrapper)!))
+    const rule = input.policy.rules.find((rule) => rule.type === dispatch.event_type)!
+    rule.source_keys.push(wrapper.signer_key)
+    input.records = input.records.filter((record) => record !== dispatch)
+    const changed = await addStatement(input, dispatch, body)
+    input.evaluation = {
+      purpose: 'historical',
+      evaluated_at: input.evaluation.evaluated_at,
+      dispatch_record: digest(changed),
+    }
+    expect(wrapper.signer_key).not.toBe(dispatch.creator_key)
+    expect((await verifyEvidenceSet(input)).request!.reliance.accepted).toBe(true)
+    rule.source_keys = rule.source_keys.filter((key) => key !== wrapper.signer_key)
+    expect((await verifyEvidenceSet(input)).request!.dimensions.source.state).toBe('rejected')
+  })
   it.each(['signature_invalid', 'opening_mismatch'] as const)(
     'preserves %s as the selected source failure',
     async (reason) => {
@@ -414,6 +476,26 @@ describe('receiver finding regressions', () => {
       reasons: ['schema_invalid'],
     })
   })
+  it.each([
+    ['not-an-absolute-uri', 'rejected', ['schema_invalid']],
+    ['urn:example:unknown-evidence', 'supported', []],
+  ] as const)(
+    'classifies the signed event type %s independently of its signature',
+    async (eventType, state, reasons) => {
+      const input = fixture()
+      const request = input.records.find(
+        (record) => record.event_type === 'https://atrib.dev/evidence/v1/request',
+      )!
+      const body = evidenceBodySchemas.request.parse(openingOf(input, request))
+      const signed = await addStatement(input, { ...request, event_type: eventType }, body)
+      const result = await verifyEvidenceSet(input)
+      const integrity = result.statements.find(
+        (statement) => statement.record_hash === digest(signed),
+      )!.dimensions.integrity
+      expect(integrity.record).toMatchObject({ state, reasons })
+      expect(integrity.body).toMatchObject({ state: 'unresolved', reasons: ['unknown_type'] })
+    },
+  )
   it('deduplicates repeated signed records and delivery basis independently of object key order', async () => {
     const input = fixture()
     const expected = await verifyEvidenceSet(input)

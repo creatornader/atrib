@@ -73,7 +73,8 @@ export const fixtureSourceVerifier: EvidenceSourceVerifier = {
       basis.push(String(ref.hash))
     }
     if (!facts) return { state: 'rejected', reasons: ['source_untrusted'], basis }
-    const assertion = object(body.assertion)
+    const normalizedClaim = object(facts.claim)
+    const assertion = object(normalizedClaim.assertion)
     if (facts.native_event_hash !== undefined) {
       const bytes = artifacts.get(String(facts.native_event_hash))
       const event = bytes && object(JSON.parse(Buffer.from(bytes).toString('utf8')))
@@ -86,8 +87,6 @@ export const fixtureSourceVerifier: EvidenceSourceVerifier = {
       )
         return { state: 'rejected', reasons: ['dependency_invalid'], basis }
     }
-    let effect:
-      { payload_hash: string; object: unknown; version: unknown; state: unknown } | undefined
     if (assertion.payload_hash !== undefined) {
       const bytes = artifacts.get(String(assertion.payload_hash))
       const raw = bytes && object(JSON.parse(Buffer.from(bytes).toString('utf8')))
@@ -99,26 +98,19 @@ export const fixtureSourceVerifier: EvidenceSourceVerifier = {
         (version.kind === 'native' && raw.version !== version.value)
       )
         return { state: 'rejected', reasons: ['dependency_invalid'], basis }
-      effect = {
-        payload_hash: String(assertion.payload_hash),
+      normalizedClaim.assertion = {
+        ...assertion,
         object: raw.object,
         state: raw.state,
-        version: assertion.version,
+        version:
+          version.kind === 'native'
+            ? { kind: 'native', value: raw.version }
+            : { kind: 'snapshot', value: assertion.payload_hash },
       }
     }
-    let coverage:
-      | {
-          surface: unknown
-          start: string
-          end: string
-          expected: unknown[]
-          captured: unknown[]
-          native_events?: Array<{ id: unknown; hash: string }>
-        }
-      | undefined
+    let nativeEvents: Array<{ id: unknown; hash: string }> | undefined
     if (String(object(body.source).kind) === 'manifest') {
       let complete = true
-      let nativeEvents: Array<{ id: unknown; hash: string }> | undefined
       for (const relation of ['expected', 'captured'] as const) {
         const entries = refs.filter((ref) => ref.relation === relation && ref.kind === 'artifact')
         if (!entries.length) complete = false
@@ -135,6 +127,13 @@ export const fixtureSourceVerifier: EvidenceSourceVerifier = {
             !eq(value.ids, assertion[relation])
           )
             return { state: 'rejected', reasons: ['dependency_invalid'], basis }
+          normalizedClaim.assertion = {
+            ...object(normalizedClaim.assertion),
+            surface: value.surface,
+            start: value.start,
+            end: value.end,
+            [relation]: value.ids,
+          }
           if (!Array.isArray(value.native_events)) complete = false
           else {
             if (nativeEvents && !eq(nativeEvents, value.native_events))
@@ -149,29 +148,20 @@ export const fixtureSourceVerifier: EvidenceSourceVerifier = {
           }
         }
       }
-      if (complete)
-        coverage = {
-          surface: assertion.surface,
-          start: String(assertion.start),
-          end: String(assertion.end),
-          expected: assertion.expected as unknown[],
-          captured: assertion.captured as unknown[],
-          native_events: nativeEvents,
-        }
+      if (!complete) nativeEvents = undefined
     }
     return {
       state: 'supported',
       reasons: [],
       basis,
       facts: {
-        claim: object(facts.claim),
+        claim: normalizedClaim,
         authority: (facts.authority ?? []) as string[],
         ...(facts.cursor === undefined ? {} : { cursor: String(facts.cursor) }),
         ...(facts.native_event_hash === undefined
           ? {}
           : { native_event_hash: String(facts.native_event_hash) }),
-        ...(coverage ? { coverage } : {}),
-        ...(effect ? { effect } : {}),
+        ...(nativeEvents ? { native_events: nativeEvents } : {}),
       },
     }
   },

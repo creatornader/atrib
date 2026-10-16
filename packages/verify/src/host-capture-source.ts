@@ -1,8 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 import canonicalize from 'canonicalize'
-import { HOST_CAPTURE_METHOD, HOST_CAPTURE_TYPE, sha256, hexEncode, verifyRecord } from '@atrib/mcp'
+import {
+  HOST_CAPTURE_METHOD,
+  EVIDENCE_TYPES,
+  commitEvidenceBody,
+  sha256,
+  hexEncode,
+  verifyRecord,
+} from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
-import type { EvidenceSourceVerifier, EvidenceSourceResult } from './evidence-statements.js'
+import {
+  validEvidenceCarrier,
+  type EvidenceSourceVerifier,
+  type EvidenceSourceResult,
+} from './evidence-statements.js'
 
 type ObjectValue = Record<string, unknown>
 const object = (value: unknown): ObjectValue => {
@@ -30,84 +41,54 @@ export const createHostCaptureSourceVerifier = (
       reasons: [reasonUri(reason)],
       basis: [],
     })
-    const source = object(body.source)
-    if (source.method !== method || source.kind !== 'boundary')
-      return rejected('host_capture_method_mismatch')
-    const sourceRefs = (body.basis as ObjectValue[]).filter(
-      (ref) => ref.kind === 'artifact' && ref.relation === 'source',
-    )
-    if (sourceRefs.length !== 1) return rejected('host_capture_source_ambiguous')
-    const hash = String(sourceRefs[0]!.hash)
-    const bytes = artifacts.get(hash)
-    if (!bytes)
-      return { state: 'unresolved', reasons: [reasonUri('host_capture_missing')], basis: [] }
     try {
-      if (bytes.length > 1_048_576 || digest(bytes) !== hash)
-        return rejected('host_capture_hash_mismatch')
-      const wrapper = object(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)))
-      if (Object.keys(wrapper).sort().join(',') !== 'payload,record')
-        return rejected('host_capture_schema_invalid')
-      const captured = object(wrapper.payload)
+      const source = object(body.source)
+      if (source.method !== method || source.kind !== 'boundary')
+        return rejected('host_capture_method_mismatch')
       if (
-        Object.keys(captured).some(
-          (key) => !['nonce', 'claim', 'authority', 'payload'].includes(key),
-        ) ||
-        typeof captured.nonce !== 'string' ||
-        !/^[A-Za-z0-9_-]{22,}$/.test(captured.nonce) ||
-        !Array.isArray(captured.authority) ||
-        captured.authority.some(
-          (hash) => typeof hash !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(hash),
-        )
-      ) {
-        return rejected('host_capture_schema_invalid')
-      }
-      const signed = object(wrapper.record)
-      const fields = [
-        'spec_version',
-        'creator_key',
-        'chain_root',
-        'event_type',
-        'context_id',
-        'timestamp',
-        'args_hash',
-        'signature',
-      ]
-      if (Object.keys(signed).sort().join(',') !== fields.sort().join(','))
-        return rejected('host_capture_schema_invalid')
-      if (
-        signed.event_type !== HOST_CAPTURE_TYPE ||
-        !sourceKeys.includes(String(signed.creator_key))
+        record.event_type !== EVIDENCE_TYPES.observation ||
+        !sourceKeys.includes(String(record.creator_key))
       )
         return rejected('host_capture_key_untrusted')
-      if (
-        !Number.isSafeInteger(evaluatedAt) ||
-        evaluatedAt < 0 ||
-        typeof signed.timestamp !== 'number' ||
-        signed.timestamp > evaluatedAt + 300_000
-      )
-        return rejected('host_capture_time_mismatch')
-      if (!(await verifyRecord(signed as AtribRecord, { nowMs: evaluatedAt })))
+      if (record.timestamp !== source.observed_at) return rejected('host_capture_time_mismatch')
+      if (!(await verifyRecord(record as AtribRecord, { nowMs: evaluatedAt })))
         return rejected('host_capture_signature_invalid')
-      if (signed.args_hash !== digest(new TextEncoder().encode(canonicalize(captured)!)))
+      if (!validEvidenceCarrier(record)) return rejected('host_capture_schema_invalid')
+      if (commitEvidenceBody('observation', body) !== record.args_hash)
         return rejected('host_capture_opening_invalid')
-      const { nonce: _nonce, basis: _basis, ...claim } = body
+      const sourceRefs = (body.basis as ObjectValue[]).filter(
+        (ref) => ref.kind === 'artifact' && ref.relation === 'source',
+      )
+      if (sourceRefs.length !== 1) return rejected('host_capture_source_ambiguous')
+      const hash = String(sourceRefs[0]!.hash)
+      const bytes = artifacts.get(hash)
+      if (!bytes)
+        return { state: 'unresolved', reasons: [reasonUri('host_capture_missing')], basis: [] }
+      if (bytes.length > 1_048_576 || digest(bytes) !== hash)
+        return rejected('host_capture_hash_mismatch')
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+      const frame = object(JSON.parse(text))
+      if (!Object.keys(frame).length || canonicalize(frame) !== text)
+        return rejected('host_capture_schema_invalid')
+      const assertion = object(body.assertion)
       if (
-        canonicalize(captured.claim) !== canonicalize(claim) ||
-        signed.timestamp !== source.observed_at ||
-        signed.context_id !== record.context_id
+        method === HOST_CAPTURE_METHOD &&
+        (frame.phase !== assertion.phase ||
+          frame.observed_at !== source.observed_at ||
+          frame.request_record_hash !== object(body.target).record_hash ||
+          canonicalize(frame.descriptor) !== canonicalize(assertion.descriptor))
       )
         return rejected('host_capture_claim_mismatch')
+      const { nonce: _nonce, basis: _basis, ...claim } = body
       const authority = (body.basis as ObjectValue[])
         .filter((ref) => ref.relation === 'authority' && ref.kind === 'record')
         .map((ref) => ref.hash)
         .sort()
-      if (canonicalize(captured.authority) !== canonicalize(authority))
-        return rejected('host_capture_authority_mismatch')
       return {
         state: 'supported',
         reasons: [],
         basis: [hash],
-        facts: { claim, authority: captured.authority as string[] },
+        facts: { claim, authority: authority as string[] },
       }
     } catch {
       return rejected('host_capture_schema_invalid')

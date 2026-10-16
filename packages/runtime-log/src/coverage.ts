@@ -2,7 +2,12 @@
 
 import canonicalize from 'canonicalize'
 import { sha256 } from '@noble/hashes/sha2.js'
-import { verifyRecord, commitEvidenceBody, type AtribRecord } from '@atrib/mcp'
+import {
+  verifyRecord,
+  commitEvidenceBody,
+  type AtribRecord,
+  type StrictMirrorUnit,
+} from '@atrib/mcp'
 import {
   createHostCaptureSourceVerifier,
   type EvidenceSourceVerifier,
@@ -28,10 +33,6 @@ export const RUNTIME_COVERAGE_METHOD =
 
 type ScopedId = { namespace: string; id: string }
 type SignedRecord = AtribRecord
-export interface CapturedCoverageEvent {
-  readonly record: SignedRecord
-  readonly payload: Record<string, unknown>
-}
 export interface ProjectCoverageEvidenceInput {
   readonly manifest: CoverageManifest
   readonly logWindowManifest: LogWindowManifest
@@ -43,7 +44,7 @@ export interface ProjectCoverageEvidenceInput {
   readonly observedAt: number
   readonly coverageAttestationRecord: SignedRecord
   readonly logWindowRecord: SignedRecord
-  readonly capturedEvents: readonly CapturedCoverageEvent[]
+  readonly capturedEvents: readonly StrictMirrorUnit[]
 }
 
 /** Projects D168's inventory. The pinned native host remains the trust boundary. */
@@ -55,6 +56,27 @@ export function projectCoverageEvidence(input: ProjectCoverageEvidenceInput) {
     const hash = hashCanonical(value)
     artifacts.set(hash, bytes)
     return hash
+  }
+  const groups: Array<Array<Pick<StrictMirrorUnit, 'record' | 'opening'>>> = [[]]
+  const frames = new Set<string>()
+  let size = 2
+  for (const { record, opening, artifacts: captured } of input.capturedEvents) {
+    const item = { record, opening }
+    const itemSize = new TextEncoder().encode(canonicalize(item)!).length
+    if (itemSize + 2 > 1_048_576) throw new Error('coverage_artifact_limit')
+    if (size + itemSize + (groups.at(-1)!.length ? 1 : 0) > 1_048_576) {
+      groups.push([])
+      size = 2
+    }
+    size += itemSize + (groups.at(-1)!.length ? 1 : 0)
+    groups.at(-1)!.push(item)
+    for (const ref of opening.basis.filter(
+      (ref) => ref.relation === 'source' && ref.kind === 'artifact',
+    )) {
+      frames.add(ref.hash)
+      const artifact = captured.find((artifact) => artifact.hash === ref.hash)
+      if (artifact) artifacts.set(ref.hash, artifact.bytes)
+    }
   }
   const body = {
     nonce: input.nonce,
@@ -72,11 +94,12 @@ export function projectCoverageEvidence(input: ProjectCoverageEvidenceInput) {
       { relation: 'captured', kind: 'artifact', hash: add(input.manifest) },
       { relation: 'expected', kind: 'artifact', hash: add(input.logWindowManifest) },
       { relation: 'expected', kind: 'artifact', hash: add(input.events) },
-      ...input.capturedEvents.map((event) => ({
+      ...groups.map((group) => ({
         relation: 'captured',
         kind: 'artifact',
-        hash: add(event),
+        hash: add(group),
       })),
+      ...[...frames].map((hash) => ({ relation: 'binding', kind: 'artifact', hash })),
     ],
   }
   commitEvidenceBody('coverage', body)
@@ -174,14 +197,7 @@ async function nativeCapture(input: Parameters<EvidenceSourceVerifier['verify']>
   if (result.state !== 'supported') return { result }
   const refs = input.body.basis as Array<{ relation: string; hash: string }>
   const hash = refs.find((ref) => ref.relation === 'source')!.hash
-  const wrapper = coverageObject(JSON.parse(new TextDecoder().decode(input.artifacts.get(hash)!)))
-  const captured = coverageObject(wrapper.payload)
-  if (
-    captured.payload === undefined ||
-    coverageObject(captured.payload).runtime_event === undefined
-  )
-    return { result: coverageFailure('unresolved', 'coverage-native-event-missing') }
-  const native = coverageObject(coverageObject(captured.payload).runtime_event)
+  const native = coverageObject(JSON.parse(new TextDecoder().decode(input.artifacts.get(hash)!)))
   const assertion = coverageObject(input.body.assertion)
   const source = coverageObject(input.body.source)
   const identity = coverageObject(source.identity)
@@ -203,11 +219,10 @@ async function nativeCapture(input: Parameters<EvidenceSourceVerifier['verify']>
       facts: {
         ...result.facts!,
         cursor: String(native.position),
-        native_event_hash: hashCanonical(native),
+        native_event_hash: hash,
       },
     },
     native,
-    wrapper,
   }
 }
 
@@ -297,29 +312,25 @@ export const runtimeCoverageSourceVerifier: EvidenceSourceVerifier = {
         invocationNamespace: `${sourceIdentity.namespace}/invocations`,
       })
       const capturedRecordHashes: Sha256Uri[] = []
+      const captures = parsed
+        .filter((entry) => entry.relation === 'captured' && Array.isArray(entry.value))
+        .flatMap((entry) => entry.value as unknown[])
+        .map(coverageObject)
       for (const action of manifest.actions.filter((action) => action.state === 'captured')) {
-        const item = parsed.find(
-          (entry) =>
-            entry.relation === 'captured' &&
-            !Array.isArray(entry.value) &&
-            coverageObject(entry.value).record &&
-            hashCanonical(coverageObject(entry.value).record) === action.record_hash,
+        const item = captures.find(
+          (item) => item.record && hashCanonical(item.record) === action.record_hash,
         )
         if (!item) return coverageFailure('unresolved', 'coverage-captured-event-missing')
-        const wrapper = coverageObject(item.value)
-        const payload = coverageObject(wrapper.payload)
-        const claim = coverageObject(payload.claim)
-        const authorities = payload.authority as string[]
+        if (!Object.hasOwn(item, 'opening'))
+          return coverageFailure('unresolved', 'coverage-captured-opening-missing')
+        const capturedRecord = coverageObject(item.record)
+        const claim = coverageObject(item.opening)
+        if (capturedRecord.context_id !== record.context_id)
+          return coverageFailure('rejected', 'coverage-session-mismatch')
         const native = await nativeCapture({
-          record,
-          body: {
-            ...claim,
-            basis: [
-              { relation: 'source', kind: 'artifact', hash: item.hash },
-              ...authorities.map((hash) => ({ relation: 'authority', kind: 'record', hash })),
-            ],
-          },
-          artifacts: new Map([[item.hash, artifacts.get(item.hash)!]]),
+          record: capturedRecord,
+          body: claim,
+          artifacts,
           sourceKeys,
           evaluatedAt,
         })
@@ -327,7 +338,7 @@ export const runtimeCoverageSourceVerifier: EvidenceSourceVerifier = {
         const event = events.find((event) => event.event_id === action.action_id)
         if (
           !event ||
-          event.event_hash !== hashCanonical(native.native) ||
+          event.event_hash !== native.result.facts!.native_event_hash ||
           event.position !== native.native!.position ||
           event.kind !== native.native!.kind ||
           canonicalize(coverageObject(claim.source).identity) !== canonicalize(sourceIdentity) ||
@@ -351,20 +362,16 @@ export const runtimeCoverageSourceVerifier: EvidenceSourceVerifier = {
         canonicalize(sourceIdentity) !== canonicalize(body.subject)
       )
         return coverageFailure('rejected', 'coverage-projection-mismatch')
-      const { nonce: _nonce, basis: _basis, ...claim } = body
       return {
         state: 'supported',
         reasons: [],
         basis: parsed.map((entry) => entry.hash),
         facts: {
-          claim,
-          coverage: {
-            ...assertion,
-            native_events: events.map((event) => ({
-              id: { namespace: `${sourceIdentity.namespace}/invocations`, id: event.event_id },
-              hash: event.event_hash,
-            })),
-          },
+          claim: { subject: sourceIdentity, source, assertion },
+          native_events: events.map((event) => ({
+            id: { namespace: `${sourceIdentity.namespace}/invocations`, id: event.event_id },
+            hash: event.event_hash,
+          })),
         },
       }
     } catch {

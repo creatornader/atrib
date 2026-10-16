@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import canonicalize from 'canonicalize'
 import {
   HOST_CAPTURE_METHOD,
-  HOST_CAPTURE_TYPE,
   EVIDENCE_TYPES,
   DECLARED_METHOD,
   getPublicKey,
@@ -105,21 +104,12 @@ async function captured(protectedMode = false, capturedAt = 1000) {
     },
   }
   const authority = allow ? [allow.record_hash] : []
-  const payload = { nonce: createEvidenceNonce(), claim, authority }
-  const record = await signRecord(
-    {
-      spec_version: 'atrib/1.0',
-      creator_key: signer,
-      chain_root: request.record_hash,
-      event_type: HOST_CAPTURE_TYPE,
-      context_id: contextId,
-      timestamp: capturedAt,
-      args_hash: hash(json(payload)),
-      signature: '',
-    } as AtribRecord,
-    key,
-  )
-  const bytes = json({ record, payload })
+  const bytes = json({
+    phase: claim.assertion.phase,
+    observed_at: capturedAt,
+    request_record_hash: request.record_hash,
+    descriptor,
+  })
   const artifactHash = hash(bytes)
   const dispatch = await sign(
     'observation',
@@ -243,23 +233,17 @@ describe('authenticated host capture', () => {
     })
     expect(result.state).toBe('rejected')
     expect(result.reasons).toContain(
-      'https://atrib.dev/evidence/v1/reason/host-capture-claim-mismatch',
+      'https://atrib.dev/evidence/v1/reason/host-capture-opening-invalid',
     )
   })
 
   it('verifies the source signature even when the artifact hash is correct', async () => {
     const { units } = await captured()
     const dispatch = units[1]!
-    const wrapper = JSON.parse(new TextDecoder().decode(dispatch.artifacts[0]!.bytes))
-    wrapper.record.signature = 'A'.repeat(86)
-    const bytes = new TextEncoder().encode(JSON.stringify(wrapper))
-    const hash = `sha256:${hexEncode(sha256(bytes))}`
-    const body = structuredClone(dispatch.opening)
-    body.basis[0]!.hash = hash
     const result = await hostCaptureSourceVerifier.verify({
-      record: dispatch.record,
-      body,
-      artifacts: new Map([[hash, bytes]]),
+      record: { ...dispatch.record, signature: 'A'.repeat(86) },
+      body: dispatch.opening,
+      artifacts: new Map(dispatch.artifacts.map((artifact) => [artifact.hash, artifact.bytes])),
       sourceKeys: [dispatch.record.creator_key],
       evaluatedAt: 1000,
     })
@@ -268,4 +252,37 @@ describe('authenticated host capture', () => {
       'https://atrib.dev/evidence/v1/reason/host-capture-signature-invalid',
     )
   })
+  it.each(['empty', 'timestamp'] as const)(
+    'rejects a %s frame even with a valid typed signature',
+    async (variant) => {
+      const { units } = await captured()
+      const dispatch = units[1]!
+      const frame =
+        variant === 'empty'
+          ? {}
+          : {
+              ...JSON.parse(new TextDecoder().decode(dispatch.artifacts[0]!.bytes)),
+              observed_at: 1001,
+            }
+      const bytes = new TextEncoder().encode(canonicalize(frame)!)
+      const hash = `sha256:${hexEncode(sha256(bytes))}`
+      const body = structuredClone(dispatch.opening)
+      body.basis[0]!.hash = hash
+      const record = await signRecord(
+        { ...dispatch.record, args_hash: commitEvidenceBody('observation', body) },
+        new Uint8Array(32).fill(7),
+      )
+      expect(
+        (
+          await hostCaptureSourceVerifier.verify({
+            record,
+            body,
+            artifacts: new Map([[hash, bytes]]),
+            sourceKeys: [record.creator_key],
+            evaluatedAt: 1000,
+          })
+        ).state,
+      ).toBe('rejected')
+    },
+  )
 })

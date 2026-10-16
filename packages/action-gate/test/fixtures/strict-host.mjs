@@ -150,9 +150,14 @@ if (mode === 'coverage') {
     hashLogWindowManifest,
     projectCoverageEvidence,
   } = await import('../../../runtime-log/dist/index.js')
-  const captured = JSON.parse(
-    Buffer.from(dispatch._local.evidence.artifacts[0].base64, 'base64').toString('utf8'),
-  )
+  const captured = {
+    record: dispatch.record,
+    opening: dispatch._local.evidence.opening,
+    artifacts: dispatch._local.evidence.artifacts.map(({ hash, base64 }) => ({
+      hash,
+      bytes: Buffer.from(base64, 'base64'),
+    })),
+  }
   const frame = nativeEvent
   const events = [
     {

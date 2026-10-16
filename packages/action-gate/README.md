@@ -136,7 +136,9 @@ the supplied view. It does not fetch the public log by itself.
 ### Strict private evidence retention
 
 Hosts can opt into [§1.12 evidence](../../atrib-spec.md#112-source-bound-evidence-statements) on the same protected executor with
-`strictEvidence`. This path snapshots normalized arguments, signs a Request
+`strictEvidence` on `createProtectedMcpExecutor`. The generic `runGatedAction`
+API keeps its existing decision/outcome behavior and rejects that option.
+The protected path snapshots normalized arguments, signs a Request
 before evaluating policy, and fsyncs the complete Request and exact
 Authorization units before entering the upstream callback. Dispatch cites that
 Authorization. Response observations describe the callback response. They do
@@ -192,11 +194,14 @@ keeps the default host-capture method for that phase. Capture inventory and
 Coverage projection use the existing [D168 runtime-log manifest](../../DECISIONS.md#d168-coverage-manifests-make-capture-scope-verifiable); callback
 results do not supply native events.
 
-The complete signed capture wrapper must fit the receiver's 1 MiB artifact
+The canonical frame must fit the receiver's 1 MiB artifact
 limit. The host checks its size synchronously at dispatch interception, before
 calling upstream. Oversize dispatch frames refuse the call with
 `capture_artifact_resource_limit`. An oversize response frame adds that gap
 after execution and cannot roll back the effect.
+The host signs one typed observation at `observedAt`. Its opening binds the frame
+and exact authority references. Response summaries use a separate captured
+artifact; they do not change the frame's native inventory hash.
 
 Strict mirrors use the existing `{record, _local, written_at}` JSONL envelope.
 Each `_local.evidence` unit retains the complete opening and base64 artifacts.

@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import canonicalize from 'canonicalize'
-import * as ed from '@noble/ed25519'
 import { verifyEvidencePublication, type EvidencePublicationInput } from './evidence-publication.js'
-import { sha256, hexEncode, base64urlDecode } from '@atrib/mcp'
-import { canonicalSigningInput, type AtribRecord } from '@atrib/mcp'
+import { sha256, hexEncode, verifyRecord, type AtribRecord } from '@atrib/mcp'
 import { genesisChainRoot } from '@atrib/mcp'
 import {
   DECLARED_METHOD,
@@ -13,6 +11,7 @@ import {
   evaluationSchema,
   policySchema,
   authoritySnapshotSchema,
+  isValidEventTypeUri,
   type EvidenceKind,
   type EvidencePolicy,
   type EvidenceEvaluation,
@@ -64,16 +63,6 @@ export interface VerifyEvidenceSetInput {
   requestHash?: string
   sourceVerifiers: Readonly<Record<string, EvidenceSourceVerifier>>
 }
-interface ReceiverInput {
-  publication?: EvidencePublicationInput
-  records: Obj[]
-  openings: Record<string, unknown>
-  artifacts: Record<string, Uint8Array>
-  policy: unknown
-  evaluation: EvidenceEvaluation
-  request_hash?: string
-  sourceVerifiers: Readonly<Record<string, EvidenceSourceVerifier>>
-}
 export interface EvidenceSourceVerifier {
   verify(input: {
     record: Readonly<Obj>
@@ -94,15 +83,7 @@ export interface EvidenceSourceResult {
     authority?: string[]
     cursor?: string
     native_event_hash?: string
-    effect?: { payload_hash: string; object: unknown; version: unknown; state: unknown }
-    coverage?: {
-      surface: unknown
-      start: string
-      end: string
-      expected: unknown[]
-      captured: unknown[]
-      native_events?: Array<{ id: unknown; hash: string }>
-    }
+    native_events?: Array<{ id: unknown; hash: string }>
   }
 }
 export interface EvidenceSetResult {
@@ -182,6 +163,14 @@ function validOptionalCarrier(record: Obj): boolean {
   }
   return true
 }
+export function validEvidenceCarrier(record: Obj): boolean {
+  return (
+    !forbidden.some((key) => key in record) &&
+    validOptionalCarrier(record) &&
+    requiredCarrier.every((key) => key in record) &&
+    /^sha256:[0-9a-f]{64}$/.test(String(record.chain_root))
+  )
+}
 const artifactFailure = (error: unknown): EvidenceDimension =>
   error instanceof Error && error.message === 'resource_limit'
     ? dim('unresolved', 'resource_limit')
@@ -190,8 +179,8 @@ function artifactBytes(bytes: Uint8Array): Uint8Array {
   if (bytes.length > 1_048_576) throw new Error('resource_limit')
   return bytes
 }
-function artifact(input: ReceiverInput, hash: string): Obj | undefined {
-  const bytes = input.artifacts[hash]
+function artifact(input: VerifyEvidenceSetInput, hash: string): Obj | undefined {
+  const bytes = input.artifacts.get(hash)
   if (!bytes) return undefined
   artifactBytes(bytes)
   if (bytesHash(bytes) !== hash) throw new Error('dependency_invalid')
@@ -201,10 +190,9 @@ function claim(info: Info): Obj {
   const { nonce: _nonce, basis: _basis, ...rest } = info.body
   return rest
 }
-function effectPayloadMatches(info: Info, input: ReceiverInput): boolean {
+function effectPayloadMatches(info: Info, input: VerifyEvidenceSetInput): boolean {
   const payloadHash = String(info.assertion.payload_hash)
-  const raw = input.artifacts[payloadHash]
-  const mapped = object(info.facts.effect)
+  const raw = input.artifacts.get(payloadHash)
   const cited = refs(info).some(
     (ref) => ref.kind === 'artifact' && ref.relation === 'source' && ref.hash === payloadHash,
   )
@@ -212,17 +200,13 @@ function effectPayloadMatches(info: Info, input: ReceiverInput): boolean {
     cited &&
     !!raw &&
     bytesHash(raw) === payloadHash &&
-    mapped.payload_hash === payloadHash &&
-    eq(mapped.object, info.assertion.object) &&
-    eq(mapped.state, info.assertion.state) &&
-    eq(mapped.version, info.assertion.version) &&
     (object(info.assertion.version).kind !== 'snapshot' ||
       object(info.assertion.version).value === payloadHash)
   )
 }
 async function inspectSource(
   info: Info,
-  input: ReceiverInput,
+  input: VerifyEvidenceSetInput,
   policy: EvidencePolicy | undefined,
   evaluatedAt: number,
 ) {
@@ -262,7 +246,7 @@ async function inspectSource(
     const artifacts = new Map<string, Uint8Array>()
     let artifactSize = 0
     for (const ref of refs(info).filter((ref) => ref.kind === 'artifact')) {
-      const bytes = input.artifacts[String(ref.hash)]
+      const bytes = input.artifacts.get(String(ref.hash))
       if (!bytes) continue
       if (ref.relation !== 'source' && (bytes.length > 1_048_576 || bytesHash(bytes) !== ref.hash))
         continue
@@ -371,19 +355,12 @@ export async function verifyEvidenceSet(
   options: VerifyEvidenceSetInput,
 ): Promise<EvidenceSetResult> {
   preflight(options)
-  const input: ReceiverInput = {
-    records: options.records.map((record) => structuredClone(record) as unknown as Obj),
-    openings: Object.fromEntries(
-      [...options.openings].map(([hash, body]) => [hash, structuredClone(body)]),
-    ),
-    artifacts: Object.fromEntries(
-      [...options.artifacts].map(([hash, bytes]) => [hash, Uint8Array.from(bytes)]),
-    ),
-    policy: structuredClone(options.policy),
-    evaluation: structuredClone(options.evaluation),
-    ...(options.requestHash === undefined ? {} : { request_hash: options.requestHash }),
-    sourceVerifiers: options.sourceVerifiers,
-    ...(options.publication === undefined ? {} : { publication: options.publication }),
+  const { sourceVerifiers, publication, openings, artifacts, ...data } = options
+  const input = {
+    ...structuredClone({ ...data, openings: new Map(openings) }),
+    artifacts: new Map([...artifacts].map(([hash, bytes]) => [hash, Uint8Array.from(bytes)])),
+    sourceVerifiers,
+    ...(publication === undefined ? {} : { publication }),
   }
   const parsedPolicy = policySchema.safeParse(input.policy)
   const policy = parsedPolicy.success ? parsedPolicy.data : undefined
@@ -396,33 +373,24 @@ export async function verifyEvidenceSet(
     const existing = uniqueRecords.get(hash)
     if (existing && existing.canonical !== canonical)
       throw new TypeError('invalid_evidence_input: conflicting record hash')
-    if (!existing) uniqueRecords.set(hash, { canonical, record })
+    if (!existing) uniqueRecords.set(hash, { canonical, record: object(record) })
   }
   for (const [hash, { record }] of uniqueRecords) {
-    const body = object(input.openings[hash])
+    const body = object(input.openings.get(hash))
     const kind = String(record.event_type).startsWith(EVIDENCE_PREFIX)
       ? String(record.event_type).slice(EVIDENCE_PREFIX.length)
       : 'unknown'
     const dimensions_ = dimensions()
     const recordSchemaOk =
       record.spec_version === 'atrib/1.0' &&
+      isValidEventTypeUri(record.event_type) &&
       /^[0-9a-f]{32}$/.test(String(record.context_id)) &&
       Number.isSafeInteger(record.timestamp) &&
       Number(record.timestamp) >= 0 &&
       Number(record.timestamp) <= evaluation.evaluated_at + 300_000
-    let recordOk: boolean
-    try {
-      recordOk =
-        recordSchemaOk &&
-        (await ed.verifyAsync(
-          base64urlDecode(String(record.signature)),
-          canonicalSigningInput(record as unknown as AtribRecord),
-          base64urlDecode(String(record.creator_key)),
-          { zip215: false },
-        ))
-    } catch {
-      recordOk = false
-    }
+    const recordOk =
+      recordSchemaOk &&
+      (await verifyRecord(record as unknown as AtribRecord, { nowMs: evaluation.evaluated_at }))
     dimensions_.integrity.record = dim(
       recordOk ? 'supported' : 'rejected',
       recordOk ? undefined : recordSchemaOk ? 'signature_invalid' : 'schema_invalid',
@@ -430,14 +398,8 @@ export async function verifyEvidenceSet(
     )
     let bodyResult = dim('supported', undefined, [hash])
     if (!Object.hasOwn(evidenceBodySchemas, kind)) bodyResult = dim('unresolved', 'unknown_type')
-    else if (
-      forbidden.some((key) => key in record) ||
-      !validOptionalCarrier(record) ||
-      requiredCarrier.some((key) => !(key in record)) ||
-      !/^sha256:[0-9a-f]{64}$/.test(String(record.chain_root))
-    )
-      bodyResult = dim('rejected', 'schema_invalid')
-    else if (!(hash in input.openings)) bodyResult = dim('unresolved', 'body_missing')
+    else if (!validEvidenceCarrier(record)) bodyResult = dim('rejected', 'schema_invalid')
+    else if (!input.openings.has(hash)) bodyResult = dim('unresolved', 'body_missing')
     else {
       try {
         if (commitEvidenceBody(kind as EvidenceKind, body) !== record.args_hash)
@@ -500,7 +462,7 @@ export async function verifyEvidenceSet(
           break
         }
         if (ref.kind === 'artifact') {
-          const bytes = input.artifacts[String(ref.hash)]
+          const bytes = input.artifacts.get(String(ref.hash))
           if (!bytes) {
             failures.push(dim('unresolved', 'dependency_missing'))
             continue
@@ -560,7 +522,7 @@ export async function verifyEvidenceSet(
       }
     }
   }
-  const requested = byHash.get(String(input.request_hash))
+  const requested = byHash.get(String(input.requestHash))
   const request = requested?.kind === 'request' ? requested : undefined
   const targetOf = (info: Info) => object(info.body.target).record_hash
   const target = (info: Info) => byHash.get(String(targetOf(info)))
@@ -626,19 +588,16 @@ export async function verifyEvidenceSet(
       return dim('rejected', 'authority_invalid')
     if (!(Number(a.not_before) <= decisionTime && decisionTime < Number(a.expires_at)))
       return dim('rejected', 'authority_invalid')
-    for (const ref of refs(info).filter((ref) => ref.relation === 'authority')) {
-      if (ref.kind === 'record') {
-        const dependency = byHash.get(String(ref.hash))
-        if (!dependency || dependency.dimensions.integrity.state === 'unresolved')
-          return dim('unresolved', 'dependency_missing')
-        if (dependency.dimensions.integrity.state !== 'supported')
-          return dim('rejected', 'dependency_invalid')
-      } else {
-        try {
-          if (!artifact(input, String(ref.hash))) return dim('unresolved', 'dependency_missing')
-        } catch (error) {
-          return artifactFailure(error)
-        }
+    const grants = new Map<string, Obj>()
+    for (const ref of refs(info).filter(
+      (ref) => ref.relation === 'authority' && ref.kind === 'artifact',
+    )) {
+      try {
+        const grant = artifact(input, String(ref.hash))
+        if (!grant) return dim('unresolved', 'dependency_missing')
+        grants.set(String(ref.hash), grant)
+      } catch (error) {
+        return artifactFailure(error)
       }
     }
     const pinned = refs(info).filter(
@@ -649,13 +608,7 @@ export async function verifyEvidenceSet(
     )
     if (!pinned.length) return dim('rejected', 'authority_invalid')
     for (const ref of pinned) {
-      let grant: Obj | undefined
-      try {
-        grant = artifact(input, String(ref.hash))
-      } catch {
-        return dim('rejected', 'dependency_invalid')
-      }
-      if (!grant) return dim('unresolved', 'dependency_missing')
+      const grant = grants.get(String(ref.hash))!
       if (!authoritySnapshotSchema.safeParse(grant).success)
         return dim('rejected', 'authority_invalid')
       if (
@@ -888,28 +841,17 @@ export async function verifyEvidenceSet(
       info.dimensions.coverage = manifestDependencies
       continue
     }
-    const proof = object(info.facts.coverage)
     const expectedOk = refs(info).some(
       (ref) => ref.relation === 'expected' && ref.kind === 'artifact',
     )
     const capturedOk = refs(info).some(
       (ref) => ref.relation === 'captured' && ref.kind === 'artifact',
     )
-    if (!expectedOk || !capturedOk || !Object.keys(proof).length) {
+    if (!expectedOk || !capturedOk) {
       info.dimensions.coverage = dim('unresolved', 'dependency_missing')
       continue
     }
-    if (
-      !eq(proof.surface, a.surface) ||
-      proof.start !== a.start ||
-      proof.end !== a.end ||
-      !eq(proof.expected, a.expected) ||
-      !eq(proof.captured, a.captured)
-    ) {
-      info.dimensions.coverage = dim('rejected', 'dependency_invalid')
-      continue
-    }
-    const nativeEvents = proof.native_events
+    const nativeEvents = info.facts.native_events
     if (nativeEvents !== undefined || selected.facts.native_event_hash !== undefined) {
       if (!Array.isArray(nativeEvents) || typeof selected.facts.native_event_hash !== 'string') {
         info.dimensions.coverage = dim('unresolved', 'dependency_missing')

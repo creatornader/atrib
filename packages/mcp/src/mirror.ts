@@ -70,7 +70,6 @@ export interface StrictMirrorUnit {
 export interface StrictMirrorRetention {
   /** A previously reserved key always refuses redispatch, including after a crash. */
   reserve(
-    key: string,
     unit: StrictMirrorUnit,
   ): Promise<{ acquired: boolean; unit: StrictMirrorUnit; units?: readonly StrictMirrorUnit[] }>
   retain(unit: StrictMirrorUnit): Promise<void>
@@ -82,7 +81,6 @@ interface StrictMirrorEnvelope {
     evidence: {
       opening: EvidenceBody
       artifacts: { hash: string; base64: string }[]
-      reservation?: string
     }
   }
   written_at: number
@@ -158,18 +156,6 @@ async function validateStrictEnvelope(value: unknown): Promise<StrictMirrorEnvel
   if (evidence.opening.basis.some((ref) => ref.kind === 'artifact' && !artifacts.has(ref.hash))) {
     throw new Error('atrib: strict mirror missing artifact')
   }
-  if (
-    evidence.reservation !== undefined &&
-    (typeof evidence.reservation !== 'string' || !evidence.reservation)
-  ) {
-    throw new Error('atrib: strict mirror invalid reservation')
-  }
-  if (
-    evidence.reservation !== undefined &&
-    evidence.reservation !== strictReservation(record, evidence.opening)
-  ) {
-    throw new Error('atrib: strict mirror reservation does not match signed request')
-  }
   return envelope
 }
 
@@ -237,7 +223,6 @@ export function createStrictMirrorRetention({ path }: { path: string }): StrictM
             hash: artifact.hash,
             base64: mirrorBase64(artifact.bytes),
           })),
-          ...(reservation === undefined ? {} : { reservation }),
         },
       },
       written_at: Date.now(),
@@ -340,7 +325,7 @@ export function createStrictMirrorRetention({ path }: { path: string }): StrictM
         const prior = cached?.entries ?? (await parseStrictMirror(await file.readFile('utf8')))
         if (!sameStrictMirrorVersion(version, await file.stat({ bigint: true })))
           throw new Error('atrib: strict mirror changed during verification')
-        // Derive identity from the signed Request, even if local metadata was lost.
+        // Derive identity only from the signed Request.
         const reservations = cached?.reservations ?? new Map<string, StrictMirrorEnvelope>()
         if (!cached) {
           for (const entry of prior) {
@@ -381,9 +366,10 @@ export function createStrictMirrorRetention({ path }: { path: string }): StrictM
     }
   }
   return {
-    reserve(key, unit) {
-      if (!key) return Promise.reject(new Error('atrib: strict mirror reservation key required'))
-      return append(unit, key)
+    async reserve(unit) {
+      const reservation = strictReservation(unit.record, unit.opening)
+      if (!reservation) return Promise.reject(new Error('atrib: strict mirror requires a Request'))
+      return append(unit, reservation)
     },
     async retain(unit) {
       await append(unit)

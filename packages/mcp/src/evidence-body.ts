@@ -6,7 +6,6 @@ import { createJsonCommitment } from './commitment.js'
 export const EVIDENCE_PREFIX = 'https://atrib.dev/evidence/v1/'
 export const DECLARED_METHOD = `${EVIDENCE_PREFIX}method/declared`
 export const HOST_CAPTURE_METHOD = `${EVIDENCE_PREFIX}method/host-capture/1`
-export const HOST_CAPTURE_TYPE = 'https://atrib.dev/source/host-capture/v1'
 const uri = z
   .string()
   .min(1)

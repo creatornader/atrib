@@ -185,9 +185,12 @@ runtime-log source.
 [§1.12 coverage body](../../docs/source-bound-evidence.md). Its output contains
 the body and exact artifact bytes for private retention. It accepts the coverage
 manifest, runtime-window manifest, event refs, both existing signed commitment
-records, and captured host wrappers. Register `runtimeCoverageSourceVerifier`
+records, and captured observation units. Register `runtimeCoverageSourceVerifier`
 under `RUNTIME_COVERAGE_METHOD` when calling `verifyEvidenceSet()`. The CLI
 registers this method for retained-journal inspection.
+
+The adapter derives `facts.claim.assertion` from the verified inventory and returns
+its exact native hashes in `facts.native_events` for the receiver's membership join.
 
 The versioned method is
 `https://atrib.dev/evidence/v1/method/runtime-coverage/1`. Its bounded profile
@@ -197,22 +200,34 @@ start cursor is the first position minus one, and the end is the last position.
 Both cursors use canonical decimal strings. Other cursor profiles are rejected.
 
 `sourceIdentity.id` must equal the runtime manifest's source ID. Native
-invocations use `sourceIdentity.namespace + '/invocations'`. Each signed host
-wrapper retains a `payload.runtime_event` containing `event_id`, `context_id`,
+invocations use `sourceIdentity.namespace + '/invocations'`. Each typed observation
+binds the JCS frame containing `event_id`, `context_id`,
 `position`, `kind`, and the exact normalized `descriptor` observed at dispatch.
 Its context must equal the signed observation's context and the runtime
 manifest's session ID. The native ID and descriptor must match the execution
-observation. Capture this frame at
+observation. The frame supplies those fields and the cursor. Subject, target,
+execution, delivery, phase, outcome and authority references remain authenticated
+host metadata. Capture this frame at
 the host interception boundary through the protected executor's optional
 `strictEvidence.capture` callback.
 
 The verifier authenticates both manifest commitments with receiver-pinned host
 keys. Coverage `observed_at` must equal the signed coverage attestation's
 timestamp. It replays the native event root and derives the expected set from those
-events. Captured actions must resolve to signed host wrappers whose native bytes
+events. Each captured `action.record_hash` selects its own signed observation,
+disclosed with its opening in a captured artifact. The projection groups these
+`{record, opening}` items into JSON arrays no larger than 1 MiB. Flat frame
+artifacts use binding basis entries, which keep arbitrary native fields separate
+from manifest and disclosure selection. The verifier checks every captured
+record's own signature, carrier, opening, source keys, method, timestamp and
+context before checking that its frame bytes
 match the event inventory. Request coverage also compares the selected dispatch's
 authenticated native-event hash with that inventory. Reusing an ID and position
 for different bytes cannot satisfy the join.
+Missing openings or frames remain unresolved; present malformed or mismatched
+material is rejected. Every captured signer must be source-pinned, but authorized
+key rotation does not require equality with the inventory signer. The frame hash
+commits its JCS bytes, not the original transport encoding.
 
 Skipped, degraded, and omitted expected actions remain explicit gaps. Missing
 expected or captured evidence leaves completeness unresolved. The proof covers

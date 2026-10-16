@@ -57,41 +57,38 @@ capture.
 
 The source method URI is
 `https://atrib.dev/evidence/v1/method/host-capture/1` (`HOST_CAPTURE_METHOD`).
-The host signs its intercepted claim after completing argument normalization.
-The source artifact is UTF-8 JCS of this closed object:
+The typed ExecutionObservation is the host's signed account after argument
+normalization. Its sole source artifact contains UTF-8 JCS of the intercepted
+frame. The default protected MCP frame has this shape:
 
 ```typescript
 {
-  record: AtribRecord,
-  payload: {
-    nonce: string,
-    claim: { subject, target, assertion, source },
-    authority: string[],
-    payload?: JsonValue
-  }
+  phase: 'dispatch' | 'response' | 'failure',
+  observed_at: number,
+  request_record_hash: string,
+  descriptor: Descriptor
 }
 ```
 
-The inner record uses `HOST_CAPTURE_TYPE`
-(`https://atrib.dev/source/host-capture/v1`) and only the eight required
-source-bound carrier fields, including `args_hash`. It signs the plain SHA-256 JCS
-commitment of the payload through the existing `signRecord` helper. Its
-timestamp equals `source.observed_at`. Its context equals the outer observation
-context. The nonce comes from 16 random bytes. `claim` contains the complete
-observation body except `nonce` and `basis`. `authority` contains the exact
-allow-record references cited by dispatch. The optional payload contains the
-intercepted handler response or failure text. The artifact is private and does
-not contain its own hash. The outer observation cites its exact byte hash.
+The frame's fields must match the opened observation, whose timestamp equals
+`source.observed_at`. Its opening commits the frame hash through its source basis.
+Subject, target, execution, delivery, outcome and cited authority references are
+authenticated host metadata. They do not establish destination state. The producer retains a
+bounded response summary as a separate captured artifact, so it cannot change
+the frame hash. Frame artifacts bind JCS bytes of the intercepted object, not
+the original transport encoding.
 
 [`hostCaptureSourceVerifier`](../verify/README.md#host-capture-source)
-authenticates this artifact using only the receiving policy's `source_keys`.
-It checks the wrapper signature, commitment, source claim, time, context and
-authority references. This supports the named host's signed account of its
-interception. It does not establish independent administration, remote receipts,
+checks the typed record's signature, carrier, closed opening and commitment.
+The observation creator must be pinned in both the receiving rule's `signer_keys`
+and `source_keys`. Empty or excluded source keys confer no source trust. This
+supports the named host's signed account of interception. It does not establish
+independent administration, remote receipts,
 destination state or coverage beyond this configured path.
-This private source-wrapper extension uses the existing 0xFF extension byte.
-It is outside the six normative evidence statement type URIs and is not itself
-an evidence statement or an automatic log submission.
+
+`createStrictMirrorRetention({ path }).reserve(unit)` derives the execution reservation
+from the signed Request's source, subject and execution. Callers supply no
+separate key, and the mirror stores no unsigned reservation metadata.
 
 ## Quick start
 

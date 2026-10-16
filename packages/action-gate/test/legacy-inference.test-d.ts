@@ -4,9 +4,17 @@ import {
   createProtectedMcpExecutor,
   type ActionGateRunResult,
   type ProtectedMcpExecutor,
-  type StrictRunGatedActionInput,
-  type StrictActionGateResult,
+  type StrictCreateProtectedMcpExecutorInput,
+  type StrictProtectedMcpExecutor,
 } from '../src/index.js'
+import type * as ActionGate from '../src/index.js'
+import type { StrictMirrorRetention, StrictMirrorUnit } from '@atrib/mcp'
+
+export function reserveSignedRequest(retention: StrictMirrorRetention, unit: StrictMirrorUnit) {
+  retention.reserve(unit)
+  // @ts-expect-error Reservation identity comes from the signed Request.
+  retention.reserve('unsigned-key', unit)
+}
 
 interface LegacyEvidence {
   readonly execution: { readonly reported_success: true }
@@ -42,7 +50,10 @@ export function contextualProtectedCaller(): ProtectedMcpExecutor<LegacyEvidence
 }
 
 export function strictVariableCaller(
-  input: StrictRunGatedActionInput<LegacyEvidence>,
-): Promise<StrictActionGateResult<LegacyEvidence>> {
-  return runGatedAction(input)
+  input: StrictCreateProtectedMcpExecutorInput<LegacyEvidence>,
+): StrictProtectedMcpExecutor<LegacyEvidence> {
+  return createProtectedMcpExecutor(input)
 }
+
+// @ts-expect-error Strict evidence is available only through the protected MCP executor.
+export type RemovedGenericStrictInput = ActionGate.StrictRunGatedActionInput<unknown>

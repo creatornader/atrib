@@ -117,13 +117,13 @@ export async function runRuntimeLogCli(
 
     if (parsed.command === 'attest') {
       const manifest = await runAttest(parsed.flags)
-      await writeJsonOutput(parsed.flags, manifest, stdout)
+      await writeCliOutput(parsed.flags, manifest, stdout)
       return 0
     }
 
     if (parsed.command === 'verify') {
       const result = await runVerify(parsed.flags)
-      await writeJsonOutput(parsed.flags, result, stdout)
+      await writeCliOutput(parsed.flags, result, stdout)
       return result.valid ? 0 : 1
     }
 
@@ -194,14 +194,9 @@ async function runMirrorInspect(flags: Map<string, string | true>) {
       gaps.push(
         `Unattributed ${kind} ${hash}: opening unavailable; no request relationship inferred.`,
       )
+      if (hash === requestHash || dispatches.includes(hash))
+        gaps.push(`Missing opening for ${hash}.`)
     }
-    if (hash !== requestHash && !dispatches.includes(hash)) continue
-    if (
-      typeof record.event_type === 'string' &&
-      record.event_type.startsWith(EVIDENCE_PREFIX) &&
-      !mirror.openings.has(hash)
-    )
-      gaps.push(`Missing opening for ${hash}.`)
   }
   const inspections: Array<{
     dispatch_record: string | null
@@ -658,20 +653,6 @@ async function readArrayFile<T>(path: string, propertyName: string): Promise<T[]
     return [object as T]
   }
   return (await readJsonLines(path)) as T[]
-}
-
-async function writeJsonOutput(
-  flags: Map<string, string | true>,
-  value: unknown,
-  stdout: (text: string) => void,
-): Promise<void> {
-  const json = `${JSON.stringify(value, null, 2)}\n`
-  const out = optionalFlag(flags, 'out')
-  if (out) {
-    await writeFile(out, json)
-  } else {
-    stdout(json)
-  }
 }
 
 async function writeCliOutput(

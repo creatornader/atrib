@@ -55,6 +55,34 @@ async function setup() {
   return { dir, mirrorPath, request, action, strictEvidence }
 }
 describe('strict evidence on the existing protected MCP host', () => {
+  it('rejects strictEvidence on the legacy generic API before evaluation or execution', async () => {
+    let calls = 0
+    await expect(
+      Reflect.apply(runGatedAction, undefined, [
+        {
+          privateKey: new Uint8Array(32).fill(23),
+          contextId: 'a'.repeat(32),
+          action: {
+            run_id: 'run',
+            action_id: 'action',
+            agent_id: 'agent',
+            surface: 'mcp',
+            tool_name: 'write',
+          },
+          strictEvidence: {},
+          evaluate: () => {
+            calls++
+            return { outcome: 'allow', policy_id: 'fixture', policy_version: '1' }
+          },
+          execute: () => {
+            calls++
+            return 'unreachable'
+          },
+        },
+      ]),
+    ).rejects.toThrow(/createProtectedMcpExecutor/)
+    expect(calls).toBe(0)
+  })
   it('uses a pre-pinned stable authority document with a live clock', async () => {
     const f = await setup()
     const key = new Uint8Array(32).fill(23)
@@ -405,8 +433,12 @@ describe('strict evidence on the existing protected MCP host', () => {
         (unit) => unit.opening.assertion.phase === 'response',
       )
       expect(response.artifacts[0].bytes.length).toBeLessThan(1_048_576)
-      const capture = JSON.parse(new TextDecoder().decode(response.artifacts[0].bytes)).payload
-        .payload
+      const payload = response.artifacts.find((artifact) =>
+        response.opening.basis.some(
+          (ref) => ref.relation === 'captured' && ref.hash === artifact.hash,
+        ),
+      )
+      const capture = JSON.parse(new TextDecoder().decode(payload.bytes))
       expect(capture.omitted).toBe(true)
       if (kind === 'oversized')
         expect(capture.hash).toBe(createJsonCommitment(value, 'plain-sha256').hash)
@@ -457,20 +489,19 @@ describe('strict evidence on the existing protected MCP host', () => {
       expect(changedCalls).toBe(0)
     },
   )
-  it('pins direct strict run inputs before its first asynchronous operation', async () => {
+  it('pins selected strict executor inputs before its first asynchronous operation', async () => {
     const f = await setup()
     let originalCalls = 0
     const descriptor = f.strictEvidence.describe(f.request)
+    const identity = f.strictEvidence.identify()
     const options = {
       privateKey: new Uint8Array(32).fill(23),
       contextId: 'a'.repeat(32),
-      action: { ...f.action, surface: 'mcp', tool_name: f.request.name, args: f.request.arguments },
       strictEvidence: {
         mirrorPath: f.mirrorPath,
         authoritySnapshot: f.strictEvidence.authoritySnapshot,
         source: f.strictEvidence.source,
-        identity: f.strictEvidence.identify(),
-        descriptor,
+        identify: () => identity,
         describe: () => ({ ...descriptor, parameters: { text: 'before' } }),
       },
       evaluate: () => ({
@@ -478,19 +509,21 @@ describe('strict evidence on the existing protected MCP host', () => {
         policy_id: 'fixture',
         policy_version: '1',
       }),
-      execute: (intercepted: () => void) => {
-        intercepted()
+      executeUpstream: () => {
         originalCalls++
         return 'original'
       },
     }
-    const pending = runGatedAction(options)
+    const pending = createProtectedMcpExecutor(options).authorizeAndExecute({
+      action: f.action,
+      request: f.request,
+    })
     options.contextId = 'b'.repeat(32)
     options.strictEvidence.source.id = 'changed'
-    options.strictEvidence.identity.subject.id = 'changed'
-    options.action.args.text = 'changed'
+    identity.subject.id = 'changed'
+    f.request.arguments.text = 'changed'
     options.evaluate = () => ({ outcome: 'block', policy_id: 'changed', policy_version: '2' })
-    options.execute = () => 'changed'
+    options.executeUpstream = () => 'changed'
     const result = await pending
     expect(result.status).toBe('success')
     expect(result.result).toBe('original')
@@ -525,7 +558,7 @@ describe('strict evidence on the existing protected MCP host', () => {
     expect(result.status).toBe('success')
     expect(result.observations[0].opening.source.method).toBe(method)
     const artifact = JSON.parse(new TextDecoder().decode(result.observations[0].artifacts[0].bytes))
-    expect(artifact.payload.payload.runtime_event.position).toBe(1)
+    expect(artifact.position).toBe(1)
     expect(result.observations[1].opening.source.method).toBe(
       'https://atrib.dev/evidence/v1/method/host-capture/1',
     )

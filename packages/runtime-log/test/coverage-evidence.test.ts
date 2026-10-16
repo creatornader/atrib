@@ -7,8 +7,10 @@ import {
   signRecord,
   commitEvidenceBody,
   DECLARED_METHOD,
-  HOST_CAPTURE_TYPE,
+  EVIDENCE_TYPES,
   type AtribRecord,
+  type StrictMirrorUnit,
+  evidenceBodySchemas,
 } from '@atrib/mcp'
 import { verifyEvidenceSet } from '@atrib/verify'
 import {
@@ -20,6 +22,7 @@ import {
   projectCoverageEvidence,
   runtimeCoverageSourceVerifier,
   RUNTIME_COVERAGE_METHOD,
+  COVERAGE_MANIFEST_SCHEMA,
   type CoverageActionRef,
 } from '../src/index.js'
 
@@ -40,25 +43,32 @@ async function signed(
   args_hash: string,
   event_type = 'https://atrib.dev/v1/types/observation',
   contextId = context,
+  signingKey: Uint8Array = seed,
 ): Promise<AtribRecord> {
   return signRecord(
     {
       spec_version: 'atrib/1.0',
       event_type,
-      creator_key: base64urlEncode(await getPublicKey(seed)),
+      creator_key: base64urlEncode(await getPublicKey(signingKey)),
       chain_root: hashCanonical(context),
       context_id: contextId,
       timestamp: now,
       args_hash,
       signature: '',
     } as AtribRecord,
-    seed,
+    signingKey,
   )
 }
 async function fixture(
   state: 'captured' | 'skipped' | 'degraded' | 'omitted' = 'captured',
   offset = 0,
   contextId = context,
+  options: {
+    count?: number
+    captureKey?: Uint8Array
+    alter?: (unit: StrictMirrorUnit) => void | Promise<void>
+    nativeSchema?: string
+  } = {},
 ) {
   const requestBody = {
     nonce: 'AAAAAAAAAAAAAAAAAAAAAA',
@@ -72,37 +82,56 @@ async function fixture(
     'https://atrib.dev/evidence/v1/request',
     contextId,
   )
-  const frames = [1, 2].map((position) => ({
-    event_id: `native-${position}`,
-    context_id: contextId,
-    position: position + offset,
-    kind: 'tools/call',
-    descriptor,
-  }))
+  const frames = Array.from({ length: options.count ?? 2 }, (_, index) => index + 1).map(
+    (position) => ({
+      event_id: `native-${position}`,
+      context_id: contextId,
+      position: position + offset,
+      kind: 'tools/call',
+      descriptor,
+      ...(options.nativeSchema ? { schema: options.nativeSchema } : {}),
+    }),
+  )
   const capturedEvents = await Promise.all(
     frames.map(async (frame) => {
       const claim = {
         subject,
         target: { record_hash: hashCanonical(request) },
         assertion: {
-          phase: 'dispatch',
-          outcome: 'pending',
+          phase: 'dispatch' as const,
+          outcome: 'pending' as const,
           descriptor,
           execution,
           native_invocation: { namespace: invocationNamespace, id: frame.event_id },
           delivery: { namespace: 'urn:deliveries:', id: frame.event_id },
         },
-        source: { kind: 'boundary', identity, method: RUNTIME_COVERAGE_METHOD, observed_at: now },
+        source: {
+          kind: 'boundary' as const,
+          identity,
+          method: RUNTIME_COVERAGE_METHOD,
+          observed_at: now,
+        },
       }
-      const payload = {
+      const bytes = new TextEncoder().encode(canonicalize(frame)!)
+      const hash = hashCanonical(frame)
+      const opening = {
         nonce: 'AAAAAAAAAAAAAAAAAAAAAA',
-        claim,
-        authority: [],
-        payload: { runtime_event: frame },
+        ...claim,
+        basis: [{ relation: 'source' as const, kind: 'artifact' as const, hash }],
       }
-      return { record: await signed(hashCanonical(payload), HOST_CAPTURE_TYPE, contextId), payload }
+      return {
+        record: await signed(
+          commitEvidenceBody('observation', opening),
+          EVIDENCE_TYPES.observation,
+          contextId,
+          options.captureKey,
+        ),
+        opening,
+        artifacts: [{ hash, bytes }],
+      }
     }),
   )
+  if (options.alter) await options.alter(capturedEvents[0]!)
   const events = frames.map((frame) => ({
     event_id: frame.event_id,
     position: frame.position,
@@ -113,7 +142,7 @@ async function fixture(
     source: { id: identity.id },
     runtime: { name: 'native-host', version: '1' },
     session: { id: contextId, digest: hashCanonical(contextId) },
-    window: { start: 1 + offset, end: 2 + offset },
+    window: { start: 1 + offset, end: frames.length + offset },
     events,
     privacy_posture: 'host-owned',
     verifier_policy: { require_event_root: true },
@@ -174,17 +203,7 @@ async function fixture(
       sourceKeys,
       evaluatedAt: now,
     })
-  const wrapper = capturedEvents[0]!
-  const observationBody = {
-    ...wrapper.payload.claim,
-    nonce: 'AAAAAAAAAAAAAAAAAAAAAA',
-    basis: [{ relation: 'source', kind: 'artifact', hash: hashCanonical(wrapper) }],
-  }
-  const observation = await signed(
-    commitEvidenceBody('observation', observationBody),
-    'https://atrib.dev/evidence/v1/observation',
-    contextId,
-  )
+  const { record: observation, opening: observationBody } = capturedEvents[0]!
   const coverage = await signed(
     commitEvidenceBody('coverage', projected.body),
     'https://atrib.dev/evidence/v1/coverage',
@@ -204,7 +223,7 @@ async function fixture(
   })
   const receiverInput = {
     records: [request, observation, coverage],
-    openings: new Map([
+    openings: new Map<string, unknown>([
       [hashCanonical(request), requestBody],
       [hashCanonical(observation), observationBody],
       [hashCanonical(coverage), projected.body],
@@ -251,12 +270,14 @@ describe('D168 coverage evidence projection', () => {
     expect(await verify()).toMatchObject({
       state: 'supported',
       facts: {
-        coverage: {
-          surface: identity,
-          start: '0',
-          end: '2',
-          expected: projected.body.assertion.expected,
-          captured: projected.body.assertion.captured,
+        claim: {
+          assertion: {
+            surface: identity,
+            start: '0',
+            end: '2',
+            expected: projected.body.assertion.expected,
+            captured: projected.body.assertion.captured,
+          },
         },
       },
     })
@@ -279,7 +300,7 @@ describe('D168 coverage evidence projection', () => {
           const result = await runtimeCoverageSourceVerifier.verify(input)
           if (result.facts) {
             if (kind === 'observation') delete result.facts.native_event_hash
-            else if (result.facts.coverage) delete result.facts.coverage.native_events
+            else delete result.facts.native_events
           }
           return result
         },
@@ -293,15 +314,14 @@ describe('D168 coverage evidence projection', () => {
   it('rejects a different signed native frame that reuses the covered invocation and cursor', async () => {
     const fixture_ = await fixture()
     const { input, receiverInput, observationBody, observation } = fixture_
-    const wrapper = structuredClone(input.capturedEvents[0]!)
-    wrapper.payload.payload.runtime_event.extra_native_field = 'different transport event'
-    wrapper.record = await signed(hashCanonical(wrapper.payload), HOST_CAPTURE_TYPE)
-    const hash = hashCanonical(wrapper)
+    const frame = JSON.parse(new TextDecoder().decode(input.capturedEvents[0]!.artifacts[0]!.bytes))
+    frame.extra_native_field = 'different transport event'
+    const hash = hashCanonical(frame)
     const body = { ...observationBody, basis: [{ relation: 'source', kind: 'artifact', hash }] }
     const changed = await signed(commitEvidenceBody('observation', body), observation.event_type)
     receiverInput.records[1] = changed
     receiverInput.openings.set(hashCanonical(changed), body)
-    receiverInput.artifacts.set(hash, new TextEncoder().encode(canonicalize(wrapper)!))
+    receiverInput.artifacts.set(hash, new TextEncoder().encode(canonicalize(frame)!))
     receiverInput.evaluation.dispatch_record = hashCanonical(changed)
     const received = await verifyEvidenceSet(receiverInput)
     expect(
@@ -312,17 +332,8 @@ describe('D168 coverage evidence projection', () => {
   })
 
   it('leaves an observation without signed native input unresolved', async () => {
-    const { receiverInput, input, observationBody, observation } = await fixture()
-    const wrapper = structuredClone(input.capturedEvents[0]!)
-    delete wrapper.payload.payload
-    wrapper.record = await signed(hashCanonical(wrapper.payload), HOST_CAPTURE_TYPE)
-    const hash = hashCanonical(wrapper)
-    const body = { ...observationBody, basis: [{ relation: 'source', kind: 'artifact', hash }] }
-    const changed = await signed(commitEvidenceBody('observation', body), observation.event_type)
-    receiverInput.records[1] = changed
-    receiverInput.openings.set(hashCanonical(changed), body)
-    receiverInput.artifacts.set(hash, new TextEncoder().encode(canonicalize(wrapper)!))
-    receiverInput.evaluation.dispatch_record = hashCanonical(changed)
+    const { receiverInput, input } = await fixture()
+    receiverInput.artifacts.delete(input.capturedEvents[0]!.artifacts[0]!.hash)
     expect((await verifyEvidenceSet(receiverInput)).request?.dimensions.coverage.state).toBe(
       'unresolved',
     )
@@ -436,7 +447,9 @@ describe('D168 coverage evidence projection', () => {
     body.basis.find((ref) => ref.hash === oldHash)!.hash = hash
     artifacts.set(hash, new TextEncoder().encode(canonicalize(altered)!))
     expect(await verify(body, artifacts)).toMatchObject({ state: 'rejected' })
-    const capturedHash = hashCanonical(input.capturedEvents[0])
+    const capturedHash = hashCanonical(
+      input.capturedEvents.map(({ record, opening }) => ({ record, opening })),
+    )
     const missing = new Map(projected.artifacts)
     missing.delete(capturedHash)
     expect(await verify(projected.body, missing)).toMatchObject({ state: 'unresolved' })
@@ -459,4 +472,123 @@ describe('D168 coverage evidence projection', () => {
     expect(runtimeCoverageSourceVerifier.compareCursors?.('2', '10')).toBeLessThan(0)
     expect(runtimeCoverageSourceVerifier.compareCursors?.('02', '2')).toBeUndefined()
   })
+  it('supports 128 independently authenticated captures without exceeding the basis limit', async () => {
+    const { projected, verify } = await fixture('captured', 0, context, { count: 128 })
+    expect(projected.body.basis.length).toBeLessThanOrEqual(256)
+    expect(await verify()).toMatchObject({ state: 'supported' })
+  })
+  it('keeps native schema fields separate from the committed coverage manifest', async () => {
+    const { verify } = await fixture('captured', 0, context, {
+      nativeSchema: COVERAGE_MANIFEST_SCHEMA,
+    })
+    expect(await verify()).toMatchObject({ state: 'supported' })
+  })
+  it('splits disclosures at the exact 1 MiB artifact boundary', async () => {
+    const { projected, verify, input } = await fixture('captured', 0, context, {
+      async alter(unit) {
+        unit.record.tool_name = ''
+        const size = new TextEncoder().encode(
+          canonicalize([{ record: unit.record, opening: unit.opening }])!,
+        ).length
+        unit.record.tool_name = 'x'.repeat(1_048_576 - size)
+        Object.assign(unit.record, await signRecord(unit.record, seed))
+      },
+    })
+    const groups = projected.body.basis
+      .filter((ref) => ref.relation === 'captured')
+      .map((ref) => projected.artifacts.get(ref.hash)!)
+      .filter((bytes) => Array.isArray(JSON.parse(new TextDecoder().decode(bytes))))
+    expect(groups).toHaveLength(2)
+    expect(groups[0]!.length).toBe(1_048_576)
+    expect(await verify()).toMatchObject({ state: 'supported' })
+    input.capturedEvents[0]!.record.tool_name += 'x'
+    expect(() => projectCoverageEvidence(input)).toThrow('coverage_artifact_limit')
+  })
+  it('distinguishes a missing captured opening from a malformed present opening', async () => {
+    const { projected, verify } = await fixture()
+    const ref = projected.body.basis.find(
+      (ref) =>
+        ref.relation === 'captured' &&
+        Array.isArray(JSON.parse(new TextDecoder().decode(projected.artifacts.get(ref.hash)!))),
+    )!
+    const group = JSON.parse(new TextDecoder().decode(projected.artifacts.get(ref.hash)!))
+    for (const missing of [true, false]) {
+      if (missing) delete group[0].opening
+      else group[0].opening = null
+      const bytes = new TextEncoder().encode(canonicalize(group)!)
+      ref.hash = hashCanonical(group)
+      projected.artifacts.set(ref.hash, bytes)
+      expect(await verify()).toMatchObject({ state: missing ? 'unresolved' : 'rejected' })
+    }
+  })
+  it.each(['result_hash', 'context', 'timestamp', 'phase', 'method'] as const)(
+    'rejects a signed captured %s mismatch',
+    async (field) => {
+      const { verify } = await fixture('captured', 0, context, {
+        async alter(unit) {
+          const body = evidenceBodySchemas.observation.options[0].parse(unit.opening)
+          if (field === 'result_hash') unit.record.result_hash = `sha256:${'1'.repeat(64)}`
+          if (field === 'context') unit.record.context_id = 'f'.repeat(32)
+          if (field === 'timestamp') unit.record.timestamp++
+          if (field === 'phase') {
+            body.assertion.phase = 'response'
+            body.assertion.outcome = 'success'
+          }
+          if (field === 'method') body.source.method = 'urn:another:method'
+          Object.assign(unit.opening, body)
+          unit.record.args_hash = commitEvidenceBody('observation', body)
+          Object.assign(unit.record, await signRecord(unit.record, seed))
+        },
+      })
+      expect(await verify()).toMatchObject({ state: 'rejected' })
+    },
+  )
+  it.each(['position', 'event_id', 'context_id', 'descriptor', 'malformed'] as const)(
+    'rejects a signed native %s mismatch',
+    async (field) => {
+      const { verify } = await fixture('captured', 0, context, {
+        async alter(unit) {
+          const frame =
+            field === 'malformed'
+              ? null
+              : JSON.parse(new TextDecoder().decode(unit.artifacts[0]!.bytes))
+          if (field === 'position') frame.position++
+          if (field === 'event_id') frame.event_id = 'other-native-id'
+          if (field === 'context_id') frame.context_id = 'f'.repeat(32)
+          if (field === 'descriptor') frame.descriptor.parameters = { changed: true }
+          const bytes = new TextEncoder().encode(canonicalize(frame)!)
+          const hash = hashCanonical(frame)
+          Object.assign(unit.artifacts[0]!, { hash, bytes })
+          unit.opening.basis[0]!.hash = hash
+          unit.record.args_hash = commitEvidenceBody('observation', unit.opening)
+          Object.assign(unit.record, await signRecord(unit.record, seed))
+        },
+      })
+      expect(await verify()).toMatchObject({ state: 'rejected' })
+    },
+  )
+  it('checks each captured signer while allowing a separately pinned rotated key', async () => {
+    const captureKey = new Uint8Array(32).fill(74)
+    const { projected, input, verify } = await fixture('captured', 0, context, { captureKey })
+    expect(await verify()).toMatchObject({ state: 'rejected' })
+    const keys = [
+      input.logWindowRecord.creator_key,
+      base64urlEncode(await getPublicKey(captureKey)),
+    ]
+    expect(await verify(projected.body, projected.artifacts, keys)).toMatchObject({
+      state: 'supported',
+    })
+  })
+  it.each(['signature', 'opening'] as const)(
+    'rejects a captured own %s mismatch under a valid coverage signer',
+    async (field) => {
+      const { verify } = await fixture('captured', 0, context, {
+        alter(unit) {
+          if (field === 'signature') unit.record.signature = 'A'.repeat(86)
+          else unit.opening.subject.id = 'different-subject'
+        },
+      })
+      expect(await verify()).toMatchObject({ state: 'rejected' })
+    },
+  )
 })

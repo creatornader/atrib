@@ -62,14 +62,17 @@ const result = await verifyEvidenceSet({
 
 Each exact source method URI selects an `EvidenceSourceVerifier`. Its `verify`
 method receives copied record/body data, hash-checked artifact bytes and the
-policy's pinned source keys. It returns authenticated facts and the hashes
-that support them. `facts.claim` binds the complete body except nonce/basis.
-`facts.authority` authenticates the sorted authority record references.
-Effects require `facts.effect` to map the raw payload hash to object, version
-and state. Coverage requires authenticated surface/window/expected/captured
-facts, an observation cursor and the method's `compareCursors` function.
+policy's pinned source keys. A supported result returns one normalized
+`facts.claim` derived from authenticated artifacts, plus the supporting hashes.
+The receiver compares this claim with the complete opening except nonce/basis.
+The claim includes effect payload hash, object, version and state, or coverage
+surface/window/expected/captured sets. `facts.authority` authenticates the sorted
+authority record references. Coverage requires an authenticated observation
+`cursor` and the method's `compareCursors` function. Methods that use native
+hashes return `native_event_hash` and `native_events` for the exact membership join.
 `singleDestinationPerDelivery` declares the method's native multiplicity rule.
-The adapter must verify its own artifact format and native authentication.
+The adapter must verify its artifact format and native authentication before
+returning support. Supplied assertions cannot serve as their own proof.
 The synthetic corpus adapter ships only in tests.
 
 Adapters receive the receiver's fixed `evaluatedAt` time. They must use it for
@@ -780,9 +783,10 @@ The full protocol spec is at [`atrib-spec.md`](https://github.com/creatornader/a
 for host-owned interception. Register it explicitly under that method
 in `sourceVerifiers` and pin the host signer in the matching policy rule's
 `source_keys`. The verifier uses only supplied artifact bytes and keys. It
-checks the host wrapper signature, exact captured claim, commitment, time,
-context and authorization references. Missing artifacts remain unresolved.
-It evaluates the source wrapper's clock bound against the supplied
+checks the typed observation's signature, carrier, closed opening, frame commitment,
+time and source-key pin. The signed opening authenticates the host metadata and
+authority references. Missing frame artifacts remain unresolved.
+It evaluates the observation's clock bound against the supplied
 `evaluation.evaluated_at`, so the verifier's wall clock does not affect replay.
 Changed bytes, reused claims and unpinned keys cannot establish source support.
 This proves a signed host account. It does not prove independent control,
