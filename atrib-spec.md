@@ -3959,20 +3959,14 @@ Observational attribution MUST NOT impair the primary function of a tool or
 agent. Its failures preserve the default tool-call and response behavior.
 Diagnostics MAY report degraded capture without changing that behavior.
 
-This section governs observational attribution middleware. An executor's
-explicitly enabled protected preconditions are host execution policy. They do
-not turn an observational failure into a failure of the default tool call.
+This section governs observational attribution middleware. Execution
+preconditions and refusal behavior belong to a separately specified host policy.
 For source-bound evidence under
 [§1.12](#112-source-bound-evidence-statements), observational failures MUST remain
-visible as degraded capture. A protected executor explicitly requiring durable
-intent MUST refuse its mediated effect if retention fails. Log submission failure
-alone MUST NOT refuse an effect whose required local intent is durable. Ordinary
-middleware remains non-blocking; this exception does not silently enable a gate.
-
-The protected durable-intent check MUST execute on the executor's own awaited
-path outside observational triggers. It MUST refuse before invoking the effect
-handler when retention fails. A trigger exception swallowed by middleware cannot
-be used as evidence that this protected check succeeded.
+visible as degraded capture. Missing or failed recording MUST NOT be treated as
+proof that an effect was prevented. A producer MUST NOT claim durable pre-action
+intent unless the complete signed record and opening were durable before the
+effect.
 
 The degradation contract is:
 
@@ -3987,8 +3981,8 @@ The degradation contract is:
 **If `ATRIB_PRIVATE_KEY` is not set at init, the middleware MUST log a warning and operate in pass-through mode.** Pass-through mode: all requests and responses are forwarded without modification, no attribution records are emitted, no context is attached. The tool or agent operates as if the `atrib()` wrapper were not present.
 
 Adding observational `@atrib/mcp` or `@atrib/agent` middleware MUST preserve the
-tool's behavior on attribution failure. A host that enables a protected executor
-separately chooses its refusal conditions and MUST expose those conditions.
+tool's behavior on attribution failure. This contract does not define a host's
+protected execution policy.
 
 #### 5.8.1 Duplicate-safe stateless MCP writes
 

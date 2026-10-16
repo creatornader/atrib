@@ -156,16 +156,13 @@ E12. Evidence projections MUST preserve authors and conflicting accounts. inform
 
 E13. Boundary producers MUST derive observations from intercepted source data. An isolated signer that accepts arbitrary agent-authored observations as host facts does not conform. Different keys do not establish independent administrative control. A captured agent report remains a captured report, not an observed effect.
 
-E14. Observational capture failure MAY permit work to continue, but MUST surface degraded capture and retain a diagnostic/gap when storage permits. Producers MUST NOT label post-call fallback as durable pre-action intent. An executor explicitly configured to require durable intent before a protected effect MUST refuse that effect when retention fails. This is a path-specific guarantee, not a universal fail-closed tool policy. Coverage never extends to uninstrumented paths by implication.
+E14. Observational capture failure MUST surface degraded capture and retain a diagnostic/gap when storage permits. Producers MUST NOT label post-call fallback as durable pre-action intent. A producer MUST NOT claim durable pre-action intent unless the complete signed record and opening were durable before the effect. Missing or failed recording MUST NOT be treated as proof that an effect was prevented. Coverage never extends to uninstrumented paths by implication.
 
-The protected retention check MUST run on the executor's own awaited path, outside observational trigger handlers whose exceptions are swallowed. It MUST return an explicit refusal without invoking the effect handler when retention fails. Generic observational middleware does not acquire that guarantee from logging configuration.
-
-These explicitly enabled preconditions belong to host execution policy.
+Execution preconditions and refusal behavior belong to a separately specified host policy.
 Default observational middleware retains the core
 [§5.8 degradation contract](../atrib-spec.md#58-degradation-contract). Existing wrapper and SDK
 action records acquire neither source-bound conformance nor destination-effect
-proof merely because this contract exists. A host may integrate a selected
-protected path without migrating its other harnesses.
+proof merely because this contract exists.
 
 ## 5. Receiver policy and results
 

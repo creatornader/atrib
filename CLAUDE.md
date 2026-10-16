@@ -260,7 +260,7 @@ A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (r
 
 These are non-negotiable. They come from the founding conversation and are the core design decisions.
 
-1. **Default telemetry failures must never affect the primary tool call or agent response.** Catch telemetry exceptions, retry network failures silently, and pass through if no key is configured. A host may explicitly require durable evidence before a protected action under its own execution policy. That opt-in path refuses the action when required retention fails. See [§5.8](atrib-spec.md#58-degradation-contract).
+1. **Default telemetry failures must never affect the primary tool call or agent response.** Catch telemetry exceptions, retry network failures silently, and pass through if no key is configured. Execution preconditions and refusal behavior belong to a separately specified host policy. See [§5.8](atrib-spec.md#58-degradation-contract).
 
 2. **The graph records structure, not causality.** Never add edge types based on semantic interpretation of tool names or response content. Edges are derived from observable record structure only. This is [§3.1](atrib-spec.md#31-design-principles-and-rationale) of the spec.
 
