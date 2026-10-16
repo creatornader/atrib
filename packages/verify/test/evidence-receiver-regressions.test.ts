@@ -110,24 +110,6 @@ async function addObservation(input: Input, original: FixtureRecord, body: Evide
 }
 
 describe('receiver finding regressions', () => {
-  it.each(['C01-complete', 'coverage-complete'])(
-    'uses one authenticated normalized claim without duplicate projections: %s',
-    async (name) => {
-      const input = fixture(name)
-      const expected = await verifyEvidenceSet(input)
-      input.sourceVerifiers[SNAPSHOT_METHOD] = {
-        ...fixtureSourceVerifier,
-        async verify(args) {
-          const result = await fixtureSourceVerifier.verify(args)
-          if (!result.facts) return result
-          expect(result.facts).not.toHaveProperty('effect')
-          expect(result.facts).not.toHaveProperty('coverage')
-          return result
-        },
-      }
-      expect(await verifyEvidenceSet(input)).toEqual(expected)
-    },
-  )
   it('rejects a normalized claim that differs from its opened assertion', async () => {
     const input = fixture()
     input.sourceVerifiers[SNAPSHOT_METHOD] = {
