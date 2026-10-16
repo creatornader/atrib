@@ -6295,8 +6295,7 @@ true`; a single endpoint without that contract remains `mixed`.
 history window, and it was never promoted to the default. The routes it
 measured then changed for their own reasons: one long-lived local agent route
 retired, [D148](#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime)
-moved the primitive runtime to atribd (daemons deployed, client configuration
-cutover pending), and Agent Bridge posting is scheduled to retire. In the last
+moved the operator primitive runtime to atribd, and Agent Bridge posting is scheduled to retire. In the last
 configuration the atribd hosts sent the coordinators `shadow_probe` traffic
 only, so each producer kept its own mirror write and log submission. The
 operator coordinators and the trial sampler are retired. Hosts whose
@@ -7849,16 +7848,18 @@ Full draft: [docs/adr-draft-p048-payments-spinout.md](docs/adr-draft-p048-paymen
 - npm name: settled as `@atrib/daemon`, with the `atribd` binary. It has shipped
   under that name since 0.1.0; the unscoped `atribd` 0.1.0 is deprecated.
 - Ambient context: `--ambient-context` or `ATRIBD_AMBIENT_CONTEXT=1`, off by
-  default. The operator profiles run with it on so calls without a
-  `context_id` keep the behavior they had under the primitives runtime. Known
-  limitation: such writes are attributed to whichever session of the profile
-  last wrote the profile's active-session file. Per-session resolution in the
-  stdio proxy would remove that limitation.
+  default. The operator profiles run without it, so a write that carries no
+  `context_id` is refused, where the primitives runtime used to resolve one
+  ambiently. Turning it on restores that behavior with a known limitation:
+  such writes are attributed to whichever session of the profile last wrote
+  the profile's active-session file. Per-session resolution in the stdio proxy
+  would remove that limitation.
 - Coordinator residual duties: none remain to merge into the daemon. The
   [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
   default trial closed and the operator coordinators retired.
-- `@atrib/primitives-runtime`: still open. It stays installed until the operator
-  client configs move to atribd. Deleting it later also requires moving the
+- `@atrib/primitives-runtime`: still open. The operator client configs now use
+  the atribd stdio proxy, and the primitives runtime stays installed for
+  rollback. Deleting it later also requires moving the
   [D128](#d128-host-owned-primitive-runtime-updates-are-build-restart-direct-probe)
   updater default to `--runtime atribd` and updating the doc-sync inventories
   and the workspace package count.
