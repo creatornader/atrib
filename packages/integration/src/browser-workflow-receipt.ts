@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { randomBytes } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { localBrowser, Stagehand } from '@browserbasehq/stagehand'
 import canonicalize from 'canonicalize'
 import { BrowserSession } from 'browser-use/browser'
@@ -548,7 +549,12 @@ async function runStagehandWorkflowReceiptSmokeOnce(): Promise<StagehandWorkflow
   const privateKey = new Uint8Array(32).fill(26)
   const contextId = '737461676568616e642d70726f6f6630'
   const privatePhrase = 'private stagehand note: vendor risk reviewed'
-  const stagehandPackageVersion = '4.0.0'
+  const stagehandPackageVersion: string = JSON.parse(
+    readFileSync(
+      new URL('../package.json', import.meta.resolve('@browserbasehq/stagehand')),
+      'utf8',
+    ),
+  ).version
   const browser = await localBrowser.launch({ headless: true })
   const stagehand = await Stagehand.create({ browser })
   const recorder = new BrowserWorkflowReceiptRecorder({

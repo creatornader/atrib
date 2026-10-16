@@ -23,6 +23,20 @@ The Stagehand smoke is opt-in inside CI because local CDP startup can time out
 on shared runners. Set `ATRIB_RUN_STAGEHAND_BROWSER_SMOKE=1` when a CI job is
 meant to exercise that browser session directly.
 
+Run the browser error and recovery checks with the same flag:
+
+```bash
+ATRIB_RUN_STAGEHAND_BROWSER_SMOKE=1 pnpm --filter @atrib/integration exec vitest run test/browser-workflow-receipt.test.ts
+APPROVAL_TRACE_TEST_PORT=8799 pnpm --filter @atrib/cloudflare-approval-trace test:browser
+```
+
+The receipt tests exercise missing-selector failures in real Stagehand and
+Playwright browsers. They check that the recorder returns the original error,
+keeps private selector text in local sidecars, verifies the signed failure,
+rejects a tampered receipt, and chains a successful recovery action. The
+approval-trace suite covers approval, rejection, revision, and diagnostic errors
+through the Playwright UI. The Stagehand smoke reports its installed SDK version.
+
 ## What It Proves
 
 - A browser/workflow agent action sequence can be represented as signed atrib
