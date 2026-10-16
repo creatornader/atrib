@@ -376,6 +376,17 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+/** True when the call carries a `context_id` argument of any value. */
+function hasContextArgument(params: CallToolRequest['params']): boolean {
+  const args = params.arguments
+  return (
+    !!args &&
+    typeof args === 'object' &&
+    !Array.isArray(args) &&
+    (args as Record<string, unknown>)['context_id'] !== undefined
+  )
+}
+
 /**
  * Serialization key for a write-primitive call. Mirrors the context_id
  * derivation the write primitives themselves apply before mirror-tail
@@ -1187,7 +1198,9 @@ export async function createAtribdBackend(
     const idempotencyKey = idempotencyKeyFromRequest(request)
     const key = writeSerializationKey(request)
     if (!key) {
-      if (idempotencyKey) {
+      // A present but malformed context_id goes to the primitive, whose
+      // schema refuses it with the same tool error as a non-idempotent call.
+      if (idempotencyKey && !hasContextArgument(request)) {
         throw new McpError(
           ErrorCode.InvalidParams,
           'atribd: idempotency requires a resolved context_id',

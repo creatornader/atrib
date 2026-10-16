@@ -1,0 +1,28 @@
+{
+  "name": "traceparent-only-resolves-context",
+  "spec_section": "D148",
+  "check": "http-carrier",
+  "description": "Ladder 2 per \u00a71.5.4: a traceparent trace-id alone resolves context_id. No propagation token is present, so no chain_root is injected.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 32,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "content": {
+            "what": "traceparent-only-resolves-context"
+          }
+        },
+        "_meta": {
+          "traceparent": "00-dddddddddddddddddddddddddddddddd-00f067aa0ba902b7-01"
+        }
+      }
+    }
+  },
+  "expected": {
+    "received_context_id": "dddddddddddddddddddddddddddddddd",
+    "received_chain_root": null
+  }
+}

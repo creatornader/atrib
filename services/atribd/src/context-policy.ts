@@ -3,16 +3,15 @@
 /**
  * Context-identity policy for the stateless HTTP surface (P046).
  *
- * Precedence per request, using the legacy inbound carriers that
- * `readInboundContext` in @atrib/mcp reads (`_meta.atrib`, the tracestate
- * `atrib=` entry, the §1.5.3 `X-Atrib-Chain` fallback, and the traceparent
- * trace-id). The `dev.atrib/attribution` extension rungs of §1.5.4 are not
- * read here yet:
+ * Precedence per request, using both §1.5.4 ladders as @atrib/mcp's
+ * `resolveContextIdentity` and `resolveInboundToken` implement them:
  *
- *   1. Explicit `context_id` tool argument (32-hex). Passed through
- *      untouched; the daemon adds nothing.
+ *   1. Explicit `context_id` tool argument. Passed through untouched,
+ *      even when malformed, so the primitive's schema refuses it; the
+ *      daemon adds nothing.
  *   2. Inbound carrier resolution from per-request `_meta`. When the
- *      carriers resolve a context_id (traceparent trace-id) the daemon
+ *      carriers resolve a context_id (the extension block's context_id,
+ *      then the traceparent trace-id) the daemon
  *      injects it as the explicit argument; when they also resolve a
  *      propagation token, the token's record hash is injected as
  *      `chain_root` on tools whose schema accepts it, seeding chain-tail
@@ -30,14 +29,19 @@
  * caller-argument path, and its D067 precedence is untouched.
  */
 
-import { KNOWN_HARNESS_DISCOVERIES, hexEncode, readInboundContext } from '@atrib/mcp'
+import {
+  KNOWN_HARNESS_DISCOVERIES,
+  readInboundContext,
+  resolveContextIdentity,
+  resolveInboundToken,
+} from '@atrib/mcp'
 import type { CallToolRequest, CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { WRITE_TOOL_NAMES } from './backend.js'
 
 const CONTEXT_ID_PATTERN = /^[0-9a-f]{32}$/
 
-/** Write tools whose input schema accepts a caller-managed chain_root. */
-const CHAIN_ROOT_CAPABLE_TOOLS: ReadonlySet<string> = new Set(['emit'])
+/** Write tools whose input schema accepts a caller-managed chain_root (emit and the attest verb). */
+const CHAIN_ROOT_CAPABLE_TOOLS: ReadonlySet<string> = new Set(['emit', 'attest'])
 
 export const MISSING_CONTEXT_ERROR_TEXT = 'atrib: context_id required on stateless transport'
 
@@ -66,22 +70,28 @@ export function applyHttpContextPolicy(
     return { kind: 'pass', params }
   }
 
+  // Rung 1: an explicit argument always wins. A present but malformed value
+  // is left for the primitive's schema to refuse, never replaced by a carrier.
   const args = argumentsRecord(params)
-  const explicit = args['context_id']
-  if (typeof explicit === 'string' && CONTEXT_ID_PATTERN.test(explicit)) {
+  if (args['context_id'] !== undefined) {
     return { kind: 'pass', params }
   }
 
-  // Rung 2: per-request _meta carriers (§1.5.4 ladder + §1.5.3 fallback).
-  const inbound = readInboundContext(params as unknown as Record<string, unknown>)
-  if (inbound?.contextId && CONTEXT_ID_PATTERN.test(inbound.contextId)) {
-    const injected: Record<string, unknown> = { ...args, context_id: inbound.contextId }
+  // Rung 2: per-request _meta carriers, both §1.5.4 ladders. Context comes
+  // from the extension block's context_id, then the traceparent trace-id;
+  // the propagation token (extension token, then _meta.atrib, the tracestate
+  // atrib= entry, then X-Atrib-Chain) seeds chain_root.
+  const meta = (params as { _meta?: unknown })._meta
+  const identity = resolveContextIdentity(undefined, meta)
+  if (identity.contextId && CONTEXT_ID_PATTERN.test(identity.contextId)) {
+    const injected: Record<string, unknown> = { ...args, context_id: identity.contextId }
+    const token = resolveInboundToken(meta)
     if (
       CHAIN_ROOT_CAPABLE_TOOLS.has(params.name) &&
       args['chain_root'] === undefined &&
-      inbound.recordHash.length === 32
+      token.recordHashHex !== undefined
     ) {
-      injected['chain_root'] = `sha256:${hexEncode(inbound.recordHash)}`
+      injected['chain_root'] = `sha256:${token.recordHashHex}`
     }
     return { kind: 'injected', params: { ...params, arguments: injected } }
   }

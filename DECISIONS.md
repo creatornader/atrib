@@ -7879,6 +7879,19 @@ Full draft: [docs/adr-draft-p048-payments-spinout.md](docs/adr-draft-p048-paymen
   inventories and the workspace package count.
 - The length and sunset criteria of the legacy-initialize window stay open.
 
+**HTTP carrier ladder (amended 2026-10-16).** Point 3's `readInboundContext`
+read only the legacy token carriers and needed a token. The daemon now consumes
+both [§1.5.4.1](atrib-spec.md#1541-negotiated-extension-carriage-devatribattribution)
+ladders. Context comes from the explicit argument, then the
+`dev.atrib/attribution` block's `context_id`, then the `traceparent` trace-id. A
+present but malformed argument is passed through for the primitive's schema to
+refuse, never replaced by a carrier. `chain_root` on `emit` and `attest` comes
+only from the propagation token: the extension token, then `_meta.atrib`, then
+the `atrib=` tracestate entry, then `X-Atrib-Chain`. A valid bare `traceparent`
+therefore satisfies strict mode, so a client that attaches one gets its trace-id
+as the context rather than a refusal, and the stdio-to-HTTP proxy does not
+forward its environment session over it.
+
 ## D149: Cross-attestation composes with a trust set for Sybil resistance
 
 **Date:** 2026-07-02
