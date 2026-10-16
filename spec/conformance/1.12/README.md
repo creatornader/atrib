@@ -157,7 +157,7 @@ per artifact. Its input preflight visits at most 100,000 JSON nodes and 64 MiB
 combined string and artifact bytes, stopping at depth 64. If an opening contains
 a subtree below that depth, preflight marks the opening limited and does not
 count the unvisited descendants. These are implementation defenses, not
-normative §1.12 limits. The standalone corpus oracle does not exercise the
+normative [§1.12](../../../atrib-spec.md#112-source-bound-evidence-statements) limits. The standalone corpus oracle does not exercise the
 preflight depth guard. Coverage may use one hash-bound manifest for many IDs.
 Missing or corrupt source/authority/coverage material must not be silently
 treated as complete. A known unavailable claim is not evidence that no event
