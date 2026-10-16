@@ -6290,6 +6290,23 @@ profile-routed primitive supervisor only when it advertises
 `profile_routing.mode: "explicit"` and `profile_routing.isolated_backends:
 true`; a single endpoint without that contract remains `mixed`.
 
+**Update 2026-10-16: the operator default trial closed without passing.**
+The trial never met its gates, and each harness route it measured moved on for
+its own reasons: the long-lived local agent route retired, [D148](#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime)
+replaced the primitives runtime with atribd, and Agent Bridge posting is being
+retired. In the last configuration the daemons sent the coordinators
+`shadow_probe` traffic only, so each producer kept its own mirror write and log
+submission and the coordinator signatures were duplicate comparison data. The
+operator coordinators and the trial sampler are retired, and the daemons no
+longer set a local-substrate endpoint.
+
+This ADR stays accepted as an optional deployment pattern. The reopen
+conditions below still apply. The local-substrate client in `@atrib/mcp` stays
+public API, and the fixture corpus in
+[`spec/conformance/local-substrate-coordinator/`](spec/conformance/local-substrate-coordinator/)
+stays. Operator scripts that only measured the live trial may leave the
+repository with this note as their record.
+
 **Consequences.**
 
 - [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
@@ -7818,6 +7835,22 @@ Full draft: [docs/adr-draft-p048-payments-spinout.md](docs/adr-draft-p048-paymen
 **Alternatives considered:** keeping seven standalone stdio processes as the public default (rejected: measured spawn storms, ppid-fragile session discovery, seven mirror writers, and the fork evidence above); patching the session machinery in place indefinitely (rejected: it builds on machinery the 2026-07-28 spec removes); waiting for the SDK before building anything (rejected: the gate binds only the transport binding, and the adapter is the ADR's own fallback path); dropping the `X-Atrib-Chain` fallback rung (rejected: [§1.5.3](atrib-spec.md#153-http-fallback-x-atrib-chain) callers would break silently); collapsing the visible tool surface to two tools now (rejected by [D079](#d079-the-six-core-cognitive-primitives--atribs-agent-facing-surface); the rename is P047's decision); hosting the surface as a cloud service (rejected: keys and mirror must stay on the host); folding the daemon into the [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned) coordinator (rejected as-is: the coordinator is optional topology glue, the daemon is the signing owner).
 
 **Open questions (operator):** final npm name (`atribd` vs `@atrib/daemon`); fate of the private `@atrib/primitives-runtime` package after cutover; the single-tenant ambient-context flag name and default; length and sunset criteria of the legacy-initialize window; whether the coordinator's residual duties merge into the daemon.
+
+**Operator answers (2026-10-16).**
+
+- npm name: `@atrib/daemon`, with the `atribd` binary. It has shipped under that name since 0.1.0.
+- Ambient context: `--ambient-context` or `ATRIBD_AMBIENT_CONTEXT=1`, off by
+  default. The operator profiles run with it on, which keeps the write behavior
+  the primitives runtime had for calls without a `context_id`. Concurrent
+  sessions of one profile share that profile's active-session file under this
+  flag. Per-session resolution in the stdio proxy is a possible later change.
+- Coordinator residual duties: they do not merge into the daemon. The
+  [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
+  default trial closed and its coordinators retired, leaving no residual duty.
+- `@atrib/primitives-runtime`: it retires after the operator configs move to
+  atribd and a clean week of writes, and the private package is then deleted.
+  Until then rollback stays a config change.
+- The length and sunset criteria of the legacy-initialize window stay open.
 
 ## D149: Cross-attestation composes with a trust set for Sybil resistance
 
@@ -9680,6 +9713,13 @@ operable through the profile-aware runtime updater.
 
 **Protocol impact.** None. This is a deployment boundary. It changes no MCP
 message and no atrib signed byte.
+
+**Update 2026-10-16.** The operator retired the `claude-desktop` profile and its
+daemon, so two profiles remain: `claude-code` and `codex`. The daemons no longer
+set `ATRIB_LOCAL_SUBSTRATE_ENDPOINT` because the
+[D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
+coordinators retired. The decision is unchanged: one daemon per remaining
+profile.
 
 ## D188: Default payment detection requires published completion evidence
 
