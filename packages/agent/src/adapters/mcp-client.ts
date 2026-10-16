@@ -15,7 +15,7 @@
  *      so the interceptor can update its session state, detect transactions,
  *      and emit Path 2 records when the tool server has no @atrib/mcp
  *
- * The adapter is intentionally narrow. it only proxies `callTool`. All other
+ * The adapter proxies `callTool` and recursively wraps clients returned by `fork`. All other
  * client methods (`listTools`, `close`, `connect`, `request`, etc.) are
  * forwarded unchanged. This means a developer can drop the adapter into any
  * existing code that uses the MCP SDK Client directly without changing
@@ -48,10 +48,10 @@ export interface MinimalMcpClient {
     options?: unknown,
   ): Promise<{
     content?: unknown
-    _meta?: Record<string, unknown>
+    _meta?: Record<string, unknown> | undefined
     headers?: unknown
     responseHeaders?: unknown
-    isError?: boolean
+    isError?: boolean | undefined
     [key: string]: unknown
   }>
 }
@@ -74,7 +74,7 @@ export interface WrapMcpClientOptions {
  * Wrap a raw MCP Client so every `callTool` invocation participates in
  * atrib attribution.
  *
- * Returns a Proxy over the client. All non-`callTool` methods are forwarded
+ * Returns a Proxy over the client. Other methods are forwarded
  * unchanged via the prototype, so the wrapped client is API-compatible with
  * the original.
  *
@@ -166,6 +166,25 @@ export function wrapMcpClient<C extends MinimalMcpClient>(
         return wrappedCallTool
       }
       const value = Reflect.get(target, prop, receiver)
+      if (prop === 'fork' && typeof value === 'function') {
+        // LangChain's inner proxy synthesizes fork on every property read.
+        // An outer proxy can wrap its result without mutating that factory.
+        return (...args: unknown[]) => {
+          const result: unknown = Reflect.apply(value, target, args)
+          const wrapResult = (forked: unknown): unknown => {
+            if (
+              forked !== null &&
+              typeof forked === 'object' &&
+              typeof (forked as { callTool?: unknown }).callTool === 'function'
+            ) {
+              return wrapMcpClient(forked as MinimalMcpClient, interceptor, options)
+            }
+            return forked
+          }
+          if (result instanceof Promise) return result.then(wrapResult)
+          return wrapResult(result)
+        }
+      }
       // If the property is a function, bind it to the original target so
       // method calls like `client.listTools()` still work correctly.
       if (typeof value === 'function') {

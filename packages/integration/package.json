@@ -13,7 +13,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck:openinference-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --types node --strict --skipLibCheck examples/openinference/integration.ts examples/openinference/dual-export-smoke.ts examples/openinference/cognitive-loop.ts",
-    "typecheck": "tsc --noEmit && pnpm typecheck:openai-examples && pnpm typecheck:mem0-examples && pnpm typecheck:proof-scripts && pnpm typecheck:openinference-examples",
+    "typecheck:langchain-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --types node --strict --exactOptionalPropertyTypes --skipLibCheck examples/langchain-js/integration.ts examples/langgraph-store/langgraph-store-smoke.ts",
+    "typecheck": "tsc --noEmit && pnpm typecheck:openai-examples && pnpm typecheck:mem0-examples && pnpm typecheck:proof-scripts && pnpm typecheck:openinference-examples && pnpm typecheck:langchain-examples",
     "build": "tsc --noEmit",
     "demo": "tsx examples/end-to-end/demo.ts",
     "openinference-cognitive-loop": "tsx examples/openinference/cognitive-loop.ts",
@@ -119,6 +120,7 @@
     "@google/adk": "2.0.0",
     "@langchain/core": "1.2.17",
     "@langchain/langgraph": "1.5.0",
+    "@langchain/mcp-adapters": "1.1.3",
     "@mastra/core": "1.63.0",
     "@mastra/mcp": "1.17.2",
     "@modelcontextprotocol/sdk": "^1.32.1",

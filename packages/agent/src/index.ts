@@ -16,7 +16,11 @@ export type { GapNode } from '@atrib/verify'
 /** @deprecated Import from '@atrib/agent/payments'. */
 export { detectTransaction } from './transaction.js'
 /** @deprecated Import types from '@atrib/agent/payments'. */
-export type { TransactionDetection, TransactionDetector, TransactionProtocol } from './transaction.js'
+export type {
+  TransactionDetection,
+  TransactionDetector,
+  TransactionProtocol,
+} from './transaction.js'
 
 // Policy negotiation
 export { initializeSessionPolicy } from './policy.js'
@@ -47,11 +51,12 @@ export type {
 
 // LangChain JS MCP adapter. patches every internal `@modelcontextprotocol/sdk`
 // Client owned by a `@langchain/mcp-adapters` `MultiServerMCPClient` so every
-// outbound `tools/call` (and every forked client from per-call-header
-// workflows) flows through atrib's interceptor.
+// outbound base-client tools/call flows through atrib's interceptor.
+// Native proxy forks use wrapMcpClient with loadMcpTools instead.
 export { attributeLangchainMcp } from './adapters/langchain-mcp.js'
 export type {
   LangchainMcpClientLike,
+  LangchainMcpToolLike,
   LangchainMultiServerMcpClientLike,
   AttributeLangchainMcpOptions,
 } from './adapters/langchain-mcp.js'
