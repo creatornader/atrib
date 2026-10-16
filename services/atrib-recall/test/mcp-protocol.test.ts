@@ -972,9 +972,9 @@ describe('MCP protocol surface', () => {
       second.close()
     }
 
-    expect(readdirSync(indexDir).filter((name) => name.startsWith('recall-content-'))).toHaveLength(
-      1,
-    )
+    const indexNames = readdirSync(indexDir).filter((name) => name.startsWith('recall-content-'))
+    expect(indexNames.filter((name) => name.endsWith('.json'))).toHaveLength(1)
+    expect(indexNames.filter((name) => name.endsWith('.json.sig'))).toHaveLength(1)
   })
 
   it('recall_by_content rejects a stale durable index when the mirror changes', async () => {

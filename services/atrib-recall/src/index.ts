@@ -385,14 +385,28 @@ function getLoadedMirrorSnapshot(recordFile?: string): LoadedMirrorSnapshot {
   return loadedMirrorSnapshot
 }
 
-function getContentSearchMirrorSnapshot(maxRecords: number): LoadedMirrorSnapshot {
+function getContentSearchMirrorSnapshot(requestedMaxRecords: number): LoadedMirrorSnapshot {
   const fingerprint = readMirrorFingerprint()
   if (loadedMirrorSnapshot?.signature === fingerprint.signature) return loadedMirrorSnapshot
+  // Bounded searches slice the newest records to their own limit, so a larger
+  // cached window serves a smaller request. Keeping the larger window stops a
+  // small probe and a normal call from evicting each other on every write.
+  const maxRecords = Math.max(
+    requestedMaxRecords,
+    contentSearchMirrorSnapshot?.maxLoadedRecords ?? 0,
+  )
   if (
     contentSearchMirrorSnapshot?.signature === fingerprint.signature &&
     contentSearchMirrorSnapshot.maxLoadedRecords === maxRecords
   ) {
     return contentSearchMirrorSnapshot
+  }
+  if (loadedMirrorSnapshot && !loadedMirrorSnapshot.partial) {
+    const refreshedComplete = tryAppendRefreshLoadedMirrorSnapshot(
+      loadedMirrorSnapshot,
+      fingerprint,
+    )
+    if (refreshedComplete) return refreshedComplete
   }
   const refreshed = tryAppendRefreshLoadedMirrorSnapshot(
     contentSearchMirrorSnapshot,
@@ -510,6 +524,16 @@ function tryLoadDurableContentIndex(
   const path = contentIndexPath()
   if (!path) return undefined
   if (!existsSync(path)) return undefined
+  // The signature sidecar lets a stale index be rejected without parsing the
+  // whole file. Every mirror write changes the fingerprint, so without this
+  // check each call after a write would parse and then discard the index.
+  try {
+    if (readFileSync(contentIndexSignaturePath(path), 'utf8') !== fingerprint.signature) {
+      return undefined
+    }
+  } catch {
+    return undefined
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(readFileSync(path, 'utf8'))
@@ -529,6 +553,10 @@ function contentIndexPath(): string | undefined {
   // otherwise every new record leaves behind a full, obsolete index file.
   const hash = createHash('sha256').update(contentIndexCacheIdentity()).digest('hex')
   return join(ATRIB_RECALL_CONTENT_INDEX_DIR, `recall-content-${hash}.json`)
+}
+
+function contentIndexSignaturePath(indexPath: string): string {
+  return `${indexPath}.sig`
 }
 
 function contentIndexCacheIdentity(): string {
@@ -564,6 +592,12 @@ function writeContentIndex(
     const tmpPath = `${path}.${process.pid}.${Date.now()}.tmp`
     writeFileSync(tmpPath, JSON.stringify(indexFile))
     renameSync(tmpPath, path)
+    // Written after the index. A reader that sees a new index with an older
+    // sidecar only misses the cache; the full validation still checks the
+    // signature stored inside the index after a sidecar match.
+    const sigTmpPath = `${tmpPath}.sig`
+    writeFileSync(sigTmpPath, indexFile.mirror_signature)
+    renameSync(sigTmpPath, contentIndexSignaturePath(path))
     return contentIndexStatus('rebuilt', path)
   } catch (error) {
     return contentIndexStatus(
