@@ -483,41 +483,75 @@ async function scanAppendedTails(change: IncrementalChange): Promise<FileTailSca
   }
 }
 
+const MAX_INCREMENTAL_ROUNDS = 4
+
+// Same-inode growth after an in-place rewrite would look like an append.
+// The byte before each append must still end the line that was read earlier.
+async function appendBoundariesIntact(changes: IncrementalChange[]): Promise<boolean> {
+  const boundaries = await Promise.all(
+    changes
+      .filter((change) => change.start > 0)
+      .map((change) => fileEndsWithNewline(change.path, change.start)),
+  )
+  return boundaries.every(Boolean)
+}
+
 async function tryIndexedCorpusTail(
   index: MirrorTailIndex,
   snapshot: CorpusSnapshot,
   contextId: string,
 ): Promise<{ usable: boolean; record: AtribRecord | null }> {
-  const changes = appendOnlyChanges(index, snapshot)
-  if (!changes) return { usable: false, record: null }
+  let changes = appendOnlyChanges(index, snapshot)
+  if (!changes || !(await appendBoundariesIntact(changes))) return { usable: false, record: null }
 
   const tails = tailsFromIndex(index)
-  for (const change of changes) {
-    const scan = await scanAppendedTails(change)
-    if (!scan.complete) return { usable: false, record: null }
-    for (const [changedContextId, record] of scan.tails) {
-      const current = tails.get(changedContextId)
-      if (current?.sourceFile === change.state.name) {
-        // Append order replaces this file's prior tail. If its timestamp
-        // moves backward, only a full scan can recover the runner-up tail
-        // from another file without storing a much larger per-file index.
-        if (!isLaterCorpusTail(record, current.record)) {
-          return { usable: false, record: null }
+  let current = snapshot
+  let changed = false
+  for (let round = 0; ; round += 1) {
+    for (const change of changes) {
+      const scan = await scanAppendedTails(change)
+      if (!scan.complete) return { usable: false, record: null }
+      changed = true
+      for (const [changedContextId, record] of scan.tails) {
+        const prior = tails.get(changedContextId)
+        if (prior?.sourceFile === change.state.name) {
+          // Append order replaces this file's prior tail. If its timestamp
+          // moves backward, only a full scan can recover the runner-up tail
+          // from another file without storing a much larger per-file index.
+          if (!isLaterCorpusTail(record, prior.record)) {
+            return { usable: false, record: null }
+          }
+          tails.set(changedContextId, { sourceFile: change.state.name, record })
+        } else if (!prior || isLaterCorpusTail(record, prior.record)) {
+          tails.set(changedContextId, { sourceFile: change.state.name, record })
         }
-        tails.set(changedContextId, { sourceFile: change.state.name, record })
-      } else if (!current || isLaterCorpusTail(record, current.record)) {
-        tails.set(changedContextId, { sourceFile: change.state.name, record })
       }
     }
+
+    const after = await snapshotMirrorCorpus(snapshot.effectivePath)
+    if (!after) return { usable: false, record: null }
+    if (sameCorpusState(current.files, after.files)) break
+
+    // Concurrent writers keep appending while this read runs. The bytes read
+    // so far stay valid when every file only grew, so fold in the new appends
+    // instead of rescanning the whole corpus. Truncation, replacement, or a
+    // removed file still falls back to the full scan.
+    const next = appendOnlyChanges(
+      { schema: MIRROR_TAIL_INDEX_SCHEMA, files: current.files, tails: [] },
+      after,
+    )
+    if (!next || !(await appendBoundariesIntact(next))) return { usable: false, record: null }
+    if (round + 1 >= MAX_INCREMENTAL_ROUNDS) {
+      // Still growing. The tails are complete for the state already read,
+      // which is what a read that started slightly earlier would return.
+      break
+    }
+    current = after
+    changes = next
   }
 
-  const after = await snapshotMirrorCorpus(snapshot.effectivePath)
-  if (!after || !sameCorpusState(snapshot.files, after.files)) {
-    return { usable: false, record: null }
-  }
-
-  if (changes.length > 0) {
-    await writeMirrorTailIndex(snapshot.indexPath, indexFromTails(snapshot.files, tails))
+  if (changed) {
+    await writeMirrorTailIndex(snapshot.indexPath, indexFromTails(current.files, tails))
   }
   return { usable: true, record: tails.get(contextId)?.record ?? null }
 }
