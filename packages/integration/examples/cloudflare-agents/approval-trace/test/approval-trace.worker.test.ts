@@ -8,6 +8,8 @@ import {
   waitOnExecutionContext,
 } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import agentsPackage from '../node_modules/agents/package.json'
+import codemodePackage from '../node_modules/@cloudflare/codemode/package.json'
 import {
   canonicalRecord,
   computeContentId,
@@ -383,7 +385,8 @@ describe('Cloudflare approval trace Worker', () => {
       },
       codemode: {
         runtime: 'CodemodeRuntime',
-        runtime_version: '@cloudflare/codemode@0.4.1',
+        runtime_version: `@cloudflare/codemode@${codemodePackage.version}`,
+        agents_sdk_version: `agents@${agentsPackage.version}`,
         executor: 'local-test',
         execution_status: 'paused',
         pending_action: expect.objectContaining({
@@ -754,7 +757,8 @@ describe('Cloudflare approval trace Worker', () => {
       },
       codemode: expect.objectContaining({
         runtime: 'CodemodeRuntime',
-        runtime_version: '@cloudflare/codemode@0.4.1',
+        runtime_version: `@cloudflare/codemode@${codemodePackage.version}`,
+        agents_sdk_version: `agents@${agentsPackage.version}`,
         executor: 'local-test',
         execution_status: 'paused',
         pending_action: expect.objectContaining({

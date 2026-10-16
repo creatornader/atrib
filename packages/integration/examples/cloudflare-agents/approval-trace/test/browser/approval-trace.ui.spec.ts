@@ -34,7 +34,7 @@ async function createProposal(page: Page, path = '/'): Promise<void> {
   await expect(page.locator('#answer')).toContainText('Code Mode approval halted')
   await expect(page.locator('#proposal')).toContainText('Proposed action')
   await expect(page.locator('#proposal')).toContainText('Native Code Mode runtime')
-  await expect(page.locator('#proposal')).toContainText('CodemodeRuntime@0.4.1')
+  await expect(page.locator('#proposal')).toContainText('CodemodeRuntime@0.5.4')
   await expect(page.locator('#proposal')).toContainText('repository.write_file')
   await expect(page.locator('#proposal')).toContainText('requiresApproval')
   await expect(page.locator('#proposal')).toContainText('Cloudflare owns durable pause')

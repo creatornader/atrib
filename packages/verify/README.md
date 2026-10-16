@@ -625,6 +625,8 @@ The async verifier also defaults `sdJwtConformancePolicy` to `require` when VI c
 
 VC type metadata and status-list fetches are explicit. If a caller enables `sdJwtVc.loadTypeMetadata` or submits credentials with VC status references, it should provide `sdJwtVc.vctFetcher` or `sdJwtVc.statusListFetcher`. The verifier does not perform hidden network fetches for those checks.
 
+The native SD-JWT conformance check adds a trailing `~` when a VI credential is a bare signed JWT with no disclosures. The caller-supplied credential stays unchanged. Signature checks and child `sd_hash` bindings use the original bytes. Both `sd-jwt` and `sd-jwt-vc` profiles enforce signature, disclosure, and time checks through SD-JWT 0.22.0.
+
 The default constraint policy is `require`. Failed, unresolved, or unsupported disclosed AP2 constraints make `valid` false. Use `constraintPolicy: "best-effort"` to keep those findings advisory, or `"off"` to skip them. The lower-level `evaluateAp2ViConstraints(input, disclosures?)` helper is exported for decoded mandate material and fixture replay.
 
 Checkout line-item checks accept both atrib's decoded `line_items[]` fixture shape and VI checkout JWT payloads that carry purchased products under `cart.items[].sku`. `payment.reference` is evaluated against the open checkout mandate disclosure digest and the same final checkout-payment binding surfaced as `checkoutPaymentBindingOk`.

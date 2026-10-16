@@ -17,9 +17,25 @@ Both integrations are zero-deploy: no extra Worker, no proxy hop, no architectur
 
 In a Worker, import from `@atrib/mcp/worker`. The package root also exports Node-only helpers for stdio proxying, local mirror reads, and host-side instrumentation. The Worker subpath keeps those modules out of the Cloudflare bundle.
 
-`Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)`. The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs. Subsequent tool calls go through atrib's interceptor for context propagation, inbound attribution-token consumption, unsigned gap-node tracking, and agent-side fallback transaction emission when the response matches a known commerce close signal. The Cloudflare approval-trace example targets `agents@0.16.2` and `@cloudflare/codemode@0.4.1`.
+`Agent.addMcpServer` uses an internal `MCPClientManager` whose `callTool({ serverId, name, arguments })` method delegates straight to `mcpConnections[serverId].client.callTool(...)`. The `client` field is publicly exposed on `MCPClientConnection`, so we can wrap it in place after `addMcpServer` runs. Subsequent tool calls go through atrib's interceptor for context propagation, inbound attribution-token consumption, unsigned gap-node tracking, and agent-side fallback transaction emission when the response matches a known commerce close signal. The Cloudflare approval-trace example targets `agents@0.28.1` and `@cloudflare/codemode@0.5.4`.
 
 See `DECISIONS.md` [D022](../../../../DECISIONS.md#d022-cloudflare-agents-adapter-mcpagent-server-side-is-zero-code-agent-client-side-uses-attributecloudflareagentmcp-not-createatribproxy) for the full architectural rationale.
+
+## Local SDK compatibility checks
+
+Run `pnpm --filter @atrib/integration exec vitest run test/cloudflare-local-runtime.test.ts` after building the workspace. This [runtime test](../../test/cloudflare-local-runtime.test.ts) starts the actual `McpAgent` server and `Agent.addMcpServer` client examples through Wrangler on localhost. It checks valid tool execution, invalid-input rejection, recovery, trace metadata and signed-record capture. The client example keeps its documented unsigned gap node and signed fallback transaction.
+
+The tests submit only to an in-memory dev log. Record signatures verify, but the dev log's Merkle proofs are placeholders and do not establish public-log inclusion. Set `ATRIB_LOG_ENDPOINT` on the client-proof Worker to route its log proxy to a local log; omitting it keeps the public endpoint default.
+
+Approval and OAuth Worker tests run in the Workers test pool. The approval [browser suite](approval-trace/test/browser/approval-trace.ui.spec.ts) also runs against a local Worker:
+
+```bash
+pnpm --filter @atrib/cloudflare-approval-trace test
+pnpm --filter @atrib/cloudflare-oauth-evidence-infra test
+pnpm --filter @atrib/cloudflare-approval-trace test:browser
+```
+
+These checks cover the local runtime. They do not deploy a Worker or exercise hosted Cloudflare OAuth accounts.
 
 ---
 
@@ -240,7 +256,7 @@ connector approval metadata, pending action shape, approve/reject calls, and
 approval-continuation path. Production configuration uses `CodemodeRuntime`,
 `DynamicWorkerExecutor`, and a Worker Loader binding.
 
-This proof uses the lower-level `@cloudflare/codemode@0.4.1` runtime surface:
+This proof uses the lower-level `@cloudflare/codemode@0.5.4` runtime surface:
 `CodemodeRuntime`, `createCodemodeRuntime`, `pending()`, `approve()`,
 `reject()`, and `rollback()`. Cloudflare's public `createCodeTool` guide still
 routes approval-gated AI SDK tools through the standard HITL path instead of the

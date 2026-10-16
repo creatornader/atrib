@@ -218,6 +218,49 @@ describe('verifyAp2ViEvidence', () => {
     })
   }
 
+  for (const profile of ['sd-jwt', 'sd-jwt-vc'] as const) {
+    it(`preserves bare VI issuer bytes and delegation hashes under ${profile}`, async () => {
+      const fixture = cloneEvidence(immediateFixture)
+      const original = JSON.stringify(fixture)
+      expect(fixture.vi!.credentials[0]!.sdJwt).not.toContain('~')
+
+      const result = await verifyAp2ViEvidenceAsync(fixture, {
+        nowSeconds: 1_779_840_000,
+        sdJwtConformanceProfile: profile,
+      })
+
+      expect(result.valid).toBe(true)
+      expect(result.errors).toEqual([])
+      expect(result.vi.credentials.every((credential) => credential.sdHashOk)).toBe(true)
+      expect(
+        result.vi.credentials.every(
+          (credential) => credential.sdJwtConformance.status === 'verified',
+        ),
+      ).toBe(true)
+      expect(JSON.stringify(fixture)).toBe(original)
+    })
+
+    it(`rejects a tampered bare VI issuer signature under ${profile}`, async () => {
+      const fixture = cloneEvidence(immediateFixture)
+      const issuer = fixture.vi!.credentials[0]!
+      const segments = issuer.sdJwt.split('.')
+      const signature = Buffer.from(segments[2]!, 'base64url')
+      signature[0] = signature[0]! ^ 1
+      segments[2] = signature.toString('base64url')
+      issuer.sdJwt = segments.join('.')
+
+      const result = await verifyAp2ViEvidenceAsync(fixture, {
+        nowSeconds: 1_779_840_000,
+        sdJwtConformanceProfile: profile,
+      })
+
+      expect(result.valid).toBe(false)
+      expect(result.vi.credentials[0]!.signature.status).toBe('invalid')
+      expect(result.vi.credentials[0]!.sdJwtConformance.status).toBe('invalid')
+      expect(result.vi.credentials[1]!.sdHashOk).toBe(false)
+    })
+  }
+
   it('verifies VI SD-JWT VC conformance in the async verifier', async () => {
     const result = await verifyAp2ViEvidenceAsync(immediateFixture, {
       nowSeconds: 1_779_840_000,
