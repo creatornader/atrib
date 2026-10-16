@@ -4525,7 +4525,7 @@ export function renderApp(options: { colo?: string } = {}): string {
       }
 
       function codeModeRuntimeVersionLabel() {
-        return 'CodemodeRuntime@0.4.1';
+        return 'CodemodeRuntime@0.5.4';
       }
 
       function currentReceiptState(run = currentRun) {

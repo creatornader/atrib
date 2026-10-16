@@ -28,7 +28,7 @@ the approved write. The proposal, decision, Code Mode preview or execution,
 outcome, and handoff are signed as separate records.
 
 This uses the lower-level runtime surface exported by
-`@cloudflare/codemode@0.4.1`: `CodemodeRuntime`, `createCodemodeRuntime`,
+`@cloudflare/codemode@0.5.4`: `CodemodeRuntime`, `createCodemodeRuntime`,
 `pending()`, `approve()`, `reject()`, and `rollback()`. Cloudflare's public
 `createCodeTool` guide still says AI SDK tools with `needsApproval` are excluded
 from the simple Codemode tool path. This example is therefore a runtime-boundary
