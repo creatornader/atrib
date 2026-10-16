@@ -1579,16 +1579,14 @@ describe('atribd real primitive mounts', () => {
         ATRIB_RECORD_FILE: recordFile,
         ATRIB_MIRROR_FILE: recordFile,
       })
-      // Claude Code does not export its session id to MCP children; the
-      // SessionStart hook writes it to a file keyed by the harness PID, which
-      // is the proxy child's parent. Here that parent is this test process.
+      // The proxy child's parent here is this test process. Its D083
+      // per-parent-PID file and the profile file both name other sessions;
+      // the proxy must forward only the session named in its own environment.
       mkdirSync(join(tmp, '.claude', 'state'), { recursive: true })
       writeFileSync(
         join(tmp, '.claude', 'state', `active-session-id-${process.pid}`),
-        '93F57455-11C0-4A1F-AB9C-A59BCFC54129',
+        'd'.repeat(32),
       )
-      // A profile file for the same profile names a different session; the
-      // proxy must not fall back to it.
       writeFileSync(join(tmp, '.claude', 'state', 'active-session-id-test-agent'), 'c'.repeat(32))
       try {
         const strict = await postJson(
@@ -1611,7 +1609,7 @@ describe('atribd real primitive mounts', () => {
             HOME: tmp,
             ATRIB_AGENT: 'test-agent',
             ATRIB_CONTEXT_ID: '',
-            CLAUDE_CODE_SESSION_ID: '',
+            CLAUDE_CODE_SESSION_ID: '93F57455-11C0-4A1F-AB9C-A59BCFC54129',
             CODEX_THREAD_ID: '',
           }),
           stderr: 'pipe',
@@ -1624,7 +1622,7 @@ describe('atribd real primitive mounts', () => {
           await client.connect(transport)
           const result = (await client.callTool({
             name: 'emit',
-            arguments: { event_type: 'observation', content: { what: 'proxy ambient write' } },
+            arguments: { event_type: 'observation', content: { what: 'proxy session write' } },
           })) as { isError?: boolean; content: { text: string }[] }
           expect(result.isError, result.content[0]?.text).not.toBe(true)
           const records = readFileSync(recordFile, 'utf8').split('\n').filter(Boolean)
@@ -1633,6 +1631,37 @@ describe('atribd real primitive mounts', () => {
           expect(mirrored.record?.context_id).toBe('93f5745511c04a1fab9ca59bcfc54129')
         } finally {
           await client.close().catch(() => {})
+        }
+
+        // Without a session in its environment the proxy forwards nothing,
+        // even though the active-session files exist, and the strict daemon
+        // refuses the write.
+        const bareTransport = new ModernStdioClientTransport({
+          command: 'node',
+          args: [BINARY, '--transport', 'stdio-http-proxy', '--endpoint', host.endpoint],
+          env: processEnvWith({
+            HOME: tmp,
+            ATRIB_AGENT: 'test-agent',
+            ATRIB_CONTEXT_ID: '',
+            CLAUDE_CODE_SESSION_ID: '',
+            CODEX_THREAD_ID: '',
+          }),
+          stderr: 'pipe',
+        })
+        const bareClient = new ModernClient(
+          { name: 'atribd-v2-proxy-no-session-test', version: '0.0.0' },
+          { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+        )
+        try {
+          await bareClient.connect(bareTransport)
+          const refused = (await bareClient.callTool({
+            name: 'emit',
+            arguments: { event_type: 'observation', content: { what: 'proxy without session' } },
+          })) as { isError?: boolean; content: { text: string }[] }
+          expect(refused.isError, refused.content[0]?.text).toBe(true)
+          expect(readFileSync(recordFile, 'utf8').split('\n').filter(Boolean)).toHaveLength(1)
+        } finally {
+          await bareClient.close().catch(() => {})
         }
       } finally {
         await host.close()

@@ -82,7 +82,7 @@ export {
 export {
   applyHttpContextPolicy,
   applyStdioProxyContext,
-  resolveProxyAmbientContext,
+  resolveProxySessionContext,
   MISSING_CONTEXT_ERROR_TEXT,
   type HttpContextPolicyOutcome,
 } from './context-policy.js'

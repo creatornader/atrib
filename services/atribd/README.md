@@ -131,18 +131,31 @@ Read primitives that support unscoped queries proceed per their own scope
 rules. A single-tenant daemon can opt back into ambient env and profile-file
 discovery ([D078](../../DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)) with `--ambient-context` or `ATRIBD_AMBIENT_CONTEXT=1`;
 it is off by default. The stdio surfaces keep the ambient ladder unchanged.
-The stdio-to-HTTP proxy resolves part of that ladder in its own child process:
-`ATRIB_CONTEXT_ID`, the harness env vars, and the harness parent-process file
-written by the SessionStart hook. It skips the profile active-session file,
-which names whichever session of the profile wrote it last. On a write call
-whose arguments omit `context_id` and that carries no `_meta` carrier, the proxy
-forwards the result as an explicit `context_id`, so a strict daemon accepts the
+The stdio-to-HTTP proxy resolves only the environment rungs of that ladder in
+its own child process: `ATRIB_CONTEXT_ID`, then the registered harness session
+variables (`CLAUDE_CODE_SESSION_ID`, `CODEX_THREAD_ID`). On a write call whose
+arguments omit `context_id` and that carries no `_meta` carrier, the proxy
+forwards that value as an explicit `context_id`, so a strict daemon accepts the
 write under the calling session without `--ambient-context`. A present but
-invalid `context_id`, any `_meta` carrier, or an unresolved ladder passes
-through unchanged and the daemon decides. Attribution is per session only when
-the harness starts the proxy directly (no wrapper process) and its SessionStart
-hook writes the parent-process file. A keyed retry whose session file changed
-between attempts is refused as a different action rather than replayed.
+invalid `context_id`, any `_meta` carrier, or no session variable passes
+through unchanged and the daemon decides.
+
+The proxy never reads the active-session files. The parent-process file and the
+profile file each name whichever session wrote them last, and a harness that
+runs several sessions under one parent process shares both, so forwarding them
+would sign one session's write under another's context. Two limits follow from
+using the environment:
+
+- A harness that starts MCP children once per app process rather than once per
+  session gives the child no session variable. Writes through such a proxy
+  still need an explicit `context_id`.
+- The variable is fixed when the child starts. If the harness keeps the child
+  across a session change, such as clearing the conversation, the proxy keeps
+  forwarding the earlier session until the child restarts. Processes the
+  session spawns inherit the variable, so a subagent writes under its parent's
+  context unless it is given its own, as in the
+  [D115](../../DECISIONS.md#d115-agent-to-subagent-handoff-uses-a-three-signal-producer-bundle)
+  bundle.
 
 ## Write serialization
 

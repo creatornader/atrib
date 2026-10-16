@@ -6291,14 +6291,14 @@ profile-routed primitive supervisor only when it advertises
 true`; a single endpoint without that contract remains `mixed`.
 
 **Update 2026-10-16: the dogfood default trial closed.** The trial reached
-`ready_for_default_trial` intermittently in June but never held a stable green
-history window, and it was never promoted to the default. The routes it
-measured then changed for their own reasons: one long-lived local agent route
-retired, [D148](#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime)
-moved the operator primitive runtime to atribd, and Agent Bridge posting is scheduled to retire. In the last
-configuration the atribd hosts sent the coordinators `shadow_probe` traffic
-only, so each producer kept its own mirror write and log submission. The
-operator coordinators and the trial sampler are retired. Hosts whose
+`ready_for_default_trial` intermittently from June 13 to July 2, then lost
+readiness and did not regain it. It never held a stable green history window and
+was never promoted to the default. In the last configuration the coordinators
+were set to `shadow_probe` mode, and no commit delegation from the daemons was
+observed, so each producer kept its own mirror write and log submission.
+[D148](#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime)
+has since moved the operator primitive runtime to atribd. The operator
+coordinators and the trial sampler are retired. Hosts whose
 `ATRIB_LOCAL_SUBSTRATE_*` settings are removed use the ordinary producer path:
 their own signing, mirror write and log queue.
 
@@ -7851,22 +7851,26 @@ Full draft: [docs/adr-draft-p048-payments-spinout.md](docs/adr-draft-p048-paymen
   default, and the operator profiles run without it. The flag would attribute
   writes without a `context_id` to whichever session of the profile last wrote
   the profile's active-session file. Instead the stdio-to-HTTP proxy resolves
-  the [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)
-  env and parent-process rungs in its own child, skipping the profile-file
-  rung, and forwards an explicit `context_id` on writes that omit one and carry
-  no `_meta` carrier. A strict daemon accepts them under the calling session
-  when the harness starts the proxy directly and writes the parent-process
-  file; otherwise the write is refused as before. Pinned by the `stdio-proxy-*`
-  context-resolution cases.
+  only the environment rungs of the
+  [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)
+  ladder (`ATRIB_CONTEXT_ID` and the harness session variables) in its own
+  child, and forwards an explicit `context_id` on writes that omit one and carry
+  no `_meta` carrier. It reads neither active-session file, because a harness
+  that runs several sessions under one parent process shares them. Where the
+  child has no session variable, the write is refused as before. Pinned by the
+  `stdio-proxy-*` context-resolution cases.
 - Coordinator residual duties: none remain to merge into the daemon. The
   [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
   default trial closed and the operator coordinators retired.
-- `@atrib/primitives-runtime`: still open. The operator client configs now use
-  the atribd stdio proxy, and the primitives runtime stays installed for
-  rollback. Deleting it later also requires moving the
+- `@atrib/primitives-runtime`: still open, and deletion is an owner decision.
+  Some operator client configs still use its stdio proxy, so they move to the
+  atribd proxy first. Deleting it also requires moving the
   [D128](#d128-host-owned-primitive-runtime-updates-are-build-restart-direct-probe)
-  updater default to `--runtime atribd` and updating the doc-sync inventories
-  and the workspace package count.
+  updater default to `--runtime atribd`, pointing the
+  [D127](#d127-primitive-runtime-health-gates-recall-contract-freshness)
+  through [D130](#d130-primitive-runtime-health-uses-non-mutating-behavioral-probes)
+  health references at atribd, and updating the doc-sync
+  inventories and the workspace package count.
 - The length and sunset criteria of the legacy-initialize window stay open.
 
 ## D149: Cross-attestation composes with a trust set for Sybil resistance
@@ -9732,11 +9736,12 @@ operable through the profile-aware runtime updater.
 message and no atrib signed byte.
 
 **Update 2026-10-16.** All three profiles remain: `claude-code`, `claude-desktop`
-and `codex`. Claude Desktop also hosts Code sessions under its profile. The
+and `codex`. The
 [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
 coordinators retired, so the daemons no longer set any
-`ATRIB_LOCAL_SUBSTRATE_*` variable; the coordinator route in Decision item 2 and
-the Evidence paragraph describe the July 29 topology. The decision is unchanged.
+`ATRIB_LOCAL_SUBSTRATE_*` variable. The coordinator route in Decision item 2 and
+the `ATRIB_LOCAL_SUBSTRATE_ENDPOINT` difference in the Evidence paragraph
+describe the July 29 topology and no longer apply. The decision is unchanged.
 
 ## D188: Default payment detection requires published completion evidence
 

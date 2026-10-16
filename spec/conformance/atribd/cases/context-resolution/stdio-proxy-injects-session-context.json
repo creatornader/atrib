@@ -2,11 +2,17 @@
   "name": "stdio-proxy-injects-session-context",
   "spec_section": "D148",
   "check": "stdio-proxy",
-  "description": "stdio-to-HTTP proxy: a write call with no context_id and no _meta carrier gets the child's ambient ladder result (here CLAUDE_CODE_SESSION_ID) forwarded as an explicit context_id, so the strict HTTP daemon accepts it under the right session.",
+  "description": "stdio-to-HTTP proxy: a write call with no context_id and no _meta carrier gets the session named in the child's environment (here CLAUDE_CODE_SESSION_ID) forwarded as an explicit context_id, so the strict HTTP daemon accepts it under the right session.",
   "input": {
     "tool": "attest",
-    "arguments": { "content": { "what": "proxy write without context" } },
-    "env": { "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129" }
+    "arguments": {
+      "content": {
+        "what": "proxy write without context"
+      }
+    },
+    "env": {
+      "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129"
+    }
   },
   "expected": {
     "context_id": "93f5745511c04a1fab9ca59bcfc54129"

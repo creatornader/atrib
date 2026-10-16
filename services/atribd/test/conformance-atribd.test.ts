@@ -34,7 +34,7 @@ import {
 import {
   applyStdioProxyContext,
   bindAtribdHttpHost,
-  resolveProxyAmbientContext,
+  resolveProxySessionContext,
   createAtribdBackend,
   type AtribdBackend,
   type AtribdPrimitiveFactory,
@@ -391,6 +391,7 @@ interface ContextResolutionFixture extends HttpVectorFixture {
     arguments?: Record<string, unknown>
     meta?: Record<string, unknown>
     profile_file_context_id?: string
+    parent_pid_file_context_id?: string
     reuses_corpus?: string
   }
   expected: HttpVectorFixture['expected'] & {
@@ -408,7 +409,8 @@ describe('atribd corpus: context-resolution', () => {
       }
       if (fixture.check === 'stdio-proxy') {
         // Isolate the file rungs: HOME points at a fresh directory that holds
-        // only the fixture's profile file, if any.
+        // only the fixture's active-session files, if any. The parent-PID
+        // file is keyed by this process's parent, the rung D083 would read.
         const home = mkdtempSync(join(tmpdir(), 'atribd-proxy-home-'))
         const savedHome = process.env['HOME']
         try {
@@ -420,6 +422,13 @@ describe('atribd corpus: context-resolution', () => {
               fixture.input.profile_file_context_id,
             )
           }
+          if (fixture.input.parent_pid_file_context_id) {
+            mkdirSync(join(home, '.claude', 'state'), { recursive: true })
+            writeFileSync(
+              join(home, '.claude', 'state', `active-session-id-${process.ppid}`),
+              fixture.input.parent_pid_file_context_id,
+            )
+          }
           process.env['HOME'] = home
           const params = {
             name: fixture.input.tool!,
@@ -427,7 +436,7 @@ describe('atribd corpus: context-resolution', () => {
             ...(fixture.input.meta ? { _meta: fixture.input.meta } : {}),
           }
           const forwarded = applyStdioProxyContext(params, () =>
-            resolveProxyAmbientContext(fixture.input.env as NodeJS.ProcessEnv),
+            resolveProxySessionContext(fixture.input.env as NodeJS.ProcessEnv),
           )
           expect(forwarded.arguments?.['context_id']).toBe(fixture.expected.context_id ?? undefined)
           if (forwarded.arguments?.['context_id'] === params.arguments['context_id']) {
