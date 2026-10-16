@@ -24,7 +24,7 @@ export function isEvidenceLocator(value: unknown): value is string {
       )
     )
   } catch {
-    return true
+    return false
   }
 }
 const locator = text.refine(isEvidenceLocator)

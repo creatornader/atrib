@@ -1428,6 +1428,12 @@ _This section is normative._
 
 The [source-bound evidence contract](docs/source-bound-evidence.md) defines normative private-body schemas, type URIs, exact request bindings, source policies, and independent receiver conclusions. These URIs use the existing extension event byte. This section allocates no new log-entry byte or signature format. Ordinary cognitive records do not acquire an action lifecycle by implication.
 
+Receivers MUST compute the body commitment from UTF-8 JCS of the supplied opening,
+without first dropping or normalizing properties through schema validation.
+Validation MUST preserve JSON values permitted by RFC 8785 in `parameters` and
+`state`. See [D189](DECISIONS.md#d189-source-bound-evidence-separates-signed-accounts-from-receiver-reliance)
+for the carrier, compatibility and degradation boundaries.
+
 The [offline conformance corpus](spec/conformance/1.12/README.md) supplies canonical
 receiver JSON vectors, jointly normative with Appendix A. Its C19 executor cases
 are non-normative examples of one configured host policy. They define neither

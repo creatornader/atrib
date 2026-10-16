@@ -93,7 +93,7 @@ New MCP framework adapters follow an established pattern (see `CLAUDE.md` for th
 
 These are non-negotiable. Do not submit PRs that violate them:
 
-1. **Observational attribution failures preserve the primary tool call and agent response.** Explicitly enabled protected preconditions are host execution policy. Required durable retention may refuse that protected effect ([§5.8](atrib-spec.md#58-degradation-contract)).
+1. **Observational attribution failures preserve the primary tool call and agent response.** Execution preconditions and refusal behavior belong to a separately specified host policy ([§5.8](atrib-spec.md#58-degradation-contract), [D189](DECISIONS.md#d189-source-bound-evidence-separates-signed-accounts-from-receiver-reliance)).
 2. **The graph records structure, not causality** ([§3.1](atrib-spec.md#31-design-principles-and-rationale))
 3. **The calculation algorithm is a pure function** ([§4.6](atrib-spec.md#46-the-calculation-algorithm))
 4. **Transaction records are non-blocking** ([§5.3.5](atrib-spec.md#535-log-submission))

@@ -193,7 +193,8 @@ async function inspectSource(
     }
     return
   }
-  if (!policy) return set('unresolved', 'policy_invalid')
+  if (!policy)
+    return set('unresolved', input.policy == null ? 'policy_missing' : 'policy_invalid')
   const src = source(info)
   const rule = policy.rules.find(
     (rule) =>
@@ -266,7 +267,7 @@ async function inspectSource(
 
 export async function evaluateEvidenceFixture(input: FixtureInput) {
   const parsedPolicy = policySchema.safeParse(input.policy)
-  const policy = parsedPolicy.success ? parsedPolicy.data : undefined
+  const policy = parsedPolicy.success ? (input.policy as EvidencePolicy) : undefined
   const evaluation = evaluationSchema.parse(input.evaluation)
   const infos: Info[] = []
   const uniqueRecords = new Map<string, { canonical: string; record: Obj }>()
