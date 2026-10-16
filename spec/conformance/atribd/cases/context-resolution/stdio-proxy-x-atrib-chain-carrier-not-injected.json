@@ -2,7 +2,7 @@
   "name": "stdio-proxy-x-atrib-chain-carrier-not-injected",
   "spec_section": "D148",
   "check": "stdio-proxy",
-  "description": "stdio-to-HTTP proxy: a write carrying an X-Atrib-Chain _meta entry, in any letter case and even if malformed, is forwarded unchanged; the daemon decides what the carrier means.",
+  "description": "stdio-to-HTTP proxy: a write carrying an X-Atrib-Chain _meta entry, even a malformed one, is forwarded unchanged; the daemon decides what the carrier means.",
   "input": {
     "tool": "attest",
     "arguments": {
@@ -14,7 +14,7 @@
       "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129"
     },
     "meta": {
-      "X-ATRIB-CHAIN": "not-a-token"
+      "X-Atrib-Chain": "not-a-token"
     }
   },
   "expected": {

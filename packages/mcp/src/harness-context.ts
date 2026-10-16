@@ -89,10 +89,9 @@ export interface HarnessDiscovery {
 export const KNOWN_HARNESS_DISCOVERIES: readonly HarnessDiscovery[] = [
   // Claude Code: parent process exposes CLAUDE_CODE_SESSION_ID as a UUID
   // (e.g. "38af29c4-fc3a-4f88-8fec-392501b8a0a9") to HOOK subprocesses
-  // (PreToolUse, SessionStart, etc.) and to MCP children. A child spawned
-  // at launch and kept across a session change still holds the earlier
-  // session's value, which is why the file fallback exists for the
-  // ambient MCP child path.
+  // (PreToolUse, SessionStart, etc.) and to MCP children. The file
+  // fallback covers a child whose env value is absent or invalid; a valid
+  // env value always wins, even when it names an earlier session.
   //
   // File convention: ~/.claude/state/active-session-id-<claude-code-pid>
   // Writer: SessionStart hook (overwrites on every session start).

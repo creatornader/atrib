@@ -3,9 +3,11 @@
 /**
  * Context-identity policy for the stateless HTTP surface (P046).
  *
- * Precedence per request, citing the single canonical inbound-carrier
- * ladder (spec §1.5.4 with the §1.5.3 `X-Atrib-Chain` fallback, as
- * `readInboundContext` in @atrib/mcp implements):
+ * Precedence per request, using the legacy inbound carriers that
+ * `readInboundContext` in @atrib/mcp reads (`_meta.atrib`, the tracestate
+ * `atrib=` entry, the §1.5.3 `X-Atrib-Chain` fallback, and the traceparent
+ * trace-id). The `dev.atrib/attribution` extension rungs of §1.5.4 are not
+ * read here yet:
  *
  *   1. Explicit `context_id` tool argument (32-hex). Passed through
  *      untouched; the daemon adds nothing.
@@ -143,15 +145,16 @@ function hasContextCarrier(params: CallToolRequest['params']): boolean {
   if (!meta || typeof meta !== 'object') return false
   // Any present carrier key counts, valid or not: the daemon decides what a
   // malformed carrier means, and the proxy never substitutes for it.
-  return Object.keys(meta).some((key) => CONTEXT_CARRIER_META_KEYS.has(key.toLowerCase()))
+  return Object.keys(meta).some((key) => CONTEXT_CARRIER_META_KEYS.has(key))
 }
 
-/** `_meta` keys that can carry context per the §1.5.4 ladders, lowercased. */
+/** `_meta` keys the §1.5.4 ladders name, spelled as the spec spells them. */
 const CONTEXT_CARRIER_META_KEYS: ReadonlySet<string> = new Set([
   'dev.atrib/attribution',
   'atrib',
   'traceparent',
   'tracestate',
+  'X-Atrib-Chain',
   'x-atrib-chain',
 ])
 

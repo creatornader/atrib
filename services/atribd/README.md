@@ -139,7 +139,11 @@ forwards that value as an explicit `context_id`, so a strict daemon accepts the
 write under the calling session without `--ambient-context`. A present but
 invalid `context_id`, any `_meta` context carrier (`dev.atrib/attribution`,
 `atrib`, `traceparent`, `tracestate` or `X-Atrib-Chain`, valid or not), or no
-session variable passes through unchanged and the daemon decides.
+session variable passes through unchanged and the daemon decides. That includes
+an ordinary OpenTelemetry `tracestate` with no `atrib=` entry, so such a write
+reaches a strict daemon without context and is refused. The daemon does not
+read the `dev.atrib/attribution` block yet, so a write whose only context is
+that block is refused too.
 
 The proxy never reads the active-session files. The parent-process file and the
 profile file each name whichever session wrote them last, and a harness that
