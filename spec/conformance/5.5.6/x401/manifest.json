@@ -51,6 +51,10 @@
     {
       "name": "oauth without token endpoint fails",
       "file": "cases/oauth-without-token-endpoint-fails.json"
+    },
+    {
+      "name": "oauth null fails",
+      "file": "cases/oauth-null-fails.json"
     }
   ]
 }

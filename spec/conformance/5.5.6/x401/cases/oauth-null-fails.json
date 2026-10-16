@@ -1,0 +1,54 @@
+{
+  "name": "oauth-null-fails",
+  "input": {
+    "protocol": "x401",
+    "proofRequest": {
+      "scheme": "x401",
+      "version": "0.2.0",
+      "credential_requirements": {
+        "digital": {
+          "requests": [
+            {
+              "protocol": "openid4vp-v1-signed",
+              "data": {
+                "request": "fixture-signed-openid4vp-request",
+                "client_id": "https://verifier.example/client.json",
+                "nonce": "nonce-current"
+              }
+            }
+          ]
+        }
+      },
+      "oauth": null,
+      "request_id": "proof-template-basic-v1",
+      "satisfied_requirements": ["urn:proof:x401:satisfaction:basic:v1"]
+    },
+    "proofResponse": {
+      "request_id": "proof-template-basic-v1",
+      "agent_id": "did:web:agent.example",
+      "credential_result": {
+        "protocol": "openid4vp-v1-signed",
+        "data": {
+          "vp_token": "fixture-vp-token"
+        }
+      }
+    },
+    "resultVerified": true,
+    "expectedVersion": "0.2.0",
+    "expectedRequestId": "proof-template-basic-v1",
+    "expectedAgentId": "did:web:agent.example",
+    "expectedCredentialProtocol": "openid4vp-v1-signed",
+    "expectedNonce": "nonce-current",
+    "requiredSatisfiedRequirements": ["urn:proof:x401:satisfaction:basic:v1"]
+  },
+  "expected": {
+    "valid": false,
+    "constraints": [
+      {
+        "type": "x401.payload.oauth.token_endpoint",
+        "status": "failed"
+      }
+    ],
+    "errors": ["x401_evidence constraint failed: x401.payload.oauth.token_endpoint"]
+  }
+}
