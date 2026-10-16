@@ -359,6 +359,8 @@ Run with `pnpm --filter @atrib/integration test`. The package typecheck also com
 
 Focused cross-package tests include:
 
+- **[`test/cloudflare-local-runtime.test.ts`](test/cloudflare-local-runtime.test.ts)** runs actual Cloudflare MCP server/client Workers on localhost, checking tool calls, invalid input, context propagation, unsigned gaps and signed fallback records. See the [Cloudflare compatibility guide](examples/cloudflare-agents/README.md#local-sdk-compatibility-checks) for the dev-log proof limit and Worker/browser commands.
+
 - **[`test/mem0-real-package.test.ts`](test/mem0-real-package.test.ts)** runs the installed Mem0 OSS and client smokes, provider rejection, mutation/readback and two-tenant filtering checks. The [Mem0 example guide](examples/mem0/README.md) lists commands and validation limits. These TypeScript examples also run through the package typecheck.
 
 - **`test/end-to-end.test.ts`** (3 tests), full attribution chain across the public packages: agent calls a tool, server emits a signed record, the record's chain hash links to the previous step, the verifier re-runs the calculation against the resulting graph.
