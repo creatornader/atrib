@@ -114,7 +114,9 @@ function mirrorBase64(bytes: Uint8Array): string {
 }
 
 function mirrorArtifactBytes(encoded: string): Uint8Array {
-  const bytes = base64urlDecode(encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''))
+  let end = encoded.length
+  while (end > 0 && encoded.charCodeAt(end - 1) === 61) end--
+  const bytes = base64urlDecode(encoded.slice(0, end).replace(/\+/g, '-').replace(/\//g, '_'))
   if (mirrorBase64(bytes) !== encoded)
     throw new Error('atrib: strict mirror invalid artifact encoding')
   return bytes

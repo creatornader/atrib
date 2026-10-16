@@ -236,6 +236,26 @@ describe('strict mirror retention', () => {
     expect(replay.units).toEqual([unit, next.unit])
     expect(verify).toHaveBeenCalledTimes(3)
   })
+  it.each([
+    { artifact: new Uint8Array([251, 255]), encoded: '+/8=' },
+    { artifact: new Uint8Array([255]), encoded: '/w==' },
+  ])('round-trips canonical artifact padding: $encoded', async ({ artifact, encoded }) => {
+    const { path, unit, key } = await fixture({ artifact })
+    await createStrictMirrorRetention({ path }).reserve(key, unit)
+    const entry = JSON.parse((await readFile(path, 'utf8')).trim())
+    expect(entry._local.evidence.artifacts[0].base64).toBe(encoded)
+    expect((await readStrictMirror(path))[0].artifacts[0].bytes).toEqual(artifact)
+    expect((await createStrictMirrorRetention({ path }).reserve(key, unit)).acquired).toBe(false)
+  })
+  it.each(['', 'A'])('rejects excessive artifact padding with tail %j', async (tail) => {
+    const { path, unit, key } = await fixture({ artifact: new Uint8Array([255]) })
+    await createStrictMirrorRetention({ path }).reserve(key, unit)
+    const entry = JSON.parse((await readFile(path, 'utf8')).trim())
+    entry._local.evidence.artifacts[0].base64 = `/w${'='.repeat(65_536)}${tail}`
+    await writeFile(path, JSON.stringify(entry) + '\n')
+    await expect(readStrictMirror(path)).rejects.toThrow()
+    await expect(createStrictMirrorRetention({ path }).reserve(key, unit)).rejects.toThrow()
+  })
   it.each(['hash', 'bytes', 'missing'])(
     'refuses %s artifact corruption before returning replay units',
     async (corruption) => {
