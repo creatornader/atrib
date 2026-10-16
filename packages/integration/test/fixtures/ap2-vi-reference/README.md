@@ -19,6 +19,6 @@ The generator builds L1, L2, and split L3 VI credentials with the VI reference i
 Default CI consumes these files through `test/ap2-vi-reference-artifacts.test.ts`. It does not start AP2 services and does not need Google credentials.
 
 The L2 credential remains byte-for-byte preserved. It references two disclosure
-digests from both `_sd` and `delegate_payload`. `@sd-jwt/core@0.20.0` rejects
+digests from both `_sd` and `delegate_payload`. `@sd-jwt/core@0.22.0` rejects
 that construction, so the integration test keeps the fixture as a negative
 conformance case until the upstream generator produces a corrected artifact.
