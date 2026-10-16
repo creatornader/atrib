@@ -1,5 +1,17 @@
 # @atrib/recall
 
+## 5.1.6
+
+### Patch Changes
+
+- 5d51ea6: Recall skips a stale durable content index without parsing it and keeps one bounded search window across different `max_records` limits. The signer's mirror tail index folds in appends that land during its incremental read instead of rescanning the whole mirror. `@atrib/attest` and `@atrib/emit` take the signer fix so the global `atrib-emit-cli` hook signer gets it on its next refresh.
+- Updated dependencies [27f9b95]
+- Updated dependencies [ea023f3]
+- Updated dependencies [5d51ea6]
+- Updated dependencies [bd922cc]
+  - @atrib/mcp@0.25.2
+  - @atrib/verify@0.14.1
+
 ## 5.1.5
 
 ### Patch Changes

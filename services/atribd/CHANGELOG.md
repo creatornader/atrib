@@ -1,5 +1,24 @@
 # @atrib/daemon
 
+## 0.4.5
+
+### Patch Changes
+
+- 27f9b95: The HTTP context policy now injects the inbound token's chain root for the `attest` verb as well as `emit`.
+- 27f9b95: The HTTP context policy no longer replaces a present but malformed `context_id` argument with a carrier context; the primitive's schema refuses it. A valid bare `traceparent` now satisfies strict mode, so a client that attaches one gets its trace-id as the context instead of a refusal.
+- 27f9b95: The HTTP context policy now resolves both context ladders of the MCP transport section: a write's `context_id` comes from the `dev.atrib/attribution` block, then the `traceparent` trace-id, and its `chain_root` from the extension token before the legacy carriers. A write whose only context is the extension block, or a bare `traceparent`, is no longer refused.
+- 27f9b95: An idempotent write with a malformed `context_id` now reaches the primitive and gets its schema refusal, the same tool error a non-idempotent call gets, instead of a JSON-RPC invalid-params error.
+- 62406b5: The stdio-to-HTTP proxy now forwards the session named in its own environment (`ATRIB_CONTEXT_ID`, `CLAUDE_CODE_SESSION_ID` or `CODEX_THREAD_ID`) as an explicit `context_id` on write calls that carry none, so a strict daemon accepts them without `--ambient-context`. It never reads the active-session files.
+- Updated dependencies [27f9b95]
+- Updated dependencies [ea023f3]
+- Updated dependencies [5d51ea6]
+- Updated dependencies [bd922cc]
+  - @atrib/mcp@0.25.2
+  - @atrib/verify@0.14.1
+  - @atrib/recall@5.1.6
+  - @atrib/attest@0.4.5
+  - @atrib/summarize@0.5.5
+
 ## 0.4.4
 
 ### Patch Changes
