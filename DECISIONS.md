@@ -7112,7 +7112,7 @@ Legacy x401 draft header and payload names are accepted with warnings by default
 - `@atrib/agent` transaction detection must ignore `PROOF-REQUEST`, `PROOF-RESPONSE`, and `PROOF-RESULT` unless a real payment signal is also present.
 - Hosts stay responsible for credential trust roots, issuer policy, token exchange, replay policy, and any live network calls.
 
-**Update (2026-10-16).** `@proof.com/x401-node@0.3.2` made the `oauth` request member optional, and Proof [announced x401's launch](https://www.globenewswire.com/news-release/2026/10/15/3381718/0/en/proof-launches-x401-giving-ai-agents-a-way-to-prove-who-they-represent-and-what-they-re-authorized-to-do.html) on 2026-10-15. The verifier now checks `oauth.token_endpoint` only when `oauth` is present and reports the check as `not_checked` when it is absent. A present `oauth` member that is null or lacks a string `token_endpoint` still fails, matching the SDK validator. The x401 corpus pins these cases.
+**Update (2026-10-16).** `@proof.com/x401-node@0.3.2` made the `oauth` request member optional. The verifier now checks `oauth.token_endpoint` only when `oauth` is present and reports the check as `not_checked` when it is absent. A present `oauth` member that is null or lacks a string `token_endpoint` still fails, matching the SDK validator. The x401 corpus pins these cases.
 
 **Cross-references.**
 
