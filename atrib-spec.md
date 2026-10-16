@@ -1429,8 +1429,10 @@ _This section is normative._
 The [source-bound evidence contract](docs/source-bound-evidence.md) defines normative private-body schemas, type URIs, exact request bindings, source policies, and independent receiver conclusions. These URIs use the existing extension event byte. This section allocates no new log-entry byte or signature format. Ordinary cognitive records do not acquire an action lifecycle by implication.
 
 The [offline conformance corpus](spec/conformance/1.12/README.md) supplies canonical
-JSON vectors, jointly normative with Appendix A, and distinguishes test-only
-receiver semantics from the separate operational producer obligations.
+receiver JSON vectors, jointly normative with Appendix A. Its C19 executor cases
+are non-normative examples of one configured host policy. They define neither
+protocol nor receiver conformance requirements. Operational producer obligations
+require separate validation.
 
 Signing, retention, disclosure and submission are separate operations. An evidence producer MAY retain a signed record and opening privately without submitting either to a public service. A submission uses [§2](#2-merkle-log-protocol) unchanged. An unsubmitted record MUST NOT be represented as log-included. Checkpoint inclusion covers its specified records, not every action at a source.
 
@@ -5046,6 +5048,11 @@ The corpus enumerates (each as a separate vector with full input → canonical b
 16. **PROVENANCE_OF derivation**: pair of records where downstream's `provenance_token` derives from upstream's hash; derivation produces correct PROVENANCE_OF graph edge per [§3.2.4](#324-edge-derivation-rules) step 7.
 
 The corpus is generated from the reference implementation; a conforming implementation produces identical bytes for the inputs in `inputs.json` of each vector directory. The Appendix A vectors above and the corpus vectors are jointly normative.
+
+For the [source-bound evidence corpus](spec/conformance/1.12/README.md), only
+receiver vectors are jointly normative with this appendix. C19 executor cases
+are non-normative host-policy examples, excluded from protocol and receiver
+conformance requirements.
 
 ---
 

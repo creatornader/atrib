@@ -2,11 +2,13 @@
 
 This corpus exercises the proposed [source-bound evidence contract](../../../docs/source-bound-evidence.md)
 and [core §1.12](../../../atrib-spec.md#112-source-bound-evidence-statements).
-The JSON inputs and expected assertions are canonical vectors for these offline
-checks. Existing core Appendix A vectors still apply. Receiver cases use the
-test-only receiver and body schemas under `packages/verify/test/source-bound-*`.
-They do not export a public receiver API. C19 cases use the isolated executor
-model described below.
+The receiver JSON inputs and expected assertions are canonical vectors, jointly
+normative with core Appendix A. Existing core Appendix A vectors still apply.
+Receiver cases use the test-only receiver and body schemas under
+`packages/verify/test/source-bound-*`.
+They do not export a public receiver API. C19 executor cases are non-normative
+examples of one configured host policy. They define neither protocol nor receiver
+conformance requirements.
 The source adapter uses synthetic test artifacts. Passing it does not establish
 an installed capture/execution boundary or package publication.
 
@@ -80,15 +82,12 @@ corrupt the checkpoint root without resigning. The log uses a separate fixed
 test key. This proves proof validation against the supplied trust configuration,
 without implying that independent organizations operate the fixture keys.
 
-Executor-model cases have `input.mode: executor`. They inject a retention failure
-and check whether the effect handler ran. They test the contract model's ordering,
-not filesystem durability or the installed middleware. They cannot establish a
-protected path exists in a deployment.
-The production strict host is separate implementation work in
-[PR #706](https://github.com/creatornader/atrib/pull/706), including
-`packages/action-gate/test/strict-protected-mcp.test.ts` and
-`packages/mcp/test/strict-mirror.test.ts`. Those package tests are outside this
-specification change and the canonical offline corpus.
+The three C19 executor-model cases have `input.mode: executor`. They vary
+retention outcomes and check whether the effect handler ran under one configured
+host policy. Their expected outcomes are non-normative examples, outside protocol
+and receiver conformance requirements. The checks do not establish filesystem
+durability, installed middleware or a protected path in a deployment. Host
+execution policy is specified separately from the evidence contract.
 
 ## Synthetic source mechanism
 
@@ -135,16 +134,16 @@ independent operators. All fixture keys are controlled by one generator.
 
 ## Coverage and external obligations
 
-| Rule family      | Offline check                                                                                                                 | Still required outside this corpus                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| E01-E02, grammar | Real signatures, complete openings, required fields, type/source constraints and prohibited carrier fields                    | Production random nonce generation and producer APIs                                                                 |
-| E04-E11          | Exact request/execution/subject/authority/source/window bindings, timeout and destination facts                               | Native integration fidelity and source adapter validation against real captures                                      |
-| E12, E18-E20     | No chronology-based joins, separate dimensions/deliveries, deterministic order, missing/conflicting facts and scoped reliance | Independently implemented receiver parity for supported production source methods                                    |
-| E03, E14         | Refusal/continuation ordering in an isolated executor model                                                                   | Atomic record/opening storage, actual crash/restart recovery, actual protected handler refusal and bypass boundaries |
-| E13              | Signed source artifacts must match authenticated facts and pinned keys                                                        | Actual signer isolation, truthful interception and administrative independence                                       |
-| E15-E17          | Pinned source/authority policy, rule overlap, declared/run-key semantics and current/historical time                          | Real delegation compilation and historical revocation snapshots                                                      |
-| E21              | Evaluation leaves the input accounts unchanged and does not implement app-state transitions                                   | Real app reducers preserve report/observed/accepted distinctions                                                     |
-| E22, publication | Self-contained snapshots, explicit unpublished state, exact RFC 6962 inclusion and checkpoint signature rejection             | Production export/import UX and live public inclusion/checkpoint integration under core section 2                    |
+| Rule family      | Offline check                                                                                                                 | Still required outside this corpus                                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| E01-E02, grammar | Real signatures, complete openings, required fields, type/source constraints and prohibited carrier fields                    | Production random nonce generation and producer APIs                                                                |
+| E04-E11          | Exact request/execution/subject/authority/source/window bindings, timeout and destination facts                               | Native integration fidelity and source adapter validation against real captures                                     |
+| E12, E18-E20     | No chronology-based joins, separate dimensions/deliveries, deterministic order, missing/conflicting facts and scoped reliance | Independently implemented receiver parity for supported production source methods                                   |
+| E03, E14         | C19 provides non-normative host-policy examples, not conformance checks for these rules                                       | Durable recording acknowledgements, record/opening recovery, capture diagnostics and pre-action durability evidence |
+| E13              | Signed source artifacts must match authenticated facts and pinned keys                                                        | Actual signer isolation, truthful interception and administrative independence                                      |
+| E15-E17          | Pinned source/authority policy, rule overlap, declared/run-key semantics and current/historical time                          | Real delegation compilation and historical revocation snapshots                                                     |
+| E21              | Evaluation leaves the input accounts unchanged and does not implement app-state transitions                                   | Real app reducers preserve report/observed/accepted distinctions                                                    |
+| E22, publication | Self-contained snapshots, explicit unpublished state, exact RFC 6962 inclusion and checkpoint signature rejection             | Production export/import UX and live public inclusion/checkpoint integration under core section 2                   |
 
 The receiver model has fixed defensive limits: 32 source-reference hops, 256
 source dependencies per statement and 1 MiB per artifact. These are this corpus

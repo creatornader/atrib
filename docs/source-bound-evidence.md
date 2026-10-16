@@ -299,7 +299,7 @@ Existing local mirror retention, runtime-log inspection and core anchor-proof
 verification may supply those functions. Any claimed publication support still
 requires the verified proof in E19.
 
-These cases are required before a reference implementation can claim conformance. Each E01 through E22 and each grammar constraint needs positive and negative executable fixtures. The [offline corpus](../spec/conformance/1.12/README.md) implements executable receiver checks and a test-only reference model. C19 separately exercises a test-only executor model. It does not prove filesystem durability. Its JSON input/expected assertions are the canonical vectors for these checks, jointly normative with core Appendix A. Its external-obligation ledger does not claim that offline vectors prove operational host capture, storage durability, administrative independence or app acceptance. No public package claims full producer/receiver conformance yet.
+The receiver cases below are required for receiver conformance. Each applicable E-rule and grammar constraint needs positive and negative executable fixtures. The [offline corpus](../spec/conformance/1.12/README.md) implements receiver checks through a test-only reference model. Its receiver JSON inputs and expected assertions are canonical vectors, jointly normative with core Appendix A. C19 separately exercises a test-only executor model as non-normative examples of one configured host policy. Those examples define neither protocol nor receiver conformance requirements and do not prove filesystem durability. Producer obligations require separate operational validation. The external-obligation ledger does not claim that offline vectors prove operational host capture, storage durability, administrative independence or app acceptance. No public package claims full producer/receiver conformance yet.
 
 | Case | Input variation                                                      | Required result                                                              |
 | ---- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -322,7 +322,7 @@ These cases are required before a reference implementation can claim conformance
 | C16  | Private record has no publication proof                              | Integrity can pass, publication unresolved, not_submitted                    |
 | C17  | Unknown extension URI                                                | Generic integrity may pass; evidence semantics unresolved                    |
 | C18  | Artifact at locator changes bytes                                    | Dependency rejected, dependency_invalid                                      |
-| C19  | Protected intent retention fails                                     | Effect refused; observational-only path can proceed with gap                 |
+| C19  | Non-normative host-policy example: intent retention fails            | Example refusal; observational-only path proceeds with a gap                 |
 | C20  | Receipt from another invocation shares context/time                  | No supported causal join                                                     |
 
 Further required cases:
