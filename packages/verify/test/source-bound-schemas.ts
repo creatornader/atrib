@@ -19,13 +19,15 @@ export const descriptorSchema = z.strictObject({
   parameters: z.json(),
   version: text.optional(),
 })
-const source = z.strictObject({
-  kind: z.enum(['declared', 'boundary', 'query', 'receipt', 'manifest']),
-  identity: scopedIdSchema,
-  method: uri,
-  observed_at: time.optional(),
-  locator: text.optional(),
-})
+const source = z
+  .strictObject({
+    kind: z.enum(['declared', 'boundary', 'query', 'receipt', 'manifest']),
+    identity: scopedIdSchema,
+    method: uri,
+    observed_at: time.optional(),
+    locator: text.optional(),
+  })
+  .refine((value) => value.kind !== 'declared' || !('observed_at' in value))
 const basis = z.array(
   z.strictObject({
     relation: z.enum(['authority', 'source', 'binding', 'expected', 'captured']),

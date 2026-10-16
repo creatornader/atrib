@@ -33,7 +33,8 @@
     "request": {
       "dimensions": {
         "effect": {
-          "state": "unresolved"
+          "state": "unresolved",
+          "reasons": ["effect_unbound"]
         }
       }
     }

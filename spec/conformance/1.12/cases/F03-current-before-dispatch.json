@@ -29,7 +29,8 @@
     "request": {
       "dimensions": {
         "authority": {
-          "state": "supported"
+          "state": "supported",
+          "reasons": ["no_dispatch_observed"]
         }
       }
     }

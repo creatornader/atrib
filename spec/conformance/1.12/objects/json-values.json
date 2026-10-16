@@ -1273,6 +1273,86 @@
         }
       ]
     },
+    "55d29f1c4c408decaeccda2545ff6f9d41306a9bd3e8f0c829aa90bcdd3edfc7": {
+      "spec_version": "atrib/1.0",
+      "creator_key": "iodf_x6zhFFXes1a_uQFRWVo3XyJ4JCGOgVXvHr0nxc",
+      "content_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "chain_root": "sha256:8a83665f3798727f14f92ad0e6c99fdab08ee731d6cd644c131223fd2f4fed2a",
+      "context_id": "11111111111111111111111111111111",
+      "event_type": "https://atrib.dev/evidence/v1/observation",
+      "timestamp": 1700000000000,
+      "args_hash": "sha256:360dad6135769be4e960b90bfb680b1230c02425d932e1705d4dbe06d2936766",
+      "signature": "RI64bNf1s5PE3oenFus92-b1RHS-cdECrFdTXlItXPz7FWWywNo749ax_T5CZzG8Sp9-eGdl-HwHn3Be1Ta5AQ"
+    },
+    "360dad6135769be4e960b90bfb680b1230c02425d932e1705d4dbe06d2936766": {
+      "nonce": "AAAAAAAAAAAAAAAAAAAAAA",
+      "subject": {
+        "namespace": "urn:invocation",
+        "id": "call-1"
+      },
+      "assertion": {
+        "phase": "dispatch",
+        "descriptor": {
+          "service": "https://api.example.test",
+          "operation": "deploy",
+          "resource": {
+            "namespace": "urn:environment",
+            "id": "staging"
+          },
+          "parameters": {
+            "image": "build-1",
+            "mode": "safe"
+          },
+          "version": "v1"
+        },
+        "execution": {
+          "namespace": "urn:execution",
+          "id": "attempt-1"
+        },
+        "native_invocation": {
+          "namespace": "urn:native",
+          "id": "native-1"
+        },
+        "delivery": {
+          "namespace": "urn:delivery",
+          "id": "delivery-1"
+        },
+        "destination_request": {
+          "namespace": "urn:destination-request",
+          "id": "request-1"
+        },
+        "outcome": "pending"
+      },
+      "target": {
+        "record_hash": "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e"
+      },
+      "source": {
+        "kind": "boundary",
+        "identity": {
+          "namespace": "urn:source",
+          "id": "rogue"
+        },
+        "method": "https://atrib.dev/conformance/method/signed-snapshot-v1",
+        "observed_at": 1700000000010
+      },
+      "basis": [
+        {
+          "relation": "authority",
+          "kind": "record",
+          "hash": "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d"
+        },
+        {
+          "relation": "source",
+          "kind": "artifact",
+          "hash": "sha256:2cc23c28fb76e34c623c06994860c5db292c3048afee841712e3bf8db2c7a208"
+        }
+      ]
+    },
+    "3317462fcf82060d3ff9ca02a64d929803873b081a69bd1fd798eb0bc5965d41": {
+      "purpose": "historical",
+      "evaluated_at": 1700000000100,
+      "dispatch_record": "sha256:55d29f1c4c408decaeccda2545ff6f9d41306a9bd3e8f0c829aa90bcdd3edfc7"
+    },
     "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b": null,
     "aabcb8ed3c1d49417df6d886b40f849617096faec5f76f42045acd620db4ebb9": {
       "spec_version": "atrib/1.0",

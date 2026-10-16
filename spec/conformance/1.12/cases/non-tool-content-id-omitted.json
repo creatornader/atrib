@@ -33,7 +33,8 @@
     "request": {
       "dimensions": {
         "integrity": {
-          "state": "supported"
+          "state": "supported",
+          "reasons": []
         }
       }
     }

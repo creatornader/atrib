@@ -33,7 +33,8 @@
     "request": {
       "dimensions": {
         "authority": {
-          "state": "rejected"
+          "state": "rejected",
+          "reasons": ["authority_invalid"]
         }
       }
     }

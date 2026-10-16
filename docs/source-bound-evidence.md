@@ -118,7 +118,23 @@ Two supported destination accounts conflict only when object and native version 
 
 E09. Coverage MUST omit target, set subject equal to surface, and use source.kind manifest with observed_at. start/end are source-native exclusive-start/inclusive-end cursors ordered by source.method. A complete conclusion MUST verify source basis for the named window, expected basis establishing the expected set independently of the claimed captured set, captured basis for every captured ID, and membership of every expected ID in captured. Receivers MUST reject duplicate IDs and MUST NOT report completeness with a declared gap or missing expected material. An empty expected set MUST have affirmative source evidence. The claim concerns only the named surface/window. Existing runtime-log manifests may serve as artifacts without automatically establishing independent expected coverage.
 
-For coverage to satisfy request-level reliance, a receiver MUST resolve an ExecutionObservation targeting that exact request, match its source.identity to coverage.surface, and verify from hash-bound source artifacts that its native_invocation lies inside the coverage window and both expected and captured sets. The approved source mechanism MUST expose the observation's native cursor and verify window membership using its cursor-order contract. CaptureObservation can similarly be checked using occurrence, but cannot become request execution evidence. An unrelated complete manifest MUST NOT satisfy required coverage. Missing membership evidence is unresolved; a demonstrated different surface/window is rejected.
+When a source uses the existing runtime-bound coverage manifest
+([D168](../DECISIONS.md#d168-coverage-manifests-make-capture-scope-verifiable)), that manifest
+remains its canonical inventory. A coverage statement is a typed projection
+that commits and authenticates facts from the manifest. It MUST NOT introduce
+an independently mutable inventory. Its source mechanism MUST check the
+projection against the exact manifest bytes. This preserves the independent
+expected-set requirement above.
+
+For coverage to satisfy request-level reliance, a receiver MUST resolve an ExecutionObservation targeting that exact request, match its source.identity to coverage.surface, and verify from hash-bound source artifacts that its native_invocation lies inside the coverage window and both expected and captured sets. The approved source mechanism MUST expose the observation's native cursor and verify window membership using its cursor-order contract. CaptureObservation can similarly be checked using occurrence, but cannot become request execution evidence. An unrelated complete manifest MUST NOT satisfy required coverage. Missing membership evidence is unresolved. A coverage statement claiming a demonstrated different surface/window MUST be rejected for that reliance. If no applicable manifest remains, request-level coverage stays unresolved under the aggregation rule below.
+
+The source mechanism MUST establish that observation and inventory refer to the
+same native event bytes. Equal IDs and cursors alone MUST NOT authenticate
+different event content. Each versioned method defines its authenticated join;
+this rule does not add a generic native-event hash field to the body grammar.
+The runtime-coverage method requires exact native-event hash membership. Its
+host-signed inventory establishes consistency within the pinned host's account,
+not independent administrative observation.
 
 ## 4. Binding and source boundaries
 
@@ -126,7 +142,13 @@ _This section is normative._
 
 E10. Every basis entry is a dependency. Receivers MUST resolve record hashes under core [§1.3](../atrib-spec.md#13-canonical-serialization) and artifact hashes over exact bytes. Missing dependencies MUST remain unresolved; invalid dependencies MUST reject dependent reliance. Locators are retrieval hints, never hash substitutes. Receipt sources MUST pass native signature verification. Query sources MUST have receiver-approved provenance for the captured response. source.method MUST be an absolute URI naming a versioned source-verification contract. A host account of a query is not a destination signature. Merely signing a source reference cannot authenticate its content.
 
-Locators MUST NOT contain credentials, including bearer tokens or pre-signed URLs. Receivers MUST NOT dereference locators during reception. One captured/expected manifest artifact MAY account for multiple IDs when the source mechanism verifies membership for each ID; one basis entry per captured ID is not required.
+Producers MUST NOT put credentials in locators, including bearer tokens or
+pre-signed URLs. Receivers MUST reject recognizable credential forms and MUST
+NOT dereference locators during reception. A receiver cannot establish that an
+opaque path or value contains no credential. That limit does not relax the
+producer prohibition. One captured/expected manifest artifact MAY account for
+multiple IDs when the source mechanism verifies membership for each ID; one
+basis entry per captured ID is not required.
 
 E11. For an ExecutionObservation, receivers MUST open its body and the targeted request body separately, then compare descriptors by JCS equality and scoped IDs by namespace/id equality. CaptureObservation has no request descriptor and MUST NOT enter this comparison or acquire request-binding support. Receivers MUST resolve the exact target record, not a convenient matching public ID. Changed parameters, target, version or execution reject the binding. Independent nonces and whole-body hashes need not match. A new execution retry requires a new request and applicable authority. Transport redelivery retains request/execution and gets its own delivery ID. It does not establish another effect or exactly-once execution.
 
@@ -137,6 +159,13 @@ E13. Boundary producers MUST derive observations from intercepted source data. A
 E14. Observational capture failure MAY permit work to continue, but MUST surface degraded capture and retain a diagnostic/gap when storage permits. Producers MUST NOT label post-call fallback as durable pre-action intent. An executor explicitly configured to require durable intent before a protected effect MUST refuse that effect when retention fails. This is a path-specific guarantee, not a universal fail-closed tool policy. Coverage never extends to uninstrumented paths by implication.
 
 The protected retention check MUST run on the executor's own awaited path, outside observational trigger handlers whose exceptions are swallowed. It MUST return an explicit refusal without invoking the effect handler when retention fails. Generic observational middleware does not acquire that guarantee from logging configuration.
+
+These explicitly enabled preconditions belong to host execution policy.
+Default observational middleware retains the core
+[§5.8 degradation contract](../atrib-spec.md#58-degradation-contract). Existing wrapper and SDK
+action records acquire neither source-bound conformance nor destination-effect
+proof merely because this contract exists. A host may integrate a selected
+protected path without migrating its other harnesses.
 
 ## 5. Receiver policy and results
 
@@ -253,6 +282,12 @@ E19. Receivers MUST report authority supported only for an applicable allow with
 
 E20. Set evaluation MUST preserve per-statement facts and expose conflict for contradictory supported accounts about the same request and dimension. Receivers MUST NOT choose a winner by timestamp or erase independently verified facts because another type is unknown. Missing dependencies MUST affect dependent conclusions only. Receivers MUST accept reliance only when integrity and every required policy dimension are supported for the evaluated request. not_applicable MUST NOT satisfy required. A receiver MUST report deficient dimensions rather than collapsing them into a truth boolean.
 
+An explicit empty required array selects integrity-only reliance. It MUST NOT
+upgrade source, authority or any other dimension. An accepted integrity-only
+result grants no execution permission and does not satisfy a host policy that
+requires source, binding or authority. Applications MUST inspect the reported
+dimensions and their own execution policy before acting.
+
 E21. Reception MUST NOT itself grant execution permission or change an application's accepted state. The application owns its state/version checks. A report, command response, observed destination state and accepted result are separate facts. Search and summaries may locate evidence but cannot upgrade it. Daily continuation and incident reconstruction use the same accounts and expose the same gaps.
 
 ## 6. Disclosure and acceptance corpus
@@ -261,7 +296,13 @@ _This section is normative._
 
 E22. A bundle MUST include selected signed records/openings, resolved basis artifacts or explicit missing entries, policy snapshot/hash, evaluation time, and any publication proofs. It MUST distinguish captured queries from destination-signed receipts. Mutable URLs alone are insufficient. Public submission is unnecessary for checking supplied local signatures and commitments.
 
-These cases are required before a reference implementation can claim conformance. Each E01 through E22 and each grammar constraint needs positive and negative executable fixtures. The [offline corpus](../spec/conformance/1.12/README.md) implements executable receiver checks and a test-only reference model. Its JSON input/expected assertions are the canonical vectors for these checks, jointly normative with core Appendix A. Its external-obligation ledger does not claim that offline vectors prove operational host capture, storage durability, administrative independence or app acceptance. No public package claims full producer/receiver conformance yet.
+Here, bundle names the disclosed material required for replay. It does not
+require a separate bundle framework, export/import API, or publication API.
+Existing local mirror retention, runtime-log inspection and core anchor-proof
+verification may supply those functions. Any claimed publication support still
+requires the verified proof in E19.
+
+These cases are required before a reference implementation can claim conformance. Each E01 through E22 and each grammar constraint needs positive and negative executable fixtures. The [offline corpus](../spec/conformance/1.12/README.md) implements executable receiver checks and a test-only reference model. C19 separately exercises a test-only executor model. It does not prove filesystem durability. Its JSON input/expected assertions are the canonical vectors for these checks, jointly normative with core Appendix A. Its external-obligation ledger does not claim that offline vectors prove operational host capture, storage durability, administrative independence or app acceptance. No public package claims full producer/receiver conformance yet.
 
 | Case | Input variation                                                      | Required result                                                              |
 | ---- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -274,7 +315,8 @@ These cases are required before a reference implementation can claim conformance
 | C07  | Redelivery under same execution with new delivery ID                 | One request, two deliveries; no second effect inferred                       |
 | C08  | Dispatch timeout plus agent success report                           | Outcome unknown, report retained, effect unresolved                          |
 | C09  | Trusted destination state without native request join                | State supported, effect unresolved, effect_unbound                           |
-| C10  | Valid signature from source outside pinned policy                    | Integrity supported, source rejected, source_untrusted                       |
+| C10  | Selected dispatch signed by a source outside pinned policy           | Integrity supported, selected source rejected, source_untrusted              |
+| C10b | Untrusted extra response beside a supported selected dispatch        | Extra source rejected; preserve independently supported selected facts       |
 | C11  | Policy or revocation snapshot unavailable                            | Dependent reliance unresolved                                                |
 | C12  | Allow expired at supported dispatch time                             | Authority rejected, authority_invalid                                        |
 | C13  | Coverage expected-source set unavailable                             | Coverage unresolved, never complete                                          |
@@ -288,10 +330,10 @@ These cases are required before a reference implementation can claim conformance
 
 Further required cases:
 
-| Case | Input variation                                                        | Required result                                                                |
-| ---- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| C21  | Host captures a report without an executable request                   | CaptureObservation supports source capture only; no invented request or effect |
-| C22  | Pinned authorizer approves a descriptor outside its exact policy scope | Authority rejected, authority_invalid                                          |
-| C23  | Complete coverage manifest belongs to another source/window            | Cannot satisfy request coverage; demonstrated membership mismatch rejected     |
+| Case | Input variation                                                        | Required result                                                                                                   |
+| ---- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| C21  | Host captures a report without an executable request                   | CaptureObservation supports source capture only; no invented request or effect                                    |
+| C22  | Pinned authorizer approves a descriptor outside its exact policy scope | Authority rejected, authority_invalid                                                                             |
+| C23  | Complete coverage manifest belongs to another source/window            | Statement's demonstrated membership mismatch rejected; request coverage unresolved without an applicable manifest |
 
 No format repairs universally omitted activity, proves hidden reasoning, or makes a compromised host's observation true. This contract retains Ed25519, JCS, record hashes, log leaves and ordinary cognitive records.

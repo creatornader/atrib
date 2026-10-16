@@ -33,7 +33,8 @@
     "request": {
       "dimensions": {
         "binding": {
-          "state": "rejected"
+          "state": "rejected",
+          "reasons": ["execution_mismatch"]
         }
       }
     }

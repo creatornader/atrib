@@ -9,6 +9,9 @@ import {
   base64urlEncode,
   signRecord,
   genesisChainRoot,
+  serializeEntry,
+  leafHash,
+  sha256,
   type AtribRecord,
 } from '@atrib/mcp'
 import { digest, jcs, SNAPSHOT_METHOD, type FixtureInput } from './source-bound-reference.js'
@@ -37,9 +40,9 @@ const descriptor = {
   parameters: { image: 'build-1', mode: 'safe' },
   version: 'v1',
 }
-const d = (state: string) => ({ state })
-const expected = (dimension: string, state: string) => ({
-  request: { dimensions: { [dimension]: d(state) } },
+const d = (state: string, ...reasons: string[]) => ({ state, reasons })
+const expected = (dimension: string, state: string, ...reasons: string[]) => ({
+  request: { dimensions: { [dimension]: d(state, ...reasons) } },
 })
 
 async function bundle(v: Variant): Promise<FixtureInput> {
@@ -256,6 +259,17 @@ async function bundle(v: Variant): Promise<FixtureInput> {
     await observe(changed, 'rogue')
     await seal('observation', changed, 'rogue')
   }
+  if (v.selected_untrusted) {
+    const changed = structuredClone(dispatch)
+    changed.basis = [ref('authority', allowHash, 'record')]
+    await observe(changed, 'rogue')
+    const rogueDispatch = await seal('observation', changed, 'rogue')
+    input.evaluation = {
+      purpose: 'historical',
+      evaluated_at: T + 100,
+      dispatch_record: rogueDispatch,
+    }
+  }
   if (v.coverage) {
     const surface = v.wrong_surface ? sourceId('other') : sourceId('host')
     const coverage = body('host', {
@@ -332,9 +346,10 @@ async function bundle(v: Variant): Promise<FixtureInput> {
           ? ['source', 'authority']
           : ['source', 'binding', 'authority', 'effect', ...(v.coverage ? ['coverage'] : [])],
       }
-  input.evaluation = v.current
-    ? { purpose: 'current', evaluated_at: T + 100 }
-    : { purpose: 'historical', evaluated_at: T + 100, dispatch_record: dispatchHash }
+  if (!v.selected_untrusted)
+    input.evaluation = v.current
+      ? { purpose: 'current', evaluated_at: T + 100 }
+      : { purpose: 'historical', evaluated_at: T + 100, dispatch_record: dispatchHash }
   if (v.pre_dispatch) {
     input.records = input.records.filter((record) =>
       ['request', 'authorization'].some(
@@ -361,6 +376,44 @@ async function bundle(v: Variant): Promise<FixtureInput> {
     }
   if (v.missing_artifact) delete input.artifacts[grant]
   if (v.artifact_mismatch) input.artifacts[grant] = Buffer.from('{}').toString('base64')
+  if (v.publication || v.publication_bad_checkpoint) {
+    const seed = new Uint8Array(32).fill(77)
+    const pub = await getPublicKey(seed)
+    const origin = 'conformance.test/v1'
+    const entry = serializeEntry({
+      record_hash_hex: requestHash.slice(7),
+      creator_key_b64url: keys.agent!,
+      context_id: '1'.repeat(32),
+      timestamp: T,
+      event_type: `${EVIDENCE_PREFIX}request`,
+    })
+    const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64')
+    const checkpointBody = `${origin}\n1\n${b64(leafHash(entry))}\n`
+    const signature = await ed.signAsync(new TextEncoder().encode(checkpointBody), seed)
+    const keyPreimage = Buffer.concat([Buffer.from(`${origin}\n`), Buffer.from([1]), pub])
+    const noteSignature = Buffer.concat([sha256(keyPreimage).slice(0, 4), signature])
+    const proof = {
+      record_hash: requestHash,
+      log_proofs: [
+        {
+          log_id: 'conformance',
+          log_index: 0,
+          checkpoint: `${checkpointBody}\n\u2014 ${origin} ${b64(noteSignature)}`,
+          inclusion_proof: [],
+          entry_bytes_b64: b64(entry),
+        },
+      ],
+    }
+    if (v.publication_bad_checkpoint)
+      proof.log_proofs[0]!.checkpoint = proof.log_proofs[0]!.checkpoint.replace(
+        b64(leafHash(entry)),
+        b64(new Uint8Array(32)),
+      )
+    input.publication = {
+      proofs: { [requestHash]: proof },
+      trust: { trust_material: { logs: { conformance: { origin, pubkey_b64: b64(pub) } } } },
+    }
+  }
   return input
 }
 
@@ -386,18 +439,28 @@ const definitions: Array<[string, Variant, Obj, string[]]> = [
       'E22',
     ],
   ],
-  ['C02-body-withheld', { withheld: true }, expected('integrity', 'unresolved'), ['E02']],
-  ['C03-body-modified', { opening_mismatch: true }, expected('integrity', 'rejected'), ['E02']],
+  [
+    'C02-body-withheld',
+    { withheld: true },
+    expected('integrity', 'unresolved', 'body_missing'),
+    ['E02'],
+  ],
+  [
+    'C03-body-modified',
+    { opening_mismatch: true },
+    expected('integrity', 'rejected', 'opening_mismatch'),
+    ['E02'],
+  ],
   [
     'C05-dispatch-substitution',
     { descriptor_mismatch: true },
-    expected('binding', 'rejected'),
+    expected('binding', 'rejected', 'descriptor_mismatch'),
     ['E11'],
   ],
   [
     'C06-execution-substitution',
     { execution_mismatch: true },
-    expected('binding', 'rejected'),
+    expected('binding', 'rejected', 'execution_mismatch'),
     ['E11'],
   ],
   [
@@ -417,79 +480,132 @@ const definitions: Array<[string, Variant, Obj, string[]]> = [
     {
       request: {
         execution: { deliveries: [{ state: 'unknown' }] },
-        dimensions: { effect: d('unresolved') },
+        dimensions: { effect: d('unresolved', 'effect_unbound') },
       },
     },
     ['E06', 'E07'],
   ],
-  ['C09-unbound-destination', { unbound: true }, expected('effect', 'unresolved'), ['E08']],
+  [
+    'C09-unbound-destination',
+    { unbound: true },
+    expected('effect', 'unresolved', 'effect_unbound'),
+    ['E08'],
+  ],
   [
     'C10-untrusted-injection',
     { untrusted: true },
     { request: { reliance: { accepted: true } } },
     ['E13', 'E17', 'E20'],
   ],
-  ['C11-policy-missing', { no_policy: true }, expected('authority', 'unresolved'), ['E15', 'E17']],
-  ['C12-expired-at-dispatch', { expired: true }, expected('authority', 'rejected'), ['E05', 'E16']],
+  [
+    'C10-selected-untrusted-dispatch',
+    { selected_untrusted: true },
+    expected('source', 'rejected', 'source_untrusted'),
+    ['E13', 'E17', 'E20'],
+  ],
+  [
+    'C11-policy-missing',
+    { no_policy: true },
+    { request: { dimensions: { authority: { state: 'unresolved' } } } },
+    ['E15', 'E17'],
+  ],
+  [
+    'C12-expired-at-dispatch',
+    { expired: true },
+    expected('authority', 'rejected', 'authority_invalid'),
+    ['E05', 'E16'],
+  ],
   [
     'C13-expected-set-missing',
     { coverage: true, no_expected: true },
-    expected('coverage', 'unresolved'),
+    expected('coverage', 'unresolved', 'dependency_missing'),
     ['E09'],
   ],
-  ['C14-capture-gap', { coverage: true, gap: true }, expected('coverage', 'rejected'), ['E09']],
+  [
+    'C14-capture-gap',
+    { coverage: true, gap: true },
+    expected('coverage', 'rejected', 'coverage_gap'),
+    ['E09'],
+  ],
   [
     'C15-native-version-conflict',
     { conflict: true },
-    expected('effect', 'conflict'),
+    expected('effect', 'conflict', 'effect_conflict'),
     ['E08', 'E20'],
   ],
-  ['C16-private-unpublished', {}, expected('publication', 'unresolved'), ['E22']],
-  ['C04-result-not-opening', { only_result: true }, expected('integrity', 'rejected'), ['E02']],
+  ['C16-private-unpublished', {}, expected('publication', 'unresolved', 'not_submitted'), ['E22']],
+  [
+    'C16-valid-publication-proof',
+    { publication: true },
+    expected('publication', 'supported'),
+    ['E19', 'E22'],
+  ],
+  [
+    'C16-invalid-publication-checkpoint',
+    { publication_bad_checkpoint: true },
+    expected('publication', 'rejected', 'dependency_invalid'),
+    ['E19', 'E22'],
+  ],
+  [
+    'C04-result-not-opening',
+    { only_result: true },
+    expected('integrity', 'rejected', 'schema_invalid'),
+    ['E02'],
+  ],
   ['C17-unknown-extension', { unknown_type: true }, { request: null }, ['E17']],
   [
     'C18-artifact-substitution',
     { artifact_mismatch: true },
-    expected('authority', 'rejected'),
+    expected('authority', 'rejected', 'authority_invalid'),
     ['E10'],
   ],
-  ['C20-unrelated-receipt', { wrong_join: true }, expected('effect', 'unresolved'), ['E08', 'E11']],
+  [
+    'C20-unrelated-receipt',
+    { wrong_join: true },
+    expected('effect', 'unresolved', 'effect_unbound'),
+    ['E08', 'E11'],
+  ],
   ['C21-request-free-capture', { capture: true }, { request: null }, ['E06', 'E07']],
   [
     'C22-authority-scope',
     { scope_mismatch: true },
-    expected('authority', 'rejected'),
+    expected('authority', 'rejected', 'authority_invalid'),
     ['E05', 'E15'],
   ],
   [
     'C23-other-window',
     { coverage: true, wrong_window: true },
-    expected('coverage', 'unresolved'),
+    expected('coverage', 'unresolved', 'dependency_missing'),
     ['E09'],
   ],
   [
     'C24-forbidden-args-salt',
     { carrier_args_salt: true },
-    expected('integrity', 'rejected'),
+    expected('integrity', 'rejected', 'schema_invalid'),
     ['E01'],
   ],
   [
     'C24-forbidden-result-hash',
     { carrier_result: true },
-    expected('integrity', 'rejected'),
+    expected('integrity', 'rejected', 'schema_invalid'),
     ['E02'],
   ],
   [
     'F02-posthoc-allow',
     { posthoc: true },
-    expected('authority', 'unresolved'),
+    expected('authority', 'unresolved', 'authority_unordered'),
     ['E05', 'E06', 'E16'],
   ],
-  ['F03-current-after-dispatch', { current: true }, expected('authority', 'unresolved'), ['E16']],
+  [
+    'F03-current-after-dispatch',
+    { current: true },
+    expected('authority', 'unresolved', 'purpose_mismatch'),
+    ['E16'],
+  ],
   [
     'F03-current-before-dispatch',
     { current: true, pre_dispatch: true },
-    expected('authority', 'supported'),
+    expected('authority', 'supported', 'no_dispatch_observed'),
     ['E16'],
   ],
   [
@@ -504,32 +620,51 @@ const definitions: Array<[string, Variant, Obj, string[]]> = [
     expected('effect', 'supported'),
     ['E08', 'E20'],
   ],
-  ['F07-overlapping-policy', { overlap: true }, expected('source', 'unresolved'), ['E15']],
+  [
+    'F07-overlapping-policy',
+    { overlap: true },
+    expected('source', 'unresolved', 'policy_invalid'),
+    ['E15'],
+  ],
   [
     'F07-principal-not-run-key',
     { principal_only: true },
-    expected('authority', 'rejected'),
+    expected('authority', 'rejected', 'authority_invalid'),
     ['E15'],
   ],
-  ['F08-stale-source', { stale: true }, expected('source', 'unresolved'), ['E16']],
+  [
+    'F08-stale-source',
+    { stale: true },
+    expected('source', 'unresolved', 'freshness_unknown'),
+    ['E16'],
+  ],
   ['coverage-complete', { coverage: true }, expected('coverage', 'supported'), ['E09']],
   [
     'coverage-captured-material-missing',
     { coverage: true, no_captured: true },
-    expected('coverage', 'unresolved'),
+    expected('coverage', 'unresolved', 'dependency_missing'),
     ['E09'],
   ],
   [
     'coverage-other-surface',
     { coverage: true, wrong_surface: true },
-    expected('coverage', 'unresolved'),
+    expected('coverage', 'unresolved', 'dependency_missing'),
     ['E09'],
   ],
-  ['revoked-authority', { revoked: true }, expected('authority', 'rejected'), ['E16']],
+  [
+    'revoked-authority',
+    { revoked: true },
+    expected('authority', 'rejected', 'authority_invalid'),
+    ['E16'],
+  ],
   [
     'opening-dependency-missing',
     { missing_artifact: true },
-    { request: { dimensions: { authority: d('unresolved'), binding: d('supported') } } },
+    {
+      request: {
+        dimensions: { authority: d('unresolved', 'dependency_missing'), binding: d('supported') },
+      },
+    },
     ['E10'],
   ],
   [
@@ -595,10 +730,49 @@ const cases = []
 for (const [name, variant, expectation, rules] of definitions) {
   const input = await bundle(variant)
   const expected_ = name.startsWith('schema-') ? { invalid_kind: variant.mutate_kind } : expectation
+  if (variant.wrong_window || variant.wrong_surface || variant.artifact_mismatch) {
+    const kind = variant.artifact_mismatch ? 'authorization' : 'coverage'
+    const record = input.records.find(
+      (record) => record.event_type === `${EVIDENCE_PREFIX}${kind}`,
+    )!
+    expected_.statements = [
+      {
+        record_hash: digest(record),
+        dimensions: variant.artifact_mismatch
+          ? { authority: d('rejected', 'dependency_invalid') }
+          : { coverage: d('rejected', 'target_mismatch') },
+      },
+    ]
+  }
+  if (variant.selected_untrusted) {
+    expected_.statements = [
+      {
+        record_hash: input.evaluation.dispatch_record,
+        dimensions: { integrity: d('supported'), source: d('rejected', 'source_untrusted') },
+      },
+    ]
+  }
+  if (variant.untrusted) {
+    const record = input.records.find((record) => record.creator_key === keys.rogue)!
+    expected_.request = {
+      ...(expected_.request as Obj),
+      dimensions: { source: d('supported') },
+    }
+    expected_.statements = [
+      {
+        record_hash: digest(record),
+        dimensions: { integrity: d('supported'), source: d('rejected', 'source_untrusted') },
+      },
+    ]
+  }
+  if (name.startsWith('C16-')) {
+    const request = expected_.request as Obj
+    request.dimensions = { ...(request.dimensions as Obj), integrity: d('supported') }
+  }
   const file = `cases/${name}.json`
   writeFileSync(
     join(root, file),
-    `${JSON.stringify({ name, protects: name, fails_when: 'the required evidence distinction is erased', no_claim: 'offline fixture sources, not installed capture or host durability', rules, input, expected: expected_ }, null, 2)}\n`,
+    `${JSON.stringify({ name, protects: name === 'C10-untrusted-injection' ? 'an added untrusted response cannot erase independently supported selected dispatch evidence (C10b)' : name, fails_when: 'the required evidence distinction is erased', no_claim: 'offline fixture sources, not installed capture or host durability', rules, input, expected: expected_ }, null, 2)}\n`,
   )
   cases.push({ file, name })
 }

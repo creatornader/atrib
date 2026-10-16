@@ -33,10 +33,12 @@
     "request": {
       "dimensions": {
         "authority": {
-          "state": "unresolved"
+          "state": "unresolved",
+          "reasons": ["dependency_missing"]
         },
         "binding": {
-          "state": "supported"
+          "state": "supported",
+          "reasons": []
         }
       }
     }

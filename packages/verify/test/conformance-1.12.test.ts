@@ -52,12 +52,27 @@ describe('source-bound evidence offline contract corpus', () => {
             .filter((statement) => !hashes.includes(statement.record_hash))
             .every((statement) => statement.dimensions.integrity.body.state === 'supported'),
         ).toBe(true)
-      } else expect(result).toMatchObject(fixture.expected)
+      } else {
+        const { statements, ...expected } = fixture.expected
+        expect(result).toMatchObject(expected)
+        for (const statement of statements ?? []) {
+          const actual = result.statements.find(
+            (candidate) => candidate.record_hash === statement.record_hash,
+          )
+          expect(actual).toBeDefined()
+          expect(actual).toMatchObject(statement)
+        }
+      }
     })
   }
 
   it('keeps the conformance projection unchanged when input record order changes', async () => {
-    for (const name of ['C01-complete', 'C10-untrusted-injection', 'F06-destination-progression']) {
+    for (const name of [
+      'C01-complete',
+      'C10-untrusted-injection',
+      'C10-selected-untrusted-dispatch',
+      'F06-destination-progression',
+    ]) {
       const fixture = loadSourceBoundFixture(join(root, `cases/${name}.json`))
       const forward = await evaluateEvidenceFixture(fixture.input)
       fixture.input.records.reverse()

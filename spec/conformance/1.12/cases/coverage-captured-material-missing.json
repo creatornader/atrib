@@ -35,7 +35,8 @@
     "request": {
       "dimensions": {
         "coverage": {
-          "state": "unresolved"
+          "state": "unresolved",
+          "reasons": ["dependency_missing"]
         }
       }
     }

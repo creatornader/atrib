@@ -33,9 +33,21 @@
     "request": {
       "dimensions": {
         "authority": {
-          "state": "rejected"
+          "state": "rejected",
+          "reasons": ["authority_invalid"]
         }
       }
-    }
+    },
+    "statements": [
+      {
+        "record_hash": "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d",
+        "dimensions": {
+          "authority": {
+            "state": "rejected",
+            "reasons": ["dependency_invalid"]
+          }
+        }
+      }
+    ]
   }
 }

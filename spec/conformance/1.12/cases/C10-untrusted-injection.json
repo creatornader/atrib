@@ -1,6 +1,6 @@
 {
   "name": "C10-untrusted-injection",
-  "protects": "C10-untrusted-injection",
+  "protects": "an added untrusted response cannot erase independently supported selected dispatch evidence (C10b)",
   "fails_when": "the required evidence distinction is erased",
   "no_claim": "offline fixture sources, not installed capture or host durability",
   "rules": ["E13", "E17", "E20"],
@@ -35,7 +35,28 @@
     "request": {
       "reliance": {
         "accepted": true
+      },
+      "dimensions": {
+        "source": {
+          "state": "supported",
+          "reasons": []
+        }
       }
-    }
+    },
+    "statements": [
+      {
+        "record_hash": "sha256:bc612e90dc7fbe2c4a0d14099249c41c8bc8e42f0c87f75ec59df1e9ba4093e9",
+        "dimensions": {
+          "integrity": {
+            "state": "supported",
+            "reasons": []
+          },
+          "source": {
+            "state": "rejected",
+            "reasons": ["source_untrusted"]
+          }
+        }
+      }
+    ]
   }
 }

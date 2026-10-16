@@ -33,7 +33,12 @@
     "request": {
       "dimensions": {
         "publication": {
-          "state": "unresolved"
+          "state": "unresolved",
+          "reasons": ["not_submitted"]
+        },
+        "integrity": {
+          "state": "supported",
+          "reasons": []
         }
       }
     }

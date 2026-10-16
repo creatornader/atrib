@@ -12,6 +12,7 @@ export interface CorpusFixtureInput {
   policy: unknown
   evaluation: unknown
   request_hash?: string
+  publication?: { proofs: Record<string, unknown>; trust: unknown }
   mode?: string
   protected?: boolean
   fail_retention?: boolean

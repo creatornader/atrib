@@ -5,6 +5,11 @@ import * as ed from '@noble/ed25519'
 import { createHash } from 'node:crypto'
 import { canonicalSigningInput, type AtribRecord } from '@atrib/mcp'
 import {
+  verifyAnchorProofElement,
+  type AnchorProofElement,
+  type AnchorTrustConfig,
+} from '../src/anchor-plurality.js'
+import {
   DECLARED_METHOD,
   EVIDENCE_PREFIX,
   evidenceBodySchemas,
@@ -58,6 +63,37 @@ export interface FixtureInput {
   policy: unknown
   evaluation: unknown
   request_hash?: string
+  publication?: { proofs: Record<string, unknown>; trust: unknown }
+}
+
+async function inspectPublication(hash: string, input: FixtureInput): Promise<Dimension> {
+  const publication = input.publication
+  if (!publication || !Object.hasOwn(publication.proofs, hash))
+    return dim('unresolved', 'not_submitted')
+  const invalid = () => dim('rejected', 'dependency_invalid', [hash])
+  try {
+    const proof = object(publication.proofs[hash])
+    if (proof.record_hash !== hash || !Array.isArray(proof.log_proofs) || !proof.log_proofs.length)
+      return invalid()
+    let failed = false
+    for (const element of proof.log_proofs) {
+      const result = await verifyAnchorProofElement(
+        element as AnchorProofElement,
+        hash,
+        publication.trust as AnchorTrustConfig,
+      )
+      if (result.status === 'invalid' || result.status === 'malformed') failed = true
+      if (result.anchorType === 'atrib-log' && result.status === 'verified')
+        return dim('supported', undefined, [hash])
+    }
+    return failed
+      ? invalid()
+      : dim('unresolved', 'https://atrib.dev/evidence/v1/reason/publication-anchor-unsupported', [
+          hash,
+        ])
+  } catch {
+    return invalid()
+  }
 }
 const assertion = (info: Info) => info.assertion
 const refs = (info: Info): Obj[] =>
@@ -407,7 +443,10 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
     resultDimensions.source =
       evaluation.purpose === 'current'
         ? request.dimensions.source
-        : selectedOk
+        : selected &&
+            isExecution(selected) &&
+            selected.assertion.phase === 'dispatch' &&
+            targetOf(selected) === request.hash
           ? selected.dimensions.source
           : dim('unresolved', 'dependency_missing')
     resultDimensions.binding =
@@ -636,7 +675,7 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
         basis: records.map((info) => info.hash).sort(),
       }
     })
-  if (request) resultDimensions.publication = dim('unresolved', 'not_submitted')
+  if (request) resultDimensions.publication = await inspectPublication(request.hash, input)
   const deficient = request
     ? ['integrity', ...(policy?.required ?? ['source'])]
         .filter((name) => resultDimensions[name as keyof Dimensions].state !== 'supported')

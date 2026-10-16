@@ -32,7 +32,8 @@
     "request": {
       "dimensions": {
         "integrity": {
-          "state": "unresolved"
+          "state": "unresolved",
+          "reasons": ["body_missing"]
         }
       }
     }

@@ -35,9 +35,21 @@
     "request": {
       "dimensions": {
         "coverage": {
-          "state": "unresolved"
+          "state": "unresolved",
+          "reasons": ["dependency_missing"]
         }
       }
-    }
+    },
+    "statements": [
+      {
+        "record_hash": "sha256:5b6a0c23873bdfb0b5a28dc17d5684dc74fe39154dab8467dfd4c364b4aa444b",
+        "dimensions": {
+          "coverage": {
+            "state": "rejected",
+            "reasons": ["target_mismatch"]
+          }
+        }
+      }
+    ]
   }
 }

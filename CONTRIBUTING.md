@@ -77,7 +77,7 @@ New MCP framework adapters follow an established pattern (see `CLAUDE.md` for th
 ## Code Style
 
 - TypeScript strict mode, no `any` types
-- Error handling per the spec's degradation contract ([§5.8](atrib-spec.md#58-degradation-contract)): catch everything, log with `atrib:` prefix, never throw to caller
+- Observational middleware follows the spec's degradation contract ([§5.8](atrib-spec.md#58-degradation-contract)): catch attribution failures, log with `atrib:` prefix, and preserve the primary call. Explicitly enabled protected preconditions belong to host execution policy and may refuse the mediated effect.
 - Tests use vitest
 - Follow existing patterns in the codebase
 
@@ -85,7 +85,7 @@ New MCP framework adapters follow an established pattern (see `CLAUDE.md` for th
 
 These are non-negotiable. Do not submit PRs that violate them:
 
-1. **atrib failures must never affect the primary tool call or agent response** ([§5.8](atrib-spec.md#58-degradation-contract))
+1. **Observational attribution failures preserve the primary tool call and agent response.** Explicitly enabled protected preconditions are host execution policy. Required durable retention may refuse that protected effect ([§5.8](atrib-spec.md#58-degradation-contract)).
 2. **The graph records structure, not causality** ([§3.1](atrib-spec.md#31-design-principles-and-rationale))
 3. **The calculation algorithm is a pure function** ([§4.6](atrib-spec.md#46-the-calculation-algorithm))
 4. **Transaction records are non-blocking** ([§5.3.5](atrib-spec.md#535-log-submission))

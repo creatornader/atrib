@@ -33,7 +33,8 @@
     "request": {
       "dimensions": {
         "authority": {
-          "state": "unresolved"
+          "state": "unresolved",
+          "reasons": ["authority_unordered"]
         }
       }
     }

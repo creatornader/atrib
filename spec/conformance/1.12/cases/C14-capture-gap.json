@@ -35,7 +35,8 @@
     "request": {
       "dimensions": {
         "coverage": {
-          "state": "rejected"
+          "state": "rejected",
+          "reasons": ["coverage_gap"]
         }
       }
     }

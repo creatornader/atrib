@@ -1902,7 +1902,7 @@ Step 2: Verify that `spec_version` is `"atrib/1.0"`. Reject with `400` if not.
 
 Step 3: Verify that `event_type` is a syntactically-valid absolute URI per [§1.4.5](#145-event_type-uri-validation); the URI need not be in atrib's normative set. Reject with `400` if not.
 
-Step 4: Verify that `timestamp` is not more than 10 minutes in the future (a more permissive window than client-side verification to account for clock skew). Reject with `400` if so.
+Step 4: Verify that `timestamp` is not more than 5 minutes in the future, matching [§1.4.3](#143-verification-procedure). Reject with `400` if so.
 
 Step 5: Verify that `context_id` is exactly 32 lowercase hex characters. Reject with `400` if not.
 
@@ -3955,10 +3955,14 @@ This section is normative. A conforming implementation MUST fire each trigger at
 
 ### 5.8 Degradation Contract
 
-atrib must never impair the primary function of a tool or agent. The attribution infrastructure is invisible infrastructure; it either works silently or fails silently. It does not fail loudly.
+Observational attribution MUST NOT impair the primary function of a tool or
+agent. Its failures preserve the default tool-call and response behavior.
+Diagnostics MAY report degraded capture without changing that behavior.
 
-This section governs observational attribution middleware, not an executor's
-separately enabled authorization contract. For source-bound evidence under
+This section governs observational attribution middleware. An executor's
+explicitly enabled protected preconditions are host execution policy. They do
+not turn an observational failure into a failure of the default tool call.
+For source-bound evidence under
 [§1.12](#112-source-bound-evidence-statements), observational failures MUST remain
 visible as degraded capture. A protected executor explicitly requiring durable
 intent MUST refuse its mediated effect if retention fails. Log submission failure
@@ -3982,7 +3986,9 @@ The degradation contract is:
 
 **If `ATRIB_PRIVATE_KEY` is not set at init, the middleware MUST log a warning and operate in pass-through mode.** Pass-through mode: all requests and responses are forwarded without modification, no attribution records are emitted, no context is attached. The tool or agent operates as if the `atrib()` wrapper were not present.
 
-The degradation contract means a developer can add `@atrib/mcp` or `@atrib/agent` to a production system with zero risk of introducing failures.
+Adding observational `@atrib/mcp` or `@atrib/agent` middleware MUST preserve the
+tool's behavior on attribution failure. A host that enables a protected executor
+separately chooses its refusal conditions and MUST expose those conditions.
 
 #### 5.8.1 Duplicate-safe stateless MCP writes
 

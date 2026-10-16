@@ -3,8 +3,12 @@
 This corpus exercises the proposed [source-bound evidence contract](../../../docs/source-bound-evidence.md)
 and [core §1.12](../../../atrib-spec.md#112-source-bound-evidence-statements).
 The JSON inputs and expected assertions are canonical vectors for these offline
-checks. Existing core Appendix A vectors still apply. The checker is a test-only
-model, not a shipped receiver or an installed capture/execution boundary.
+checks. Existing core Appendix A vectors still apply. Receiver cases use the
+test-only receiver and body schemas under `packages/verify/test/source-bound-*`.
+They do not export a public receiver API. C19 cases use the isolated executor
+model described below.
+The source adapter uses synthetic test artifacts. Passing it does not establish
+an installed capture/execution boundary or package publication.
 
 ## Run
 
@@ -43,7 +47,7 @@ complete receiver inputs before evaluation. Missing, malformed or mismatched
 entries fail the reader. Expected assertions remain explicit in each case. No
 URL is fetched.
 
-Expected objects are partial assertions against EvidenceSetResult, not a
+Expected objects are partial assertions against the receiver result, not a
 requirement that unrelated facts disappear. `invalid_kind` is a schema-vector
 shorthand: every record of that type must have rejected body integrity, and
 unmutated types must retain supported body integrity. It is not a receiver input.
@@ -51,10 +55,35 @@ Case IDs beginning C map to the contract's acceptance cases. F IDs name addition
 adversarial conditions. Schema cases remove required fields or add an unknown
 field while retaining a genuine signature over the malformed body.
 
-Executor-model cases have input.mode executor. They inject a retention failure
+Each entry in `expected.statements` selects a statement by its exact record hash
+and asserts only the listed fields. Request dimensions stay scoped to the
+selected request and dispatch. `C10-selected-untrusted-dispatch` covers contract
+C10. The retained `C10-untrusted-injection` case covers C10b: an extra untrusted
+response leaves the selected trusted dispatch's reliance intact. C23 and the
+other-surface variant assert rejected statement coverage with `target_mismatch`
+and unresolved request coverage with `dependency_missing`.
+
+The October 16 review retained all 141 prior cases and their dimension states.
+It added the selected-untrusted-dispatch case and two publication cases, and
+strengthened explicit standard reason assertions. The corpus now has 144 cases.
+These expectations come from the contract rules and case table, independently
+of receiver output.
+
+The private-unpublished case asserts `not_submitted`. The publication cases
+supply an exact request inclusion proof with a pinned checkpoint key, then
+corrupt the checkpoint root without resigning. The log uses a separate fixed
+test key. This proves proof validation against the supplied trust configuration,
+without implying that independent organizations operate the fixture keys.
+
+Executor-model cases have `input.mode: executor`. They inject a retention failure
 and check whether the effect handler ran. They test the contract model's ordering,
 not filesystem durability or the installed middleware. They cannot establish a
 protected path exists in a deployment.
+The production strict host is separate implementation work in
+[PR #706](https://github.com/creatornader/atrib/pull/706), including
+`packages/action-gate/test/strict-protected-mcp.test.ts` and
+`packages/mcp/test/strict-mirror.test.ts`. Those package tests are outside this
+specification change and the canonical offline corpus.
 
 ## Synthetic source mechanism
 
@@ -85,7 +114,7 @@ independent operators. All fixture keys are controlled by one generator.
 | E13              | Signed source artifacts must match authenticated facts and pinned keys                                                        | Actual signer isolation, truthful interception and administrative independence                                       |
 | E15-E17          | Pinned source/authority policy, rule overlap, declared/run-key semantics and current/historical time                          | Real delegation compilation and historical revocation snapshots                                                      |
 | E21              | Evaluation leaves the input accounts unchanged and does not implement app-state transitions                                   | Real app reducers preserve report/observed/accepted distinctions                                                     |
-| E22, publication | Self-contained input/opening/artifact snapshots and explicit unpublished state                                                | Production export/import UX and positive public inclusion/checkpoint integration under core section 2                |
+| E22, publication | Self-contained snapshots, explicit unpublished state, exact RFC 6962 inclusion and checkpoint signature rejection             | Production export/import UX and live public inclusion/checkpoint integration under core section 2                    |
 
 The receiver model has fixed defensive limits: 32 source-reference hops, 256
 source dependencies per statement and 1 MiB per artifact. These are this corpus
@@ -96,5 +125,5 @@ that no event occurred.
 
 Passing these vectors establishes the selected offline distinctions. It does not
 establish complete producer/receiver conformance, installed capture, publication,
-application acceptance, or prevention of unobserved activity. The production
-implementation boundary remains in [STATUS.md](../../../STATUS.md#spec-defined-not-yet-implemented).
+application acceptance, or prevention of unobserved activity. The implementation
+boundary remains in [STATUS.md](../../../STATUS.md#spec-defined-not-yet-implemented).

@@ -33,7 +33,8 @@
     "request": {
       "dimensions": {
         "integrity": {
-          "state": "rejected"
+          "state": "rejected",
+          "reasons": ["opening_mismatch"]
         }
       }
     }

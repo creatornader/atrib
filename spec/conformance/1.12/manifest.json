@@ -39,6 +39,10 @@
       "name": "C10-untrusted-injection"
     },
     {
+      "file": "cases/C10-selected-untrusted-dispatch.json",
+      "name": "C10-selected-untrusted-dispatch"
+    },
+    {
       "file": "cases/C11-policy-missing.json",
       "name": "C11-policy-missing"
     },
@@ -61,6 +65,14 @@
     {
       "file": "cases/C16-private-unpublished.json",
       "name": "C16-private-unpublished"
+    },
+    {
+      "file": "cases/C16-valid-publication-proof.json",
+      "name": "C16-valid-publication-proof"
+    },
+    {
+      "file": "cases/C16-invalid-publication-checkpoint.json",
+      "name": "C16-invalid-publication-checkpoint"
     },
     {
       "file": "cases/C04-result-not-opening.json",
