@@ -719,15 +719,29 @@ export function verifyX401AuthorizationEvidence(
       credentialSummary.credentialProtocol,
     ),
   )
-  const oauth = objectMember(decoded.proofRequest, 'oauth')
-  constraints.push(
-    check(
-      'x401.payload.oauth.token_endpoint',
-      typeof oauth?.['token_endpoint'] === 'string' ? 'passed' : 'failed',
-      'string',
-      oauth?.['token_endpoint'] ?? null,
-    ),
-  )
+  // `oauth` is optional in x401; when present it must name a token endpoint.
+  const oauthValue = decoded.proofRequest?.['oauth']
+  if (oauthValue === undefined) {
+    constraints.push(
+      check(
+        'x401.payload.oauth.token_endpoint',
+        'not_checked',
+        undefined,
+        undefined,
+        'x401 request carries no oauth metadata',
+      ),
+    )
+  } else {
+    const oauth = asRecord(oauthValue)
+    constraints.push(
+      check(
+        'x401.payload.oauth.token_endpoint',
+        typeof oauth?.['token_endpoint'] === 'string' ? 'passed' : 'failed',
+        'string',
+        oauth?.['token_endpoint'] ?? null,
+      ),
+    )
+  }
 
   if (input.expectedNonce) {
     constraints.push(
