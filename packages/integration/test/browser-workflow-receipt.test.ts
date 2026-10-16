@@ -3,6 +3,9 @@
 import { execFile } from 'node:child_process'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { readFileSync } from 'node:fs'
+import { localBrowser, Stagehand } from '@browserbasehq/stagehand'
+import { chromium } from 'playwright'
 import { canonicalRecord, genesisChainRoot, hexEncode, sha256, verifyRecord } from '@atrib/mcp'
 import { describe, expect, it } from 'vitest'
 import {
@@ -119,7 +122,12 @@ describe('browser workflow receipt example', () => {
       expect(result.ok).toBe(true)
       expect(result.host).toMatchObject({
         framework: 'stagehand',
-        package_version: '4.0.0',
+        package_version: JSON.parse(
+          readFileSync(
+            new URL('../package.json', import.meta.resolve('@browserbasehq/stagehand')),
+            'utf8',
+          ),
+        ).version,
         environment: 'LOCAL',
         action_mode: 'local-browser-protocol',
         extracted_confirmation_seen: true,
@@ -181,4 +189,83 @@ describe('browser workflow receipt example', () => {
     expect(await verifyRecord(records[0]!)).toBe(true)
     expect(await verifyRecord(records[1]!)).toBe(true)
   })
+
+  for (const framework of ['stagehand', 'playwright'] as const) {
+    const browserIt = framework === 'stagehand' ? stagehandSmokeIt : it
+    browserIt(
+      `preserves real ${framework} failures and recovers with signed receipts`,
+      async () => {
+        const browser =
+          framework === 'stagehand'
+            ? await localBrowser.launch({ headless: true })
+            : await chromium.launch()
+        let stagehand: Awaited<ReturnType<typeof Stagehand.create>> | undefined
+        try {
+          if (framework === 'stagehand') {
+            stagehand = await Stagehand.create({
+              browser: browser as Awaited<ReturnType<typeof localBrowser.launch>>,
+            })
+          }
+          const page =
+            framework === 'stagehand'
+              ? (
+                  await (browser as Awaited<ReturnType<typeof localBrowser.launch>>).context.pages()
+                )[0]!
+              : await (browser as Awaited<ReturnType<typeof chromium.launch>>).newPage()
+          await page.goto(
+            'data:text/html,<button id="recover" onclick="this.textContent=\'Recovered\'">Recover</button>',
+          )
+          const recorder = new BrowserWorkflowReceiptRecorder({
+            privateKey: new Uint8Array(32).fill(27),
+            contextId: '62726f777365722d6661696c75726530',
+            logSubmission: 'disabled',
+          })
+          const secret = '#private-missing-control'
+          let nativeError: unknown
+          await expect(
+            recorder.action({
+              operation: 'click',
+              pageUrl: 'browser://local/failure',
+              args: { selector: secret },
+              run: async () => {
+                try {
+                  await page.locator(secret).click({ timeout: 150 })
+                } catch (error) {
+                  nativeError = error
+                  throw error
+                }
+              },
+            }),
+          ).rejects.toSatisfy((error: unknown) => error === nativeError && error instanceof Error)
+          expect(await page.locator('#recover').innerText()).toBe('Recover')
+          await recorder.action({
+            operation: 'click',
+            pageUrl: 'browser://local/failure',
+            args: { selector: '#recover' },
+            run: () => page.locator('#recover').click(),
+          })
+          expect(await page.locator('#recover').innerText()).toBe('Recovered')
+          const records = recorder.getSignedRecords()
+          expect(records).toHaveLength(2)
+          expect(recorder.getSidecars().map((sidecar) => sidecar.status)).toEqual(['error', 'ok'])
+          expect(JSON.stringify(recorder.getSidecars())).toContain(secret)
+          expect(JSON.stringify(records)).not.toContain(secret)
+          expect(records[1]!.chain_root).toBe(
+            `sha256:${hexEncode(sha256(canonicalRecord(records[0]!)))}`,
+          )
+          for (const record of records) expect(await verifyRecord(record)).toBe(true)
+          expect(
+            await verifyRecord({ ...records[0]!, result_hash: `sha256:${'0'.repeat(64)}` }),
+          ).toBe(false)
+        } finally {
+          try {
+            await stagehand?.close()
+          } finally {
+            await browser.close()
+          }
+        }
+      },
+      30000,
+    )
+  }
 })
