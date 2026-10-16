@@ -90,6 +90,9 @@ async function main() {
     creatorKey,
     serverUrl: 'https://your-agent.example/atrib-openinference-pilot',
     submit: async (signed, sidecar) => {
+      if (typeof signed.signature !== 'string') {
+        throw new Error('OpenInference span records require a top-level signature')
+      }
       submittedRecords.push(signed)
       console.log(
         `atrib: signed record ${signed.signature.slice(0, 16)}... ` +
