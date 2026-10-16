@@ -595,13 +595,18 @@ function writeContentIndex(
     try {
       writeFileSync(sigTmpPath, indexFile.mirror_signature)
       renameSync(sigTmpPath, contentIndexSignaturePath(path))
-    } catch {
-      // The index itself was written; a missing sidecar only costs a cache miss.
+    } catch (error) {
       try {
         rmSync(sigTmpPath, { force: true })
       } catch {
         // Best effort; a stray temp file is harmless.
       }
+      // Without its sidecar the index is never loaded, so this is a failed write.
+      return contentIndexStatus(
+        'write_failed',
+        path,
+        `signature sidecar: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
     return contentIndexStatus('rebuilt', path)
   } catch (error) {

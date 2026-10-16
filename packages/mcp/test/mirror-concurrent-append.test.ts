@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { appendFileSync, writeFileSync } from 'node:fs'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -155,6 +155,16 @@ describe('mirror tail index under concurrent appends', () => {
     hooks.onOpen = undefined
     expect((await resolve(CTX_B)).chainRoot).toBe(ref(newFileB))
     expect(hooks.readStreams).toBe(0)
+  })
+
+  it('falls back to a full scan when a file was rewritten in place and grew', async () => {
+    const rewrittenB = await makeRecord(CTX_B, 7)
+    const priorSize = (await readFile(siblingPath)).length
+    // Same inode and a larger size, but the old end is no longer a line break.
+    await writeFile(siblingPath, JSON.stringify(rewrittenB) + ' '.repeat(priorSize) + '\n')
+
+    expect((await resolve(CTX_B)).chainRoot).toBe(ref(rewrittenB))
+    expect(hooks.readStreams).toBeGreaterThan(0)
   })
 
   it('still falls back to a full scan when a sibling is truncated during the read', async () => {
