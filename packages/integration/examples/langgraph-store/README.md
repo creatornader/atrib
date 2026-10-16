@@ -10,7 +10,7 @@ pnpm --filter @atrib/integration langgraph-store-smoke
 
 What the smoke proves:
 
-- A real `@langchain/langgraph@1.3.3` `entrypoint` can receive an attributed `InMemoryStore`.
+- A real `@langchain/langgraph@1.5.0` `entrypoint` can receive an attributed `InMemoryStore`.
 - Workflow code still calls `getStore().put`, `getStore().get`, and `getStore().search`.
 - LangGraph routes those workflow calls through `BaseStore.batch`; public records use `langgraph.store.batch`.
 - The wrapped store returns the same values LangGraph expects.
@@ -21,6 +21,7 @@ What it does not prove yet:
 
 - Python LangGraph store or checkpointer parity.
 - A hosted LangGraph Platform deployment.
-- A current LangChain or LangGraph review target.
 
 The integration point is intentionally narrow: wrap the store boundary, not the workflow. Existing LangGraph code keeps its storage backend and graph shape.
+
+The [SDK compatibility test](../../test/langchain-sdk-compat.test.ts) also validates core 1.2.17, native ToolNode/checkpointer behavior, interrupt/resume, store readback, namespace isolation, record signatures, and chain continuity. The related [MCP example](../langchain-js/README.md) covers tool calls and header forks.

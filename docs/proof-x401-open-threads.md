@@ -9,7 +9,7 @@ This document maps the current Proof x401 issue and PR surface to atrib's local 
 | Repo                      | Current use for atrib                                   | Upstream posture                                                                              |
 | ------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `proof/x401`              | Current spec source and issue/PR surface.               | Track first. Any upstream contribution should target this repo unless the change is SDK-only. |
-| `proof/x401-node`         | Released current-spec x401 wire SDK.                    | Private integration dependency is now allowed through `@proof.com/x401-node@0.3.0`.           |
+| `proof/x401-node`         | Released current-spec x401 wire SDK.                    | Private integration uses `@proof.com/x401-node@0.3.3`.           |
 | `proof/proof-vc-common`   | Opt-in credential request and verifier helper surface.  | `@proof.com/proof-vc-common` requests VP tokens; `@proof.com/proof-vc-server` verifies them.  |
 | `proof/proof-vc-web`      | Credential Manager and browser UX reference.            | Browser-demo scope only. It is not an x401 wire implementation.                               |
 | `proof/verifier-vcp-demo` | Demo reference for Proof's own route and verifier flow. | Reference only until it uses current x401 wire names.                                         |
@@ -52,7 +52,7 @@ The atrib side is done for current-spec local E2E when one command proves:
 - the Explorer shows proof-gate status and payment separation;
 - optional AAuth, AP2 / VI, or x402 evidence remains separate from x401 semantics.
 
-The native Proof SDK bar is now met against the released npm SDK: the private integration fixture imports `@proof.com/x401-node@0.3.0`, runs its real verifier and agent helpers, emits `PROOF-REQUEST` and `PROOF-RESPONSE` directly, verifies the resulting atrib action chain, and proves strict current-spec verification rejects raw legacy headers.
+The native Proof SDK bar is now met against the released npm SDK: the private integration fixture imports `@proof.com/x401-node@0.3.3`, runs its real verifier and agent helpers, emits `PROOF-REQUEST` and `PROOF-RESPONSE` directly, verifies the resulting atrib action chain, and proves strict current-spec verification rejects raw legacy headers.
 
 The public x401 E2E bar is met without a Proof platform account by the open local credential verifier:
 
@@ -60,7 +60,7 @@ The public x401 E2E bar is met without a Proof platform account by the open loca
 pnpm --filter @atrib/integration open-x401-credential-e2e
 ```
 
-That path issues a local JWT VC, presents it inside a signed VP token, verifies holder signature, issuer signature, trusted issuer key, audience, x401 nonce, age, and KYC claims, accepts the `PROOF-RESPONSE`, and signs the atrib action chain. It uses `@proof.com/x401-node@0.3.0` for current x401 wire semantics but keeps credential verification provider-neutral.
+That path issues a local JWT VC, presents it inside a signed VP token, verifies holder signature, issuer signature, trusted issuer key, audience, x401 nonce, age, and KYC claims, accepts the `PROOF-RESPONSE`, and signs the atrib action chain. It uses `@proof.com/x401-node@0.3.3` for current x401 wire semantics but keeps credential verification provider-neutral.
 
 Write the durable public packet for that path with:
 
@@ -94,7 +94,9 @@ ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT=<holder-email> \
 pnpm --filter @atrib/integration proof-vc-token-capture -- --open
 ```
 
-That helper uses `@proof.com/proof-vc-common@0.3.0` to create the OID4VP authorization URL, captures the browser fragment on a local callback page, verifies the token in memory through `@proof.com/proof-vc-server@0.3.0`, and prints only the sanitized x401 evidence packet. Use `-- --print-url` to print the authorization URL without waiting for a browser callback. A real Proof credential, a Proof OAuth Application client id, a registered redirect URI matching the local callback, and the holder email as `ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT` are required. Set `ATRIB_PROOF_VC_CAPTURE_AUD` when the verifier must check an expected audience.
+That helper uses `@proof.com/proof-vc-common@0.6.0` to create the OID4VP authorization URL, captures the browser fragment on a local callback page, verifies the token in memory through `@proof.com/proof-vc-server@0.6.0`, and prints only the sanitized x401 evidence packet. Use `-- --print-url` to print the authorization URL without waiting for a browser callback. A real Proof credential, a Proof OAuth Application client id, a registered redirect URI matching the local callback, and the holder email as `ATRIB_PROOF_VC_CAPTURE_LOGIN_HINT` are required. Set `ATRIB_PROOF_VC_CAPTURE_AUD` when the verifier must check an expected audience.
+
+The 2026-10-16 private integration migration pins Proof VC common/server 0.6.0 and x401-node 0.3.3. Native verification now uses Proof's environment-bound issuer and trust-root selection. Legacy `development`/`production` settings remain aliases, while staging, next and localhost requests need the matching explicit environment. See the [integration guide](../packages/integration/README.md) for flags, native rejection checks and the unchanged real-credential acceptance gate. Historical release links below retain their original versions.
 
 The live npm Proof-side SDK interop bar is now met by `@proof.com/x401-node@0.3.0`. Keep the readiness guard so future releases fail closed if old wire names reappear.
 

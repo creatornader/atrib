@@ -7,7 +7,9 @@ Demonstrates the canonical Pattern #4 composition from atrib-spec [§9](../../..
 - **`@atrib/openinference` composes alongside `@arizeai/openinference-vercel`**, the reference SpanProcessor for Vercel AI SDK's OpenInference instrumentation. They share one TracerProvider; each filters spans independently.
 - **The atrib processor signs every OpenInference span** that carries the canonical `openinference.span.kind` attribute and required fields, producing an `AtribRecord` per span.
 - **The Arize processor stays unaffected.** It continues exporting to whatever OTLP endpoint Phoenix / Langfuse / Datadog is listening on.
-- **No code changes to the agent or Vercel AI SDK.** The integration is one `provider.addSpanProcessor` line away from any existing OpenInference pipeline.
+- **Register the AI SDK telemetry integration.** AI SDK 7 needs `@ai-sdk/otel` to emit spans. This example passes its tracer to `LegacyOpenTelemetry` so the existing OpenInference attribute mapping stays stable.
+
+The [localhost compatibility test](../../test/ai-instrumentation-compat.test.ts) exercises actual AI SDK generation, tool execution, streaming, and failures without provider credentials. The [processor guide](../../../openinference/README.md) describes bounded tool-span deferral and flush behavior. `pnpm --filter @atrib/integration typecheck:openinference-examples` checks all three offline examples.
 
 ## Run it
 

@@ -653,6 +653,8 @@ The runnable examples (`surface-1-mcp-agent.ts`, `surface-2-agent-client.ts`) ar
 
 ## D024: LangChain JS MCP adapter: NOT docs-only. `MultiServerMCPClient` needs a proper helper because its internal Client references are `#private`
 
+**Compatibility correction (2026-10-16):** Real checks with core 1.2.17, LangGraph 1.5.0, and MCP adapter 1.1.3 found that its native `fork` is synthesized by a Proxy getter. The in-place fork replacement described below is ignored by that factory. `attributeLangchainMcp` now accepts an SDK `loadTools` callback and installs attributed callbacks into the existing tool objects. The callback receives a `wrapMcpClient` proxy that attributes each native fork result. Without loader mode, the helper reports an unreplaceable fork. The [current guide](packages/integration/examples/langchain-js/README.md) and [real SDK tests](packages/integration/test/langchain-sdk-compat.test.ts) supersede the historical fork-propagation claim below.
+
 **Date:** 2026-04-06
 **Context:** [D020](#d020-framework-adapter-targets-claude-agent-sdk-cloudflare-agents-vercel-ai-sdk-re-ranked-from-an-incomplete-prior-decision) asserted that LangChain would ship as a docs-only adapter because `loadMcpTools(name, rawClient)` accepts an injected `@modelcontextprotocol/sdk` Client, so `wrapMcpClient` from `@atrib/agent` would cover it transparently. After review concluded that docs-only was insufficient for the common usage path, `@langchain/mcp-adapters@1.1.3` was unpacked and source-read for its actual API. The docs-only claim was half right and half wrong.
 

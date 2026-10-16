@@ -17,6 +17,7 @@ const LOG_ENDPOINT = 'https://log.atrib.dev/v1/entries'
 
 interface Env {
   ATRIB_PRIVATE_KEY: string
+  ATRIB_LOG_ENDPOINT?: string
   UpstreamMcp: DurableObjectNamespace<UpstreamMcp>
   ClientProofAgent: DurableObjectNamespace<ClientProofAgent>
   CaptureAgent: DurableObjectNamespace<CaptureAgent>
@@ -236,7 +237,7 @@ async function handleLogProxy(request: Request, env: Env): Promise<Response> {
   }
 
   const body = await request.text()
-  const response = await fetch(LOG_ENDPOINT, {
+  const response = await fetch(env.ATRIB_LOG_ENDPOINT ?? LOG_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -144,3 +144,37 @@ describe('wrapMcpClient MPP MCP completion', () => {
     ).toHaveLength(1)
   })
 })
+
+class ForkingClient {
+  constructor(
+    private readonly asynchronous: boolean,
+    readonly seen: Array<Record<string, unknown> | undefined>,
+  ) {}
+  async callTool(params: { name: string; _meta?: Record<string, unknown> }) {
+    this.seen.push(params._meta)
+    return { content: [{ type: 'text', text: 'fork result' }] }
+  }
+  fork(): ForkingClient | Promise<ForkingClient> {
+    const client = new ForkingClient(this.asynchronous, this.seen)
+    return this.asynchronous ? Promise.resolve(client) : client
+  }
+}
+
+for (const asynchronous of [false, true]) {
+  it(`preserves ${asynchronous ? 'async' : 'sync'} fork returns and nested attribution`, async () => {
+    const seen: Array<Record<string, unknown> | undefined> = []
+    const raw = new ForkingClient(asynchronous, seen)
+    const interceptor = atrib({ creatorKey: CREATOR_KEY, detectTransaction: [] })
+    const after = vi.spyOn(interceptor, 'onAfterToolResponse')
+    const wrapped = wrapMcpClient(raw, interceptor)
+    const first = wrapped.fork()
+    expect(first instanceof Promise).toBe(asynchronous)
+    const second = await (await first).fork()
+    await second.callTool({ name: 'weather' })
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.['X-atrib-Context']).toMatch(/^[0-9a-f]{32}$/)
+    expect(after).toHaveBeenCalledTimes(1)
+    expect(raw.callTool).toBe(ForkingClient.prototype.callTool)
+    await interceptor.flush()
+  })
+}

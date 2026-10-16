@@ -35,7 +35,7 @@ type SignerRole = 'agent' | 'human' | 'action_mcp' | 'codemode_runtime'
 
 const APPROVAL_POLICY_ID = 'cloudflare-workers-payment-route-write'
 const APPROVAL_POLICY_VERSION = '2026-06-26.1'
-const CODEMODE_RUNTIME_VERSION = '@cloudflare/codemode@0.4.1'
+const CODEMODE_RUNTIME_VERSION = '@cloudflare/codemode@0.5.4'
 
 interface TraceRecord {
   label: string

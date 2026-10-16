@@ -4,8 +4,11 @@ import { spawn } from 'node:child_process'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { createClient, type Environment } from '@proof.com/proof-vc-common'
-import type { TrustRoot } from '@proof.com/proof-vc-server'
-import { runProofVcCommonX401Interop } from '../src/proof-vc-common-x401.js'
+import type { ProofVcCommonTrustRoot } from '../src/proof-vc-common-x401.js'
+import {
+  resolveProofVcEnvironment,
+  runProofVcCommonX401Interop,
+} from '../src/proof-vc-common-x401.js'
 
 const BASIC_SCOPE = 'urn:proof:params:scope:verifiable-credentials:basic' as const
 
@@ -44,7 +47,7 @@ function readEnvironment(): Environment {
   throw new Error('ATRIB_PROOF_VC_CAPTURE_ENVIRONMENT is not a supported Proof environment')
 }
 
-function readTrustRoot(proofEnvironment: Environment): TrustRoot {
+function readTrustRoot(proofEnvironment: Environment): ProofVcCommonTrustRoot {
   const value =
     env('ATRIB_PROOF_VC_COMMON_TRUST_ROOT') ??
     env('ATRIB_PROOF_VC_CAPTURE_TRUST_ROOT') ??
@@ -142,6 +145,7 @@ function maybeOpen(url: string): void {
 async function main(): Promise<void> {
   const proofEnvironment = readEnvironment()
   const trustRoot = readTrustRoot(proofEnvironment)
+  resolveProofVcEnvironment({ environment: proofEnvironment, trustRoot })
   const host = env('ATRIB_PROOF_VC_CAPTURE_HOST') ?? '127.0.0.1'
   const port = numberEnv('ATRIB_PROOF_VC_CAPTURE_PORT', 8765)
   const clientId = requireEnv('ATRIB_PROOF_VC_CAPTURE_CLIENT_ID')
@@ -210,6 +214,7 @@ async function main(): Promise<void> {
             encodedVPToken: parsed.vpToken,
             nonce,
             trustRoot,
+            environment: proofEnvironment,
             ...(aud ? { aud } : {}),
           })
           console.log(JSON.stringify(result.public_packet, null, 2))

@@ -73,7 +73,7 @@
       "path": "examples/langchain-js",
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
-      "commands": []
+      "commands": ["typecheck:langchain-examples"]
     },
     {
       "id": "langgraph-store",
@@ -325,7 +325,8 @@
       "commands": [
         "openinference-cognitive-loop",
         "openinference-dual-export-smoke",
-        "openinference-phoenix-private-evidence"
+        "openinference-phoenix-private-evidence",
+        "typecheck:openinference-examples"
       ]
     },
     {
@@ -404,7 +405,7 @@
       "path": "scripts/proof-vc-common-x401-interop.ts",
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
-      "commands": ["proof-vc-common-x401-interop"]
+      "commands": ["proof-vc-common-x401-interop", "typecheck:proof-scripts"]
     },
     {
       "id": "proof-vc-token-capture",

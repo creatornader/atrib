@@ -237,8 +237,8 @@ interface ReceiptRecoveryGate {
 const TEXT_ENCODER = new TextEncoder()
 const STABLE_CONNECTOR_ID = 'cloudflare-demo-repository-write-mcp'
 const CODEMODE_RUNTIME_ID = 'cloudflare-demo-codemode-runtime'
-const CODEMODE_RUNTIME_VERSION = '@cloudflare/codemode@0.4.1'
-const AGENTS_SDK_VERSION = 'agents@0.16.2'
+const CODEMODE_RUNTIME_VERSION = '@cloudflare/codemode@0.5.4'
+const AGENTS_SDK_VERSION = 'agents@0.28.1'
 const APPROVAL_POLICY_ID = 'cloudflare-workers-payment-route-write'
 const APPROVAL_POLICY_VERSION = '2026-06-26.1'
 const LOG_BASE_URL = 'https://log.atrib.dev/v1'
