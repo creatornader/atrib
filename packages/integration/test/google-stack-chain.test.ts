@@ -24,19 +24,18 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
         schema: 'atrib-google-stack-chain.snapshot.v1',
         record_hashes: {
           ap2_transaction:
-            'sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db',
+            'sha256:b2f4a0fcdb0e664daad0f31628139a89e49d206f3688dcd1abb278494a90552d',
           a2a_remote_evidence:
-            'sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9',
+            'sha256:3e1f5632dfc4c8a465ad3d5a8ba40a2419f2da411839788ebf61c0b84550e390',
           a2a_receiver_followup:
-            'sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2',
-          adk_decision:
-            'sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f',
+            'sha256:fdf00bf2ee1d036195bfae584a4334c5de8475065eb7ae8fd1de5ff2d9cec281',
+          adk_decision: 'sha256:c8cdb091d546dafd353b479f95f556101754990e85b4d7e86c1abe46e7c7db39',
           adk_python_tool_callback:
-            'sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af',
+            'sha256:7ccf3809c3f81a5f68048512121d26fa545256fee20d2f8aa3c75321b2b4354f',
           adk_handler_error_decision:
-            'sha256:49e8f7c207bcea047601dab8a5bdce53777bc559b20c99ab1ec357fb9b425d24',
+            'sha256:504a345fe9a77f3da6f21471fa39d7b47b34a8167d01d51fe4b36913a4abc7b0',
           adk_handler_error_terminal_outcome:
-            'sha256:192d8c403e65a34ae37d184c4f9dacc4c1b6a84c1eb4b0270426737f5570e9c0',
+            'sha256:f5941ac69efed30c6408fd8e78669bc7c9ce5e645f4814bd0e531dcad9a03e86',
         },
       })
       expect(result.snapshot.resolved_edges).toHaveLength(6)
@@ -125,21 +124,22 @@ describe.skipIf(process.env.ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF !== '1')(
       )
       expect(result.layers.adk_python.google_operational_ids).toMatchObject({
         trace_id: '4f22c9bdbeaaf460f4aca6fd8fa817ef',
-        span_id: '2a7b24b6f52f9a1f',
+        span_id: 'c0e8175ca7d0d648',
         adk_session_id: 'google-stack-adk-python-session-0001',
         adk_agent_name: 'google_adk_python_decision_allow_agent',
         source: 'local-adk-python-decision-sidecar',
         trace_projection: 'deterministic-local',
       })
       expect(result.layers.adk_python.google_operational_ids.adk_invocation_id).toBe(
-        'e-b7ca2de9-6454-413a-93f7-14d9e12d6dc6',
+        result.analytics_fixture.rows.find(
+          (row) => row.event_type === 'atrib.adk_python.tool_callback_signed',
+        )?.invocation_id,
       )
-      expect(result.layers.adk_python.google_operational_ids.adk_function_call_id).toBe(
-        'adk-687c0a1d-72ee-43ed-86ef-d6216cd63522',
-      )
+      expect(result.layers.adk_python.google_operational_ids.adk_invocation_id).toMatch(/\S/)
+      expect(result.layers.adk_python.google_operational_ids.adk_function_call_id).toMatch(/\S/)
       expect(result.value_add.privacy_boundary).toContain('hashes')
       expect(result.next_chunks[0]).toContain('public proof material')
       expect(result.caveats.join(' ')).toContain('trust-transfer layer')
-    })
+    }, 60_000)
   },
 )

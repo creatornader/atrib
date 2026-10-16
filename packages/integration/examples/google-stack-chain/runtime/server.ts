@@ -1,6 +1,4 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { AtribRecord } from '@atrib/mcp'
 import type { Ap2ViEvidenceBundle } from '@atrib/verify'
 import {
@@ -9,6 +7,7 @@ import {
 } from '../../google-adk-python/google-adk-python-decision-ledger-proof.js'
 import {
   DEFAULT_RUNTIME_NOW_SECONDS,
+  DEFAULT_GOOGLE_REPLAY_FILES,
   buildGoogleEvidenceGate,
   buildReplayPacket,
   loadPacketFromFiles,
@@ -20,11 +19,6 @@ import {
 } from '../../../src/google-evidence-runtime.js'
 import { createGoogleActiveRuntimeRun, type GoogleActiveRuntimeRun } from './active-runtime.js'
 
-const runtimeDir = dirname(fileURLToPath(import.meta.url))
-const integrationDir = resolve(runtimeDir, '../../..')
-const fixtureDir = join(integrationDir, 'test/fixtures/ap2-vi-reference')
-const defaultResultJson = join(fixtureDir, 'ap2-vi-reference-result.json')
-const defaultEvidenceJson = join(fixtureDir, 'ap2-vi-reference-evidence.json')
 const serviceName = 'atrib-google-evidence-runtime'
 const port = Number(process.env.PORT ?? '8080')
 const maxStoredRuns = 25
@@ -112,7 +106,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       const gate = await buildDefaultGate()
       writeJson(response, 200, {
         ok: gate.allowed,
-        mode: 'official-sample-replay',
+        mode: 'replay',
         gate,
       })
       return
@@ -346,8 +340,7 @@ async function loadConfiguredPacket(): Promise<GoogleEvidencePacket> {
   }
 
   return buildReplayPacket({
-    resultJson: defaultResultJson,
-    evidenceJson: defaultEvidenceJson,
+    ...DEFAULT_GOOGLE_REPLAY_FILES,
     contextId: process.env.ATRIB_GOOGLE_RUNTIME_CONTEXT_ID,
     nowSeconds: nowSeconds ?? DEFAULT_RUNTIME_NOW_SECONDS,
   })

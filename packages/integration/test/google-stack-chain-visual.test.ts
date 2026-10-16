@@ -98,7 +98,7 @@ describe('Google stack chain visual workbench', () => {
     await expect.poll(() => page.locator('#protocolBadge').getAttribute('class')).toContain('ADK')
     await expect
       .poll(() => page.locator('#selectedHash').textContent())
-      .toContain('sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af')
+      .toContain('sha256:7ccf3809c3f81a5f68048512121d26fa545256fee20d2f8aa3c75321b2b4354f')
     await expect
       .poll(() => page.locator('#analyticsRows tr.selected').textContent())
       .toContain('ADK Python')
@@ -303,14 +303,17 @@ describe('Google stack chain visual workbench', () => {
     const scriptFixture = context.window.GOOGLE_STACK_PROOF_SNAPSHOT
 
     expect(scriptFixture).toEqual(fixture)
+    expect(fixture.analytics.rows.map((row: { node_id: string }) => row.node_id)).toEqual(
+      fixture.nodes.map((node: { id: string }) => node.id),
+    )
     expect(fixture.nodes.map((node: { record_hash: string }) => node.record_hash)).toEqual([
-      'sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db',
-      'sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9',
-      'sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2',
-      'sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f',
-      'sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af',
-      'sha256:49e8f7c207bcea047601dab8a5bdce53777bc559b20c99ab1ec357fb9b425d24',
-      'sha256:192d8c403e65a34ae37d184c4f9dacc4c1b6a84c1eb4b0270426737f5570e9c0',
+      'sha256:b2f4a0fcdb0e664daad0f31628139a89e49d206f3688dcd1abb278494a90552d',
+      'sha256:3e1f5632dfc4c8a465ad3d5a8ba40a2419f2da411839788ebf61c0b84550e390',
+      'sha256:fdf00bf2ee1d036195bfae584a4334c5de8475065eb7ae8fd1de5ff2d9cec281',
+      'sha256:c8cdb091d546dafd353b479f95f556101754990e85b4d7e86c1abe46e7c7db39',
+      'sha256:7ccf3809c3f81a5f68048512121d26fa545256fee20d2f8aa3c75321b2b4354f',
+      'sha256:504a345fe9a77f3da6f21471fa39d7b47b34a8167d01d51fe4b36913a4abc7b0',
+      'sha256:f5941ac69efed30c6408fd8e78669bc7c9ce5e645f4814bd0e531dcad9a03e86',
     ])
     expect(
       fixture.analytics.rows.map((row: { trace_id: string | null; span_id: string | null }) => [
@@ -321,10 +324,10 @@ describe('Google stack chain visual workbench', () => {
       [null, null],
       ['4f22c9bdbeaaf460f4aca6fd8fa817ef', 'b115b227841db8e4'],
       ['4f22c9bdbeaaf460f4aca6fd8fa817ef', '1d6154dbc8bded9a'],
-      ['4f22c9bdbeaaf460f4aca6fd8fa817ef', 'e434f38575bf4688'],
-      ['4f22c9bdbeaaf460f4aca6fd8fa817ef', '2a7b24b6f52f9a1f'],
-      ['849166752a8d0fcda4ae6b3e4640c1c6', '788caf2ee5867281'],
-      ['849166752a8d0fcda4ae6b3e4640c1c6', 'b2c05cce8c854872'],
+      ['4f22c9bdbeaaf460f4aca6fd8fa817ef', '9ace3918d4808261'],
+      ['4f22c9bdbeaaf460f4aca6fd8fa817ef', 'c0e8175ca7d0d648'],
+      ['849166752a8d0fcda4ae6b3e4640c1c6', '9455e389826690d0'],
+      ['849166752a8d0fcda4ae6b3e4640c1c6', 'f5d7c40e1223aca8'],
     ])
   })
 })
@@ -603,9 +606,7 @@ function mockRun() {
         detail: 'ADK handler error outcome signed.',
         timestamp: '2026-06-18T00:00:04.000Z',
         record_hash: 'sha256:err0000000000000000000000000000000000000000000000000000000000000',
-        informed_by: [
-          'sha256:errd3c1510a000000000000000000000000000000000000000000000000000',
-        ],
+        informed_by: ['sha256:errd3c1510a000000000000000000000000000000000000000000000000000'],
         checks: [
           {
             key: 'adk_handler_error_decision_parent_resolved',
@@ -663,8 +664,7 @@ function mockRun() {
       }),
       mockAnalyticsRow({
         event_type: 'atrib.adk_python.handler_error_decision_allowed',
-        atrib_record_hash:
-          'sha256:errd3c1510a000000000000000000000000000000000000000000000000000',
+        atrib_record_hash: 'sha256:errd3c1510a000000000000000000000000000000000000000000000000000',
         protocol: 'ADK Python',
       }),
       mockAnalyticsRow({
