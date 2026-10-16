@@ -64,22 +64,24 @@ response leaves the selected trusted dispatch's reliance intact. C23 and the
 other-surface variant assert rejected statement coverage with `target_mismatch`
 and unresolved request coverage with `dependency_missing`.
 
-The October 16 review retained all 141 prior cases and their dimension states.
-It added the selected-untrusted-dispatch case and two publication cases, and
-strengthened explicit standard reason assertions. The closure review added ten
-grammar negatives, two native-byte coverage negatives, two occurrence conflicts
-and a dependency-depth case. It also covers destination multiplicity, unknown
-cursor comparisons, future timestamps, duplicate records and wrong-kind authority
-references. The corpus now has 167 cases. Malformed-body cases
-assert per-statement source rejection and its standard reason.
-These expectations come from the contract rules and case table, independently
-of receiver output.
+The October 16 corpus revision retains all 167 prior case IDs and adds eight
+cases, for 175 total. Four cases cover raw JCS openings with an own
+`__proto__` property in request parameters and effect state, including a valid
+opening and a same-hash mutated opening for each assertion. Two cases reject
+invalid-port and malformed-IPv6 locators. One positive case accepts a relative
+locator. A separate policy case tests a parsed own `__proto__` key in the
+authorized descriptor while leaving C01's signed inputs unchanged. C11 now
+checks the source dimension's `policy_missing` reason. The three C19 executor examples remain
+non-normative. Expected results come from the contract rules and case table,
+independently of receiver output.
 
-The private-unpublished case asserts `not_submitted`. The publication cases
-supply an exact request inclusion proof with a pinned checkpoint key, then
-corrupt the checkpoint root without resigning. The log uses a separate fixed
-test key. This proves proof validation against the supplied trust configuration,
-without implying that independent organizations operate the fixture keys.
+The private-unpublished case asserts `not_submitted`. A valid inclusion under a
+pinned checkpoint supports publication even when another proof in the same
+bundle is invalid. An invalid-only bundle rejects. C16 covers the valid and
+invalid-only cases. A separate production-receiver companion test covers the
+mixed-bundle behavior. The log uses a separate fixed test key. These checks
+validate proofs against supplied trust, without implying that independent
+organizations operate the fixture keys.
 
 The three C19 executor-model cases have `input.mode: executor`. They vary
 retention outcomes and check whether the effect handler ran under one configured
@@ -89,6 +91,10 @@ durability, installed middleware or a protected path in a deployment. Host
 execution policy is specified separately from the evidence contract.
 This slice provides no production executor, durable journal or runtime capture
 adapter. Those operational boundaries require separate implementation and tests.
+
+Keep implementation evidence for E01, E03, E13 and E14 in the operational
+evidence ledger. These fixtures do not establish live interception, durable
+record/opening retention or pre-action durability.
 
 ## Synthetic source mechanism
 
@@ -146,12 +152,17 @@ independent operators. All fixture keys are controlled by one generator.
 | E21              | Evaluation leaves the input accounts unchanged and does not implement app-state transitions                                   | Real app reducers preserve report/observed/accepted distinctions                                                    |
 | E22, publication | Self-contained snapshots, explicit unpublished state, exact RFC 6962 inclusion and checkpoint signature rejection             | Production export/import UX and live public inclusion/checkpoint integration under core section 2                   |
 
-The receiver has fixed defensive limits: 32 dependency hops, 256
-references and 16 MiB of bytes per traversal, with 1 MiB per artifact.
-These are implementation bounds, not universal deployment sizes. Coverage may use one hash-bound
-manifest for many IDs. Missing or corrupt source/authority/coverage material must
-not be silently treated as complete. A known unavailable claim is not evidence
-that no event occurred.
+The public `verifyEvidenceSet` implementation limits source-reference traversal
+to 32 hops, 256 references and 16 MiB of artifact bytes per traversal, with 1 MiB
+per artifact. Its input preflight visits at most 100,000 JSON nodes and 64 MiB
+combined string and artifact bytes, stopping at depth 64. If an opening contains
+a subtree below that depth, preflight marks the opening limited and does not
+count the unvisited descendants. These are implementation defenses, not
+normative [§1.12](../../../atrib-spec.md#112-source-bound-evidence-statements) limits. The standalone corpus oracle does not exercise the
+preflight depth guard. Coverage may use one hash-bound manifest for many IDs.
+Missing or corrupt source/authority/coverage material must not be silently
+treated as complete. A known unavailable claim is not evidence that no event
+occurred.
 
 Passing these vectors establishes the selected offline distinctions. It does not
 establish complete producer/receiver conformance, installed capture, publication,

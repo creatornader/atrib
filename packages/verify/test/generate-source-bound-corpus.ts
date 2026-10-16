@@ -12,6 +12,7 @@ import {
   serializeEntry,
   leafHash,
   sha256,
+  createJsonCommitment,
   type AtribRecord,
 } from '@atrib/mcp'
 import {
@@ -48,6 +49,9 @@ const descriptor = {
   parameters: { image: 'build-1', mode: 'safe' },
   version: 'v1',
 }
+const rawJcsObject = () =>
+  JSON.parse('{"__proto__":{"allowed":true},"constructor":1,"prototype":2}') as Obj
+const rawPolicyParameters = () => JSON.parse('{"__proto__":{"requiredFlag":true}}') as Obj
 const d = (state: string, ...reasons: string[]) => ({ state, reasons })
 const expected = (dimension: string, state: string, ...reasons: string[]) => ({
   request: { dimensions: { [dimension]: d(state, ...reasons) } },
@@ -102,6 +106,10 @@ async function bundle(v: Variant): Promise<FixtureInput> {
       else if (v.mutate_field === 'authority_basis') value.basis = []
       else if (v.mutate_field === 'source_locator_credential')
         (value.source as Obj).locator = 'Bearer fixture-secret'
+      else if (v.mutate_field === 'source_locator_invalid_port')
+        (value.source as Obj).locator = 'https://example.test:99999/path'
+      else if (v.mutate_field === 'source_locator_invalid_ipv6')
+        (value.source as Obj).locator = 'https://[2001:db8:::1]/path'
       else if (v.mutate_field === 'basis_locator_credential')
         (value.basis as Obj[])[0]!.locator = 'https://example.test/file?token=fixture-secret'
       else if (v.mutate_field.startsWith('source.'))
@@ -119,7 +127,10 @@ async function bundle(v: Variant): Promise<FixtureInput> {
         context_id: '1'.repeat(32),
         event_type: `${EVIDENCE_PREFIX}${kind}`,
         timestamp: T,
-        args_hash: digest(value),
+        args_hash:
+          (v.raw_jcs_request && kind === 'request') || (v.raw_jcs_effect && kind === 'effect')
+            ? createJsonCommitment(value, 'plain-sha256').hash
+            : digest(value),
         signature: '',
         ...extra,
       } as AtribRecord,
@@ -131,7 +142,15 @@ async function bundle(v: Variant): Promise<FixtureInput> {
     }
     const hash = digest(record)
     input.records.push(record as unknown as Obj)
-    input.openings[hash] = value
+    const opening = structuredClone(value)
+    if (v.raw_jcs_mutation === kind) {
+      const nested =
+        kind === 'request'
+          ? (((opening.assertion as Obj).descriptor as Obj).parameters as Obj)
+          : ((opening.assertion as Obj).state as Obj)
+      ;(nested['__proto__'] as Obj).allowed = false
+    }
+    input.openings[hash] = opening
     return hash
   }
   const observe = async (value: Obj, role = 'host', extras: Obj = {}) => {
@@ -183,7 +202,14 @@ async function bundle(v: Variant): Promise<FixtureInput> {
     not_before: T - 100,
     expires_at: T + 10_000,
   })
-  const req = body('agent', { descriptor, execution })
+  const req = body('agent', {
+    descriptor: {
+      ...descriptor,
+      ...(v.raw_jcs_request ? { parameters: rawJcsObject() } : {}),
+    },
+    execution,
+  })
+  if (v.relative_locator) (req.source as Obj).locator = './records/request.json'
   const requestHash = await seal(
     'request',
     req,
@@ -257,7 +283,7 @@ async function bundle(v: Variant): Promise<FixtureInput> {
     {
       object: id('deployment', 'deployment-1'),
       version: { kind: 'native', value: 'revision-1' },
-      state: { deployed: true },
+      state: v.raw_jcs_effect ? rawJcsObject() : { deployed: true },
       ...(!v.unbound
         ? {
             binding: {
@@ -416,7 +442,14 @@ async function bundle(v: Variant): Promise<FixtureInput> {
     authority_versions: ['v1'],
     authorized_descriptors: v.scope_mismatch
       ? [{ ...descriptor, resource: id('environment', 'elsewhere') }]
-      : [descriptor],
+      : [
+          v.raw_policy_proto
+            ? {
+                ...descriptor,
+                parameters: { ...descriptor.parameters, ...rawPolicyParameters() },
+              }
+            : descriptor,
+        ],
     authority_basis: [grant],
   }))
   if (v.overlap) rules.push(structuredClone(rules[0]!))
@@ -686,6 +719,32 @@ const definitions: Array<[string, Variant, Obj, string[]]> = [
     expected('integrity', 'rejected', 'schema_invalid'),
     ['E02'],
   ],
+  ['F15-raw-jcs-request-opening', { raw_jcs_request: true }, {}, ['E01', 'E02']],
+  [
+    'F15-raw-jcs-request-opening-mismatch',
+    { raw_jcs_request: true, raw_jcs_mutation: 'request' },
+    {},
+    ['E01', 'E02'],
+  ],
+  ['F15-raw-jcs-effect-opening', { raw_jcs_effect: true }, {}, ['E01', 'E02']],
+  [
+    'F15-raw-jcs-effect-opening-mismatch',
+    { raw_jcs_effect: true, raw_jcs_mutation: 'effect' },
+    {},
+    ['E01', 'E02'],
+  ],
+  ['F16-relative-source-locator', { relative_locator: true }, {}, ['E10']],
+  [
+    'F17-policy-descriptor-proto-key',
+    { raw_policy_proto: true },
+    {
+      request: {
+        dimensions: { authority: d('rejected', 'authority_invalid') },
+        reliance: { accepted: false },
+      },
+    },
+    ['E15'],
+  ],
   [
     'F02-posthoc-allow',
     { posthoc: true },
@@ -819,7 +878,12 @@ for (const kind of ['observation', 'effect', 'coverage']) {
     ])
   }
 }
-for (const field of ['source_locator_credential', 'basis_locator_credential'])
+for (const field of [
+  'source_locator_credential',
+  'basis_locator_credential',
+  'source_locator_invalid_port',
+  'source_locator_invalid_ipv6',
+])
   definitions.push([
     `schema-observation-${field}`,
     { mutate_kind: 'observation', mutate_field: field },
@@ -948,6 +1012,14 @@ const cases = []
 for (const [name, variant, expectation, rules] of definitions) {
   const input = await bundle(variant)
   const expected_ = name.startsWith('schema-') ? { invalid_kind: variant.mutate_kind } : expectation
+  if (variant.no_policy) {
+    expected_.statements = [
+      {
+        record_hash: input.request_hash!,
+        dimensions: { source: d('unresolved', 'policy_missing') },
+      },
+    ]
+  }
   if (variant.mutate_kind) {
     expected_.statements = input.records
       .filter((record) => record.event_type === `${EVIDENCE_PREFIX}${variant.mutate_kind}`)
@@ -957,6 +1029,30 @@ for (const [name, variant, expectation, rules] of definitions) {
           source: d('rejected', 'schema_invalid'),
         },
       }))
+  }
+  if (variant.raw_jcs_request || variant.raw_jcs_effect || variant.relative_locator) {
+    const kind = variant.raw_jcs_effect ? 'effect' : 'request'
+    const record = input.records.find(
+      (candidate) => candidate.event_type === `${EVIDENCE_PREFIX}${kind}`,
+    )!
+    expected_.statements = [
+      {
+        record_hash: digest(record),
+        dimensions: {
+          integrity: {
+            body: variant.raw_jcs_mutation ? d('rejected', 'opening_mismatch') : d('supported'),
+          },
+        },
+      },
+    ]
+  }
+  if (variant.raw_policy_proto) {
+    expected_.statements = [
+      {
+        record_hash: input.request_hash!,
+        dimensions: { integrity: { body: d('supported') } },
+      },
+    ]
   }
   if (variant.deep_dependencies)
     expected_.statements = [

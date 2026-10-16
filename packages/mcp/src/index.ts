@@ -93,6 +93,7 @@ export type { AtribHttpResult } from './http.js'
 // Types
 export type { AtribRecord, UnsignedAtribRecord, DecodedToken, SignerEntry } from './types.js'
 export {
+  hasCreatorSignerEntry,
   EVENT_TYPE_TOOL_CALL_URI,
   EVENT_TYPE_TRANSACTION_URI,
   EVENT_TYPE_OBSERVATION_URI,

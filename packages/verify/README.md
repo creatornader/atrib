@@ -102,13 +102,17 @@ artifact limit. Limit failures report `resource_limit`. Invalid evaluation
 objects are rejected at the API boundary. Only supplied publication proofs
 verified against explicitly pinned log keys can support publication.
 
-Direct API input must contain JSON records, openings and policy. A preflight
-rejects cycles and non-JSON objects with `TypeError`, and rejects inputs above
-64 levels, 100,000 JSON nodes, 4,096 records/openings/artifacts or 64 MiB of
-strings and artifact bytes with `RangeError('resource_limit')`. It runs before
-cloning, canonicalization or schema parsing. These input errors produce no
-evidence verdict. Dependency limits within accepted input remain unresolved
-dimensions with a named reason.
+Direct API input must contain JSON records, openings and policy. Before cloning,
+preflight omits any opening deeper than 64 levels. Its record's body integrity
+stays `unresolved / resource_limit`; other statements retain their facts. The
+omitted subtree is not inspected beyond that depth or counted toward remaining
+node/string budgets. Preflight rejects detected cycles and non-JSON objects with
+`TypeError`. It rejects more than 4,096 records/openings/artifacts, 100,000 visited
+JSON nodes, 64 MiB of visited strings plus artifact bytes, or excessive depth
+outside openings with `RangeError('resource_limit')`. These API errors produce no
+verdict. Invalid shared evaluation configuration also produces no verdict because
+statement checks require one valid evaluation time. Dependency limits within
+admitted input remain unresolved dimensions with a named reason.
 
 ## Quick start
 

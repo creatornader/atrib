@@ -145,6 +145,20 @@ export interface SignerEntry {
   signature: string
 }
 
+/** Check for a transaction creator's signer entry. Does not verify its signature. */
+export function hasCreatorSignerEntry(record: Record<string, unknown>): boolean {
+  return (
+    record.event_type === 'https://atrib.dev/v1/types/transaction' &&
+    typeof record.creator_key === 'string' &&
+    Array.isArray(record.signers) &&
+    record.signers.some((entry: unknown) => {
+      if (entry === null || typeof entry !== 'object') return false
+      const signer = entry as Record<string, unknown>
+      return signer.creator_key === record.creator_key && typeof signer.signature === 'string'
+    })
+  )
+}
+
 /** An unsigned record. all fields except signature. */
 export type UnsignedAtribRecord = Omit<AtribRecord, 'signature'>
 

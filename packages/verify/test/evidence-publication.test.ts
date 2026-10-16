@@ -63,6 +63,16 @@ describe('source-bound publication', () => {
         trust,
       })
     expect(await verify()).toMatchObject({ state: 'supported', basis: [recordHash] })
+    const invalidProof = { log_id: 'offline', checkpoint: 'forged', inclusion_proof: [] }
+    for (const log_proofs of [
+      [invalidProof, ...proof.log_proofs],
+      [...proof.log_proofs, invalidProof],
+    ])
+      expect(await verify({ ...proof, log_proofs })).toMatchObject({
+        state: 'supported',
+        basis: [recordHash],
+        reasons: [],
+      })
     expect(await publication()).toMatchObject({
       state: 'unresolved',
       reasons: ['not_submitted'],

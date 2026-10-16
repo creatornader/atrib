@@ -15,7 +15,7 @@
  */
 
 import type { AtribRecord } from './types.js'
-import { isValidEventTypeUri } from './types.js'
+import { hasCreatorSignerEntry, isValidEventTypeUri } from './types.js'
 const SPEC_VERSION = 'atrib/1.0'
 const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000
 const CONTENT_ID_REQUIRED_TYPES = new Set([
@@ -81,16 +81,7 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
     }
   }
 
-  const hasCreatorSigner =
-    record.event_type === 'https://atrib.dev/v1/types/transaction' &&
-    Array.isArray(record.signers) &&
-    record.signers.some(
-      (entry) =>
-        entry !== null &&
-        typeof entry === 'object' &&
-        entry.creator_key === record.creator_key &&
-        typeof entry.signature === 'string',
-    )
+  const hasCreatorSigner = hasCreatorSignerEntry(record)
   if (!hasCreatorSigner && typeof record.signature !== 'string') {
     return {
       ok: false,

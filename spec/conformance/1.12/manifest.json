@@ -111,6 +111,30 @@
       "name": "C24-forbidden-result-hash"
     },
     {
+      "file": "cases/F15-raw-jcs-request-opening.json",
+      "name": "F15-raw-jcs-request-opening"
+    },
+    {
+      "file": "cases/F15-raw-jcs-request-opening-mismatch.json",
+      "name": "F15-raw-jcs-request-opening-mismatch"
+    },
+    {
+      "file": "cases/F15-raw-jcs-effect-opening.json",
+      "name": "F15-raw-jcs-effect-opening"
+    },
+    {
+      "file": "cases/F15-raw-jcs-effect-opening-mismatch.json",
+      "name": "F15-raw-jcs-effect-opening-mismatch"
+    },
+    {
+      "file": "cases/F16-relative-source-locator.json",
+      "name": "F16-relative-source-locator"
+    },
+    {
+      "file": "cases/F17-policy-descriptor-proto-key.json",
+      "name": "F17-policy-descriptor-proto-key"
+    },
+    {
       "file": "cases/F02-posthoc-allow.json",
       "name": "F02-posthoc-allow"
     },
@@ -485,6 +509,14 @@
     {
       "file": "cases/schema-observation-basis_locator_credential.json",
       "name": "schema-observation-basis_locator_credential"
+    },
+    {
+      "file": "cases/schema-observation-source_locator_invalid_port.json",
+      "name": "schema-observation-source_locator_invalid_port"
+    },
+    {
+      "file": "cases/schema-observation-source_locator_invalid_ipv6.json",
+      "name": "schema-observation-source_locator_invalid_ipv6"
     },
     {
       "file": "cases/F11-single-destination-without-dispatch-id.json",

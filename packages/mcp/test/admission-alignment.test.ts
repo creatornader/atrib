@@ -4,6 +4,7 @@ import { signRecord, signTransactionRecord, verifyRecord, getPublicKey } from '.
 import { base64urlEncode } from '../src/base64url.js'
 import { canonicalRecord } from '../src/canon.js'
 import type { AtribRecord } from '../src/types.js'
+import { hasCreatorSignerEntry } from '../src/types.js'
 
 const seed = new Uint8Array(32).fill(7)
 const now = 1_800_000_000_000
@@ -18,6 +19,30 @@ const base = {
 }
 
 describe('record admission alignment', () => {
+  it('checks creator signer structure without claiming signature validity', () => {
+    const transaction = {
+      event_type: 'https://atrib.dev/v1/types/transaction',
+      creator_key: 'creator',
+    }
+    const signers = [{ creator_key: 'creator', signature: '' }]
+    expect(hasCreatorSignerEntry({ ...transaction, signers })).toBe(true)
+    for (const signers of [
+      null,
+      [],
+      [null],
+      ['sig'],
+      [{ creator_key: 'creator' }],
+      [{ creator_key: 'creator', signature: 7 }],
+      [{ creator_key: 'other', signature: 'sig' }],
+    ]) {
+      expect(hasCreatorSignerEntry({ ...transaction, signers })).toBe(false)
+    }
+    expect(hasCreatorSignerEntry({ event_type: transaction.event_type, signers })).toBe(false)
+    expect(hasCreatorSignerEntry({ ...transaction, event_type: base.event_type, signers })).toBe(
+      false,
+    )
+  })
+
   it('verifies against an explicit clock without changing the default clock', async () => {
     const record = await signRecord(
       { ...base, creator_key: base64urlEncode(await getPublicKey(seed)) } as AtribRecord,

@@ -9832,6 +9832,110 @@ facilitators, or measure protocol-wide usage.
 
 ---
 
+## D189: Source-bound evidence separates signed accounts from receiver reliance
+
+**Date:** 2026-10-16
+
+**Status:** Accepted
+
+**Extends:** [D099](#d099-explicit-emit-records-commit-local-content-through-default-args_hash),
+[D105](#d105-pattern-3-handoff-claims-use-verifier-side-claim-acceptance)
+and [D152](#d152-handoff-verdicts-are-receiver-computed).
+
+**Context.** A valid signature binds a key to a signed account. It does not
+establish that an action occurred, that a source observed it, that permission
+covered it, or that a destination changed. Shared context and chronology cannot
+supply the missing invocation join. Receivers need committed source material
+and explicit trust inputs to distinguish these conclusions.
+
+**Decision.** Adopt [§1.12](atrib-spec.md#112-source-bound-evidence-statements)
+and the [source-bound evidence contract](docs/source-bound-evidence.md).
+Its request, authorization, observation, report, effect and coverage statements
+use extension URIs and the existing `0xFF` event byte. Each uses the existing
+non-transaction signature shape and commits its closed private body through
+`args_hash = sha256(UTF8(JCS(body)))`. A private random nonce randomizes the
+commitment to guessable body values. The receiver hashes the supplied opening
+before schema transformation can remove or normalize properties. Validation
+rejects unlisted properties but preserves the RFC 8785 JSON domain inside
+`parameters` and `state`, including JSON names that resemble JavaScript internals.
+
+Receivers independently recompute integrity, source, binding, authority, effect,
+coverage and publication under a pinned policy and evaluation time. A source
+mechanism authenticates exact artifacts and native identifiers. A causal effect
+requires the authenticated request/observation/destination join. Neither
+`context_id`, chronology nor declared `informed_by` supplies it. Missing evidence
+leaves dependent conclusions unresolved. Conflicting supported accounts remain
+visible.
+
+The accompanying core rules are explicit:
+
+- `content_id` remains required for `tool_call`, `transaction` and any type that
+  requires it. Other statements may omit it. Present values retain the applicable
+  derivation; omission does not invent a tool identity.
+- The signing model includes standard records with `signature` and transaction
+  records with `signers[]`. A transaction need not invent a top-level signature.
+  Canonical serialization and signing procedures for either shape are unchanged.
+- `context_id` remains 32 lowercase hex characters. An explicit correlation
+  context takes precedence over a different transport trace-id. Context continuity
+  does not establish invocation identity or operational causality.
+- Log admission uses the verifier's five-minute future-timestamp window in
+  [§2.6.1](atrib-spec.md#261-submit-entry), replacing the former ten-minute
+  admission allowance.
+
+The default nonblocking guarantee in
+[§5.8](atrib-spec.md#58-degradation-contract) is unchanged. Observational failures
+preserve the primary tool call and response and expose degraded capture.
+E03 requires recoverable record/opening retention before acknowledging durable
+recording. It does not require refusing execution. Execution preconditions and
+refusal behavior remain separate host policy, as in
+[D133](#d133-action-gate-is-a-host-owned-controlproof-package),
+[D144](#d144-pre-action-elevation-gate-composes-authority-propagation-with-cross-attestation)
+and [D169](#d169-protected-mcp-execution-requires-a-one-time-server-side-permit).
+This decision introduces no host refusal mode.
+
+**Alternatives considered.**
+
+- _Treat signature validity as action truth._ Rejected. Source authentication,
+  exact binding, permission and destination state require different evidence.
+- _Add new event bytes or publish private bodies._ Rejected. Existing extension
+  types and body commitments carry the contract without changing the log leaf.
+- _Hash a schema-normalized body._ Rejected. Dropping or transforming properties
+  can accept an opening different from the body the signer committed.
+- _Infer execution joins from context or timestamps._ Rejected. Shared correlation
+  cannot distinguish retries, deliveries or unrelated destination effects.
+- _Require recording before every tool call._ Rejected. That would change the
+  observational degradation guarantee and prescribe host execution policy.
+- _Retain a ten-minute log window._ Rejected. It admits timestamps the verifier
+  rejects under its five-minute window.
+
+**Consequences.**
+
+- Ed25519, JCS, record-hash and log-leaf algorithms remain unchanged. Records
+  with the same fields retain their bytes. Acceptance is not identical:
+  conditional field checks and the tighter admission window change which inputs
+  pass.
+- TypeScript callers must handle optional `content_id` on non-tool statements
+  and the signature union, including signers-only transactions. These are source
+  compatibility changes for callers that assumed both fields were always strings.
+  A minor changeset for packages at `0.x` does not make those changes nonbreaking.
+- Receiver JSON vectors are normative. The three C19 executor cases are
+  non-normative examples of one configured host policy. Offline vectors do not
+  prove operational capture or filesystem durability. Public packages do not yet
+  claim full source-bound producer or receiver conformance.
+- Disclosure, archive submission, log inclusion and application acceptance remain
+  separate operations. The contract adds no public graph edges or permission to
+  index private bodies.
+
+**Cross-references.**
+
+- [§1.2.1](atrib-spec.md#121-field-definitions), conditional field presence.
+- [§1.5.1](atrib-spec.md#151-context_id-the-session-anchor), correlation context.
+- [§1.12](atrib-spec.md#112-source-bound-evidence-statements), normative entry point.
+- [Source-bound evidence corpus](spec/conformance/1.12/README.md), receiver vectors
+  and operational obligations.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

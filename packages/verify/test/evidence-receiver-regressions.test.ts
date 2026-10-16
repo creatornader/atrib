@@ -64,6 +64,29 @@ const dispatchOf = (input: Input) =>
       record.event_type === 'https://atrib.dev/evidence/v1/observation' &&
       executionBodyOf(input, record).assertion.phase === 'dispatch',
   )!
+const laxSourceVerifier: EvidenceSourceVerifier = {
+  ...fixtureSourceVerifier,
+  async verify({ body }) {
+    const parsed = body as unknown as EvidenceBody
+    return {
+      state: 'supported',
+      reasons: [],
+      basis: parsed.basis
+        .filter((ref) => ref.kind === 'artifact' && ref.relation === 'source')
+        .map((ref) => ref.hash),
+      facts: {
+        claim: Object.fromEntries(
+          Object.entries(body).filter(([key]) => !['nonce', 'basis'].includes(key)),
+        ),
+        authority: parsed.basis
+          .filter((ref) => ref.kind === 'record' && ref.relation === 'authority')
+          .map((ref) => ref.hash)
+          .sort(),
+        cursor: '5',
+      },
+    }
+  },
+}
 async function seedFor(key: string) {
   for (let n = 1; n <= 8; n++) {
     const seed = new Uint8Array(32).fill(n)
@@ -110,6 +133,327 @@ async function addObservation(input: Input, original: FixtureRecord, body: Evide
 }
 
 describe('receiver finding regressions', () => {
+  it('preserves an own __proto__ parameter in policy scope and policy hash', async () => {
+    const input = fixture()
+    const rule = input.policy.rules.find((rule) => rule.type.endsWith('/authorization'))!
+    Object.defineProperty(rule.authorized_descriptors[0]!.parameters, '__proto__', {
+      value: { requiredFlag: true },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
+    const result = await verifyEvidenceSet(input)
+    expect(result.request!.dimensions.authority).toMatchObject({
+      state: 'rejected',
+      reasons: ['authority_invalid'],
+    })
+    expect(result.request!.reliance.accepted).toBe(false)
+    expect(result.policy!.hash).toBe(digest(input.policy))
+  })
+  it('authorizes matching raw request and policy parameters with an own __proto__ key', async () => {
+    const input = fixture()
+    const request = input.records.find((record) => record.event_type.endsWith('/request'))!
+    const requestBody = evidenceBodySchemas.request.parse(openingOf(input, request))
+    Object.defineProperty(requestBody.assertion.descriptor.parameters, '__proto__', {
+      value: { requiredFlag: true },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
+    const changedRequest = await addStatement(input, request, requestBody)
+    input.requestHash = digest(changedRequest)
+    const allow = input.records.find((record) => record.event_type.endsWith('/authorization'))!
+    const allowBody = authorizationBodyOf(input, allow)
+    allowBody.target.record_hash = input.requestHash
+    const changedAllow = await addStatement(input, allow, allowBody)
+    input.records = [changedRequest, changedAllow]
+    input.policy.rules.find((rule) => rule.type === allow.event_type)!.authorized_descriptors = [
+      structuredClone(requestBody.assertion.descriptor),
+    ]
+    input.policy.required = ['source', 'authority']
+    input.evaluation = { purpose: 'current', evaluated_at: input.evaluation.evaluated_at }
+    const result = await verifyEvidenceSet(input)
+    expect(changedRequest.args_hash).toBe(digest(requestBody))
+    expect(result.request!.dimensions.authority.state).toBe('supported')
+    expect(result.request!.reliance.accepted).toBe(true)
+    expect(result.policy!.hash).toBe(digest(input.policy))
+  })
+  it('scopes an overdeep opening to its body without changing supplied input', async () => {
+    const input = fixture()
+    const effect = input.records.find((record) => record.event_type.endsWith('/effect'))!
+    let deep: unknown = null
+    for (let i = 0; i < 70; i++) deep = { nested: deep }
+    input.openings.set(digest(effect), deep)
+    const { sourceVerifiers, ...data } = input
+    const before = structuredClone(data)
+    const result = await verifyEvidenceSet(input)
+    expect(
+      result.statements.find((statement) => statement.record_hash === digest(effect))!.dimensions
+        .integrity.body,
+    ).toMatchObject({
+      state: 'unresolved',
+      reasons: ['resource_limit'],
+    })
+    expect(
+      result.statements
+        .filter((statement) => statement.record_hash !== digest(effect))
+        .every((statement) => statement.dimensions.integrity.state === 'supported'),
+    ).toBe(true)
+    for (const name of ['source', 'binding', 'authority'] as const)
+      expect(result.request!.dimensions[name].state).toBe('supported')
+    const { sourceVerifiers: afterVerifiers, ...after } = input
+    expect(afterVerifiers).toBe(sourceVerifiers)
+    expect(structuredClone(after)).toEqual(before)
+  })
+  it('rejects invalid evaluation configuration before evaluating statements', async () => {
+    await expect(
+      verifyEvidenceSet({ ...fixture(), evaluation: { purpose: 'current', evaluated_at: -1 } }),
+    ).rejects.toThrow()
+  })
+  it.each(['authority-version', 'pinned-basis'] as const)(
+    'receiver guard: rejects authorization outside the policy %s',
+    async (condition) => {
+      const input = fixture()
+      const rule = input.policy.rules.find((rule) => rule.type.endsWith('/authorization'))!
+      if (condition === 'authority-version') rule.authority_versions = ['different-version']
+      else rule.authority_basis = []
+      expect((await verifyEvidenceSet(input)).request!.dimensions.authority).toMatchObject({
+        state: 'rejected',
+        reasons: ['authority_invalid'],
+      })
+    },
+  )
+  it.each(['deny', 'escalate'] as const)(
+    'receiver guard: a lone applicable %s confers no permission',
+    async (decision) => {
+      const input = fixture()
+      input.records = input.records.filter(
+        (record) =>
+          !['observation', 'effect'].some((kind) => record.event_type.endsWith(`/${kind}`)),
+      )
+      const allow = input.records.find((record) => record.event_type.endsWith('/authorization'))!
+      const body = authorizationBodyOf(input, allow)
+      body.assertion.decision = decision
+      input.records = input.records.filter((record) => record !== allow)
+      await addStatement(input, allow, body)
+      input.evaluation = { purpose: 'current', evaluated_at: input.evaluation.evaluated_at }
+      expect((await verifyEvidenceSet(input)).request!.dimensions.authority).toMatchObject({
+        state: 'rejected',
+        reasons: ['authority_invalid'],
+      })
+    },
+  )
+  it('receiver guard: matches the pinned snapshot version to authority_version', async () => {
+    const input = fixture()
+    input.records = input.records.filter(
+      (record) => !['observation', 'effect'].some((kind) => record.event_type.endsWith(`/${kind}`)),
+    )
+    const allow = input.records.find((record) => record.event_type.endsWith('/authorization'))!
+    const body = authorizationBodyOf(input, allow)
+    body.assertion.authority_version = 'different-snapshot-version'
+    input.policy.rules.find((rule) => rule.type === allow.event_type)!.authority_versions = [
+      body.assertion.authority_version,
+    ]
+    input.records = input.records.filter((record) => record !== allow)
+    const changed = await addStatement(input, allow, body)
+    input.evaluation = { purpose: 'current', evaluated_at: input.evaluation.evaluated_at }
+    const result = await verifyEvidenceSet(input)
+    expect(
+      result.statements.find((statement) => statement.record_hash === digest(changed))!.dimensions
+        .authority,
+    ).toMatchObject({ state: 'rejected', reasons: ['authority_invalid'] })
+  })
+  it.each(['method', 'subject-namespace'] as const)(
+    'receiver guard: matches the source policy %s exactly',
+    async (condition) => {
+      const input = fixture()
+      const dispatch = dispatchOf(input)
+      const rule = input.policy.rules.find((rule) => rule.type === dispatch.event_type)!
+      if (condition === 'method') rule.methods = ['https://example.test/other-method/v1']
+      else rule.subject_namespace = 'https://example.test/other-subject'
+      expect((await verifyEvidenceSet(input)).request!.dimensions.source).toMatchObject({
+        state: 'rejected',
+        reasons: ['source_untrusted'],
+      })
+    },
+  )
+  it('receiver guard: leaves negative evidence age unresolved', async () => {
+    const input = fixture()
+    const dispatch = dispatchOf(input)
+    const body = executionBodyOf(input, dispatch)
+    body.source.observed_at = input.evaluation.evaluated_at + 1
+    const changed = await addStatement(input, dispatch, body)
+    input.sourceVerifiers[SNAPSHOT_METHOD] = laxSourceVerifier
+    input.evaluation = {
+      purpose: 'historical',
+      evaluated_at: input.evaluation.evaluated_at,
+      dispatch_record: digest(changed),
+    }
+    expect((await verifyEvidenceSet(input)).request!.dimensions.source).toMatchObject({
+      state: 'unresolved',
+      reasons: ['freshness_unknown'],
+    })
+  })
+  it('receiver guard: authenticates the exact authority references returned by the source', async () => {
+    const input = fixture()
+    input.sourceVerifiers[SNAPSHOT_METHOD] = {
+      ...laxSourceVerifier,
+      async verify(args) {
+        const result = await laxSourceVerifier.verify(args)
+        result.facts!.authority = []
+        return result
+      },
+    }
+    expect((await verifyEvidenceSet(input)).request!.dimensions.source).toMatchObject({
+      state: 'rejected',
+      reasons: ['source_untrusted'],
+    })
+  })
+  it('receiver guard: requires verifier support to cite a source artifact', async () => {
+    const input = fixture()
+    const dispatch = dispatchOf(input)
+    const body = executionBodyOf(input, dispatch)
+    const bindingHash = digest({ transport: 'binding-only' })
+    input.artifacts.set(bindingHash, Buffer.from(canonicalize({ transport: 'binding-only' })!))
+    body.basis.push({ relation: 'binding', kind: 'artifact', hash: bindingHash })
+    const changed = await addStatement(input, dispatch, body)
+    input.evaluation = {
+      purpose: 'historical',
+      evaluated_at: input.evaluation.evaluated_at,
+      dispatch_record: digest(changed),
+    }
+    input.sourceVerifiers[SNAPSHOT_METHOD] = {
+      ...laxSourceVerifier,
+      async verify(args) {
+        const result = await laxSourceVerifier.verify(args)
+        if (
+          args.record.event_type === dispatch.event_type &&
+          args.body.assertion &&
+          (args.body.assertion as { phase: string }).phase === 'dispatch'
+        )
+          result.basis = [bindingHash]
+        return result
+      },
+    }
+    expect((await verifyEvidenceSet(input)).request!.dimensions.source).toMatchObject({
+      state: 'rejected',
+      reasons: ['source_untrusted'],
+    })
+  })
+  it('receiver guard: binds a snapshot version to the exact effect payload', async () => {
+    const input = fixture()
+    const effect = input.records.find((record) => record.event_type.endsWith('/effect'))!
+    const body = evidenceBodySchemas.effect.parse(openingOf(input, effect))
+    body.assertion.version = { kind: 'snapshot', value: `sha256:${'f'.repeat(64)}` }
+    input.records = input.records.filter((record) => record !== effect)
+    const changed = await addStatement(input, effect, body)
+    input.sourceVerifiers[SNAPSHOT_METHOD] = laxSourceVerifier
+    const result = await verifyEvidenceSet(input)
+    expect(
+      result.statements.find((statement) => statement.record_hash === digest(changed))!.dimensions
+        .source,
+    ).toMatchObject({ state: 'rejected', reasons: ['dependency_invalid'] })
+    expect(result.request!.dimensions.effect.state).toBe('unresolved')
+  })
+  it('receiver guard: rejects an unrecognized declared method despite a matching policy', async () => {
+    const input = fixture()
+    const request = input.records.find((record) => record.event_type.endsWith('/request'))!
+    const body = evidenceBodySchemas.request.parse(openingOf(input, request))
+    body.source.method = 'https://example.test/custom-declared/v1'
+    input.policy.rules.find((rule) => rule.type === request.event_type)!.methods = [
+      body.source.method,
+    ]
+    const changed = await addStatement(input, request, body)
+    input.requestHash = digest(changed)
+    input.evaluation = { purpose: 'current', evaluated_at: input.evaluation.evaluated_at }
+    expect((await verifyEvidenceSet(input)).request!.dimensions.source).toMatchObject({
+      state: 'rejected',
+      reasons: ['schema_invalid'],
+    })
+  })
+  it('receiver guard: requires effects to join the selected delivery', async () => {
+    const input = fixture()
+    input.sourceVerifiers[SNAPSHOT_METHOD] = laxSourceVerifier
+    const response = input.records.find(
+      (record) =>
+        record.event_type.endsWith('/observation') &&
+        executionBodyOf(input, record).assertion.phase === 'response',
+    )!
+    const responseBody = executionBodyOf(input, response)
+    responseBody.assertion.delivery.id = 'another-delivery'
+    const changedResponse = await addStatement(input, response, responseBody)
+    const effect = input.records.find((record) => record.event_type.endsWith('/effect'))!
+    const body = evidenceBodySchemas.effect.parse(openingOf(input, effect))
+    body.assertion.binding!.observation_record = digest(changedResponse)
+    input.records = input.records.filter((record) => record !== effect)
+    await addStatement(input, effect, body)
+    const result = await verifyEvidenceSet(input)
+    expect(result.request!.destination_states).toHaveLength(1)
+    expect(result.request!.destination_states[0]!.source.state).toBe('supported')
+    expect(result.request!.dimensions.effect).toMatchObject({
+      state: 'unresolved',
+      reasons: ['effect_unbound'],
+    })
+  })
+  it.each(['explicit-gap', 'missing-invocation', 'exclusive-start'] as const)(
+    'receiver guard: coverage checks %s independently of its source adapter',
+    async (condition) => {
+      const input = fixture('coverage-complete')
+      input.sourceVerifiers[SNAPSHOT_METHOD] = laxSourceVerifier
+      const coverage = input.records.find((record) => record.event_type.endsWith('/coverage'))!
+      const body = evidenceBodySchemas.coverage.parse(openingOf(input, coverage))
+      if (condition === 'explicit-gap') body.assertion.gaps.push({ reason: 'known omission' })
+      if (condition === 'missing-invocation') {
+        const other = { namespace: body.assertion.expected[0]!.namespace, id: 'unrelated-event' }
+        body.assertion.expected = [other]
+        body.assertion.captured = [other]
+      }
+      if (condition === 'exclusive-start') body.assertion.start = '5'
+      input.records = input.records.filter((record) => record !== coverage)
+      const changed = await addStatement(input, coverage, body)
+      const result = await verifyEvidenceSet(input)
+      expect(
+        result.statements.find((statement) => statement.record_hash === digest(changed))!.dimensions
+          .coverage,
+      ).toMatchObject({
+        state: 'rejected',
+        reasons: [condition === 'explicit-gap' ? 'coverage_gap' : 'target_mismatch'],
+      })
+      expect(result.request!.reliance.accepted).toBe(false)
+    },
+  )
+  it.each([null, undefined])('reports an absent policy (%s) as policy_missing', async (policy) => {
+    const input = fixture()
+    const result = await verifyEvidenceSet({ ...input, policy })
+    expect(result.request!.dimensions.source).toMatchObject({
+      state: 'unresolved',
+      reasons: ['policy_missing'],
+    })
+    expect(result.request!.reliance.accepted).toBe(false)
+  })
+  it('reports a malformed supplied policy as policy_invalid', async () => {
+    const result = await verifyEvidenceSet({ ...fixture(), policy: {} })
+    expect(result.request!.dimensions.source).toMatchObject({
+      state: 'unresolved',
+      reasons: ['policy_invalid'],
+    })
+  })
+  it('contains a throwing cursor comparator within coverage conclusions', async () => {
+    const input = fixture('coverage-complete')
+    input.sourceVerifiers[SNAPSHOT_METHOD] = {
+      ...fixtureSourceVerifier,
+      compareCursors() {
+        throw new Error('native cursor unavailable')
+      },
+    }
+    const result = await verifyEvidenceSet(input)
+    expect(result.request!.dimensions.coverage).toMatchObject({
+      state: 'unresolved',
+      reasons: ['dependency_missing'],
+    })
+    for (const name of ['source', 'binding', 'authority', 'effect'] as const)
+      expect(result.request!.dimensions[name].state).toBe('supported')
+  })
   it('rejects a normalized claim that differs from its opened assertion', async () => {
     const input = fixture()
     input.sourceVerifiers[SNAPSHOT_METHOD] = {

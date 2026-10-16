@@ -10,6 +10,7 @@ import { hexEncode, sha256 } from './hash.js'
 import { recordHashExistsInMirror } from './mirror.js'
 import { SHA256_REF_PATTERN } from './refs.js'
 import type { AtribRecord } from './types.js'
+import { hasCreatorSignerEntry } from './types.js'
 
 export type RecordReferenceResolution = 'found' | 'not-found' | 'unknown'
 
@@ -235,16 +236,7 @@ function collectMirrorHashes(value: unknown, hashes: Set<string>): void {
 function isAtribRecordLike(value: unknown): value is AtribRecord {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
   const obj = value as Record<string, unknown>
-  const hasCreatorSigner =
-    obj['event_type'] === 'https://atrib.dev/v1/types/transaction' &&
-    Array.isArray(obj['signers']) &&
-    obj['signers'].some(
-      (entry) =>
-        entry !== null &&
-        typeof entry === 'object' &&
-        entry.creator_key === obj['creator_key'] &&
-        typeof entry.signature === 'string',
-    )
+  const hasCreatorSigner = hasCreatorSignerEntry(obj)
   const contentIdRequired = [
     'https://atrib.dev/v1/types/tool_call',
     'https://atrib.dev/v1/types/transaction',

@@ -125,24 +125,25 @@ export async function buildGraph(
   const includeGapNodes = options.includeGapNodes ?? true
   const includeCrossSession = options.includeCrossSession ?? true
 
-  // Sort records by timestamp for determinism (tiebreak by context_id + content_id)
-  const sorted = [...records].sort((a, b) => {
-    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp
-    const aKey = `${a.context_id}:${a.content_id}`
-    const bKey = `${b.context_id}:${b.content_id}`
-    return aKey < bKey ? -1 : aKey > bKey ? 1 : 0
-  })
-  const recordInfo = sorted.map((record) => {
-    const canonical = canonicalRecord(record)
-    const digest = sha256(canonical)
-    const hash = hexEncode(digest)
-    return {
-      record,
-      hash,
-      nodeId: `sha256:${hash}`,
-      token16: base64urlEncode(digest.slice(0, 16)),
-    }
-  })
+  const recordInfo = records
+    .map((record) => {
+      const canonical = canonicalRecord(record)
+      const digest = sha256(canonical)
+      const hash = hexEncode(digest)
+      return {
+        record,
+        hash,
+        nodeId: `sha256:${hash}`,
+        token16: base64urlEncode(digest.slice(0, 16)),
+      }
+    })
+    .sort((a, b) => {
+      if (a.record.timestamp !== b.record.timestamp) return a.record.timestamp - b.record.timestamp
+      const aKey = `${a.record.context_id}:${a.record.content_id ?? a.nodeId}`
+      const bKey = `${b.record.context_id}:${b.record.content_id ?? b.nodeId}`
+      return aKey < bKey ? -1 : aKey > bKey ? 1 : 0
+    })
+  const sorted = recordInfo.map(({ record }) => record)
   const infoByRecord = new Map(recordInfo.map((info) => [info.record, info]))
   const infoByNodeId = new Map(recordInfo.map((info) => [info.nodeId, info]))
 

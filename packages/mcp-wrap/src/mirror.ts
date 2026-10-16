@@ -27,6 +27,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { AtribRecord, OnRecordSidecar } from '@atrib/mcp'
+import { hasCreatorSignerEntry } from '@atrib/mcp'
 import { ensureSecureDir, secureAppend } from './paths.js'
 
 /**
@@ -95,16 +96,7 @@ function normalizeMirrorLine(parsed: unknown): AtribRecord | null {
     (parsed as { record?: unknown }).record !== null
       ? ((parsed as { record: unknown }).record as Record<string, unknown>)
       : (parsed as Record<string, unknown>)
-  const hasCreatorSigner =
-    candidate.event_type === 'https://atrib.dev/v1/types/transaction' &&
-    Array.isArray(candidate.signers) &&
-    candidate.signers.some(
-      (entry) =>
-        entry !== null &&
-        typeof entry === 'object' &&
-        entry.creator_key === candidate.creator_key &&
-        typeof entry.signature === 'string',
-    )
+  const hasCreatorSigner = hasCreatorSignerEntry(candidate)
   if (
     typeof candidate.context_id === 'string' &&
     typeof candidate.timestamp === 'number' &&

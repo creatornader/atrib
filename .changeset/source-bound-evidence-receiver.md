@@ -17,3 +17,9 @@ Allow non-tool statements to omit content_id and transactions to use their
 creator's signers entry without a top-level signature. Align submission helper
 checks with the five-minute future-clock limit already enforced by core record
 verification. Let callers supply a fixed evaluation clock to that verifier.
+
+This changes TypeScript source compatibility. Callers must handle optional
+`content_id` on non-tool statements and the signature union, including signers-only
+transactions without a top-level `signature`. The minor release for these `0.x`
+packages includes these breaking source changes. Signing and log-leaf algorithms
+remain unchanged; accepted record shapes and the submission clock window change.

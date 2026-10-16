@@ -270,7 +270,7 @@ async function inspectSource(
     }
     return
   }
-  if (!policy) return set('unresolved', 'policy_invalid')
+  if (!policy) return set('unresolved', input.policy == null ? 'policy_missing' : 'policy_invalid')
   const src = source(info)
   const rule = policy.rules.find(
     (rule) =>
@@ -357,7 +357,7 @@ async function inspectSource(
   return set('supported')
 }
 
-function preflight(options: VerifyEvidenceSetInput): void {
+function preflight(options: VerifyEvidenceSetInput): Set<string> {
   if (
     options.records.length > 4096 ||
     options.openings.size > 4096 ||
@@ -367,8 +367,11 @@ function preflight(options: VerifyEvidenceSetInput): void {
   let nodes = 0
   let bytes = 0
   const path = new Set<object>()
+  const depthLimit = new RangeError('resource_limit')
+  const limitedOpenings = new Set<string>()
   function json(value: unknown, depth: number): void {
-    if (++nodes > 100_000 || depth > 64) throw new RangeError('resource_limit')
+    if (++nodes > 100_000) throw new RangeError('resource_limit')
+    if (depth > 64) throw depthLimit
     if (typeof value === 'string') {
       bytes += new TextEncoder().encode(value).length
       if (bytes > 67_108_864) throw new RangeError('resource_limit')
@@ -392,7 +395,15 @@ function preflight(options: VerifyEvidenceSetInput): void {
     path.delete(value)
   }
   for (const record of options.records) json(record, 0)
-  for (const body of options.openings.values()) json(body, 0)
+  for (const [hash, body] of options.openings) {
+    try {
+      json(body, 0)
+    } catch (error) {
+      if (error !== depthLimit) throw error
+      limitedOpenings.add(hash)
+      path.clear()
+    }
+  }
   if (options.policy !== undefined) json(options.policy, 0)
   json(options.evaluation, 0)
   for (const artifact of options.artifacts.values()) {
@@ -401,21 +412,25 @@ function preflight(options: VerifyEvidenceSetInput): void {
     bytes += artifact.length
     if (bytes > 67_108_864) throw new RangeError('resource_limit')
   }
+  return limitedOpenings
 }
 
 export async function verifyEvidenceSet(
   options: VerifyEvidenceSetInput,
 ): Promise<EvidenceSetResult> {
-  preflight(options)
+  const limitedOpenings = preflight(options)
   const { sourceVerifiers, publication, openings, artifacts, ...data } = options
   const input = {
-    ...structuredClone({ ...data, openings: new Map(openings) }),
+    ...structuredClone({
+      ...data,
+      openings: new Map([...openings].filter(([hash]) => !limitedOpenings.has(hash))),
+    }),
     artifacts: new Map([...artifacts].map(([hash, bytes]) => [hash, Uint8Array.from(bytes)])),
     sourceVerifiers,
     ...(publication === undefined ? {} : { publication }),
   }
   const parsedPolicy = policySchema.safeParse(input.policy)
-  const policy = parsedPolicy.success ? parsedPolicy.data : undefined
+  const policy = parsedPolicy.success ? (input.policy as EvidencePolicy) : undefined
   const evaluation = evaluationSchema.parse(input.evaluation)
   const infos: Info[] = []
   const uniqueRecords = new Map<string, { canonical: string; record: Obj }>()
@@ -451,6 +466,7 @@ export async function verifyEvidenceSet(
     let bodyResult = dim('supported', undefined, [hash])
     if (!Object.hasOwn(evidenceBodySchemas, kind)) bodyResult = dim('unresolved', 'unknown_type')
     else if (!validEvidenceCarrier(record)) bodyResult = dim('rejected', 'schema_invalid')
+    else if (limitedOpenings.has(hash)) bodyResult = dim('unresolved', 'resource_limit')
     else if (!input.openings.has(hash)) bodyResult = dim('unresolved', 'body_missing')
     else {
       try {
@@ -867,9 +883,13 @@ export async function verifyEvidenceSet(
     if (source(info).method !== source(dispatch).method) return undefined
     const compare = input.sourceVerifiers[String(source(info).method)]?.compareCursors
     if (!compare || typeof dispatch.facts.cursor !== 'string') return undefined
-    const start = compare(String(info.assertion.start), dispatch.facts.cursor)
-    const end = compare(dispatch.facts.cursor, String(info.assertion.end))
-    return start === undefined || end === undefined ? undefined : start < 0 && end <= 0
+    try {
+      const start = compare(String(info.assertion.start), dispatch.facts.cursor)
+      const end = compare(dispatch.facts.cursor, String(info.assertion.end))
+      return start === undefined || end === undefined ? undefined : start < 0 && end <= 0
+    } catch {
+      return undefined
+    }
   }
   const coverageInfos = infos.filter((info) => info.kind === 'coverage')
   for (const info of coverageInfos) {

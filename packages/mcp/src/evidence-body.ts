@@ -26,7 +26,7 @@ export function isEvidenceLocator(value: unknown): value is string {
       )
     )
   } catch {
-    return true
+    return false
   }
 }
 const locator = text.refine(isEvidenceLocator)
@@ -280,6 +280,6 @@ export function commitEvidenceBody(kind: EvidenceKind, body: unknown): string {
     throw new TypeError('atrib: evidence body must be JSON without undefined properties')
   }
   json(body, 0)
-  const parsed = evidenceBodySchemas[kind].parse(body)
-  return createJsonCommitment(parsed, 'plain-sha256').hash
+  evidenceBodySchemas[kind].parse(body)
+  return createJsonCommitment(body, 'plain-sha256').hash
 }
