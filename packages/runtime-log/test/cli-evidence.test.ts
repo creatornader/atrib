@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runRuntimeLogCli } from '../src/cli.js'
 import { hashCanonical } from '../src/index.js'
+import { createProtectedMcpExecutor } from '../../action-gate/src/index.js'
 import {
   base64urlEncode,
   getPublicKey,
@@ -14,6 +15,8 @@ import {
   createEvidenceNonce,
   DECLARED_METHOD,
   EVIDENCE_TYPES,
+  HOST_CAPTURE_METHOD,
+  createJsonCommitment,
   type EvidenceBody,
 } from '@atrib/mcp'
 
@@ -54,6 +57,127 @@ async function inspect(text: string, extra: string[] = []) {
 }
 
 describe('retained evidence CLI', () => {
+  it.each([true, false])(
+    'separates missing dispatch evidence from retained response completion: %s',
+    async (responseRetained) => {
+      const dir = await realpath(await mkdtemp(join(tmpdir(), 'atrib-inspect-response-')))
+      const mirror = join(dir, 'mirror.jsonl')
+      const policyPath = join(dir, 'policy.json')
+      const source = { namespace: 'urn:host:', id: 'fixture' }
+      const descriptor = {
+        service: 'urn:mcp:',
+        operation: 'write',
+        resource: { namespace: 'urn:file:', id: 'fixture' },
+        parameters: {},
+      }
+      const authority = { version: 'fixture:1', revoked: false, not_before: 0, expires_at: 10_000 }
+      const key = new Uint8Array(32).fill(23)
+      const signer = base64urlEncode(await getPublicKey(key))
+      const executor = createProtectedMcpExecutor({
+        privateKey: key,
+        contextId: 'a'.repeat(32),
+        now: () => 1000,
+        strictEvidence: {
+          mirrorPath: mirror,
+          source,
+          authoritySnapshot: authority,
+          describe: () => descriptor,
+          identify: () => ({
+            subject: { namespace: 'urn:action:', id: 'action' },
+            execution: { namespace: 'urn:run:', id: 'run' },
+            native_invocation: { namespace: 'urn:invoke:', id: 'invocation' },
+            delivery: { namespace: 'urn:delivery:', id: 'delivery' },
+          }),
+        },
+        evaluate: () => ({ outcome: 'allow', policy_id: 'fixture', policy_version: '1' }),
+        executeUpstream: () => 'response',
+      })
+      const captured = await executor.authorizeAndExecute({
+        action: { run_id: 'run', action_id: 'action', agent_id: 'host' },
+        request: { name: 'write', arguments: {} },
+      })
+      const rows = (await readFile(mirror, 'utf8'))
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+      await writeFile(
+        mirror,
+        rows
+          .filter((row) => {
+            const phase = row._local.evidence.opening.assertion.phase
+            return phase !== 'dispatch' && (responseRetained || phase !== 'response')
+          })
+          .map((row) => JSON.stringify(row))
+          .join('\n') + '\n',
+      )
+      await writeFile(
+        policyPath,
+        JSON.stringify({
+          id: 'local',
+          required: ['source', 'binding', 'authority'],
+          rules: ['request', 'authorization', 'observation'].map((kind) => ({
+            type: EVIDENCE_TYPES[kind],
+            signer_keys: [signer],
+            source_keys: [signer],
+            source,
+            methods: [kind === 'observation' ? HOST_CAPTURE_METHOD : DECLARED_METHOD],
+            subject_namespace: 'urn:action:',
+            max_age_ms: 60_000,
+            authority_versions: ['fixture:1'],
+            authorized_descriptors: [descriptor],
+            authority_basis: [createJsonCommitment(authority, 'plain-sha256').hash],
+          })),
+        }),
+      )
+      for (const format of ['json', 'text']) {
+        let stdout = ''
+        let stderr = ''
+        const code = await runRuntimeLogCli(
+          [
+            'inspect',
+            '--mirror',
+            mirror,
+            '--policy',
+            policyPath,
+            '--request',
+            captured.request.record_hash,
+            '--evaluated-at',
+            '1000',
+            '--format',
+            format,
+          ],
+          {
+            stdout: (text) => {
+              stdout += text
+            },
+            stderr: (text) => {
+              stderr += text
+            },
+          },
+        )
+        expect(stderr).toBe('')
+        expect(code).toBe(1)
+        if (format === 'json') {
+          const output = JSON.parse(stdout)
+          expect(output.accepted).toBe(false)
+          expect(output.inspections[0].dispatch_record).toBeNull()
+          expect(
+            output.inspections[0].verification.request.execution.deliveries.map(
+              (delivery) => delivery.state,
+            ),
+          ).toEqual(responseRetained ? ['success'] : [])
+          expect(output.gaps.join(' ')).toContain(
+            'dispatch ordering and historical authority unresolved',
+          )
+          expect(output.gaps.join(' ')).not.toContain('execution unknown')
+        } else {
+          expect(stdout).toContain('dispatch ordering and historical authority unresolved')
+          expect(stdout).toContain(responseRetained ? 'Execution: success.' : 'Execution: unknown.')
+          if (responseRetained) expect(stdout).not.toContain('execution unknown')
+        }
+      }
+    },
+  )
   it.each(['authorization', 'effect', 'coverage'] as const)(
     'lists an unopened %s record without inferring a request relationship',
     async (kind) => {

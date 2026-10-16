@@ -118,11 +118,13 @@ describe('built CLI receives production protected host journals', () => {
     expect(output.inspections[0].dispatch_record).toBeNull()
     expect(output.gaps.join('\n')).toContain(`Unattributed observation ${metadata.dispatchHash}`)
     const human = inspect(metadata, ['--format', 'text'])
-    expect(human.stdout).toContain('No dispatch opening available; execution unknown.')
+    expect(human.stdout).toContain(
+      'No dispatch opening available; dispatch ordering and historical authority unresolved.',
+    )
     expect(human.stdout).not.toContain('No observed dispatch')
     expect(human.stdout).toContain(`Unattributed observation ${metadata.dispatchHash}`)
-    expect(human.stdout).toContain('Execution: unknown without a dispatch opening.')
-    expect(human.stdout).not.toContain('Execution: success.')
+    expect(human.stdout).toContain('Execution: success.')
+    expect(human.stdout).not.toContain('execution unknown')
   })
 
   it('preserves supported request conclusions beside an unattributed unopened observation', async () => {
@@ -293,7 +295,9 @@ describe('built CLI receives production protected host journals', () => {
     expect(received.status, received.stderr).toBe(1)
     const output = JSON.parse(received.stdout)
     expect(output.accepted).toBe(false)
-    expect(output.gaps.join(' ')).toContain('No dispatch opening available; execution unknown.')
+    expect(output.gaps.join(' ')).toContain(
+      'No dispatch opening available; dispatch ordering and historical authority unresolved.',
+    )
     expect((await readFile(metadata.effectPath, 'utf8')).trim().split('\n')).toHaveLength(1)
   })
 

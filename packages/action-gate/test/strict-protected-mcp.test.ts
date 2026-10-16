@@ -222,55 +222,370 @@ describe('strict evidence on the existing protected MCP host', () => {
     expect((await first).status).toBe('success')
     expect(calls).toBe(1)
   })
-  it.each(['signer', 'target', 'subject', 'source', 'context'] as const)(
-    'ignores a policy failure Report from a different %s',
+  it.each([
+    'authority_snapshot_not_applicable',
+    'dispatch_descriptor_mismatch',
+    'dispatch_descriptor_unavailable',
+    'authorization_expired_before_dispatch',
+    'dispatch_not_observed',
+  ] as const)(
+    'replays completed pre-dispatch refusal %s without entering upstream',
+    async (reason) => {
+      const f = await setup()
+      let descriptions = 0
+      let evaluations = 0
+      let calls = 0
+      let time = 1000
+      const options = {
+        privateKey: new Uint8Array(32).fill(23),
+        contextId: 'a'.repeat(32),
+        now: () => time,
+        strictEvidence: {
+          ...f.strictEvidence,
+          authorizationMaxAgeMs: 10,
+          authoritySnapshot: {
+            ...f.strictEvidence.authoritySnapshot,
+            version: reason === 'authority_snapshot_not_applicable' ? 'other:1' : 'fixture:1',
+          },
+          describe: (request) => {
+            descriptions++
+            if (descriptions === 2) {
+              if (reason === 'dispatch_descriptor_unavailable')
+                throw new Error('descriptor offline')
+              if (reason === 'authorization_expired_before_dispatch') time += 11
+            }
+            return {
+              ...f.strictEvidence.describe(request),
+              ...(reason === 'dispatch_descriptor_mismatch' && descriptions === 2
+                ? { version: 'changed' }
+                : {}),
+            }
+          },
+        },
+        ...(reason === 'dispatch_not_observed'
+          ? {
+              permitStore: {
+                issue: () => {
+                  throw new Error('permit unavailable')
+                },
+                consume: createMemoryProtectedMcpPermitStore().consume,
+              },
+            }
+          : {}),
+        evaluate: () => {
+          evaluations++
+          return { outcome: 'allow' as const, policy_id: 'fixture', policy_version: '1' }
+        },
+        executeUpstream: () => {
+          calls++
+          return 'unreachable'
+        },
+      }
+      const first = await createProtectedMcpExecutor(options).authorizeAndExecute({
+        action: f.action,
+        request: f.request,
+      })
+      const replay = await createProtectedMcpExecutor(options).authorizeAndExecute({
+        action: f.action,
+        request: f.request,
+      })
+      expect(first.status).toBe('refused')
+      expect(first.gaps).toContain(reason)
+      expect(replay.status).toBe('refused')
+      expect(replay.replayed).toBe(true)
+      expect(replay.gaps).toContain(reason)
+      expect(evaluations).toBe(1)
+      expect(calls).toBe(0)
+      const rows = (await readFile(f.mirrorPath, 'utf8'))
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+      const report = rows.at(-1)
+      expect(report.record.event_type).toBe(EVIDENCE_TYPES.report)
+      expect(report._local.evidence.opening.assertion).toEqual({
+        status: 'failure',
+        text: `action-gate: refused before dispatch: ${reason}`,
+      })
+    },
+  )
+
+  it('replays authenticated response completion even when dispatch retention is missing', async () => {
+    const f = await setup()
+    let calls = 0
+    const options = {
+      privateKey: new Uint8Array(32).fill(23),
+      contextId: 'a'.repeat(32),
+      strictEvidence: f.strictEvidence,
+      evaluate: () => ({ outcome: 'allow' as const, policy_id: 'fixture', policy_version: '1' }),
+      executeUpstream: () => {
+        calls++
+        return 'response'
+      },
+    }
+    const first = await createProtectedMcpExecutor(options).authorizeAndExecute({
+      action: f.action,
+      request: f.request,
+    })
+    const rows = (await readFile(f.mirrorPath, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    await writeFile(
+      f.mirrorPath,
+      rows
+        .filter((row) => row._local.evidence.opening.assertion.phase !== 'dispatch')
+        .map((row) => JSON.stringify(row))
+        .join('\n') + '\n',
+    )
+    const replay = await createProtectedMcpExecutor(options).authorizeAndExecute({
+      action: f.action,
+      request: f.request,
+    })
+    expect(first.status).toBe('success')
+    expect(replay.status).toBe('success')
+    expect(replay.replayed).toBe(true)
+    expect(replay.gaps).toContain('result_not_replayed')
+    expect(replay.result).toBeUndefined()
+    expect(replay.observations.map((unit) => unit.opening.assertion.phase)).toEqual(['response'])
+    expect(calls).toBe(1)
+  })
+  it.each([
+    'signer',
+    'target',
+    'subject',
+    'source',
+    'context',
+    'method',
+    'reason',
+    'status',
+  ] as const)('ignores a policy failure Report from a different %s', async (changed) => {
+    const f = await setup()
+    const options = {
+      privateKey: new Uint8Array(32).fill(23),
+      contextId: 'a'.repeat(32),
+      strictEvidence: f.strictEvidence,
+      evaluate: () => {
+        throw new Error('offline')
+      },
+      executeUpstream: () => {
+        throw new Error('unreachable')
+      },
+    }
+    await createProtectedMcpExecutor(options).authorizeAndExecute({
+      action: f.action,
+      request: f.request,
+    })
+    const retained = (await readFile(f.mirrorPath, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    const report = retained[1]
+    const opening = report._local.evidence.opening
+    if (changed === 'target') opening.target.record_hash = `sha256:${'0'.repeat(64)}`
+    if (changed === 'subject') opening.subject.id = 'different'
+    if (changed === 'source') opening.source.identity.id = 'different'
+    if (changed === 'method') opening.source.method = HOST_CAPTURE_METHOD
+    if (changed === 'reason')
+      opening.assertion.text = 'action-gate: refused before dispatch: arbitrary_reason'
+    if (changed === 'status') opening.assertion.status = 'success'
+    if (changed === 'context') report.record.context_id = 'b'.repeat(32)
+    const key = new Uint8Array(32).fill(changed === 'signer' ? 24 : 23)
+    report.record = await signRecord(
+      {
+        ...report.record,
+        creator_key: base64urlEncode(await getPublicKey(key)),
+        args_hash: commitEvidenceBody('report', opening),
+      },
+      key,
+    )
+    await writeFile(f.mirrorPath, retained.map((entry) => JSON.stringify(entry)).join('\n') + '\n')
+    const replay = await createProtectedMcpExecutor(options).authorizeAndExecute({
+      action: f.action,
+      request: f.request,
+    })
+    expect(replay.status).toBe('unknown')
+    expect(replay.gaps).toContain('execution_already_reserved')
+    expect(replay.gaps).not.toContain('policy_invalid')
+  })
+  it('keeps a completed refusal unknown on replay when its Report could not be retained', async () => {
+    const f = await setup()
+    let evaluations = 0
+    let calls = 0
+    const options = {
+      privateKey: new Uint8Array(32).fill(23),
+      contextId: 'a'.repeat(32),
+      strictEvidence: f.strictEvidence,
+      evaluate: async () => {
+        evaluations++
+        await writeFile(`${f.mirrorPath}.lock`, '', { mode: 0o600 })
+        throw new Error('policy offline')
+      },
+      executeUpstream: () => {
+        calls++
+        return 'unreachable'
+      },
+    }
+    const first = await createProtectedMcpExecutor(options).authorizeAndExecute({
+      action: f.action,
+      request: f.request,
+    })
+    expect(first.status).toBe('refused')
+    expect(first.gaps).toContain('lock_busy')
+    await rm(`${f.mirrorPath}.lock`)
+    const replay = await createProtectedMcpExecutor(options).authorizeAndExecute({
+      action: f.action,
+      request: f.request,
+    })
+    expect(replay.status).toBe('unknown')
+    expect(replay.gaps).toContain('execution_already_reserved')
+    expect(evaluations).toBe(1)
+    expect(calls).toBe(0)
+  })
+  it('treats a pre-dispatch refusal Report plus execution observations as a conflict', async () => {
+    const f = await setup()
+    const key = new Uint8Array(32).fill(23)
+    let calls = 0
+    const options = {
+      privateKey: key,
+      contextId: 'a'.repeat(32),
+      strictEvidence: f.strictEvidence,
+      evaluate: () => ({ outcome: 'allow' as const, policy_id: 'fixture', policy_version: '1' }),
+      executeUpstream: () => {
+        calls++
+        return 'response'
+      },
+    }
+    const first = await createProtectedMcpExecutor(options).authorizeAndExecute({
+      action: f.action,
+      request: f.request,
+    })
+    const opening = {
+      ...first.request.opening,
+      target: { record_hash: first.request.record_hash },
+      assertion: {
+        status: 'failure',
+        text: 'action-gate: refused before dispatch: dispatch_not_observed',
+      },
+    }
+    const record = await signRecord(
+      {
+        ...first.request.record,
+        event_type: EVIDENCE_TYPES.report,
+        chain_root: first.request.record_hash,
+        args_hash: commitEvidenceBody('report', opening),
+      },
+      key,
+    )
+    const text = await readFile(f.mirrorPath, 'utf8')
+    await writeFile(
+      f.mirrorPath,
+      text +
+        JSON.stringify({
+          record,
+          _local: { evidence: { opening, artifacts: [] } },
+          written_at: Date.now(),
+        }) +
+        '\n',
+    )
+    const replay = await createProtectedMcpExecutor(options).authorizeAndExecute({
+      action: f.action,
+      request: f.request,
+    })
+    expect(replay.status).toBe('unknown')
+    expect(replay.gaps).toContain('retained_terminal_conflict')
+    expect(calls).toBe(1)
+  })
+  it.each(['expired-first', 'policy-first'])(
+    'detects policy failure plus Authorization regardless of Report order: %s',
+    async (order) => {
+      const f = await setup()
+      const key = new Uint8Array(32).fill(23)
+      let calls = 0
+      const options = {
+        privateKey: key,
+        contextId: 'a'.repeat(32),
+        strictEvidence: f.strictEvidence,
+        evaluate: () => ({ outcome: 'allow' as const, policy_id: 'fixture', policy_version: '1' }),
+        executeUpstream: () => {
+          calls++
+          return 'response'
+        },
+      }
+      const first = await createProtectedMcpExecutor(options).authorizeAndExecute({
+        action: f.action,
+        request: f.request,
+      })
+      const rows = (await readFile(f.mirrorPath, 'utf8'))
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .filter((row) => row.record.event_type !== EVIDENCE_TYPES.observation)
+      const reasons = ['authorization_expired_before_dispatch', 'policy_invalid']
+      if (order === 'policy-first') reasons.reverse()
+      for (const reason of reasons) {
+        const opening = {
+          ...first.request.opening,
+          target: { record_hash: first.request.record_hash },
+          assertion: { status: 'failure', text: `action-gate: refused before dispatch: ${reason}` },
+        }
+        const record = await signRecord(
+          {
+            ...first.request.record,
+            event_type: EVIDENCE_TYPES.report,
+            chain_root: first.request.record_hash,
+            args_hash: commitEvidenceBody('report', opening),
+          },
+          key,
+        )
+        rows.push({
+          record,
+          _local: { evidence: { opening, artifacts: [] } },
+          written_at: Date.now(),
+        })
+      }
+      await writeFile(f.mirrorPath, rows.map((row) => JSON.stringify(row)).join('\n') + '\n')
+      const replay = await createProtectedMcpExecutor(options).authorizeAndExecute({
+        action: f.action,
+        request: f.request,
+      })
+      expect(replay.status).toBe('unknown')
+      expect(replay.gaps).toContain('retained_terminal_conflict')
+      expect(calls).toBe(1)
+    },
+  )
+  it.each(['key', 'context'])(
+    'does not trust a retained refusal under a different current %s',
     async (changed) => {
       const f = await setup()
+      let evaluations = 0
+      let calls = 0
       const options = {
         privateKey: new Uint8Array(32).fill(23),
         contextId: 'a'.repeat(32),
         strictEvidence: f.strictEvidence,
         evaluate: () => {
-          throw new Error('offline')
+          evaluations++
+          throw new Error('policy offline')
         },
         executeUpstream: () => {
-          throw new Error('unreachable')
+          calls++
+          return 'unreachable'
         },
       }
       await createProtectedMcpExecutor(options).authorizeAndExecute({
         action: f.action,
         request: f.request,
       })
-      const retained = (await readFile(f.mirrorPath, 'utf8'))
-        .trim()
-        .split('\n')
-        .map((line) => JSON.parse(line))
-      const report = retained[1]
-      const opening = report._local.evidence.opening
-      if (changed === 'target') opening.target.record_hash = `sha256:${'0'.repeat(64)}`
-      if (changed === 'subject') opening.subject.id = 'different'
-      if (changed === 'source') opening.source.identity.id = 'different'
-      if (changed === 'context') report.record.context_id = 'b'.repeat(32)
-      const key = new Uint8Array(32).fill(changed === 'signer' ? 24 : 23)
-      report.record = await signRecord(
-        {
-          ...report.record,
-          creator_key: base64urlEncode(await getPublicKey(key)),
-          args_hash: commitEvidenceBody('report', opening),
-        },
-        key,
-      )
-      await writeFile(
-        f.mirrorPath,
-        retained.map((entry) => JSON.stringify(entry)).join('\n') + '\n',
-      )
-      const replay = await createProtectedMcpExecutor(options).authorizeAndExecute({
-        action: f.action,
-        request: f.request,
-      })
+      const replay = await createProtectedMcpExecutor({
+        ...options,
+        ...(changed === 'key'
+          ? { privateKey: new Uint8Array(32).fill(24) }
+          : { contextId: 'b'.repeat(32) }),
+      }).authorizeAndExecute({ action: f.action, request: f.request })
       expect(replay.status).toBe('unknown')
       expect(replay.gaps).toContain('execution_already_reserved')
-      expect(replay.gaps).not.toContain('policy_invalid')
+      expect(evaluations).toBe(1)
+      expect(calls).toBe(0)
     },
   )
   it('exposes bounded lock contention separately from retention corruption', async () => {
@@ -318,8 +633,8 @@ describe('strict evidence on the existing protected MCP host', () => {
         calls++
         await vi.waitFor(async () => {
           expect((await readFile(f.mirrorPath, 'utf8')).trim().split('\n')).toHaveLength(3)
+          await writeFile(`${f.mirrorPath}.lock`, '', { mode: 0o600, flag: 'wx' })
         })
-        await writeFile(`${f.mirrorPath}.lock`, '', { mode: 0o600 })
         return 'response'
       },
     })
@@ -718,6 +1033,11 @@ describe('strict evidence on the existing protected MCP host', () => {
       ).status,
     ).toBe('unknown')
     expect(calls).toBe(1)
+    const rows = (await readFile(f.mirrorPath, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    expect(rows.some((row) => row.record.event_type === EVIDENCE_TYPES.report)).toBe(false)
   })
   it('records no dispatch when authorization retention fails', async () => {
     const f = await setup()

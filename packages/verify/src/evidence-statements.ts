@@ -248,7 +248,10 @@ async function inspectSource(
     for (const ref of refs(info).filter((ref) => ref.kind === 'artifact')) {
       const bytes = input.artifacts.get(String(ref.hash))
       if (!bytes) continue
-      if (ref.relation !== 'source' && (bytes.length > 1_048_576 || bytesHash(bytes) !== ref.hash))
+      if (
+        !['source', 'binding'].includes(String(ref.relation)) &&
+        (bytes.length > 1_048_576 || bytesHash(bytes) !== ref.hash)
+      )
         continue
       artifactBytes(bytes)
       artifactSize += bytes.length

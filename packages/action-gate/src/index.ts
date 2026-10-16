@@ -873,7 +873,14 @@ export function createProtectedMcpExecutor<TResult>(
         const actionEnvelope = actionEnvelopeFor(action, request)
         const observations: SignedStrictMirrorUnit[] = []
         const gaps: string[] = []
-        const policyFailureText = 'action-gate: refused before dispatch: policy_invalid'
+        const refusalReasons = [
+          'policy_invalid',
+          'authority_snapshot_not_applicable',
+          'dispatch_descriptor_mismatch',
+          'dispatch_descriptor_unavailable',
+          'authorization_expired_before_dispatch',
+          'dispatch_not_observed',
+        ] as const
         const retentionFailure = (phase: string, error: unknown) => {
           gaps.push(
             error instanceof Error && error.message.startsWith('atrib: strict mirror lock_busy;')
@@ -950,7 +957,7 @@ export function createProtectedMcpExecutor<TResult>(
               record_hash: recordHashFor(unit.record),
             })
             let refused = false
-            let policyFailed = false
+            let refusalReason: (typeof refusalReasons)[number] | undefined
             let succeeded = false
             let uncertain = false
             for (const unit of claimed.units ?? []) {
@@ -958,10 +965,13 @@ export function createProtectedMcpExecutor<TResult>(
               if (
                 record.creator_key !== creatorKey ||
                 record.context_id !== contextId ||
+                record.creator_key !== retainedRequest.record.creator_key ||
+                record.context_id !== retainedRequest.record.context_id ||
                 !('target' in body) ||
                 body.target.record_hash !== retainedRequest.record_hash ||
-                canonicalize(body.subject) !== canonicalize(identity.subject) ||
-                canonicalize(body.source.identity) !== canonicalize(source)
+                canonicalize(body.subject) !== canonicalize(retainedRequest.opening.subject) ||
+                canonicalize(body.source.identity) !==
+                  canonicalize(retainedRequest.opening.source.identity)
               )
                 continue
               const assertion = body.assertion
@@ -969,8 +979,20 @@ export function createProtectedMcpExecutor<TResult>(
                 authorization = signedUnit(unit)
                 refused ||= ['deny', 'escalate'].includes(assertion.decision)
               } else if (record.event_type === EVIDENCE_TYPES.report && 'status' in assertion) {
-                policyFailed ||=
-                  assertion.status === 'failure' && assertion.text === policyFailureText
+                if (
+                  assertion.status === 'failure' &&
+                  body.source.kind === 'declared' &&
+                  body.source.method === DECLARED_METHOD
+                ) {
+                  const reportedReason = refusalReasons.find(
+                    (reason) =>
+                      assertion.text === `action-gate: refused before dispatch: ${reason}`,
+                  )
+                  refusalReason =
+                    reportedReason === 'policy_invalid'
+                      ? reportedReason
+                      : (refusalReason ?? reportedReason)
+                }
               } else if (
                 record.event_type === EVIDENCE_TYPES.observation &&
                 'execution' in assertion &&
@@ -988,13 +1010,14 @@ export function createProtectedMcpExecutor<TResult>(
             if (
               (refused && observations.length) ||
               (succeeded && uncertain) ||
-              (policyFailed && (authorization || observations.length))
+              (refusalReason && observations.length) ||
+              (refusalReason === 'policy_invalid' && authorization)
             ) {
               gaps.push('retained_terminal_conflict')
               return { ...result('unknown'), replayed: true }
             }
-            if (policyFailed) {
-              gaps.push('policy_invalid')
+            if (refusalReason) {
+              gaps.push(refusalReason)
               return { ...result('refused'), replayed: true }
             }
             if (refused) return { ...result('refused'), replayed: true }
@@ -1008,6 +1031,33 @@ export function createProtectedMcpExecutor<TResult>(
         } catch (error) {
           retainedRequest = undefined
           retentionFailure('request', error)
+          return result('refused')
+        }
+        const ownerRequestHash = retainedRequest.record_hash
+        const refuseBeforeDispatch = async (reason: (typeof refusalReasons)[number]) => {
+          gaps.push(reason)
+          try {
+            // Only the reservation owner records its completed pre-dispatch refusal.
+            // A Request alone may still belong to an in-flight execution.
+            await retention.retain(
+              await sign(
+                'report',
+                {
+                  subject: identity.subject,
+                  target: { record_hash: ownerRequestHash },
+                  assertion: {
+                    status: 'failure',
+                    text: `action-gate: refused before dispatch: ${reason}`,
+                  },
+                  source: { kind: 'declared', identity: source, method: DECLARED_METHOD },
+                  basis: [],
+                },
+                ownerRequestHash,
+              ),
+            )
+          } catch (error) {
+            retentionFailure('report', error)
+          }
           return result('refused')
         }
         const evaluatedPolicy = await resolvePolicyDecision({
@@ -1027,27 +1077,7 @@ export function createProtectedMcpExecutor<TResult>(
           typeof policy.policy_version !== 'string' ||
           !policy.policy_version
         ) {
-          gaps.push('policy_invalid')
-          try {
-            // Only the reservation owner records its completed pre-dispatch refusal.
-            // A Request alone may still belong to an in-flight execution.
-            await retention.retain(
-              await sign(
-                'report',
-                {
-                  subject: identity.subject,
-                  target: { record_hash: retainedRequest.record_hash },
-                  assertion: { status: 'failure', text: policyFailureText },
-                  source: { kind: 'declared', identity: source, method: DECLARED_METHOD },
-                  basis: [],
-                },
-                retainedRequest.record_hash,
-              ),
-            )
-          } catch (error) {
-            retentionFailure('report', error)
-          }
-          return result('refused')
+          return refuseBeforeDispatch('policy_invalid')
         }
         const authorizedAt = now()
         const maxAge = strict.authorizationMaxAgeMs ?? 30_000
@@ -1060,8 +1090,7 @@ export function createProtectedMcpExecutor<TResult>(
           authorizedAt < authority.not_before ||
           authorizedAt >= authority.expires_at
         ) {
-          gaps.push('authority_snapshot_not_applicable')
-          return result('refused')
+          return refuseBeforeDispatch('authority_snapshot_not_applicable')
         }
         const authorizationExpiresAt = Math.min(authority.expires_at, authorizedAt + maxAge)
         const authorityBytes = encoder.encode(canonicalize(authority)!)
@@ -1098,17 +1127,14 @@ export function createProtectedMcpExecutor<TResult>(
         if (policy.outcome !== 'allow') return result('refused')
         try {
           if (canonicalize(snapshotJson(strict.describe(request))) !== canonicalize(descriptor)) {
-            gaps.push('dispatch_descriptor_mismatch')
-            return result('refused')
+            return refuseBeforeDispatch('dispatch_descriptor_mismatch')
           }
         } catch {
-          gaps.push('dispatch_descriptor_unavailable')
-          return result('refused')
+          return refuseBeforeDispatch('dispatch_descriptor_unavailable')
         }
         const dispatchedAt = now()
         if (dispatchedAt < authorizedAt || dispatchedAt >= authorizationExpiresAt) {
-          gaps.push('authorization_expired_before_dispatch')
-          return result('refused')
+          return refuseBeforeDispatch('authorization_expired_before_dispatch')
         }
         const observe = (
           phase: 'dispatch' | 'response' | 'failure',
@@ -1242,8 +1268,7 @@ export function createProtectedMcpExecutor<TResult>(
         }
         await dispatchRetention
         if (dispatchTime === undefined) {
-          gaps.push('dispatch_not_observed')
-          return result('refused')
+          return refuseBeforeDispatch('dispatch_not_observed')
         }
         const phase = completed ? 'response' : 'failure'
         try {

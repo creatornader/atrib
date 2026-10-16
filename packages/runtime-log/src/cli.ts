@@ -179,7 +179,7 @@ async function runMirrorInspect(flags: Map<string, string | true>) {
   const gaps: string[] = []
   if (!dispatches.length)
     gaps.push(
-      'No dispatch opening available; execution unknown. Retained intent is evaluated at the supplied time.',
+      'No dispatch opening available; dispatch ordering and historical authority unresolved. Retained evidence is evaluated at the supplied time.',
     )
   for (const record of mirror.records) {
     const hash = hashCanonical(record)
@@ -378,7 +378,7 @@ function renderMirrorInspection(inspection: Awaited<ReturnType<typeof runMirrorI
     lines.push(
       item.dispatch_record
         ? `Dispatch ${item.dispatch_record}`
-        : 'No dispatch opening available; execution unknown.',
+        : 'No dispatch opening available; dispatch ordering and historical authority unresolved.',
     )
     if (!dimensions) {
       lines.push('Request: missing or invalid.')
@@ -390,9 +390,7 @@ function renderMirrorInspection(inspection: Awaited<ReturnType<typeof runMirrorI
       `Authority: ${dimensions.authority.state}.`,
       `Remote effect: ${dimensions.effect.state}.`,
       `Capture coverage: ${dimensions.coverage.state}.`,
-      item.dispatch_record
-        ? `Execution: ${result.request!.execution.deliveries.map((delivery) => delivery.state).join(', ') || 'unknown'}.`
-        : `Execution: unknown without a dispatch opening. Retained delivery observations: ${result.request!.execution.deliveries.map((delivery) => delivery.state).join(', ') || 'none'}.`,
+      `Execution: ${result.request!.execution.deliveries.map((delivery) => delivery.state).join(', ') || 'unknown'}.`,
     )
     for (const [name, dimension] of Object.entries(dimensions))
       if (dimension.reasons.length) lines.push(`${name}: ${dimension.reasons.join(', ')}.`)

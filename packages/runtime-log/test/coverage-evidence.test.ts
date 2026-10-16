@@ -339,6 +339,40 @@ describe('D168 coverage evidence projection', () => {
     )
   })
 
+  it.each(['missing', 'invalid', 'invalid-with-missing-disclosure'] as const)(
+    'preserves %s native binding frame status at the receiver',
+    async (condition) => {
+      const { input, receiverInput } = await fixture()
+      const frameHash = input.capturedEvents[1]!.artifacts[0]!.hash
+      if (condition === 'missing') receiverInput.artifacts.delete(frameHash)
+      else receiverInput.artifacts.set(frameHash, new TextEncoder().encode('malformed'))
+      if (condition === 'invalid-with-missing-disclosure') {
+        const disclosure = receiverInput.records[2]!
+        const body = evidenceBodySchemas.coverage.parse(
+          receiverInput.openings.get(hashCanonical(disclosure)),
+        )
+        const group = body.basis.find(
+          (ref) =>
+            ref.relation === 'captured' &&
+            Array.isArray(
+              JSON.parse(new TextDecoder().decode(receiverInput.artifacts.get(ref.hash)!)),
+            ),
+        )!
+        receiverInput.artifacts.delete(group.hash)
+      }
+      const received = await verifyEvidenceSet(receiverInput)
+      const coverage = received.statements.find(
+        (statement) => statement.record_hash === hashCanonical(receiverInput.records[2]!),
+      )!
+      expect(coverage.dimensions.source.state).toBe(
+        condition === 'missing' ? 'unresolved' : 'rejected',
+      )
+      if (condition !== 'missing')
+        expect(coverage.dimensions.source.reasons).toContain('dependency_invalid')
+      expect(received.request?.reliance.accepted).toBe(false)
+    },
+  )
+
   it('rejects an authenticated inventory for another window with the same invocation IDs', async () => {
     const original = await fixture()
     const other = await fixture('captured', 10)
@@ -476,6 +510,15 @@ describe('D168 coverage evidence projection', () => {
     const { projected, verify } = await fixture('captured', 0, context, { count: 128 })
     expect(projected.body.basis.length).toBeLessThanOrEqual(256)
     expect(await verify()).toMatchObject({ state: 'supported' })
+  })
+  it('bounds raw captured references before emitting coverage', async () => {
+    const { input } = await fixture()
+    const basis = input.capturedEvents[0]!.opening.basis
+    for (let index = 0; index < 248; index++)
+      basis.push({ relation: 'source', kind: 'artifact', hash: hashCanonical(`frame-${index}`) })
+    expect(projectCoverageEvidence(input).body.basis).toHaveLength(256)
+    basis.push({ relation: 'source', kind: 'artifact', hash: hashCanonical('frame-over-limit') })
+    expect(() => projectCoverageEvidence(input)).toThrow('coverage_artifact_limit')
   })
   it('keeps native schema fields separate from the committed coverage manifest', async () => {
     const { verify } = await fixture('captured', 0, context, {

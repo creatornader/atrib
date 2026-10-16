@@ -389,7 +389,11 @@ passes records, openings, artifacts, and the authenticated host capture and
 runtime coverage adapters to `@atrib/verify`'s `verifyEvidenceSet`. Each matching dispatch gets
 its own historical evaluation. Use `--dispatch HASH` to select one explicitly.
 Without an observed dispatch, inspection verifies retained intent and
-authorization at the supplied evaluation time and marks execution unknown.
+authorization at the supplied evaluation time. Dispatch ordering and historical
+authority remain unresolved, and inspection is not accepted. Authenticated
+response observations still support delivery completion. Without such an
+observation, execution remains unknown. Completion does not establish remote
+effect or historical authorization.
 Select `--dispatch HASH` to evaluate missing evidence for a known dispatch.
 
 JSON is the default. It retains record references, verifier dimensions,

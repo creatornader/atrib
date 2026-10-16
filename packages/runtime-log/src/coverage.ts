@@ -78,6 +78,7 @@ export function projectCoverageEvidence(input: ProjectCoverageEvidenceInput) {
       if (artifact) artifacts.set(ref.hash, artifact.bytes)
     }
   }
+  if (groups.length + frames.size + 5 > 256) throw new Error('coverage_artifact_limit')
   const body = {
     nonce: input.nonce,
     subject: input.sourceIdentity,

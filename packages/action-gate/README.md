@@ -180,11 +180,19 @@ the [runtime-log CLI](../runtime-log/README.md).
 validity window inside that grant. Missing, revoked, expired, or mismatched
 grants fail closed. An evaluator exception returns `policy_invalid` without
 asserting that the policy denied the request. The reservation owner retains a
-declared failure Report for this completed pre-dispatch refusal. A matching
-signed Report lets later delivery replay the refusal and its gap. Without that
-Report, a Request with no Authorization may still belong to an active owner,
-so replay remains `unknown`. The host never releases that reservation or retries
-the effect under the same execution identity.
+declared failure Report for completed pre-dispatch refusals: invalid policy,
+inapplicable authority, unavailable or changed descriptor, expired authorization,
+or a dispatch boundary that was not entered. These Reports describe only the
+selected upstream callback, not other side effects. Replay requires a signed
+Report with a fixed reason, the original Request's signer, context, target,
+subject, and declared source. The current executor's signer and context must
+also match. An allow Authorization followed by a post-authorization refusal
+is consistent. A `policy_invalid` Report combined with any Authorization is a
+conflict. A refusal combined with execution observations is also a conflict.
+Without a retained Report, an active owner, storage failure, or crash remains
+`unknown`. The host never releases that reservation or retries the effect under
+the same execution identity. A callback that throws after entering upstream
+does not produce a pre-dispatch refusal Report.
 
 An optional `capture` profile supplies a registered source `method` and a
 synchronous `nativeEvent(phase, observedAt)` reader. The host snapshots that
@@ -222,7 +230,11 @@ replacement. These checks rely on POSIX ownership and permission semantics.
 A reservation derives from the signed Request's source, subject, and execution.
 An existing reservation returns the retained terminal state with `replayed:
 true`: `success` for a recorded successful response, or `refused` for a retained
-denial or escalation. It does not redispatch or promise a cached raw result.
+denial, escalation, or completed pre-dispatch refusal. `success` describes
+response completion even if the dispatch observation was not retained. Missing
+dispatch evidence leaves ordering and historical authority unresolved, not the
+authenticated response. Replay adds `result_not_replayed` and does not redispatch
+or promise a cached raw result.
 Pending or uncertain executions remain `unknown`. Changed parameters under
 that execution return a refusal. A crashed writer can leave
 `protected.jsonl.lock`; truncated or corrupt mirrors also stop writes. Recovery
