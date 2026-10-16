@@ -30,19 +30,9 @@
  * preferred (lower latency between span end and record submission).
  */
 
-import type {
-  ReadableSpan,
-  Span,
-  SpanProcessor,
-} from '@opentelemetry/sdk-trace-base'
+import type { ReadableSpan, Span, SpanProcessor } from '@opentelemetry/sdk-trace-base'
 import type { Context } from '@opentelemetry/api'
-import {
-  type AtribRecord,
-  signRecord,
-  canonicalRecord,
-  sha256,
-  hexEncode,
-} from '@atrib/mcp'
+import { type AtribRecord, signRecord, canonicalRecord, sha256, hexEncode } from '@atrib/mcp'
 import {
   spanToUnsignedRecord,
   readLlmOutputToolCallId,
@@ -50,24 +40,20 @@ import {
   readIoValues,
 } from './span-to-record.js'
 import { isOpenInferenceSpan } from './openinference-filter.js'
+import { buildAtribSpanSidecar, type AtribSpanSidecar } from './sidecar.js'
 import {
-  buildAtribSpanSidecar,
-  type AtribSpanSidecar,
-} from './sidecar.js'
-import { InformedByTracker, type InformedByTrackerOptions } from './informed-by-tracker.js'
-import {
-  deriveArgsResultHashFields,
-  type ArgsResultHashPosture,
-} from './args-result-hash.js'
+  DeferredToolSpans,
+  InformedByTracker,
+  type InformedByTrackerOptions,
+} from './informed-by-tracker.js'
+import { deriveArgsResultHashFields, type ArgsResultHashPosture } from './args-result-hash.js'
 
 export type AtribBatchEntry = {
   readonly signed: AtribRecord
   readonly sidecar: AtribSpanSidecar
 }
 
-export type AtribBatchSubmission = (
-  batch: readonly AtribBatchEntry[],
-) => void | Promise<void>
+export type AtribBatchSubmission = (batch: readonly AtribBatchEntry[]) => void | Promise<void>
 
 export type AtribBatchBufferConfig = {
   /**
@@ -173,6 +159,8 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
   private shutdownRequested = false
   private droppedRecords = 0
 
+  private readonly deferredTools = new DeferredToolSpans()
+
   constructor(opts: AtribBatchSpanProcessorOptions) {
     this.opts = opts
     const cfg = opts.config ?? {}
@@ -182,8 +170,7 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
     this.exportTimeoutMillis = cfg.exportTimeoutMillis ?? DEFAULT_EXPORT_TIMEOUT_MILLIS
     if (opts.autoInformedBy === true) {
       this.tracker =
-        opts.informedByTracker ??
-        new InformedByTracker(opts.informedByTrackerOptions ?? {})
+        opts.informedByTracker ?? new InformedByTracker(opts.informedByTrackerOptions ?? {})
     } else {
       this.tracker = null
     }
@@ -219,6 +206,14 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
     while (this.inflightSigning.size > 0) {
       await Promise.allSettled([...this.inflightSigning])
     }
+    // An unmatched tool still produces a record, without an invented link.
+    for (const pending of this.deferredTools.take(() => true)) {
+      try {
+        await this.processOne(pending, false)
+      } catch (error) {
+        this.logError('flush', error)
+      }
+    }
     // Drain queue: keep flushing batches until empty.
     while (this.queue.length > 0) {
       await this.flushOnce()
@@ -235,7 +230,7 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
     return this.droppedRecords
   }
 
-  private async processOne(span: ReadableSpan): Promise<void> {
+  private async processOne(span: ReadableSpan, allowDefer = true): Promise<void> {
     const mappingCtx = {
       creatorKey: this.opts.creatorKey,
       serverUrl: this.opts.serverUrl,
@@ -250,6 +245,21 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
     const toolCallId = readToolCallId(span)
     const llmOutputToolCallId = readLlmOutputToolCallId(span)
 
+    // AI SDK 7 ends the tool before its enclosing model step. Hold only
+    // these native tool spans until the matching model record is signed.
+    if (
+      allowDefer &&
+      this.tracker !== null &&
+      result.kind === 'TOOL' &&
+      span.attributes['ai.operationId'] === 'ai.toolCall' &&
+      toolCallId !== undefined &&
+      this.tracker.lookup(traceId, toolCallId) === undefined
+    ) {
+      const evicted = this.deferredTools.add(span)
+      if (evicted !== undefined) await this.processOne(evicted, false)
+      return
+    }
+
     let unsignedRecord = result.record
     if (this.opts.resolveChainRoot !== undefined) {
       unsignedRecord = {
@@ -258,11 +268,7 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
       }
     }
 
-    if (
-      this.tracker !== null &&
-      result.kind === 'TOOL' &&
-      toolCallId !== undefined
-    ) {
+    if (this.tracker !== null && result.kind === 'TOOL' && toolCallId !== undefined) {
       const llmRecordHash = this.tracker.lookup(traceId, toolCallId)
       if (llmRecordHash !== undefined) {
         unsignedRecord = { ...unsignedRecord, informed_by: [llmRecordHash] }
@@ -274,21 +280,14 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
       this.opts.argsResultHashPosture !== 'none'
     ) {
       const ioForHash = readIoValues(span)
-      const hashFields = deriveArgsResultHashFields(
-        this.opts.argsResultHashPosture,
-        ioForHash,
-      )
+      const hashFields = deriveArgsResultHashFields(this.opts.argsResultHashPosture, ioForHash)
       unsignedRecord = { ...unsignedRecord, ...hashFields }
     }
 
     const recordWithPlaceholder = { ...unsignedRecord, signature: '' } as AtribRecord
     const signed = await signRecord(recordWithPlaceholder, this.opts.privateKey)
 
-    if (
-      this.tracker !== null &&
-      result.kind === 'LLM' &&
-      llmOutputToolCallId !== undefined
-    ) {
+    if (this.tracker !== null && result.kind === 'LLM' && llmOutputToolCallId !== undefined) {
       const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(signed)))}`
       this.tracker.recordLlmToolCallEmission(traceId, llmOutputToolCallId, recordHash)
     }
@@ -296,6 +295,14 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
     const sidecar = buildAtribSpanSidecar(span, result.kind)
 
     this.enqueue({ signed, sidecar })
+    if (result.kind === 'LLM' && llmOutputToolCallId !== undefined) {
+      const ready = this.deferredTools.take(
+        (pending) =>
+          pending.spanContext().traceId === traceId &&
+          readToolCallId(pending) === llmOutputToolCallId,
+      )
+      for (const pending of ready) await this.processOne(pending, false)
+    }
   }
 
   private enqueue(entry: AtribBatchEntry): void {
@@ -322,8 +329,12 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
         void this.flushOnce().catch((err) => this.logError('flush', err))
       }, this.scheduledDelayMillis)
       // Allow the process to exit even if the timer is the only pending work.
-      if (typeof this.flushTimer === 'object' && this.flushTimer !== null && 'unref' in this.flushTimer) {
-        (this.flushTimer as { unref: () => void }).unref()
+      if (
+        typeof this.flushTimer === 'object' &&
+        this.flushTimer !== null &&
+        'unref' in this.flushTimer
+      ) {
+        ;(this.flushTimer as { unref: () => void }).unref()
       }
     }
   }
@@ -359,7 +370,7 @@ export class AtribBatchSpanProcessor implements SpanProcessor {
         reject(new Error(`submit timed out after ${this.exportTimeoutMillis}ms`))
       }, this.exportTimeoutMillis)
       if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
-        (timer as { unref: () => void }).unref()
+        ;(timer as { unref: () => void }).unref()
       }
       promise.then(
         (v) => {

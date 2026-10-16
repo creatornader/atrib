@@ -55,8 +55,7 @@ const processor = new AtribSpanProcessor({
   },
 })
 
-const provider = new BasicTracerProvider()
-provider.addSpanProcessor(processor)
+const provider = new BasicTracerProvider({ spanProcessors: [processor] })
 
 // Now any framework with OpenInference instrumentation that emits TOOL
 // spans on this provider produces signed atrib records.
@@ -92,6 +91,10 @@ Langfuse, Phoenix, Datadog, and similar systems should remain the trace viewer, 
 `sidecar.content` is intentionally local-only. It includes fields such as `source`, `span_kind`, `span_name`, `trace_id`, `span_id`, `what`, `topics`, `tool_name`, `args`, `result`, `input`, `output`, `agent_name`, `model_name`, prompt fields, `usage_details`, `cost_details`, `score_details`, and `metadata`. These fields are not signed record fields. If you need verifier-grade replay for input or output bytes, enable `argsResultHashPosture: 'plain'` or `'salted'` so the signed record carries `args_hash` and `result_hash`. The hash input is verifier-compatible: JSON strings are parsed and JCS-canonicalized before hashing, and non-JSON strings are hashed as JCS string values.
 
 This is the intended overlap with Langfuse: send the same spans to Langfuse for operations, and to atrib for signed evidence plus local cognitive recall.
+
+With `autoInformedBy: true`, native AI SDK 7 tool spans can finish before their model-step span. Both processors hold up to 256 such spans until a signed LLM record with the same trace and tool-call ID exists. The tool receives that record hash before signing. Overflow emits the oldest tool without a link. `forceFlush()` and `shutdown()` drain unmatched tools without inventing references. Call one of them before exit. Default automatic linking remains disabled.
+
+The [real AI SDK compatibility test](../integration/test/ai-instrumentation-compat.test.ts) drives a localhost OpenAI-compatible provider through generation, tool execution, streaming, invalid arguments, and provider errors. [Deferred-tool tests](test/deferred-tool-spans.test.ts) check both processors, trace isolation, overflow, and shutdown.
 
 ## Simple vs batch
 
@@ -131,8 +134,9 @@ process.on('SIGTERM', async () => {
 `AtribSpanProcessor` is additive. Add it to your tracer provider alongside any existing exporters (Langfuse OTLP receiver, Phoenix collector, Datadog, etc.). Each processor sees every span; atrib filters for OpenInference spans and signs them; other processors continue unaffected.
 
 ```ts
-provider.addSpanProcessor(new SimpleSpanProcessor(otlpExporter)) // your existing pipeline
-provider.addSpanProcessor(atribProcessor) // adds verifiable substrate
+const provider = new BasicTracerProvider({
+  spanProcessors: [new SimpleSpanProcessor(otlpExporter), atribProcessor],
+})
 ```
 
 The integration package includes a smoke script that uses a real OTLP HTTP exporter and the atrib processor on the same provider:
@@ -226,7 +230,7 @@ Current coverage:
 - Preflight verification helper that catches misconfigured context propagation at startup.
 - Attribute keys imported from `@arizeai/openinference-semantic-conventions` for canonical schema correctness.
 - Recall-readable local sidecar content for span identity, prompts, outputs, usage, cost, scores, metadata, and LLM-to-tool linkage.
-- 67 unit tests + composition pilot validated end-to-end against real Vercel AI SDK v6 + NVIDIA NIM-served Qwen 3.5 + `@arizeai/openinference-vercel`'s reference SpanProcessor on a shared TracerProvider.
+- 73 unit tests + composition pilot validated end-to-end against real Vercel AI SDK v6 + NVIDIA NIM-served Qwen 3.5 + `@arizeai/openinference-vercel`'s reference SpanProcessor on a shared TracerProvider.
 - Runnable integration example at `packages/integration/examples/openinference/` (offline by default; live model-driven path enabled via `ATRIB_OPENINFERENCE_RUN_LIVE=1` + `NVIDIA_API_KEY`).
 - Dual-export smoke at `packages/integration/examples/openinference/dual-export-smoke.ts`, with local OTLP HTTP receiver by default and Phoenix/Langfuse-compatible endpoint override via `ATRIB_OPENINFERENCE_OTLP_ENDPOINT`.
 - Conformance fixtures in `test/fixtures/` capture four canonical span shapes (TOOL, two LLMs, AGENT) live-captured from a real run. The fixture-replay test catches upstream attribute-schema drift before it reaches consumers.

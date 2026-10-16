@@ -1,32 +1,11 @@
 name: Dependabot auto-merge
 
-# Auto-approve + auto-merge Dependabot PRs that match high-trust criteria
-# (patch + minor version bumps for security-relevant ecosystems). Major
-# version bumps are NOT auto-merged: they get a Dependabot PR but require
-# manual review because semantic version theory holds that majors may break.
-#
-# Why this exists: per the operator's policy, security-patch PRs for
-# transitive deps should land continuously without per-PR review friction.
-# Manual review for these turns Dependabot into a backlog instead of a
-# safety net. The 8 required CI checks on `main` (test, test 3.10,
-# test 3.12, scan / gitleaks, scan / TruffleHog, scan / typos,
-# pre-commit textleaks+oss-twin-check, CodeQL aggregator) already gate
-# the merge; auto-merge just removes the human in the loop for low-risk
-# version bumps that pass those gates. The per-language Analyze contexts
-# were dropped from required checks on 2026-07-16: default-setup CodeQL
-# skips them on lockfile-only diffs, which deadlocked deps-only PRs
-# (see the branch-protection posture runbook).
-#
-# Configuration:
-# - Only PRs authored by dependabot[bot] are considered
-# - Approval + auto-merge enabled for patch/minor updates
-# - Major updates labeled "major" by Dependabot get NO auto-action;
-#   require manual review
-#
-# Source: GitHub's official Dependabot auto-merge guide.
-# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions
+# Individual npm patch/minor updates and eligible non-npm updates may auto-merge.
+# Grouped npm updates require compatibility review in separate lanes, even when CI passes.
+# Read this policy from the protected base branch. Never check out or execute PR code.
+# Metadata contract: https://github.com/dependabot/fetch-metadata#usage
 
-on: pull_request
+on: pull_request_target
 
 permissions:
   contents: write
@@ -35,16 +14,27 @@ permissions:
 jobs:
   dependabot:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       - name: Fetch Dependabot metadata
         id: meta
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
 
-      - name: Auto-approve + enable auto-merge (patch + minor only)
-        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+      - name: Auto-approve + enable eligible patch/minor auto-merge
+        if: >-
+          (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+           steps.meta.outputs.update-type == 'version-update:semver-minor') &&
+          steps.meta.outputs.dependency-names != '' &&
+          steps.meta.outputs.package-ecosystem != '' &&
+          !(
+            (steps.meta.outputs.package-ecosystem == 'npm' ||
+             steps.meta.outputs.package-ecosystem == 'npm_and_yarn' ||
+             startsWith(github.head_ref, 'dependabot/npm_and_yarn/')) &&
+            (steps.meta.outputs.dependency-group != '' ||
+             contains(steps.meta.outputs.dependency-names, ','))
+          )
         run: |
           gh pr review --approve "$PR_URL"
           gh pr merge --auto --squash "$PR_URL"
