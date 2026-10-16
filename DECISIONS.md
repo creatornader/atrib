@@ -9714,12 +9714,11 @@ operable through the profile-aware runtime updater.
 **Protocol impact.** None. This is a deployment boundary. It changes no MCP
 message and no atrib signed byte.
 
-**Update 2026-10-16.** The operator retired the `claude-desktop` profile and its
-daemon, so two profiles remain: `claude-code` and `codex`. The daemons no longer
-set `ATRIB_LOCAL_SUBSTRATE_ENDPOINT` because the
-[D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
-coordinators retired. The decision is unchanged: one daemon per remaining
-profile.
+**Update 2026-10-16.** All three profiles remain: `claude-code`, `claude-desktop`
+and `codex`. Claude Desktop also hosts Code sessions that use its profile, so
+it is not idle. The daemons no longer set `ATRIB_LOCAL_SUBSTRATE_ENDPOINT`
+because the [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
+coordinators retired. The decision is unchanged.
 
 ## D188: Default payment detection requires published completion evidence
 
