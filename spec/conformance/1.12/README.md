@@ -13,13 +13,14 @@ From the repository root, after dependency installation:
 ```sh
 pnpm --filter @atrib/mcp build
 pnpm --filter @atrib/verify test -- conformance-1.12.test.ts source-bound-schemas.test.ts source-bound-adversarial.test.ts
-pnpm --filter @atrib/verify exec tsx test/run-source-bound-fixture.ts ../../../spec/conformance/1.12/cases/C01-complete.json
+pnpm --filter @atrib/verify exec tsx test/run-source-bound-fixture.ts ../../spec/conformance/1.12/cases/C01-complete.json
 ```
 
 Regenerate fixed signed inputs with:
 
 ```sh
 pnpm --filter @atrib/verify exec tsx test/generate-source-bound-corpus.ts
+pnpm exec prettier --write 'spec/conformance/1.12/cases/*.json' spec/conformance/1.12/manifest.json 'spec/conformance/1.12/objects/*.json'
 ```
 
 The generator uses the existing atrib signing/canonicalization helpers. It does
@@ -31,10 +32,16 @@ construction in a deployment.
 ## Fixture and result format
 
 `manifest.json` enumerates every case file. Each case carries input, expected,
-protects, fails_when, no_claim and rule IDs. Receiver inputs contain complete
-signed records, private openings keyed by actual signed-record hash, base64
-artifact bytes keyed by digest, a pinned policy, evaluation and optional request
-hash. No URL is fetched. Artifacts and policy travel with the fixture.
+protects, fails_when, no_claim and rule IDs. Signed records, private openings,
+policies, evaluations and artifact maps refer to shared entries in three
+content-addressed stores: `objects/json-values.json`, `objects/artifacts.json`
+and `objects/artifact-maps.json`. Store files are pretty-printed. JSON value
+references use JCS hashes; artifact references hash decoded bytes. The artifact
+map uses a closed typed wrapper, and its reader checks the hash of the fully
+materialized map. The test reader verifies referenced entries and reconstructs
+complete receiver inputs before evaluation. Missing, malformed or mismatched
+entries fail the reader. Expected assertions remain explicit in each case. No
+URL is fetched.
 
 Expected objects are partial assertions against EvidenceSetResult, not a
 requirement that unrelated facts disappear. `invalid_kind` is a schema-vector

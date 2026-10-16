@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 // Public fixture seeds only. These regressions exercise the offline model.
-import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as ed from '@noble/ed25519'
 import { signRecord, verifyRecord as verifySignature, type AtribRecord } from '@atrib/mcp'
@@ -11,6 +10,7 @@ import {
   jcs,
   type FixtureInput,
 } from './source-bound-reference.js'
+import { loadSourceBoundFixture } from './source-bound-corpus.js'
 import { DECLARED_METHOD, type EvidencePolicy } from './source-bound-schemas.js'
 
 type Obj = Record<string, unknown>
@@ -35,7 +35,7 @@ type TestBody = {
 type SourceWrapper = { payload: Obj; signer_key: string; signature: string }
 const root = join(__dirname, '../../../spec/conformance/1.12/cases')
 const load = (name = 'C01-complete'): FixtureInput =>
-  JSON.parse(readFileSync(join(root, `${name}.json`), 'utf8')).input
+  loadSourceBoundFixture(join(root, `${name}.json`)).input
 const bodyOf = (input: FixtureInput, record: Obj): TestBody =>
   input.openings[digest(record)] as TestBody
 const find = (input: FixtureInput, kind: string, phase?: string): Obj => {

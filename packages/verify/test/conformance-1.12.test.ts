@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { digest, evaluateEvidenceFixture } from './source-bound-reference.js'
+import { loadSourceBoundFixture } from './source-bound-corpus.js'
 import { exerciseRetentionFixture } from './source-bound-executor-reference.js'
 
 const root = join(__dirname, '../../../spec/conformance/1.12')
@@ -22,7 +23,7 @@ describe('source-bound evidence offline contract corpus', () => {
   })
 
   for (const item of manifest.cases) {
-    const fixture = JSON.parse(readFileSync(join(root, item.file), 'utf8'))
+    const fixture = loadSourceBoundFixture(join(root, item.file))
     it(`${fixture.name}: ${fixture.protects}`, async () => {
       if (fixture.input.mode === 'executor') {
         expect(
@@ -57,7 +58,7 @@ describe('source-bound evidence offline contract corpus', () => {
 
   it('keeps the conformance projection unchanged when input record order changes', async () => {
     for (const name of ['C01-complete', 'C10-untrusted-injection', 'F06-destination-progression']) {
-      const fixture = JSON.parse(readFileSync(join(root, `cases/${name}.json`), 'utf8'))
+      const fixture = loadSourceBoundFixture(join(root, `cases/${name}.json`))
       const forward = await evaluateEvidenceFixture(fixture.input)
       fixture.input.records.reverse()
       expect(await evaluateEvidenceFixture(fixture.input)).toEqual(forward)
@@ -65,7 +66,7 @@ describe('source-bound evidence offline contract corpus', () => {
   })
 
   it('does not mutate the supplied source accounts or application state', async () => {
-    const fixture = JSON.parse(readFileSync(join(root, 'cases/C01-complete.json'), 'utf8'))
+    const fixture = loadSourceBoundFixture(join(root, 'cases/C01-complete.json'))
     const before = JSON.stringify(fixture.input)
     await evaluateEvidenceFixture(fixture.input)
     expect(JSON.stringify(fixture.input)).toBe(before)
@@ -74,7 +75,7 @@ describe('source-bound evidence offline contract corpus', () => {
   it('replays the disclosed fixture in a fresh process without the source database', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'atrib-evidence-replay-'))
     try {
-      const fixture = JSON.parse(readFileSync(join(root, 'cases/C01-complete.json'), 'utf8'))
+      const fixture = loadSourceBoundFixture(join(root, 'cases/C01-complete.json'))
       const path = join(directory, 'bundle.json')
       writeFileSync(path, JSON.stringify(fixture))
       const cli = createRequire(import.meta.url).resolve('tsx/cli')

@@ -575,5 +575,11 @@
     "expected": "bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E",
     "rogue": "iodf_x6zhFFXes1a_uQFRWVo3XyJ4JCGOgVXvHr0nxc"
   },
-  "scope": "offline corpus model; not a production receiver or host conformance claim"
+  "scope": "offline corpus model; not a production receiver or host conformance claim",
+  "fixture_store": {
+    "format": "atrib-conformance-content-store/1",
+    "json_values": "objects/json-values.json",
+    "artifact_bytes": "objects/artifacts.json",
+    "artifact_maps": "objects/artifact-maps.json"
+  }
 }

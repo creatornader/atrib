@@ -12,6 +12,7 @@ import {
   type AtribRecord,
 } from '@atrib/mcp'
 import { digest, jcs, SNAPSHOT_METHOD, type FixtureInput } from './source-bound-reference.js'
+import { compactSourceBoundCorpus } from './source-bound-corpus.js'
 import { DECLARED_METHOD, EVIDENCE_PREFIX } from './source-bound-schemas.js'
 
 type Obj = Record<string, unknown>
@@ -627,4 +628,5 @@ writeFileSync(
   join(root, 'manifest.json'),
   `${JSON.stringify({ spec_section: '1.12', generator: 'packages/verify/test/generate-source-bound-corpus.ts', cases, fixture_keys: keys, scope: 'offline corpus model; not a production receiver or host conformance claim' }, null, 2)}\n`,
 )
+compactSourceBoundCorpus(root)
 process.stdout.write(`Generated ${cases.length} deterministic cases\n`)

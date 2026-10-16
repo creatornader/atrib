@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-import { readFileSync } from 'node:fs'
 import { evaluateEvidenceFixture, type FixtureInput } from './source-bound-reference.js'
+import { loadSourceBoundFixture } from './source-bound-corpus.js'
 import { exerciseRetentionFixture } from './source-bound-executor-reference.js'
-const fixture = JSON.parse(readFileSync(process.argv[2]!, 'utf8')) as {
+const fixture = loadSourceBoundFixture(process.argv[2]!) as {
   input: FixtureInput & { mode?: string; protected?: boolean; fail_retention?: boolean }
 }
 const result =
