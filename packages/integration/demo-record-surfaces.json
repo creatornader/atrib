@@ -325,7 +325,8 @@
       "commands": [
         "openinference-cognitive-loop",
         "openinference-dual-export-smoke",
-        "openinference-phoenix-private-evidence"
+        "openinference-phoenix-private-evidence",
+        "typecheck:openinference-examples"
       ]
     },
     {
