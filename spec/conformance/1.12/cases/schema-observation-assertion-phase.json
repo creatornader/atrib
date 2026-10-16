@@ -30,6 +30,26 @@
     "request_hash": "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e"
   },
   "expected": {
-    "invalid_kind": "observation"
+    "invalid_kind": "observation",
+    "statements": [
+      {
+        "record_hash": "sha256:59a351f8fe639c875c9458082c06c92caf5c571751c77e4cbf23a573f7e7a2ea",
+        "dimensions": {
+          "source": {
+            "state": "rejected",
+            "reasons": ["schema_invalid"]
+          }
+        }
+      },
+      {
+        "record_hash": "sha256:f77ce169b10fa754a2c0017607e8b44220db7ea60a9dd21b6cc08585ae38c85b",
+        "dimensions": {
+          "source": {
+            "state": "rejected",
+            "reasons": ["schema_invalid"]
+          }
+        }
+      }
+    ]
   }
 }

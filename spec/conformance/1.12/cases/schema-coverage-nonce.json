@@ -32,6 +32,17 @@
     "request_hash": "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e"
   },
   "expected": {
-    "invalid_kind": "coverage"
+    "invalid_kind": "coverage",
+    "statements": [
+      {
+        "record_hash": "sha256:b87542fa791b37665341eb66c8a9907206974227ea69b46a4de24414c0025812",
+        "dimensions": {
+          "source": {
+            "state": "rejected",
+            "reasons": ["schema_invalid"]
+          }
+        }
+      }
+    ]
   }
 }

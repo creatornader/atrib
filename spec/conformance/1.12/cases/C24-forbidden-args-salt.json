@@ -37,6 +37,17 @@
           "reasons": ["schema_invalid"]
         }
       }
-    }
+    },
+    "statements": [
+      {
+        "record_hash": "sha256:e7be3486d0cf5b19444fd8cbef2943d4310dd7efa9693185d3568ce9c75afb57",
+        "dimensions": {
+          "source": {
+            "state": "rejected",
+            "reasons": ["schema_invalid"]
+          }
+        }
+      }
+    ]
   }
 }

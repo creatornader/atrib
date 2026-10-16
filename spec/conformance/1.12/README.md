@@ -65,7 +65,12 @@ and unresolved request coverage with `dependency_missing`.
 
 The October 16 review retained all 141 prior cases and their dimension states.
 It added the selected-untrusted-dispatch case and two publication cases, and
-strengthened explicit standard reason assertions. The corpus now has 144 cases.
+strengthened explicit standard reason assertions. The closure review added ten
+grammar negatives, two native-byte coverage negatives, two occurrence conflicts
+and a dependency-depth case. It also covers destination multiplicity, unknown
+cursor comparisons, future timestamps, duplicate records and wrong-kind authority
+references. The corpus now has 167 cases. Malformed-body cases
+assert per-statement source rejection and its standard reason.
 These expectations come from the contract rules and case table, independently
 of receiver output.
 
@@ -97,6 +102,31 @@ Its integer cursor is a source coordinate for exclusive-start/inclusive-end
 numeric windows. Expected and captured manifests authenticate surface/window/ID
 sets separately. The method models a single native destination request per
 delivery. Other adapters must declare their own multiplicity and source rules.
+
+For coverage, the signed dispatch payload also commits `native_event_hash`.
+The hash addresses exact JCS bytes containing the source surface, native ID,
+cursor and execution assertion. The source adapter checks those bytes against
+the dispatch claim. Signed expected and captured manifests carry `native_events`
+entries binding IDs to the same event bytes. The receiver compares these
+authenticated hashes through its existing callback facts. Equal IDs with
+different event bytes reject coverage. A missing native hash leaves it unresolved.
+This hash representation belongs to this synthetic method. Other approved
+methods may define a different authenticated join.
+
+Three synthetic method variants exercise policy differences. The
+`signed-snapshot-multiple-v1` variant permits multiple destination requests per
+delivery. `signed-snapshot-other-cursor-v1` has a distinct cursor contract, so its
+window cannot be compared with the base method. The
+`signed-snapshot-unknown-cursor-v1` comparator returns unknown. Each URI uses the
+same `https://atrib.dev/conformance/method/` prefix and signature mechanism.
+
+This repairs the earlier ID-only synthetic method. Six inputs from the previous
+144-case corpus change: `C13-expected-set-missing`, `C14-capture-gap`,
+`C23-other-window`, `coverage-complete`, `coverage-captured-material-missing` and
+`coverage-other-surface`. Their dispatch and coverage source artifacts now bind
+native bytes. Their dimension-state expectations remain unchanged. The other
+138 inputs remain unchanged. This is the explicit input exception to the
+earlier frozen corpus, not a claim that the old ID-only proof was sufficient.
 
 Source records, native query snapshots and destination receipts are different
 evidence. This fixture signature authenticates the controlled fixture account; it

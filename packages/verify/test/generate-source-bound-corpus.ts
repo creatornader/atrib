@@ -14,7 +14,15 @@ import {
   sha256,
   type AtribRecord,
 } from '@atrib/mcp'
-import { digest, jcs, SNAPSHOT_METHOD, type FixtureInput } from './source-bound-reference.js'
+import {
+  digest,
+  jcs,
+  SNAPSHOT_METHOD,
+  MULTI_DESTINATION_METHOD,
+  OTHER_CURSOR_METHOD,
+  UNKNOWN_CURSOR_METHOD,
+  type FixtureInput,
+} from './source-bound-reference.js'
 import { compactSourceBoundCorpus } from './source-bound-corpus.js'
 import { DECLARED_METHOD, EVIDENCE_PREFIX } from './source-bound-schemas.js'
 
@@ -46,6 +54,13 @@ const expected = (dimension: string, state: string, ...reasons: string[]) => ({
 })
 
 async function bundle(v: Variant): Promise<FixtureInput> {
+  const hostMethod = v.multiplicity_allowed
+    ? MULTI_DESTINATION_METHOD
+    : v.unknown_cursor
+      ? UNKNOWN_CURSOR_METHOD
+      : SNAPSHOT_METHOD
+  const destinationMethod =
+    v.multiple_destinations && !v.multiplicity_allowed ? MULTI_DESTINATION_METHOD : SNAPSHOT_METHOD
   const input: FixtureInput = {
     records: [],
     openings: {},
@@ -82,6 +97,13 @@ async function bundle(v: Variant): Promise<FixtureInput> {
         delete (value.assertion as Obj)[v.mutate_field.slice(10)]
       else if (v.mutate_field === 'nonce_short') value.nonce = 'AA'
       else if (v.mutate_field === 'target') delete value.target
+      else if (v.mutate_field === 'source_basis')
+        value.basis = (value.basis as Obj[]).filter((ref) => ref.relation !== 'source')
+      else if (v.mutate_field === 'authority_basis') value.basis = []
+      else if (v.mutate_field === 'source_locator_credential')
+        (value.source as Obj).locator = 'Bearer fixture-secret'
+      else if (v.mutate_field === 'basis_locator_credential')
+        (value.basis as Obj[])[0]!.locator = 'https://example.test/file?token=fixture-secret'
       else if (v.mutate_field.startsWith('source.'))
         delete (value.source as Obj)[v.mutate_field.slice(7)]
       else if (v.mutate_field.startsWith('subject.'))
@@ -129,11 +151,11 @@ async function bundle(v: Variant): Promise<FixtureInput> {
     value.source = {
       kind: 'boundary',
       identity: sourceId(role),
-      method: SNAPSHOT_METHOD,
+      method: role === 'destination' ? destinationMethod : hostMethod,
       observed_at: T + 10,
       ...extras,
     }
-    const payload = {
+    const payload: Obj = {
       claim: Object.fromEntries(
         Object.entries(value).filter(([name]) => !['nonce', 'basis'].includes(name)),
       ),
@@ -142,6 +164,16 @@ async function bundle(v: Variant): Promise<FixtureInput> {
         .map((r) => r.hash)
         .sort(),
       cursor: 5,
+    }
+    if (v.coverage && !v.mutate_kind && assertion.phase === 'dispatch') {
+      const nativeHash = artifact({
+        surface: sourceId(role),
+        id: assertion.native_invocation,
+        cursor: 5,
+        assertion: structuredClone(assertion),
+      })
+      if (!v.native_hash_missing) payload.native_event_hash = nativeHash
+      ;(value.basis as Obj[]).push(ref('source', nativeHash))
     }
     ;(value.basis as Obj[]).push(ref('source', artifact(await signed(payload, role))))
   }
@@ -164,7 +196,9 @@ async function bundle(v: Variant): Promise<FixtureInput> {
           ? { args_hash: undefined, result_hash: digest(req) }
           : v.unknown_type
             ? { event_type: 'https://example.test/unknown-type' }
-            : {},
+            : v.future_record
+              ? { timestamp: T + 400_000 }
+              : {},
   )
   input.request_hash = requestHash
   const allow = body(
@@ -195,7 +229,10 @@ async function bundle(v: Variant): Promise<FixtureInput> {
     },
     requestHash,
   )
-  dispatch.basis = v.posthoc ? [] : [ref('authority', allowHash, 'record')]
+  dispatch.basis = v.posthoc
+    ? []
+    : [ref('authority', v.authority_wrong_kind ? requestHash : allowHash, 'record')]
+  if (v.omit_dispatch_destination) delete (dispatch.assertion as Obj).destination_request
   await observe(dispatch)
   const dispatchHash = await seal('observation', dispatch, 'host')
   const response = body(
@@ -244,11 +281,31 @@ async function bundle(v: Variant): Promise<FixtureInput> {
     await observe(changed, 'destination', { kind: 'query', observed_at: T + 21 })
     await seal('effect', changed, 'destination')
   }
-  if (v.terminal_conflict || v.redelivery) {
+  if (v.multiple_destinations) {
+    const second = structuredClone(response)
+    second.basis = []
+    ;(second.assertion as Obj).destination_request = id('destination-request', 'request-2')
+    await observe(second)
+    const hash = await seal('observation', second, 'host')
+    const secondEffect = structuredClone(effect)
+    secondEffect.basis = []
+    ;(secondEffect.assertion as Obj).binding = {
+      observation_record: hash,
+      destination_request: id('destination-request', 'request-2'),
+    }
+    await observe(secondEffect, 'destination', { kind: 'query', observed_at: T + 20 })
+    await seal('effect', secondEffect, 'destination')
+  }
+  if (v.terminal_conflict || v.redelivery || v.occurrence_execution || v.occurrence_native) {
     const changed = structuredClone(response)
     changed.basis = []
     ;(changed.assertion as Obj).outcome = 'error'
     if (v.redelivery) (changed.assertion as Obj).delivery = id('delivery', 'delivery-2')
+    if (v.occurrence_execution) {
+      ;(changed.assertion as Obj).delivery = id('delivery', 'delivery-2')
+      ;(changed.assertion as Obj).execution = id('execution', 'attempt-2')
+    }
+    if (v.occurrence_native) (changed.assertion as Obj).native_invocation = id('native', 'other')
     await observe(changed)
     await seal('observation', changed, 'host')
   }
@@ -282,13 +339,35 @@ async function bundle(v: Variant): Promise<FixtureInput> {
     })
     coverage.subject = surface
     coverage.basis = []
+    const nativeEvents: Obj[] = []
+    if (!v.mutate_kind) {
+      const frame = {
+        surface: sourceId('host'),
+        id: native,
+        cursor: 5,
+        assertion: {
+          ...(dispatch.assertion as Obj),
+          ...(v.native_mismatch ? { descriptor: { ...descriptor, operation: 'delete' } } : {}),
+        },
+      }
+      const hash = artifact(frame)
+      nativeEvents.push({ id: native, hash })
+      ;(coverage.basis as Obj[]).push(ref('source', hash))
+    }
+    const nativeFacts = nativeEvents.length ? { native_events: nativeEvents } : {}
     if (!v.no_expected)
       (coverage.basis as Obj[]).push(
         ref(
           'expected',
           artifact(
             await signed(
-              { surface, start: (coverage.assertion as Obj).start, end: '10', ids: [native] },
+              {
+                surface,
+                start: (coverage.assertion as Obj).start,
+                end: '10',
+                ids: [native],
+                ...nativeFacts,
+              },
               'expected',
             ),
           ),
@@ -305,22 +384,27 @@ async function bundle(v: Variant): Promise<FixtureInput> {
                 start: (coverage.assertion as Obj).start,
                 end: '10',
                 ids: (coverage.assertion as Obj).captured,
+                ...nativeFacts,
               },
               'host',
             ),
           ),
         ),
       )
-    await observe(coverage, 'host', { kind: 'manifest', observed_at: T + 30 })
+    await observe(coverage, 'host', {
+      kind: 'manifest',
+      observed_at: T + 30,
+      ...(v.other_cursor ? { method: OTHER_CURSOR_METHOD } : {}),
+    })
     await seal('coverage', coverage, 'host')
   }
   const rules = [
     ['request', 'agent', DECLARED_METHOD],
     ['authorization', 'owner', DECLARED_METHOD],
     ['report', 'agent', DECLARED_METHOD],
-    ['observation', 'host', SNAPSHOT_METHOD],
-    ['effect', 'destination', SNAPSHOT_METHOD],
-    ['coverage', 'host', SNAPSHOT_METHOD],
+    ['observation', 'host', hostMethod],
+    ['effect', 'destination', destinationMethod],
+    ['coverage', 'host', v.other_cursor ? OTHER_CURSOR_METHOD : hostMethod],
   ].map(([kind, role, method]) => ({
     type: `${EVIDENCE_PREFIX}${kind}`,
     signer_keys: [keys[role!]!],
@@ -376,6 +460,18 @@ async function bundle(v: Variant): Promise<FixtureInput> {
     }
   if (v.missing_artifact) delete input.artifacts[grant]
   if (v.artifact_mismatch) input.artifacts[grant] = Buffer.from('{}').toString('base64')
+  if (v.deep_dependencies) {
+    let prior = requestHash
+    for (let index = 0; index < 35; index++) {
+      const linked = body('agent', { status: 'unknown', text: `Dependency ${index}` }, requestHash)
+      linked.basis = [ref('source', prior, 'record')]
+      prior = await seal('report', linked, 'agent')
+    }
+  }
+  if (v.duplicate_records)
+    input.records.push(
+      ...input.records.map((record) => Object.fromEntries(Object.entries(record).reverse())),
+    )
   if (v.publication || v.publication_bad_checkpoint) {
     const seed = new Uint8Array(32).fill(77)
     const pub = await getPublicKey(seed)
@@ -709,6 +805,128 @@ const assertionFields: Record<string, string[]> = {
   effect: ['object', 'payload_hash', 'version', 'state'],
   coverage: ['surface', 'start', 'end', 'expected', 'captured', 'gaps'],
 }
+for (const kind of ['observation', 'effect', 'coverage']) {
+  for (const field of ['source.observed_at', 'source_basis']) {
+    definitions.push([
+      `schema-${kind}-${field.replace('.', '-')}`,
+      {
+        mutate_kind: kind,
+        mutate_field: field,
+        ...(kind === 'coverage' ? { coverage: true } : {}),
+      },
+      {},
+      ['grammar', 'E06', 'E08', 'E09'],
+    ])
+  }
+}
+for (const field of ['source_locator_credential', 'basis_locator_credential'])
+  definitions.push([
+    `schema-observation-${field}`,
+    { mutate_kind: 'observation', mutate_field: field },
+    {},
+    ['grammar', 'E10'],
+  ])
+definitions.push(
+  [
+    'F11-single-destination-without-dispatch-id',
+    { multiple_destinations: true, omit_dispatch_destination: true },
+    {
+      request: {
+        dimensions: {
+          binding: d('conflict', 'source_conflict'),
+          effect: d('conflict', 'effect_conflict'),
+        },
+      },
+    },
+    ['E06', 'E08', 'E18'],
+  ],
+  [
+    'F11-single-destination-conflict',
+    { multiple_destinations: true },
+    {
+      request: {
+        dimensions: {
+          binding: d('conflict', 'source_conflict'),
+          effect: d('conflict', 'effect_conflict'),
+        },
+      },
+    },
+    ['E06', 'E08', 'E18'],
+  ],
+  [
+    'F11-multiple-destinations-allowed',
+    { multiple_destinations: true, multiplicity_allowed: true },
+    { request: { dimensions: { binding: d('supported'), effect: d('supported') } } },
+    ['E06', 'E08', 'E18'],
+  ],
+  [
+    'coverage-other-cursor-method',
+    { coverage: true, other_cursor: true },
+    expected('coverage', 'unresolved', 'dependency_missing'),
+    ['E09'],
+  ],
+  [
+    'coverage-unknown-cursor-order',
+    { coverage: true, unknown_cursor: true },
+    expected('coverage', 'unresolved', 'dependency_missing'),
+    ['E09'],
+  ],
+  [
+    'F12-future-record',
+    { future_record: true, current: true, pre_dispatch: true },
+    expected('integrity', 'rejected', 'schema_invalid'),
+    ['E18'],
+  ],
+  [
+    'F13-duplicate-records',
+    { duplicate_records: true },
+    { request: { reliance: { accepted: true } } },
+    ['E18'],
+  ],
+  [
+    'F14-wrong-kind-authority',
+    { authority_wrong_kind: true },
+    expected('authority', 'rejected', 'dependency_invalid'),
+    ['E05', 'E18'],
+  ],
+  [
+    'F09-occurrence-execution-conflict',
+    { occurrence_execution: true },
+    expected('binding', 'conflict', 'execution_mismatch'),
+    ['E06', 'E18'],
+  ],
+  [
+    'F09-occurrence-native-conflict',
+    { occurrence_native: true },
+    expected('binding', 'conflict', 'source_conflict'),
+    ['E06', 'E18'],
+  ],
+  ['F10-dependency-depth-limit', { deep_dependencies: true }, {}, ['E10', 'E18']],
+  [
+    'schema-authorization-authority_basis',
+    { mutate_kind: 'authorization', mutate_field: 'authority_basis' },
+    {},
+    ['grammar', 'E05'],
+  ],
+  [
+    'schema-capture-source-observed_at',
+    { capture: true, mutate_kind: 'observation', mutate_field: 'source.observed_at' },
+    {},
+    ['grammar', 'E06'],
+  ],
+  [
+    'coverage-native-bytes-mismatch',
+    { coverage: true, native_mismatch: true },
+    expected('coverage', 'rejected', 'coverage_gap'),
+    ['E09'],
+  ],
+  [
+    'coverage-native-hash-missing',
+    { coverage: true, native_hash_missing: true },
+    expected('coverage', 'unresolved', 'dependency_missing'),
+    ['E09'],
+  ],
+)
 for (const [kind, fields] of Object.entries(assertionFields))
   for (const field of [
     ...fields.map((field) => `assertion.${field}`),
@@ -730,6 +948,58 @@ const cases = []
 for (const [name, variant, expectation, rules] of definitions) {
   const input = await bundle(variant)
   const expected_ = name.startsWith('schema-') ? { invalid_kind: variant.mutate_kind } : expectation
+  if (variant.mutate_kind) {
+    expected_.statements = input.records
+      .filter((record) => record.event_type === `${EVIDENCE_PREFIX}${variant.mutate_kind}`)
+      .map((record) => ({
+        record_hash: digest(record),
+        dimensions: {
+          source: d('rejected', 'schema_invalid'),
+        },
+      }))
+  }
+  if (variant.deep_dependencies)
+    expected_.statements = [
+      {
+        record_hash: digest(input.records.at(-1)),
+        dimensions: { source: d('unresolved', 'resource_limit') },
+      },
+    ]
+  if (
+    variant.native_mismatch ||
+    variant.native_hash_missing ||
+    variant.other_cursor ||
+    variant.unknown_cursor
+  ) {
+    const coverage = input.records.find(
+      (record) => record.event_type === `${EVIDENCE_PREFIX}coverage`,
+    )!
+    expected_.statements = [
+      {
+        record_hash: digest(coverage),
+        dimensions: {
+          coverage: variant.native_mismatch
+            ? d('rejected', 'dependency_invalid')
+            : d('unresolved', 'dependency_missing'),
+        },
+      },
+    ]
+  }
+  if (
+    variant.opening_mismatch ||
+    variant.only_result ||
+    variant.carrier_args_salt ||
+    variant.carrier_result
+  ) {
+    expected_.statements = [
+      {
+        record_hash: input.request_hash,
+        dimensions: {
+          source: d('rejected', variant.opening_mismatch ? 'opening_mismatch' : 'schema_invalid'),
+        },
+      },
+    ]
+  }
   if (variant.wrong_window || variant.wrong_surface || variant.artifact_mismatch) {
     const kind = variant.artifact_mismatch ? 'authorization' : 'coverage'
     const record = input.records.find(

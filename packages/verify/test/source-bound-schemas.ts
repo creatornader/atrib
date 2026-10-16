@@ -8,6 +8,26 @@ const uri = z
   .min(1)
   .refine((value) => /^[a-z][a-z0-9+.-]*:/i.test(value))
 const text = z.string().min(1)
+export function isEvidenceLocator(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) return false
+  if (/\bbearer\s+/i.test(value)) return false
+  try {
+    const parsed = new URL(value, 'https://atrib.invalid/')
+    return (
+      !parsed.username &&
+      !parsed.password &&
+      ![...parsed.searchParams.keys(), ...new URLSearchParams(parsed.hash.slice(1)).keys()].some(
+        (key) =>
+          /token|signature|credential|secret|password|authorization|api[_-]?key|^sig$|^key$/i.test(
+            key,
+          ),
+      )
+    )
+  } catch {
+    return true
+  }
+}
+const locator = text.refine(isEvidenceLocator)
 const time = z.number().int().nonnegative().safe()
 export const hashSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/)
 const key = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
@@ -25,7 +45,7 @@ const source = z
     identity: scopedIdSchema,
     method: uri,
     observed_at: time.optional(),
-    locator: text.optional(),
+    locator: locator.optional(),
   })
   .refine((value) => value.kind !== 'declared' || !('observed_at' in value))
 const basis = z.array(
@@ -34,7 +54,7 @@ const basis = z.array(
     kind: z.enum(['record', 'artifact']),
     hash: hashSchema,
     media_type: text.optional(),
-    locator: text.optional(),
+    locator: locator.optional(),
   }),
 )
 const kernel = {
@@ -111,16 +131,25 @@ export const evidenceBodySchemas = {
     .refine((value) => ['declared', 'boundary'].includes(value.source.kind)),
   authorization: z
     .strictObject({ ...kernel, assertion: authorization, target })
-    .refine((value) => value.source.kind === 'declared'),
+    .refine(
+      (value) =>
+        value.source.kind === 'declared' && value.basis.some((ref) => ref.relation === 'authority'),
+    ),
   observation: z.union([
     z
       .strictObject({ ...kernel, assertion: execution, target })
-      .refine((value) => value.source.kind === 'boundary'),
+      .refine(
+        (value) =>
+          value.source.kind === 'boundary' &&
+          value.source.observed_at !== undefined &&
+          value.basis.some((ref) => ref.relation === 'source'),
+      ),
     z
       .strictObject({ ...kernel, assertion: capture })
       .refine(
         (value) =>
           value.source.kind === 'boundary' &&
+          value.source.observed_at !== undefined &&
           value.subject.namespace === value.assertion.occurrence.namespace &&
           value.subject.id === value.assertion.occurrence.id &&
           value.basis.some(
@@ -136,12 +165,24 @@ export const evidenceBodySchemas = {
     .refine((value) => value.source.kind === 'declared'),
   effect: z
     .strictObject({ ...kernel, assertion: effect, target })
-    .refine((value) => ['query', 'receipt'].includes(value.source.kind)),
+    .refine(
+      (value) =>
+        ['query', 'receipt'].includes(value.source.kind) &&
+        value.source.observed_at !== undefined &&
+        value.basis.some(
+          (ref) =>
+            ref.relation === 'source' &&
+            ref.kind === 'artifact' &&
+            ref.hash === value.assertion.payload_hash,
+        ),
+    ),
   coverage: z
     .strictObject({ ...kernel, assertion: coverage })
     .refine(
       (value) =>
         value.source.kind === 'manifest' &&
+        value.source.observed_at !== undefined &&
+        value.basis.some((ref) => ref.relation === 'source') &&
         value.subject.namespace === value.assertion.surface.namespace &&
         value.subject.id === value.assertion.surface.id,
     ),

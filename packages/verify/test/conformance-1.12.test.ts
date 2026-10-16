@@ -32,6 +32,11 @@ describe('source-bound evidence offline contract corpus', () => {
         return
       }
       const result = await evaluateEvidenceFixture(fixture.input)
+      expect(new Set(result.statements.map((statement) => statement.record_hash)).size).toBe(
+        result.statements.length,
+      )
+      for (const delivery of result.request?.execution.deliveries ?? [])
+        expect(new Set(delivery.basis).size).toBe(delivery.basis.length)
       if (fixture.expected.invalid_kind) {
         const hashes = fixture.input.records
           .filter(
@@ -48,6 +53,13 @@ describe('source-bound evidence offline contract corpus', () => {
           affected.every((statement) => statement.dimensions.integrity.body.state === 'rejected'),
         ).toBe(true)
         expect(
+          affected.every(
+            (statement) =>
+              statement.dimensions.source.state === 'rejected' &&
+              statement.dimensions.source.reasons.includes('schema_invalid'),
+          ),
+        ).toBe(true)
+        expect(
           result.statements
             .filter((statement) => !hashes.includes(statement.record_hash))
             .every((statement) => statement.dimensions.integrity.body.state === 'supported'),
@@ -55,13 +67,13 @@ describe('source-bound evidence offline contract corpus', () => {
       } else {
         const { statements, ...expected } = fixture.expected
         expect(result).toMatchObject(expected)
-        for (const statement of statements ?? []) {
-          const actual = result.statements.find(
-            (candidate) => candidate.record_hash === statement.record_hash,
-          )
-          expect(actual).toBeDefined()
-          expect(actual).toMatchObject(statement)
-        }
+      }
+      for (const statement of fixture.expected.statements ?? []) {
+        const actual = result.statements.find(
+          (candidate) => candidate.record_hash === statement.record_hash,
+        )
+        expect(actual).toBeDefined()
+        expect(actual).toMatchObject(statement)
       }
     })
   }

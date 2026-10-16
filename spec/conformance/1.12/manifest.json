@@ -455,6 +455,98 @@
       "name": "schema-coverage-subject.id"
     },
     {
+      "file": "cases/schema-observation-source-observed_at.json",
+      "name": "schema-observation-source-observed_at"
+    },
+    {
+      "file": "cases/schema-observation-source_basis.json",
+      "name": "schema-observation-source_basis"
+    },
+    {
+      "file": "cases/schema-effect-source-observed_at.json",
+      "name": "schema-effect-source-observed_at"
+    },
+    {
+      "file": "cases/schema-effect-source_basis.json",
+      "name": "schema-effect-source_basis"
+    },
+    {
+      "file": "cases/schema-coverage-source-observed_at.json",
+      "name": "schema-coverage-source-observed_at"
+    },
+    {
+      "file": "cases/schema-coverage-source_basis.json",
+      "name": "schema-coverage-source_basis"
+    },
+    {
+      "file": "cases/schema-observation-source_locator_credential.json",
+      "name": "schema-observation-source_locator_credential"
+    },
+    {
+      "file": "cases/schema-observation-basis_locator_credential.json",
+      "name": "schema-observation-basis_locator_credential"
+    },
+    {
+      "file": "cases/F11-single-destination-without-dispatch-id.json",
+      "name": "F11-single-destination-without-dispatch-id"
+    },
+    {
+      "file": "cases/F11-single-destination-conflict.json",
+      "name": "F11-single-destination-conflict"
+    },
+    {
+      "file": "cases/F11-multiple-destinations-allowed.json",
+      "name": "F11-multiple-destinations-allowed"
+    },
+    {
+      "file": "cases/coverage-other-cursor-method.json",
+      "name": "coverage-other-cursor-method"
+    },
+    {
+      "file": "cases/coverage-unknown-cursor-order.json",
+      "name": "coverage-unknown-cursor-order"
+    },
+    {
+      "file": "cases/F12-future-record.json",
+      "name": "F12-future-record"
+    },
+    {
+      "file": "cases/F13-duplicate-records.json",
+      "name": "F13-duplicate-records"
+    },
+    {
+      "file": "cases/F14-wrong-kind-authority.json",
+      "name": "F14-wrong-kind-authority"
+    },
+    {
+      "file": "cases/F09-occurrence-execution-conflict.json",
+      "name": "F09-occurrence-execution-conflict"
+    },
+    {
+      "file": "cases/F09-occurrence-native-conflict.json",
+      "name": "F09-occurrence-native-conflict"
+    },
+    {
+      "file": "cases/F10-dependency-depth-limit.json",
+      "name": "F10-dependency-depth-limit"
+    },
+    {
+      "file": "cases/schema-authorization-authority_basis.json",
+      "name": "schema-authorization-authority_basis"
+    },
+    {
+      "file": "cases/schema-capture-source-observed_at.json",
+      "name": "schema-capture-source-observed_at"
+    },
+    {
+      "file": "cases/coverage-native-bytes-mismatch.json",
+      "name": "coverage-native-bytes-mismatch"
+    },
+    {
+      "file": "cases/coverage-native-hash-missing.json",
+      "name": "coverage-native-hash-missing"
+    },
+    {
       "file": "cases/schema-request-assertion-descriptor.json",
       "name": "schema-request-assertion-descriptor"
     },

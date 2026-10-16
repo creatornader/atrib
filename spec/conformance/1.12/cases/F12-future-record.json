@@ -1,0 +1,38 @@
+{
+  "name": "F12-future-record",
+  "protects": "F12-future-record",
+  "fails_when": "the required evidence distinction is erased",
+  "no_claim": "offline fixture sources, not installed capture or host durability",
+  "rules": ["E18"],
+  "input": {
+    "records": [
+      "sha256:0e947982e387808982fa2a2bdeb8ee4202133ff11e9bcb29abe053ff502bb043",
+      "sha256:b831c7919e911cf7e406145f96bbd14f601ee239e881aa77bab14db56bebd2e6"
+    ],
+    "openings": {
+      "sha256:0e947982e387808982fa2a2bdeb8ee4202133ff11e9bcb29abe053ff502bb043": "sha256:eb2aa156f05bb96f598dbb75c8ce6582e326a12d9fae15ac3f79e4b7d4bf8f46",
+      "sha256:b831c7919e911cf7e406145f96bbd14f601ee239e881aa77bab14db56bebd2e6": "sha256:6b27ce5767fdeb416bb46b430e7e997f6f02168315f668b9fa78a1bb853f4e37",
+      "sha256:881ecf28e9547bb456fab8c14b037fbfbc0f3e44925a149ff0b3cd63b29b43c0": "sha256:46dd3356c581fdcd2030d316a3ec9750235f9254ca7b8ba275d0d66959c67b69",
+      "sha256:df518fe70bb15325692e85b8105a8aec670d788a019b36c73f7af475f17d19b4": "sha256:a21e58cbedda6a1d911a86ac4c7f1beb8b765c77d322c2af182d7bf8e6eeb5eb",
+      "sha256:33b484e77571acd6cb3d61aee1ad3676c99a2d0eacc650b5b3e5f9668e9b6d5a": "sha256:a63bcc0e482059a2f16682a44ca7f54518a74bb5a78734752fb9df0938294e96",
+      "sha256:ee5a3d7e15f75711b1b4b64a452c20102b01308f06b7f38f73e2a989210f585d": "sha256:1dcb83044631c57a741a9a49d21d3ae07cd72e72fb5b526017f51e2cf9e2c5d5"
+    },
+    "artifacts": {
+      "$type": "atrib-artifact-map/1",
+      "$ref": "sha256:b5b939b36a8d2418705747b7bc86c41ea71cdb088101cb227e4810283260b477"
+    },
+    "policy": "sha256:f931523ee74d20d0001a7cb2318532c45bb1dfbab44aa394494c03a4135f37e1",
+    "evaluation": "sha256:458a037d1329bf6f76973cd8f58d15eb2516f1fc361b06860e4d85737213c4d5",
+    "request_hash": "sha256:0e947982e387808982fa2a2bdeb8ee4202133ff11e9bcb29abe053ff502bb043"
+  },
+  "expected": {
+    "request": {
+      "dimensions": {
+        "integrity": {
+          "state": "rejected",
+          "reasons": ["schema_invalid"]
+        }
+      }
+    }
+  }
+}

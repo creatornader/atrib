@@ -1,0 +1,50 @@
+{
+  "name": "F11-single-destination-without-dispatch-id",
+  "protects": "F11-single-destination-without-dispatch-id",
+  "fails_when": "the required evidence distinction is erased",
+  "no_claim": "offline fixture sources, not installed capture or host durability",
+  "rules": ["E06", "E08", "E18"],
+  "input": {
+    "records": [
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e",
+      "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d",
+      "sha256:7d67ecd31944ff4b021ef4f07a409a90b70c7fe4470d815d13d1b294dad9aa09",
+      "sha256:95efdb992373965e103a8b9c7e5a2e05c73a2c14d90975e7a4e82526c20027c4",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8",
+      "sha256:6c9dc98d0929057128c85e618283f1d61352f82e4cfc8f8b5ba08e4c64794501",
+      "sha256:a24164ac195337d05dd866b2101945c9d78752a76910602811540b75363c7f83",
+      "sha256:0f51c3e074ccdef5b53c8daa559848293b864560a672acf1293fe0afe850f4a4"
+    ],
+    "openings": {
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e": "sha256:eb2aa156f05bb96f598dbb75c8ce6582e326a12d9fae15ac3f79e4b7d4bf8f46",
+      "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d": "sha256:27456d018d96a39d40892275bbc959d7e2b25c2f8897ee772aee70bf43a238ba",
+      "sha256:7d67ecd31944ff4b021ef4f07a409a90b70c7fe4470d815d13d1b294dad9aa09": "sha256:18efc259ea4c449ecec75250a2bd0910a6dbc00017e06f4466b4854a3b3acbe8",
+      "sha256:95efdb992373965e103a8b9c7e5a2e05c73a2c14d90975e7a4e82526c20027c4": "sha256:fb7209d953d98ae900561c53bbb071bd2909b838dbcd6a3611fc70b3b6e5ab54",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8": "sha256:c9ae88f556a025caa14870479cb939a4b3c265d4772e5b66da826540662f9225",
+      "sha256:6c9dc98d0929057128c85e618283f1d61352f82e4cfc8f8b5ba08e4c64794501": "sha256:26a233d2841802dbbcf18d4aff2a43d2a50dc1e9efb8941a9d09ed8eaedfa883",
+      "sha256:a24164ac195337d05dd866b2101945c9d78752a76910602811540b75363c7f83": "sha256:1719ed665d4aedae04cbfb1e3ec8b111058d5ef5becb8b35f54191e07883f642",
+      "sha256:0f51c3e074ccdef5b53c8daa559848293b864560a672acf1293fe0afe850f4a4": "sha256:3af93e566b633a6c14556de9d4bdee411528dc6962ff1c23d5fff4e831b6ed10"
+    },
+    "artifacts": {
+      "$type": "atrib-artifact-map/1",
+      "$ref": "sha256:ec7eb1ea357cc4dde1fa0a411af6db26ad3b516caef2090a3c3d3b494fa2b414"
+    },
+    "policy": "sha256:4237a17e2cd52bb1e27080cc3e07badfad1ef220d7c6f802bd57ed0cd0ece069",
+    "evaluation": "sha256:4a229cd8c745462d955ee19461b7c806c3cbfe14d14af5ca01314a14c591bc27",
+    "request_hash": "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e"
+  },
+  "expected": {
+    "request": {
+      "dimensions": {
+        "binding": {
+          "state": "conflict",
+          "reasons": ["source_conflict"]
+        },
+        "effect": {
+          "state": "conflict",
+          "reasons": ["effect_conflict"]
+        }
+      }
+    }
+  }
+}

@@ -122,6 +122,12 @@ const requiredCarrier = [
   'signature',
 ]
 export const SNAPSHOT_METHOD = 'https://atrib.dev/conformance/method/signed-snapshot-v1'
+export const MULTI_DESTINATION_METHOD =
+  'https://atrib.dev/conformance/method/signed-snapshot-multiple-v1'
+export const OTHER_CURSOR_METHOD =
+  'https://atrib.dev/conformance/method/signed-snapshot-other-cursor-v1'
+export const UNKNOWN_CURSOR_METHOD =
+  'https://atrib.dev/conformance/method/signed-snapshot-unknown-cursor-v1'
 const artifactFailure = (error: unknown): Dimension =>
   error instanceof Error && error.message === 'resource_limit'
     ? dim('unresolved', 'resource_limit')
@@ -179,7 +185,14 @@ async function inspectSource(
   const set = (state: State, reason?: string) => {
     info.dimensions.source = dim(state, reason, [info.hash])
   }
-  if (info.dimensions.integrity.state !== 'supported') return set('unresolved', 'body_missing')
+  if (info.dimensions.integrity.state !== 'supported') {
+    info.dimensions.source = {
+      state: info.dimensions.integrity.state,
+      basis: [...info.dimensions.integrity.basis],
+      reasons: [...info.dimensions.integrity.reasons],
+    }
+    return
+  }
   if (!policy) return set('unresolved', 'policy_invalid')
   const src = source(info)
   const rule = policy.rules.find(
@@ -197,7 +210,15 @@ async function inspectSource(
       return set('rejected', 'schema_invalid')
   } else {
     if (!Number.isSafeInteger(src.observed_at)) return set('rejected', 'schema_invalid')
-    if (src.method !== SNAPSHOT_METHOD) return set('unresolved', 'source_untrusted')
+    if (
+      ![
+        SNAPSHOT_METHOD,
+        MULTI_DESTINATION_METHOD,
+        OTHER_CURSOR_METHOD,
+        UNKNOWN_CURSOR_METHOD,
+      ].includes(String(src.method))
+    )
+      return set('unresolved', 'source_untrusted')
     const sourceRefs = refs(info).filter(
       (ref) => ref.relation === 'source' && ref.kind === 'artifact',
     )
@@ -223,6 +244,17 @@ async function inspectSource(
       }
     }
     if (!found) return set('rejected', 'source_untrusted')
+    if (info.facts.native_event_hash !== undefined) {
+      const event = artifact(input, String(info.facts.native_event_hash))
+      if (
+        !event ||
+        !eq(event.surface, src.identity) ||
+        !eq(event.id, info.assertion.native_invocation) ||
+        event.cursor !== info.facts.cursor ||
+        !eq(event.assertion, info.assertion)
+      )
+        return set('rejected', 'dependency_invalid')
+    }
   }
   if (info.kind === 'effect' && !effectPayloadMatches(info, input))
     return set('rejected', 'dependency_invalid')
@@ -237,21 +269,31 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
   const policy = parsedPolicy.success ? parsedPolicy.data : undefined
   const evaluation = evaluationSchema.parse(input.evaluation)
   const infos: Info[] = []
+  const uniqueRecords = new Map<string, { canonical: string; record: Obj }>()
   for (const record of input.records) {
     const hash = digest(record)
+    const canonical = jcs(record)
+    const existing = uniqueRecords.get(hash)
+    if (existing && existing.canonical !== canonical)
+      throw new TypeError('invalid_evidence_input: conflicting record hash')
+    if (!existing) uniqueRecords.set(hash, { canonical, record })
+  }
+  for (const [hash, { record }] of uniqueRecords) {
     const body = object(input.openings[hash])
     const kind = String(record.event_type).startsWith(EVIDENCE_PREFIX)
       ? String(record.event_type).slice(EVIDENCE_PREFIX.length)
       : 'unknown'
     const dimensions_ = dimensions()
+    const recordSchemaOk =
+      record.spec_version === 'atrib/1.0' &&
+      /^[0-9a-f]{32}$/.test(String(record.context_id)) &&
+      Number.isSafeInteger(record.timestamp) &&
+      Number(record.timestamp) >= 0 &&
+      Number(record.timestamp) <= evaluation.evaluated_at + 300_000
     let recordOk: boolean
     try {
       recordOk =
-        record.spec_version === 'atrib/1.0' &&
-        /^[0-9a-f]{32}$/.test(String(record.context_id)) &&
-        Number.isSafeInteger(record.timestamp) &&
-        Number(record.timestamp) >= 0 &&
-        Number(record.timestamp) <= evaluation.evaluated_at + 300_000 &&
+        recordSchemaOk &&
         (await ed.verifyAsync(
           Buffer.from(String(record.signature), 'base64url'),
           canonicalSigningInput(record as unknown as AtribRecord),
@@ -263,7 +305,7 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
     }
     dimensions_.integrity.record = dim(
       recordOk ? 'supported' : 'rejected',
-      recordOk ? undefined : 'signature_invalid',
+      recordOk ? undefined : recordSchemaOk ? 'signature_invalid' : 'schema_invalid',
       [hash],
     )
     let bodyResult = dim('supported', undefined, [hash])
@@ -303,7 +345,8 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
   }
   const byHash = new Map(infos.map((info) => [info.hash, info]))
   function dependencies(info: Info, path: string[] = [], relations = ['source']): Dimension {
-    if (path.includes(info.hash) || path.length > 32) return dim('unresolved', 'dependency_cycle')
+    if (path.includes(info.hash)) return dim('unresolved', 'dependency_cycle')
+    if (path.length > 32) return dim('unresolved', 'resource_limit')
     if (refs(info).length > 256) return dim('unresolved', 'resource_limit')
     for (const ref of refs(info)) {
       if (!relations.includes(String(ref.relation))) continue
@@ -367,6 +410,13 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
       targetOf(info) === request?.hash,
   )
   const selectedOk = selected && dispatches.includes(selected)
+  const singleDestination = (info: Info) => source(info).method !== MULTI_DESTINATION_METHOD
+  const destinationConflict = (a: Info, b: Info) =>
+    singleDestination(a) &&
+    eq(a.assertion.delivery, b.assertion.delivery) &&
+    a.assertion.destination_request !== undefined &&
+    b.assertion.destination_request !== undefined &&
+    !eq(a.assertion.destination_request, b.assertion.destination_request)
   const decisionTime =
     evaluation.purpose === 'current'
       ? evaluation.evaluated_at
@@ -461,21 +511,46 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
           isExecution(info) &&
           sourceSupported(info) &&
           targetOf(info) === request.hash &&
-          eq(info.assertion.native_invocation, selected.assertion.native_invocation) &&
-          eq(info.assertion.delivery, selected.assertion.delivery),
+          eq(source(info).identity, source(selected).identity) &&
+          source(info).method === source(selected).method &&
+          (eq(info.assertion.native_invocation, selected.assertion.native_invocation) ||
+            eq(info.assertion.delivery, selected.assertion.delivery)),
       )
-      if (
-        sameOccurrence.some(
-          (info) =>
-            !eq(info.assertion.descriptor, selected.assertion.descriptor) ||
-            !eq(info.assertion.execution, selected.assertion.execution),
-        )
+      const destinationConflicts = new Set(
+        sameOccurrence.filter((info) =>
+          sameOccurrence.some((other) => destinationConflict(info, other)),
+        ),
       )
-        resultDimensions.binding = dim(
-          'conflict',
-          'descriptor_mismatch',
-          sameOccurrence.map((info) => info.hash),
-        )
+      const conflicting = sameOccurrence.filter(
+        (info) =>
+          !eq(info.assertion.descriptor, selected.assertion.descriptor) ||
+          !eq(info.assertion.execution, selected.assertion.execution) ||
+          (eq(info.assertion.delivery, selected.assertion.delivery) &&
+            !eq(info.assertion.native_invocation, selected.assertion.native_invocation)) ||
+          destinationConflicts.has(info),
+      )
+      if (conflicting.length) {
+        resultDimensions.binding = dim('conflict', undefined, [
+          selected.hash,
+          ...conflicting.map((info) => info.hash),
+        ])
+        resultDimensions.binding.reasons = [
+          ...new Set(
+            conflicting.flatMap((info) => [
+              ...(!eq(info.assertion.descriptor, selected.assertion.descriptor)
+                ? ['descriptor_mismatch']
+                : []),
+              ...(!eq(info.assertion.execution, selected.assertion.execution)
+                ? ['execution_mismatch']
+                : []),
+              ...(!eq(info.assertion.native_invocation, selected.assertion.native_invocation) ||
+              destinationConflicts.has(info)
+                ? ['source_conflict']
+                : []),
+            ]),
+          ),
+        ].sort()
+      }
     }
     if (evaluation.purpose === 'current' && dispatches.length)
       resultDimensions.authority = dim('unresolved', 'purpose_mismatch')
@@ -501,8 +576,9 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
           .filter((info) => ['supported', 'rejected'].includes(info.dimensions.authority.state))
           .map((info) => info.assertion.decision),
       )
-      resultDimensions.authority =
-        decisions.size > 1
+      resultDimensions.authority = valid.some((info) => info.kind !== 'authorization')
+        ? dim('rejected', 'dependency_invalid')
+        : decisions.size > 1
           ? dim('conflict', 'authority_invalid')
           : grants.length === 0
             ? dim('unresolved', selected ? 'authority_unordered' : 'authority_invalid')
@@ -568,7 +644,13 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
   )
   if (request)
     resultDimensions.effect =
-      conflictingState || destinations.size > 1
+      conflictingState ||
+      (destinations.size > 1 &&
+        ((selectedOk && singleDestination(selected)) ||
+          joinedEffects.some((info) => {
+            const observed = byHash.get(String(object(info.assertion.binding).observation_record))
+            return observed && singleDestination(observed)
+          })))
         ? dim('conflict', 'effect_conflict')
         : joinedEffects.length
           ? dim(
@@ -577,6 +659,20 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
               joinedEffects.map((info) => info.hash),
             )
           : dim('unresolved', 'effect_unbound')
+  function inCoverageWindow(info: Info, dispatch: Info): boolean | undefined {
+    if (
+      source(info).method !== source(dispatch).method ||
+      source(info).method === UNKNOWN_CURSOR_METHOD
+    )
+      return undefined
+    const [start, cursor, end] = [
+      info.assertion.start,
+      dispatch.facts.cursor,
+      info.assertion.end,
+    ].map(Number)
+    if (![start, cursor, end].every(Number.isSafeInteger)) return undefined
+    return start < cursor && cursor <= end
+  }
   const coverageInfos = infos.filter((info) => info.kind === 'coverage')
   for (const info of coverageInfos) {
     if (!sourceSupported(info) || !selectedOk) {
@@ -585,11 +681,13 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
     }
     const a = info.assertion,
       sameSurface = eq(a.surface, source(selected).identity)
-    const inWindow =
-      Number(a.start) < Number(selected.facts.cursor) &&
-      Number(selected.facts.cursor) <= Number(a.end)
-    if (!sameSurface || !inWindow) {
+    const inWindow = inCoverageWindow(info, selected)
+    if (!sameSurface || inWindow === false) {
       info.dimensions.coverage = dim('rejected', 'target_mismatch')
+      continue
+    }
+    if (inWindow === undefined) {
+      info.dimensions.coverage = dim('unresolved', 'dependency_missing')
       continue
     }
     const manifestDependencies = dependencies(info, [], ['expected', 'captured'])
@@ -600,6 +698,7 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
     const expectedRefs = refs(info).filter(
       (ref) => ref.relation === 'expected' && ref.kind === 'artifact',
     )
+    let nativeEvents: Obj[] | undefined
     async function checkManifest(entries: Obj[], ids: unknown) {
       if (!entries.length) return false
       for (const ref of entries) {
@@ -613,6 +712,14 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
           eq(payload.ids, ids)
         ))
           throw new Error('dependency_invalid')
+        if (!Array.isArray(payload.native_events)) return false
+        if (nativeEvents && !eq(nativeEvents, payload.native_events))
+          throw new Error('dependency_invalid')
+        nativeEvents = payload.native_events.map(object)
+        for (const entry of nativeEvents) {
+          const event = artifact(input, String(entry.hash))
+          if (!event || !eq(event.id, entry.id)) throw new Error('dependency_invalid')
+        }
       }
       return true
     }
@@ -631,6 +738,15 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
       info.dimensions.coverage = dim('unresolved', 'dependency_missing')
       continue
     }
+    const native = nativeEvents?.find((event) => eq(event.id, selected.assertion.native_invocation))
+    if (!native || typeof selected.facts.native_event_hash !== 'string') {
+      info.dimensions.coverage = dim('unresolved', 'dependency_missing')
+      continue
+    }
+    if (native.hash !== selected.facts.native_event_hash) {
+      info.dimensions.coverage = dim('rejected', 'dependency_invalid')
+      continue
+    }
     const ids = Array.isArray(a.expected) ? a.expected : [],
       captured = Array.isArray(a.captured) ? a.captured : []
     const gaps = Array.isArray(a.gaps) ? a.gaps : []
@@ -645,8 +761,7 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
     (info) =>
       selectedOk &&
       eq(info.assertion.surface, source(selected).identity) &&
-      Number(info.assertion.start) < Number(selected.facts.cursor) &&
-      Number(selected.facts.cursor) <= Number(info.assertion.end) &&
+      inCoverageWindow(info, selected) === true &&
       sourceSupported(info),
   )
   if (request)
@@ -672,7 +787,7 @@ export async function evaluateEvidenceFixture(input: FixtureInput) {
       return {
         delivery: JSON.parse(id) as unknown,
         state: outcomes.length > 1 ? 'conflict' : (outcomes[0] ?? 'unknown'),
-        basis: records.map((info) => info.hash).sort(),
+        basis: [...new Set(records.map((info) => info.hash))].sort(),
       }
     })
   if (request) resultDimensions.publication = await inspectPublication(request.hash, input)

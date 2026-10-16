@@ -1,0 +1,55 @@
+{
+  "name": "coverage-unknown-cursor-order",
+  "protects": "coverage-unknown-cursor-order",
+  "fails_when": "the required evidence distinction is erased",
+  "no_claim": "offline fixture sources, not installed capture or host durability",
+  "rules": ["E09"],
+  "input": {
+    "records": [
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e",
+      "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d",
+      "sha256:d91079fa1b60be8833017d15338c5c92f4f402a44554194877a29ca94fef5f51",
+      "sha256:0d339ae33419d3a69e54cff523b100ce5fc01f67a0d83721f595f4ffa5065b77",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8",
+      "sha256:3589e5d13bef823210f659209185dfe208a886ccc4b721c1504733fde66d2ccd",
+      "sha256:bbe47a65c3c1aaf37317ca7aeab3527db60cb6b35b634eb2754796953dfcb70b"
+    ],
+    "openings": {
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e": "sha256:eb2aa156f05bb96f598dbb75c8ce6582e326a12d9fae15ac3f79e4b7d4bf8f46",
+      "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d": "sha256:27456d018d96a39d40892275bbc959d7e2b25c2f8897ee772aee70bf43a238ba",
+      "sha256:d91079fa1b60be8833017d15338c5c92f4f402a44554194877a29ca94fef5f51": "sha256:1a92f46abdf18ca5c346329ce8646cf4b05536d118cd9d9ce37048918f9c599e",
+      "sha256:0d339ae33419d3a69e54cff523b100ce5fc01f67a0d83721f595f4ffa5065b77": "sha256:53e71e30be8919b992d5b76eaabc34517760fbf197652e54153f4bbbd315f5ac",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8": "sha256:c9ae88f556a025caa14870479cb939a4b3c265d4772e5b66da826540662f9225",
+      "sha256:3589e5d13bef823210f659209185dfe208a886ccc4b721c1504733fde66d2ccd": "sha256:b109d9726e644064189bb89001609cc33ac6a38b8fd6793c5ddcf607c56a47ac",
+      "sha256:bbe47a65c3c1aaf37317ca7aeab3527db60cb6b35b634eb2754796953dfcb70b": "sha256:64459bcf52cf25fadfb0ed6d02c2ac9c72e7450ebc3dc556b56a50d4d9b205b3"
+    },
+    "artifacts": {
+      "$type": "atrib-artifact-map/1",
+      "$ref": "sha256:36fca824c23d4b48fe364fc53cbd2d101aef5cebf0693381c21d232de84ef62a"
+    },
+    "policy": "sha256:013649737b6a01733f81f6684047ee1d3f197ad977102b64910dc7273ab0047f",
+    "evaluation": "sha256:7a39b4d440f6dd1c7559b96da5f8873b17be424b278799ad5701f460e917e8ce",
+    "request_hash": "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e"
+  },
+  "expected": {
+    "request": {
+      "dimensions": {
+        "coverage": {
+          "state": "unresolved",
+          "reasons": ["dependency_missing"]
+        }
+      }
+    },
+    "statements": [
+      {
+        "record_hash": "sha256:bbe47a65c3c1aaf37317ca7aeab3527db60cb6b35b634eb2754796953dfcb70b",
+        "dimensions": {
+          "coverage": {
+            "state": "unresolved",
+            "reasons": ["dependency_missing"]
+          }
+        }
+      }
+    ]
+  }
+}
