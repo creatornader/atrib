@@ -254,7 +254,7 @@ A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (r
 
 These are non-negotiable. They come from the founding conversation and are the core design decisions.
 
-1. **Default telemetry failures must never affect the primary tool call or agent response.** Catch telemetry exceptions, retry network failures silently, and pass through if no key is configured. Execution preconditions and refusal behavior belong to a separately specified host policy. See [§5.8](atrib-spec.md#58-degradation-contract).
+1. **Observational attribution failures must never affect the primary tool call or agent response.** Catch attribution exceptions, retry network failures silently, and pass through if no key is configured. Execution preconditions and refusal behavior belong to a separately specified host policy. See [§5.8](atrib-spec.md#58-degradation-contract).
 
 2. **The graph records structure, not causality.** Never add edge types based on semantic interpretation of tool names or response content. Edges are derived from observable record structure only. This is [§3.1](atrib-spec.md#31-design-principles-and-rationale) of the spec.
 
@@ -436,4 +436,4 @@ outside the repo; CI skips it silently when no wordlist is present.
 
 - TypeScript strict mode.
 - No `any` types. The spec defines exact shapes; use them.
-- Default telemetry follows the degradation contract ([§5.8](atrib-spec.md#58-degradation-contract)): catch exceptions, log with `atrib:` prefix, and preserve the primary response. Explicit host execution policies may require durable evidence before protected actions.
+- Observational attribution follows the degradation contract ([§5.8](atrib-spec.md#58-degradation-contract)): catch exceptions, log with `atrib:` prefix, and preserve the primary response. Explicit host execution policies may require durable evidence before protected actions.

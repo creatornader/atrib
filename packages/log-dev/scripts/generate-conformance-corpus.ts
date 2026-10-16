@@ -323,7 +323,7 @@ async function generate(): Promise<void> {
       spec_section: '2.6.1',
       validation_step: 4,
       description:
-        'timestamp is 20 minutes ahead of the reference time, beyond the 10-minute clock-skew tolerance. The log MUST reject with 400. The test consumer freezes Date.now() to the manifest reference_time_ms before sending this case so the validation outcome is stable across runs.',
+        'timestamp is 20 minutes ahead of the reference time, beyond the 5-minute clock-skew tolerance. The log MUST reject with 400. The test consumer freezes Date.now() to the manifest reference_time_ms before sending this case so the validation outcome is stable across runs.',
       request: {
         method: 'POST',
         path: '/v1/entries',
