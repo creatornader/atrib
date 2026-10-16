@@ -95,11 +95,22 @@ function normalizeMirrorLine(parsed: unknown): AtribRecord | null {
     (parsed as { record?: unknown }).record !== null
       ? ((parsed as { record: unknown }).record as Record<string, unknown>)
       : (parsed as Record<string, unknown>)
+  const hasCreatorSigner =
+    candidate.event_type === 'https://atrib.dev/v1/types/transaction' &&
+    Array.isArray(candidate.signers) &&
+    candidate.signers.some(
+      (entry) =>
+        entry !== null &&
+        typeof entry === 'object' &&
+        entry.creator_key === candidate.creator_key &&
+        typeof entry.signature === 'string',
+    )
   if (
     typeof candidate.context_id === 'string' &&
     typeof candidate.timestamp === 'number' &&
     typeof candidate.chain_root === 'string' &&
-    typeof candidate.signature === 'string' &&
+    (typeof candidate.signature === 'string' ||
+      (!('signature' in candidate) && hasCreatorSigner)) &&
     typeof candidate.creator_key === 'string'
   ) {
     return candidate as unknown as AtribRecord

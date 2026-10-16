@@ -212,17 +212,9 @@ Public packages are intended for npm publication. Private workspace packages and
 
 CLAUDE.md is the navigational center. The spec (`atrib-spec.md`) is the authoritative technical reference.
 
-The proposed [§1.12 source-bound evidence contract](docs/source-bound-evidence.md)
-defines committed bodies and receiver obligations. It is spec work ahead of
-implementation, not an added evidence-envelope profile or a claim that current
-verifyRecord.valid establishes action truth. See STATUS.md for the implementation
-boundary. Keep its acceptance cases synchronized with the receiver corpus when
-that implementation lands.
-
-The [offline evidence corpus](spec/conformance/1.12/README.md) has a test-only
-schema/receiver model under `packages/verify/test/source-bound-*`. It does not
-export a public receiver API. Keep its signed fixtures, explicit operational
-obligations and source-mechanism description synchronized with the contract.
+The [source-bound evidence contract](docs/source-bound-evidence.md) defines the
+statement bodies, receiver obligations and [offline corpus](spec/conformance/1.12/README.md).
+See [STATUS.md](STATUS.md) for implementation and release evidence.
 
 ## Authoritative docs
 

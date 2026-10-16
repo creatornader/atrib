@@ -121,6 +121,8 @@ export function forgePacket(
   const remapped = new Map<string, Fact>()
   const corrupted = records.map((r) => {
     const body = bodyByHash.get('sha256:' + recordHashHex(r))
+    if (typeof r.signature !== 'string')
+      throw new Error('forgePacket requires a top-level signature')
     const c = { ...r, signature: flip(r.signature[0] ?? 'A') + r.signature.slice(1) }
     if (body) remapped.set('sha256:' + recordHashHex(c), body)
     return c

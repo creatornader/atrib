@@ -235,15 +235,31 @@ function collectMirrorHashes(value: unknown, hashes: Set<string>): void {
 function isAtribRecordLike(value: unknown): value is AtribRecord {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
   const obj = value as Record<string, unknown>
+  const hasCreatorSigner =
+    obj['event_type'] === 'https://atrib.dev/v1/types/transaction' &&
+    Array.isArray(obj['signers']) &&
+    obj['signers'].some(
+      (entry) =>
+        entry !== null &&
+        typeof entry === 'object' &&
+        entry.creator_key === obj['creator_key'] &&
+        typeof entry.signature === 'string',
+    )
+  const contentIdRequired = [
+    'https://atrib.dev/v1/types/tool_call',
+    'https://atrib.dev/v1/types/transaction',
+    'https://atrib.dev/v1/types/directory_anchor',
+    'https://atrib.dev/v1/types/session_checkpoint',
+  ].includes(obj['event_type'] as string)
   return (
     obj['spec_version'] === 'atrib/1.0' &&
-    typeof obj['content_id'] === 'string' &&
+    (!('content_id' in obj || contentIdRequired) || typeof obj['content_id'] === 'string') &&
     typeof obj['creator_key'] === 'string' &&
     typeof obj['chain_root'] === 'string' &&
     typeof obj['event_type'] === 'string' &&
     typeof obj['context_id'] === 'string' &&
     typeof obj['timestamp'] === 'number' &&
-    typeof obj['signature'] === 'string'
+    (typeof obj['signature'] === 'string' || (!('signature' in obj) && hasCreatorSigner))
   )
 }
 

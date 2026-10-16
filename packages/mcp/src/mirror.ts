@@ -625,11 +625,28 @@ function parseMirrorValue(value: unknown): AtribRecord | null {
   if (!isObject(value)) return null
   const wrapped = value['record']
   const candidate = isObject(wrapped) ? wrapped : value
+  const hasCreatorSigner =
+    candidate['event_type'] === 'https://atrib.dev/v1/types/transaction' &&
+    Array.isArray(candidate['signers']) &&
+    candidate['signers'].some(
+      (entry) =>
+        isObject(entry) &&
+        entry['creator_key'] === candidate['creator_key'] &&
+        typeof entry['signature'] === 'string',
+    )
+  const contentIdRequired = [
+    'https://atrib.dev/v1/types/tool_call',
+    'https://atrib.dev/v1/types/transaction',
+    'https://atrib.dev/v1/types/directory_anchor',
+    'https://atrib.dev/v1/types/session_checkpoint',
+  ].includes(candidate['event_type'] as string)
   if (
     candidate['spec_version'] !== 'atrib/1.0' ||
-    typeof candidate['content_id'] !== 'string' ||
+    (('content_id' in candidate || contentIdRequired) &&
+      typeof candidate['content_id'] !== 'string') ||
     typeof candidate['creator_key'] !== 'string' ||
-    typeof candidate['signature'] !== 'string' ||
+    (typeof candidate['signature'] !== 'string' &&
+      ('signature' in candidate || !hasCreatorSigner)) ||
     typeof candidate['chain_root'] !== 'string' ||
     typeof candidate['event_type'] !== 'string' ||
     typeof candidate['context_id'] !== 'string' ||

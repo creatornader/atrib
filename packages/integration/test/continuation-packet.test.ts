@@ -25,7 +25,7 @@ describe('continuation packet', () => {
   it('signs a real chained, informed_by-linked record per fact', async () => {
     const { records, chainTail } = await buildSession1Records(DOC)
     expect(records.length).toBe(4)
-    for (const r of records) expect(r.signature.length).toBeGreaterThan(0)
+    for (const r of records) expect(r.signature).toMatch(/^.+$/)
     // chain fact hop>0 carries informed_by to its causal predecessor.
     const linked = records.filter((r) => Array.isArray((r as { informed_by?: string[] }).informed_by))
     expect(linked.length).toBe(2) // F2 informed by F1, F3 informed by F2

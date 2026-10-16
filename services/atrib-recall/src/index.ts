@@ -903,13 +903,23 @@ function extractRecord(parsed: unknown): AtribRecord | null {
     typeof obj.record === 'object' && obj.record !== null
       ? (obj.record as Record<string, unknown>)
       : obj
+  const hasCreatorSigner =
+    candidate.event_type === 'https://atrib.dev/v1/types/transaction' &&
+    Array.isArray(candidate.signers) &&
+    candidate.signers.some(
+      (entry) =>
+        entry !== null &&
+        typeof entry === 'object' &&
+        entry.creator_key === candidate.creator_key &&
+        typeof entry.signature === 'string',
+    )
   if (
     typeof candidate.spec_version === 'string' &&
     typeof candidate.event_type === 'string' &&
     typeof candidate.context_id === 'string' &&
     typeof candidate.creator_key === 'string' &&
     typeof candidate.chain_root === 'string' &&
-    typeof candidate.signature === 'string'
+    (typeof candidate.signature === 'string' || (!('signature' in candidate) && hasCreatorSigner))
   ) {
     return candidate as unknown as AtribRecord
   }

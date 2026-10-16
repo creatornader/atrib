@@ -62,10 +62,12 @@ class SignerEntry(TypedDict):
 
 class AtribRecord(TypedDict):
     """A signed attribution record (§1.2). Optional fields MUST be omitted
-    (never null) when absent — presence changes the JCS form and signature."""
+    (never null) when absent. Presence changes the JCS form and signature.
+    Transactions may omit signature when signers carries the creator entry.
+    Runtime admission enforces signature and content_id requirements by type."""
 
     spec_version: str
-    content_id: str
+    content_id: NotRequired[str]
     creator_key: str
     chain_root: str
     event_type: str

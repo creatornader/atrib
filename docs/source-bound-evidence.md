@@ -1,6 +1,6 @@
 # Source-bound evidence contract
 
-Proposed normative text for [core §1.12](../atrib-spec.md#112-source-bound-evidence-statements). The reference packages do not yet implement this contract. [STATUS.md](../STATUS.md#spec-defined-not-yet-implemented) records that boundary. The acceptance cases below specify required behavior, not test results from today's verifier.
+Proposed normative text for [core §1.12](../atrib-spec.md#112-source-bound-evidence-statements). In-repository package source implements closed body validation and the explicit `verifyEvidenceSet` receiver. The [offline corpus](../spec/conformance/1.12/README.md) runs against that exported API with a test-only synthetic source adapter. [STATUS.md](../STATUS.md#spec-defined-not-yet-implemented) distinguishes these local implementations from publication, deployment and full operational conformance.
 
 ## 1. Conformance and carrier
 
@@ -299,7 +299,7 @@ Existing local mirror retention, runtime-log inspection and core anchor-proof
 verification may supply those functions. Any claimed publication support still
 requires the verified proof in E19.
 
-The receiver cases below are required for receiver conformance. Each applicable E-rule and grammar constraint needs positive and negative executable fixtures. The [offline corpus](../spec/conformance/1.12/README.md) implements receiver checks through a test-only reference model. Its receiver JSON inputs and expected assertions are canonical vectors, jointly normative with core Appendix A. C19 separately exercises a test-only executor model as non-normative examples of one configured host policy. Those examples define neither protocol nor receiver conformance requirements and do not prove filesystem durability. Producer obligations require separate operational validation. The external-obligation ledger does not claim that offline vectors prove operational host capture, storage durability, administrative independence or app acceptance. No public package claims full producer/receiver conformance yet.
+The receiver cases below are required for receiver conformance. Each applicable E-rule and grammar constraint needs positive and negative executable fixtures. The [offline corpus](../spec/conformance/1.12/README.md) checks receiver cases through the exported receiver and a test-only source adapter. Its receiver JSON inputs and expected assertions are canonical vectors, jointly normative with core Appendix A. C19 separately exercises a test-only executor model as non-normative examples of one configured host policy. Those examples define neither protocol nor receiver conformance requirements and do not prove filesystem durability. Producer obligations require separate operational validation. The external-obligation ledger does not claim that offline vectors prove operational host capture, storage durability, administrative independence or app acceptance. The local implementation does not establish published, deployed or full producer/receiver conformance.
 
 | Case | Input variation                                                      | Required result                                                              |
 | ---- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |

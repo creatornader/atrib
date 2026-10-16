@@ -170,7 +170,7 @@ export async function buildGraph(
       id: nodeId,
       event_type: graphLabelFromEventTypeUri(record.event_type),
       event_type_uri: record.event_type,
-      content_id: record.content_id,
+      content_id: record.content_id ?? null,
       creator_key: record.creator_key,
       chain_root: record.chain_root,
       context_id: record.context_id,

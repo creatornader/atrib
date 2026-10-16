@@ -12,6 +12,24 @@ pnpm add @atrib/mcp
 
 Verify a local build with `pnpm --filter @atrib/mcp test`.
 
+## Source-bound statement bodies
+
+`evidenceBodySchemas` validates the six closed bodies in
+[the source-bound evidence contract](../../docs/source-bound-evidence.md).
+`EVIDENCE_TYPES` maps each kind to its signed extension URI.
+`createEvidenceNonce()` generates an unpadded base64url nonce from 16 random
+bytes. `commitEvidenceBody(kind, body)` validates the body and returns its
+plain JCS SHA-256 commitment for `args_hash`. Keep the nonce in the private
+opening. These helpers neither sign nor retain the record/opening pair.
+Use the existing `signRecord` helper and a host-owned atomic store.
+
+`isEvidenceLocator` is the locator predicate used by body validation. It rejects
+bearer tokens, URL user information and recognized
+credential query or fragment keys in absolute and relative hints. Benign queries,
+fragments and relative hints remain valid. Only `source.locator` and
+`basis[].locator` use this rule. Arbitrary JSON parameters and destination state
+can contain unrelated properties named `locator`.
+
 ## Quick start
 
 ```typescript
