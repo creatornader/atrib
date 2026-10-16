@@ -28,7 +28,7 @@
  * caller-argument path, and its D067 precedence is untouched.
  */
 
-import { hexEncode, readInboundContext } from '@atrib/mcp'
+import { hexEncode, readInboundContext, resolveEnvContextId } from '@atrib/mcp'
 import type { CallToolRequest, CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { WRITE_TOOL_NAMES } from './backend.js'
 
@@ -95,4 +95,37 @@ export function applyHttpContextPolicy(
       isError: true,
     },
   }
+}
+
+/**
+ * stdio-to-HTTP proxy context rung. The proxy child is spawned per harness
+ * session, so its env and parent PID still carry the D078/D083 ambient ladder
+ * that the shared HTTP daemon cannot see. For a write call that carries no
+ * valid explicit `context_id` and no `_meta` carrier, resolve the child's
+ * ambient context and forward it as an explicit argument. Everything else,
+ * including an unresolvable ladder, passes through unchanged so the daemon's
+ * HTTP policy still decides. Never mutates the caller's params object.
+ */
+export function applyStdioProxyContext(
+  params: CallToolRequest['params'],
+  resolveAmbient: () => string | undefined = () => resolveEnvContextId(process.env),
+): CallToolRequest['params'] {
+  if (!WRITE_TOOL_NAMES.has(params.name)) return params
+
+  const args = argumentsRecord(params)
+  const explicit = args['context_id']
+  if (typeof explicit === 'string' && CONTEXT_ID_PATTERN.test(explicit)) return params
+
+  const inbound = readInboundContext(params as unknown as Record<string, unknown>)
+  if (inbound?.contextId && CONTEXT_ID_PATTERN.test(inbound.contextId)) return params
+
+  let ambient: string | undefined
+  try {
+    ambient = resolveAmbient()
+  } catch {
+    return params
+  }
+  if (!ambient || !CONTEXT_ID_PATTERN.test(ambient)) return params
+
+  return { ...params, arguments: { ...args, context_id: ambient } }
 }

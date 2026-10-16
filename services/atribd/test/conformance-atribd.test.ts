@@ -32,6 +32,7 @@ import {
   sha256,
 } from '@atrib/mcp'
 import {
+  applyStdioProxyContext,
   bindAtribdHttpHost,
   createAtribdBackend,
   type AtribdBackend,
@@ -382,13 +383,15 @@ describe('atribd corpus: routing-headers', () => {
 })
 
 interface ContextResolutionFixture extends HttpVectorFixture {
-  check: 'http-carrier' | 'stdio-env' | 'chain-root-corpus'
+  check: 'http-carrier' | 'stdio-env' | 'stdio-proxy' | 'chain-root-corpus'
   input: HttpVectorFixture['input'] & {
     env?: Record<string, string>
+    tool?: string
+    arguments?: Record<string, unknown>
     reuses_corpus?: string
   }
   expected: HttpVectorFixture['expected'] & {
-    context_id?: string
+    context_id?: string | null
     all_cases_match?: boolean
   }
 }
@@ -398,6 +401,14 @@ describe('atribd corpus: context-resolution', () => {
     it(name, async () => {
       if (fixture.check === 'http-carrier') {
         await runHttpVector(fixture)
+        return
+      }
+      if (fixture.check === 'stdio-proxy') {
+        const forwarded = applyStdioProxyContext(
+          { name: fixture.input.tool!, arguments: fixture.input.arguments ?? {} },
+          () => resolveEnvContextId(fixture.input.env as NodeJS.ProcessEnv),
+        )
+        expect(forwarded.arguments?.['context_id']).toBe(fixture.expected.context_id ?? undefined)
         return
       }
       if (fixture.check === 'stdio-env') {

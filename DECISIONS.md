@@ -7848,12 +7848,15 @@ Full draft: [docs/adr-draft-p048-payments-spinout.md](docs/adr-draft-p048-paymen
 - npm name: settled as `@atrib/daemon`, with the `atribd` binary. It has shipped
   under that name since 0.1.0; the unscoped `atribd` 0.1.0 is deprecated.
 - Ambient context: `--ambient-context` or `ATRIBD_AMBIENT_CONTEXT=1`, off by
-  default. The operator profiles run without it, so a write that carries no
-  `context_id` is refused, where the primitives runtime used to resolve one
-  ambiently. Turning it on restores that behavior with a known limitation:
-  such writes are attributed to whichever session of the profile last wrote
-  the profile's active-session file. Per-session resolution in the stdio proxy
-  would remove that limitation.
+  default, and the operator profiles run without it. The flag would attribute
+  writes without a `context_id` to whichever session of the profile last wrote
+  the profile's active-session file. Instead the stdio-to-HTTP proxy resolves
+  the [D078](#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)
+  ladder in its own child and forwards an explicit `context_id` on writes, so a
+  strict daemon accepts them. Attribution is per session where the harness
+  spawns one child per session; a harness that shares one child across
+  sessions keeps the last-writer limitation. Pinned by the `stdio-proxy-*`
+  context-resolution cases.
 - Coordinator residual duties: none remain to merge into the daemon. The
   [D120](#d120-local-substrate-coordinator-keeps-startup-spawn-sidecars-wrapper-owned)
   default trial closed and the operator coordinators retired.

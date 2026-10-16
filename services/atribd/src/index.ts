@@ -81,6 +81,7 @@ export {
 } from './backend.js'
 export {
   applyHttpContextPolicy,
+  applyStdioProxyContext,
   MISSING_CONTEXT_ERROR_TEXT,
   type HttpContextPolicyOutcome,
 } from './context-policy.js'

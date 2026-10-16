@@ -1,0 +1,14 @@
+{
+  "name": "stdio-proxy-read-not-injected",
+  "spec_section": "D148",
+  "check": "stdio-proxy",
+  "description": "stdio-to-HTTP proxy: read calls pass through unchanged; only write calls receive the ambient context.",
+  "input": {
+    "tool": "recall_my_attribution_history",
+    "arguments": { "compact": true },
+    "env": { "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129" }
+  },
+  "expected": {
+    "context_id": null
+  }
+}

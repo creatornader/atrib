@@ -130,9 +130,15 @@ Write primitives require an explicit context per request:
 Read primitives that support unscoped queries proceed per their own scope
 rules. A single-tenant daemon can opt back into ambient env and profile-file
 discovery ([D078](../../DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)) with `--ambient-context` or `ATRIBD_AMBIENT_CONTEXT=1`;
-the flag name is a
-[D148](../../DECISIONS.md#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime)
-open question. The stdio surfaces keep the ambient ladder unchanged.
+it is off by default. The stdio surfaces keep the ambient ladder unchanged.
+The stdio-to-HTTP proxy resolves that ladder in its own child process and
+forwards the result as an explicit
+`context_id` on write calls that carry neither an argument nor a `_meta`
+carrier. A strict daemon behind the proxy therefore accepts those writes under
+the calling session without `--ambient-context`. Attribution is per session
+when the harness spawns one proxy child per session; a harness that shares one
+child across sessions resolves whichever session its env or active-session
+file names.
 
 ## Write serialization
 

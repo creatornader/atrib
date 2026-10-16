@@ -36,6 +36,9 @@
         "cases/context-resolution/read-unscoped-proceeds.json",
         "cases/context-resolution/stdio-env-explicit-context-id-wins.json",
         "cases/context-resolution/stdio-env-harness-session-fallback.json",
+        "cases/context-resolution/stdio-proxy-injects-session-context.json",
+        "cases/context-resolution/stdio-proxy-explicit-context-wins.json",
+        "cases/context-resolution/stdio-proxy-read-not-injected.json",
         "cases/context-resolution/resolve-chain-root-unchanged.json"
       ]
     },

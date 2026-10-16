@@ -1566,6 +1566,52 @@ describe('atribd real primitive mounts', () => {
       await host.close()
     }
   })
+
+  it(
+    'forwards the proxy child session context on writes to a strict daemon',
+    { timeout: 30_000 },
+    async () => {
+      const host = await startHttpHostProcess({
+        HOME: tmp,
+        ATRIB_AGENT: 'test-agent',
+        ATRIB_PRIVATE_KEY: TEST_PRIVATE_KEY,
+        ATRIB_RECORD_FILE: recordFile,
+        ATRIB_MIRROR_FILE: recordFile,
+      })
+      try {
+        const transport = new ModernStdioClientTransport({
+          command: 'node',
+          args: [BINARY, '--transport', 'stdio-http-proxy', '--endpoint', host.endpoint],
+          env: processEnvWith({
+            HOME: tmp,
+            ATRIB_CONTEXT_ID: '',
+            CLAUDE_CODE_SESSION_ID: '93F57455-11C0-4A1F-AB9C-A59BCFC54129',
+          }),
+          stderr: 'pipe',
+        })
+        const client = new ModernClient(
+          { name: 'atribd-v2-proxy-context-test', version: '0.0.0' },
+          { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+        )
+        try {
+          await client.connect(transport)
+          const result = (await client.callTool({
+            name: 'emit',
+            arguments: { event_type: 'observation', content: { what: 'proxy ambient write' } },
+          })) as { isError?: boolean; content: { text: string }[] }
+          expect(result.isError, result.content[0]?.text).not.toBe(true)
+          const records = readFileSync(recordFile, 'utf8').split('\n').filter(Boolean)
+          expect(records).toHaveLength(1)
+          const mirrored = JSON.parse(records[0]!) as { record?: { context_id?: string } }
+          expect(mirrored.record?.context_id).toBe('93f5745511c04a1fab9ca59bcfc54129')
+        } finally {
+          await client.close().catch(() => {})
+        }
+      } finally {
+        await host.close()
+      }
+    },
+  )
 })
 
 describe('atribd process replacement', () => {
