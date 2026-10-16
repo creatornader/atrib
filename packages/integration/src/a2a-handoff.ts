@@ -251,6 +251,7 @@ export async function runA2aHandoffProof(
       'Verify A2A Agent Card signature',
       () => verifySignedAgentCard(agentCard),
     )
+    if (!agentCardSignature.valid) throw new Error('Agent Card signature verification failed')
     const clientFactory = await timings.span(
       'a2a_stack_setup',
       'Build in-process A2A JSON-RPC stack',

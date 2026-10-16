@@ -1,0 +1,30 @@
+{
+  "name": "extension-context-only-no-chain-root",
+  "spec_section": "D148",
+  "check": "http-carrier",
+  "description": "An extension block with a context_id and no token resolves context only. chain_root never comes from a context_id.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 36,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "content": {
+            "what": "extension-context-only-no-chain-root"
+          }
+        },
+        "_meta": {
+          "dev.atrib/attribution": {
+            "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "received_context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "received_chain_root": null
+  }
+}

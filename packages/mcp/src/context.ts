@@ -223,8 +223,10 @@ export function extractTraceId(traceparent: string): string | undefined {
   const [version, traceId, parentId, traceFlags] = parts
   if (!version || !traceId || !parentId || !traceFlags) return undefined
 
-  // Per W3C: version is 2 lowercase hex
-  if (!/^[0-9a-f]{2}$/.test(version)) return undefined
+  // Per W3C: version is 2 lowercase hex, and ff is forbidden
+  if (!/^[0-9a-f]{2}$/.test(version) || version === 'ff') return undefined
+  // Per W3C: version 00 has exactly four fields; later versions may append
+  if (version === '00' && parts.length !== 4) return undefined
   // Per W3C: trace-id is exactly 32 lowercase hex, NOT all zeros
   if (!/^[0-9a-f]{32}$/.test(traceId)) return undefined
   if (traceId === '0'.repeat(32)) return undefined

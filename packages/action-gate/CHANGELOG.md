@@ -1,5 +1,16 @@
 # @atrib/action-gate
 
+## 0.1.10
+
+### Patch Changes
+
+- Updated dependencies [27f9b95]
+- Updated dependencies [ea023f3]
+- Updated dependencies [5d51ea6]
+- Updated dependencies [bd922cc]
+  - @atrib/mcp@0.25.2
+  - @atrib/verify@0.14.1
+
 ## 0.1.9
 
 ### Patch Changes

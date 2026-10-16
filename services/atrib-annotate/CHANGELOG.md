@@ -1,5 +1,12 @@
 # @atrib/annotate
 
+## 1.1.5
+
+### Patch Changes
+
+- Updated dependencies [5d51ea6]
+  - @atrib/attest@0.4.5
+
 ## 1.1.4
 
 ### Patch Changes

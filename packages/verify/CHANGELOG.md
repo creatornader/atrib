@@ -1,5 +1,15 @@
 # @atrib/verify
 
+## 0.14.1
+
+### Patch Changes
+
+- ea023f3: Accept x401 proof requests without the optional `oauth` member. The OAuth token endpoint is still required when `oauth` is present.
+- bd922cc: Update SD-JWT to 0.22.0, JOSE to 6.2.12, and secp256k1 to 3.2.0. Adapt bare VI credentials to the native SD-JWT presentation format while preserving original signature and delegation-hash inputs.
+- Updated dependencies [27f9b95]
+- Updated dependencies [5d51ea6]
+  - @atrib/mcp@0.25.2
+
 ## 0.14.0
 
 ### Minor Changes

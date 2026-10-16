@@ -2,6 +2,7 @@ import { execFile as execFileCallback } from 'node:child_process'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { canonicalRecord, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
 import type { Ap2ViEvidenceBundle } from '@atrib/verify'
@@ -88,6 +89,14 @@ export interface BigQueryWriteOptions {
 export const GOOGLE_EVIDENCE_RUNTIME_SERVICE = 'atrib-google-evidence-runtime'
 export const DEFAULT_RUNTIME_CONTEXT_ID = 'google-ap2-runtime-replay-20260609'
 export const DEFAULT_RUNTIME_NOW_SECONDS = 1779840000
+export const DEFAULT_GOOGLE_REPLAY_FILES = {
+  resultJson: fileURLToPath(
+    new URL('../test/fixtures/ap2-local-chain/ap2-local-chain-result.json', import.meta.url),
+  ),
+  evidenceJson: fileURLToPath(
+    new URL('../test/fixtures/ap2-local-chain/ap2-local-chain-evidence.json', import.meta.url),
+  ),
+}
 
 export async function buildReplayPacket(options: {
   resultJson: string

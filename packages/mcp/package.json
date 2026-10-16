@@ -1,6 +1,6 @@
 {
   "name": "@atrib/mcp",
-  "version": "0.25.1",
+  "version": "0.25.2",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -53,7 +53,7 @@
     "@types/node": "^26.6.5",
     "fast-check": "^4.10.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.5"
   },
   "repository": {
     "type": "git",

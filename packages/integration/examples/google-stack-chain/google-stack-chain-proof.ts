@@ -2,8 +2,7 @@
 
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { canonicalRecord, hexEncode, sha256, type AtribRecord } from '@atrib/mcp'
 import { verifyRecord as verifyAtribRecord } from '@atrib/verify'
 import {
@@ -11,6 +10,7 @@ import {
   readJsonFile,
 } from '../../src/ap2-local-participant.js'
 import { runAp2LiveInterop } from '../../src/ap2-live-interop.js'
+import { DEFAULT_GOOGLE_REPLAY_FILES } from '../../src/google-evidence-runtime.js'
 import { runA2aHandoffProof } from '../../src/a2a-handoff.js'
 import {
   runGoogleAdkPythonDecisionLedgerAllowPath,
@@ -141,17 +141,11 @@ type GoogleStackChainProof = {
 }
 
 export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof> {
-  const exampleDir = dirname(fileURLToPath(import.meta.url))
-  const packageDir = resolve(exampleDir, '../..')
   const artifactDir = await mkdtemp(join(tmpdir(), 'atrib-google-stack-chain-'))
 
   const ap2Artifacts = await generateAp2LocalParticipantArtifacts({
-    result: await readJsonFile(
-      join(packageDir, 'test/fixtures/ap2-vi-reference/ap2-vi-reference-result.json'),
-    ),
-    evidence: await readJsonFile(
-      join(packageDir, 'test/fixtures/ap2-vi-reference/ap2-vi-reference-evidence.json'),
-    ),
+    result: await readJsonFile(DEFAULT_GOOGLE_REPLAY_FILES.resultJson),
+    evidence: await readJsonFile(DEFAULT_GOOGLE_REPLAY_FILES.evidenceJson),
     outDir: artifactDir,
     nowSeconds: NOW_SECONDS,
   })
@@ -168,7 +162,9 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
     ap2Summary.detection.protocol !== 'AP2' ||
     !ap2Summary.detection.contentId ||
     !ap2Summary.evidence?.valid ||
-    !ap2Summary.evidence.transactionAccepted
+    !ap2Summary.evidence.transactionAccepted ||
+    !ap2Summary.evidence.ap2.paymentReceipt?.jwt?.verified ||
+    !ap2Summary.evidence.ap2.checkoutReceipt?.jwt?.verified
   ) {
     throw new Error(`AP2 layer failed: ${ap2Summary.errors.join(', ')}`)
   }
@@ -222,9 +218,12 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
   const outcomeVerification = await verifyAtribRecord(adkPython.outcome.record, {
     informedByCandidates: [adkPython.decision.record],
   })
-  const handlerErrorDecisionVerification = await verifyAtribRecord(adkHandlerError.decision.record, {
-    informedByCandidates: [a2a.records.followup],
-  })
+  const handlerErrorDecisionVerification = await verifyAtribRecord(
+    adkHandlerError.decision.record,
+    {
+      informedByCandidates: [a2a.records.followup],
+    },
+  )
   const handlerErrorOutcomeVerification = await verifyAtribRecord(adkHandlerError.outcome.record, {
     informedByCandidates: [adkHandlerError.decision.record],
   })
@@ -512,7 +511,7 @@ export async function runGoogleStackChainProof(): Promise<GoogleStackChainProof>
     ],
     caveats: [
       'Boundary: atrib is the trust-transfer layer here. AP2 evidence is accepted first, A2A receives that signed parent, and ADK signs an allow decision before the tool callback cites that decision.',
-      'AP2 source: committed AP2 / VI fixtures or merchant-supplied packet JSON. This proof does not use live payment credentials or move funds.',
+      'AP2 source: an atrib local positive fixture with signed test receipt JWTs, not the preserved upstream capture or a live payment. Merchant-supplied packets are verified separately.',
       'A2A source: in-process JSON-RPC with signed receiving-agent follow-up. It proves verifier-gated handoff, not an A2A TCK result or public server deployment.',
       'ADK source: google-adk Python InMemoryRunner proof. The claim is decision, callback, and handler-error terminal-outcome signing, not managed Agent Platform Runtime, Gemini Enterprise, BigQuery Storage Write API export, or Memory Bank coverage.',
       'ADK handler-error coverage proves a real FunctionTool exception path. Timeout, cancellation, and process-crash completeness still need ADK-owned terminal emission semantics.',

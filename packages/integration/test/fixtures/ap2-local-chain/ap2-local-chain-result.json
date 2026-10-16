@@ -1,0 +1,14 @@
+{
+  "status": "success",
+  "source": "atrib local AP2 / VI chain fixture",
+  "payment_receipt_jwt_parts": [
+    "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImF0cmliLWxvY2FsLXBheW1lbnQtcmVjZWlwdCJ9",
+    "eyJzdGF0dXMiOiJTdWNjZXNzIiwiaXNzIjoiZml4dHVyZS1waXNwIiwiaWF0IjoxNzc5ODQwMDMwLCJyZWZlcmVuY2UiOiIyYmxTdDJTT2VwbWpTN3M1M3NOR1VRQVVnbUx2UERuZDJyS2l4SkNPSXBBIiwicGF5bWVudF9pZCI6InBheV9hdXRvbm9tb3VzXzEiLCJwc3BfY29uZmlybWF0aW9uX2lkIjoicHNwX2F1dG9ub21vdXNfMSIsIm5ldHdvcmtfY29uZmlybWF0aW9uX2lkIjoibmV0X2F1dG9ub21vdXNfMSJ9",
+    "tUs5N2vwP1_zUitHRfSj8IPmhb4I2mHle1Fq0ud9K7AVNt2tjnyZ8xjfFGLTMCrhSMpAENIsnRAHDM8mTHfnig"
+  ],
+  "checkout_receipt_jwt_parts": [
+    "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImF0cmliLWxvY2FsLWNoZWNrb3V0LXJlY2VpcHQifQ",
+    "eyJzdGF0dXMiOiJTdWNjZXNzIiwiaXNzIjoiZml4dHVyZS1tZXJjaGFudCIsImlhdCI6MTc3OTg0MDAzMCwicmVmZXJlbmNlIjoiQVQyY0FkVkJMa2Z4THI5TEdSMHBnRlB0bFNwNmdjWTZGRndXY1pJaGRDayIsIm9yZGVyX2lkIjoib3JkZXJfYXV0b25vbW91c18xIn0",
+    "jtWIoJPlJOAvypBfnjK1zV-2k3Vwujt0aklmfaVdfyrJLQ0GaygVOqieZDWEPRfMi8-m87EAPNFrP9ibNFzaUw"
+  ]
+}

@@ -8,6 +8,8 @@
  * ladder is unchanged: explicit argument > `_meta` carriers > `ATRIB_CONTEXT_ID`
  * env > harness registry env > fallback file > undefined, per D078/D083.
  * The stateless explicit-required policy applies to the HTTP surface only.
+ * The stdio-to-HTTP proxy keeps the same ladder by resolving it in the child
+ * and forwarding the result as an explicit `context_id` on write calls.
  */
 
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
@@ -18,6 +20,7 @@ import {
   readPackageVersion,
   DEFAULT_TOOL_TIMEOUT_MS,
 } from './backend.js'
+import { applyStdioProxyContext } from './context-policy.js'
 import { createAtribdModernServer, DEFAULT_TOOLS_LIST_TTL_MS } from './http-host.js'
 
 export interface AtribdRuntime {
@@ -93,10 +96,11 @@ export async function createAtribdHttpProxyRuntime(
 
   server.setRequestHandler('tools/list', async () => ({ tools: listed.tools }))
   server.setRequestHandler('tools/call', async (request) => {
+    const params = applyStdioProxyContext(request.params)
     return callWithToolTimeout(
-      request.params.name,
+      params.name,
       toolTimeoutMs,
-      () => upstream.callTool(request.params) as never,
+      () => upstream.callTool(params) as never,
     ) as unknown as CallToolResult
   })
 

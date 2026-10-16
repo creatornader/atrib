@@ -1,5 +1,12 @@
 # @atrib/trace
 
+## 1.1.6
+
+### Patch Changes
+
+- Updated dependencies [5d51ea6]
+  - @atrib/recall@5.1.6
+
 ## 1.1.5
 
 ### Patch Changes

@@ -152,6 +152,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
@@ -218,6 +219,7 @@ type MirrorFileStat = {
   path: string
   size: number
   mtimeMs: number
+  ino: number
 }
 
 type MirrorFingerprint = {
@@ -355,7 +357,7 @@ function statMirrorFile(path: string): MirrorFileStat | null {
   try {
     const stat = statSync(path)
     if (!stat.isFile()) return null
-    return { path, size: stat.size, mtimeMs: stat.mtimeMs }
+    return { path, size: stat.size, mtimeMs: stat.mtimeMs, ino: stat.ino }
   } catch {
     return null
   }
@@ -385,9 +387,18 @@ function getLoadedMirrorSnapshot(recordFile?: string): LoadedMirrorSnapshot {
   return loadedMirrorSnapshot
 }
 
-function getContentSearchMirrorSnapshot(maxRecords: number): LoadedMirrorSnapshot {
+function getContentSearchMirrorSnapshot(requestedMaxRecords: number): LoadedMirrorSnapshot {
   const fingerprint = readMirrorFingerprint()
   if (loadedMirrorSnapshot?.signature === fingerprint.signature) return loadedMirrorSnapshot
+  // Bounded searches slice the newest records to their own limit, so a larger
+  // cached window serves a smaller request. Keeping the larger window stops a
+  // small probe and a normal call from evicting each other on every write.
+  // The retained size is capped at the default window so one oversized
+  // request cannot pin a full-corpus copy for the life of the process.
+  const maxRecords = Math.max(
+    requestedMaxRecords,
+    Math.min(contentSearchMirrorSnapshot?.maxLoadedRecords ?? 0, ATRIB_RECALL_CONTENT_MAX_RECORDS),
+  )
   if (
     contentSearchMirrorSnapshot?.signature === fingerprint.signature &&
     contentSearchMirrorSnapshot.maxLoadedRecords === maxRecords
@@ -510,6 +521,16 @@ function tryLoadDurableContentIndex(
   const path = contentIndexPath()
   if (!path) return undefined
   if (!existsSync(path)) return undefined
+  // The signature sidecar lets a stale index be rejected without parsing the
+  // whole file. Every mirror write changes the fingerprint, so without this
+  // check each call after a write would parse and then discard the index.
+  try {
+    if (readFileSync(contentIndexSignaturePath(path), 'utf8') !== fingerprint.signature) {
+      return undefined
+    }
+  } catch {
+    return undefined
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(readFileSync(path, 'utf8'))
@@ -529,6 +550,10 @@ function contentIndexPath(): string | undefined {
   // otherwise every new record leaves behind a full, obsolete index file.
   const hash = createHash('sha256').update(contentIndexCacheIdentity()).digest('hex')
   return join(ATRIB_RECALL_CONTENT_INDEX_DIR, `recall-content-${hash}.json`)
+}
+
+function contentIndexSignaturePath(indexPath: string): string {
+  return `${indexPath}.sig`
 }
 
 function contentIndexCacheIdentity(): string {
@@ -564,6 +589,26 @@ function writeContentIndex(
     const tmpPath = `${path}.${process.pid}.${Date.now()}.tmp`
     writeFileSync(tmpPath, JSON.stringify(indexFile))
     renameSync(tmpPath, path)
+    // Written after the index. A reader that sees a new index with an older
+    // sidecar only misses the cache; the full validation still checks the
+    // signature stored inside the index after a sidecar match.
+    const sigTmpPath = `${tmpPath}.sig`
+    try {
+      writeFileSync(sigTmpPath, indexFile.mirror_signature)
+      renameSync(sigTmpPath, contentIndexSignaturePath(path))
+    } catch (error) {
+      try {
+        rmSync(sigTmpPath, { force: true })
+      } catch {
+        // Best effort; a stray temp file is harmless.
+      }
+      // Without its sidecar the index is never loaded, so this is a failed write.
+      return contentIndexStatus(
+        'write_failed',
+        path,
+        `signature sidecar: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
     return contentIndexStatus('rebuilt', path)
   } catch (error) {
     return contentIndexStatus(
@@ -778,7 +823,9 @@ function tryAppendRefreshLoadedMirrorSnapshot(
     maxLoadedRecords,
     partial,
   }
-  if (previous.partial) {
+  // Only an unbounded refresh may stand in for the complete mirror. A bounded
+  // window that held every record before the append can be truncated by it.
+  if (maxLoadedRecords !== undefined) {
     contentSearchMirrorSnapshot = refreshed
   } else {
     loadedMirrorSnapshot = refreshed
@@ -790,6 +837,9 @@ function sameMirrorFiles(a: MirrorFileStat[], b: MirrorFileStat[]): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i += 1) {
     if (a[i]!.path !== b[i]!.path) return false
+    // A replaced file can be larger than the one it replaced; only the same
+    // inode can be treated as an append.
+    if (a[i]!.ino !== b[i]!.ino) return false
   }
   return true
 }

@@ -1,6 +1,6 @@
 {
   "name": "@atrib/trace",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Legacy home of atrib's trace read primitive. Superseded by @atrib/recall (the read verb, shape=walk with a direction); this package re-exports the same surface and forwards the atrib-trace binary.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
@@ -36,7 +36,7 @@
     "@types/node": "^26.6.5",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.5"
   },
   "files": [
     "dist"

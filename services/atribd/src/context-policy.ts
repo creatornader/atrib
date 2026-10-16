@@ -3,14 +3,15 @@
 /**
  * Context-identity policy for the stateless HTTP surface (P046).
  *
- * Precedence per request, citing the single canonical inbound-carrier
- * ladder (spec §1.5.4 with the §1.5.3 `X-Atrib-Chain` fallback, as
- * `readInboundContext` in @atrib/mcp implements):
+ * Precedence per request, using both §1.5.4 ladders as @atrib/mcp's
+ * `resolveContextIdentity` and `resolveInboundToken` implement them:
  *
- *   1. Explicit `context_id` tool argument (32-hex). Passed through
- *      untouched; the daemon adds nothing.
+ *   1. Explicit `context_id` tool argument. Passed through untouched,
+ *      even when malformed, so the primitive's schema refuses it; the
+ *      daemon adds nothing.
  *   2. Inbound carrier resolution from per-request `_meta`. When the
- *      carriers resolve a context_id (traceparent trace-id) the daemon
+ *      carriers resolve a context_id (the extension block's context_id,
+ *      then the traceparent trace-id) the daemon
  *      injects it as the explicit argument; when they also resolve a
  *      propagation token, the token's record hash is injected as
  *      `chain_root` on tools whose schema accepts it, seeding chain-tail
@@ -28,14 +29,19 @@
  * caller-argument path, and its D067 precedence is untouched.
  */
 
-import { hexEncode, readInboundContext } from '@atrib/mcp'
+import {
+  KNOWN_HARNESS_DISCOVERIES,
+  readInboundContext,
+  resolveContextIdentity,
+  resolveInboundToken,
+} from '@atrib/mcp'
 import type { CallToolRequest, CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { WRITE_TOOL_NAMES } from './backend.js'
 
 const CONTEXT_ID_PATTERN = /^[0-9a-f]{32}$/
 
-/** Write tools whose input schema accepts a caller-managed chain_root. */
-const CHAIN_ROOT_CAPABLE_TOOLS: ReadonlySet<string> = new Set(['emit'])
+/** Write tools whose input schema accepts a caller-managed chain_root (emit and the attest verb). */
+const CHAIN_ROOT_CAPABLE_TOOLS: ReadonlySet<string> = new Set(['emit', 'attest'])
 
 export const MISSING_CONTEXT_ERROR_TEXT = 'atrib: context_id required on stateless transport'
 
@@ -64,22 +70,28 @@ export function applyHttpContextPolicy(
     return { kind: 'pass', params }
   }
 
+  // Rung 1: an explicit argument always wins. A present but malformed value
+  // is left for the primitive's schema to refuse, never replaced by a carrier.
   const args = argumentsRecord(params)
-  const explicit = args['context_id']
-  if (typeof explicit === 'string' && CONTEXT_ID_PATTERN.test(explicit)) {
+  if (args['context_id'] !== undefined) {
     return { kind: 'pass', params }
   }
 
-  // Rung 2: per-request _meta carriers (§1.5.4 ladder + §1.5.3 fallback).
-  const inbound = readInboundContext(params as unknown as Record<string, unknown>)
-  if (inbound?.contextId && CONTEXT_ID_PATTERN.test(inbound.contextId)) {
-    const injected: Record<string, unknown> = { ...args, context_id: inbound.contextId }
+  // Rung 2: per-request _meta carriers, both §1.5.4 ladders. Context comes
+  // from the extension block's context_id, then the traceparent trace-id;
+  // the propagation token (extension token, then _meta.atrib, the tracestate
+  // atrib= entry, then X-Atrib-Chain) seeds chain_root.
+  const meta = (params as { _meta?: unknown })._meta
+  const identity = resolveContextIdentity(undefined, meta)
+  if (identity.contextId && CONTEXT_ID_PATTERN.test(identity.contextId)) {
+    const injected: Record<string, unknown> = { ...args, context_id: identity.contextId }
+    const token = resolveInboundToken(meta)
     if (
       CHAIN_ROOT_CAPABLE_TOOLS.has(params.name) &&
       args['chain_root'] === undefined &&
-      inbound.recordHash.length === 32
+      token.recordHashHex !== undefined
     ) {
-      injected['chain_root'] = `sha256:${hexEncode(inbound.recordHash)}`
+      injected['chain_root'] = `sha256:${token.recordHashHex}`
     }
     return { kind: 'injected', params: { ...params, arguments: injected } }
   }
@@ -95,4 +107,86 @@ export function applyHttpContextPolicy(
       isError: true,
     },
   }
+}
+
+/**
+ * stdio-to-HTTP proxy context rung. The proxy child is spawned by the
+ * harness, so its environment can name the session that started it
+ * (`ATRIB_CONTEXT_ID`, `CLAUDE_CODE_SESSION_ID`, `CODEX_THREAD_ID`). For a write
+ * call whose arguments omit `context_id` entirely and that carries no `_meta`
+ * context carrier, forward that environment value as an explicit `context_id`.
+ *
+ * Only environment rungs are used. The D083 file rungs (the per-parent-PID and
+ * profile active-session files) name whichever session last wrote them, and a
+ * harness that runs many sessions under one parent process shares those files,
+ * so they would sign concurrent sessions under each other's context. Anything
+ * else (a present `context_id`, a non-object `arguments`, any `_meta` carrier,
+ * or no environment value) passes through unchanged and the daemon decides.
+ * Never mutates the caller's params object.
+ */
+export function applyStdioProxyContext(
+  params: CallToolRequest['params'],
+  resolveSession: () => string | undefined = resolveProxySessionContext,
+): CallToolRequest['params'] {
+  if (!WRITE_TOOL_NAMES.has(params.name)) return params
+
+  const raw = params.arguments
+  if (raw !== undefined && (raw === null || typeof raw !== 'object' || Array.isArray(raw))) {
+    return params
+  }
+  const args = (raw ?? {}) as Record<string, unknown>
+  if (Object.prototype.hasOwnProperty.call(args, 'context_id')) return params
+  if (hasContextCarrier(params)) return params
+
+  let session: string | undefined
+  try {
+    session = resolveSession()
+  } catch {
+    return params
+  }
+  if (!session || !CONTEXT_ID_PATTERN.test(session)) return params
+
+  return { ...params, arguments: { ...args, context_id: session } }
+}
+
+function hasContextCarrier(params: CallToolRequest['params']): boolean {
+  if (readInboundContext(params as unknown as Record<string, unknown>)) return true
+  const meta = (params as { _meta?: unknown })._meta
+  if (!meta || typeof meta !== 'object') return false
+  // Any present carrier key counts, valid or not: the daemon decides what a
+  // malformed carrier means, and the proxy never substitutes for it.
+  return Object.keys(meta).some((key) => CONTEXT_CARRIER_META_KEYS.has(key))
+}
+
+/** `_meta` keys the §1.5.4 ladders name, spelled as the spec spells them. */
+const CONTEXT_CARRIER_META_KEYS: ReadonlySet<string> = new Set([
+  'dev.atrib/attribution',
+  'atrib',
+  'traceparent',
+  'tracestate',
+  'X-Atrib-Chain',
+  'x-atrib-chain',
+])
+
+/**
+ * The proxy's session ladder: `ATRIB_CONTEXT_ID`, then each registered harness
+ * environment variable in registry order. No file rung is consulted.
+ */
+export function resolveProxySessionContext(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const explicit = env['ATRIB_CONTEXT_ID']
+  if (explicit && CONTEXT_ID_PATTERN.test(explicit)) return explicit
+  for (const discovery of KNOWN_HARNESS_DISCOVERIES) {
+    if (discovery.envVar === '') continue
+    const value = env[discovery.envVar]
+    if (value === undefined || value === '') continue
+    try {
+      const parsed = discovery.parse(value)
+      if (parsed && CONTEXT_ID_PATTERN.test(parsed)) return parsed
+    } catch {
+      // A registry parser that throws falls through to the next rung.
+    }
+  }
+  return undefined
 }

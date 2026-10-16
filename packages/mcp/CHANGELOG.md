@@ -1,5 +1,12 @@
 # @atrib/mcp
 
+## 0.25.2
+
+### Patch Changes
+
+- 27f9b95: `extractTraceId` now rejects the forbidden traceparent version `ff` and version `00` values with more than four fields, per W3C Trace Context.
+- 5d51ea6: Recall skips a stale durable content index without parsing it and keeps one bounded search window across different `max_records` limits. The signer's mirror tail index folds in appends that land during its incremental read instead of rescanning the whole mirror. `@atrib/attest` and `@atrib/emit` take the signer fix so the global `atrib-emit-cli` hook signer gets it on its next refresh.
+
 ## 0.25.1
 
 ### Patch Changes

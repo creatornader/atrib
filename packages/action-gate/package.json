@@ -1,6 +1,6 @@
 {
   "name": "@atrib/action-gate",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -55,6 +55,6 @@
   "devDependencies": {
     "@types/node": "^26.6.5",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.5"
   }
 }

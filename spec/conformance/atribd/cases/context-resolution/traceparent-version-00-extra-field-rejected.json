@@ -1,0 +1,28 @@
+{
+  "name": "traceparent-version-00-extra-field-rejected",
+  "spec_section": "D148",
+  "check": "http-carrier",
+  "description": "Version 00 traceparents have exactly four fields, so a fifth field makes it invalid and the strict write is refused.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 40,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "content": {
+            "what": "traceparent-version-00-extra-field-rejected"
+          }
+        },
+        "_meta": {
+          "traceparent": "00-dddddddddddddddddddddddddddddddd-00f067aa0ba902b7-01-garbage"
+        }
+      }
+    }
+  },
+  "expected": {
+    "rejected": true,
+    "error_text": "atrib: context_id required on stateless transport"
+  }
+}

@@ -32,7 +32,9 @@ import {
   sha256,
 } from '@atrib/mcp'
 import {
+  applyStdioProxyContext,
   bindAtribdHttpHost,
+  resolveProxySessionContext,
   createAtribdBackend,
   type AtribdBackend,
   type AtribdPrimitiveFactory,
@@ -132,22 +134,24 @@ async function fakeToolBackend(): Promise<{ backend: AtribdBackend; calls: Recor
         'emit',
         () => {
           const mcp = new McpServer({ name: 'fake-emit', version: '0.0.0' })
-          mcp.registerTool(
-            'emit',
-            {
-              description: 'Fake write primitive',
-              inputSchema: {
-                context_id: z.string().optional(),
-                chain_root: z.string().optional(),
-                content: z.record(z.string(), z.unknown()).optional(),
-                event_type: z.string().optional(),
+          for (const name of ['emit', 'attest']) {
+            mcp.registerTool(
+              name,
+              {
+                description: 'Fake write primitive',
+                inputSchema: {
+                  context_id: z.string().optional(),
+                  chain_root: z.string().optional(),
+                  content: z.record(z.string(), z.unknown()).optional(),
+                  event_type: z.string().optional(),
+                },
               },
-            },
-            async (args) => {
-              calls.push({ tool: 'emit', args: args as Record<string, unknown> })
-              return { content: [{ type: 'text', text: JSON.stringify({ ok: true }) }] }
-            },
-          )
+              async (args) => {
+                calls.push({ tool: name, args: args as Record<string, unknown> })
+                return { content: [{ type: 'text', text: JSON.stringify({ ok: true }) }] }
+              },
+            )
+          }
           return { mcp }
         },
       ],
@@ -382,13 +386,18 @@ describe('atribd corpus: routing-headers', () => {
 })
 
 interface ContextResolutionFixture extends HttpVectorFixture {
-  check: 'http-carrier' | 'stdio-env' | 'chain-root-corpus'
+  check: 'http-carrier' | 'stdio-env' | 'stdio-proxy' | 'chain-root-corpus'
   input: HttpVectorFixture['input'] & {
     env?: Record<string, string>
+    tool?: string
+    arguments?: Record<string, unknown>
+    meta?: Record<string, unknown>
+    profile_file_context_id?: string
+    parent_pid_file_context_id?: string
     reuses_corpus?: string
   }
   expected: HttpVectorFixture['expected'] & {
-    context_id?: string
+    context_id?: string | null
     all_cases_match?: boolean
   }
 }
@@ -398,6 +407,58 @@ describe('atribd corpus: context-resolution', () => {
     it(name, async () => {
       if (fixture.check === 'http-carrier') {
         await runHttpVector(fixture)
+        return
+      }
+      if (fixture.check === 'stdio-proxy') {
+        // Isolate the file rungs: HOME points at a fresh directory that holds
+        // only the fixture's active-session files, if any. The parent-PID
+        // file is keyed by this process's parent, the rung D083 would read.
+        const home = mkdtempSync(join(tmpdir(), 'atribd-proxy-home-'))
+        const savedHome = process.env['HOME']
+        try {
+          const profile = fixture.input.env?.['ATRIB_ACTIVE_SESSION_PROFILE']
+          if (profile && fixture.input.profile_file_context_id) {
+            mkdirSync(join(home, '.claude', 'state'), { recursive: true })
+            writeFileSync(
+              join(home, '.claude', 'state', `active-session-id-${profile}`),
+              fixture.input.profile_file_context_id,
+            )
+          }
+          if (fixture.input.parent_pid_file_context_id) {
+            mkdirSync(join(home, '.claude', 'state'), { recursive: true })
+            writeFileSync(
+              join(home, '.claude', 'state', `active-session-id-${process.ppid}`),
+              fixture.input.parent_pid_file_context_id,
+            )
+          }
+          process.env['HOME'] = home
+          const params = {
+            name: fixture.input.tool!,
+            arguments: fixture.input.arguments ?? {},
+            ...(fixture.input.meta ? { _meta: fixture.input.meta } : {}),
+          }
+          const forwarded = applyStdioProxyContext(params, () =>
+            resolveProxySessionContext(fixture.input.env as NodeJS.ProcessEnv),
+          )
+          // A null expectation means "absent" unless the fixture itself passes
+          // a null context_id, which must be forwarded unchanged.
+          const suppliedContext = Object.prototype.hasOwnProperty.call(
+            params.arguments,
+            'context_id',
+          )
+          expect(forwarded.arguments?.['context_id']).toBe(
+            suppliedContext
+              ? fixture.expected.context_id
+              : (fixture.expected.context_id ?? undefined),
+          )
+          if (forwarded.arguments?.['context_id'] === params.arguments['context_id']) {
+            expect(forwarded).toBe(params)
+          }
+        } finally {
+          if (savedHome === undefined) delete process.env['HOME']
+          else process.env['HOME'] = savedHome
+          rmSync(home, { recursive: true, force: true })
+        }
         return
       }
       if (fixture.check === 'stdio-env') {
@@ -628,6 +689,8 @@ interface DegradationFixture extends HttpVectorFixture {
   input: HttpVectorFixture['input'] & {
     tool?: string
     arguments?: Record<string, unknown>
+    meta?: Record<string, unknown>
+    profile_file_context_id?: string
     log_endpoint?: string
     tool_timeout_ms?: number
   }
