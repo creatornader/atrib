@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import { proofSdkVersions } from '../src/proof-sdk-versions.js'
+
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -35,7 +37,7 @@ This proof signs an x401 protected-route flow with an open local credential veri
 
 ## What ran
 
-- Upstream surface: \`@proof.com/x401-node@0.3.0\` current-spec wire SDK.
+- Upstream surface: \`@proof.com/x401-node@${proofSdkVersions.x401}\` current-spec wire SDK.
 - Credential verifier: local JWT VC issuer plus signed VP token verifier.
 - atrib path: signed attempted action plus signed successful action linked through \`informed_by\`.
 - Record policy: public packet keeps hashes, verifier outcomes, package versions, and key thumbprints.
@@ -88,8 +90,7 @@ const verifierOutput = {
   packet: 'x401-open-credential-e2e',
   mode: 'offline-local',
   live_upstream: false,
-  upstream_shape:
-    '@proof.com/x401-node@0.3.0 current-spec x401 wire SDK with local JWT VC / signed VP verifier',
+  upstream_shape: `@proof.com/x401-node@${proofSdkVersions.x401} current-spec x401 wire SDK with local JWT VC / signed VP verifier`,
   operations: ['protected_fetch_attempt', 'stale_nonce_retry', 'protected_fetch_success'],
   attempts: result.attempts,
   records: [
