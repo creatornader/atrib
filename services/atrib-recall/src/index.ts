@@ -152,6 +152,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
@@ -596,6 +597,11 @@ function writeContentIndex(
       renameSync(sigTmpPath, contentIndexSignaturePath(path))
     } catch {
       // The index itself was written; a missing sidecar only costs a cache miss.
+      try {
+        rmSync(sigTmpPath, { force: true })
+      } catch {
+        // Best effort; a stray temp file is harmless.
+      }
     }
     return contentIndexStatus('rebuilt', path)
   } catch (error) {
@@ -811,7 +817,9 @@ function tryAppendRefreshLoadedMirrorSnapshot(
     maxLoadedRecords,
     partial,
   }
-  if (previous.partial) {
+  // Only an unbounded refresh may stand in for the complete mirror. A bounded
+  // window that held every record before the append can be truncated by it.
+  if (maxLoadedRecords !== undefined) {
     contentSearchMirrorSnapshot = refreshed
   } else {
     loadedMirrorSnapshot = refreshed

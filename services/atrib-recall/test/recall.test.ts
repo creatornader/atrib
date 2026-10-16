@@ -657,6 +657,32 @@ describe('content index cache reuse', () => {
     })
   })
 
+  it('does not serve a refreshed bounded window as the complete mirror', async () => {
+    const make = (n: number) =>
+      makeSigned({ timestamp: n, content_id: `sha256:${String(n).repeat(64)}` })
+    writeFileSync(
+      recordFile,
+      [await make(1), await make(2)].map((r) => JSON.stringify(r)).join('\n'),
+    )
+    await withIndexEnv(async (recallModule) => {
+      const bounded = await recallModule.runRecallByContent({ query: '', max_records: 3 })
+      expect(bounded.searched_records).toBe(2)
+
+      appendFileSync(
+        recordFile,
+        `\n${JSON.stringify(await make(3))}\n${JSON.stringify(await make(4))}`,
+      )
+      const afterAppend = await recallModule.runRecallByContent({ query: '', max_records: 3 })
+      expect(afterAppend.searched_records).toBe(3)
+
+      const complete = await recallModule.runRecallByContent({
+        query: '',
+        evidence_mode: 'require_complete',
+      })
+      expect(complete.total_records).toBe(4)
+    })
+  })
+
   it('keeps a small bounded search to its own limit after a larger window was cached', async () => {
     const records = [
       await makeSigned({ timestamp: 1, content_id: `sha256:${'1'.repeat(64)}` }),
