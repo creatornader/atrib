@@ -98,26 +98,33 @@ export function applyHttpContextPolicy(
 }
 
 /**
- * stdio-to-HTTP proxy context rung. The proxy child is spawned per harness
- * session, so its env and parent PID still carry the D078/D083 ambient ladder
- * that the shared HTTP daemon cannot see. For a write call that carries no
- * valid explicit `context_id` and no `_meta` carrier, resolve the child's
- * ambient context and forward it as an explicit argument. Everything else,
- * including an unresolvable ladder, passes through unchanged so the daemon's
- * HTTP policy still decides. Never mutates the caller's params object.
+ * stdio-to-HTTP proxy context rung. The proxy child is spawned by the
+ * harness, so its env and parent PID can carry the D078/D083 ladder that the
+ * shared HTTP daemon cannot see. For a write call whose arguments omit
+ * `context_id` entirely and that carries no `_meta` context carrier, resolve
+ * the child's ladder and forward the result as an explicit `context_id`.
+ *
+ * The profile active-session file rung is skipped on purpose: it names
+ * whichever session of the profile last wrote the file, which is the
+ * last-writer attribution `--ambient-context` keeps off by default. A present
+ * but invalid `context_id`, a non-object `arguments`, any `_meta` carrier, or
+ * an unresolvable ladder passes through unchanged so the daemon's HTTP policy
+ * or the primitive schema decides. Never mutates the caller's params object.
  */
 export function applyStdioProxyContext(
   params: CallToolRequest['params'],
-  resolveAmbient: () => string | undefined = () => resolveEnvContextId(process.env),
+  resolveAmbient: () => string | undefined = resolveProxyAmbientContext,
 ): CallToolRequest['params'] {
   if (!WRITE_TOOL_NAMES.has(params.name)) return params
 
-  const args = argumentsRecord(params)
-  const explicit = args['context_id']
-  if (typeof explicit === 'string' && CONTEXT_ID_PATTERN.test(explicit)) return params
+  const raw = params.arguments
+  if (raw !== undefined && (raw === null || typeof raw !== 'object' || Array.isArray(raw))) {
+    return params
+  }
+  const args = (raw ?? {}) as Record<string, unknown>
+  if (Object.prototype.hasOwnProperty.call(args, 'context_id')) return params
 
-  const inbound = readInboundContext(params as unknown as Record<string, unknown>)
-  if (inbound?.contextId && CONTEXT_ID_PATTERN.test(inbound.contextId)) return params
+  if (readInboundContext(params as unknown as Record<string, unknown>)) return params
 
   let ambient: string | undefined
   try {
@@ -128,4 +135,17 @@ export function applyStdioProxyContext(
   if (!ambient || !CONTEXT_ID_PATTERN.test(ambient)) return params
 
   return { ...params, arguments: { ...args, context_id: ambient } }
+}
+
+/**
+ * The proxy's ladder: `ATRIB_CONTEXT_ID`, harness env vars, and the harness
+ * parent-process file, without the profile-file rung.
+ */
+export function resolveProxyAmbientContext(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const withoutProfile: NodeJS.ProcessEnv = { ...env }
+  delete withoutProfile['ATRIB_ACTIVE_SESSION_PROFILE']
+  delete withoutProfile['ATRIB_AGENT']
+  return resolveEnvContextId(withoutProfile)
 }

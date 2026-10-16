@@ -131,14 +131,18 @@ Read primitives that support unscoped queries proceed per their own scope
 rules. A single-tenant daemon can opt back into ambient env and profile-file
 discovery ([D078](../../DECISIONS.md#d078-mcp-servers-honor-atrib_context_id-env-as-context_id-default)/[D083](../../DECISIONS.md#d083-harness-session-id-discovery-extends-d078-for-cognitive-primitive-mcp-servers)) with `--ambient-context` or `ATRIBD_AMBIENT_CONTEXT=1`;
 it is off by default. The stdio surfaces keep the ambient ladder unchanged.
-The stdio-to-HTTP proxy resolves that ladder in its own child process and
-forwards the result as an explicit
-`context_id` on write calls that carry neither an argument nor a `_meta`
-carrier. A strict daemon behind the proxy therefore accepts those writes under
-the calling session without `--ambient-context`. Attribution is per session
-when the harness spawns one proxy child per session; a harness that shares one
-child across sessions resolves whichever session its env or active-session
-file names.
+The stdio-to-HTTP proxy resolves part of that ladder in its own child process:
+`ATRIB_CONTEXT_ID`, the harness env vars, and the harness parent-process file
+written by the SessionStart hook. It skips the profile active-session file,
+which names whichever session of the profile wrote it last. On a write call
+whose arguments omit `context_id` and that carries no `_meta` carrier, the proxy
+forwards the result as an explicit `context_id`, so a strict daemon accepts the
+write under the calling session without `--ambient-context`. A present but
+invalid `context_id`, any `_meta` carrier, or an unresolved ladder passes
+through unchanged and the daemon decides. Attribution is per session only when
+the harness starts the proxy directly (no wrapper process) and its SessionStart
+hook writes the parent-process file. A keyed retry whose session file changed
+between attempts is refused as a different action rather than replayed.
 
 ## Write serialization
 

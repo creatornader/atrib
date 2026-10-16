@@ -74,26 +74,30 @@ export interface ModernSdkStatelessAdapterOptions {
 export function createModernSdkStatelessAdapter(
   options: ModernSdkStatelessAdapterOptions,
 ): AtribdTransportAdapter {
-  const handler = createMcpHandler(async (context) => {
-    let requestMeta: unknown
-    try {
-      const body = await context.requestInfo?.clone().json()
-      const params = body && typeof body === 'object' && !Array.isArray(body)
-        ? (body as { params?: unknown }).params
-        : undefined
-      if (params && typeof params === 'object' && !Array.isArray(params)) {
-        requestMeta = (params as { _meta?: unknown })._meta
+  const handler = createMcpHandler(
+    async (context) => {
+      let requestMeta: unknown
+      try {
+        const body = await context.requestInfo?.clone().json()
+        const params =
+          body && typeof body === 'object' && !Array.isArray(body)
+            ? (body as { params?: unknown }).params
+            : undefined
+        if (params && typeof params === 'object' && !Array.isArray(params)) {
+          requestMeta = (params as { _meta?: unknown })._meta
+        }
+      } catch {
+        // Optional extension metadata must never block the primary request.
       }
-    } catch {
-      // Optional extension metadata must never block the primary request.
-    }
-    return options.serverFactory(requestMeta)
-  }, {
-    // The host routes 2025 traffic to the existing v1 adapter. Keeping the
-    // paths separate preserves its JSON-only response behavior for deployed
-    // legacy clients while v2 owns the modern wire protocol.
-    legacy: 'reject',
-  })
+      return options.serverFactory(requestMeta)
+    },
+    {
+      // The host routes 2025 traffic to the existing v1 adapter. Keeping the
+      // paths separate preserves its JSON-only response behavior for deployed
+      // legacy clients while v2 owns the modern wire protocol.
+      legacy: 'reject',
+    },
+  )
   const nodeHandler = toNodeHandler(handler, {
     onerror: (error) => {
       try {

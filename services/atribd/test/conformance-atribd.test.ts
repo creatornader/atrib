@@ -34,6 +34,7 @@ import {
 import {
   applyStdioProxyContext,
   bindAtribdHttpHost,
+  resolveProxyAmbientContext,
   createAtribdBackend,
   type AtribdBackend,
   type AtribdPrimitiveFactory,
@@ -388,6 +389,8 @@ interface ContextResolutionFixture extends HttpVectorFixture {
     env?: Record<string, string>
     tool?: string
     arguments?: Record<string, unknown>
+    meta?: Record<string, unknown>
+    profile_file_context_id?: string
     reuses_corpus?: string
   }
   expected: HttpVectorFixture['expected'] & {
@@ -404,11 +407,37 @@ describe('atribd corpus: context-resolution', () => {
         return
       }
       if (fixture.check === 'stdio-proxy') {
-        const forwarded = applyStdioProxyContext(
-          { name: fixture.input.tool!, arguments: fixture.input.arguments ?? {} },
-          () => resolveEnvContextId(fixture.input.env as NodeJS.ProcessEnv),
-        )
-        expect(forwarded.arguments?.['context_id']).toBe(fixture.expected.context_id ?? undefined)
+        // Isolate the file rungs: HOME points at a fresh directory that holds
+        // only the fixture's profile file, if any.
+        const home = mkdtempSync(join(tmpdir(), 'atribd-proxy-home-'))
+        const savedHome = process.env['HOME']
+        try {
+          const profile = fixture.input.env?.['ATRIB_ACTIVE_SESSION_PROFILE']
+          if (profile && fixture.input.profile_file_context_id) {
+            mkdirSync(join(home, '.claude', 'state'), { recursive: true })
+            writeFileSync(
+              join(home, '.claude', 'state', `active-session-id-${profile}`),
+              fixture.input.profile_file_context_id,
+            )
+          }
+          process.env['HOME'] = home
+          const params = {
+            name: fixture.input.tool!,
+            arguments: fixture.input.arguments ?? {},
+            ...(fixture.input.meta ? { _meta: fixture.input.meta } : {}),
+          }
+          const forwarded = applyStdioProxyContext(params, () =>
+            resolveProxyAmbientContext(fixture.input.env as NodeJS.ProcessEnv),
+          )
+          expect(forwarded.arguments?.['context_id']).toBe(fixture.expected.context_id ?? undefined)
+          if (forwarded.arguments?.['context_id'] === params.arguments['context_id']) {
+            expect(forwarded).toBe(params)
+          }
+        } finally {
+          if (savedHome === undefined) delete process.env['HOME']
+          else process.env['HOME'] = savedHome
+          rmSync(home, { recursive: true, force: true })
+        }
         return
       }
       if (fixture.check === 'stdio-env') {
@@ -639,6 +668,8 @@ interface DegradationFixture extends HttpVectorFixture {
   input: HttpVectorFixture['input'] & {
     tool?: string
     arguments?: Record<string, unknown>
+    meta?: Record<string, unknown>
+    profile_file_context_id?: string
     log_endpoint?: string
     tool_timeout_ms?: number
   }

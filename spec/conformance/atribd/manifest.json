@@ -39,6 +39,9 @@
         "cases/context-resolution/stdio-proxy-injects-session-context.json",
         "cases/context-resolution/stdio-proxy-explicit-context-wins.json",
         "cases/context-resolution/stdio-proxy-read-not-injected.json",
+        "cases/context-resolution/stdio-proxy-malformed-context-not-replaced.json",
+        "cases/context-resolution/stdio-proxy-meta-carrier-not-injected.json",
+        "cases/context-resolution/stdio-proxy-profile-rung-skipped.json",
         "cases/context-resolution/resolve-chain-root-unchanged.json"
       ]
     },

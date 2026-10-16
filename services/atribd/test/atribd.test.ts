@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -1574,18 +1574,45 @@ describe('atribd real primitive mounts', () => {
       const host = await startHttpHostProcess({
         HOME: tmp,
         ATRIB_AGENT: 'test-agent',
+        ATRIBD_AMBIENT_CONTEXT: '',
         ATRIB_PRIVATE_KEY: TEST_PRIVATE_KEY,
         ATRIB_RECORD_FILE: recordFile,
         ATRIB_MIRROR_FILE: recordFile,
       })
+      // Claude Code does not export its session id to MCP children; the
+      // SessionStart hook writes it to a file keyed by the harness PID, which
+      // is the proxy child's parent. Here that parent is this test process.
+      mkdirSync(join(tmp, '.claude', 'state'), { recursive: true })
+      writeFileSync(
+        join(tmp, '.claude', 'state', `active-session-id-${process.pid}`),
+        '93F57455-11C0-4A1F-AB9C-A59BCFC54129',
+      )
+      // A profile file for the same profile names a different session; the
+      // proxy must not fall back to it.
+      writeFileSync(join(tmp, '.claude', 'state', 'active-session-id-test-agent'), 'c'.repeat(32))
       try {
+        const strict = await postJson(
+          host.endpoint,
+          toolsCallBody(
+            1,
+            'emit',
+            { event_type: 'observation', content: { what: 'direct' } },
+            modernMeta(),
+          ),
+          { ...MODERN_HEADERS, 'mcp-method': 'tools/call', 'mcp-name': 'emit' },
+        )
+        const strictPayload = (await strict.json()) as { result?: { isError?: boolean } }
+        expect(strictPayload.result?.isError, JSON.stringify(strictPayload)).toBe(true)
+
         const transport = new ModernStdioClientTransport({
           command: 'node',
           args: [BINARY, '--transport', 'stdio-http-proxy', '--endpoint', host.endpoint],
           env: processEnvWith({
             HOME: tmp,
+            ATRIB_AGENT: 'test-agent',
             ATRIB_CONTEXT_ID: '',
-            CLAUDE_CODE_SESSION_ID: '93F57455-11C0-4A1F-AB9C-A59BCFC54129',
+            CLAUDE_CODE_SESSION_ID: '',
+            CODEX_THREAD_ID: '',
           }),
           stderr: 'pipe',
         })
