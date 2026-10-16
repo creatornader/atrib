@@ -322,6 +322,24 @@ describe('extractTraceId: W3C trace-id validation', () => {
   it('rejects too few parts', () => {
     expect(extractTraceId('00-4bf92f3577b34da6a3ce929d0e0e4736')).toBeUndefined()
   })
+
+  it('rejects the forbidden version ff', () => {
+    expect(
+      extractTraceId('ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'),
+    ).toBeUndefined()
+  })
+
+  it('rejects extra fields on version 00', () => {
+    expect(
+      extractTraceId('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra'),
+    ).toBeUndefined()
+  })
+
+  it('accepts appended fields on a later version', () => {
+    expect(extractTraceId('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra')).toBe(
+      '4bf92f3577b34da6a3ce929d0e0e4736',
+    )
+  })
 })
 
 describe('extractTraceId: basic', () => {

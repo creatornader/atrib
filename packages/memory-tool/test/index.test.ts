@@ -60,7 +60,9 @@ describe('@atrib/memory-tool', () => {
       contextId: '4bf92f3577b34da6a3ce929d0e0e4736',
       logSubmission: 'disabled',
       now: () => Date.now(),
-      onRecord: (record) => records.push(record),
+      onRecord: (record) => {
+        records.push(record)
+      },
     })
 
     const result = await memory.create({
@@ -148,7 +150,9 @@ describe('@atrib/memory-tool', () => {
       privateKey,
       signReads: true,
       logSubmission: 'disabled',
-      onRecord: (record) => records.push(record),
+      onRecord: (record) => {
+        records.push(record)
+      },
     })
 
     await memory.view({ command: 'view', path: '/memories' })

@@ -4,7 +4,7 @@
 
 ```bash
 # Prerequisites
-node --version  # >= 20
+node --version  # Node 24, matching CI
 corepack enable  # enables pnpm
 
 # Clone and install
@@ -15,16 +15,23 @@ pnpm install
 # Build all packages
 pnpm -r build
 
-# Run all tests. One test is intentionally skipped, see DEV_LOG_SKIPS
+# Run all tests. The dev log signature case is intentionally skipped, see DEV_LOG_SKIPS
 # in packages/log-dev/test/conformance.test.ts for the rationale (the
 # in-memory dev log can't implement §2.6.1 Step 1 signature verification
 # without a circular workspace dep on @atrib/verify; the production Go
-# log service is expected to honor it). All other tests should pass.
+# log service is expected to honor it). Some external proof tests are opt-in.
 pnpm -r test
 
 # Typecheck
 pnpm -r typecheck
 ```
+
+The workspace uses Vitest 5 and Vite 8.3.4. Worker tests use Cloudflare's
+`@cloudflare/vitest-plugin` integration. Its predecessor,
+`@cloudflare/vitest-pool-workers`, supports Vitest 4 and must not be paired with
+the workspace runner. See the [Vitest migration guide](https://vitest.dev/guide/migration/)
+and [Cloudflare migration guide](https://developers.cloudflare.com/workers/testing/vitest-integration/migration-guides/migrate-to-vitest-plugin/)
+when changing test configuration.
 
 ## Optional: pre-commit hooks
 
@@ -77,8 +84,9 @@ New MCP framework adapters follow an established pattern (see `CLAUDE.md` for th
 ## Code Style
 
 - TypeScript strict mode, no `any` types
-- Observational middleware follows the spec's degradation contract ([§5.8](atrib-spec.md#58-degradation-contract)): catch attribution failures, log with `atrib:` prefix, and preserve the primary call. Explicitly enabled protected preconditions belong to host execution policy and may refuse the mediated effect.
-- Tests use vitest
+- Observational middleware defaults to pass-through under the spec's degradation contract ([§5.8](atrib-spec.md#58-degradation-contract)): catch attribution failures, log with `atrib:` prefix, and preserve the primary call.
+- Tests use Vitest 5
+- Execution preconditions and refusal behavior belong to a separately specified host policy.
 - Follow existing patterns in the codebase
 
 ## Critical Invariants

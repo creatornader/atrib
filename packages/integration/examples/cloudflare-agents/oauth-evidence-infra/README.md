@@ -110,7 +110,7 @@ pnpm --filter @atrib/cloudflare-oauth-evidence-infra typecheck
 pnpm --filter @atrib/cloudflare-oauth-evidence-infra test
 ```
 
-The Worker tests run in Cloudflare's Vitest pool. They prove the shipped `@atrib/verify` HTTP replay-cache adapter can call the Durable Object endpoint, replayed DPoP keys are rejected, the introspection helper can call the proxy endpoint, and raw opaque tokens do not appear in returned evidence.
+The Worker tests run in Vitest 5 through `@cloudflare/vitest-plugin`. They prove the shipped `@atrib/verify` HTTP replay-cache adapter can call the Durable Object endpoint, replayed DPoP keys are rejected, the introspection helper can call the proxy endpoint, and raw opaque tokens do not appear in returned evidence.
 
 ## Deploy
 

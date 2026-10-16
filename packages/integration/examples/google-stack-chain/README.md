@@ -8,11 +8,36 @@ proof chain:
 - Google ADK Python decision-ledger signing before dispatch, followed by ADK
   Python tool-callback signing and a handler-error terminal outcome proof
 
+The positive chain and runtime default use the
+[local AP2 / VI fixture](../../test/fixtures/ap2-local-chain/ap2-local-chain-metadata.json).
+Its four VI layers come from atrib's valid local corpus. Its payment and checkout
+JWTs are signed with local P-256 test keys and verified under the normal strict
+policies. It is not an upstream capture or evidence of a live payment.
+
+The preserved upstream capture in `test/fixtures/ap2-vi-reference` contains
+repeated L2 disclosure digest references. It remains unchanged as a rejection
+case. Using that capture as positive input caused the chain to fail before A2A.
+[`test/ap2-chain-gate.test.ts`](../../test/ap2-chain-gate.test.ts) now checks the
+shared default fixture on every test run, including receipt, disclosure,
+counterparty, and mandate-only failures that must stop before A2A or ADK.
+
 Run:
 
 ```bash
 pnpm --filter @atrib/integration google-stack-chain-proof
 ```
+
+Run the full chain and browser snapshot checks with Python ADK enabled:
+
+```bash
+ATRIB_RUN_GOOGLE_STACK_CHAIN_PROOF=1 pnpm --filter @atrib/integration exec vitest run \
+  test/google-stack-chain.test.ts test/ap2-chain-gate.test.ts \
+  test/google-stack-chain-visual.test.ts --no-file-parallelism
+```
+
+The full chain test allows 60 seconds for subprocess startup. It pins the signed
+record hashes and deterministic trace projections. Native ADK invocation and
+function-call IDs are checked as runtime values, including analytics propagation.
 
 Open the visual workbench:
 
@@ -44,21 +69,33 @@ evidence identifiers used for the signed record body.
 Current snapshot record hashes:
 
 - AP2 transaction:
-  `sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db`
+  `sha256:b2f4a0fcdb0e664daad0f31628139a89e49d206f3688dcd1abb278494a90552d`
 - A2A remote evidence:
-  `sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9`
+  `sha256:3e1f5632dfc4c8a465ad3d5a8ba40a2419f2da411839788ebf61c0b84550e390`
 - A2A receiver follow-up:
-  `sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2`
+  `sha256:fdf00bf2ee1d036195bfae584a4334c5de8475065eb7ae8fd1de5ff2d9cec281`
 - ADK Python allow decision:
-  `sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f`
+  `sha256:c8cdb091d546dafd353b479f95f556101754990e85b4d7e86c1abe46e7c7db39`
 - ADK Python tool callback:
-  `sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af`
+  `sha256:7ccf3809c3f81a5f68048512121d26fa545256fee20d2f8aa3c75321b2b4354f`
 - ADK Python handler-error decision:
-  `sha256:49e8f7c207bcea047601dab8a5bdce53777bc559b20c99ab1ec357fb9b425d24`
+  `sha256:504a345fe9a77f3da6f21471fa39d7b47b34a8167d01d51fe4b36913a4abc7b0`
 - ADK Python terminal error outcome:
-  `sha256:192d8c403e65a34ae37d184c4f9dacc4c1b6a84c1eb4b0270426737f5570e9c0`
+  `sha256:f5941ac69efed30c6408fd8e78669bc7c9ce5e645f4814bd0e531dcad9a03e86`
 
 The script also writes a local AP2 artifact bundle under `/tmp`.
+
+To regenerate the local receipt fixture from the existing VI corpus:
+
+```bash
+node packages/integration/scripts/generate-ap2-local-chain-fixtures.mjs
+```
+
+The [generator](../../scripts/generate-ap2-local-chain-fixtures.mjs) writes
+segmented JWTs and source metadata beside the local fixture. ES256 signatures
+are freshly generated, so regeneration requires rerunning the proof and
+refreshing the pinned hashes below and the visual snapshot. Normal proof runs
+read the committed bytes and keep their hashes stable.
 
 The ADK Python decision-ledger layer includes Google-style operational IDs as local
 sidecar facts. The trace and span IDs are deterministic local projections for
@@ -171,8 +208,10 @@ proof contexts.
 
 It is also not an Agent Platform Runtime proof, an A2A TCK result, a live AP2
 payment run, a Gemini Enterprise registration, or a Cloud Marketplace listing.
-The AP2 runtime is deployed on Cloud Run and uses official-sample replay or
-provided packet JSON; it is not a real external AP2 merchant or payment service.
+The runtime source defaults to the local positive fixture and can verify
+provided packet JSON, including official-sample captures. These checks do not
+update a deployed Cloud Run instance or prove a real external merchant or
+payment service.
 The ADK handler-error branch proves a real exception path, but timeout,
 cancellation, and process-crash completeness still need ADK-owned terminal
 emission semantics.

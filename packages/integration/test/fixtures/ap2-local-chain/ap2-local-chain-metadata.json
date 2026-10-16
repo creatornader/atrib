@@ -1,0 +1,8 @@
+{
+  "source": "atrib local fixture; not an upstream capture or live payment",
+  "vi_source": "packages/agent/test/fixtures/ap2/vi_autonomous_success_evidence.json",
+  "vi_source_sha256": "ccec29ac78eb4eac706424059978a8aa25eb27ea86ed960adcc2640f4c48a093",
+  "now_seconds": 1779840000,
+  "receipt_signing": "local P-256 test keys; ES256 signatures are freshly generated",
+  "note": "Regenerating receipt signatures changes the chain snapshot. Preserve upstream negative fixtures unchanged."
+}

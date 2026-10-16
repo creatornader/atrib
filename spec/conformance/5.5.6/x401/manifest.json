@@ -43,6 +43,18 @@
     {
       "name": "unverified issuer trust fails",
       "file": "cases/unverified-issuer-trust-fails.json"
+    },
+    {
+      "name": "optional oauth absent passes",
+      "file": "cases/optional-oauth-absent-pass.json"
+    },
+    {
+      "name": "oauth without token endpoint fails",
+      "file": "cases/oauth-without-token-endpoint-fails.json"
+    },
+    {
+      "name": "oauth null fails",
+      "file": "cases/oauth-null-fails.json"
     }
   ]
 }

@@ -1,0 +1,31 @@
+{
+  "name": "extension-block-resolves",
+  "spec_section": "D148",
+  "check": "http-carrier",
+  "description": "Ladder 2 rung 2 and Ladder 1 rung 1 per \u00a71.5.4: the dev.atrib/attribution block's context_id and token resolve on their own, with no legacy carrier.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 30,
+      "method": "tools/call",
+      "params": {
+        "name": "emit",
+        "arguments": {
+          "content": {
+            "what": "extension-block-resolves"
+          }
+        },
+        "_meta": {
+          "dev.atrib/attribution": {
+            "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "token": "zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw.BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "received_context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "received_chain_root": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  }
+}

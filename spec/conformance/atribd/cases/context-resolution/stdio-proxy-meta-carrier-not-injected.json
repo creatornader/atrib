@@ -1,0 +1,24 @@
+{
+  "name": "stdio-proxy-meta-carrier-not-injected",
+  "spec_section": "D148",
+  "check": "stdio-proxy",
+  "description": "stdio-to-HTTP proxy: a write that carries an atrib _meta carrier is forwarded unchanged; the daemon resolves the carrier's context and chain_root, or rejects it, without ambient substitution.",
+  "input": {
+    "tool": "emit",
+    "arguments": {
+      "content": {
+        "what": "carrier"
+      }
+    },
+    "meta": {
+      "atrib": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "traceparent": "00-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-bbbbbbbbbbbbbbbb-01"
+    },
+    "env": {
+      "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129"
+    }
+  },
+  "expected": {
+    "context_id": null
+  }
+}

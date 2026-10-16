@@ -21,7 +21,9 @@ try {
     contextId,
     logSubmission: 'disabled',
     signReads: true,
-    onRecord: (record) => records.push(record),
+    onRecord: (record) => {
+      records.push(record)
+    },
   })
 
   await memory.create({

@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { appendFileSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import {
+  appendFileSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+  mkdtempSync,
+  rmSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -580,6 +587,158 @@ describe('complete content index refresh', () => {
       else process.env.ATRIB_RECALL_CONTENT_INDEX = originalIndexEnabled
       vi.resetModules()
     }
+  })
+})
+
+describe('content index cache reuse', () => {
+  async function withIndexEnv(
+    fn: (recallModule: typeof import('../src/index.js'), indexFile: string) => Promise<void>,
+  ): Promise<void> {
+    const indexFile = join(tmp, 'content-index.json')
+    const originalRecordFile = process.env.ATRIB_RECORD_FILE
+    const originalIndexFile = process.env.ATRIB_RECALL_CONTENT_INDEX_FILE
+    const originalIndexEnabled = process.env.ATRIB_RECALL_CONTENT_INDEX
+    process.env.ATRIB_RECORD_FILE = recordFile
+    process.env.ATRIB_RECALL_CONTENT_INDEX_FILE = indexFile
+    delete process.env.ATRIB_RECALL_CONTENT_INDEX
+    vi.resetModules()
+    const recallModule = await import('../src/index.js')
+    try {
+      await fn(recallModule, indexFile)
+    } finally {
+      recallModule.clearRecallMirrorCache()
+      if (originalRecordFile === undefined) delete process.env.ATRIB_RECORD_FILE
+      else process.env.ATRIB_RECORD_FILE = originalRecordFile
+      if (originalIndexFile === undefined) delete process.env.ATRIB_RECALL_CONTENT_INDEX_FILE
+      else process.env.ATRIB_RECALL_CONTENT_INDEX_FILE = originalIndexFile
+      if (originalIndexEnabled === undefined) delete process.env.ATRIB_RECALL_CONTENT_INDEX
+      else process.env.ATRIB_RECALL_CONTENT_INDEX = originalIndexEnabled
+      vi.resetModules()
+    }
+  }
+
+  function indexStatus(result: Record<string, unknown>): string | undefined {
+    return (result.coverage as { index?: { status?: string } }).index?.status
+  }
+
+  it('writes a signature sidecar and loads the durable index only when it matches', async () => {
+    writeFileSync(recordFile, JSON.stringify(await makeSigned({ timestamp: 1 })))
+    await withIndexEnv(async (recallModule, indexFile) => {
+      const built = await recallModule.runRecallByContent({
+        query: '',
+        evidence_mode: 'require_complete',
+      })
+      expect(indexStatus(built)).toBe('rebuilt')
+      const stored = JSON.parse(readFileSync(indexFile, 'utf8')) as { mirror_signature: string }
+      expect(readFileSync(`${indexFile}.sig`, 'utf8')).toBe(stored.mirror_signature)
+
+      recallModule.clearRecallMirrorCache()
+      const hit = await recallModule.runRecallByContent({
+        query: '',
+        evidence_mode: 'require_complete',
+      })
+      expect(indexStatus(hit)).toBe('hit')
+
+      writeFileSync(`${indexFile}.sig`, 'stale')
+      recallModule.clearRecallMirrorCache()
+      const skipped = await recallModule.runRecallByContent({
+        query: '',
+        evidence_mode: 'require_complete',
+      })
+      expect(indexStatus(skipped)).toBe('rebuilt')
+      expect(readFileSync(`${indexFile}.sig`, 'utf8')).toBe(stored.mirror_signature)
+    })
+  })
+
+  it('does not load a durable index that has no signature sidecar', async () => {
+    writeFileSync(recordFile, JSON.stringify(await makeSigned({ timestamp: 1 })))
+    await withIndexEnv(async (recallModule, indexFile) => {
+      await recallModule.runRecallByContent({ query: '', evidence_mode: 'require_complete' })
+      rmSync(`${indexFile}.sig`)
+      recallModule.clearRecallMirrorCache()
+      const result = await recallModule.runRecallByContent({
+        query: '',
+        evidence_mode: 'require_complete',
+      })
+      expect(indexStatus(result)).toBe('rebuilt')
+    })
+  })
+
+  it('does not serve a refreshed bounded window as the complete mirror', async () => {
+    const make = (n: number) =>
+      makeSigned({ timestamp: n, content_id: `sha256:${String(n).repeat(64)}` })
+    writeFileSync(
+      recordFile,
+      [await make(1), await make(2)].map((r) => JSON.stringify(r)).join('\n'),
+    )
+    await withIndexEnv(async (recallModule) => {
+      const bounded = await recallModule.runRecallByContent({ query: '', max_records: 3 })
+      expect(bounded.searched_records).toBe(2)
+
+      appendFileSync(
+        recordFile,
+        `\n${JSON.stringify(await make(3))}\n${JSON.stringify(await make(4))}`,
+      )
+      const afterAppend = await recallModule.runRecallByContent({ query: '', max_records: 3 })
+      expect(afterAppend.searched_records).toBe(3)
+
+      const complete = await recallModule.runRecallByContent({
+        query: '',
+        evidence_mode: 'require_complete',
+      })
+      expect(complete.total_records).toBe(4)
+    })
+  })
+
+  it('rebuilds instead of appending when a mirror file is replaced by a larger one', async () => {
+    const first = await makeSigned({ timestamp: 1, content_id: `sha256:${'1'.repeat(64)}` })
+    const replacements = [
+      await makeSigned({ timestamp: 2, content_id: `sha256:${'2'.repeat(64)}` }),
+      await makeSigned({ timestamp: 3, content_id: `sha256:${'3'.repeat(64)}` }),
+    ]
+    writeFileSync(recordFile, JSON.stringify(first))
+    await withIndexEnv(async (recallModule) => {
+      await recallModule.runRecallByContent({ query: '', evidence_mode: 'require_complete' })
+      const replacementFile = `${recordFile}.next`
+      writeFileSync(replacementFile, replacements.map((r) => JSON.stringify(r)).join('\n'))
+      renameSync(replacementFile, recordFile)
+
+      const result = await recallModule.runRecallByContent({
+        query: '',
+        evidence_mode: 'require_complete',
+      })
+      expect(result.total_records).toBe(2)
+      const hashes = (result.results as Array<{ record_hash: string }>).map((r) => r.record_hash)
+      expect(hashes).not.toContain(`sha256:${hexEncode(sha256(canonicalRecord(first)))}`)
+    })
+  })
+
+  it('keeps a small bounded search to its own limit after a larger window was cached', async () => {
+    const records = [
+      await makeSigned({ timestamp: 1, content_id: `sha256:${'1'.repeat(64)}` }),
+      await makeSigned({ timestamp: 2, content_id: `sha256:${'2'.repeat(64)}` }),
+      await makeSigned({ timestamp: 3, content_id: `sha256:${'3'.repeat(64)}` }),
+    ]
+    writeFileSync(recordFile, records.map((r) => JSON.stringify(r)).join('\n'))
+    await withIndexEnv(async (recallModule) => {
+      const wide = await recallModule.runRecallByContent({ query: '', max_records: 50 })
+      expect(wide.searched_records).toBe(3)
+
+      const narrow = await recallModule.runRecallByContent({ query: '', max_records: 1 })
+      expect(narrow.searched_records).toBe(1)
+      const hashes = (narrow.results as Array<{ record_hash: string }>).map((r) => r.record_hash)
+      const newest = `sha256:${hexEncode(sha256(canonicalRecord(records[2]!)))}`
+      expect(hashes).toEqual([newest])
+
+      const fourth = await makeSigned({ timestamp: 4, content_id: `sha256:${'4'.repeat(64)}` })
+      appendFileSync(recordFile, `\n${JSON.stringify(fourth)}`)
+      const afterAppend = await recallModule.runRecallByContent({ query: '', max_records: 50 })
+      expect(afterAppend.searched_records).toBe(4)
+      const narrowAfter = await recallModule.runRecallByContent({ query: '', max_records: 1 })
+      expect(
+        (narrowAfter.results as Array<{ record_hash: string }>).map((r) => r.record_hash),
+      ).toEqual([`sha256:${hexEncode(sha256(canonicalRecord(fourth)))}`])
+    })
   })
 })
 

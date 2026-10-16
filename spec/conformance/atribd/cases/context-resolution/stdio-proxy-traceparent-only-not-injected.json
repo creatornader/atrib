@@ -1,0 +1,23 @@
+{
+  "name": "stdio-proxy-traceparent-only-not-injected",
+  "spec_section": "D148",
+  "check": "stdio-proxy",
+  "description": "stdio-to-HTTP proxy: a traceparent alone counts as a context carrier, so the environment session is not forwarded.",
+  "input": {
+    "tool": "attest",
+    "arguments": {
+      "content": {
+        "what": "traceparent only"
+      }
+    },
+    "env": {
+      "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129"
+    },
+    "meta": {
+      "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+    }
+  },
+  "expected": {
+    "context_id": null
+  }
+}

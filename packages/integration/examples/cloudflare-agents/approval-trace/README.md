@@ -122,7 +122,7 @@ pnpm --filter @atrib/cloudflare-approval-trace test:browser
 pnpm --filter @atrib/cloudflare-approval-trace proof:worker
 ```
 
-The local test command uses Cloudflare's Workers Vitest pool with
+The local test command uses Vitest 5 and `@cloudflare/vitest-plugin` with
 `wrangler.test.jsonc`, deterministic fixture keys, isolated Durable Object
 storage, and no public log writes. It drives the Worker API, checks signed
 records, inspects Durable Object state directly, and verifies the observability

@@ -411,7 +411,7 @@ const result = await verifyRecord(record, {
 
 Checks performed when evidence is present:
 
-- x401 envelope, version, `credential_requirements.digital.requests[]`, and OAuth token endpoint.
+- x401 envelope, version, `credential_requirements.digital.requests[]`, and the OAuth token endpoint when the optional `oauth` member is present.
 - Request id and result-artifact binding when both are present.
 - Visible OpenID4VP nonce from the credential request.
 - Result artifact or x401 token object shape.

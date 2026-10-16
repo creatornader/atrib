@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -1135,6 +1135,23 @@ describe('atribd request cancellation', () => {
     })
     await backend.close()
   })
+
+  it('routes a keyed write with a malformed context_id to the primitive schema', async () => {
+    for (const name of ['ATRIB_CONTEXT_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID']) {
+      vi.stubEnv(name, '')
+    }
+    const { backend, calls } = await fakeToolBackend()
+    const result = await backend.callTool({
+      name: 'emit',
+      arguments: { context_id: 'NOT-HEX', content: { what: 'malformed keyed write' } },
+      _meta: { 'dev.atrib/idempotencyKey': 'malformed-context-write-0001' },
+    })
+    expect(result.content).toEqual([{ type: 'text', text: JSON.stringify({ ok: true }) }])
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.args['context_id']).toBe('NOT-HEX')
+    await backend.close()
+    vi.unstubAllEnvs()
+  })
 })
 
 describe('atribd health surface', () => {
@@ -1566,6 +1583,108 @@ describe('atribd real primitive mounts', () => {
       await host.close()
     }
   })
+
+  it(
+    'forwards the proxy child session context on writes to a strict daemon',
+    { timeout: 30_000 },
+    async () => {
+      const host = await startHttpHostProcess({
+        HOME: tmp,
+        ATRIB_AGENT: 'test-agent',
+        ATRIBD_AMBIENT_CONTEXT: '',
+        ATRIB_PRIVATE_KEY: TEST_PRIVATE_KEY,
+        ATRIB_RECORD_FILE: recordFile,
+        ATRIB_MIRROR_FILE: recordFile,
+      })
+      // The proxy child's parent here is this test process. Its D083
+      // per-parent-PID file and the profile file both name other sessions;
+      // the proxy must forward only the session named in its own environment.
+      mkdirSync(join(tmp, '.claude', 'state'), { recursive: true })
+      writeFileSync(
+        join(tmp, '.claude', 'state', `active-session-id-${process.pid}`),
+        'd'.repeat(32),
+      )
+      writeFileSync(join(tmp, '.claude', 'state', 'active-session-id-test-agent'), 'c'.repeat(32))
+      try {
+        const strict = await postJson(
+          host.endpoint,
+          toolsCallBody(
+            1,
+            'emit',
+            { event_type: 'observation', content: { what: 'direct' } },
+            modernMeta(),
+          ),
+          { ...MODERN_HEADERS, 'mcp-method': 'tools/call', 'mcp-name': 'emit' },
+        )
+        const strictPayload = (await strict.json()) as { result?: { isError?: boolean } }
+        expect(strictPayload.result?.isError, JSON.stringify(strictPayload)).toBe(true)
+
+        const transport = new ModernStdioClientTransport({
+          command: 'node',
+          args: [BINARY, '--transport', 'stdio-http-proxy', '--endpoint', host.endpoint],
+          env: processEnvWith({
+            HOME: tmp,
+            ATRIB_AGENT: 'test-agent',
+            ATRIB_CONTEXT_ID: '',
+            CLAUDE_CODE_SESSION_ID: '93F57455-11C0-4A1F-AB9C-A59BCFC54129',
+            CODEX_THREAD_ID: '',
+          }),
+          stderr: 'pipe',
+        })
+        const client = new ModernClient(
+          { name: 'atribd-v2-proxy-context-test', version: '0.0.0' },
+          { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+        )
+        try {
+          await client.connect(transport)
+          const result = (await client.callTool({
+            name: 'emit',
+            arguments: { event_type: 'observation', content: { what: 'proxy session write' } },
+          })) as { isError?: boolean; content: { text: string }[] }
+          expect(result.isError, result.content[0]?.text).not.toBe(true)
+          const records = readFileSync(recordFile, 'utf8').split('\n').filter(Boolean)
+          expect(records).toHaveLength(1)
+          const mirrored = JSON.parse(records[0]!) as { record?: { context_id?: string } }
+          expect(mirrored.record?.context_id).toBe('93f5745511c04a1fab9ca59bcfc54129')
+        } finally {
+          await client.close().catch(() => {})
+        }
+
+        // Without a session in its environment the proxy forwards nothing,
+        // even though the active-session files exist, and the strict daemon
+        // refuses the write.
+        const bareTransport = new ModernStdioClientTransport({
+          command: 'node',
+          args: [BINARY, '--transport', 'stdio-http-proxy', '--endpoint', host.endpoint],
+          env: processEnvWith({
+            HOME: tmp,
+            ATRIB_AGENT: 'test-agent',
+            ATRIB_CONTEXT_ID: '',
+            CLAUDE_CODE_SESSION_ID: '',
+            CODEX_THREAD_ID: '',
+          }),
+          stderr: 'pipe',
+        })
+        const bareClient = new ModernClient(
+          { name: 'atribd-v2-proxy-no-session-test', version: '0.0.0' },
+          { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+        )
+        try {
+          await bareClient.connect(bareTransport)
+          const refused = (await bareClient.callTool({
+            name: 'emit',
+            arguments: { event_type: 'observation', content: { what: 'proxy without session' } },
+          })) as { isError?: boolean; content: { text: string }[] }
+          expect(refused.isError, refused.content[0]?.text).toBe(true)
+          expect(readFileSync(recordFile, 'utf8').split('\n').filter(Boolean)).toHaveLength(1)
+        } finally {
+          await bareClient.close().catch(() => {})
+        }
+      } finally {
+        await host.close()
+      }
+    },
+  )
 })
 
 describe('atribd process replacement', () => {

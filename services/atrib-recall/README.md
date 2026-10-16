@@ -197,7 +197,7 @@ The Park et al. ranking weights and recency time constant are environment-tunabl
 | `ATRIB_RECALL_NOISE_FLOOR`         | 0.6              | Anti-noise threshold for `rank_by=relevance` (see below)          |
 | `ATRIB_RECALL_CONTENT_MAX_RECORDS` | 5000             | Newest-first corpus size for bounded `recall_by_content` searches |
 | `ATRIB_RECALL_CONTENT_INDEX`       | enabled          | Set to `0` to disable the durable content-token sidecar           |
-| `ATRIB_RECALL_CONTENT_INDEX_DIR`   | `~/.atrib/cache` | Directory for mirror-keyed content index files                    |
+| `ATRIB_RECALL_CONTENT_INDEX_DIR`   | `~/.atrib/cache` | Directory for content index files and their `.sig` sidecars       |
 | `ATRIB_RECALL_CONTENT_INDEX_FILE`  | unset            | Exact content index file path, mainly for tests                   |
 
 The implementation does not enforce that alpha + beta + gamma sum to 1.0; the operator-facing defaults do. See [D085](../../DECISIONS.md#d085-recall-calibration-defaults-survey-grounded-rationale) for the survey-grounded rationale: `ALPHA=0.3` matches CrewAI's `recency_weight=0.3` (the only normalized-weights peer in a 2026-05-23 OSS survey); `TAU_DAYS=7` produces a ~4.85-day half-life inside the field range and close to Park et al.'s ~5.75-day empirical anchor.

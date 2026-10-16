@@ -1,0 +1,21 @@
+{
+  "name": "stdio-proxy-empty-context-not-replaced",
+  "spec_section": "D148",
+  "check": "stdio-proxy",
+  "description": "stdio-to-HTTP proxy: an empty-string context_id argument is present, so the proxy forwards it unchanged and the daemon decides.",
+  "input": {
+    "tool": "attest",
+    "arguments": {
+      "context_id": "",
+      "content": {
+        "what": "empty context"
+      }
+    },
+    "env": {
+      "CLAUDE_CODE_SESSION_ID": "93F57455-11C0-4A1F-AB9C-A59BCFC54129"
+    }
+  },
+  "expected": {
+    "context_id": ""
+  }
+}

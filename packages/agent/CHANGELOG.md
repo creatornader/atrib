@@ -1,5 +1,17 @@
 # @atrib/agent
 
+## 0.5.1
+
+### Patch Changes
+
+- a0a7d5d: Preserve MCP attribution on clients returned by native LangChain header forks. Keep synchronous and asynchronous fork return shapes, align strict client option types, and report proxy fork factories that cannot be patched in place.
+- Updated dependencies [27f9b95]
+- Updated dependencies [ea023f3]
+- Updated dependencies [5d51ea6]
+- Updated dependencies [bd922cc]
+  - @atrib/mcp@0.25.2
+  - @atrib/verify@0.14.1
+
 ## 0.5.0
 
 ### Minor Changes

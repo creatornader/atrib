@@ -1,0 +1,31 @@
+{
+  "name": "attest-chain-root-injected",
+  "spec_section": "D148",
+  "check": "http-carrier",
+  "description": "The attest verb accepts a caller-managed chain_root like emit, so the inbound token's record hash is injected as chain_root for attest too.",
+  "input": {
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 33,
+      "method": "tools/call",
+      "params": {
+        "name": "attest",
+        "arguments": {
+          "content": {
+            "what": "attest-chain-root-injected"
+          }
+        },
+        "_meta": {
+          "dev.atrib/attribution": {
+            "context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "token": "zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw.BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "received_context_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "received_chain_root": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  }
+}

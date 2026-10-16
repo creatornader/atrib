@@ -1,0 +1,21 @@
+{
+  "name": "stdio-proxy-parent-pid-file-skipped",
+  "spec_section": "D148",
+  "check": "stdio-proxy",
+  "description": "stdio-to-HTTP proxy: with no session in the child's environment, the D083 per-parent-PID active-session file is not consulted. A harness that runs many sessions under one parent process shares that file, so forwarding it would sign one session's write under another's context.",
+  "input": {
+    "tool": "attest",
+    "arguments": {
+      "content": {
+        "what": "parent file only"
+      }
+    },
+    "env": {
+      "ATRIB_AGENT": "atribd-corpus-profile"
+    },
+    "parent_pid_file_context_id": "dddddddddddddddddddddddddddddddd"
+  },
+  "expected": {
+    "context_id": null
+  }
+}

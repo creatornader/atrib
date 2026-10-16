@@ -22,7 +22,7 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
       "protocol": "AP2",
       "actor": "ap2-local-participant",
       "event_type": "atrib.ap2.transaction_verified",
-      "record_hash": "sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db",
+      "record_hash": "sha256:b2f4a0fcdb0e664daad0f31628139a89e49d206f3688dcd1abb278494a90552d",
       "parents": [],
       "verifier": "@atrib/verify",
       "checks": [
@@ -40,9 +40,9 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
       "protocol": "A2A",
       "actor": "a2a-specialist-agent",
       "event_type": "atrib.a2a.remote_evidence_accepted",
-      "record_hash": "sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9",
+      "record_hash": "sha256:3e1f5632dfc4c8a465ad3d5a8ba40a2419f2da411839788ebf61c0b84550e390",
       "parents": [
-        "sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db"
+        "sha256:b2f4a0fcdb0e664daad0f31628139a89e49d206f3688dcd1abb278494a90552d"
       ],
       "verifier": "@atrib/verify",
       "checks": [
@@ -59,9 +59,9 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
       "protocol": "A2A",
       "actor": "a2a-receiving-agent",
       "event_type": "atrib.a2a.receiver_followup_signed",
-      "record_hash": "sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2",
+      "record_hash": "sha256:fdf00bf2ee1d036195bfae584a4334c5de8475065eb7ae8fd1de5ff2d9cec281",
       "parents": [
-        "sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9"
+        "sha256:3e1f5632dfc4c8a465ad3d5a8ba40a2419f2da411839788ebf61c0b84550e390"
       ],
       "verifier": "@atrib/verify",
       "checks": [
@@ -78,9 +78,9 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
       "protocol": "ADK Python",
       "actor": "google_adk_python_decision_allow_agent",
       "event_type": "atrib.adk_python.decision_allowed",
-      "record_hash": "sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f",
+      "record_hash": "sha256:c8cdb091d546dafd353b479f95f556101754990e85b4d7e86c1abe46e7c7db39",
       "parents": [
-        "sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2"
+        "sha256:fdf00bf2ee1d036195bfae584a4334c5de8475065eb7ae8fd1de5ff2d9cec281"
       ],
       "verifier": "@atrib/verify",
       "checks": [
@@ -97,9 +97,9 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
       "protocol": "ADK Python",
       "actor": "google_adk_python_decision_allow_agent",
       "event_type": "atrib.adk_python.tool_callback_signed",
-      "record_hash": "sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af",
+      "record_hash": "sha256:7ccf3809c3f81a5f68048512121d26fa545256fee20d2f8aa3c75321b2b4354f",
       "parents": [
-        "sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f"
+        "sha256:c8cdb091d546dafd353b479f95f556101754990e85b4d7e86c1abe46e7c7db39"
       ],
       "verifier": "@atrib/verify",
       "checks": [
@@ -116,9 +116,9 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
       "protocol": "ADK Python",
       "actor": "google_adk_python_decision_handler_error_agent",
       "event_type": "atrib.adk_python.handler_error_decision_allowed",
-      "record_hash": "sha256:49e8f7c207bcea047601dab8a5bdce53777bc559b20c99ab1ec357fb9b425d24",
+      "record_hash": "sha256:504a345fe9a77f3da6f21471fa39d7b47b34a8167d01d51fe4b36913a4abc7b0",
       "parents": [
-        "sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2"
+        "sha256:fdf00bf2ee1d036195bfae584a4334c5de8475065eb7ae8fd1de5ff2d9cec281"
       ],
       "verifier": "@atrib/verify",
       "checks": [
@@ -135,9 +135,9 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
       "protocol": "ADK Python",
       "actor": "google_adk_python_decision_handler_error_agent",
       "event_type": "atrib.adk_python.handler_error_terminal_outcome_signed",
-      "record_hash": "sha256:192d8c403e65a34ae37d184c4f9dacc4c1b6a84c1eb4b0270426737f5570e9c0",
+      "record_hash": "sha256:f5941ac69efed30c6408fd8e78669bc7c9ce5e645f4814bd0e531dcad9a03e86",
       "parents": [
-        "sha256:49e8f7c207bcea047601dab8a5bdce53777bc559b20c99ab1ec357fb9b425d24"
+        "sha256:504a345fe9a77f3da6f21471fa39d7b47b34a8167d01d51fe4b36913a4abc7b0"
       ],
       "verifier": "@atrib/verify",
       "checks": [
@@ -205,7 +205,7 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
         "status": "OK",
         "error_message": null,
         "is_truncated": false,
-        "atrib_record_hash": "sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db",
+        "atrib_record_hash": "sha256:b2f4a0fcdb0e664daad0f31628139a89e49d206f3688dcd1abb278494a90552d",
         "atrib_parent_record_hashes": [],
         "protocol": "AP2"
       },
@@ -223,9 +223,9 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
         "status": "OK",
         "error_message": null,
         "is_truncated": false,
-        "atrib_record_hash": "sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9",
+        "atrib_record_hash": "sha256:3e1f5632dfc4c8a465ad3d5a8ba40a2419f2da411839788ebf61c0b84550e390",
         "atrib_parent_record_hashes": [
-          "sha256:e5f103d959cbb1e316e6d658b35fabc547b6b9b3bd530d0165cfbe48155cc6db"
+          "sha256:b2f4a0fcdb0e664daad0f31628139a89e49d206f3688dcd1abb278494a90552d"
         ],
         "protocol": "A2A"
       },
@@ -243,9 +243,9 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
         "status": "OK",
         "error_message": null,
         "is_truncated": false,
-        "atrib_record_hash": "sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2",
+        "atrib_record_hash": "sha256:fdf00bf2ee1d036195bfae584a4334c5de8475065eb7ae8fd1de5ff2d9cec281",
         "atrib_parent_record_hashes": [
-          "sha256:23e25fd31fc81cf8f6d668cf68454d05c6018451f3a7467fc15f2649277e42f9"
+          "sha256:3e1f5632dfc4c8a465ad3d5a8ba40a2419f2da411839788ebf61c0b84550e390"
         ],
         "protocol": "A2A"
       },
@@ -258,14 +258,14 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
         "invocation_id": "e-b7ca2de9-6454-413a-93f7-14d9e12d6dc6",
         "user_id": null,
         "trace_id": "4f22c9bdbeaaf460f4aca6fd8fa817ef",
-        "span_id": "e434f38575bf4688",
+        "span_id": "9ace3918d4808261",
         "parent_span_id": "1d6154dbc8bded9a",
         "status": "OK",
         "error_message": null,
         "is_truncated": false,
-        "atrib_record_hash": "sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f",
+        "atrib_record_hash": "sha256:c8cdb091d546dafd353b479f95f556101754990e85b4d7e86c1abe46e7c7db39",
         "atrib_parent_record_hashes": [
-          "sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2"
+          "sha256:fdf00bf2ee1d036195bfae584a4334c5de8475065eb7ae8fd1de5ff2d9cec281"
         ],
         "protocol": "ADK Python"
       },
@@ -278,14 +278,14 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
         "invocation_id": "e-b7ca2de9-6454-413a-93f7-14d9e12d6dc6",
         "user_id": null,
         "trace_id": "4f22c9bdbeaaf460f4aca6fd8fa817ef",
-        "span_id": "2a7b24b6f52f9a1f",
-        "parent_span_id": "e434f38575bf4688",
+        "span_id": "c0e8175ca7d0d648",
+        "parent_span_id": "9ace3918d4808261",
         "status": "OK",
         "error_message": null,
         "is_truncated": false,
-        "atrib_record_hash": "sha256:b68851adcf913713f2eba14e2dce27abd3212ebee7f52c87ad44ca77aed1f3af",
+        "atrib_record_hash": "sha256:7ccf3809c3f81a5f68048512121d26fa545256fee20d2f8aa3c75321b2b4354f",
         "atrib_parent_record_hashes": [
-          "sha256:f52b375c72747cb07a26fd9ed0038b12803a2beee2b8104bc2a34a43b65aa34f"
+          "sha256:c8cdb091d546dafd353b479f95f556101754990e85b4d7e86c1abe46e7c7db39"
         ],
         "protocol": "ADK Python"
       },
@@ -298,14 +298,14 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
         "invocation_id": "e-8cc41729-ac2e-4efb-b69a-6a4730752319",
         "user_id": null,
         "trace_id": "849166752a8d0fcda4ae6b3e4640c1c6",
-        "span_id": "788caf2ee5867281",
+        "span_id": "9455e389826690d0",
         "parent_span_id": "1d6154dbc8bded9a",
         "status": "OK",
         "error_message": null,
         "is_truncated": false,
-        "atrib_record_hash": "sha256:49e8f7c207bcea047601dab8a5bdce53777bc559b20c99ab1ec357fb9b425d24",
+        "atrib_record_hash": "sha256:504a345fe9a77f3da6f21471fa39d7b47b34a8167d01d51fe4b36913a4abc7b0",
         "atrib_parent_record_hashes": [
-          "sha256:1225fb6849cab06d9bec936abdf28f5ff1a4e2872ea8f5a87c1b469c54c18fb2"
+          "sha256:fdf00bf2ee1d036195bfae584a4334c5de8475065eb7ae8fd1de5ff2d9cec281"
         ],
         "protocol": "ADK Python"
       },
@@ -318,14 +318,14 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
         "invocation_id": "e-8cc41729-ac2e-4efb-b69a-6a4730752319",
         "user_id": null,
         "trace_id": "849166752a8d0fcda4ae6b3e4640c1c6",
-        "span_id": "b2c05cce8c854872",
-        "parent_span_id": "788caf2ee5867281",
+        "span_id": "f5d7c40e1223aca8",
+        "parent_span_id": "9455e389826690d0",
         "status": "ERROR",
         "error_message": "quote_price handler failed after ADK allowed the call",
         "is_truncated": false,
-        "atrib_record_hash": "sha256:192d8c403e65a34ae37d184c4f9dacc4c1b6a84c1eb4b0270426737f5570e9c0",
+        "atrib_record_hash": "sha256:f5941ac69efed30c6408fd8e78669bc7c9ce5e645f4814bd0e531dcad9a03e86",
         "atrib_parent_record_hashes": [
-          "sha256:49e8f7c207bcea047601dab8a5bdce53777bc559b20c99ab1ec357fb9b425d24"
+          "sha256:504a345fe9a77f3da6f21471fa39d7b47b34a8167d01d51fe4b36913a4abc7b0"
         ],
         "protocol": "ADK Python"
       }
@@ -340,7 +340,7 @@ window.GOOGLE_STACK_PROOF_SNAPSHOT = {
   ],
   "caveats": [
     "Boundary: atrib is the trust-transfer layer here. AP2 evidence is accepted first, A2A receives that signed parent, and ADK signs an allow decision before the tool callback cites that decision.",
-    "AP2 source: committed AP2 / VI fixtures or merchant-supplied packet JSON. This proof does not use live payment credentials or move funds.",
+    "AP2 source: an atrib local positive fixture with signed test receipt JWTs, not the preserved upstream capture or a live payment. Merchant-supplied packets are verified separately.",
     "A2A source: in-process JSON-RPC with signed receiving-agent follow-up. It proves verifier-gated handoff, not an A2A TCK result or public server deployment.",
     "ADK source: google-adk Python InMemoryRunner proof. The claim is decision, callback, and handler-error terminal-outcome signing, not managed Agent Platform Runtime, Gemini Enterprise, BigQuery Storage Write API export, or Memory Bank coverage.",
     "ADK handler-error coverage proves a real FunctionTool exception path. Timeout, cancellation, and process-crash completeness still need ADK-owned terminal emission semantics."
