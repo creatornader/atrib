@@ -3,7 +3,7 @@
 ## Development setup
 
 ```bash
-# Prerequisites
+# Prerequisites (Node 22 minimum; use Node 24 for CI parity)
 node --version  # Node 24, matching CI
 corepack enable  # enables pnpm
 

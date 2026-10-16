@@ -59,7 +59,7 @@
   "dependencies": {
     "@atrib/verify": "workspace:*",
     "@noble/hashes": "^2.4.0",
-    "canonicalize": "^4.0.0"
+    "canonicalize": "^5.1.0"
   },
   "devDependencies": {
     "@atrib/mcp": "workspace:*",
@@ -67,5 +67,8 @@
     "@types/node": "^26.6.5",
     "typescript": "^6.0.3",
     "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

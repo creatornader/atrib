@@ -183,6 +183,10 @@ The signatures, chain hashes, and transaction detection are production code. Onl
 
 ## Quick start
 
+Node.js consumers need Node 22 or newer. See the
+[canonicalization compatibility notes](packages/mcp/README.md#canonicalization-compatibility)
+when upgrading from canonicalize 4.
+
 Now that you've seen the demo, pick the install path that matches what you're doing:
 
 - Sign tool calls your MCP server handles: [`@atrib/mcp`](packages/mcp/README.md) ([below](#sign-tool-calls-your-mcp-server))
@@ -309,14 +313,14 @@ evidence envelope. The public packages provide runtime observation and
 verification of supplied evidence, not a payment client or protocol-wide
 market measurement system.
 
-| Protocol     | Sponsor             | Detection signal                             | Profile ref                                                         |
-| ------------ | ------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
-| **ACP**      | Stripe / OpenAI     | `status === "completed"` + embedded `order`  | [§2.1](docs/payments-profile.md#21-acp-agentic-commerce-protocol)   |
-| **UCP**      | Google / Shopify    | Same as ACP + `ucp.version` envelope         | [§2.2](docs/payments-profile.md#22-ucp-universal-commerce-protocol) |
-| **x402**     | x402 Foundation     | `PAYMENT-RESPONSE` HTTP header               | [§2.3](docs/payments-profile.md#23-x402)                            |
+| Protocol     | Sponsor             | Detection signal                                                               | Profile ref                                                         |
+| ------------ | ------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| **ACP**      | Stripe / OpenAI     | `status === "completed"` + embedded `order`                                    | [§2.1](docs/payments-profile.md#21-acp-agentic-commerce-protocol)   |
+| **UCP**      | Google / Shopify    | Same as ACP + `ucp.version` envelope                                           | [§2.2](docs/payments-profile.md#22-ucp-universal-commerce-protocol) |
+| **x402**     | x402 Foundation     | `PAYMENT-RESPONSE` HTTP header                                                 | [§2.3](docs/payments-profile.md#23-x402)                            |
 | **MPP**      | Tempo Labs / Stripe | `Payment-Receipt` HTTP header or MCP `result._meta["org.paymentauth/receipt"]` | [§2.4](docs/payments-profile.md#24-mpp-machine-payments-protocol)   |
-| **AP2**      | Google              | Successful CheckoutReceipt or PaymentReceipt | [§2.5](docs/payments-profile.md#25-ap2-and-a2a-x402)                |
-| **a2a-x402** | Google              | A2A task `payment-completed` plus a successful receipt | [§2.5](docs/payments-profile.md#25-ap2-and-a2a-x402)                |
+| **AP2**      | Google              | Successful CheckoutReceipt or PaymentReceipt                                   | [§2.5](docs/payments-profile.md#25-ap2-and-a2a-x402)                |
+| **a2a-x402** | Google              | A2A task `payment-completed` plus a successful receipt                         | [§2.5](docs/payments-profile.md#25-ap2-and-a2a-x402)                |
 
 x401 is intentionally not in this table. It is a `401` proof-requirement
 protocol for credential-gated HTTP routes, so
