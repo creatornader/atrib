@@ -9,7 +9,10 @@
       "context_id": "c0ffee00c0ffee00c0ffee00c0ffee00",
       "content": {
         "what": "atribd record-byte-parity conformance vector",
-        "topics": ["P046", "record-byte-parity"]
+        "topics": [
+          "P046",
+          "record-byte-parity"
+        ]
       }
     },
     "private_key_seed_base64url": "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio",

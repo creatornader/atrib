@@ -9,7 +9,10 @@
         "trace": {
           "status": "fail",
           "primitive": "trace",
-          "tool_names": ["trace", "trace_forward"],
+          "tool_names": [
+            "trace",
+            "trace_forward"
+          ],
           "probe_kind": "read-only",
           "mutates_log_on_call": false,
           "reason": "trace returned unexpected direction"
@@ -17,7 +20,9 @@
         "emit": {
           "status": "skipped",
           "primitive": "emit",
-          "tool_names": ["emit"],
+          "tool_names": [
+            "emit"
+          ],
           "probe_kind": "not-available",
           "mutates_log_on_call": true,
           "reason": "write primitive has no validate-only contract; health checks must not sign records"

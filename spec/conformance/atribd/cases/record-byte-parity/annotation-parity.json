@@ -8,7 +8,9 @@
       "annotates": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "importance": "high",
       "summary": "atribd record-byte-parity annotation vector",
-      "topics": ["P046"],
+      "topics": [
+        "P046"
+      ],
       "context_id": "c0ffee00c0ffee00c0ffee00c0ffee00"
     },
     "private_key_seed_base64url": "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio",
