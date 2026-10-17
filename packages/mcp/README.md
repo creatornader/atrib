@@ -12,6 +12,24 @@ pnpm add @atrib/mcp
 
 Verify a local build with `pnpm --filter @atrib/mcp test`.
 
+## Canonicalization compatibility
+
+Node.js consumers need Node 22 or newer. Development and CI use Node 24.
+
+Signing and commitments use RFC 8785 through `canonicalize` 5.1. JSON values keep
+the same bytes as canonicalize 4, including number formatting and UTF-16 key
+ordering. The [byte snapshot tests](test/canonical-snapshot.test.ts) and
+[signing corpus](../../spec/conformance/1.4/) pin this contract.
+
+Pass JSON data for tool arguments, results, and content. JavaScript-only values
+can change commitments when upgrading: functions and `toJSON()` results of
+`undefined` are omitted in objects and become `null` in arrays. Boxed primitives
+serialize as their primitive values, and sparse array holes become `null`.
+Historical commitments over these JavaScript-only inputs need their original
+canonicalizer for verification. NaN, infinities, lone surrogates, BigInt,
+and cycles are rejected. These input changes come from
+[canonicalize 5](https://github.com/erdtman/canonicalize/compare/v4.0.0...v5.1.0).
+
 ## Source-bound statement bodies
 
 `evidenceBodySchemas` validates the six closed bodies in

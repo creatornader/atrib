@@ -153,8 +153,8 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
     devDependencies:
       '@types/node':
         specifier: ^26.6.5
@@ -181,8 +181,8 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
     devDependencies:
       '@types/node':
         specifier: ^26.6.5
@@ -222,8 +222,8 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
     devDependencies:
       '@types/node':
         specifier: ^26.6.5
@@ -277,8 +277,8 @@ importers:
         specifier: workspace:*
         version: link:../verify
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
     devDependencies:
       '@ai-sdk/openai-compatible':
         specifier: 3.0.68
@@ -585,8 +585,8 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
       zod:
         specifier: ^4.6.6
         version: 4.6.7
@@ -644,8 +644,8 @@ importers:
         specifier: workspace:*
         version: link:../mcp
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
     devDependencies:
       '@anthropic-ai/sdk':
         specifier: ^0.133.0
@@ -672,8 +672,8 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
     devDependencies:
       '@opentelemetry/api':
         specifier: ^1.9.0
@@ -703,8 +703,8 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
     devDependencies:
       '@atrib/mcp':
         specifier: workspace:*
@@ -777,8 +777,8 @@ importers:
         specifier: 0.22.0
         version: 0.22.0
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
       jose:
         specifier: 6.2.12
         version: 6.2.12
@@ -870,8 +870,8 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
       zod:
         specifier: ^4.6.6
         version: 4.6.7
@@ -979,8 +979,8 @@ importers:
         specifier: ^26.6.5
         version: 26.6.5
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1079,8 +1079,8 @@ importers:
         specifier: ^26.6.5
         version: 26.6.5
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
@@ -1152,8 +1152,8 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
     devDependencies:
       '@types/node':
         specifier: ^26.6.5
@@ -1212,8 +1212,8 @@ importers:
         specifier: ^26.6.5
         version: 26.6.5
       canonicalize:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
       fast-check:
         specifier: ^4.10.2
         version: 4.10.2
@@ -4151,9 +4151,9 @@ packages:
   caniuse-lite@1.0.30001816:
     resolution: {integrity: sha512-+8Yx7BXCoqk6IF8yTicjfUR6D/ldJzdlsodlEOiOSPmhK844WIgk67/zIQaGAOxNkZyyvBlrRFnLvqKIoqbAFw==}
 
-  canonicalize@4.0.0:
-    resolution: {integrity: sha512-FEdXzwWs+N3rZqEqpqleiY9M1A6IAf9oo1zHFABnLW9FcJ/jzsu+G/Ks3Hq3FglmPKe80GeGBw8ZXLEnwPB0vQ==}
-    engines: {node: '>=18'}
+  canonicalize@5.1.0:
+    resolution: {integrity: sha512-bab9+WefZljqQ8jT0qRwVmTyzAUU63K97QIQD3agynIBrb6sa5M2eAy8Hv8K3p4V9+ONVYZKtGYl4Dg+/5Gumw==}
+    engines: {node: '>=22'}
     hasBin: true
 
   canvas@3.2.3:
@@ -10848,7 +10848,7 @@ snapshots:
 
   caniuse-lite@1.0.30001816: {}
 
-  canonicalize@4.0.0: {}
+  canonicalize@5.1.0: {}
 
   canvas@3.2.3:
     dependencies:

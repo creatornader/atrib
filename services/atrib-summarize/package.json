@@ -49,5 +49,8 @@
     "type": "git",
     "url": "git+https://github.com/creatornader/atrib.git",
     "directory": "services/atrib-summarize"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
