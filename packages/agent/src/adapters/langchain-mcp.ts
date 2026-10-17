@@ -1,60 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Adapter: attribute MCP tool calls flowing through a LangChain JS MCP client.
+ * Attribute calls from LangChain MCPAdapter 2.x and MultiServerMCPClient 1.x.
+ * Discover servers from the configuration snapshot, then wrap each internal
+ * client's callTool method and mutable forks. LangChain 2.0.1 exposes a mutable
+ * fork method, but cached tools capture it before attribution setup. Use loader
+ * mode for those per-call header callbacks. The 1.1.3 proxy synthesizes fork on
+ * reads, so it needs loader mode for per-call headers; an unreplaceable fork produces a warning.
  *
- * LangChain exposes MCP integration via the `@langchain/mcp-adapters` package
- * (verified against `@langchain/mcp-adapters@1.1.3`). Two APIs are supported:
- *
- *   1. **High-level: `new MultiServerMCPClient({ mcpServers: {...} }).getTools()`**
- *     . config-driven, the client owns its internal
- *      `@modelcontextprotocol/sdk` Client instances behind `#private` fields.
- *      Users never see the Client reference directly; there is no public
- *      setter to inject a `wrapMcpClient`-style Proxy replacement. The
- *      `getClient(serverName)` getter returns the internal Client, so we
- *      can reach it. but we cannot substitute it.
- *
- *   2. **Low-level: `loadMcpTools(serverName, rawClient)`**. accepts a raw
- *      `@modelcontextprotocol/sdk` Client directly (verified at
- *      `dist/tools.d.ts:28`). For this path, users can construct their own
- *      Client, wrap with the existing `wrapMcpClient` helper, and pass it
- *      in. No new code required. see the example in
- *      `packages/integration/examples/langchain-js/` for the pattern.
- *
- * This adapter handles the high-level `MultiServerMCPClient` path. It walks
- * the multi-client's configured servers, calls `getClient()` on each to reach
- * the internal Client, and monkey-patches `callTool` in place. Structurally
- * the same pattern as `attributeVercelAiSdkMcp` (see D023), with one
- * additional concern documented below.
- *
- * ## Per-call fork propagation
- *
- * Some clients expose a mutable fork method; this helper patches those
- * recursively. The native 1.1.3 client instead synthesizes fork through a
- * Proxy getter, so assigning a replacement does not intercept it. This
- * helper reports that limitation. For per-call headers, load tools with
- * loadMcpTools(serverName, wrapMcpClient(client, interceptor), options).
- * The outer wrapper owns the fork result and preserves attribution.
- *
- * ## Idempotency
- *
- * Each patched Client is marked with `Symbol.for('atrib.langchain-mcp.patched')`.
- * Repeat calls to the helper on the same multi-client, and repeat `fork()`
- * calls on already-patched Clients, are no-ops.
- *
- * ## Order sensitivity
- *
- * The helper is SAFE to call AFTER `multiClient.getTools()` because LangChain's
- * tool `func` captures `client` by closure but dereferences `client.callTool`
- * at invocation time (not at tool construction time. see `dist/tools.js:391`).
- * Patching the client after tools are built still takes effect on the next
- * tool invocation.
- *
- * The helper is also safe to call BEFORE `getTools()`, but in that case
- * `multiClient.getClient(serverName)` will lazily initialize the connection
- * if it hasn't happened yet. For predictable startup, most users will call
- * `await multiClient.initializeConnections()` first, then
- * `await attributeLangchainMcp(multiClient, { interceptor })`.
+ * Loader mode rebuilds callbacks around wrapMcpClient while retaining cached
+ * tool objects. Forward the SDK's naming and hook options to loadMcpTools.
+ * Select a mode on the first helper call. Mixing modes is rejected to avoid
+ * duplicate attribution. Both modes are idempotent and preserve tool errors.
  */
 
 import type { ToolCallInterceptor } from '../middleware.js'
@@ -102,20 +59,21 @@ export interface LangchainMcpClientLike {
 
 /**
  * Minimal structural type for a LangChain `MultiServerMCPClient`. Mirrors the
- * subset of the public surface we depend on (verified against
- * `@langchain/mcp-adapters@1.1.3` `dist/client.d.ts`).
+ * subset used from MCPAdapter 2.0.1 and MultiServerMCPClient 1.1.3.
  *
- * The `config` getter returns a cloned `ClientConfig` whose `mcpServers`
- * field enumerates every configured server by name. this is how we
- * discover which servers to patch without requiring the caller to list
- * them explicitly.
+ * The snapshot uses `servers` in 2.x and `mcpServers` in 1.x. Neither
+ * snapshot can reconfigure an existing client.
  */
 export interface LangchainMultiServerMcpClientLike<
   C extends LangchainMcpClientLike = LangchainMcpClientLike,
   T extends LangchainMcpToolLike = LangchainMcpToolLike,
 > {
-  readonly config: { mcpServers?: Record<string, unknown> | undefined }
+  readonly config: {
+    servers?: Record<string, unknown> | undefined
+    mcpServers?: Record<string, unknown> | undefined
+  }
   getClient(serverName: string, options?: unknown): Promise<C | undefined>
+  listTools?(serverName: string): Promise<T[]>
   getTools?(serverName: string): Promise<T[]>
 }
 
@@ -137,7 +95,7 @@ export interface AttributeLangchainMcpOptions<
    * Optional per-server canonical URL map. Used by the interceptor for
    * content_id derivation when emitting Path 2 transaction records (§5.4.5).
    * Keys are the server names as they appear in the multi-client's
-   * `mcpServers` config; values are canonical URLs (e.g.
+   * `servers` or `mcpServers` config; values are canonical URLs (e.g.
    * `'https://search.example.com'`).
    */
   serverUrls?: Record<string, string>
@@ -152,54 +110,25 @@ export interface AttributeLangchainMcpOptions<
 }
 
 /**
- * Patch a LangChain `MultiServerMCPClient` so every outbound `tools/call`
- * flows through atrib's interceptor lifecycle.
+ * Attribute a LangChain MCPAdapter or MultiServerMCPClient.
  *
- * Walks the multi-client's configured servers, calls `getClient(serverName)`
- * on each to reach the internal `@modelcontextprotocol/sdk` Client, and
- * monkey-patches `callTool` (and `fork` when present) in place.
+ * In-place mode patches base calls and mutable fork methods. Cached LangChain
+ * 2.x tool callbacks retain their original fork, so per-call headers need
+ * loader mode. Loader mode replaces callbacks without replacing tool objects.
+ * Forward the SDK's naming and hook options in loadTools.
  *
- * Idempotent: calling the helper twice on the same multi-client, or calling
- * it on a multi-client with some already-patched servers, is safe. Repeat
- * invocations on already-patched clients are no-ops.
+ * Calling the helper again in the same mode is idempotent. The return value
+ * counts newly attributed clients. Attribution errors preserve tool behavior
+ * under the degradation contract in spec section 5.8.
  *
- * Order independent: this helper can be called BEFORE or AFTER
- * `multiClient.getTools()` because LangChain's tool `func` dereferences
- * `client.callTool` at invocation time, not at build time.
- *
- * Returns the number of clients that were newly patched on this call
- * (excludes clients that were already patched from a previous call).
- *
- * Usage:
- *
- *   import { MultiServerMCPClient } from '@langchain/mcp-adapters'
- *   import { ChatAnthropic } from '@langchain/anthropic'
- *   import { createReactAgent } from '@langchain/langgraph/prebuilt'
- *   import { atrib, attributeLangchainMcp } from '@atrib/agent'
- *
- *   const interceptor = atrib({
- *     creatorKey: process.env.ATRIB_PRIVATE_KEY!,
- *     merchantDomain: 'https://merchant.example.com',
- *     serverUrls: ['https://search.example.com'],
- *   })
- *
- *   const multi = new MultiServerMCPClient({
- *     mcpServers: {
- *       search: { transport: 'http', url: 'https://search.example.com/mcp' },
- *     },
- *   })
- *
- *   await multi.initializeConnections()
- *   await attributeLangchainMcp(multi, {
- *     interceptor,
- *     serverUrls: { search: 'https://search.example.com' },
- *   })
- *
- *   const tools = await multi.getTools()
- *   const agent = createReactAgent({
- *     llm: new ChatAnthropic({ model: 'claude-sonnet-4-6' }),
- *     tools,
- *   })
+ * @example
+ * const toolOptions = { prefixToolNameWithServerName: true }
+ * const multi = new MCPAdapter({ servers, ...toolOptions })
+ * const tools = await multi.listTools()
+ * await attributeLangchainMcp(multi, {
+ *   interceptor,
+ *   loadTools: (name, client) => loadMcpTools(name, client, toolOptions),
+ * })
  */
 export async function attributeLangchainMcp<
   C extends LangchainMcpClientLike,
@@ -209,7 +138,8 @@ export async function attributeLangchainMcp<
   options: AttributeLangchainMcpOptions<C, T>,
 ): Promise<number> {
   const { interceptor, serverUrls = {}, servers } = options
-  const configuredServers = servers ?? Object.keys(multiClient.config.mcpServers ?? {})
+  const config = multiClient.config
+  const configuredServers = servers ?? Object.keys(config.servers ?? config.mcpServers ?? {})
 
   let newlyPatched = 0
   for (const serverName of configuredServers) {
@@ -235,10 +165,11 @@ export async function attributeLangchainMcp<
           'atrib: choose loadTools on the first call; do not combine attribution modes',
         )
       }
-      if (typeof multiClient.getTools !== 'function') {
-        throw new TypeError('atrib: langchain-mcp loadTools requires multiClient.getTools')
+      const listTools = multiClient.listTools ?? multiClient.getTools
+      if (typeof listTools !== 'function') {
+        throw new TypeError('atrib: langchain-mcp loadTools requires listTools or getTools')
       }
-      const tools = await multiClient.getTools(serverName)
+      const tools = await listTools.call(multiClient, serverName)
       if (tools.every((tool) => attributedTools.has(tool))) continue
       // The SDK loader expects MCP results. Retain the concrete caller client
       // type while bridging the legacy structural interface's unknown result.
@@ -268,6 +199,15 @@ export async function attributeLangchainMcp<
     }
     if (patchClient(client, interceptor, serverUrls[serverName])) {
       newlyPatched++
+      if (
+        config.servers !== undefined &&
+        typeof multiClient.listTools === 'function' &&
+        typeof client.fork === 'function'
+      ) {
+        console.warn(
+          'atrib: LangChain 2 cached tools capture fork before attribution; supply loadTools for per-call headers',
+        )
+      }
     }
   }
   return newlyPatched

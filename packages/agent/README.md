@@ -26,17 +26,17 @@ Verify a local build with `pnpm --filter @atrib/agent test`.
 
 ## Coverage Matrix 1: MCP Framework Adapters
 
-| Framework                                  | Package                          | Adapter helper                                                                                                                                                   | Integration shape                                                                                               | Status     |
-| ------------------------------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------- |
-| **Raw `@modelcontextprotocol/sdk` Client** | `@modelcontextprotocol/sdk`      | `wrapMcpClient(client, interceptor, { serverUrl? })`                                                                                                             | Proxy-based wrapper, returns new client                                                                         | ✅ Shipped |
-| **Claude Agent SDK**                       | `@anthropic-ai/claude-agent-sdk` | **Case A (in-process tools):** zero code. the SDK's `createSdkMcpServer` returns a real `McpServer` that `@atrib/mcp` wraps directly                             | Reuses `@atrib/mcp`'s `atrib()` middleware on the server side                                                   | ✅ Shipped |
-|                                            |                                  | **Case B (third-party servers):** `createAtribProxy({ upstream, interceptor })` from `@atrib/mcp`. in-process surrogate `McpServer` that forwards to an upstream | Proxy McpServer between SDK and upstream transport                                                              | ✅ Shipped |
-| **Cloudflare Agents**                      | `agents`                         | `attributeCloudflareAgentMcp(agent, { interceptor, serverUrls })`                                                                                                | Walks `agent.mcp.mcpConnections`, replaces `.client` via `wrapMcpClient`                                        | ✅ Shipped |
-| **Vercel AI SDK MCP**                      | `@ai-sdk/mcp`                    | `attributeVercelAiSdkMcp(mcpClient, { interceptor, serverUrl })`                                                                                                 | Monkey-patches `mcpClient.request()` (custom JSON-RPC, not SDK Client)                                          | ✅ Shipped |
-| **LangChain JS MCP adapters**              | `@langchain/mcp-adapters`        | **High-level:** `attributeLangchainMcp(multiClient, { interceptor, serverUrls })`                                                                                | Walks `multiClient.config.mcpServers`, Patches base clients and mutable forks; reports native proxy fork limits | ✅ Shipped |
-|                                            |                                  | **Low-level:** `wrapMcpClient(rawClient, interceptor)` passed to `loadMcpTools(name, wrapped)`                                                                   | Wraps callTool and native fork results                                                                          | ✅ Shipped |
-| **OpenAI Agents SDK**                      | `@openai/agents`                 | _(planned. custom transport architecture, not `@modelcontextprotocol/sdk`)_                                                                                      | Planned: subclass `MCPServerSSE` / `MCPServerStdio` / `MCPServerStreamableHttp`                                 | ⏳ Planned |
-| **Mastra**                                 | `@mastra/mcp`                    | _(planned. receipt proof covers `MCPClient` + `MCPServer` over stdio)_                                                                                           | Adapter pending                                                                                                 | 🧪 Proof   |
+| Framework                                  | Package                          | Adapter helper                                                                                                                                                   | Integration shape                                                                                                         | Status     |
+| ------------------------------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **Raw `@modelcontextprotocol/sdk` Client** | `@modelcontextprotocol/sdk`      | `wrapMcpClient(client, interceptor, { serverUrl? })`                                                                                                             | Proxy-based wrapper, returns new client                                                                                   | ✅ Shipped |
+| **Claude Agent SDK**                       | `@anthropic-ai/claude-agent-sdk` | **Case A (in-process tools):** zero code. the SDK's `createSdkMcpServer` returns a real `McpServer` that `@atrib/mcp` wraps directly                             | Reuses `@atrib/mcp`'s `atrib()` middleware on the server side                                                             | ✅ Shipped |
+|                                            |                                  | **Case B (third-party servers):** `createAtribProxy({ upstream, interceptor })` from `@atrib/mcp`. in-process surrogate `McpServer` that forwards to an upstream | Proxy McpServer between SDK and upstream transport                                                                        | ✅ Shipped |
+| **Cloudflare Agents**                      | `agents`                         | `attributeCloudflareAgentMcp(agent, { interceptor, serverUrls })`                                                                                                | Walks `agent.mcp.mcpConnections`, replaces `.client` via `wrapMcpClient`                                                  | ✅ Shipped |
+| **Vercel AI SDK MCP**                      | `@ai-sdk/mcp`                    | `attributeVercelAiSdkMcp(mcpClient, { interceptor, serverUrl })`                                                                                                 | Monkey-patches `mcpClient.request()` (custom JSON-RPC, not SDK Client)                                                    | ✅ Shipped |
+| **LangChain JS MCP adapters**              | `@langchain/mcp-adapters`        | **High-level:** `attributeLangchainMcp(multiClient, { interceptor, serverUrls })`                                                                                | Walks `adapter.config.servers` or legacy `mcpServers`, Patches base clients and mutable forks; reports cached fork limits | ✅ Shipped |
+|                                            |                                  | **Low-level:** `wrapMcpClient(rawClient, interceptor)` passed to `loadMcpTools(name, wrapped)`                                                                   | Wraps callTool and native fork results                                                                                    | ✅ Shipped |
+| **OpenAI Agents SDK**                      | `@openai/agents`                 | _(planned. custom transport architecture, not `@modelcontextprotocol/sdk`)_                                                                                      | Planned: subclass `MCPServerSSE` / `MCPServerStdio` / `MCPServerStreamableHttp`                                           | ⏳ Planned |
+| **Mastra**                                 | `@mastra/mcp`                    | _(planned. receipt proof covers `MCPClient` + `MCPServer` over stdio)_                                                                                           | Adapter pending                                                                                                           | 🧪 Proof   |
 
 **The pattern across every row is identical:** one `atrib()` interceptor object, one adapter helper call, zero changes to your existing tool invocation code. The name of the helper varies because each host framework exposes a structurally different integration surface, but the `ToolCallInterceptor` type, the options shape, and the observable behavior are uniform.
 
@@ -361,15 +361,15 @@ const result = await streamText({ model: 'openai/gpt-5.4', tools, prompt: '...' 
 Supply the SDK loader for native clients and per-call headers:
 
 ```ts
-import { MultiServerMCPClient, loadMcpTools } from '@langchain/mcp-adapters'
+import { MCPAdapter, loadMcpTools } from '@langchain/mcp-adapters'
 import { attributeLangchainMcp } from '@atrib/agent'
 
 const toolOptions = { prefixToolNameWithServerName: true }
-const multi = new MultiServerMCPClient({
+const multi = new MCPAdapter({
   ...toolOptions,
-  mcpServers: { search: { transport: 'http', url: 'https://search.example.com/mcp' } },
+  servers: { search: { transport: 'http', url: 'https://search.example.com/mcp' } },
 })
-const tools = await multi.getTools()
+const tools = await multi.listTools()
 await attributeLangchainMcp(multi, {
   interceptor,
   serverUrls: { search: 'https://search.example.com/mcp' },
@@ -377,7 +377,7 @@ await attributeLangchainMcp(multi, {
 })
 ```
 
-The helper installs attributed callbacks into the existing tool objects. Its wrapped clients recursively attribute synchronous or asynchronous fork results. Forward the SDK's original naming and hook options to the loader. The in-place mode remains available for base-client calls, but reports when a native proxy prevents fork replacement. See the [LangChain example](../integration/examples/langchain-js/README.md) for per-call headers and the validated SDK versions.
+The helper installs attributed callbacks into the existing tool objects. Its wrapped clients recursively attribute synchronous or asynchronous fork results. Forward the SDK's original naming and hook options to the loader. The in-place mode remains available for base-client calls, but reports native proxy or cached fork limits. Use loader mode for LangChain 2 per-call headers. See the [LangChain example](../integration/examples/langchain-js/README.md) for per-call headers and the validated SDK versions.
 
 ---
 

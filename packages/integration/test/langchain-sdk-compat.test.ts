@@ -4,7 +4,12 @@ import { once } from 'node:events'
 import { createServer } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AIMessage } from '@langchain/core/messages'
-import { loadMcpTools, MultiServerMCPClient } from '@langchain/mcp-adapters'
+import {
+  loadMcpTools,
+  MCPAdapter,
+  MultiServerMCPClient,
+  createMCPElicitationResume,
+} from '@langchain/mcp-adapters'
 import {
   Annotation,
   Command,
@@ -22,6 +27,13 @@ import { ToolNode } from '@langchain/langgraph/prebuilt'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import {
+  McpServer,
+  createMcpHandler,
+  inputRequired,
+  acceptedContent,
+} from '@modelcontextprotocol/server'
+import { z } from 'zod'
 import { atrib, attributeLangchainMcp } from '@atrib/agent'
 import { base64urlEncode, canonicalRecord, hexEncode, sha256, verifyRecord } from '@atrib/mcp'
 import { attributeLangGraphStore } from '../src/langgraph-store-attribution.js'
@@ -31,7 +43,7 @@ afterEach(async () => {
   for (const cleanup of close.splice(0).reverse()) await cleanup()
 })
 
-async function mcpFixture(forkedHeaders = true) {
+async function mcpFixture(forkedHeaders = true, modern = false) {
   const calls: Array<{
     name: string
     args: unknown
@@ -40,6 +52,75 @@ async function mcpFixture(forkedHeaders = true) {
   }> = []
   let tenant = 'alice'
   const http = createServer(async (req, res) => {
+    if (modern) {
+      const server = new McpServer({ name: 'langchain-modern-fixture', version: '1.0.0' })
+      for (const name of ['weather', 'explode', 'approve']) {
+        server.registerTool(name, { inputSchema: { city: z.string() } }, async (args, extra) => {
+          calls.push({
+            name,
+            args,
+            meta: extra.mcpReq._meta,
+            tenant: req.headers['x-tenant'] as string | undefined,
+          })
+          if (
+            name === 'approve' &&
+            !acceptedContent(
+              extra.mcpReq.inputResponses,
+              'confirm',
+              z.object({ confirmed: z.literal(true) }),
+            )
+          ) {
+            return inputRequired({
+              inputRequests: {
+                confirm: inputRequired.elicit({
+                  message: 'Confirm this fixture request',
+                  requestedSchema: z.object({ confirmed: z.boolean() }),
+                }),
+              },
+            })
+          }
+          return {
+            content: [
+              {
+                type: 'text',
+                text: name === 'explode' ? 'fixture backend denied' : `clear in ${args.city}`,
+              },
+            ],
+            structuredContent: { private_detail: 'local fixture artifact' },
+            _meta: { diagnostic: 'private fixture metadata' },
+            ...(name === 'explode' ? { isError: true } : {}),
+          }
+        })
+      }
+      const handler = createMcpHandler(() => server, { legacy: 'reject' })
+      const chunks: Buffer[] = []
+      for await (const chunk of req) chunks.push(Buffer.from(chunk))
+      const controller = new AbortController()
+      res.on('close', () => controller.abort())
+      const response = await handler.fetch(
+        new Request(`http://127.0.0.1${req.url}`, {
+          method: req.method!,
+          headers: req.headers as Record<string, string>,
+          signal: controller.signal,
+          ...(chunks.length ? { body: Buffer.concat(chunks) } : {}),
+        }),
+      )
+      res.writeHead(response.status, Object.fromEntries(response.headers))
+      const reader = response.body?.getReader()
+      if (reader) {
+        try {
+          while (true) {
+            const chunk = await reader.read()
+            if (chunk.done) break
+            res.write(chunk.value)
+          }
+        } catch (error) {
+          if (!controller.signal.aborted) res.destroy(error as Error)
+        }
+      }
+      res.end()
+      return
+    }
     if (req.method !== 'POST') {
       res.writeHead(405).end()
       return
@@ -103,9 +184,9 @@ async function mcpFixture(forkedHeaders = true) {
     await new Promise<void>((resolve) => http.close(() => resolve()))
   })
   const url = `http://127.0.0.1:${(http.address() as { port: number }).port}/mcp`
-  const multi = new MultiServerMCPClient({
+  const multi = new MCPAdapter({
     beforeToolCall: () => (forkedHeaders ? { headers: { 'x-tenant': tenant } } : {}),
-    mcpServers: {
+    servers: {
       local: {
         transport: 'http',
         url,
@@ -113,7 +194,7 @@ async function mcpFixture(forkedHeaders = true) {
     },
   })
   close.push(() => multi.close())
-  const tools = await multi.getTools()
+  const tools = await multi.listTools()
   const weather = tools.find((tool) => tool.name.endsWith('weather'))!
   const explode = tools.find((tool) => tool.name.endsWith('explode'))!
   expect(weather).toBeDefined()
@@ -125,6 +206,7 @@ async function mcpFixture(forkedHeaders = true) {
   close.push(() => interceptor.flush())
   return {
     calls,
+    url,
     multi,
     tools,
     weather,
@@ -138,6 +220,7 @@ async function mcpFixture(forkedHeaders = true) {
       client: NonNullable<Awaited<ReturnType<typeof multi.getClient>>>,
     ) {
       return loadMcpTools(serverName, client, {
+        prefixToolNameWithServerName: true,
         beforeToolCall: () => (forkedHeaders ? { headers: { 'x-tenant': tenant } } : {}),
       })
     },
@@ -145,7 +228,7 @@ async function mcpFixture(forkedHeaders = true) {
 }
 
 describe('installed LangChain core and LangGraph compatibility', () => {
-  it('attributes cached base-client tools and reports an unreplaceable fork once', async () => {
+  it('attributes cached base-client tools and warns once about captured forks', async () => {
     const f = await mcpFixture(false)
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
@@ -155,7 +238,7 @@ describe('installed LangChain core and LangGraph compatibility', () => {
       expect(f.calls[0]!.meta?.['X-atrib-Context']).toMatch(/^[0-9a-f]{32}$/)
       expect(warning).toHaveBeenCalledTimes(1)
       expect(warning).toHaveBeenCalledWith(
-        expect.stringContaining('loadMcpTools with wrapMcpClient'),
+        expect.stringContaining('LangChain 2 cached tools capture fork'),
       )
     } finally {
       warning.mockRestore()
@@ -222,29 +305,37 @@ describe('installed LangChain core and LangGraph compatibility', () => {
     expect(f.calls).toHaveLength(0)
   })
 
-  it('rejects invalid arguments before transport and preserves backend failures', async () => {
-    const f = await mcpFixture()
-    expect(
-      await attributeLangchainMcp(f.multi, { interceptor: f.interceptor, loadTools: f.loadTools }),
-    ).toBe(1)
-    expect(
-      await attributeLangchainMcp(f.multi, { interceptor: f.interceptor, loadTools: f.loadTools }),
-    ).toBe(0)
-    const tools = f.tools
-    const weather = tools.find((tool) => tool.name.endsWith('weather'))!
-    const explode = tools.find((tool) => tool.name.endsWith('explode'))!
-    await expect(weather.invoke({ city: 42 })).rejects.toThrow()
-    expect(f.calls).toHaveLength(0)
-    const after = vi.spyOn(f.interceptor, 'onAfterToolResponse')
-    await expect(explode.invoke({ city: 'Austin' })).rejects.toThrow('fixture backend denied')
-    expect(f.calls).toHaveLength(1)
-    expect(after).toHaveBeenCalledWith(
-      'explode',
-      expect.anything(),
-      {},
-      expect.objectContaining({ isError: true }),
-    )
-  })
+  for (const modern of [false, true]) {
+    it(`rejects invalid arguments before transport and preserves backend failures (${modern ? 'modern' : 'legacy'})`, async () => {
+      const f = await mcpFixture(true, modern)
+      expect(
+        await attributeLangchainMcp(f.multi, {
+          interceptor: f.interceptor,
+          loadTools: f.loadTools,
+        }),
+      ).toBe(1)
+      expect(
+        await attributeLangchainMcp(f.multi, {
+          interceptor: f.interceptor,
+          loadTools: f.loadTools,
+        }),
+      ).toBe(0)
+      const tools = f.tools
+      const weather = tools.find((tool) => tool.name.endsWith('weather'))!
+      const explode = tools.find((tool) => tool.name.endsWith('explode'))!
+      await expect(weather.invoke({ city: 42 })).rejects.toThrow()
+      expect(f.calls).toHaveLength(0)
+      const after = vi.spyOn(f.interceptor, 'onAfterToolResponse')
+      await expect(explode.invoke({ city: 'Austin' })).rejects.toThrow('fixture backend denied')
+      expect(f.calls).toHaveLength(1)
+      expect(after).toHaveBeenCalledWith(
+        'explode',
+        expect.anything(),
+        modern ? expect.objectContaining({ diagnostic: 'private fixture metadata' }) : {},
+        expect.objectContaining({ isError: true }),
+      )
+    })
+  }
 
   it('executes native LangChain tools in a checkpointed graph without crossing threads', async () => {
     const f = await mcpFixture()
@@ -285,6 +376,111 @@ describe('installed LangChain core and LangGraph compatibility', () => {
     expect(JSON.stringify(checkpoint.values.messages)).toContain('Austin')
     expect(f.calls.every((call) => typeof call.meta?.['X-atrib-Context'] === 'string')).toBe(true)
   })
+
+  it('keeps deprecated MultiServerMCPClient aliases attributed with the new config snapshot', async () => {
+    const f = await mcpFixture(false)
+    const alias = new MultiServerMCPClient({
+      mcpServers: { alias: { transport: 'http', url: f.url } },
+    })
+    close.push(() => alias.close())
+    const tools = await alias.getTools()
+    expect(await attributeLangchainMcp(alias, { interceptor: f.interceptor })).toBe(1)
+    await tools.find((tool) => tool.name === 'alias_weather')!.invoke({ city: 'Austin' })
+    expect(f.calls.at(-1)!.meta?.['X-atrib-Context']).toMatch(/^[0-9a-f]{32}$/)
+  })
+
+  it('attributes modern tools and tenant-header forks in loader mode', async () => {
+    const f = await mcpFixture(true, true)
+    expect((await f.multi.getClient('local'))!.getProtocolEra()).toBe('modern')
+    expect(f.weather.name).toBe('local_weather')
+    const after = vi.spyOn(f.interceptor, 'onAfterToolResponse')
+    expect(
+      await attributeLangchainMcp(f.multi, {
+        interceptor: f.interceptor,
+        loadTools: f.loadTools,
+      }),
+    ).toBe(1)
+    const result = await f.weather.invoke({
+      type: 'tool_call',
+      id: 'metadata-call',
+      name: f.weather.name,
+      args: { city: 'Austin' },
+    })
+    expect(result.content).toBe('clear in Austin')
+    expect(result.artifact).toContainEqual({
+      type: 'mcp_structured_content',
+      data: { private_detail: 'local fixture artifact' },
+    })
+    expect(JSON.stringify(result.content)).not.toContain('private')
+    f.setTenant('bob')
+    await f.weather.invoke({ city: 'Boston' })
+    expect(f.calls.map((call) => call.tenant)).toEqual(['alice', 'bob'])
+    expect(f.calls.every((call) => typeof call.meta?.['X-atrib-Context'] === 'string')).toBe(true)
+    expect(after).toHaveBeenCalledTimes(2)
+    expect(after).toHaveBeenCalledWith(
+      'weather',
+      expect.objectContaining({
+        structuredContent: { private_detail: 'local fixture artifact' },
+      }),
+      expect.objectContaining({ diagnostic: 'private fixture metadata' }),
+      expect.objectContaining({ isError: false }),
+    )
+  })
+
+  it.each([true, false])(
+    'preserves modern elicitation and validates resumed answers (valid=%s)',
+    async (valid) => {
+      const f = await mcpFixture(true, true)
+      await attributeLangchainMcp(f.multi, { interceptor: f.interceptor, loadTools: f.loadTools })
+      const graph = new StateGraph(MessagesAnnotation)
+        .addNode('tools', new ToolNode(f.tools))
+        .addEdge(START, 'tools')
+        .addEdge('tools', END)
+        .compile({ checkpointer: new MemorySaver() })
+      const config = { configurable: { thread_id: 'mcp-approval-alice' } }
+      const paused = await graph.invoke(
+        {
+          messages: [
+            new AIMessage({
+              content: '',
+              tool_calls: [
+                {
+                  id: 'approval-call',
+                  name: 'local_approve',
+                  args: { city: 'Austin' },
+                  type: 'tool_call',
+                },
+              ],
+            }),
+          ],
+        },
+        config,
+      )
+      const pending = (
+        paused as typeof paused & { __interrupt__?: import('@langchain/langgraph').Interrupt[] }
+      ).__interrupt__![0]!
+      expect(pending).toBeDefined()
+      const resumed = await graph.invoke(
+        new Command({
+          resume: createMCPElicitationResume(pending, {
+            ...(valid
+              ? { confirm: { action: 'accept' as const, content: { confirmed: true } } }
+              : {}),
+          }),
+        }),
+        config,
+      )
+      if (valid) {
+        expect(JSON.stringify(resumed.messages.at(-1)!.content)).toContain('Austin')
+        expect(f.calls).toHaveLength(3)
+      } else {
+        expect(resumed.messages.at(-1)).toMatchObject({ status: 'error' })
+        expect(JSON.stringify(resumed.messages.at(-1)!.content)).toContain('needs answers')
+        expect(f.calls).toHaveLength(2)
+      }
+      expect(f.calls.every((call) => typeof call.meta?.['X-atrib-Context'] === 'string')).toBe(true)
+    },
+  )
 
   it('resumes an interrupt from the selected checkpoint only', async () => {
     const State = Annotation.Root({ owner: Annotation<string>(), decision: Annotation<string>() })
