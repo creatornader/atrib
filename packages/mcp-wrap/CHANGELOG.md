@@ -1,5 +1,21 @@
 # @atrib/mcp-wrap
 
+## 0.13.0
+
+### Minor Changes
+
+- ca2debb: Retain transaction records whose creator signature appears in signers when loading local mirrors. Keep signature verification on recalled records.
+
+  Both packages expose record types through their public APIs. Callers must handle
+  optional `content_id` and transactions with a creator signer but no top-level
+  `signature`. The stable `@atrib/recall` API takes a major release for this source
+  compatibility break. The `0.x` `@atrib/mcp-wrap` API takes a minor release.
+
+### Patch Changes
+
+- Updated dependencies [ca2debb]
+  - @atrib/mcp@0.26.0
+
 ## 0.12.4
 
 ### Patch Changes
