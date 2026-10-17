@@ -10,15 +10,20 @@
  * Step 6 (idempotency) is state-dependent and handled by each server's
  * proof-cache / storage layer.
  *
- * The 10-minute future-skew window (Step 4) matches §2.6.1's log-server
- * tolerance. Client-side record verification (§1.4.3) uses a tighter
- * 5-minute window; see packages/mcp/src/signing.ts for that path.
+ * The five-minute future-skew window also applies to record verification
+ * (§1.4.3), which log admission invokes after these structural checks.
  */
 
 import type { AtribRecord } from './types.js'
-import { isValidEventTypeUri } from './types.js'
+import { hasCreatorSignerEntry, isValidEventTypeUri } from './types.js'
 const SPEC_VERSION = 'atrib/1.0'
-const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000 // spec 2.6.1 Step 4: 10 minutes
+const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000
+const CONTENT_ID_REQUIRED_TYPES = new Set([
+  'https://atrib.dev/v1/types/tool_call',
+  'https://atrib.dev/v1/types/transaction',
+  'https://atrib.dev/v1/types/directory_anchor',
+  'https://atrib.dev/v1/types/session_checkpoint',
+])
 
 export interface ValidationResult {
   ok: boolean
@@ -52,12 +57,16 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
     }
   }
 
-  // Step 4: timestamp must be present and not more than 10 minutes in the future
-  if (typeof record.timestamp !== 'number' || !Number.isInteger(record.timestamp) || record.timestamp < 0) {
+  // Step 4: timestamp must be present and not more than five minutes in the future.
+  if (
+    typeof record.timestamp !== 'number' ||
+    !Number.isInteger(record.timestamp) ||
+    record.timestamp < 0
+  ) {
     return { ok: false, status: 400, error: 'timestamp must be a non-negative integer' }
   }
   if (record.timestamp - Date.now() > MAX_FUTURE_SKEW_MS) {
-    return { ok: false, status: 400, error: 'timestamp is more than 10 minutes in the future' }
+    return { ok: false, status: 400, error: 'timestamp is more than 5 minutes in the future' }
   }
 
   // Step 5: context_id must be exactly 32 lowercase hex chars
@@ -66,10 +75,22 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
   }
 
   // Required string fields for record_hash computation
-  for (const field of ['creator_key', 'chain_root', 'content_id', 'signature'] as const) {
+  for (const field of ['creator_key', 'chain_root'] as const) {
     if (typeof record[field] !== 'string') {
       return { ok: false, status: 400, error: `${field} is required and must be a string` }
     }
+  }
+
+  const hasCreatorSigner = hasCreatorSignerEntry(record)
+  if (!hasCreatorSigner && typeof record.signature !== 'string') {
+    return {
+      ok: false,
+      status: 400,
+      error: 'signature is required unless a transaction has a creator signer',
+    }
+  }
+  if ('signature' in record && typeof record.signature !== 'string') {
+    return { ok: false, status: 400, error: 'signature must be a string when present' }
   }
 
   // T13: chain_root must match the spec §1.2.3 format,
@@ -82,8 +103,14 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
     return { ok: false, status: 400, error: 'chain_root must match sha256:<64-hex>' }
   }
 
-  // content_id follows the same shape per §1.2.5.
-  if (!/^sha256:[0-9a-f]{64}$/.test(record.content_id as string)) {
+  if (CONTENT_ID_REQUIRED_TYPES.has(record.event_type) && !('content_id' in record)) {
+    return { ok: false, status: 400, error: 'content_id is required for this event_type' }
+  }
+  // Optional fields must be omitted, not null or undefined.
+  if (
+    'content_id' in record &&
+    (typeof record.content_id !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(record.content_id))
+  ) {
     return { ok: false, status: 400, error: 'content_id must match sha256:<64-hex>' }
   }
 
@@ -103,7 +130,11 @@ export function validateSubmission(record: Partial<AtribRecord>): ValidationResu
     }
     for (const ref of ib) {
       if (typeof ref !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(ref)) {
-        return { ok: false, status: 400, error: 'informed_by entries must each match sha256:<64-hex>' }
+        return {
+          ok: false,
+          status: 400,
+          error: 'informed_by entries must each match sha256:<64-hex>',
+        }
       }
     }
   }

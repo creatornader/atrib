@@ -39,6 +39,7 @@ import { resolveChainRoot, genesisChainRoot } from './chain-root.js'
 import { sha256, hexEncode } from './hash.js'
 import { SHA256_REF_PATTERN } from './refs.js'
 import type { AtribRecord } from './types.js'
+import { hasCreatorSignerEntry } from './types.js'
 
 /**
  * Read the most recent record from a JSONL mirror file.
@@ -659,11 +660,20 @@ function parseMirrorValue(value: unknown): AtribRecord | null {
   if (!isObject(value)) return null
   const wrapped = value['record']
   const candidate = isObject(wrapped) ? wrapped : value
+  const hasCreatorSigner = hasCreatorSignerEntry(candidate)
+  const contentIdRequired = [
+    'https://atrib.dev/v1/types/tool_call',
+    'https://atrib.dev/v1/types/transaction',
+    'https://atrib.dev/v1/types/directory_anchor',
+    'https://atrib.dev/v1/types/session_checkpoint',
+  ].includes(candidate['event_type'] as string)
   if (
     candidate['spec_version'] !== 'atrib/1.0' ||
-    typeof candidate['content_id'] !== 'string' ||
+    (('content_id' in candidate || contentIdRequired) &&
+      typeof candidate['content_id'] !== 'string') ||
     typeof candidate['creator_key'] !== 'string' ||
-    typeof candidate['signature'] !== 'string' ||
+    (typeof candidate['signature'] !== 'string' &&
+      ('signature' in candidate || !hasCreatorSigner)) ||
     typeof candidate['chain_root'] !== 'string' ||
     typeof candidate['event_type'] !== 'string' ||
     typeof candidate['context_id'] !== 'string' ||

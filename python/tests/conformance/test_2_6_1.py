@@ -182,7 +182,7 @@ class TestSteps2To5Rejects:
 
     def test_future_timestamp_depends_on_mocked_clock(self) -> None:
         # Prove the clock pin matters: the reject-future-timestamp record
-        # (20 min past reference) is INSIDE the 10-minute window if "now"
+        # (20 min past reference) is INSIDE the five-minute window if "now"
         # drifts to its own timestamp — only the manifest reference time
         # makes the fixture reject deterministically.
         entry = next(

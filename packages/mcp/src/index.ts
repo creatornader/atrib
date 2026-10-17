@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // @atrib/mcp. Public API
+export * from './evidence-body.js'
 
 // Middleware (primary export)
 export { atrib, VERIFIABLE_ACTION_DISCLOSURE } from './middleware.js'
@@ -92,6 +93,7 @@ export type { AtribHttpResult } from './http.js'
 // Types
 export type { AtribRecord, UnsignedAtribRecord, DecodedToken, SignerEntry } from './types.js'
 export {
+  hasCreatorSignerEntry,
   EVENT_TYPE_TOOL_CALL_URI,
   EVENT_TYPE_TRANSACTION_URI,
   EVENT_TYPE_OBSERVATION_URI,

@@ -113,6 +113,18 @@ describe('loadAutoChainSeed, backward compatibility with legacy bare-record entr
 })
 
 describe('loadAutoChainSeed', () => {
+  it('retains a transaction whose signature is in signers', () => {
+    const { signature, ...base } = VALID_RECORD
+    const record = {
+      ...base,
+      event_type: 'https://atrib.dev/v1/types/transaction',
+      signers: [{ creator_key: base.creator_key, signature }],
+    }
+    const file = join(tmpDir, 'transaction.jsonl')
+    writeFileSync(file, JSON.stringify({ record }) + '\n')
+    expect(loadAutoChainSeed(file, () => {})).toEqual([record])
+  })
+
   it('returns empty array when file does not exist', () => {
     expect(loadAutoChainSeed(join(tmpDir, 'missing.jsonl'), () => {})).toEqual([])
   })

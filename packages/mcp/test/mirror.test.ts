@@ -15,6 +15,7 @@ import {
   recordHashExistsInMirror,
   sha256,
   signRecord,
+  signTransactionRecord,
 } from '../src/index.js'
 import type { AtribRecord } from '../src/index.js'
 
@@ -51,6 +52,47 @@ afterEach(async () => {
 })
 
 describe('readMirrorTail', () => {
+  it.each(['statement', 'transaction'])(
+    'retains a %s with conditional fields omitted',
+    async (kind) => {
+      const original = await makeRecord()
+      const { content_id: _, ...base } = original
+      const signed =
+        kind === 'statement'
+          ? await signRecord(
+              { ...base, event_type: 'https://atrib.dev/evidence/v1/request' },
+              TEST_KEY,
+            )
+          : await signTransactionRecord(
+              { ...original, event_type: 'https://atrib.dev/v1/types/transaction' },
+              TEST_KEY,
+            )
+      const { signature: _signature, ...withoutSignature } = signed
+      const record = kind === 'statement' ? signed : withoutSignature
+      await writeFile(mirrorPath, `${JSON.stringify({ record })}\n`)
+      expect(await readMirrorTail({ path: mirrorPath })).toEqual(record)
+      const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(record as AtribRecord)))}`
+      expect(await recordHashExistsInMirror({ path: mirrorPath, recordHash })).toBe(true)
+    },
+  )
+
+  it('still rejects missing type-specific fields and unrelated signers', async () => {
+    const original = await makeRecord()
+    const { content_id: _contentId, ...withoutContentId } = original
+    const { signature: _signature, ...withoutSignature } = original
+    const malformed = [
+      withoutContentId,
+      { ...withoutSignature, signers: [{ creator_key: original.creator_key, signature: 'sig' }] },
+      {
+        ...withoutSignature,
+        event_type: 'https://atrib.dev/v1/types/transaction',
+        signers: [{ creator_key: 'another', signature: 'sig' }],
+      },
+    ]
+    await writeFile(mirrorPath, malformed.map((record) => JSON.stringify({ record })).join('\n'))
+    expect(await readMirrorTail({ path: mirrorPath })).toBeNull()
+  })
+
   it('returns null when file does not exist', async () => {
     expect(await readMirrorTail({ path: join(tmpDir, 'missing.jsonl') })).toBeNull()
   })

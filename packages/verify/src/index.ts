@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // @atrib/verify. Merchant verification library
+export { verifyEvidenceSet } from './evidence-statements.js'
+export type {
+  VerifyEvidenceSetInput,
+  EvidenceSetResult,
+  EvidenceSourceVerifier,
+  EvidenceSourceResult,
+  EvidenceState,
+  EvidenceDimension,
+  EvidenceDimensions,
+} from './evidence-statements.js'
 
 // Verifier (primary export)
 export { AtribVerifier } from './verifier.js'

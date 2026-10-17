@@ -6,6 +6,7 @@ import { sha512 } from '@noble/hashes/sha2.js'
 import {
   base64urlDecode,
   canonicalRecord,
+  hasCreatorSignerEntry,
   hexEncode,
   leafHash,
   serializeEntry,
@@ -174,14 +175,21 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isAtribRecordLike(value: unknown): value is AtribRecord {
   if (!isObject(value)) return false
+  const contentIdRequired = [
+    'https://atrib.dev/v1/types/tool_call',
+    'https://atrib.dev/v1/types/transaction',
+    'https://atrib.dev/v1/types/directory_anchor',
+    'https://atrib.dev/v1/types/session_checkpoint',
+  ].includes(value.event_type as string)
   return (
     typeof value.spec_version === 'string' &&
     typeof value.event_type === 'string' &&
     typeof value.context_id === 'string' &&
     typeof value.creator_key === 'string' &&
     typeof value.chain_root === 'string' &&
-    typeof value.content_id === 'string' &&
-    typeof value.signature === 'string'
+    (!('content_id' in value || contentIdRequired) || typeof value.content_id === 'string') &&
+    (typeof value.signature === 'string' ||
+      (!('signature' in value) && hasCreatorSignerEntry(value)))
   )
 }
 

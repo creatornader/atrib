@@ -51,6 +51,25 @@ async function makeRecord(overrides: Partial<{
 }
 
 describe('buildGraph (section 3.2.4)', () => {
+  it('orders content-id-less statements deterministically without changing edges', async () => {
+    const original = await makeRecord({ timestamp: 1000 })
+    const { content_id: _contentId, ...base } = original
+    const first = await signRecord(
+      { ...base, event_type: 'https://atrib.dev/evidence/v1/request' },
+      TEST_KEY,
+    )
+    const second = await signRecord(
+      { ...base, event_type: 'https://atrib.dev/evidence/v1/outcome' },
+      TEST_KEY,
+    )
+    const forward = await buildGraph([first, second])
+    const reverse = await buildGraph([second, first])
+    expect(forward.nodes.map((node) => node.id)).toEqual(reverse.nodes.map((node) => node.id))
+    expect(forward.edges).toEqual(reverse.edges)
+    expect(forward.edge_count).toBe(1)
+    expect(forward.edges[0]?.type).toBe('SESSION_PARALLEL')
+  })
+
   it('builds a single-node graph for a genesis record', async () => {
     const record = await makeRecord()
     const graph = await buildGraph([record])

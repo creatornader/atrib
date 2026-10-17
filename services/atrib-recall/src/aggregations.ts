@@ -29,6 +29,7 @@ import {
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
   deriveLocalContentFromSidecar,
+  hasCreatorSignerEntry,
 } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import {
@@ -131,6 +132,7 @@ function extractLoaded(
       ? (obj.record as Record<string, unknown>)
       : null
   const candidate = envelopeRecord ?? obj
+  const hasCreatorSigner = hasCreatorSignerEntry(candidate)
   if (
     typeof candidate.spec_version !== 'string' ||
     typeof candidate.event_type !== 'string' ||
@@ -139,7 +141,7 @@ function extractLoaded(
     typeof candidate.chain_root !== 'string' ||
     typeof candidate.timestamp !== 'number' ||
     !Number.isFinite(candidate.timestamp) ||
-    typeof candidate.signature !== 'string'
+    (typeof candidate.signature !== 'string' && ('signature' in candidate || !hasCreatorSigner))
   ) {
     return null
   }
