@@ -1,5 +1,12 @@
 # @atrib/runtime-log
 
+## 0.5.5
+
+### Patch Changes
+
+- Updated dependencies [ca2debb]
+  - @atrib/verify@0.15.0
+
 ## 0.5.4
 
 ### Patch Changes

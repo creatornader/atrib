@@ -1,5 +1,17 @@
 # @atrib/daemon
 
+## 0.4.6
+
+### Patch Changes
+
+- Updated dependencies [ca2debb]
+- Updated dependencies [ca2debb]
+  - @atrib/recall@6.0.0
+  - @atrib/mcp@0.26.0
+  - @atrib/verify@0.15.0
+  - @atrib/attest@0.5.0
+  - @atrib/summarize@0.6.0
+
 ## 0.4.5
 
 ### Patch Changes
