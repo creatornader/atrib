@@ -123,7 +123,7 @@
     "@langchain/langgraph": "1.5.0",
     "@langchain/mcp-adapters": "2.0.1",
     "@mastra/core": "1.63.0",
-    "@mastra/mcp": "1.17.2",
+    "@mastra/mcp": "2.4.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@modelcontextprotocol/server": "^2.3.1",
     "@noble/ed25519": "^3.2.0",
