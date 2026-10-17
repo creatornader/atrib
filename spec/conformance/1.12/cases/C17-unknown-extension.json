@@ -1,0 +1,35 @@
+{
+  "name": "C17-unknown-extension",
+  "protects": "C17-unknown-extension",
+  "fails_when": "the required evidence distinction is erased",
+  "no_claim": "offline fixture sources, not installed capture or host durability",
+  "rules": ["E17"],
+  "input": {
+    "records": [
+      "sha256:cb44b544e8cbc943405c238c0aee4f3c30b77de011624d27abb4f771840ec7c9",
+      "sha256:5fd4c7cfdb704b2dd41d6a98fe1e11a26f545505da2d891012e35c7e98666c5b",
+      "sha256:9569115922cf9dd38b2819530d6453b406f7d20c4974f712650c5f8017b37a9d",
+      "sha256:59cc2e8c16ef216f6658ed7d3fed12f581d0b71e65e3ec830863f658f3810bc3",
+      "sha256:592701ea6bd41e5fe5146cc4b8ae8814913a158f8e9bf75b48b7b3c70c46fdab",
+      "sha256:460702bd83f66c2cd66b218df09b02f088fa6022847b28b6852ef56c68e6107b"
+    ],
+    "openings": {
+      "sha256:cb44b544e8cbc943405c238c0aee4f3c30b77de011624d27abb4f771840ec7c9": "sha256:eb2aa156f05bb96f598dbb75c8ce6582e326a12d9fae15ac3f79e4b7d4bf8f46",
+      "sha256:5fd4c7cfdb704b2dd41d6a98fe1e11a26f545505da2d891012e35c7e98666c5b": "sha256:d2d8c36623eaf4094b6d5e2c646040b05c31d03e1a17d070a198002db649d1be",
+      "sha256:9569115922cf9dd38b2819530d6453b406f7d20c4974f712650c5f8017b37a9d": "sha256:08d36194c5ea24868e57439c6b4d9c8b2c686fe9e527ed0d2fccdfd4f2e1f0fa",
+      "sha256:59cc2e8c16ef216f6658ed7d3fed12f581d0b71e65e3ec830863f658f3810bc3": "sha256:1fcbd5d99ef9d2da531fae48eddab630232e347e5f681c4f32f3ff2d9a005e7c",
+      "sha256:592701ea6bd41e5fe5146cc4b8ae8814913a158f8e9bf75b48b7b3c70c46fdab": "sha256:e44039246da0be598d4c15154c3ca505b4961e0ff5b6a07436b6eed0f690dc84",
+      "sha256:460702bd83f66c2cd66b218df09b02f088fa6022847b28b6852ef56c68e6107b": "sha256:f7e7f04cab875153cafa75d4c22967afb14517c38d6e511287f3ab02ce261f64"
+    },
+    "artifacts": {
+      "$type": "atrib-artifact-map/1",
+      "$ref": "sha256:c4a2f1a4c548cd33e2de5af112dcfce7ffaf427b44919ce9f3f09509ea7a1796"
+    },
+    "policy": "sha256:32b8835216b989734d568a92c57cee7f87f265c79d5d51c45890c5a03853265f",
+    "evaluation": "sha256:5958385f60446ee56b5ae337144bb0126e8b664cbf3ff37d45c9ccf419ee8c76",
+    "request_hash": "sha256:cb44b544e8cbc943405c238c0aee4f3c30b77de011624d27abb4f771840ec7c9"
+  },
+  "expected": {
+    "request": null
+  }
+}

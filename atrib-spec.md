@@ -85,7 +85,7 @@ atrib is built on a different principle: **you can record what happened and who 
 
 ### What atrib certifies, what it does not
 
-atrib certifies five structural axes of agent activity: who acted (identity, via signature), what they did (event_type), when (timestamp), in what order (chain_root and the ordering edges of [§3](#3-graph-query-interface)), and what the agent claims informed each action (the `informed_by` and `provenance_token` fields, surfaced as INFORMED_BY and PROVENANCE_OF edges in [§3](#3-graph-query-interface)).
+atrib binds a signing key to an account: its declared type, signer-declared time, committed content and signed references. The signer may be an agent, a host observing an agent, an authorizer or another source. Signature verification alone does not establish who acted, that the event occurred, or its real occurrence time. The ordering edges of [§3](#3-graph-query-interface) and declared informed_by/provenance_token links do not establish operational causality. [§1.12](#112-source-bound-evidence-statements) defines the additional evidence needed for source-bound conclusions.
 
 atrib does NOT certify that the agent's reasoning is truthful, that prior records actually influenced subsequent decisions, or that tool responses were real absent tool-side attestation. A signature proves who committed to a claim, never that the claim is true. The first two limits are intrinsic to signed claims. The third narrows when another party signs its own evidence: the tool signs its response, a counterparty co-signs a transaction, an evaluator signs a diagnostic, or a witness attests the outcome. Those signatures corroborate the action, not the agent's reasoning. The substrate is content-preserving (commitments, not content) and disclosure-configurable (the privacy postures of [§8](#8-privacy-postures) let the harness pick how much each record reveals).
 
@@ -205,6 +205,7 @@ Contents
   - [1.7.4 MPP](#174-mpp-machine-payments-protocol)
   - [1.7.5 AP2 / a2a-x402](#175-ap2-and-a2a-x402)
 - [1.8 Scope Boundaries](#18-scope-boundaries)
+- [1.12 Source-bound evidence statements](#112-source-bound-evidence-statements)
 - [Interoperability Roadmap](#interoperability-roadmap)
 
 ### 1.1 Normative Requirements Language
@@ -213,7 +214,7 @@ The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RE
 
 #### 1.1.1 Conformance Targets
 
-This specification defines requirements for four conformance targets:
+This specification defines requirements for the following conformance targets:
 
 - **MCP server middleware**: satisfies all MUST requirements in [§1.2](#12-the-attribution-record)-[§1.5](#15-context-propagation), [§2.3](#23-log-entry-format), [§2.6](#26-submission-api-write-interface), and [§5.3](#53-atribmcp-mcp-server-middleware).
 - **Agent middleware**: satisfies all MUST requirements in [§1.5](#15-context-propagation), [§1.7](#17-transaction-event-hooks), [payments profile §7](docs/payments-profile.md#7-session-negotiation), and [§5.4](#54-atribagent-agent-middleware).
@@ -221,6 +222,8 @@ This specification defines requirements for four conformance targets:
 - **Verification library**: satisfies all MUST requirements in [payments profile §8](docs/payments-profile.md#8-the-calculation-algorithm), [payments profile §9](docs/payments-profile.md#9-settlement-recommendation-document), and [§5.5](#55-atribverify-merchant-verification-library).
 
 A graph query service, when implemented, must satisfy all MUST requirements in [§3](#3-graph-query-interface). A witness, when implemented, must satisfy all MUST requirements in [§2.9](#29-witnessing-and-cosignatures).
+
+Evidence producers and evidence receivers conform to [§1.12](#112-source-bound-evidence-statements). Generic record verification or log admission alone does not establish evidence conformance.
 
 All normative requirements in this section are prefixed with their requirement level. A conforming implementation satisfies all MUST requirements and is RECOMMENDED to satisfy all SHOULD requirements.
 
@@ -293,12 +296,12 @@ An attribution record is a JSON object. Two shapes exist depending on `event_typ
 | Field                 | Type    | Req                                               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | --------------------- | ------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | spec_version          | string  | MUST                                              | Always the literal string `"atrib/1.0"` for records conforming to this specification. Implementations MUST reject records with unknown spec_version values rather than attempting to process them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| content_id            | string  | MUST                                              | A prefixed hex-encoded SHA-256 digest identifying the specific creator and tool that produced this record. See [§1.2.2](#122-content_id-derivation) for derivation. Format: `"sha256:"` followed by 64 lowercase hex characters.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| creator_key           | string  | MUST                                              | The creator's Ed25519 public key, encoded as base64url (RFC 4648 §5, no padding). 43 characters. This is the stable identity of the creator across all their records: either a principal key (delegation depth 0) or a run key certified by a principal per [§1.11](#111-delegation-certificates), in which case the durable identity is the principal resolved through the [§1.11.4](#1114-verifier-walk) walk.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| content_id            | string  | Conditional                                       | Required for tool_call and transaction records and wherever a type-specific section requires it. Optional on other records, including [§1.12](#112-source-bound-evidence-statements) evidence statements. When absent, MUST be omitted, not set to null. When present, follows [§1.2.2](#122-content_id-derivation) or an explicitly specified type-specific derivation. An absent value does not imply a tool identity.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| creator_key           | string  | MUST                                              | The signer's Ed25519 public key, encoded as unpadded base64url (43 characters). It identifies who signed the account, not necessarily the actor, observer, authorizer or destination. Resolve certified run keys to principals per [§1.11.4](#1114-verifier-walk). Principal binding alone does not establish authority for an assertion's scope.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | chain_root            | string  | MUST                                              | A prefixed hex-encoded SHA-256 digest anchoring this record in the chain. For non-genesis records: the hash of the parent attribution record's canonical serialization (see [§1.3](#13-canonical-serialization)). For genesis records: the hash of the context_id string. See [§1.2.3](#123-chain_root-for-genesis-records).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | event_type            | string  | MUST                                              | An absolute URI identifying the type of event this record documents. atrib's normative URI set is defined in [§1.2.4](#124-event_type-values); consumers MAY mint extension URIs in their own namespaces. URI form is validated per [§1.4.5](#145-event_type-uri-validation). atrib does not require URI recognition for verification; an unrecognized but syntactically-valid extension URI does not block signature verification.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| context_id            | string  | MUST                                              | The W3C Trace Context trace-id of the OTel trace containing this event. 32 lowercase hex characters. This is the join key that connects attribution records to each other and to transaction events. See [§1.5.1](#151-context_id-the-session-anchor).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| timestamp             | integer | MUST                                              | Unix time in milliseconds as a JSON integer. MUST NOT be a string, float, or ISO 8601 date. MUST NOT be in the future. Implementations SHOULD reject records with timestamps more than 5 minutes in the future relative to local clock. The value MAY be coarsened (rounded to second/minute/hour/day boundaries) per the [§8.4](#84-coarsened-timing-posture) timing posture; when coarsened, the granularity MUST be declared explicitly via the `timestamp_granularity` field.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| context_id            | string  | MUST                                              | A correlation context encoded as 32 lowercase hex characters. It may map to a W3C trace-id per [§1.5.1](#151-context_id-the-session-anchor). Shared context does not establish invocation identity, authorization, execution, or causality.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| timestamp             | integer | MUST                                              | Signer-declared Unix time in milliseconds as a JSON integer, not independently established occurrence time. Implementations SHOULD reject values more than five minutes ahead of their local clock. Coarsened values declare timestamp_granularity per [§8.4](#84-coarsened-timing-posture). Source observation and receipt times remain separately attributed per [§1.12](#112-source-bound-evidence-statements).                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | informed_by           | array   | MAY                                               | Array of `"sha256:" + hex(record_hash)` strings identifying records the agent claims informed this action. Hashes MUST be sorted lexicographically by the hex string (deterministic ordering). Empty or absent when the record makes no provenance claim. The graph layer derives INFORMED_BY edges from this field ([§3.2.3](#323-edge-types)). atrib does not validate truthfulness of the claim. See [§1.2.5](#125-informed_by) and [D041](DECISIONS.md#d041-informed_by-linking-primitive-and-informed_by-edge-type).                                                                                                                                                                                                                                                                                                                                                           |
 | provenance_token      | string  | MAY                                               | Base64url-encoded 16-byte opaque token for cross-session causal anchoring. Distinct from session_token: provenance_token says "this session descends from that anchor" (causal); session_token says "this is the same logical session" (continuation). Carried ONLY by the genesis record of a session that claims an upstream anchor; non-genesis records MUST NOT carry it. Derived as the first 16 bytes of the upstream record's hash; upstream records carry no special field to be anchorable. The graph layer derives PROVENANCE_OF edges from this field ([§3.2.3](#323-edge-types)). See [§1.2.6](#126-provenance_token) and [D044](DECISIONS.md#d044-provenance_token-field-for-cross-session-causal-anchoring).                                                                                                                                                          |
 | delegation_cert_hash  | string  | MAY                                               | `"sha256:" + 64 lowercase hex` commitment to a delegation certificate per [§1.11.3](#1113-the-delegation_cert_hash-field). Permitted ONLY on session genesis records (committing the signer's run key to its certificate) and on `key_revocation` records ([§1.11.5](#1115-run-key-revocation)). JCS-canonical form sorts the field between `creator_key` (`c-r`) and `event_type` (`e`). See [D140](DECISIONS.md#d140-delegation-certificates-principal-keys-certify-ephemeral-run-keys).                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -317,7 +320,7 @@ An attribution record is a JSON object. Two shapes exist depending on `event_typ
 
 The `content_id` identifies who specifically served a piece of content, not what the content was, and not a fingerprint of the response payload. Two different MCP server operators serving the same tool will produce different `content_id` values. This is intentional: provenance is about the serving entity, not the served artifact.
 
-The `content_id` MUST be computed as follows:
+When present for a tool/service record, `content_id` MUST be computed as follows, unless its type-specific section defines another derivation. Non-tool statements may omit it per [§1.2.1](#121-field-definitions). Omission does not alter the record-hash or log-leaf rules.
 
 ```
 // Inputs:
@@ -899,7 +902,7 @@ For attribution chains to form, context must travel between hops, from the agent
 
 The `context_id` is the join key that connects all attribution records in a session to each other and to the transaction event that closes it. Without it, records are isolated facts. With it, they form a graph.
 
-The `context_id` MUST be the W3C Trace Context trace-id from the `traceparent` header of the OTel trace that contains the attribution event. It is the 32-character hexadecimal trace-id field, lowercase, without the `traceparent` prefix or other fields.
+The `context_id` MUST be 32 lowercase hexadecimal characters. When derived from a W3C traceparent, it uses the trace-id field. A caller may instead supply a stable correlation context through the runtime's explicit context interface. A producer MUST NOT replace an explicit context merely because a transport request has another trace-id.
 
 ```
 // traceparent header:
@@ -910,7 +913,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 context_id = "4bf92f3577b34da6a3ce929d0e0e4736"
 ```
 
-The `context_id` is **not** generated by atrib. It is the trace-id that already exists in the OTel instrumentation of the session. If the agent runtime does not produce OTel traces, implementations SHOULD generate a cryptographically random 16-byte value and use its hex encoding as the context_id, then inject it into any OTel spans created during the session.
+Without an explicit context, implementations SHOULD reuse the session's existing trace-id. A runtime without one SHOULD generate a cryptographically random 16-byte context and may carry it into OTel spans. Context is a correlation aid, not a durable invocation, execution, delivery, or application-object identifier. The orphan rule below still applies.
 
 When a producer is asked to sign a record but receives no `context_id` from any source (no inbound atrib token, no `traceparent`, no caller-supplied value, no runtime-side session identifier), the producer MUST synthesize a fresh random `context_id` and emit a genesis record under it. The producer MUST NOT consult its local mirror's most-recent record to inherit a `context_id` from another session, that absorbs orphan records into whichever session was at the mirror tail and produces unrecoverable session conflation. The producer SHOULD surface the orphan provenance to operators so the upstream runtime miswire can be fixed; the reference implementation marks orphans `inheritedFrom = 'fresh-orphan'` for downstream filtering. See [D072](DECISIONS.md#d072-orphan-handling--synthesize-fresh-never-inherit-from-mirror-tail) for the rationale + alternatives.
 
@@ -1419,6 +1422,26 @@ Delegation depth > 1 (chains are rejected with `delegation_depth_exceeded`; futu
 
 ---
 
+### 1.12 Source-bound evidence statements
+
+_This section is normative._
+
+The [source-bound evidence contract](docs/source-bound-evidence.md) defines normative private-body schemas, type URIs, exact request bindings, source policies, and independent receiver conclusions. These URIs use the existing extension event byte. This section allocates no new log-entry byte or signature format. Ordinary cognitive records do not acquire an action lifecycle by implication.
+
+Receivers MUST compute the body commitment from UTF-8 JCS of the supplied opening,
+without first dropping or normalizing properties through schema validation.
+Validation MUST preserve JSON values permitted by RFC 8785 in `parameters` and
+`state`. See [D189](DECISIONS.md#d189-source-bound-evidence-separates-signed-accounts-from-receiver-reliance)
+for the carrier, compatibility and degradation boundaries.
+
+The [offline conformance corpus](spec/conformance/1.12/README.md) supplies canonical
+receiver JSON vectors, jointly normative with Appendix A. Its C19 executor cases
+are non-normative examples of one configured host policy. They define neither
+protocol nor receiver conformance requirements. Operational producer obligations
+require separate validation.
+
+Signing, retention, disclosure and submission are separate operations. An evidence producer MAY retain a signed record and opening privately without submitting either to a public service. A submission uses [§2](#2-merkle-log-protocol) unchanged. An unsubmitted record MUST NOT be represented as log-included. Checkpoint inclusion covers its specified records, not every action at a source.
+
 ## §2 Merkle Log Protocol
 
 _Commitment, not content. The append-only transparency log for attribution records._
@@ -1887,7 +1910,7 @@ Step 2: Verify that `spec_version` is `"atrib/1.0"`. Reject with `400` if not.
 
 Step 3: Verify that `event_type` is a syntactically-valid absolute URI per [§1.4.5](#145-event_type-uri-validation); the URI need not be in atrib's normative set. Reject with `400` if not.
 
-Step 4: Verify that `timestamp` is not more than 10 minutes in the future (a more permissive window than client-side verification to account for clock skew). Reject with `400` if so.
+Step 4: Verify that `timestamp` is not more than 5 minutes in the future, matching [§1.4.3](#143-verification-procedure). Reject with `400` if so.
 
 Step 5: Verify that `context_id` is exactly 32 lowercase hex characters. Reject with `400` if not.
 
@@ -3940,7 +3963,18 @@ This section is normative. A conforming implementation MUST fire each trigger at
 
 ### 5.8 Degradation Contract
 
-atrib must never impair the primary function of a tool or agent. The attribution infrastructure is invisible infrastructure; it either works silently or fails silently. It does not fail loudly.
+Observational attribution MUST NOT impair the primary function of a tool or
+agent. Its failures preserve the default tool-call and response behavior.
+Diagnostics MAY report degraded capture without changing that behavior.
+
+This section governs observational attribution middleware. Execution
+preconditions and refusal behavior belong to a separately specified host policy.
+For source-bound evidence under
+[§1.12](#112-source-bound-evidence-statements), observational failures MUST remain
+visible as degraded capture. Missing or failed recording MUST NOT be treated as
+proof that an effect was prevented. A producer MUST NOT claim durable pre-action
+intent unless the complete signed record and opening were durable before the
+effect.
 
 The degradation contract is:
 
@@ -3954,7 +3988,9 @@ The degradation contract is:
 
 **If `ATRIB_PRIVATE_KEY` is not set at init, the middleware MUST log a warning and operate in pass-through mode.** Pass-through mode: all requests and responses are forwarded without modification, no attribution records are emitted, no context is attached. The tool or agent operates as if the `atrib()` wrapper were not present.
 
-The degradation contract means a developer can add `@atrib/mcp` or `@atrib/agent` to a production system with zero risk of introducing failures.
+Adding observational `@atrib/mcp` or `@atrib/agent` middleware MUST preserve the
+tool's behavior on attribution failure. This contract does not define a host's
+protected execution policy.
 
 #### 5.8.1 Duplicate-safe stateless MCP writes
 
@@ -4843,7 +4879,7 @@ Even under the assumption that any individual record may be poisoned, the substr
 
 "Verifiable agent actions" is honest under this threat model because:
 
-- The actions ARE verifiable: they happened, they are signed, they are logged, the signer cannot deny them.
+- A receiver can verify signed accounts and any supplied source, commitment, or inclusion evidence. A signature alone does not establish that an action happened or that its record was logged.
 - "Verifiable" means non-repudiable, inspectable, cross-checkable. It does NOT mean "true."
 - A signed false claim remains verifiable as a claim; the verifier sees what was claimed and assesses it against the available trust layers.
 
@@ -5018,6 +5054,11 @@ The corpus enumerates (each as a separate vector with full input → canonical b
 16. **PROVENANCE_OF derivation**: pair of records where downstream's `provenance_token` derives from upstream's hash; derivation produces correct PROVENANCE_OF graph edge per [§3.2.4](#324-edge-derivation-rules) step 7.
 
 The corpus is generated from the reference implementation; a conforming implementation produces identical bytes for the inputs in `inputs.json` of each vector directory. The Appendix A vectors above and the corpus vectors are jointly normative.
+
+For the [source-bound evidence corpus](spec/conformance/1.12/README.md), only
+receiver vectors are jointly normative with this appendix. C19 executor cases
+are non-normative host-policy examples, excluded from protocol and receiver
+conformance requirements.
 
 ---
 

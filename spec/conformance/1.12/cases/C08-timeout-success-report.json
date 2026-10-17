@@ -1,0 +1,47 @@
+{
+  "name": "C08-timeout-success-report",
+  "protects": "C08-timeout-success-report",
+  "fails_when": "the required evidence distinction is erased",
+  "no_claim": "offline fixture sources, not installed capture or host durability",
+  "rules": ["E06", "E07"],
+  "input": {
+    "records": [
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e",
+      "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d",
+      "sha256:beae85fc9bcce2a8f2e5d1d09a790cc742e12488352e8854703a8f1d08ca192d",
+      "sha256:91ecc4ab57941c41e080320ca929c1dc64d5ec7e184cfcc4d750d171ae40610f",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8"
+    ],
+    "openings": {
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e": "sha256:eb2aa156f05bb96f598dbb75c8ce6582e326a12d9fae15ac3f79e4b7d4bf8f46",
+      "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d": "sha256:27456d018d96a39d40892275bbc959d7e2b25c2f8897ee772aee70bf43a238ba",
+      "sha256:beae85fc9bcce2a8f2e5d1d09a790cc742e12488352e8854703a8f1d08ca192d": "sha256:edf70210f8687992e29b83911a92f08fd0e86a8fbf9054f2e6cca9b0cf0c9a0e",
+      "sha256:91ecc4ab57941c41e080320ca929c1dc64d5ec7e184cfcc4d750d171ae40610f": "sha256:b229040a92605e2a5f41d48cb380c29d24f72479d15eb74c08d320e0e2b00646",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8": "sha256:c9ae88f556a025caa14870479cb939a4b3c265d4772e5b66da826540662f9225"
+    },
+    "artifacts": {
+      "$type": "atrib-artifact-map/1",
+      "$ref": "sha256:678b113211df39e3afb928241d4343a45f0a8d662f7312227484b407ce7471ca"
+    },
+    "policy": "sha256:32b8835216b989734d568a92c57cee7f87f265c79d5d51c45890c5a03853265f",
+    "evaluation": "sha256:800f8a1790feb1876f41ea054b292c8f0becf334389b8c06ba77c70d31f3a246",
+    "request_hash": "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e"
+  },
+  "expected": {
+    "request": {
+      "execution": {
+        "deliveries": [
+          {
+            "state": "unknown"
+          }
+        ]
+      },
+      "dimensions": {
+        "effect": {
+          "state": "unresolved",
+          "reasons": ["effect_unbound"]
+        }
+      }
+    }
+  }
+}

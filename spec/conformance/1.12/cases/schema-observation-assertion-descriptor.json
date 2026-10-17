@@ -1,0 +1,55 @@
+{
+  "name": "schema-observation-assertion-descriptor",
+  "protects": "schema-observation-assertion-descriptor",
+  "fails_when": "the required evidence distinction is erased",
+  "no_claim": "offline fixture sources, not installed capture or host durability",
+  "rules": ["grammar"],
+  "input": {
+    "records": [
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e",
+      "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d",
+      "sha256:b358315980ed888161326320831f98bfcbc009e63b67f9a2fc53cf05537f88e9",
+      "sha256:b581740ffd98b333bafe43d1d66ca6c0ebd6e918714438893960d89d37c62314",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8",
+      "sha256:e2ad98635a12d24ca1f258ffd848f280739b213841309a742a49634db58216f6"
+    ],
+    "openings": {
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e": "sha256:eb2aa156f05bb96f598dbb75c8ce6582e326a12d9fae15ac3f79e4b7d4bf8f46",
+      "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d": "sha256:27456d018d96a39d40892275bbc959d7e2b25c2f8897ee772aee70bf43a238ba",
+      "sha256:b358315980ed888161326320831f98bfcbc009e63b67f9a2fc53cf05537f88e9": "sha256:b9833be64a7c02fe7f6a8a69b02033d3b5a2eca59627add88884652adc577e25",
+      "sha256:b581740ffd98b333bafe43d1d66ca6c0ebd6e918714438893960d89d37c62314": "sha256:90ae75a8a6066b537d4f4b190f3613502f342069710c26203e30c71c741623db",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8": "sha256:c9ae88f556a025caa14870479cb939a4b3c265d4772e5b66da826540662f9225",
+      "sha256:e2ad98635a12d24ca1f258ffd848f280739b213841309a742a49634db58216f6": "sha256:069526ddd6a299291a0d2df5b7f6e5acb611256fb80c81fda5dd7359a3d6264e"
+    },
+    "artifacts": {
+      "$type": "atrib-artifact-map/1",
+      "$ref": "sha256:77135d7bf9755444403ae1381be9560922930b00ee865989ef1320bee5b49ace"
+    },
+    "policy": "sha256:32b8835216b989734d568a92c57cee7f87f265c79d5d51c45890c5a03853265f",
+    "evaluation": "sha256:522a9ff6e3c0d5ee201346c51f18c9993f33e9f6b920a32276d31c64c11bccc2",
+    "request_hash": "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e"
+  },
+  "expected": {
+    "invalid_kind": "observation",
+    "statements": [
+      {
+        "record_hash": "sha256:b358315980ed888161326320831f98bfcbc009e63b67f9a2fc53cf05537f88e9",
+        "dimensions": {
+          "source": {
+            "state": "rejected",
+            "reasons": ["schema_invalid"]
+          }
+        }
+      },
+      {
+        "record_hash": "sha256:b581740ffd98b333bafe43d1d66ca6c0ebd6e918714438893960d89d37c62314",
+        "dimensions": {
+          "source": {
+            "state": "rejected",
+            "reasons": ["schema_invalid"]
+          }
+        }
+      }
+    ]
+  }
+}

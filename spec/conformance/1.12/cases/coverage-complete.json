@@ -1,0 +1,44 @@
+{
+  "name": "coverage-complete",
+  "protects": "coverage-complete",
+  "fails_when": "the required evidence distinction is erased",
+  "no_claim": "offline fixture sources, not installed capture or host durability",
+  "rules": ["E09"],
+  "input": {
+    "records": [
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e",
+      "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d",
+      "sha256:8623ebea82ef024848049fed337534cdc3e97eae0c43850b91636d87d1c5e64a",
+      "sha256:95efdb992373965e103a8b9c7e5a2e05c73a2c14d90975e7a4e82526c20027c4",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8",
+      "sha256:50fb25e82d0a2152310b63805aabd8a1c38c1e0eeb4ab7e06f420bd0a8fbd783",
+      "sha256:77fe0515cf7b1989ba902ed2042605ea5b789764a10203652b4ba7df4adefeed"
+    ],
+    "openings": {
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e": "sha256:eb2aa156f05bb96f598dbb75c8ce6582e326a12d9fae15ac3f79e4b7d4bf8f46",
+      "sha256:5ba40ffe4fbb3cd50e88a761ae513bb9dc07bf0507f9ef8e695670289556ed6d": "sha256:27456d018d96a39d40892275bbc959d7e2b25c2f8897ee772aee70bf43a238ba",
+      "sha256:8623ebea82ef024848049fed337534cdc3e97eae0c43850b91636d87d1c5e64a": "sha256:b23c3198f461908f4f59e4643da2131d07cc0fa60a3b22906a3fa837e9248df0",
+      "sha256:95efdb992373965e103a8b9c7e5a2e05c73a2c14d90975e7a4e82526c20027c4": "sha256:fb7209d953d98ae900561c53bbb071bd2909b838dbcd6a3611fc70b3b6e5ab54",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8": "sha256:c9ae88f556a025caa14870479cb939a4b3c265d4772e5b66da826540662f9225",
+      "sha256:50fb25e82d0a2152310b63805aabd8a1c38c1e0eeb4ab7e06f420bd0a8fbd783": "sha256:efed28db69780cb4043775d6f563dcc02fc3e3d9f5319ce4a21dea68c3d0b183",
+      "sha256:77fe0515cf7b1989ba902ed2042605ea5b789764a10203652b4ba7df4adefeed": "sha256:c77671dd756b5eefa8559ceaf231511c0df8888ea8f5bf1459168485638a360f"
+    },
+    "artifacts": {
+      "$type": "atrib-artifact-map/1",
+      "$ref": "sha256:e87548c0d9d0f307b785ac7772c5b83409c461c936d52c078c08e2f6c7802232"
+    },
+    "policy": "sha256:2876ec31a38838f9c6f8abbd5e30145a6ab8418ae0a2c81733538552033d1eaa",
+    "evaluation": "sha256:660c61465b181fd43e373afe4c3208462962b8c62dd9d134e3bb0f038b638160",
+    "request_hash": "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e"
+  },
+  "expected": {
+    "request": {
+      "dimensions": {
+        "coverage": {
+          "state": "supported",
+          "reasons": []
+        }
+      }
+    }
+  }
+}

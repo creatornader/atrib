@@ -1,0 +1,47 @@
+{
+  "name": "F16-relative-source-locator",
+  "protects": "F16-relative-source-locator",
+  "fails_when": "the required evidence distinction is erased",
+  "no_claim": "offline fixture sources, not installed capture or host durability",
+  "rules": ["E10"],
+  "input": {
+    "records": [
+      "sha256:97950504aa5b015dd26decc0692dcf34daaa648db70c3940e2754cb2f5291675",
+      "sha256:6ee3b276a256c761990659c1ff3dcaa4a4717824d1da189c4dea331330982501",
+      "sha256:8a78abe380e8594cfa69dc3bbbb571a29e4fc3374ee18c530e4241aa85de6a53",
+      "sha256:30ee867a2629ee75b3238cafdd28fb732328838d415fc6e7927282d1afb0733b",
+      "sha256:f037222d942b3fa976dd332cd141ce7051314f4740621c1ecb81f5e49cab97b4",
+      "sha256:fa49d874abb667968687768da73dfc655cdc494583d90654b25a3ad495c3a20c"
+    ],
+    "openings": {
+      "sha256:97950504aa5b015dd26decc0692dcf34daaa648db70c3940e2754cb2f5291675": "sha256:66eb4f1663ddfafc54930e8c9d878c633eee940361c9df68f9d8c1a24814c694",
+      "sha256:6ee3b276a256c761990659c1ff3dcaa4a4717824d1da189c4dea331330982501": "sha256:3b797e77aaefbbab5d1acbb15c7d4771a87c7dcf166d1cc6a177fe45d3900f29",
+      "sha256:8a78abe380e8594cfa69dc3bbbb571a29e4fc3374ee18c530e4241aa85de6a53": "sha256:6409faef692b5648e1055b5bcc60e41c1044093805d3f3b32a4d6ee7bbf71015",
+      "sha256:30ee867a2629ee75b3238cafdd28fb732328838d415fc6e7927282d1afb0733b": "sha256:469378e74ebc1752f1c77596f6f80f1737d1c0bbe0f6e48a5b00d543b38ec848",
+      "sha256:f037222d942b3fa976dd332cd141ce7051314f4740621c1ecb81f5e49cab97b4": "sha256:b403c022612e38e20b888a57c91423133cf3ba5717447dc488952e71d924857f",
+      "sha256:fa49d874abb667968687768da73dfc655cdc494583d90654b25a3ad495c3a20c": "sha256:5cda7453ddbc2c95daf9b55cb257fe4c8617cf5d57367fac7364fc1e692e2743"
+    },
+    "artifacts": {
+      "$type": "atrib-artifact-map/1",
+      "$ref": "sha256:a98830a896bc20c991d3931b2e9e794addd8b41208d5a46280fae6a77b2145a2"
+    },
+    "policy": "sha256:32b8835216b989734d568a92c57cee7f87f265c79d5d51c45890c5a03853265f",
+    "evaluation": "sha256:d90fb3e13fbc544e092a220ea88c6c1dff0b1c5ad07fab949c8d1629719ec7b4",
+    "request_hash": "sha256:97950504aa5b015dd26decc0692dcf34daaa648db70c3940e2754cb2f5291675"
+  },
+  "expected": {
+    "statements": [
+      {
+        "record_hash": "sha256:97950504aa5b015dd26decc0692dcf34daaa648db70c3940e2754cb2f5291675",
+        "dimensions": {
+          "integrity": {
+            "body": {
+              "state": "supported",
+              "reasons": []
+            }
+          }
+        }
+      }
+    ]
+  }
+}
