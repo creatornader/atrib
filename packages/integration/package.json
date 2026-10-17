@@ -15,7 +15,7 @@
     "typecheck:openinference-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --types node --strict --skipLibCheck examples/openinference/integration.ts examples/openinference/dual-export-smoke.ts examples/openinference/cognitive-loop.ts",
     "test:langchain-packed": "node scripts/check-langchain-mcp-packed.mjs",
     "typecheck:langchain-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --types node --strict --exactOptionalPropertyTypes --skipLibCheck examples/langchain-js/integration.ts examples/langgraph-store/langgraph-store-smoke.ts",
-    "typecheck": "tsc --noEmit && pnpm typecheck:openai-examples && pnpm typecheck:mem0-examples && pnpm typecheck:proof-scripts && pnpm typecheck:openinference-examples && pnpm typecheck:langchain-examples",
+    "typecheck": "tsc --noEmit && pnpm typecheck:openai-examples && pnpm typecheck:mem0-examples && pnpm typecheck:proof-scripts && pnpm typecheck:openinference-examples && pnpm typecheck:langchain-examples && pnpm typecheck:mastra-examples",
     "build": "tsc --noEmit",
     "demo": "tsx examples/end-to-end/demo.ts",
     "openinference-cognitive-loop": "tsx examples/openinference/cognitive-loop.ts",
@@ -92,7 +92,9 @@
     "proof-repo-interop": "tsx scripts/check-proof-repo-interop.ts",
     "typecheck:openai-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck examples/openai-responses/openai-responses-tool-call-smoke.ts examples/openai-agents-runtime/openai-agents-runtime-smoke.ts",
     "typecheck:mem0-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck examples/mem0/mem0-oss-full-cycle-smoke.ts examples/mem0/mem0-oss-compat-smoke.ts examples/mem0/mem0-client-smoke.ts examples/mem0/mem0-mutation-assurance-smoke.ts",
-    "typecheck:proof-scripts": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --types node --strict --skipLibCheck scripts/proof-vc-token-capture.ts scripts/proof-vc-common-x401-interop.ts scripts/open-x401-credential-packet.ts"
+    "typecheck:proof-scripts": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --types node --strict --skipLibCheck scripts/proof-vc-token-capture.ts scripts/proof-vc-common-x401-interop.ts scripts/open-x401-credential-packet.ts",
+    "test:mastra-packed": "node scripts/check-mastra-packed.mjs",
+    "typecheck:mastra-examples": "tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --types node --strict --exactOptionalPropertyTypes --skipLibCheck examples/mastra-runtime/mastra-runtime-smoke.ts examples/mastra-runtime/mastra-runtime-server.ts examples/mastra-runtime/mastra-workflow-suspend-resume-smoke.ts examples/mastra-runtime/mastra-compat-server.ts"
   },
   "dependencies": {
     "@a2a-js/sdk": "1.3.0",
@@ -122,8 +124,8 @@
     "@langchain/core": "1.2.17",
     "@langchain/langgraph": "1.5.0",
     "@langchain/mcp-adapters": "2.0.1",
-    "@mastra/core": "1.63.0",
-    "@mastra/mcp": "1.17.2",
+    "@mastra/core": "1.78.0",
+    "@mastra/mcp": "2.4.1",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@modelcontextprotocol/server": "^2.3.1",
     "@noble/ed25519": "^3.2.0",

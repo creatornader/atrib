@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MCPClient } from '@mastra/mcp'
+import { noopObserve } from '@mastra/core/tools'
 import { canonicalRecord, hexEncode, sha256, verifyRecord } from '@atrib/mcp'
 import { MastraRuntimeReceiptRecorder } from '../../src/mastra-runtime-receipt.js'
 
@@ -99,11 +100,7 @@ export async function runMastraRuntimeReceiptSmoke(): Promise<SmokeResult> {
       namespacedToolName,
       toolCallId: 'mastra-mcp-tool-call-1',
       args,
-      run: () =>
-        approveOrder.execute?.(args, {
-          toolCallId: 'mastra-mcp-tool-call-1',
-          runId: 'mastra-mcp-run-1',
-        } as never),
+      run: () => approveOrder.execute?.(args, { observe: noopObserve }),
     })
 
     await recorder.flushAtrib()
