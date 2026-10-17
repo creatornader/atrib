@@ -1,5 +1,19 @@
 # @atrib/verify-mcp
 
+## 2.0.0
+
+### Major Changes
+
+- 1387ea3: Upgrade canonicalize to 5.1 and require Node.js 22 or newer. JSON values retain their canonical bytes, signatures, hashes, and tokens. JavaScript-only inputs change: function properties and toJSON() results of undefined are omitted from objects and become null in arrays; boxed primitives serialize as their values, and sparse array holes become null. Stored commitments over these JavaScript-only inputs can differ. Pass JSON data when committing tool arguments, results, or content.
+
+### Patch Changes
+
+- Updated dependencies [1387ea3]
+- Updated dependencies [ca2debb]
+- Updated dependencies [ca2debb]
+  - @atrib/recall@6.0.0
+  - @atrib/verify@0.15.0
+
 ## 1.1.6
 
 ### Patch Changes

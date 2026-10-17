@@ -1,5 +1,23 @@
 # @atrib/mcp-wrap
 
+## 0.13.0
+
+### Minor Changes
+
+- 1387ea3: Upgrade canonicalize to 5.1 and require Node.js 22 or newer. JSON values retain their canonical bytes, signatures, hashes, and tokens. JavaScript-only inputs change: function properties and toJSON() results of undefined are omitted from objects and become null in arrays; boxed primitives serialize as their values, and sparse array holes become null. Stored commitments over these JavaScript-only inputs can differ. Pass JSON data when committing tool arguments, results, or content.
+- ca2debb: Retain transaction records whose creator signature appears in signers when loading local mirrors. Keep signature verification on recalled records.
+
+  Both packages expose record types through their public APIs. Callers must handle
+  optional `content_id` and transactions with a creator signer but no top-level
+  `signature`. The stable `@atrib/recall` API takes a major release for this source
+  compatibility break. The `0.x` `@atrib/mcp-wrap` API takes a minor release.
+
+### Patch Changes
+
+- Updated dependencies [1387ea3]
+- Updated dependencies [ca2debb]
+  - @atrib/mcp@0.26.0
+
 ## 0.12.4
 
 ### Patch Changes
