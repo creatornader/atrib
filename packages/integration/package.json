@@ -107,7 +107,7 @@
     "@atrib/runtime-log": "workspace:*",
     "@atrib/sdk": "workspace:*",
     "@atrib/verify": "workspace:*",
-    "canonicalize": "^4.0.0"
+    "canonicalize": "^5.1.0"
   },
   "devDependencies": {
     "@ai-sdk/openai-compatible": "3.0.68",
@@ -120,9 +120,9 @@
     "@google/adk": "2.0.0",
     "@langchain/core": "1.2.17",
     "@langchain/langgraph": "1.5.0",
-    "@langchain/mcp-adapters": "1.1.3",
+    "@langchain/mcp-adapters": "2.0.1",
     "@mastra/core": "1.63.0",
-    "@mastra/mcp": "1.17.2",
+    "@mastra/mcp": "2.3.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@noble/ed25519": "^3.2.0",
     "@noble/hashes": "^2.4.0",
