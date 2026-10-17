@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
-    "canonicalize": "^4.0.0"
+    "canonicalize": "^5.1.0"
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.100.1"
