@@ -164,7 +164,11 @@
       "path": "examples/mastra-runtime",
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
-      "commands": ["mastra-runtime-smoke", "mastra-workflow-suspend-resume-smoke"]
+      "commands": [
+        "mastra-runtime-smoke",
+        "mastra-workflow-suspend-resume-smoke",
+        "typecheck:mastra-examples"
+      ]
     },
     {
       "id": "microsoft-agent-framework",
@@ -476,6 +480,13 @@
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
       "commands": ["test:langchain-packed"]
+    },
+    {
+      "id": "mastra-packed-compatibility",
+      "path": "scripts/check-mastra-packed.mjs",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["test:mastra-packed"]
     }
   ]
 }

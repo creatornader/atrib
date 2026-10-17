@@ -114,7 +114,7 @@ export async function runMastraWorkflowSuspendResumeSmoke(): Promise<SmokeResult
       suspended_steps: suspended.suspended,
     },
     result: { status: suspended.status },
-    informedBy: informedBy(startHash),
+    ...informedBy(startHash),
   })
 
   const resumeData = {
@@ -133,7 +133,7 @@ export async function runMastraWorkflowSuspendResumeSmoke(): Promise<SmokeResult
       resume_data: resumeData,
     },
     result: { status: 'resuming' },
-    informedBy: informedBy(suspendHash),
+    ...informedBy(suspendHash),
   })
 
   const resumed = await run.resume({
@@ -156,7 +156,7 @@ export async function runMastraWorkflowSuspendResumeSmoke(): Promise<SmokeResult
       workflow_result: resumed.result,
     },
     result: { status: resumed.status, result: resumed.result },
-    informedBy: informedBy(resumeHash),
+    ...informedBy(resumeHash),
   })
 
   await recorder.flushAtrib()
@@ -182,6 +182,12 @@ export async function runMastraWorkflowSuspendResumeSmoke(): Promise<SmokeResult
     (record) => `sha256:${hexEncode(sha256(canonicalRecord(record)))}`,
   )
   const finalReceipt = unwrapWorkflowResult(resumed.result)
+  const suspendLinked = startHash !== undefined && records[1]?.informed_by?.[0] === startHash
+  const resumeLinked = suspendHash !== undefined && records[2]?.informed_by?.[0] === suspendHash
+  const resultLinked = resumeHash !== undefined && records[3]?.informed_by?.[0] === resumeHash
+  if (!suspendLinked || !resumeLinked || !resultLinked) {
+    throw new Error('Mastra workflow receipts lost a signed informed_by link')
+  }
 
   return {
     ok: true,
@@ -204,9 +210,9 @@ export async function runMastraWorkflowSuspendResumeSmoke(): Promise<SmokeResult
     operations: records.map((record) => record.tool_name ?? ''),
     record_hashes: recordHashes,
     causal_links: {
-      suspend_informed_by_start: records[1]?.informed_by?.[0] === startHash,
-      resume_informed_by_suspend: records[2]?.informed_by?.[0] === suspendHash,
-      result_informed_by_resume: records[3]?.informed_by?.[0] === resumeHash,
+      suspend_informed_by_start: suspendLinked,
+      resume_informed_by_suspend: resumeLinked,
+      result_informed_by_resume: resultLinked,
     },
     final_receipt: finalReceipt,
     privacy: {
@@ -220,8 +226,8 @@ export async function runMastraWorkflowSuspendResumeSmoke(): Promise<SmokeResult
     ],
   }
 
-  function informedBy(hash: string | undefined): string[] | undefined {
-    return hash ? [hash] : undefined
+  function informedBy(hash: string | undefined): { informedBy?: string[] } {
+    return hash ? { informedBy: [hash] } : {}
   }
 
   function unwrapWorkflowResult(result: unknown): SmokeResult['final_receipt'] {

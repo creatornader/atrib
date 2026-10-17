@@ -22,7 +22,7 @@ Both smokes are local and credential-free. They do not call a hosted Mastra
 Platform agent, a live model, or a database. The fake part is the procurement
 approval payload; the MCP server, stdio transport, MCP client, tool listing,
 tool execution path, workflow engine, suspend point, resume call, and snapshot
-store come from `@mastra/core@1.41.0` and `@mastra/mcp@1.9.1`.
+store come from `@mastra/core@1.78.0` and `@mastra/mcp@2.4.1`.
 
 ## What It Proves
 
@@ -50,3 +50,34 @@ does not cover hosted Mastra Platform run imports, post-hoc event APIs, skill
 loading, memory state, file-system context, tracing export, eval replay, or MCP
 auth diagnostics. Those remain source-reading gates before a Mastra adapter
 shape can be chosen.
+
+## MCP 2 compatibility checks
+
+The [upstream migration guide](https://mastra.ai/reference/migrations/mcp-v2)
+requires a compatible Mastra core alongside MCP 2. Servers serve the 2026-07-28
+protocol. Tools that need input use suspend/resume with a per-server client
+`inputRequests` handler. Direct `executeTool()` calls return a completed or
+suspended status explicitly.
+
+`mastra-compat-server.ts` is a local test fixture. Its counters prove that invalid
+arguments never reach the handler and that rejected resume answers never complete
+the fixture action. It uses a public fixture continuation key and no real
+credentials or external effects. The [native tests](../../test/mastra-mcp2-compat.test.ts)
+cover schema rejection, backend errors, same-client recovery, signed error
+receipts, and accepted, declined, malformed, and absent answers. The original
+workflow smoke still verifies persisted suspend/resume and signed causal links.
+
+```bash
+pnpm --filter @atrib/integration exec vitest run test/mastra-runtime-receipt.test.ts test/mastra-mcp2-compat.test.ts
+pnpm --filter @atrib/integration typecheck:mastra-examples
+pnpm --filter @atrib/integration test:mastra-packed
+```
+
+The [packed check](../../scripts/check-mastra-packed.mjs) installs the local MCP
+archive and these exact Mastra versions in a fresh pnpm consumer. It runs both
+test files and strict typechecking outside the workspace. Production atrib
+endpoints stay blocked by the copied test guard. No model calls run.
+
+The old provider-utils v5 alias, its two overrides, and its compatibility patch
+are retired. Core 1.78 no longer depends on that alias; it uses the v6 and v7
+provider-utils lines. Other SDK versions remain unchanged.
