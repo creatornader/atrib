@@ -469,6 +469,13 @@
       "record_class": "offline-local",
       "endpoint_posture": "local-only",
       "commands": ["mcp-interceptor-audit"]
+    },
+    {
+      "id": "langchain-mcp-packed-compatibility",
+      "path": "scripts/check-langchain-mcp-packed.mjs",
+      "record_class": "offline-local",
+      "endpoint_posture": "local-only",
+      "commands": ["test:langchain-packed"]
     }
   ]
 }

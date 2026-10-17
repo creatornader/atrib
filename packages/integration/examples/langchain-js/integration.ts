@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { loadMcpTools, MultiServerMCPClient } from '@langchain/mcp-adapters'
+import { loadMcpTools, MCPAdapter } from '@langchain/mcp-adapters'
 import { atrib, attributeLangchainMcp } from '@atrib/agent'
 
 async function main() {
@@ -13,15 +13,15 @@ async function main() {
     shop: 'https://shop.example.com/mcp',
   }
   const toolOptions = { prefixToolNameWithServerName: true }
-  const multi = new MultiServerMCPClient({
+  const multi = new MCPAdapter({
     ...toolOptions,
-    mcpServers: Object.fromEntries(
+    servers: Object.fromEntries(
       Object.entries(serverUrls).map(([name, url]) => [name, { transport: 'http' as const, url }]),
     ),
   })
 
   try {
-    const tools = await multi.getTools()
+    const tools = await multi.listTools()
     await attributeLangchainMcp(multi, {
       interceptor,
       serverUrls,
