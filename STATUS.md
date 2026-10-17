@@ -108,6 +108,17 @@ The package inventory, grouped current / deprecated / private, lives in the [REA
 
 ## Spec-defined, not yet implemented
 
+- Source-bound evidence ([§1.12](atrib-spec.md#112-source-bound-evidence-statements), [contract](docs/source-bound-evidence.md), [corpus](spec/conformance/1.12/README.md)): `@atrib/mcp` provides closed body schemas and commitments. `@atrib/verify` evaluates supplied signed records, openings, source artifacts and pinned policy through `verifyEvidenceSet`. The offline corpus uses a synthetic source adapter. Host execution, durable record/opening storage, runtime capture and CLI reconstruction are not implemented by this evidence slice. These source changes do not establish remote effects, installed capture, package publication or deployment.
+
+The reference implementation in [PR #706](https://github.com/creatornader/atrib/pull/706)
+includes conditional `content_id` and signature validation, corresponding record
+types, and five-minute future-timestamp admission. The standalone
+[PR #700](https://github.com/creatornader/atrib/pull/700) spec and corpus checkout
+retains the legacy ten-minute helper allowance. Python changes here cover core
+record optional-field and admission parity. Python source-bound producer and
+receiver helpers remain future work beyond #706. Merge, publication and deployed
+admission behavior each require separate receipts.
+
 - Cross-log replication ([§2.11](atrib-spec.md#211-cross-log-replication), [D050](DECISIONS.md#d050-cross-log-replication-for-equivocation-defense); spec-defined; second log-node deployment + verifier multi-log proof bundles forthcoming).
 - An independently controlled witness deployment. The reference image workflow, deployment proof, endpoint-aware verifier, operator lifecycle tools, Fly and Compose templates, monitor, operator contract, and public recruitment path are ready. No external operator currently appears in an atrib-maintained reference verification profile.
 - Historical and verified non-membership directory lookups at the selected anchor epoch. The AKD bridge and directory endpoint currently return a latest-state membership proof or an unproved miss. `resolveIdentity()` rejects a known lookup-to-anchor epoch mismatch, but the reference service cannot yet complete [§6.3](atrib-spec.md#63-verifier-consultation-algorithm) steps 6 and 7 for historical state or absent keys.

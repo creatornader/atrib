@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as ed from '@noble/ed25519'
 import { sha512, sha256 } from '@noble/hashes/sha2.js'
-import { canonicalRecord, signRecord, hexEncode } from '@atrib/mcp'
+import { canonicalRecord, signRecord, signTransactionRecord, hexEncode } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { startLogServer, type LogServer } from '../src/index.js'
 import { parseSignatureLine } from '../src/checkpoint.js'
@@ -47,6 +47,7 @@ async function makeSignedRecord(overrides: Partial<AtribRecord> = {}): Promise<A
     ...overrides,
   }
 
+  if (unsigned.content_id === undefined) delete unsigned.content_id
   // Use signRecord which correctly strips signature before signing (§1.4.3)
   return signRecord(unsigned as AtribRecord, privateKey)
 }
@@ -171,6 +172,41 @@ afterAll(async () => {
 })
 
 describe('POST /v1/entries', () => {
+  it('admits an observation with content_id omitted and returns its proof', async () => {
+    const record = await makeSignedRecord({
+      event_type: 'https://atrib.dev/v1/types/observation',
+      content_id: undefined,
+    })
+    expect(record).not.toHaveProperty('content_id')
+    const first = await post(server.url, record)
+    const second = await post(server.url, record)
+    expect(first.status).toBe(200)
+    expect(second).toEqual(first)
+  })
+
+  it('admits a transaction with only its creator signers entry', async () => {
+    const privateKey = ed.utils.randomSecretKey()
+    const signed = await signTransactionRecord(
+      await makeSignedRecord({
+        event_type: 'https://atrib.dev/v1/types/transaction',
+      }),
+      privateKey,
+    )
+    const { signature: _, ...record } = signed
+    const first = await post(server.url, record)
+    expect(first.status).toBe(200)
+    expect(await post(server.url, record)).toEqual(first)
+    const invalid = { ...record, signers: [{ ...record.signers![0], signature: 'invalid' }] }
+    expect((await post(server.url, invalid)).status).toBe(400)
+  })
+
+  it('rejects a signed record six minutes ahead at the timestamp check', async () => {
+    const record = await makeSignedRecord({ timestamp: Date.now() + 6 * 60_000 })
+    const response = await post(server.url, record)
+    expect(response.status).toBe(400)
+    expect((response.json as { error: string }).error).toMatch(/timestamp.*5 minutes/)
+  })
+
   it('returns 200 with proof bundle for a valid record', async () => {
     const record = await makeSignedRecord()
     const { status, json } = await post(server.url, record)
@@ -199,8 +235,8 @@ describe('POST /v1/entries', () => {
     expect((json as Record<string, unknown>).error).toMatch(/spec_version/)
   })
 
-  it('rejects timestamp more than 10 minutes in future with 400', async () => {
-    const record = await makeSignedRecord({ timestamp: Date.now() + 11 * 60 * 1000 })
+  it('rejects timestamp more than 5 minutes in future with 400', async () => {
+    const record = await makeSignedRecord({ timestamp: Date.now() + 6 * 60 * 1000 })
     const { status, json } = await post(server.url, record)
 
     expect(status).toBe(400)

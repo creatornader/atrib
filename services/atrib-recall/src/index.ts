@@ -38,6 +38,7 @@ import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import {
   verifyRecord,
   EVENT_TYPE_SHORT_NAMES,
+  hasCreatorSignerEntry,
   isValidEventTypeUri,
   normalizeEventType,
   resolveEnvContextId,
@@ -953,13 +954,14 @@ function extractRecord(parsed: unknown): AtribRecord | null {
     typeof obj.record === 'object' && obj.record !== null
       ? (obj.record as Record<string, unknown>)
       : obj
+  const hasCreatorSigner = hasCreatorSignerEntry(candidate)
   if (
     typeof candidate.spec_version === 'string' &&
     typeof candidate.event_type === 'string' &&
     typeof candidate.context_id === 'string' &&
     typeof candidate.creator_key === 'string' &&
     typeof candidate.chain_root === 'string' &&
-    typeof candidate.signature === 'string'
+    (typeof candidate.signature === 'string' || (!('signature' in candidate) && hasCreatorSigner))
   ) {
     return candidate as unknown as AtribRecord
   }

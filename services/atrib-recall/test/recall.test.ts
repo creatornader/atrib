@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   signRecord,
+  signTransactionRecord,
   getPublicKey,
   base64urlEncode,
   genesisChainRoot,
@@ -81,6 +82,14 @@ afterEach(() => {
 })
 
 describe('loadRecords', () => {
+  it('retains a signed transaction without a top-level signature', async () => {
+    const original = await makeSigned({ event_type: EVENT_TYPE_TRANSACTION_URI })
+    const signed = await signTransactionRecord(original, KEY)
+    const { signature: _, ...record } = signed
+    writeFileSync(recordFile, JSON.stringify({ record }) + '\n')
+    expect(loadRecords(recordFile)).toEqual([record])
+  })
+
   it('returns empty array when file does not exist', () => {
     expect(loadRecords(join(tmp, 'missing.jsonl'))).toEqual([])
   })
@@ -110,6 +119,33 @@ describe('loadRecords', () => {
 })
 
 describe('recall', () => {
+  it.each(['statement', 'transaction'])(
+    'verifies a %s with conditional fields omitted and filters tampering',
+    async (kind) => {
+      const original = await makeSigned()
+      const { content_id: _, ...base } = original
+      const signed =
+        kind === 'statement'
+          ? await signRecord({ ...base, event_type: 'https://atrib.dev/evidence/v1/request' }, KEY)
+          : await signTransactionRecord(
+              { ...original, event_type: EVENT_TYPE_TRANSACTION_URI },
+              KEY,
+            )
+      const { signature: _signature, ...withoutSignature } = signed
+      const record = kind === 'statement' ? signed : withoutSignature
+      const tampered = { ...record, timestamp: record.timestamp + 1 }
+      writeFileSync(
+        recordFile,
+        [record, tampered].map((entry) => JSON.stringify({ record: entry })).join('\n'),
+      )
+      const result = await recall({}, recordFile)
+      expect(result.total).toBe(2)
+      expect(result.returned).toBe(1)
+      expect(result.filtered_out_by_verification).toBe(1)
+      expect(result.records[0]!.signature_verified).toBe(true)
+    },
+  )
+
   it('annotates each record with signature_verified=true for valid signatures', async () => {
     const records = [
       await makeSigned({ timestamp: 1, content_id: `sha256:${'1'.repeat(64)}` }),

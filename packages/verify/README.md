@@ -21,6 +21,99 @@ pnpm add @atrib/verify
 
 Verify a local build with `pnpm --filter @atrib/verify test`.
 
+Build workspace dependencies before package-local tests: run
+`pnpm --filter @atrib/mcp build` and `pnpm --filter @atrib/verify build`.
+The package entry points resolve built files. Root test orchestration already
+runs the required builds.
+
+## Source-bound statement reception
+
+`verifyEvidenceSet` evaluates complete signed records, private openings and
+exact artifact bytes under a supplied policy and evaluation time. Its
+[contract](../../docs/source-bound-evidence.md) separates record/body integrity,
+source, binding, authority, effect, coverage and publication. It leaves generic
+`verifyRecord.valid` unchanged and never changes application acceptance.
+
+Publication uses the existing anchor verifier with caller-pinned log keys.
+Absent proofs remain `unresolved / not_submitted`. Invalid supplied proofs are
+`rejected / dependency_invalid` without aborting other statement checks.
+
+Supplying openings discloses their nonce and private parameters to the receiver.
+Signing does not set retention or disclosure policy. Middleware public-log
+submission remains enabled by default. A public binary log entry exposes the
+record hash, signer, context, timestamp and event byte. Configured log-to-graph
+fanout forwards the full signed record, which the graph can archive. Optional
+record-body archive submission and local mirror storage are separate. The mirror
+can contain raw tool arguments and results in `_local`.
+
+```typescript
+import { verifyEvidenceSet } from '@atrib/verify'
+
+const result = await verifyEvidenceSet({
+  records,
+  openings: new Map(openingEntries),
+  artifacts: new Map(artifactByteEntries),
+  policy,
+  evaluation: { purpose: 'historical', evaluated_at, dispatch_record },
+  requestHash,
+  sourceVerifiers,
+})
+```
+
+Each exact source method URI selects an `EvidenceSourceVerifier`. Its `verify`
+method receives copied record/body data, hash-checked artifact bytes and the
+policy's pinned source keys. A supported result returns one normalized
+`facts.claim` derived from authenticated artifacts, plus the supporting hashes.
+The receiver compares this claim with the complete opening except nonce/basis.
+The claim includes effect payload hash, object, version and state, or coverage
+surface/window/expected/captured sets. `facts.authority` authenticates the sorted
+authority record references. Coverage requires an authenticated observation
+`cursor` and the method's `compareCursors` function. Methods that use native
+hashes return `native_event_hash` and `native_events` for the exact membership join.
+`singleDestinationPerDelivery` declares the method's native multiplicity rule.
+The adapter must verify its artifact format and native authentication before
+returning support. Supplied assertions cannot serve as their own proof.
+The synthetic corpus adapter ships only in tests.
+
+Adapters receive the receiver's fixed `evaluatedAt` time. They must use it for
+time checks rather than consult the machine clock.
+
+Current-purpose authority is a pre-dispatch conclusion. Its
+`no_dispatch_observed` reason means no source-supported dispatch was supplied.
+It does not establish that no action ran. Consumers must inspect every statement
+and its missing-source or rejected-source facts before choosing the next action.
+Historical reception names one supported dispatch explicitly.
+
+Standard dimension states use bare values such as `supported` and `unresolved`.
+These values describe this result format, not source identities. Evidence type
+and method URIs identify contracts and namespaces. Source-native scoped IDs
+retain their namespace/id pair. Consumers should map dimension states separately
+from URI and scoped-ID values; neither spelling establishes source trust.
+
+Core reason codes such as `source_untrusted` use bare strings. Adapters may
+return namespaced diagnostic URIs, such as a method-specific signature failure.
+Preserve those complete values when mapping them to labels. A URI names the
+diagnostic contract; it does not make the source more trusted than a bare code.
+
+The receiver performs no fetching. Unknown methods, missing artifacts and
+freshness failures remain unresolved. It checks at most 32 dependency hops,
+256 references and 16 MiB of dependency bytes per traversal, with a 1 MiB
+artifact limit. Limit failures report `resource_limit`. Invalid evaluation
+objects are rejected at the API boundary. Only supplied publication proofs
+verified against explicitly pinned log keys can support publication.
+
+Direct API input must contain JSON records, openings and policy. Before cloning,
+preflight omits any opening deeper than 64 levels. Its record's body integrity
+stays `unresolved / resource_limit`; other statements retain their facts. The
+omitted subtree is not inspected beyond that depth or counted toward remaining
+node/string budgets. Preflight rejects detected cycles and non-JSON objects with
+`TypeError`. It rejects more than 4,096 records/openings/artifacts, 100,000 visited
+JSON nodes, 64 MiB of visited strings plus artifact bytes, or excessive depth
+outside openings with `RangeError('resource_limit')`. These API errors produce no
+verdict. Invalid shared evaluation configuration also produces no verdict because
+statement checks require one valid evaluation time. Dependency limits within
+admitted input remain unresolved dimensions with a named reason.
+
 ## Quick start
 
 ```typescript

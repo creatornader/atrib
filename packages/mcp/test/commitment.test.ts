@@ -7,7 +7,9 @@ import {
   createToolNameCommitment,
   hexEncode,
   sha256,
+  verifyJsonCommitment,
 } from '../src/index.js'
+import { commitEvidenceBody, isEvidenceLocator } from '../src/evidence-body.js'
 
 describe('JSON commitment helpers', () => {
   it('creates deterministic plain JCS commitments', () => {
@@ -35,5 +37,129 @@ describe('JSON commitment helpers', () => {
     expect(createToolNameCommitment('read_file')).toBe(
       `sha256:${hexEncode(sha256(new TextEncoder().encode('read_file')))}`,
     )
+  })
+})
+
+describe('evidence body commitments', () => {
+  const id = { namespace: 'https://example.test/objects', id: 'one' }
+  const hash = `sha256:${'1'.repeat(64)}`
+  function body(kind: 'request' | 'effect', value: unknown) {
+    const common = { nonce: 'AAAAAAAAAAAAAAAAAAAAAA', subject: id }
+    return kind === 'request'
+      ? {
+          ...common,
+          source: { kind: 'declared', identity: id, method: 'https://example.test/method/v1' },
+          basis: [],
+          assertion: {
+            descriptor: {
+              service: 'https://example.test',
+              operation: 'write',
+              resource: id,
+              parameters: value,
+            },
+            execution: id,
+          },
+        }
+      : {
+          ...common,
+          source: {
+            kind: 'query',
+            identity: id,
+            method: 'https://example.test/method/v1',
+            observed_at: 1,
+          },
+          target: { record_hash: hash },
+          basis: [{ relation: 'source', kind: 'artifact', hash }],
+          assertion: {
+            object: id,
+            payload_hash: hash,
+            version: { kind: 'native', value: '1' },
+            state: value,
+          },
+        }
+  }
+
+  it.each(['request', 'effect'] as const)('commits every raw JSON key in %s bodies', (kind) => {
+    const opening = body(
+      kind,
+      JSON.parse('{"__proto__":{"allowed":true},"constructor":1,"prototype":2}'),
+    )
+    const expected = createJsonCommitment(opening, 'plain-sha256')
+    expect(commitEvidenceBody(kind, opening)).toBe(expected.hash)
+    expect(verifyJsonCommitment(opening, { hash: commitEvidenceBody(kind, opening) })).toBe(true)
+  })
+
+  it.each(['request', 'effect'] as const)(
+    'binds special JSON key mutations in %s bodies',
+    (kind) => {
+      const original = body(kind, JSON.parse('{"__proto__":{"allowed":true}}'))
+      const changed = body(kind, JSON.parse('{"__proto__":{"allowed":false}}'))
+      const committed = commitEvidenceBody(kind, original)
+      expect(verifyJsonCommitment(changed, { hash: committed })).toBe(false)
+      expect(commitEvidenceBody(kind, changed)).not.toBe(committed)
+    },
+  )
+
+  it.each([undefined, NaN, new Date(), () => {}])(
+    'rejects non-JSON parameter values: %s',
+    (value) => {
+      expect(() => commitEvidenceBody('request', body('request', value))).toThrow()
+    },
+  )
+
+  it('rejects cyclic and excessive JSON inputs before schema parsing', () => {
+    const cycle: unknown[] = []
+    cycle.push(cycle)
+    expect(() => commitEvidenceBody('request', body('request', cycle))).toThrow('resource_limit')
+    expect(() => commitEvidenceBody('request', body('request', Array(100_001).fill(null)))).toThrow(
+      'resource_limit',
+    )
+  })
+
+  it('commits encoded locator hints without changing their values', () => {
+    const request = body('request', {})
+    const opening = {
+      ...request,
+      source: { ...request.source, locator: 'artifacts/receipt%20one.json' },
+    }
+    const original = JSON.stringify(opening)
+    expect(commitEvidenceBody('request', opening)).toBe(
+      createJsonCommitment(opening, 'plain-sha256').hash,
+    )
+    expect(JSON.stringify(opening)).toBe(original)
+  })
+})
+
+describe('evidence locators', () => {
+  it.each([
+    'https://example.test:bad/path',
+    ['https://', ['reader', 'secret'].join(':'), '@example.test:bad/path'].join(''),
+    'https://example.test:bad/path?token=secret',
+    'https://[::1/path',
+    ['https://', ['reader', 'secret'].join(':'), '@example.test/path'].join(''),
+    'https://example.test/path?token=secret',
+    'https://example.test/path#api_key=secret',
+    'Bearer fixture',
+    'bearer%20fixture',
+    'BEARER%09fixture',
+    '%42earer%20fixture',
+    'https://example.test/items/bearer%20fixture',
+    'bearer%20fixture%zz',
+    '%42earer%20fixture%FF',
+  ])('rejects malformed or credential-bearing locator %s', (value) => {
+    expect(isEvidenceLocator(value)).toBe(false)
+  })
+
+  it.each([
+    'artifacts/receipt.json',
+    '../receipts/one',
+    '/artifacts/one?revision=2',
+    'https://example.test/receipt#section',
+    'artifacts/receipt%20one.json',
+    'https://example.test/items/receipt%20one',
+    'artifacts/100%complete.json',
+    'artifacts/receipt%2.json',
+  ])('accepts a retrieval hint %s', (value) => {
+    expect(isEvidenceLocator(value)).toBe(true)
   })
 })

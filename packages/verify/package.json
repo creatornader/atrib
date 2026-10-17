@@ -36,7 +36,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && pnpm typecheck:conformance",
+    "typecheck:conformance": "tsc --project tsconfig.conformance.json",
     "clean": "rm -rf dist"
   },
   "dependencies": {
@@ -50,6 +51,7 @@
     "jose": "6.2.12"
   },
   "devDependencies": {
+    "zod": "^4.6.6",
     "@types/node": "^26.6.5",
     "fast-check": "^4.10.2",
     "typescript": "^6.0.3",

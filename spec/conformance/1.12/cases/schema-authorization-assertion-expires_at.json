@@ -1,0 +1,46 @@
+{
+  "name": "schema-authorization-assertion-expires_at",
+  "protects": "schema-authorization-assertion-expires_at",
+  "fails_when": "the required evidence distinction is erased",
+  "no_claim": "offline fixture sources, not installed capture or host durability",
+  "rules": ["grammar"],
+  "input": {
+    "records": [
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e",
+      "sha256:694b4a2f78af159f7a8c647f41d5773d4153110c721c106260567728ebe3aa05",
+      "sha256:0e0d85a06e8dcfd78d7e15fb29f4edb28b4cbb0b4144b87cd2660e0df24c61aa",
+      "sha256:95efdb992373965e103a8b9c7e5a2e05c73a2c14d90975e7a4e82526c20027c4",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8",
+      "sha256:50fb25e82d0a2152310b63805aabd8a1c38c1e0eeb4ab7e06f420bd0a8fbd783"
+    ],
+    "openings": {
+      "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e": "sha256:eb2aa156f05bb96f598dbb75c8ce6582e326a12d9fae15ac3f79e4b7d4bf8f46",
+      "sha256:694b4a2f78af159f7a8c647f41d5773d4153110c721c106260567728ebe3aa05": "sha256:8ba34efbcfb5cee24a10488a63d4bb1e71214f1c7a839a902827d4d69d8e1ffa",
+      "sha256:0e0d85a06e8dcfd78d7e15fb29f4edb28b4cbb0b4144b87cd2660e0df24c61aa": "sha256:8cf540c928b00d12d25bf75b22adca2057ae089b4301a0f8c2c655cbd95949d5",
+      "sha256:95efdb992373965e103a8b9c7e5a2e05c73a2c14d90975e7a4e82526c20027c4": "sha256:fb7209d953d98ae900561c53bbb071bd2909b838dbcd6a3611fc70b3b6e5ab54",
+      "sha256:a89bbbdad5f23468e4329e832139af1bd374184426b8f66d7c5dafa879bbf9f8": "sha256:c9ae88f556a025caa14870479cb939a4b3c265d4772e5b66da826540662f9225",
+      "sha256:50fb25e82d0a2152310b63805aabd8a1c38c1e0eeb4ab7e06f420bd0a8fbd783": "sha256:efed28db69780cb4043775d6f563dcc02fc3e3d9f5319ce4a21dea68c3d0b183"
+    },
+    "artifacts": {
+      "$type": "atrib-artifact-map/1",
+      "$ref": "sha256:0e83e9da3b1c547fb1c55a55b64a210c1e6c434139ab5ded37e49b1c375fe4ea"
+    },
+    "policy": "sha256:32b8835216b989734d568a92c57cee7f87f265c79d5d51c45890c5a03853265f",
+    "evaluation": "sha256:bb1e3d83e8c30a7410b78e03d00bc03856807b90ab158f9ef88aa7e03023e842",
+    "request_hash": "sha256:dd61a8909374108f2107fc9c83361f76a8422264d3fdb0f649cb42eb34150c2e"
+  },
+  "expected": {
+    "invalid_kind": "authorization",
+    "statements": [
+      {
+        "record_hash": "sha256:694b4a2f78af159f7a8c647f41d5773d4153110c721c106260567728ebe3aa05",
+        "dimensions": {
+          "source": {
+            "state": "rejected",
+            "reasons": ["schema_invalid"]
+          }
+        }
+      }
+    ]
+  }
+}

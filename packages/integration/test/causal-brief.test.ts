@@ -47,7 +47,7 @@ describe('buildCausalBrief', () => {
     const { records, hashBySpan } = await buildCausalRecords(DOC)
     expect(records.length).toBe(3)
     // Every record signed and verifiable.
-    for (const r of records) expect(r.signature.length).toBeGreaterThan(0)
+    for (const r of records) expect(r.signature).toMatch(/^.+$/)
     // Children carry informed_by pointing at the parent record hash.
     const child = records.find((r) => r.context_id === DOC.trace_id && 'informed_by' in r)
     expect(child).toBeDefined()

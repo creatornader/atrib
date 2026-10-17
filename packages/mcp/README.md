@@ -30,6 +30,27 @@ canonicalizer for verification. NaN, infinities, lone surrogates, BigInt,
 and cycles are rejected. These input changes come from
 [canonicalize 5](https://github.com/erdtman/canonicalize/compare/v4.0.0...v5.1.0).
 
+## Source-bound statement bodies
+
+`evidenceBodySchemas` validates the six closed bodies in
+[the source-bound evidence contract](../../docs/source-bound-evidence.md).
+`EVIDENCE_TYPES` maps each kind to its signed extension URI.
+`createEvidenceNonce()` generates an unpadded base64url nonce from 16 random
+bytes. `commitEvidenceBody(kind, body)` validates the body and returns its
+plain JCS SHA-256 commitment for `args_hash`. Keep the nonce in the private
+opening. These helpers neither sign nor retain the record/opening pair.
+Use the existing `signRecord` helper and a host-owned atomic store.
+
+`isEvidenceLocator` is the locator predicate used by body validation. It rejects
+recognizable raw and percent-encoded bearer forms, URL user information and
+recognized credential query or fragment keys in absolute and relative hints.
+It checks bearer forms after one decoding pass without changing the locator or
+its commitment. Benign queries, fragments and relative hints remain valid.
+The predicate cannot establish that an opaque path or value contains no credential.
+Producers must keep credentials out of locators. Only `source.locator` and
+`basis[].locator` use this rule. Arbitrary JSON parameters and destination state
+can contain unrelated properties named `locator`.
+
 ## Quick start
 
 ```typescript

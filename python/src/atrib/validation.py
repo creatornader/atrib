@@ -4,8 +4,7 @@
 Port of ``packages/mcp/src/validation.ts``: Steps 2–5 plus required-field
 presence checks. Step 1 (Ed25519 verification) lives in
 :func:`atrib.signing.verify_record`; Step 6 (idempotency) is server state.
-The 10-minute future-skew window matches the log server's tolerance
-(client-side §1.4.3 verification uses the tighter 5-minute window).
+The five-minute future-skew window matches record verification (§1.4.3).
 """
 
 from __future__ import annotations
@@ -17,7 +16,11 @@ from dataclasses import dataclass
 
 from .types import SPEC_VERSION, is_valid_event_type_uri
 
-_MAX_FUTURE_SKEW_MS = 10 * 60 * 1000
+_MAX_FUTURE_SKEW_MS = 5 * 60 * 1000
+_CONTENT_ID_REQUIRED_TYPES = frozenset(
+    f"https://atrib.dev/v1/types/{name}"
+    for name in ("tool_call", "transaction", "directory_anchor", "session_checkpoint")
+)
 _SHA256_REF_RE = re.compile(r"^sha256:[0-9a-f]{64}\Z")
 _CONTEXT_ID_RE = re.compile(r"^[0-9a-f]{32}\Z")
 
@@ -60,7 +63,7 @@ def validate_submission(
     if not is_valid_event_type_uri(record.get("event_type")):
         return _reject("event_type must be a syntactically-valid absolute URI")
 
-    # Step 4: timestamp integer, not >10min in the future. Integral floats
+    # Step 4: timestamp integer, not >5min in the future. Integral floats
     # pass: JSON "1.0e12" parses to the same JS number as "1000000000000",
     # and the TS reference (Number.isInteger) accepts it — Python must not
     # be stricter on identical wire bytes.
@@ -71,7 +74,7 @@ def validate_submission(
         return _reject("timestamp must be a non-negative integer")
     now = int(time.time() * 1000) if now_ms is None else now_ms
     if timestamp - now > _MAX_FUTURE_SKEW_MS:
-        return _reject("timestamp is more than 10 minutes in the future")
+        return _reject("timestamp is more than 5 minutes in the future")
 
     # Step 5: context_id exactly 32 lowercase hex chars.
     context_id = record.get("context_id")
@@ -79,14 +82,35 @@ def validate_submission(
         return _reject("context_id must be 32 lowercase hex characters")
 
     # Required string fields for record_hash computation.
-    for field in ("creator_key", "chain_root", "content_id", "signature"):
+    for field in ("creator_key", "chain_root"):
         if not isinstance(record.get(field), str):
             return _reject(f"{field} is required and must be a string")
+
+    signers = record.get("signers")
+    has_creator_signer = (
+        record.get("event_type") == "https://atrib.dev/v1/types/transaction"
+        and isinstance(signers, list)
+        and any(
+            isinstance(entry, Mapping)
+            and entry.get("creator_key") == record.get("creator_key")
+            and isinstance(entry.get("signature"), str)
+            for entry in signers
+        )
+    )
+    if not has_creator_signer and not isinstance(record.get("signature"), str):
+        return _reject("signature is required unless a transaction has a creator signer")
+    if "signature" in record and not isinstance(record.get("signature"), str):
+        return _reject("signature must be a string when present")
 
     if not _SHA256_REF_RE.match(str(record.get("chain_root"))):
         return _reject("chain_root must match sha256:<64-hex>")
 
-    if not _SHA256_REF_RE.match(str(record.get("content_id"))):
+    if record.get("event_type") in _CONTENT_ID_REQUIRED_TYPES and "content_id" not in record:
+        return _reject("content_id is required for this event_type")
+    if "content_id" in record and (
+        not isinstance(record.get("content_id"), str)
+        or not _SHA256_REF_RE.match(str(record.get("content_id")))
+    ):
         return _reject("content_id must match sha256:<64-hex>")
 
     if "session_token" in record and not isinstance(record.get("session_token"), str):

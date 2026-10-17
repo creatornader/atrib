@@ -10,6 +10,7 @@ import {
   hexEncode,
   sha256,
   signRecord,
+  signTransactionRecord,
   type AtribRecord,
 } from '@atrib/mcp'
 import { handoffClaimsFromEvidencePacket, verifyHandoffClaims } from '../src/index.js'
@@ -108,6 +109,55 @@ async function buildFutureClaimRecord(seedByte: number, body: unknown): Promise<
 }
 
 describe('verifyHandoffClaims', () => {
+  it.each(['statement', 'transaction'])('retains a signed %s in a handoff packet', async (kind) => {
+    const seed = new Uint8Array(32).fill(11)
+    const original = await buildClaimRecord(11, { summary: 'handoff' })
+    const { content_id: _contentId, ...statement } = original
+    const signed =
+      kind === 'statement'
+        ? await signRecord(
+            { ...statement, event_type: 'https://atrib.dev/evidence/v1/request' },
+            seed,
+          )
+        : await signTransactionRecord(
+            { ...original, event_type: 'https://atrib.dev/v1/types/transaction' },
+            seed,
+          )
+    const { signature: _signature, ...transaction } = signed
+    const record = (kind === 'statement' ? signed : transaction) as AtribRecord
+    const claims = handoffClaimsFromEvidencePacket({ records: [{ record }] })
+    expect(claims).toHaveLength(1)
+    expect(claims[0]?.record).toEqual(record)
+    const result = await verifyHandoffClaims(claims, { trusted_creator_keys: [record.creator_key] })
+    expect(result.accepted_record_hashes).toEqual([recordHash(record)])
+  })
+
+  it('rejects malformed optional string fields and missing kind-specific fields in packets', async () => {
+    const original = await buildClaimRecord(11, {})
+    const { signature: _signature, ...transaction } = await signTransactionRecord(
+      { ...original, event_type: 'https://atrib.dev/v1/types/transaction' },
+      new Uint8Array(32).fill(11),
+    )
+    const { content_id: _contentId, ...withoutContentId } = transaction
+    for (const record of [
+      { ...original, content_id: null },
+      { ...original, content_id: undefined },
+      { ...original, content_id: 7 },
+      { ...transaction, signature: null },
+      { ...transaction, signature: undefined },
+      { ...transaction, signature: 7 },
+      { ...transaction, signers: [{ creator_key: original.creator_key, signature: 7 }] },
+      { ...transaction, signers: [{ creator_key: 'other', signature: 'sig' }] },
+      withoutContentId,
+      { ...transaction, event_type: 'https://atrib.dev/evidence/v1/request' },
+    ]) {
+      const claims = handoffClaimsFromEvidencePacket({
+        records: [{ record: record as unknown as AtribRecord }],
+      })
+      expect(claims).toEqual([])
+    }
+  })
+
   it('accepts a fresh trusted claim with matching record hash and body commitment', async () => {
     const body = { summary: 'Agent A read the tenant logs', ticket: 'SUP-42' }
     const record = await buildClaimRecord(11, body)
