@@ -51,6 +51,16 @@ entries to disk. The scheduled security workflow runs
 reintroduced. A future browser-use upgrade must preserve this boundary and pass
 the OSV scan before it lands.
 
+The private Google ADK TypeScript proofs use `@google/adk@2.1.0`, which removes
+the older database-driver graph that installed `braces` and `sprintf-js`.
+The Cloudflare examples exclude the optional `just-bash` peer of
+`agents@0.28.1`. They use Agents core and MCP exports, not `agents/skills`,
+which requires that peer. Adding skills support requires a separate dependency
+review and a safe formatting implementation before restoring `just-bash`.
+The dependency guard also rejects versions covered by GHSA-vfj7-8cjw-p6xm
+and GHSA-hp3w-g68c-fv3c. Both packages are absent from the lockfile.
+The OSV gate and GitHub alerts remain enabled.
+
 ## Credit
 
 We credit security researchers in release notes (unless you prefer anonymity). Let us know your preference when reporting.

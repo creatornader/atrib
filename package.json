@@ -90,7 +90,8 @@
       "@modelcontextprotocol/client@>=2.0.0 <2.2.0": "2.2.0",
       "brace-expansion@<5.0.12": "5.0.12",
       "browser-use@0.8.0>extract-zip": "-",
-      "@cloudflare/vitest-plugin>zod": "^4.6.6"
+      "@cloudflare/vitest-plugin>zod": "^4.6.6",
+      "agents@0.28.1>just-bash": "-"
     },
     "packageExtensions": {
       "mem0ai@3.0.6": {
@@ -113,7 +114,6 @@
       }
     },
     "patchedDependencies": {
-      "minimatch@3.1.5": "patches/minimatch@3.1.5.patch",
       "minimatch@9.0.9": "patches/minimatch@9.0.9.patch",
       "browser-use@0.8.0": "patches/browser-use@0.8.0.patch"
     }
