@@ -330,7 +330,7 @@ issue and PR map lives in [`docs/proof-x401-open-threads.md`](docs/proof-x401-op
 
 ## Packages
 
-Current packages come first. The deprecated legacy packages follow: all are re-export shims (or, for summarize, a standalone server) whose tool names stay mounted as permanent aliases per [D164](DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse). Private workspace packages that never publish close the list.
+Current packages come first. The deprecated legacy packages follow: all are re-export shims whose tool names stay mounted as permanent aliases per [D164](DECISIONS.md#d164-attestrecall-verb-rename-and-primitive-surface-collapse). Private workspace packages that never publish close the list.
 
 ### Current packages
 
@@ -350,10 +350,11 @@ Current packages come first. The deprecated legacy packages follow: all are re-e
 | [`@atrib/openinference`](packages/openinference/README.md) | OpenTelemetry SpanProcessor consuming OpenInference-shaped spans and emitting signed atrib records plus recall-readable local sidecar content. Reference impl of spec [§9](atrib-spec.md#9-runtime-integration-patterns) Pattern #4; one adapter transitively covers every framework with OpenInference instrumentation.                                                                                                |
 | [`@atrib/memory-tool`](packages/memory-tool/README.md)     | Anthropic Memory Tool handler wrapper. Signs memory commands as atrib records while the host keeps its own storage backend.                                                                                                                                                                                                                                                                                             |
 | [`@atrib/runtime-log`](packages/runtime-log/README.md)     | Runtime-log proof helpers. Builds and verifies bounded run-window and expected-surface coverage manifests. The [`buzz`](packages/runtime-log/README.md#buzz-observer-source) source verifies observer captures. The [observation adapters](packages/runtime-log/README.md#live-observation-adapters) expose cursor-bound host telemetry without implying execution or accepted state.                                   |
+| [`@atrib/summarize`](services/atrib-summarize/README.md) | Cognitive-primitive MCP server: reads N records and synthesizes a narrative via an OpenAI-compatible LLM. No successor shape in the read verb; stays mounted through the alias window. |
 
 ### Deprecated legacy packages
 
-All six are deprecated on npm and remain installable. Their tool names stay mounted as permanent aliases, so existing configurations keep working and signed records are byte-identical either way.
+All five are deprecated on npm and remain installable. Their tool names stay mounted as permanent aliases, so existing configurations keep working and signed records are byte-identical either way.
 
 | Package                                                  | What it was, and where it went                                                                                                                                                         |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -361,7 +362,6 @@ All six are deprecated on npm and remain installable. Their tool names stay moun
 | [`@atrib/annotate`](services/atrib-annotate/README.md)   | Legacy home of `atrib-annotate` (marks past records' importance, topics, and summary); folds into `attest` and stays mounted as a permanent alias.                                     |
 | [`@atrib/revise`](services/atrib-revise/README.md)       | Legacy home of `atrib-revise` (supersedes a prior position with a stated reason); folds into `attest` and stays mounted as a permanent alias.                                          |
 | [`@atrib/trace`](services/atrib-trace/README.md)         | Legacy home of `trace` / `trace_forward` (informed_by walks); re-export shim over `@atrib/recall`; the tools fold into `recall` shape `walk` with a direction.                         |
-| [`@atrib/summarize`](services/atrib-summarize/README.md) | Cognitive-primitive MCP server: reads N records and synthesizes a narrative via an OpenAI-compatible LLM. No successor shape in the read verb; stays mounted through the alias window. |
 | [`@atrib/verify-mcp`](services/atrib-verify/README.md)   | Legacy home of `atrib-verify` (handoff-evidence acceptance); re-export shim over `@atrib/recall`; the tool folds into the `recall` verification parameter.                             |
 
 ### Private workspace packages
@@ -375,7 +375,7 @@ Fixtures, test harnesses, and superseded local runtimes. Marked `private: true`;
 | [`@atrib/integration`](packages/integration/README.md)             | Cross-package tests + runnable examples.                                                                                                                                                                                                                |
 | [`@atrib/operating-graph`](apps/operating-graph/README.md)         | Open-source reference client for named, bounded workspace views, body-aware search, live decisions and outcomes, handoffs, explicit conflicts, and signed application resolutions.                                                                      |
 
-The twenty designed-public packages split fourteen current and six deprecated;
+The twenty designed-public packages split fifteen current and five deprecated;
 the public-package tables above are the canonical list. Private application and
 test packages do not change that count. The [`python/`](python/README.md)
 directory ships the `atrib` Python SDK (published on PyPI), the first
