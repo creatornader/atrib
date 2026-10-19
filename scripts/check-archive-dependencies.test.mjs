@@ -19,6 +19,7 @@ assert.deepEqual(await checkArchiveDependencies({ readFileImpl: async () => safe
   ok: true,
   extract_zip_present: false,
   adm_zip_vulnerable_version_present: false,
+  vulnerable_braces_or_sprintf_present: false,
 })
 
 await assert.rejects(
@@ -43,3 +44,17 @@ await assert.rejects(
   () => checkArchiveDependencies({ readFileImpl: async () => 'adm-zip@0.6.0:' }),
   /vulnerable adm-zip 0\.6\.0/,
 )
+
+for (const name of ['braces', 'sprintf-js']) {
+  const affected = name === 'braces' ? ['1.0.0', '3.0.3'] : ['1.0.0', '1.1.3']
+  for (const version of affected) {
+    await assert.rejects(
+      () => checkArchiveDependencies({ readFileImpl: async () => `  '${name}@${version}':\n` }),
+      new RegExp(`reintroduced vulnerable ${name}`),
+    )
+  }
+}
+
+await checkArchiveDependencies({
+  readFileImpl: async () => '  braces@3.0.4:\n  sprintf-js@1.1.4:\n',
+})

@@ -120,7 +120,7 @@
     "@atrib/openinference": "workspace:^",
     "@atrib/operating-graph": "workspace:*",
     "@browserbasehq/stagehand": "4.2.1",
-    "@google/adk": "2.0.0",
+    "@google/adk": "2.1.0",
     "@langchain/core": "1.2.17",
     "@langchain/langgraph": "1.5.0",
     "@langchain/mcp-adapters": "2.0.1",

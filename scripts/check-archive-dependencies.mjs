@@ -17,10 +17,29 @@ export async function checkArchiveDependencies({ readFileImpl = readFile } = {})
     throw new Error('pnpm-lock.yaml contains vulnerable adm-zip 0.6.0; keep the 0.6.1 override')
   }
 
+  for (const [name, ceiling] of [
+    ['braces', [3, 0, 3]],
+    ['sprintf-js', [1, 1, 3]],
+  ]) {
+    const versions = lockfile.matchAll(
+      new RegExp(`^\\s*['"]?${name}@(\\d+)\\.(\\d+)\\.(\\d+)`, 'gm'),
+    )
+    for (const match of versions) {
+      const version = match.slice(1).map(Number)
+      const difference = version
+        .map((part, index) => part - ceiling[index])
+        .find((part) => part !== 0)
+      if (difference === undefined || difference < 0) {
+        throw new Error(`pnpm-lock.yaml reintroduced vulnerable ${name} ${version.join('.')}`)
+      }
+    }
+  }
+
   return {
     ok: true,
     extract_zip_present: false,
     adm_zip_vulnerable_version_present: false,
+    vulnerable_braces_or_sprintf_present: false,
   }
 }
 
