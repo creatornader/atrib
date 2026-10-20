@@ -17,7 +17,7 @@
     "@types/node": "^26.6.5",
     "typescript": "^6.0.3",
     "vitest": "^5.0.5",
-    "wrangler": "4.151.0",
+    "wrangler": "4.151.1",
     "@cloudflare/vitest-plugin": "1.4.4"
   }
 }
