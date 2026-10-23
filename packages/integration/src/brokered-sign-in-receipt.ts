@@ -171,8 +171,9 @@ export async function runBrokeredSignInReceiptSmoke(
     throw new Error('local sidecars leaked the credential')
   }
   const publicJson = JSON.stringify(records)
-  if (publicJson.includes(pageUrl) || publicJson.includes(itemRef)) {
-    throw new Error('signed records leaked the site or item reference')
+  // Signed records carry only hashes; the test suite also asserts the site host is absent.
+  if (publicJson.includes(itemRef)) {
+    throw new Error('signed records leaked the item reference')
   }
 
   const later = records.slice(1)
