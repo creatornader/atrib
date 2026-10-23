@@ -175,6 +175,10 @@ The wrapper picks the signing key in this order (first hit wins):
    valid `op://<vault>/<item>/<field>` reference. Off by default; activates
    only when the env var is set.
 
+The wrapper does not sign through a signer socket yet. If `ATRIB_SIGNER_SOCK`
+is set, it exits non-zero instead of falling back to a seed
+([D190](../../DECISIONS.md#d190-a-local-signer-socket-is-a-final-key-source)).
+
 If none yields a key, the wrapper exits non-zero. Operator misconfiguration
 should surface immediately rather than silently degrading.
 

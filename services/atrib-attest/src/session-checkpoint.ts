@@ -366,7 +366,10 @@ export async function emitSessionCheckpoint(
       randomContextId: () => contextId,
     })
 
-    const creatorKey = base64urlEncode(await getPublicKey(key.privateKey))
+    const creatorKey =
+      key.source === 'signer-socket'
+        ? key.signer.creatorKey
+        : base64urlEncode(await getPublicKey(key.privateKey))
     const unsigned: SessionCheckpointRecord = {
       spec_version: 'atrib/1.0',
       // §1.2.2 with the pseudo-origin "atrib" for origin-less cognitive
@@ -384,7 +387,11 @@ export async function emitSessionCheckpoint(
 
     // Single signing owner: the same @atrib/mcp signRecord every emit-family
     // producer routes through.
-    const record = (await signRecord(unsigned, key.privateKey)) as SessionCheckpointRecord
+    const record = (
+      key.source === 'signer-socket'
+        ? await key.signer.signRecord(unsigned)
+        : await signRecord(unsigned, key.privateKey)
+    ) as SessionCheckpointRecord
     const recordHash = `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
 
     // Non-blocking submission per §5.3.5 / §5.8; the queue owns retries.

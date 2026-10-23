@@ -4,6 +4,10 @@
 // identity B in the same session, breaking chain continuity and creating
 // mystery keys in the log.
 //
+// ATRIB_SIGNER_SOCK (D190) is final when set. The wrapper hands its seed to
+// the upstream proxy, so it cannot sign through a socket yet; it refuses to
+// start rather than fall back to a seed that would fork the identity.
+//
 // Resolution order (first hit wins):
 //   1. ATRIB_PRIVATE_KEY env var (legacy / dev path)
 //   2. ATRIB_KEY_FILE env var → 0600 file
@@ -42,6 +46,13 @@ export interface ResolvedKey {
  * before falling back to the generic `atrib-creator` service.
  */
 export async function resolveKey(agent: string): Promise<ResolvedKey> {
+  if (process.env['ATRIB_SIGNER_SOCK']) {
+    throw new Error(
+      '[mcp-wrap] ATRIB_SIGNER_SOCK is set, but the wrapper does not sign through a signer socket yet. ' +
+        'Unset ATRIB_SIGNER_SOCK for this process; the wrapper will not fall back to a seed while it is set.',
+    )
+  }
+
   const envSeed = process.env['ATRIB_PRIVATE_KEY']
   if (envSeed) {
     return { privateKey: decodeSeed(envSeed), seedB64url: envSeed.trim(), source: 'env' }

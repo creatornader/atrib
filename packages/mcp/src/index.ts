@@ -123,6 +123,15 @@ export {
 } from './signing.js'
 export { computeContentId, normalizeServerUrl } from './content-id.js'
 export {
+  ATRIB_SIGNER_IDENTITY_ENV,
+  ATRIB_SIGNER_PUBKEY_ENV,
+  ATRIB_SIGNER_SOCK_ENV,
+  ATRIB_SIGNER_TIMEOUT_MS_ENV,
+  createSignerSocket,
+  signerSocketFromEnv,
+} from './signer-socket.js'
+export type { RecordSigner, SignerSocketOptions } from './signer-socket.js'
+export {
   ATRIB_PARENT_RECORD_HASH_ENV,
   SHA256_REF_PATTERN,
   SHA256_REF_GLOBAL_PATTERN,

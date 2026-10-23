@@ -23,6 +23,7 @@ import {
   sha256,
   hexEncode,
   type AtribRecord,
+  type RecordSigner,
 } from '@atrib/mcp'
 import canonicalize from 'canonicalize'
 
@@ -30,7 +31,10 @@ const SYNTHETIC_SERVER_URL = 'mcp://atrib-emit'
 const encoder = new TextEncoder()
 
 export interface BuildEmitRecordInput {
-  privateKey: Uint8Array
+  /** In-process seed. Pass this or `signer`, not both. */
+  privateKey?: Uint8Array | undefined
+  /** External signer that holds the key outside this process (D190). */
+  signer?: RecordSigner | undefined
   eventType: string
   contextId: string
   chainRoot: string
@@ -98,7 +102,13 @@ export async function buildAndSignEmitRecord(input: BuildEmitRecordInput): Promi
   if (input.resultSalt && !input.resultHash) {
     throw new TypeError('result_salt requires result_hash')
   }
-  const publicKey = base64urlEncode(await getPublicKey(input.privateKey))
+  const { privateKey, signer } = input
+  if ((privateKey === undefined) === (signer === undefined)) {
+    throw new TypeError('pass exactly one of privateKey or signer')
+  }
+  const publicKey = signer
+    ? signer.creatorKey
+    : base64urlEncode(await getPublicKey(privateKey as Uint8Array))
   const toolName = leafOfEventTypeUri(input.eventType)
   const contentId = computeContentId(SYNTHETIC_SERVER_URL, toolName)
   const argsHash = input.argsHash ?? contentHash(input.content)
@@ -129,7 +139,7 @@ export async function buildAndSignEmitRecord(input: BuildEmitRecordInput): Promi
     ...(input.toolName ? { tool_name: input.toolName } : {}),
   } as AtribRecord
 
-  return signRecord(record, input.privateKey)
+  return signer ? signer.signRecord(record) : signRecord(record, privateKey as Uint8Array)
 }
 
 function contentHash(content: Record<string, unknown>): string {

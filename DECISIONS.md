@@ -9940,6 +9940,77 @@ This decision introduces no host refusal mode.
 
 ---
 
+## D190: A local signer socket is a final key source
+
+**Date:** 2026-10-23
+
+**Status:** Accepted
+
+**Extends:** [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox).
+
+**Context.** Producers on a workstation resolve a 32-byte seed from the
+environment, a file, the macOS Keychain or 1Password. Every source places the
+seed in the producer's own process, so any other process running as the same
+user can read it the same way. [D102](#d102-sandboxed-signer-proxy-keeps-keys-outside-sandbox)
+already keeps keys outside a sandbox through a host signer. Local producers
+need the same boundary without a sandbox, and they need a seed left in the
+environment to be unable to override that boundary.
+
+**Decision.** `@atrib/mcp` ships a signer socket client. A producer that sets
+`ATRIB_SIGNER_SOCK` sends each unsigned record over a Unix socket to a host
+signer that runs under a separate account, and accepts the returned signature
+only if it verifies under the pinned `ATRIB_SIGNER_PUBKEY`.
+
+1. When `ATRIB_SIGNER_SOCK` is set, it is the only key source. A missing pinned
+   key throws. No producer falls back to an env, file, Keychain or 1Password
+   seed, so a leftover seed cannot fork the identity.
+2. The wire format is one newline-terminated JSON request per connection:
+   `{"v":1,"op":"sign","identity":...,"record":...}`, answered by
+   `{"v":1,"ok":true,"signature":...}` or `{"v":1,"ok":false,"error":...}`.
+   `identity` names the key the caller asks for. The signer decides whether
+   that caller may use it.
+3. The client refuses a socket, or a socket directory, owned by the calling
+   user, and a world-writable socket directory. The pinned key makes a planted
+   socket unable to produce an accepted signature; the ownership check stops it
+   from receiving record bodies.
+4. One request is bounded by `ATRIB_SIGNER_TIMEOUT_MS`, 500 ms by default, so
+   a down signer fails the call quickly under
+   [§5.8](atrib-spec.md#58-degradation-contract).
+5. Transaction records are not signed through the socket. Their
+   [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
+   cross-attestation bytes need their own request shape.
+6. `@atrib/attest`, and the daemon and SDK paths that resolve keys through it,
+   sign through the socket. `@atrib/mcp-wrap` and the local substrate host need
+   an in-process seed today, so they refuse to start while the socket is set.
+
+**Alternatives considered.**
+
+- _Sign arbitrary bytes over the SSH agent protocol._ Rejected. The bytes are
+  identical, but an SSH agent signs anything with any loaded key, so the signer
+  cannot apply a per-caller identity policy to the record.
+- _Return the seed to the caller over the socket._ Rejected. It moves the
+  readable seed from a file into a socket without changing who can read it.
+- _Keep seed sources as fallbacks behind the socket._ Rejected. A fallback
+  would let an env seed silently replace the signer's identity.
+
+**Consequences.**
+
+- Records signed through the socket are byte-identical to in-process signing.
+  No record field, canonical form or verifier step changes.
+- The signer implementation, its policy and its audit log are host-owned and
+  out of scope for the public packages.
+- Wrapper and local-substrate support, and transaction cross-attestation over
+  the socket, remain follow-up work.
+
+**Cross-references.**
+
+- [§9.7](atrib-spec.md#97-pattern-sandboxed-execution-signer-proxy), host signer
+  proxy pattern.
+- [D148](#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime),
+  daemon key resolution.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).

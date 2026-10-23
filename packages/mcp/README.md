@@ -334,6 +334,18 @@ The `atrib()` middleware accepts an opt-in `localSubstrate` shadow option for th
 
 `buildLocalSubstrateHealthReport()` and `probeLocalSubstrateHealth()` build read-only rollout-gate reports for queue depth, WAL join state, active contexts, wrapper counts, and stale child counts. `contexts.active` is a bounded sample; `contexts.active_count` carries the full active-context count, and `contexts.active_truncated` marks clipped samples. Probe warnings are advisory. They do not change signing, submission, or primary tool-call behavior.
 
+### Signer socket ([D190](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d190-a-local-signer-socket-is-a-final-key-source))
+
+`createSignerSocket({ socketPath, creatorKey, identity })` returns a
+`RecordSigner` whose `signRecord(record)` sends the unsigned record over a
+Unix socket to a host signer and returns it signed. The signature must verify
+under the pinned `creatorKey`, or the call throws. `signerSocketFromEnv()`
+builds one from `ATRIB_SIGNER_SOCK` and `ATRIB_SIGNER_PUBKEY`, returning `null`
+when the socket is unset and throwing when it is set without a pinned key.
+The client refuses sockets owned by the calling user and bounds each request
+by `ATRIB_SIGNER_TIMEOUT_MS` (default 500). It does not sign transaction
+records.
+
 ### `createAtribProxy(options): Promise<AtribProxy>`
 
 In-process surrogate `McpServer` that forwards every tool call to an upstream MCP server and attributes them at the proxy layer. Used by the Claude Agent SDK adapter (Case B) and any host that accepts a real `McpServer` instance but where the actual tools live in a third-party MCP server. See `packages/integration/examples/claude-agent-sdk/case-b-third-party-mcp.ts` for the full pattern.

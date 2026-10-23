@@ -160,4 +160,24 @@ describe('resolveKey fail-fast', () => {
     expect(second).toBe(first)
     expect(spawnSyncMock).toHaveBeenCalledTimes(1)
   })
+
+  it('uses ATRIB_SIGNER_SOCK over every seed source and never shells out', async () => {
+    process.env['ATRIB_SIGNER_SOCK'] = '/var/run/atrib-signer/signer.sock'
+    process.env['ATRIB_SIGNER_PUBKEY'] = Buffer.alloc(32, 9).toString('base64url')
+    process.env['ATRIB_PRIVATE_KEY'] = Buffer.alloc(32, 7).toString('base64url')
+    process.env['ATRIB_OP_REFERENCE'] = 'op://vault/item/field'
+
+    const key = await resolveKey()
+    expect(key?.source).toBe('signer-socket')
+    expect(key?.privateKey).toBeUndefined()
+    expect(spawnSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when ATRIB_SIGNER_SOCK is set without a pinned key', async () => {
+    process.env['ATRIB_SIGNER_SOCK'] = '/var/run/atrib-signer/signer.sock'
+    process.env['ATRIB_PRIVATE_KEY'] = Buffer.alloc(32, 7).toString('base64url')
+
+    await expect(resolveKey()).rejects.toThrow('ATRIB_SIGNER_PUBKEY')
+    expect(spawnSyncMock).not.toHaveBeenCalled()
+  })
 })

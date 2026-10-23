@@ -6,6 +6,9 @@
 // in the log.
 //
 // Resolution order (first hit wins):
+//   0. ATRIB_SIGNER_SOCK (D190): a host signer over a Unix socket. When set,
+//      it is final: no other source is consulted, and misconfiguration throws.
+//      The process never holds the seed; see @atrib/mcp signer-socket.ts.
 //   1. ATRIB_PRIVATE_KEY env var (legacy / dev path)
 //   2. ATRIB_KEY_FILE env var → 0600 file
 //   3. macOS Keychain, account = current user, services tried in order:
@@ -38,7 +41,7 @@
 import { readFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { userInfo } from 'node:os'
-import { base64urlDecode } from '@atrib/mcp'
+import { base64urlDecode, signerSocketFromEnv, type RecordSigner } from '@atrib/mcp'
 
 /**
  * Upper bound on the `security find-generic-password` call. A healthy,
@@ -55,7 +58,18 @@ const KEYCHAIN_TIMEOUT_MS = Number(process.env['ATRIB_KEYCHAIN_TIMEOUT_MS'] ?? '
  */
 const OP_TIMEOUT_MS = Number(process.env['ATRIB_OP_TIMEOUT_MS'] ?? '10000')
 
-export interface ResolvedKey {
+export type ResolvedKey = SeedKey | SignerSocketKey
+
+/** A key held by an external signer. The process sees only the pinned public key. */
+export interface SignerSocketKey {
+  source: 'signer-socket'
+  signer: RecordSigner
+  privateKey?: undefined
+  keychainService?: undefined
+  opReference?: undefined
+}
+
+export interface SeedKey {
   privateKey: Uint8Array
   /** Source the key came from. Surfaced in startup logs so operators can confirm key provenance. */
   source: 'env' | 'file' | 'keychain' | 'op'
@@ -77,6 +91,11 @@ export interface ResolvedKey {
  * atrib-creator-claude-code` resolves identically here and in the wrapper.
  */
 export async function resolveKey(): Promise<ResolvedKey | null> {
+  const signer = signerSocketFromEnv()
+  if (signer) {
+    return { source: 'signer-socket', signer }
+  }
+
   const envSeed = process.env['ATRIB_PRIVATE_KEY']
   if (envSeed) {
     return { privateKey: decodeSeed(envSeed), source: 'env' }
