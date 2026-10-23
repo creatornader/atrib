@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
-    "@modelcontextprotocol/server": "^2.3.1",
+    "@modelcontextprotocol/server": "^2.4.0",
     "zod": "^4.6.6"
   },
   "devDependencies": {
