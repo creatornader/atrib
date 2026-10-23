@@ -340,7 +340,11 @@ async function startLocalSubstrateHost(
 ): Promise<LocalSubstrateHostHandle> {
   const harnessClasses = options.harnessClasses ?? [...LOCAL_SUBSTRATE_HARNESS_CLASSES]
   const coordinator = createInProcessLocalSubstrateCoordinator({
-    creatorKey: base64urlEncode(options.key.privateKey),
+    // A signer-socket key never reaches this process (D190); the coordinator
+    // asks the socket for each signature instead.
+    ...(options.key.source === 'signer-socket'
+      ? { signer: options.key.signer }
+      : { creatorKey: base64urlEncode(options.key.privateKey) }),
     supportedHarnessClasses: harnessClasses,
     ...(options.logEndpoint !== undefined ? { logEndpoint: options.logEndpoint } : {}),
     ...(options.logSubmission !== undefined ? { logSubmission: options.logSubmission } : {}),
@@ -454,7 +458,8 @@ export async function resolveSigningKeyWithRetry(
   const now = options.now ?? ((): number => Date.now())
   const sleep =
     options.sleep ??
-    ((ms: number): Promise<void> => new Promise<void>((resolveSleep) => setTimeout(resolveSleep, ms)))
+    ((ms: number): Promise<void> =>
+      new Promise<void>((resolveSleep) => setTimeout(resolveSleep, ms)))
   const log = options.log ?? ((message: string): void => void process.stderr.write(message))
 
   const startedAt = now()

@@ -25,8 +25,10 @@ import {
   validateLocalSubstrateHealthReport,
   validateLocalSubstrateRequest,
   validateLocalSubstrateResponse,
+  signRecord,
   verifyRecord,
   type AtribRecord,
+  type RecordSigner,
   type LocalSubstrateCoordinatorRequest,
   type LocalSubstrateCoordinatorResponse,
   type LocalSubstrateFixture,
@@ -449,6 +451,53 @@ describe('local substrate coordinator contract', () => {
     expect(headResponse?.status).toBe(200)
     expect(await headResponse!.text()).toBe('')
 
+    coordinator.destroy()
+  })
+
+  it('signs through an external signer and rejects when the signer fails (D190)', async () => {
+    const fixture = readJson<LocalSubstrateFixture>('cases/startup-spawn-codex-tool-call.json')
+    const seed = new Uint8Array(32).fill(0x11)
+    let fail = false
+    let calls = 0
+    const signer: RecordSigner = {
+      source: 'signer-socket',
+      socketPath: '/test/signer.sock',
+      identity: 'test-agent',
+      creatorKey: fixture.input.coordinator_request.record_body.creator_key,
+      async signRecord(record) {
+        calls += 1
+        if (fail) throw new Error('atrib: signer socket unreachable')
+        return signRecord(record, seed)
+      },
+    }
+    expect(() =>
+      createInProcessLocalSubstrateCoordinator({ signer, creatorKey: fixtureSeed(0x11) }),
+    ).toThrow('not both')
+
+    const observed: AtribRecord[] = []
+    const coordinator = createInProcessLocalSubstrateCoordinator({
+      signer,
+      logSubmission: 'disabled',
+      onRecord: (record) => {
+        observed.push(record)
+      },
+    })
+    const accepted = await tryLocalSubstrateCoordinator(fixture.input.coordinator_request, {
+      transport: coordinator.transport,
+    })
+    expect(accepted.status).toBe('accepted')
+    expect(observed).toHaveLength(1)
+    expect(await verifyRecord(observed[0]!)).toBe(true)
+
+    fail = true
+    const rejected = (await coordinator.transport(
+      fixture.input.coordinator_request,
+      {},
+    )) as LocalSubstrateCoordinatorResponse
+    expect(rejected.status).toBe('rejected')
+    expect(rejected.rejection_reason).toMatch(/^signer refused: /)
+    expect(observed).toHaveLength(1)
+    expect(calls).toBe(2)
     coordinator.destroy()
   })
 

@@ -18,6 +18,7 @@ from collections.abc import Mapping
 from .canon import jcs
 from .content_id import compute_content_id
 from .encoding import base64url_encode, hex_encode
+from .signer_socket import SignerSocket
 from .signing import get_public_key, sign_record
 from .types import SPEC_VERSION, AtribRecord
 
@@ -45,7 +46,8 @@ def content_hash(content: Mapping[str, object]) -> str:
 
 def build_and_sign_emit_record(
     *,
-    private_key: bytes,
+    private_key: bytes | None = None,
+    signer: SignerSocket | None = None,
     event_type: str,
     context_id: str,
     chain_root: str,
@@ -61,8 +63,15 @@ def build_and_sign_emit_record(
 ) -> AtribRecord:
     """Build, sign, and return a complete AtribRecord ready for submission.
     Pure aside from the signing primitive; no I/O. ``timestamp_ms`` injects
-    the clock for deterministic tests."""
-    public_key = base64url_encode(get_public_key(private_key))
+    the clock for deterministic tests. Exactly one of ``private_key`` and
+    ``signer`` (D190) is required."""
+    if (private_key is None) == (signer is None):
+        raise ValueError("atrib: provide exactly one of private_key and signer")
+    public_key = (
+        signer.creator_key
+        if signer is not None
+        else base64url_encode(get_public_key(private_key or b""))
+    )
     content_id = compute_content_id(SYNTHETIC_SERVER_URL, leaf_of_event_type_uri(event_type))
     effective_args_hash = args_hash if args_hash else content_hash(content)
 
@@ -90,4 +99,6 @@ def build_and_sign_emit_record(
     if tool_name:
         record["tool_name"] = tool_name
 
-    return sign_record(record, private_key)
+    if signer is not None:
+        return signer.sign_record(record)
+    return sign_record(record, private_key or b"")

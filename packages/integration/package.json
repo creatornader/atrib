@@ -60,6 +60,7 @@
     "cloudflare-x402-path-b-reference": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/verify build && pnpm --filter @atrib/action-gate build && pnpm --filter @atrib/agent build && tsx examples/cloudflare-agents/x402-path-b-reference/x402-path-b-reference-smoke.ts",
     "browser-workflow-receipt-smoke": "tsx examples/browser-workflow/browser-workflow-receipt-smoke.ts",
     "browser-use-workflow-receipt-smoke": "tsx examples/browser-workflow/browser-use-workflow-receipt-smoke.ts",
+    "brokered-sign-in-receipt-smoke": "tsx examples/browser-workflow/brokered-sign-in-receipt-smoke.ts",
     "stagehand-workflow-receipt-smoke": "tsx examples/browser-workflow/stagehand-workflow-receipt-smoke.ts",
     "browserbase-stagehand-packet": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/mcp-wrap build && tsx examples/browserbase-stagehand/browserbase-stagehand-packet-smoke.ts",
     "browserbase-stagehand-live-demo": "pnpm --filter @atrib/mcp build && pnpm --filter @atrib/mcp-wrap build && tsx examples/browserbase-stagehand/live-demo/server.ts",

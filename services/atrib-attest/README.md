@@ -146,6 +146,15 @@ Environment variables are unchanged from the legacy emit surface:
 table with descriptions; the values and resolution order carried over
 unchanged.
 
+`ATRIB_SIGNER_SOCK` takes precedence over every seed source
+([D190](../../DECISIONS.md#d190-a-local-signer-socket-is-a-final-key-source)).
+Each record goes over a Unix socket to a host signer that runs under a
+separate account, and the returned signature must verify under the pinned
+`ATRIB_SIGNER_PUBKEY`. While the socket is set, no seed source is consulted,
+and a missing pinned key or a down signer fails the call instead.
+`ATRIB_SIGNER_IDENTITY` (default `ATRIB_AGENT`) names the key requested, and
+`ATRIB_SIGNER_TIMEOUT_MS` (default 500) bounds each request.
+
 Programmatic callers can set `mirrorPath` and `autochainSource` in
 `EmitInProcessOptions`. `mirrorPath` selects the write target for one call.
 `autochainSource` selects its mirror-based chain inheritance source. When only

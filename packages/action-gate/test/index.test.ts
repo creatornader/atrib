@@ -7,6 +7,7 @@ import {
   buildActionGateDecisionEntry,
   buildActionGateOutcomeEntry,
   hashCanonical,
+  resolveActionGatePrivateKey,
   runGatedAction,
   signActionGateDecision,
   signActionGateOutcome,
@@ -14,6 +15,7 @@ import {
   type ActionGateActionEnvelope,
   type ActionGatePolicyOutcome,
 } from '../src/index.js'
+import { base64urlEncode, getPublicKey, signRecord, type RecordSigner } from '@atrib/mcp'
 
 const PRIVATE_KEY = new Uint8Array(32).fill(7)
 const CONTEXT_ID = '5f9a8a2b68f94a5cb7f9361b2c8d4e10'
@@ -1013,5 +1015,66 @@ describe('@atrib/action-gate', () => {
     const verification = await verifyActionGateRun({ decision, outcome })
 
     expect(verification).toEqual({ valid: true, issues: [] })
+  })
+})
+
+describe('@atrib/action-gate with an external signer (D190)', () => {
+  const ticks = () => {
+    let tick = 1_780_000_000_000
+    return () => tick++
+  }
+  const run = (
+    key: { privateKey?: Uint8Array; signer?: RecordSigner },
+    execute = () => ({ ok: true }),
+  ) =>
+    runGatedAction({
+      ...key,
+      contextId: CONTEXT_ID,
+      action: browserAction({ risk: ['read_only'] }),
+      evaluate: () => ({
+        outcome: 'allow',
+        policy_id: 'browser-risk-policy',
+        policy_version: '2026-06-28.1',
+        reason: 'fixture allow',
+      }),
+      execute,
+      now: ticks(),
+    })
+
+  it('signs decision and outcome through the signer, byte-identical to seed signing', async () => {
+    let calls = 0
+    const signer: RecordSigner = {
+      source: 'signer-socket',
+      socketPath: '/test/signer.sock',
+      identity: 'test-agent',
+      creatorKey: base64urlEncode(await getPublicKey(PRIVATE_KEY)),
+      async signRecord(record) {
+        calls += 1
+        return signRecord(record, PRIVATE_KEY)
+      },
+    }
+    const viaSigner = await run({ signer })
+    const viaSeed = await run({ privateKey: PRIVATE_KEY })
+    expect(calls).toBe(2)
+    expect(viaSigner.decision.record).toEqual(viaSeed.decision.record)
+    expect(viaSigner.outcome.record).toEqual(viaSeed.outcome.record)
+    expect(viaSigner.verification.valid).toBe(true)
+  })
+
+  it('fails closed when ATRIB_SIGNER_SOCK is set, without reading ATRIB_PRIVATE_KEY', async () => {
+    const saved = { ...process.env }
+    process.env.ATRIB_SIGNER_SOCK = '/nonexistent/atrib-signer.sock'
+    process.env.ATRIB_PRIVATE_KEY = base64urlEncode(PRIVATE_KEY)
+    delete process.env.ATRIB_SIGNER_PUBKEY
+    let executed = 0
+    try {
+      await expect(run({}, () => ((executed += 1), { ok: true }))).rejects.toThrow(
+        'ATRIB_SIGNER_PUBKEY',
+      )
+      expect(() => resolveActionGatePrivateKey()).toThrow('ATRIB_SIGNER_SOCK is set')
+      expect(executed).toBe(0)
+    } finally {
+      process.env = saved
+    }
   })
 })

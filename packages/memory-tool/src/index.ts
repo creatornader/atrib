@@ -19,9 +19,10 @@ import {
   hexEncode,
   resolveChainRoot,
   sha256,
+  signerSocketFromEnv,
   signRecord,
 } from '@atrib/mcp'
-import type { AtribRecord, ProofBundle, SubmissionQueue } from '@atrib/mcp'
+import type { AtribRecord, ProofBundle, RecordSigner, SubmissionQueue } from '@atrib/mcp'
 
 type MemoryCommandName = BetaMemoryTool20250818Command['command']
 type MemoryCommandFor<K extends MemoryCommandName> = Extract<
@@ -45,9 +46,16 @@ const MUTATING_COMMANDS = new Set<MemoryCommandName>([
 export interface AtribMemoryToolOptions {
   /**
    * 32-byte Ed25519 seed as bytes, base64url, or 64 lowercase hex.
-   * When omitted, reads `ATRIB_PRIVATE_KEY`.
+   * When neither this nor `signer` is given, the key comes from the
+   * environment: `ATRIB_SIGNER_SOCK` when set (final, D190), otherwise
+   * `ATRIB_PRIVATE_KEY`.
    */
   privateKey?: Uint8Array | string
+  /**
+   * External signer that holds the key outside this process (D190), such as
+   * `createSignerSocket(...)`. Takes precedence over `privateKey`.
+   */
+  signer?: RecordSigner
   /** Stable trace id for all signed memory commands. Defaults per process. */
   contextId?: string
   /** Logical producer surface used for content_id derivation. */
@@ -97,6 +105,7 @@ export class AtribMemoryTool implements AtribMemoryToolHandlers {
   readonly contextId: string
 
   private readonly privateKey: Uint8Array | undefined
+  private readonly signer: RecordSigner | undefined
   private readonly handlers: MemoryToolHandlers
   private readonly serverUrl: string
   private readonly signReads: boolean
@@ -108,7 +117,9 @@ export class AtribMemoryTool implements AtribMemoryToolHandlers {
 
   constructor(handlers: MemoryToolHandlers, options: AtribMemoryToolOptions = {}) {
     this.handlers = handlers
-    this.privateKey = tryResolvePrivateKey(options.privateKey)
+    const key = resolveSigningKey(options)
+    this.privateKey = key.privateKey
+    this.signer = key.signer
     this.creatorKey = ''
     this.contextId = options.contextId ?? randomContextId()
     this.serverUrl = options.serverUrl ?? DEFAULT_SERVER_URL
@@ -116,7 +127,7 @@ export class AtribMemoryTool implements AtribMemoryToolHandlers {
     this.now = options.now ?? Date.now
     this.onRecord = options.onRecord
 
-    if (!this.privateKey || options.logSubmission === 'disabled') {
+    if ((!this.privateKey && !this.signer) || options.logSubmission === 'disabled') {
       this.queue = options.submissionQueue
     } else {
       this.queue = options.submissionQueue ?? createSubmissionQueue(options.logEndpoint)
@@ -124,7 +135,9 @@ export class AtribMemoryTool implements AtribMemoryToolHandlers {
   }
 
   async init(): Promise<this> {
-    if (this.privateKey) {
+    if (this.signer) {
+      this.creatorKey = this.signer.creatorKey
+    } else if (this.privateKey) {
       this.creatorKey = base64urlEncode(await getPublicKey(this.privateKey))
     }
     return this
@@ -198,8 +211,7 @@ export class AtribMemoryTool implements AtribMemoryToolHandlers {
           error: { name: string; message: string }
         },
   ): Promise<void> {
-    const privateKey = this.privateKey
-    if (!privateKey || !this.shouldSign(name)) return
+    if (!this.shouldSign(name)) return
 
     try {
       if (!this.creatorKey) await this.init()
@@ -220,7 +232,9 @@ export class AtribMemoryTool implements AtribMemoryToolHandlers {
         result_hash: hashCanonical(outcome),
         tool_name: toolName,
       }
-      const signed = await signRecord(record, privateKey)
+      const signed = this.signer
+        ? await this.signer.signRecord(record)
+        : await signRecord(record, this.privateKey!)
       const recordHashHex = hexEncode(sha256(canonicalRecord(signed)))
       this.lastRecordHashHex = recordHashHex
       this.records.push(signed)
@@ -238,7 +252,8 @@ export class AtribMemoryTool implements AtribMemoryToolHandlers {
   }
 
   private shouldSign(name: MemoryCommandName): boolean {
-    return this.privateKey !== undefined && (this.signReads || MUTATING_COMMANDS.has(name))
+    const canSign = this.signer !== undefined || this.privateKey !== undefined
+    return canSign && (this.signReads || MUTATING_COMMANDS.has(name))
   }
 }
 
@@ -265,6 +280,32 @@ export function resolvePrivateKey(value?: Uint8Array | string): Uint8Array {
     throw new Error('atrib memory tool: privateKey must decode to 32 bytes')
   }
   return decoded
+}
+
+/**
+ * Pick the signing key. A host-supplied signer or seed wins. Otherwise a set
+ * ATRIB_SIGNER_SOCK is final: a misconfigured socket leaves memory commands
+ * unsigned and never falls back to ATRIB_PRIVATE_KEY (D190).
+ */
+function resolveSigningKey(options: AtribMemoryToolOptions): {
+  privateKey?: Uint8Array
+  signer?: RecordSigner
+} {
+  if (options.signer) return { signer: options.signer }
+  if (options.privateKey !== undefined) {
+    const privateKey = tryResolvePrivateKey(options.privateKey)
+    return privateKey ? { privateKey } : {}
+  }
+  if (typeof process !== 'undefined') {
+    try {
+      const signer = signerSocketFromEnv(process.env)
+      if (signer) return { signer }
+    } catch {
+      return {}
+    }
+  }
+  const privateKey = tryResolvePrivateKey()
+  return privateKey ? { privateKey } : {}
 }
 
 function tryResolvePrivateKey(value?: Uint8Array | string): Uint8Array | undefined {

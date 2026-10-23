@@ -192,6 +192,7 @@
       "commands": [
         "browser-workflow-receipt-smoke",
         "browser-use-workflow-receipt-smoke",
+        "brokered-sign-in-receipt-smoke",
         "stagehand-workflow-receipt-smoke"
       ]
     },

@@ -333,14 +333,24 @@ queue per effective atrib-log anchor). Never raises.
 ### Keys ([§5.6](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#56-key-management))
 
 - `resolve_key(env=None) -> ResolvedKey | None`: the portable subset of
-  `@atrib/emit`'s ladder: `ATRIB_PRIVATE_KEY` (base64url 32-byte seed),
-  then `ATRIB_KEY_FILE`. The macOS-Keychain and 1Password rungs are
+  `@atrib/emit`'s ladder: the `ATRIB_SIGNER_SOCK` signer socket with a pinned
+  `ATRIB_SIGNER_PUBKEY` ([D190](https://github.com/creatornader/atrib/blob/main/DECISIONS.md#d190-a-local-signer-socket-is-a-final-key-source)),
+  then `ATRIB_PRIVATE_KEY` (base64url 32-byte seed), then `ATRIB_KEY_FILE`.
+  A set socket is final: when it is misconfigured, `resolve_key` returns
+  `None` and never reads a seed. The macOS-Keychain and 1Password rungs are
   platform/tool-coupled and intentionally not ported; hosts needing them
   resolve the seed themselves and pass it explicitly. Never raises:
   malformed material degrades to `None` with a stderr warning, and absence
   of a key is pass-through, not an error.
-- `ResolvedKey`: frozen dataclass: `private_key` (32-byte seed), `source`
-  (`'env' | 'file'`).
+- `ResolvedKey`: frozen dataclass: `private_key` (32-byte seed, empty for
+  the socket), `source` (`'signer-socket' | 'env' | 'file'`), and `signer`.
+- `SignerSocket` and `signer_socket_from_env(env=None)`: the signer socket
+  client. It refuses transaction records, a socket owned by the calling user
+  and a world-writable socket directory, bounds each request with
+  `ATRIB_SIGNER_TIMEOUT_MS` (500 ms by default), and raises
+  `SignerSocketError` unless the returned signature verifies under the pinned
+  key. `attest` treats that error like any signing failure: no record, a
+  warning, and the caller's work continues.
 
 ### Mirror ([§5.9](https://github.com/creatornader/atrib/blob/main/atrib-spec.md#59-local-mirror-conventions))
 

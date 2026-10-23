@@ -765,7 +765,7 @@ async function handleEmit({
   let record
   try {
     record = await buildAndSignEmitRecord({
-      privateKey: key.privateKey,
+      ...(key.source === 'signer-socket' ? { signer: key.signer } : { privateKey: key.privateKey }),
       eventType,
       contextId,
       chainRoot,

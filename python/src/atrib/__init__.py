@@ -82,6 +82,7 @@ from .hashes import (
     sha256,
 )
 from .keys import ResolvedKey, resolve_key
+from .signer_socket import SignerSocket, SignerSocketError, signer_socket_from_env
 from .mcp_client import (
     PROTOCOL_VERSION,
     McpProtocolError,
@@ -206,6 +207,8 @@ __all__ = [
     "McpTransportInfo",
     "RecallOutcome",
     "ResolvedKey",
+    "SignerSocket",
+    "SignerSocketError",
     "SPEC_VERSION",
     "PROTOCOL_VERSION",
     "SignerEntry",
@@ -256,6 +259,7 @@ __all__ = [
     "sign_record",
     "sign_transaction_attestation",
     "sign_transaction_record",
+    "signer_socket_from_env",
     "validate_submission",
     "verify_record",
 ]

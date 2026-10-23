@@ -4,7 +4,12 @@
 // identity B in the same session, breaking chain continuity and creating
 // mystery keys in the log.
 //
+// ATRIB_SIGNER_SOCK (D190) is final when set: the wrapper signs through the
+// socket and never consults a seed source, so a leftover seed cannot fork
+// the identity. A misconfigured socket fails startup.
+//
 // Resolution order (first hit wins):
+//   0. ATRIB_SIGNER_SOCK + ATRIB_SIGNER_PUBKEY (signer socket, final)
 //   1. ATRIB_PRIVATE_KEY env var (legacy / dev path)
 //   2. ATRIB_KEY_FILE env var → 0600 file
 //   3. macOS Keychain, account = current user, services tried in order:
@@ -19,9 +24,17 @@
 import { readFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { userInfo } from 'node:os'
-import { base64urlDecode } from '@atrib/mcp'
+import { base64urlDecode, signerSocketFromEnv, type RecordSigner } from '@atrib/mcp'
 
-export interface ResolvedKey {
+export type ResolvedKey = SeedKey | SignerSocketKey
+
+/** The signer socket holds the key; the wrapper never sees a seed. */
+export interface SignerSocketKey {
+  source: 'signer-socket'
+  signer: RecordSigner
+}
+
+export interface SeedKey {
   privateKey: Uint8Array
   /** Raw base64url-encoded seed. Re-emitted to ATRIB_PRIVATE_KEY for the upstream proxy. */
   seedB64url: string
@@ -42,6 +55,11 @@ export interface ResolvedKey {
  * before falling back to the generic `atrib-creator` service.
  */
 export async function resolveKey(agent: string): Promise<ResolvedKey> {
+  // Throws when the socket is set but misconfigured, so startup fails closed.
+  // The signer identity defaults to the wrapper's agent, as Keychain does.
+  const signer = signerSocketFromEnv({ ATRIB_AGENT: agent, ...process.env })
+  if (signer) return { source: 'signer-socket', signer }
+
   const envSeed = process.env['ATRIB_PRIVATE_KEY']
   if (envSeed) {
     return { privateKey: decodeSeed(envSeed), seedB64url: envSeed.trim(), source: 'env' }

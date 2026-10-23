@@ -20,6 +20,7 @@ import { EVENT_TYPE_TRANSACTION_URI } from './types.js'
 import { zeroize } from './zeroize.js'
 import type { AtribRecord, UnsignedAtribRecord } from './types.js'
 import type { ArchiveSubmissionOptions, ProofBundle, SubmissionQueue } from './submission.js'
+import type { RecordSigner } from './signer-socket.js'
 
 export const LOCAL_SUBSTRATE_REQUEST_SCHEMA = 'atrib.local-substrate-coordinator.request.v0'
 export const LOCAL_SUBSTRATE_RESPONSE_SCHEMA = 'atrib.local-substrate-coordinator.response.v0'
@@ -297,7 +298,14 @@ export interface InProcessLocalSubstrateCoordinatorHealthOptions {
 }
 
 export interface CreateInProcessLocalSubstrateCoordinatorOptions {
-  creatorKey: string
+  /** Base64url Ed25519 seed (32 bytes). Required unless `signer` is set. */
+  creatorKey?: string
+  /**
+   * External signer that holds the key outside this process (D190). When
+   * set, it is the only key source and `creatorKey` must be absent. A signer
+   * failure rejects the request; the coordinator never signs with a seed.
+   */
+  signer?: RecordSigner
   supportedHarnessClasses?: readonly LocalSubstrateHarnessClass[]
   logEndpoint?: string
   logSubmission?: 'enabled' | 'disabled'
@@ -1175,8 +1183,12 @@ export function probeLocalSubstrateHealth(
 export function createInProcessLocalSubstrateCoordinator(
   options: CreateInProcessLocalSubstrateCoordinatorOptions,
 ): InProcessLocalSubstrateCoordinator {
-  const privateKey = base64urlDecode(options.creatorKey)
-  if (privateKey.length !== 32) {
+  const signer = options.signer
+  if (signer && options.creatorKey !== undefined) {
+    throw new Error('local substrate coordinator takes signer or creatorKey, not both')
+  }
+  const privateKey = signer ? new Uint8Array(0) : base64urlDecode(options.creatorKey ?? '')
+  if (!signer && privateKey.length !== 32) {
     throw new Error('local substrate coordinator creatorKey must decode to 32 bytes')
   }
 
@@ -1193,7 +1205,9 @@ export function createInProcessLocalSubstrateCoordinator(
             ? { archiveSubmission: options.archiveSubmission }
             : {}),
         })
-  const publicKeyReady = getPublicKey(new Uint8Array(privateKey)).then(base64urlEncode)
+  const publicKeyReady = signer
+    ? Promise.resolve(signer.creatorKey)
+    : getPublicKey(new Uint8Array(privateKey)).then(base64urlEncode)
   let destroyed = false
 
   const health = (): LocalSubstrateHealthProbeResult => {
@@ -1282,7 +1296,17 @@ export function createInProcessLocalSubstrateCoordinator(
     }
 
     const unsigned = { ...request.record_body, signature: '' } as AtribRecord
-    const signed = await signRecord(unsigned, privateKey)
+    let signed: AtribRecord
+    if (signer) {
+      try {
+        signed = await signer.signRecord(unsigned)
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error)
+        return rejectedLocalSubstrateResponse(request, `signer refused: ${reason}`, health().report)
+      }
+    } else {
+      signed = await signRecord(unsigned, privateKey)
+    }
     const recordHash = recordHashRef(signed)
     const receiptId = encodeToken(signed)
     activeContexts.add(request.record_body.context_id)

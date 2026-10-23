@@ -19,6 +19,24 @@ pnpm --filter @atrib/integration browser-use-workflow-receipt-smoke
 pnpm --filter @atrib/integration stagehand-workflow-receipt-smoke
 ```
 
+### Brokered sign-in
+
+```bash
+pnpm --filter @atrib/integration brokered-sign-in-receipt-smoke
+```
+
+A credential broker fills a login into the page on the agent's behalf, so the
+agent never holds the value. The agent signs the broker's outcome as a
+`browser.action.credential` record, and each later action cites that record
+through `informed_by`. The record commits to a salted item reference, never
+the credential, the site, or the item itself; those stay in the local sidecar
+or nowhere. A denied release produces no later actions. A broker failure is
+signed as an error outcome and the workflow stops.
+
+The broker is a local fixture and every output says so. Its outcome is the
+agent's own claim: no broker artifact is verified, because no broker exposes
+one an agent can check yet.
+
 The Stagehand smoke is opt-in inside CI because local CDP startup can time out
 on shared runners. Set `ATRIB_RUN_STAGEHAND_BROWSER_SMOKE=1` when a CI job is
 meant to exercise that browser session directly.
