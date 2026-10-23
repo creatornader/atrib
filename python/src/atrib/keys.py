@@ -2,7 +2,8 @@
 """Signing-key resolution (§5.6).
 
 Portable subset of ``@atrib/emit``'s resolveKey ladder: the
-``ATRIB_PRIVATE_KEY`` env var (base64url 32-byte seed) then
+``ATRIB_SIGNER_SOCK`` signer socket (D190, final when set), the
+``ATRIB_PRIVATE_KEY`` env var (base64url 32-byte seed), then
 ``ATRIB_KEY_FILE``. The macOS-Keychain and 1Password rungs are
 platform/tool-coupled and intentionally not ported; hosts needing them
 should resolve the seed themselves and pass it explicitly.
@@ -19,12 +20,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .encoding import base64url_decode
+from .signer_socket import SignerSocket, signer_socket_from_env
 
 
 @dataclass(frozen=True)
 class ResolvedKey:
-    private_key: bytes  # 32-byte Ed25519 seed
-    source: str  # 'env' | 'file'
+    private_key: bytes  # 32-byte Ed25519 seed; empty when ``signer`` is set
+    source: str  # 'signer-socket' | 'env' | 'file'
+    # Set when source == 'signer-socket': the process never holds the seed.
+    signer: SignerSocket | None = None
 
 
 def _decode_seed(value: str) -> bytes | None:
@@ -40,6 +44,16 @@ def resolve_key(env: Mapping[str, str] | None = None) -> ResolvedKey | None:
     Never raises (§5.8): malformed material degrades to None with a
     warning on stderr."""
     environment: Mapping[str, str] = os.environ if env is None else env
+
+    # D190: a set ATRIB_SIGNER_SOCK is final. A misconfigured socket degrades
+    # to pass-through and never falls back to a seed source.
+    try:
+        signer = signer_socket_from_env(environment)
+    except ValueError as exc:
+        _warn(str(exc).removeprefix("atrib: "))
+        return None
+    if signer is not None:
+        return ResolvedKey(private_key=b"", source="signer-socket", signer=signer)
 
     env_value = environment.get("ATRIB_PRIVATE_KEY")
     if env_value:

@@ -74,7 +74,12 @@ const memory = await createAtribMemoryTool(fsMemory, {
 `logSubmission: 'disabled'` still signs records and calls `onRecord`; it only
 skips public log submission.
 
-If neither `privateKey` nor `ATRIB_PRIVATE_KEY` is configured, the wrapper
+To keep the seed out of the process, pass `signer: createSignerSocket(...)`
+from `@atrib/mcp` instead of `privateKey`. With neither option, a set
+`ATRIB_SIGNER_SOCK` is the key source and `ATRIB_PRIVATE_KEY` is not read
+([D190](../../DECISIONS.md#d190-a-local-signer-socket-is-a-final-key-source)).
+
+If no key is configured, the wrapper
 passes commands through to the underlying handlers without signing. An invalid
 key has the same pass-through behavior. Memory operations must not fail because
 the atrib layer is missing or misconfigured.

@@ -51,6 +51,31 @@ function makeConfig(recordFile: string): WrapConfig {
 }
 
 describe('wrap wiring', () => {
+  it('passes a signer socket key as the signer and never as a seed', async () => {
+    const { wrap } = await import('../src/wrap.js')
+    const { createAtribProxy, createSignerSocket } = await import('@atrib/mcp')
+    const createAtribProxyMock = vi.mocked(createAtribProxy)
+    createAtribProxyMock.mockClear()
+    const signer = createSignerSocket({
+      socketPath: '/var/run/atrib-signer/signer.sock',
+      creatorKey: Buffer.alloc(32, 9).toString('base64url'),
+      identity: 'codex',
+    })
+
+    const dir = mkdtempSync(join(tmpdir(), 'atrib-wrap-wiring-'))
+    try {
+      await wrap(makeConfig(join(dir, 'records.jsonl')), {
+        resolveKey: async () => ({ source: 'signer-socket', signer }),
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+
+    const options = createAtribProxyMock.mock.calls[0]?.[0]
+    expect(options?.atrib.signer).toBe(signer)
+    expect(options?.atrib.creatorKey).toBeUndefined()
+  })
+
   it('passes bridge-safe context and informed_by options to createAtribProxy', async () => {
     const { wrap } = await import('../src/wrap.js')
     const { createAtribProxy } = await import('@atrib/mcp')

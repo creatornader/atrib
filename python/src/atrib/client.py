@@ -520,7 +520,8 @@ class AtribClient:
 
         try:
             record = build_and_sign_emit_record(
-                private_key=key.private_key,
+                private_key=None if key.signer is not None else key.private_key,
+                signer=key.signer,
                 event_type=resolved_event_type,
                 context_id=effective_context,
                 chain_root=effective_chain_root,

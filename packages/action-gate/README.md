@@ -50,6 +50,12 @@ console.log(result.outcome.record_hash)
 console.log(result.verification.valid)
 ```
 
+To keep the seed out of the process, pass `signer: createSignerSocket(...)`
+from `@atrib/mcp` instead of `privateKey`. With neither option, a set
+`ATRIB_SIGNER_SOCK` is the key source; a misconfigured socket throws, so the
+gate fails closed and never reads `ATRIB_PRIVATE_KEY`
+([D190](../../DECISIONS.md#d190-a-local-signer-socket-is-a-final-key-source)).
+
 ## Contract
 
 The package has four gate states:

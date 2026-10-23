@@ -12,11 +12,12 @@ import {
   hexEncode,
   resolveChainRoot,
   sha256,
+  signerSocketFromEnv,
   signRecord,
   verifyRecord,
   EVENT_TYPE_TRANSACTION_URI,
 } from '@atrib/mcp'
-import type { AtribRecord } from '@atrib/mcp'
+import type { AtribRecord, RecordSigner } from '@atrib/mcp'
 import {
   verifyRecord as verifyRecordAnnotated,
   isTrustedCrossAttested,
@@ -176,6 +177,8 @@ export interface SignedActionGateOutcome {
 
 export interface RunGatedActionInput<TResult> {
   readonly privateKey?: Uint8Array | string
+  /** External signer that holds the key outside this process (D190). Takes precedence over `privateKey`. */
+  readonly signer?: RecordSigner
   readonly contextId?: string
   readonly serverUrl?: string
   readonly parentRecordHashes?: readonly Sha256Uri[]
@@ -290,6 +293,8 @@ export interface ProtectedMcpExecutor<TResult> {
 
 export interface CreateProtectedMcpExecutorInput<TResult> {
   readonly privateKey?: Uint8Array | string
+  /** External signer that holds the key outside this process (D190). Takes precedence over `privateKey`. */
+  readonly signer?: RecordSigner
   readonly contextId?: string
   readonly serverUrl?: string
   readonly surface?: string
@@ -374,7 +379,7 @@ export async function runGatedAction<TResult>(
   input: RunGatedActionInput<TResult>,
 ): Promise<ActionGateRunResult<TResult>> {
   const recordDeliveryErrors: ActionGateRecordDeliveryError[] = []
-  const privateKey = resolveActionGatePrivateKey(input.privateKey)
+  const key = resolveActionGateKey(input)
   const now = input.now ?? Date.now
   const contextId = input.contextId ?? randomContextId()
   const serverUrl = input.serverUrl ?? DEFAULT_ACTION_GATE_SERVER_URL
@@ -398,7 +403,7 @@ export async function runGatedAction<TResult>(
   const decision = await signActionGateDecision({
     entry: decisionEntry,
     action: input.action,
-    privateKey,
+    ...key,
     contextId,
     serverUrl,
     timestampMs,
@@ -423,7 +428,7 @@ export async function runGatedAction<TResult>(
   const outcome = await signActionGateOutcome({
     entry: outcomeEntry,
     action: input.action,
-    privateKey,
+    ...key,
     contextId,
     serverUrl,
     decisionRecordHash: decision.record_hash,
@@ -569,6 +574,7 @@ export function createProtectedMcpExecutor<TResult>(
     try {
       const bypassEvidence = await runGatedAction<never>({
         ...(input.privateKey !== undefined ? { privateKey: input.privateKey } : {}),
+        ...(input.signer !== undefined ? { signer: input.signer } : {}),
         ...(input.contextId !== undefined ? { contextId: input.contextId } : {}),
         ...(input.serverUrl !== undefined ? { serverUrl: input.serverUrl } : {}),
         action: actionEnvelopeFor(action, request, {
@@ -636,6 +642,7 @@ export function createProtectedMcpExecutor<TResult>(
   ): Promise<ActionGateRunResult<TResult>> =>
     runGatedAction<TResult>({
       ...(input.privateKey !== undefined ? { privateKey: input.privateKey } : {}),
+      ...(input.signer !== undefined ? { signer: input.signer } : {}),
       ...(input.contextId !== undefined ? { contextId: input.contextId } : {}),
       ...(input.serverUrl !== undefined ? { serverUrl: input.serverUrl } : {}),
       action: actionEnvelopeFor(action, request, {
@@ -696,6 +703,7 @@ export function createProtectedMcpExecutor<TResult>(
       }
       return runGatedAction({
         ...(input.privateKey !== undefined ? { privateKey: input.privateKey } : {}),
+        ...(input.signer !== undefined ? { signer: input.signer } : {}),
         ...(input.contextId !== undefined ? { contextId: input.contextId } : {}),
         ...(input.serverUrl !== undefined ? { serverUrl: input.serverUrl } : {}),
         action: actionEnvelopeFor(action, request),
@@ -828,6 +836,7 @@ export async function signActionGateDecision({
   entry,
   action,
   privateKey,
+  signer,
   contextId,
   serverUrl = DEFAULT_ACTION_GATE_SERVER_URL,
   chainTailHex,
@@ -835,7 +844,9 @@ export async function signActionGateDecision({
 }: {
   readonly entry: ActionGateDecisionEntry
   readonly action: ActionGateActionEnvelope
-  readonly privateKey: Uint8Array
+  /** 32-byte seed. Exactly one of `privateKey` and `signer` is required. */
+  readonly privateKey?: Uint8Array
+  readonly signer?: RecordSigner
   readonly contextId: string
   readonly serverUrl?: string
   readonly chainTailHex?: string
@@ -845,7 +856,7 @@ export async function signActionGateDecision({
   if (!actionMatchesDecisionEntry(action, entry)) {
     throw new Error('action does not match decision entry')
   }
-  const creatorKey = base64urlEncode(await getPublicKey(privateKey))
+  const creatorKey = await creatorKeyFor({ privateKey, signer })
   const record: AtribRecord = {
     spec_version: 'atrib/1.0',
     content_id: computeContentId(serverUrl, `${DECISION_TOOL_NAME}.${entry.decision_state}`),
@@ -862,7 +873,7 @@ export async function signActionGateDecision({
       ? { informed_by: [...entry.parent_record_hashes] }
       : {}),
   }
-  const signed = await signRecord(record, privateKey)
+  const signed = await signWith(record, { privateKey, signer })
   const recordHash = recordHashFor(signed)
   return {
     record: signed,
@@ -884,6 +895,7 @@ export async function signActionGateOutcome({
   entry,
   action,
   privateKey,
+  signer,
   contextId,
   decisionRecordHash,
   serverUrl = DEFAULT_ACTION_GATE_SERVER_URL,
@@ -893,7 +905,9 @@ export async function signActionGateOutcome({
 }: {
   readonly entry: ActionGateOutcomeEntry
   readonly action: ActionGateActionEnvelope
-  readonly privateKey: Uint8Array
+  /** 32-byte seed. Exactly one of `privateKey` and `signer` is required. */
+  readonly privateKey?: Uint8Array
+  readonly signer?: RecordSigner
   readonly contextId: string
   readonly decisionRecordHash: Sha256Uri
   readonly serverUrl?: string
@@ -916,7 +930,7 @@ export async function signActionGateOutcome({
   if (result !== undefined && entry.result_digest !== digestCanonical(result)) {
     throw new Error('result does not match outcome entry result_digest')
   }
-  const creatorKey = base64urlEncode(await getPublicKey(privateKey))
+  const creatorKey = await creatorKeyFor({ privateKey, signer })
   const record: AtribRecord = {
     spec_version: 'atrib/1.0',
     content_id: computeContentId(serverUrl, `${OUTCOME_TOOL_NAME}.${entry.status}`),
@@ -934,7 +948,7 @@ export async function signActionGateOutcome({
     tool_name: `${OUTCOME_TOOL_NAME}.${entry.status}`,
     informed_by: [decisionRecordHash],
   }
-  const signed = await signRecord(record, privateKey)
+  const signed = await signWith(record, { privateKey, signer })
   const recordHash = recordHashFor(signed)
   return {
     record: signed,
@@ -1452,7 +1466,54 @@ export function recordHashFor(record: AtribRecord): Sha256Uri {
   return `sha256:${hexEncode(sha256(canonicalRecord(record)))}`
 }
 
+type ActionGateKey = { readonly privateKey: Uint8Array } | { readonly signer: RecordSigner }
+type SigningKeyInput = {
+  readonly privateKey?: Uint8Array | undefined
+  readonly signer?: RecordSigner | undefined
+}
+
+/**
+ * Pick the signing key. A caller-supplied signer or seed wins. Otherwise a set
+ * ATRIB_SIGNER_SOCK is final (D190): a misconfigured socket throws, so the
+ * gate fails closed instead of signing with ATRIB_PRIVATE_KEY.
+ */
+function resolveActionGateKey(input: {
+  readonly privateKey?: Uint8Array | string
+  readonly signer?: RecordSigner
+}): ActionGateKey {
+  if (input.signer) return { signer: input.signer }
+  if (input.privateKey === undefined && typeof process !== 'undefined') {
+    const signer = signerSocketFromEnv(process.env)
+    if (signer) return { signer }
+  }
+  return { privateKey: resolveActionGatePrivateKey(input.privateKey) }
+}
+
+function requireOneKey(key: SigningKeyInput): ActionGateKey {
+  if (key.signer && key.privateKey) throw new Error('provide privateKey or signer, not both')
+  if (key.signer) return { signer: key.signer }
+  if (key.privateKey) return { privateKey: key.privateKey }
+  throw new Error('provide privateKey or signer')
+}
+
+async function creatorKeyFor(key: SigningKeyInput): Promise<string> {
+  const resolved = requireOneKey(key)
+  return 'signer' in resolved
+    ? resolved.signer.creatorKey
+    : base64urlEncode(await getPublicKey(resolved.privateKey))
+}
+
+async function signWith(record: AtribRecord, key: SigningKeyInput): Promise<AtribRecord> {
+  const resolved = requireOneKey(key)
+  return 'signer' in resolved
+    ? resolved.signer.signRecord(record)
+    : signRecord(record, resolved.privateKey)
+}
+
 export function resolveActionGatePrivateKey(value?: Uint8Array | string): Uint8Array {
+  if (value === undefined && typeof process !== 'undefined' && process.env.ATRIB_SIGNER_SOCK) {
+    throw new Error('ATRIB_SIGNER_SOCK is set; Action Gate will not read ATRIB_PRIVATE_KEY (D190)')
+  }
   const raw = value ?? (typeof process !== 'undefined' ? process.env.ATRIB_PRIVATE_KEY : undefined)
   if (raw instanceof Uint8Array) {
     if (raw.length !== 32) throw new Error('Action Gate privateKey must be 32 bytes')

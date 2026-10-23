@@ -166,6 +166,12 @@ Commit mode does not move local mirror append or outbound context ownership to t
 
 The wrapper picks the signing key in this order (first hit wins):
 
+0. `ATRIB_SIGNER_SOCK` with a pinned `ATRIB_SIGNER_PUBKEY`
+   ([D190](../../DECISIONS.md#d190-a-local-signer-socket-is-a-final-key-source)). The wrapper sends each record to the
+   signer socket and never holds a seed. The signer identity defaults to the
+   wrapper's `agent`; set `ATRIB_SIGNER_IDENTITY` to override it. When the
+   socket is set, no later source is consulted, and a missing pinned key
+   stops the wrapper at startup.
 1. `ATRIB_PRIVATE_KEY` env var (legacy / dev path).
 2. `ATRIB_KEY_FILE` env var → 0600-mode file containing the base64url seed.
 3. macOS Keychain entry for the current user, services tried in order:
@@ -174,10 +180,6 @@ The wrapper picks the signing key in this order (first hit wins):
 4. 1Password CLI (`op read`) as a recovery path. Set `ATRIB_OP_REFERENCE` to a
    valid `op://<vault>/<item>/<field>` reference. Off by default; activates
    only when the env var is set.
-
-The wrapper does not sign through a signer socket yet. If `ATRIB_SIGNER_SOCK`
-is set, it exits non-zero instead of falling back to a seed
-([D190](../../DECISIONS.md#d190-a-local-signer-socket-is-a-final-key-source)).
 
 If none yields a key, the wrapper exits non-zero. Operator misconfiguration
 should surface immediately rather than silently degrading.

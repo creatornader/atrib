@@ -45,6 +45,7 @@ import type { ArchiveSubmissionOptions, SubmissionQueue, ProofBundle } from './s
 import type { CapturedMcpOAuthEvidence, McpOAuthEvidenceCaptureOptions } from './oauth-evidence.js'
 import type { CapturedX401Evidence, X401EvidenceCaptureOptions } from './x401-evidence.js'
 import type { DelegationCertificate } from './delegation.js'
+import type { RecordSigner } from './signer-socket.js'
 
 const HEX_32 = /^[0-9a-f]{32}$/
 const DEFAULT_LOCAL_SUBSTRATE_SHADOW_DEGRADATION: LocalSubstrateDegradationPolicy = {
@@ -218,8 +219,14 @@ export interface OnRecordSidecar {
 
 /** Options for the atrib() middleware (§5.3.1). */
 export interface AtribOptions {
-  /** Base64url-encoded Ed25519 private key (32 bytes). Required. */
+  /** Base64url-encoded Ed25519 private key (32 bytes). Required unless `signer` is set. */
   creatorKey?: string
+  /**
+   * External signer that holds the key outside this process (D190). When
+   * set, it is the only key source: `creatorKey` is ignored, and a signer
+   * failure leaves the call unattributed rather than signing with a seed.
+   */
+  signer?: RecordSigner
   /** URL of the Merkle log submission endpoint. */
   logEndpoint?: string
   /**
@@ -533,8 +540,11 @@ export function atrib(
 ): AtribServer {
   const atribServer = server as unknown as AtribServer
 
+  // A signer is final (D190): with both set, creatorKey is never decoded.
+  const signer = options.signer
+
   // §5.8: If ATRIB_PRIVATE_KEY is not set, pass-through mode
-  if (!options.creatorKey) {
+  if (!signer && !options.creatorKey) {
     console.warn('atrib: no creatorKey provided, operating in pass-through mode')
     atribServer.flush = async () => {}
     atribServer.getProof = () => undefined
@@ -543,8 +553,8 @@ export function atrib(
     return atribServer
   }
 
-  const privateKey = base64urlDecode(options.creatorKey)
-  if (privateKey.length !== 32) {
+  const privateKey = signer ? new Uint8Array(0) : base64urlDecode(options.creatorKey ?? '')
+  if (!signer && privateKey.length !== 32) {
     console.warn('atrib: creatorKey must be 32 bytes, operating in pass-through mode')
     atribServer.flush = async () => {}
     atribServer.getProof = () => undefined
@@ -646,9 +656,13 @@ export function atrib(
 
   // Derive the public key once at init (async, cached).
   let publicKeyB64: string | undefined
-  const publicKeyReady = getPublicKey(privateKey).then((pk) => {
-    publicKeyB64 = base64urlEncode(pk)
-  })
+  const publicKeyReady = signer
+    ? Promise.resolve().then(() => {
+        publicKeyB64 = signer.creatorKey
+      })
+    : getPublicKey(privateKey).then((pk) => {
+        publicKeyB64 = base64urlEncode(pk)
+      })
 
   // Init-time warning: result disclosure requires the post-call signing
   // path. preCallTransform forces pre-call signing where the result isn't
@@ -967,7 +981,10 @@ export function atrib(
     } as UnsignedAtribRecord
 
     // §1.4.2: Sign the record
-    const signed = await signRecord({ ...record, signature: '' } as AtribRecord, privateKey)
+    const unsignedRecord = { ...record, signature: '' } as AtribRecord
+    const signed = signer
+      ? await signer.signRecord(unsignedRecord)
+      : await signRecord(unsignedRecord, privateKey)
     const recordHashHex = hexEncode(sha256(canonicalRecord(signed)))
     dispatchLocalSubstrateShadow(
       {

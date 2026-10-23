@@ -280,7 +280,7 @@ export async function wrap(
     version: '0.1.0',
     upstream,
     atrib: {
-      creatorKey: key.seedB64url,
+      ...(key.source === 'signer-socket' ? { signer: key.signer } : { creatorKey: key.seedB64url }),
       serverUrl: `${config.serverUrl}/${config.agent}`,
       logEndpoint: config.logEndpoint,
       ...(config.archiveSubmission ? { archiveSubmission: config.archiveSubmission } : {}),

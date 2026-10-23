@@ -9980,13 +9980,18 @@ only if it verifies under the pinned `ATRIB_SIGNER_PUBKEY`.
 5. Transaction records are not signed through the socket. Their
    [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
    cross-attestation bytes need their own request shape.
-6. `@atrib/attest`, and the daemon and TypeScript SDK paths that resolve keys
-   through it, sign through the socket. `@atrib/mcp-wrap` and the local
-   substrate host need an in-process seed today, so they refuse to start while
-   the socket is set. Producers that take their seed from the caller, or read
-   `ATRIB_PRIVATE_KEY` directly (the Python SDK, `@atrib/memory-tool`,
-   `@atrib/action-gate` and the integration examples), do not consult the
-   socket. A host using the socket gives them no seed.
+6. Every producer that resolves its own key signs through the socket:
+   `@atrib/attest`, and the daemon and TypeScript SDK paths that resolve keys
+   through it, `@atrib/mcp-wrap`, the local substrate host, the Python SDK,
+   `@atrib/memory-tool` and `@atrib/action-gate`. The `atrib()` middleware and
+   the in-process coordinator take the client as a `signer` option, so a seed
+   never enters those processes. A caller that passes its own seed or signer
+   explicitly keeps that choice; the socket rule governs keys read from the
+   environment. `@atrib/agent` takes its key from the caller. The private
+   integration proofs still read `ATRIB_PRIVATE_KEY` directly and are not
+   meant to run under a signer socket. A misconfigured socket
+   stops a long-running producer at startup, leaves an observational call
+   unattributed, and makes `@atrib/action-gate` fail closed.
 
 **Alternatives considered.**
 
@@ -10004,8 +10009,10 @@ only if it verifies under the pinned `ATRIB_SIGNER_PUBKEY`.
   No record field, canonical form or verifier step changes.
 - The signer implementation, its policy and its audit log are host-owned and
   out of scope for the public packages.
-- Wrapper, local-substrate and Python SDK support, and transaction
-  cross-attestation over the socket, remain follow-up work.
+- An older producer that predates this decision ignores `ATRIB_SIGNER_SOCK`
+  and keeps resolving a seed. Hosts that set the socket check the producer's
+  reported key source before relying on it.
+- Transaction cross-attestation over the socket remains follow-up work.
 
 **Cross-references.**
 

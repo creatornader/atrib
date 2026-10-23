@@ -4,12 +4,14 @@ import { createAtribMemoryTool, resolvePrivateKey, type AtribMemorySidecar } fro
 import {
   base64urlEncode,
   canonicalRecord,
+  getPublicKey,
+  signRecord,
   genesisChainRoot,
   hexEncode,
   sha256,
   verifyRecord,
 } from '@atrib/mcp'
-import type { AtribRecord } from '@atrib/mcp'
+import type { AtribRecord, RecordSigner } from '@atrib/mcp'
 
 const privateKey = new Uint8Array(32).fill(7)
 
@@ -89,6 +91,56 @@ describe('@atrib/memory-tool', () => {
     await memory.view({ command: 'view', path: '/memories' })
 
     expect(memory.getSignedRecords()).toHaveLength(0)
+  })
+
+  it('signs through an external signer without holding a seed (D190)', async () => {
+    const creatorKey = base64urlEncode(await getPublicKey(privateKey))
+    let calls = 0
+    const signer: RecordSigner = {
+      source: 'signer-socket',
+      socketPath: '/test/signer.sock',
+      identity: 'test-agent',
+      creatorKey,
+      async signRecord(record) {
+        calls += 1
+        return signRecord(record, privateKey)
+      },
+    }
+    const memory = await createAtribMemoryTool(handlers(), { signer, logSubmission: 'disabled' })
+    await memory.create({ command: 'create', path: '/memories/a.txt', file_text: 'body' })
+
+    expect(calls).toBe(1)
+    expect(memory.creatorKey).toBe(creatorKey)
+    const [record] = memory.getSignedRecords()
+    expect(record?.creator_key).toBe(creatorKey)
+    expect(await verifyRecord(record!)).toBe(true)
+  })
+
+  it('treats ATRIB_SIGNER_SOCK as final and never falls back to ATRIB_PRIVATE_KEY', async () => {
+    const saved = { ...process.env }
+    const pinned = base64urlEncode(new Uint8Array(32).fill(9))
+    process.env.ATRIB_PRIVATE_KEY = base64urlEncode(privateKey)
+    process.env.ATRIB_SIGNER_SOCK = '/nonexistent/atrib-signer.sock'
+    try {
+      process.env.ATRIB_SIGNER_PUBKEY = pinned
+      const unreachable = await createAtribMemoryTool(handlers(), { logSubmission: 'disabled' })
+      const result = await unreachable.create({
+        command: 'create',
+        path: '/memories/b.txt',
+        file_text: 'body',
+      })
+      expect(result).toBe('created /memories/b.txt')
+      expect(unreachable.creatorKey).toBe(pinned)
+      expect(unreachable.getSignedRecords()).toHaveLength(0)
+
+      delete process.env.ATRIB_SIGNER_PUBKEY
+      const misconfigured = await createAtribMemoryTool(handlers(), { logSubmission: 'disabled' })
+      await misconfigured.create({ command: 'create', path: '/memories/c.txt', file_text: 'body' })
+      expect(misconfigured.creatorKey).toBe('')
+      expect(misconfigured.getSignedRecords()).toHaveLength(0)
+    } finally {
+      process.env = saved
+    }
   })
 
   it('passes through without signing when no private key is configured', async () => {

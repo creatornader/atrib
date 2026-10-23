@@ -338,16 +338,13 @@ function keyScope(key: ResolvedKey): string {
 async function startLocalSubstrateHost(
   options: StartHostOptions,
 ): Promise<LocalSubstrateHostHandle> {
-  if (options.key.source === 'signer-socket') {
-    // The in-process coordinator signs with a seed it holds. Refuse rather
-    // than fall back to another key source (D190 fail-closed rule).
-    throw new Error(
-      'atrib-local-substrate: ATRIB_SIGNER_SOCK is set, but the local substrate host needs an in-process key; unset it or run without the host',
-    )
-  }
   const harnessClasses = options.harnessClasses ?? [...LOCAL_SUBSTRATE_HARNESS_CLASSES]
   const coordinator = createInProcessLocalSubstrateCoordinator({
-    creatorKey: base64urlEncode(options.key.privateKey),
+    // A signer-socket key never reaches this process (D190); the coordinator
+    // asks the socket for each signature instead.
+    ...(options.key.source === 'signer-socket'
+      ? { signer: options.key.signer }
+      : { creatorKey: base64urlEncode(options.key.privateKey) }),
     supportedHarnessClasses: harnessClasses,
     ...(options.logEndpoint !== undefined ? { logEndpoint: options.logEndpoint } : {}),
     ...(options.logSubmission !== undefined ? { logSubmission: options.logSubmission } : {}),
