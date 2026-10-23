@@ -9961,9 +9961,10 @@ environment to be unable to override that boundary.
 signer that runs under a separate account, and accepts the returned signature
 only if it verifies under the pinned `ATRIB_SIGNER_PUBKEY`.
 
-1. When `ATRIB_SIGNER_SOCK` is set, it is the only key source. A missing pinned
-   key throws. No producer falls back to an env, file, Keychain or 1Password
-   seed, so a leftover seed cannot fork the identity.
+1. When `ATRIB_SIGNER_SOCK` is set, it is the only key source for producers
+   that resolve keys themselves. A missing pinned key throws. None of them
+   falls back to an env, file, Keychain or 1Password seed, so a leftover seed
+   cannot fork the identity.
 2. The wire format is one newline-terminated JSON request per connection:
    `{"v":1,"op":"sign","identity":...,"record":...}`, answered by
    `{"v":1,"ok":true,"signature":...}` or `{"v":1,"ok":false,"error":...}`.
@@ -9979,9 +9980,13 @@ only if it verifies under the pinned `ATRIB_SIGNER_PUBKEY`.
 5. Transaction records are not signed through the socket. Their
    [§1.7.6](atrib-spec.md#176-cross-attestation-requirement-for-transaction-records)
    cross-attestation bytes need their own request shape.
-6. `@atrib/attest`, and the daemon and SDK paths that resolve keys through it,
-   sign through the socket. `@atrib/mcp-wrap` and the local substrate host need
-   an in-process seed today, so they refuse to start while the socket is set.
+6. `@atrib/attest`, and the daemon and TypeScript SDK paths that resolve keys
+   through it, sign through the socket. `@atrib/mcp-wrap` and the local
+   substrate host need an in-process seed today, so they refuse to start while
+   the socket is set. Producers that take their seed from the caller, or read
+   `ATRIB_PRIVATE_KEY` directly (the Python SDK, `@atrib/memory-tool`,
+   `@atrib/action-gate` and the integration examples), do not consult the
+   socket. A host using the socket gives them no seed.
 
 **Alternatives considered.**
 
@@ -9999,11 +10004,13 @@ only if it verifies under the pinned `ATRIB_SIGNER_PUBKEY`.
   No record field, canonical form or verifier step changes.
 - The signer implementation, its policy and its audit log are host-owned and
   out of scope for the public packages.
-- Wrapper and local-substrate support, and transaction cross-attestation over
-  the socket, remain follow-up work.
+- Wrapper, local-substrate and Python SDK support, and transaction
+  cross-attestation over the socket, remain follow-up work.
 
 **Cross-references.**
 
+- [§1.4.6](atrib-spec.md#146-signing-key-isolation-for-sandboxed-execution),
+  signing key isolation.
 - [§9.7](atrib-spec.md#97-pattern-sandboxed-execution-signer-proxy), host signer
   proxy pattern.
 - [D148](#d148-atribd-is-the-public-stateless-native-local-daemon-for-the-primitive-runtime),
