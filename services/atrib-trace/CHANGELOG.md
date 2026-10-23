@@ -1,5 +1,11 @@
 # @atrib/trace
 
+## 2.0.1
+
+### Patch Changes
+
+- @atrib/recall@6.0.1
+
 ## 2.0.0
 
 ### Major Changes

@@ -1,5 +1,16 @@
 # @atrib/sdk
 
+## 8.0.1
+
+### Patch Changes
+
+- Updated dependencies [5280751]
+  - @atrib/mcp@0.27.0
+  - @atrib/verify@0.15.1
+  - @atrib/recall@6.0.1
+  - @atrib/emit@2.0.1
+  - @atrib/verify-mcp@2.0.1
+
 ## 8.0.0
 
 ### Major Changes

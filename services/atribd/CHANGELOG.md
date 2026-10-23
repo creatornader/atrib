@@ -1,5 +1,16 @@
 # @atrib/daemon
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [5280751]
+  - @atrib/mcp@0.27.0
+  - @atrib/attest@0.6.0
+  - @atrib/verify@0.15.1
+  - @atrib/recall@6.0.1
+  - @atrib/summarize@0.6.1
+
 ## 0.5.0
 
 ### Minor Changes

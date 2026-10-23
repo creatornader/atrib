@@ -1,5 +1,13 @@
 # @atrib/recall
 
+## 6.0.1
+
+### Patch Changes
+
+- Updated dependencies [5280751]
+  - @atrib/mcp@0.27.0
+  - @atrib/verify@0.15.1
+
 ## 6.0.0
 
 ### Major Changes
