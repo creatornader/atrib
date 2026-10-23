@@ -64,8 +64,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.12.0)
       '@modelcontextprotocol/client':
-        specifier: ^2.3.1
-        version: 2.3.1
+        specifier: ^2.4.0
+        version: 2.4.0
       eslint:
         specifier: ^10.12.0
         version: 10.12.0
@@ -410,7 +410,7 @@ importers:
         version: 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)
       agents:
         specifier: 0.28.1
-        version: 0.28.1(@ai-sdk/provider@4.0.27)(@babel/core@7.29.7)(@babel/runtime@7.29.10)(@cloudflare/codemode@0.5.4(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(@modelcontextprotocol/client@2.3.1)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(@modelcontextprotocol/server@2.4.0)(ai@7.0.138(zod@4.6.7))(chat@4.39.0(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(react@19.2.6)(rolldown@1.2.14)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)(yaml@2.9.0))(zod@4.6.7)
+        version: 0.28.1(@ai-sdk/provider@4.0.27)(@babel/core@7.29.7)(@babel/runtime@7.29.10)(@cloudflare/codemode@0.5.4(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(@modelcontextprotocol/client@2.4.0)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(@modelcontextprotocol/server@2.4.0)(ai@7.0.138(zod@4.6.7))(chat@4.39.0(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(react@19.2.6)(rolldown@1.2.14)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)(yaml@2.9.0))(zod@4.6.7)
       zod:
         specifier: ^4.6.6
         version: 4.6.7
@@ -456,7 +456,7 @@ importers:
         version: 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)
       agents:
         specifier: 0.28.1
-        version: 0.28.1(@ai-sdk/provider@4.0.27)(@babel/core@7.29.7)(@babel/runtime@7.29.10)(@cloudflare/codemode@0.5.4(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(@modelcontextprotocol/client@2.3.1)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(@modelcontextprotocol/server@2.4.0)(ai@7.0.138(zod@4.6.7))(chat@4.39.0(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(react@19.2.6)(rolldown@1.2.14)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)(yaml@2.9.0))(zod@4.6.7)
+        version: 0.28.1(@ai-sdk/provider@4.0.27)(@babel/core@7.29.7)(@babel/runtime@7.29.10)(@cloudflare/codemode@0.5.4(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(@modelcontextprotocol/client@2.4.0)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(@modelcontextprotocol/server@2.4.0)(ai@7.0.138(zod@4.6.7))(chat@4.39.0(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(react@19.2.6)(rolldown@1.2.14)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)(yaml@2.9.0))(zod@4.6.7)
       zod:
         specifier: ^4.6.6
         version: 4.6.7
@@ -490,7 +490,7 @@ importers:
         version: 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)
       agents:
         specifier: 0.28.1
-        version: 0.28.1(@ai-sdk/provider@4.0.27)(@babel/core@7.29.7)(@babel/runtime@7.29.10)(@cloudflare/codemode@0.5.4(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(@modelcontextprotocol/client@2.3.1)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(@modelcontextprotocol/server@2.4.0)(ai@7.0.138(zod@4.6.7))(chat@4.39.0(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(react@19.2.6)(rolldown@1.2.14)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)(yaml@2.9.0))(zod@4.6.7)
+        version: 0.28.1(@ai-sdk/provider@4.0.27)(@babel/core@7.29.7)(@babel/runtime@7.29.10)(@cloudflare/codemode@0.5.4(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(@modelcontextprotocol/client@2.4.0)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(@modelcontextprotocol/server@2.4.0)(ai@7.0.138(zod@4.6.7))(chat@4.39.0(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(react@19.2.6)(rolldown@1.2.14)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)(yaml@2.9.0))(zod@4.6.7)
       zod:
         specifier: ^4.6.6
         version: 4.6.7
@@ -569,8 +569,8 @@ importers:
   packages/mcp:
     dependencies:
       '@modelcontextprotocol/client':
-        specifier: ^2.3.1
-        version: 2.3.1
+        specifier: ^2.4.0
+        version: 2.4.0
       '@modelcontextprotocol/server':
         specifier: ^2.4.0
         version: 2.4.0
@@ -606,8 +606,8 @@ importers:
         specifier: workspace:*
         version: link:../mcp
       '@modelcontextprotocol/client':
-        specifier: ^2.3.1
-        version: 2.3.1
+        specifier: ^2.4.0
+        version: 2.4.0
       '@modelcontextprotocol/server':
         specifier: ^2.4.0
         version: 2.4.0
@@ -727,8 +727,8 @@ importers:
         specifier: workspace:*
         version: link:../mcp
       '@modelcontextprotocol/client':
-        specifier: ^2.3.1
-        version: 2.3.1
+        specifier: ^2.4.0
+        version: 2.4.0
     devDependencies:
       '@atrib/recall':
         specifier: workspace:*
@@ -854,8 +854,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/mcp
       '@modelcontextprotocol/client':
-        specifier: ^2.3.1
-        version: 2.3.1
+        specifier: ^2.4.0
+        version: 2.4.0
       '@modelcontextprotocol/server':
         specifier: ^2.4.0
         version: 2.4.0
@@ -925,8 +925,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/verify
       '@modelcontextprotocol/client':
-        specifier: ^2.3.1
-        version: 2.3.1
+        specifier: ^2.4.0
+        version: 2.4.0
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
         version: 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)
@@ -953,8 +953,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/mcp
       '@modelcontextprotocol/client':
-        specifier: ^2.3.1
-        version: 2.3.1
+        specifier: ^2.4.0
+        version: 2.4.0
       '@modelcontextprotocol/server':
         specifier: ^2.4.0
         version: 2.4.0
@@ -1105,8 +1105,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/verify
       '@modelcontextprotocol/client':
-        specifier: ^2.3.1
-        version: 2.3.1
+        specifier: ^2.4.0
+        version: 2.4.0
       '@modelcontextprotocol/node':
         specifier: ^2.1.1
         version: 2.1.1(@modelcontextprotocol/server@2.4.0)
@@ -2772,6 +2772,10 @@ packages:
 
   '@modelcontextprotocol/client@2.3.1':
     resolution: {integrity: sha512-mIGZXpHsjnZ6lD+gD/WCMpR5k8yVQQ8nNFH1N0Srf7AvnwTUMYD6pvTY8ng2+He5FfV7YMZLmrjL7cLa/cc3dQ==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/client@2.4.0':
+    resolution: {integrity: sha512-LgrD2OphHuG12vfKFKz6SOnq7bKHQmhGJIAYdD+MZBn2npHEyry6uD8zvktodtl5CQM85MO0anUyD9JwmUmxww==}
     engines: {node: '>=20'}
 
   '@modelcontextprotocol/core@2.2.0':
@@ -8546,6 +8550,16 @@ snapshots:
       pkce-challenge: 5.0.1
       zod: 4.6.7
 
+  '@modelcontextprotocol/client@2.4.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.4.0
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.1.1
+      jose: 6.2.12
+      pkce-challenge: 5.0.1
+      zod: 4.6.7
+
   '@modelcontextprotocol/core@2.2.0':
     dependencies:
       zod: 4.6.7
@@ -9624,11 +9638,11 @@ snapshots:
     dependencies:
       humanize-ms: 1.2.1
 
-  agents@0.28.1(@ai-sdk/provider@4.0.27)(@babel/core@7.29.7)(@babel/runtime@7.29.10)(@cloudflare/codemode@0.5.4(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(@modelcontextprotocol/client@2.3.1)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(@modelcontextprotocol/server@2.4.0)(ai@7.0.138(zod@4.6.7))(chat@4.39.0(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(react@19.2.6)(rolldown@1.2.14)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)(yaml@2.9.0))(zod@4.6.7):
+  agents@0.28.1(@ai-sdk/provider@4.0.27)(@babel/core@7.29.7)(@babel/runtime@7.29.10)(@cloudflare/codemode@0.5.4(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(@modelcontextprotocol/client@2.4.0)(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))(@modelcontextprotocol/server@2.4.0)(ai@7.0.138(zod@4.6.7))(chat@4.39.0(ai@7.0.138(zod@4.6.7))(zod@4.6.7))(react@19.2.6)(rolldown@1.2.14)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)(yaml@2.9.0))(zod@4.6.7):
     dependencies:
       '@babel/plugin-proposal-decorators': 8.0.2(@babel/core@7.29.7)
       '@cfworker/json-schema': 4.1.1
-      '@modelcontextprotocol/client': 2.3.1
+      '@modelcontextprotocol/client': 2.4.0
       '@modelcontextprotocol/sdk': 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)
       '@modelcontextprotocol/server': 2.4.0
       '@rolldown/plugin-babel': 0.2.3(@babel/core@7.29.7)(@babel/runtime@7.29.10)(rolldown@1.2.14)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)(yaml@2.9.0))
