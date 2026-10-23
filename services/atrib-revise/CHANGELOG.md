@@ -1,5 +1,12 @@
 # @atrib/revise
 
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [5280751]
+  - @atrib/attest@0.6.0
+
 ## 2.0.0
 
 ### Major Changes

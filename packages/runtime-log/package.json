@@ -1,6 +1,6 @@
 {
   "name": "@atrib/runtime-log",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "bin": {
     "atrib-runtime-log": "./dist/cli.js"
