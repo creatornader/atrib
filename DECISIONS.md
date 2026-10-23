@@ -10636,3 +10636,52 @@ when the watchdog first warns, and treat that warning as the deadline for
 choosing among the three structural options rather than as the fix.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P060: credential-release evidence waits for a broker artifact a verifier can check
+
+**Filed 2026-10-23.**
+
+**Source:** Credential brokers now release website logins and one-time codes
+into a page on an agent's behalf after the owner approves on their own device.
+The agent never holds the value and learns only that release was granted. No
+broker exposes a signed approval artifact, an event export, or an API an agent
+or verifier can check.
+
+**The decision in question:** whether to register an atrib-maintained
+credential-release evidence profile under the universal evidence envelope
+([D137](#d137-universal-evidence-envelope-as-the-single-protocol-level-attachment-model)), and what it
+would carry.
+
+**Considerations.**
+
+- No existing profile fits. The `human-approval` profile requires an
+  atrib-signed approval record with `approver_key`. Action-bound tokens
+  ([D145](#d145-action-bound-single-use-authorization-tokens)) are minted and
+  consumed by the host, not by a broker. The [§5.5.6](atrib-spec.md#556-generic-authorization-evidence-blocks) authorization evidence
+  strings are frozen.
+- Without a broker artifact every fact would be `caller-attested`, and the
+  profile's tiers could never pass `declared` or `attested`. Registering it now
+  would put a profile in the registry that rests only on the producer's word,
+  shaped by brokers that may expose different artifacts later.
+- Candidate fields when an artifact exists: a generic broker type, a salted
+  item commitment ([§8.3](atrib-spec.md#83-salted-commitment-posture)), a coarse approval-method enum, an approver key or
+  role, scope, expiry, outcome, and the broker's artifact or its hash.
+- Privacy rules that hold either way: never the credential value; item
+  references only as per-record salted commitments, because an unsalted hash
+  can be brute-forced from the site and username and links accounts across
+  sessions; site names and broker vendor labels stay in the local sidecar;
+  the approver is a key or role, never a name or address.
+
+**Until then:** producers record the broker outcome as an ordinary signed
+record whose content commits through `args_hash`
+([D099](#d099-explicit-emit-records-commit-local-content-through-default-args_hash)),
+and later actions cite it through `informed_by`. The integration package's
+brokered sign-in smoke shows the shape with a simulated broker.
+
+**Trigger:** the first broker that exposes an approval artifact a verifier can
+check offline.
+
+**Likely outcome (not committed):** register the profile against that artifact,
+with the privacy rules above; until then, no registry, corpus or count changes.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.

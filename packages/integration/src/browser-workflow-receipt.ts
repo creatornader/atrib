@@ -25,7 +25,7 @@ import type { Page } from 'browser-use/browser'
 
 type MaybePromise<T> = T | Promise<T>
 
-export type BrowserWorkflowActionName = 'observe' | 'click' | 'fill' | 'submit'
+export type BrowserWorkflowActionName = 'observe' | 'click' | 'fill' | 'submit' | 'credential'
 
 export type BrowserWorkflowToolName = `browser.action.${BrowserWorkflowActionName}`
 
@@ -37,6 +37,7 @@ const TOOL_NAMES: Record<BrowserWorkflowActionName, BrowserWorkflowToolName> = {
   click: 'browser.action.click',
   fill: 'browser.action.fill',
   submit: 'browser.action.submit',
+  credential: 'browser.action.credential',
 }
 
 export interface BrowserWorkflowReceiptOptions {
@@ -92,6 +93,8 @@ export interface BrowserActionCall<TResult> {
   operation: BrowserWorkflowActionName
   pageUrl: string
   args: unknown
+  /** Record hashes (`sha256:<hex>`) this action relied on, signed as `informed_by`. */
+  informedBy?: string[]
   run: () => MaybePromise<TResult>
 }
 
@@ -127,16 +130,28 @@ export class BrowserWorkflowReceiptRecorder implements BrowserWorkflowReceiptSta
     const argsSnapshot = snapshotCanonical(call.args)
     try {
       const result = await call.run()
-      await this.signAction(call.operation, call.pageUrl, argsSnapshot, {
-        status: 'ok',
-        result,
-      })
+      await this.signAction(
+        call.operation,
+        call.pageUrl,
+        argsSnapshot,
+        {
+          status: 'ok',
+          result,
+        },
+        call.informedBy,
+      )
       return result
     } catch (error) {
-      await this.signAction(call.operation, call.pageUrl, argsSnapshot, {
-        status: 'error',
-        error: normalizeError(error),
-      })
+      await this.signAction(
+        call.operation,
+        call.pageUrl,
+        argsSnapshot,
+        {
+          status: 'error',
+          error: normalizeError(error),
+        },
+        call.informedBy,
+      )
       throw error
     }
   }
@@ -171,6 +186,7 @@ export class BrowserWorkflowReceiptRecorder implements BrowserWorkflowReceiptSta
           status: 'error'
           error: { name: string; message: string }
         },
+    informedBy?: string[],
   ): Promise<void> {
     const privateKey = this.privateKey
     if (!privateKey || argsSnapshot === undefined) return
@@ -187,6 +203,7 @@ export class BrowserWorkflowReceiptRecorder implements BrowserWorkflowReceiptSta
           autoChainTailHex: this.lastRecordHashHex,
         }),
         event_type: EVENT_TYPE_TOOL_CALL_URI,
+        ...(informedBy && informedBy.length > 0 ? { informed_by: [...informedBy].sort() } : {}),
         context_id: this.contextId,
         timestamp: this.now(),
         signature: '',
