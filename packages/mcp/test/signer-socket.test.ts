@@ -91,7 +91,7 @@ describe('signer socket client', () => {
     const signer = createSignerSocket({
       socketPath,
       creatorKey: record.creator_key,
-      identity: 'second-brain',
+      identity: 'scheduled-job',
       allowSameOwner: true,
     })
     await expect(signer.signRecord(record)).rejects.toThrow('signer refused: identity not allowed')
@@ -208,9 +208,9 @@ describe('signerSocketFromEnv', () => {
     const base = { ATRIB_SIGNER_SOCK: '/tmp/x.sock', ATRIB_SIGNER_PUBKEY: creatorKey }
     expect(signerSocketFromEnv({ ...base, ATRIB_AGENT: 'codex' })?.identity).toBe('codex')
     expect(
-      signerSocketFromEnv({ ...base, ATRIB_AGENT: 'codex', ATRIB_SIGNER_IDENTITY: 'hermes' })
+      signerSocketFromEnv({ ...base, ATRIB_AGENT: 'codex', ATRIB_SIGNER_IDENTITY: 'job-runner' })
         ?.identity,
-    ).toBe('hermes')
+    ).toBe('job-runner')
     expect(signerSocketFromEnv(base)?.identity).toBe('claude-code')
   })
 
