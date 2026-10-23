@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@atrib/attest": "workspace:*",
-    "@modelcontextprotocol/server": "^2.3.1"
+    "@modelcontextprotocol/server": "^2.4.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
