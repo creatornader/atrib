@@ -17,20 +17,20 @@
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
-    "@cloudflare/codemode": "0.5.4",
+    "@cloudflare/codemode": "0.5.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "agents": "0.28.1",
+    "agents": "0.30.0",
     "zod": "^4.6.6"
   },
   "devDependencies": {
     "@atrib/graph-node": "workspace:*",
-    "@cloudflare/workers-types": "5.20261016.1",
-    "@playwright/test": "^1.64.0",
+    "@cloudflare/workers-types": "5.20261023.1",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.0.5",
-    "wrangler": "4.151.0",
-    "@cloudflare/vitest-plugin": "1.4.4"
+    "wrangler": "4.152.0",
+    "@cloudflare/vitest-plugin": "1.4.7"
   }
 }
