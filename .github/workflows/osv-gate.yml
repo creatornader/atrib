@@ -1,0 +1,21 @@
+name: osv-gate
+
+# Fails in its own run when the OSV-Scanner sweep in security-scan finds
+# vulnerabilities. Kept out of security-scan so the run that uploads the
+# SARIF stays green and code scanning shows no configuration error.
+# workflow_run only fires for this file on the default branch.
+
+on:
+  workflow_run:
+    workflows: [security-scan]
+    types: [completed]
+
+permissions:
+  actions: read
+
+jobs:
+  gate:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    uses: creatornader/oss-security-scan/.github/workflows/osv-gate.yml@v0.3.0
+    with:
+      run-id: ${{ github.event.workflow_run.id }}
