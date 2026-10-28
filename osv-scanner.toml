@@ -1,0 +1,7 @@
+# Advisories osv-scanner may ignore, each with a reason and an expiry.
+# Remove an entry as soon as a fixed release exists.
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2027-01-31
+reason = "deepmerge has no patched release. It reaches the tree only through html-to-text in @llamaindex/node-parser, used by the LlamaIndex integration example, which merges its own option objects rather than untrusted input."
