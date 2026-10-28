@@ -45,10 +45,10 @@
     "@noble/ed25519": "^3.2.0",
     "@noble/hashes": "^2.4.0",
     "@noble/secp256k1": "^3.2.0",
-    "@sd-jwt/core": "0.22.0",
-    "@sd-jwt/sd-jwt-vc": "0.22.0",
+    "@sd-jwt/core": "0.23.2",
+    "@sd-jwt/sd-jwt-vc": "0.23.2",
     "canonicalize": "^5.1.0",
-    "jose": "6.2.12"
+    "jose": "6.2.13"
   },
   "devDependencies": {
     "zod": "^4.6.6",

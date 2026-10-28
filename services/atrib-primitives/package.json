@@ -23,7 +23,7 @@
     "@atrib/summarize": "workspace:*",
     "@atrib/verify": "workspace:*",
     "@modelcontextprotocol/client": "^2.4.0",
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@modelcontextprotocol/server": "^2.4.0"
   },
   "devDependencies": {
