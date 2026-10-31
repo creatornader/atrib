@@ -20,6 +20,9 @@ function parseArgs(argv) {
   let notifier = join(homedir(), '.claude', 'scripts', 'moshi-notify.mjs')
   let stateFile = join(homedir(), '.atrib', 'state', 'atribd-mcp-monitor.json')
   let dryRun = false
+  let notifyTo
+  let reminderHours = 24
+  let now = Date.now()
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     if (arg === '--endpoint') {
@@ -31,6 +34,21 @@ function parseArgs(argv) {
     if (arg === '--notifier') {
       notifier = argv[++index]
       if (!notifier) throw new Error('--notifier requires a path')
+      continue
+    }
+    if (arg === '--notify-to') {
+      notifyTo = argv[++index]
+      if (!notifyTo) throw new Error('--notify-to requires a selector, such as @atrib')
+      continue
+    }
+    if (arg === '--reminder-hours') {
+      reminderHours = Number(argv[++index])
+      if (!(reminderHours > 0)) throw new Error('--reminder-hours must be a positive number')
+      continue
+    }
+    if (arg === '--now') {
+      now = Date.parse(argv[++index])
+      if (!Number.isFinite(now)) throw new Error('--now requires an ISO timestamp')
       continue
     }
     if (arg === '--state-file') {
@@ -49,7 +67,16 @@ function parseArgs(argv) {
     notifier,
     stateFile,
     dryRun,
+    notifyTo,
+    reminderMs: reminderHours * 60 * 60 * 1000,
+    now,
   }
+}
+
+const ALERTS = ['compatibility', 'availability']
+
+function isoOrNull(value) {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null
 }
 
 function loadState(path) {
@@ -62,9 +89,24 @@ function loadState(path) {
         Number.isSafeInteger(parsed?.availability_failures) && parsed.availability_failures > 0
           ? parsed.availability_failures
           : 0,
+      reminded_at: Object.fromEntries(
+        ALERTS.map((alert) => [alert, isoOrNull(parsed?.reminded_at?.[alert])]),
+      ),
+      agent_pending: Object.fromEntries(
+        ALERTS.map((alert) => {
+          const pending = parsed?.agent_pending?.[alert]
+          return [alert, pending === 'firing' || pending === 'resolved' ? pending : null]
+        }),
+      ),
     }
   } catch {
-    return { compatibility_alert: false, availability_alert: false, availability_failures: 0 }
+    return {
+      compatibility_alert: false,
+      availability_alert: false,
+      availability_failures: 0,
+      reminded_at: { compatibility: null, availability: null },
+      agent_pending: { compatibility: null, availability: null },
+    }
   }
 }
 
@@ -94,20 +136,45 @@ function summary(reports) {
     .join('; ')
 }
 
-function notify(notifier, title, message, dryRun) {
-  if (dryRun) return { status: 'dry-run' }
-  const result = spawnSync(
-    NODE,
-    [notifier, '--source', 'codex', '--title', title, '--message', message],
-    {
-      encoding: 'utf8',
-      timeout: 15_000,
-    },
-  )
-  if (result.status !== 0) {
-    throw new Error(`notification failed: ${result.stderr || result.stdout}`)
+// Phone pushes go through the notifier as source atribd-monitor, as before.
+// With --notify-to, the monitor also keeps one agent-facing alert per check:
+// a separate notifier call with a stable key, no push, and --rousr-strict, so
+// a call that did not land is reported and retried on the next cycle instead
+// of being lost. A notifier failure never aborts the cycle.
+function runNotifier(options, args, timeout) {
+  if (options.dryRun) return { status: 'dry-run' }
+  const result = spawnSync(NODE, [options.notifier, '--source', 'atribd-monitor', ...args], {
+    encoding: 'utf8',
+    timeout,
+  })
+  if (result.status === 0) return { status: 'sent' }
+  return {
+    status: 'failed',
+    exit: result.status,
+    error: (result.error?.message || result.stderr || result.stdout || '').trim().slice(0, 300),
   }
-  return { status: 'sent' }
+}
+
+function pushNotice(options, title, message) {
+  // Leaves room for the notifier's own retries (three attempts, 8 s each).
+  return runNotifier(options, ['--title', title, '--message', message], 45_000)
+}
+
+function agentNotice(options, alert, title, message, resolve) {
+  const args = [
+    '--title',
+    title,
+    '--message',
+    message,
+    '--rousr-key',
+    `atribd-mcp:${alert}`,
+    '--to',
+    options.notifyTo,
+    '--no-push',
+    '--rousr-strict',
+  ]
+  if (resolve) args.push('--resolve')
+  return runNotifier(options, args, 20_000)
 }
 
 function main() {
@@ -138,55 +205,89 @@ function main() {
     availability_failures: availabilityFailures,
   }
   const notifications = []
-  if (next.compatibility_alert && !prior.compatibility_alert) {
-    notifications.push({
-      kind: 'compatibility_opened',
-      ...notify(
-        options.notifier,
+  const nowIso = new Date(options.now).toISOString()
+  const notices = {
+    compatibility: {
+      opened: [
         'atribd MCP legacy regression',
         `Modern traffic was followed by legacy MCP traffic. ${summary(compatibility.reports)}`,
-        options.dryRun,
-      ),
-    })
-  }
-  if (!next.compatibility_alert && prior.compatibility_alert) {
-    notifications.push({
-      kind: 'compatibility_recovered',
-      ...notify(
-        options.notifier,
+      ],
+      recovered: [
         'atribd MCP legacy regression recovered',
         'No active legacy-after-modern regression remains.',
-        options.dryRun,
-      ),
-    })
-  }
-  if (next.availability_alert && !prior.availability_alert) {
-    notifications.push({
-      kind: 'availability_opened',
-      ...notify(
-        options.notifier,
+      ],
+      reminder: [
+        'atribd MCP legacy regression still open',
+        `Legacy MCP traffic after modern traffic is still reported. ${summary(compatibility.reports)}`,
+      ],
+    },
+    availability: {
+      opened: [
         'atribd profile availability degraded',
         `Readiness probes failed in two scheduled monitor cycles. ${summary(availability.reports)}`,
-        options.dryRun,
-      ),
-    })
-  }
-  if (!next.availability_alert && prior.availability_alert) {
-    notifications.push({
-      kind: 'availability_recovered',
-      ...notify(
-        options.notifier,
+      ],
+      recovered: [
         'atribd profile availability recovered',
         'All configured atribd readiness probes are passing.',
-        options.dryRun,
-      ),
+      ],
+      reminder: [
+        'atribd profile availability still degraded',
+        `Readiness probes are still failing (${availabilityFailures} consecutive cycles). ${summary(availability.reports)}`,
+      ],
+    },
+  }
+  next.reminded_at = { ...prior.reminded_at }
+  next.agent_pending = { ...prior.agent_pending }
+  for (const alert of ALERTS) {
+    const open = next[`${alert}_alert`]
+    const wasOpen = prior[`${alert}_alert`]
+    let agent
+    if (open !== wasOpen) {
+      const [title, message] = open ? notices[alert].opened : notices[alert].recovered
+      notifications.push({
+        kind: `${alert}_${open ? 'opened' : 'recovered'}`,
+        ...pushNotice(options, title, message),
+      })
+      agent = open ? { title, message, resolve: false } : { title, message, resolve: true }
+    } else if (next.agent_pending[alert] === (open ? 'firing' : 'resolved')) {
+      // The last agent notice for this state did not land: send it again.
+      const [title, message] = open ? notices[alert].reminder : notices[alert].recovered
+      agent = { title, message, resolve: !open, retry: true }
+    } else if (open) {
+      // Still open: remind the agent sessions (never the phone) once per
+      // reminder interval. An alert opened before agent notices existed has
+      // no reminded_at, so the first run with --notify-to raises it at once.
+      const last = next.reminded_at[alert] ? Date.parse(next.reminded_at[alert]) : -Infinity
+      if (options.now - last >= options.reminderMs) {
+        const [title, message] = notices[alert].reminder
+        agent = { title, message, resolve: false, reminder: true }
+      }
+    }
+    if (!options.notifyTo) {
+      // No agent notices: keep no reminder clock, so enabling --notify-to
+      // later raises an open alert at once.
+      next.reminded_at[alert] = null
+      next.agent_pending[alert] = null
+      continue
+    }
+    if (!agent) continue
+    const sent = agentNotice(options, alert, agent.title, agent.message, agent.resolve)
+    notifications.push({
+      kind: `${alert}_agent_${agent.resolve ? 'resolve' : agent.reminder ? 'reminder' : agent.retry ? 'retry' : 'open'}`,
+      ...sent,
     })
+    if (sent.status === 'failed') {
+      next.agent_pending[alert] = agent.resolve ? 'resolved' : 'firing'
+    } else {
+      next.agent_pending[alert] = null
+      next.reminded_at[alert] = agent.resolve ? null : nowIso
+    }
   }
   if (!options.dryRun) saveState(options.stateFile, next)
   process.stdout.write(
     `${JSON.stringify({
       schema: 'atrib.atribd-mcp-monitor.v1',
-      checked_at: new Date().toISOString(),
+      checked_at: nowIso,
       compatibility,
       availability,
       alerts: next,

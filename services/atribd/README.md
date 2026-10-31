@@ -90,6 +90,32 @@ legacy request followed by an explicit deprecation announcement.
 `ATRIBD_MCP_LEGACY_ZERO_WINDOW_MS` changes that local evidence window; it does
 not remove the announcement requirement.
 
+### Scheduled monitoring
+
+`scripts/monitor-atribd-mcp.mjs` runs both checks for a set of profiles and
+keeps its own state (`~/.atrib/state/atribd-mcp-monitor.json`). It is meant
+for a scheduler such as a 5-minute launchd job:
+
+```sh
+node scripts/monitor-atribd-mcp.mjs \
+  --endpoint http://127.0.0.1:8795/mcp/ready \
+  --notify-to @atrib
+```
+
+It calls the notifier (default `~/.claude/scripts/moshi-notify.mjs`) with
+source `atribd-monitor` when an alert opens or recovers. An availability alert
+opens after two failed cycles in a row.
+
+With `--notify-to`, it also keeps one agent-facing alert per check. Each open,
+recovery and reminder is a second notifier call with a stable key
+(`atribd-mcp:compatibility`, `atribd-mcp:availability`), the selector,
+`--no-push` and `--rousr-strict`, so the phone gets one push per transition.
+While an alert stays open, the agents are reminded once a day
+(`--reminder-hours`). If an agent notice fails, for example because the
+notifier predates these flags, the monitor saves `agent_pending` and retries
+it on the next cycle without another push. A notifier failure never stops the
+cycle from saving its state.
+
 ## Stateless transport
 
 Every HTTP request is self-describing and any request can land on any
