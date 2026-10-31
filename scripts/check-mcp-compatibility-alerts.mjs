@@ -27,6 +27,13 @@ function parseArgs(argv) {
   return { endpoints, json }
 }
 
+// Daemons that report `regression` count only recent legacy-after-modern
+// traffic. Older daemons only have the lifetime counter.
+export function compatibilityRegressionActive(compatibility) {
+  if (typeof compatibility?.regression?.active === 'boolean') return compatibility.regression.active
+  return compatibility?.expected_modern === true && compatibility?.legacy_after_modern_requests > 0
+}
+
 export function evaluateCompatibilityReport(endpoint, payload) {
   const compatibility = payload?.report?.compatibility
   const daemon = payload?.report?.daemon
@@ -37,8 +44,7 @@ export function evaluateCompatibilityReport(endpoint, payload) {
       reason: 'health response lacks daemon or compatibility facts',
     }
   }
-  const regression =
-    compatibility.expected_modern === true && compatibility.legacy_after_modern_requests > 0
+  const regression = compatibilityRegressionActive(compatibility)
   return {
     endpoint,
     profile: compatibility.profile,

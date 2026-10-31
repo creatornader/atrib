@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -87,6 +87,100 @@ describe('MCP compatibility observability', () => {
       client_labels_bounded: 16,
       protocol_labels_bounded: 8,
     })
+  })
+
+  it('treats legacy-after-modern traffic as a regression only within the window', () => {
+    let now = Date.parse('2026-10-28T21:00:00.000Z')
+    const observer = createMcpCompatibilityObserver({
+      profile: 'claude-code',
+      expectedModern: true,
+      stateFile: false,
+      regressionWindowMs: 60_000,
+      now: () => now,
+    })
+    observer.observe(
+      { headers: { 'mcp-protocol-version': '2026-07-28' } },
+      modernBody('claude-code'),
+    )
+    expect(observer.report().regression).toEqual({
+      active: false,
+      window_ms: 60_000,
+      last_legacy_after_modern_at: null,
+    })
+
+    observer.observe({ headers: {} }, legacyBody('cutover-check', '0'))
+    expect(observer.report().regression.active).toBe(true)
+
+    // The window passes with only modern traffic: no longer active, while the
+    // lifetime counter and removal readiness keep the evidence.
+    now += 60_000
+    observer.observe(
+      { headers: { 'mcp-protocol-version': '2026-07-28' } },
+      modernBody('claude-code'),
+    )
+    const later = observer.report()
+    expect(later.regression.active).toBe(false)
+    expect(later.regression.last_legacy_after_modern_at).toBe('2026-10-28T21:00:00.000Z')
+    expect(later.legacy_after_modern_requests).toBe(1)
+    expect(later.removal_readiness.reasons).toContain(
+      'legacy traffic observed after modern traffic',
+    )
+  })
+
+  it('restarts the window when restored state has no usable regression time', async () => {
+    const now = Date.parse('2026-10-31T05:00:00.000Z')
+    for (const stamp of [undefined, 'not-a-date', '2027-10-30T12:00:00.000Z']) {
+      const dir = mkdtempSync(join(tmpdir(), 'atribd-compat-'))
+      temporaryDirectories.push(dir)
+      const stateFile = join(dir, 'state.json')
+      writeFileSync(
+        stateFile,
+        JSON.stringify({
+          schema: MCP_COMPATIBILITY_SCHEMA,
+          profile: 'claude-code',
+          observation_started_at: '2026-10-16T06:45:48.985Z',
+          updated_at: '2026-10-28T21:37:44.130Z',
+          modern_requests: 289,
+          legacy_requests: 14,
+          legacy_after_modern_requests: 14,
+          ...(stamp === undefined ? {} : { last_legacy_after_modern_at: stamp }),
+          clients: {},
+          protocols: {},
+        }),
+      )
+      let current = now
+      const observer = createMcpCompatibilityObserver({
+        profile: 'claude-code',
+        expectedModern: true,
+        stateFile,
+        regressionWindowMs: 60_000,
+        now: () => current,
+      })
+      const report = observer.report()
+      expect(report.regression.active).toBe(true)
+      expect(report.regression.last_legacy_after_modern_at).toBe('2026-10-31T05:00:00.000Z')
+      await observer.flush()
+      // The restarted window is saved, so a later restart does not re-arm it.
+      const saved = JSON.parse(readFileSync(stateFile, 'utf8'))
+      expect(saved.last_legacy_after_modern_at).toBe('2026-10-31T05:00:00.000Z')
+      current += 60_000
+      expect(observer.report().regression.active).toBe(false)
+      const restarted = createMcpCompatibilityObserver({
+        profile: 'claude-code',
+        expectedModern: true,
+        stateFile,
+        regressionWindowMs: 60_000,
+        now: () => current,
+      })
+      expect(restarted.report().regression.active).toBe(false)
+    }
+  })
+
+  it('never reports a regression for a profile not expected to be modern', () => {
+    const observer = createMcpCompatibilityObserver({ profile: 'mixed', stateFile: false })
+    observer.observe({ headers: { 'mcp-protocol-version': '2026-07-28' } }, modernBody())
+    observer.observe({ headers: {} }, legacyBody())
+    expect(observer.report().regression.active).toBe(false)
   })
 
   it('requires a sustained zero window and an announcement before removal', () => {
