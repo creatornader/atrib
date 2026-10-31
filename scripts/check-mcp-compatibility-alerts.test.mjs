@@ -32,4 +32,20 @@ assert.equal(regression.reason, 'legacy traffic observed after modern traffic')
 
 assert.equal(evaluateCompatibilityReport('http://example/health', {}).status, 'invalid')
 
+// A daemon that reports the windowed regression decides: an old
+// legacy-after-modern request outside the window is not an alert.
+const settled = health(3)
+settled.report.compatibility.regression = {
+  active: false,
+  window_ms: 86_400_000,
+  last_legacy_after_modern_at: '2026-10-28T21:37:44.130Z',
+}
+assert.equal(evaluateCompatibilityReport('http://example/health', settled).status, 'pass')
+const recent = health(3)
+recent.report.compatibility.regression = {
+  ...settled.report.compatibility.regression,
+  active: true,
+}
+assert.equal(evaluateCompatibilityReport('http://example/health', recent).status, 'alert')
+
 process.stdout.write('MCP compatibility alert checks passed\n')

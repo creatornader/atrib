@@ -6,6 +6,10 @@ import { dirname, join } from 'node:path'
 
 export const MCP_COMPATIBILITY_SCHEMA = 'atrib.mcp-compatibility-observability.v1'
 export const DEFAULT_LEGACY_ZERO_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
+// A legacy-after-modern request counts as an active regression for this long.
+// The lifetime counters stay for removal readiness; health and alerts use the
+// window, so one stray probe does not degrade a profile forever.
+export const DEFAULT_REGRESSION_WINDOW_MS = 24 * 60 * 60 * 1000
 const MAX_CLIENT_LABELS = 16
 const MAX_PROTOCOL_LABELS = 8
 
@@ -42,6 +46,11 @@ export interface McpCompatibilityReport extends CompatibilityState {
     sustained_zero_window_ms: number
     announcement_required: true
   }
+  regression: {
+    active: boolean
+    window_ms: number
+    last_legacy_after_modern_at: string | null
+  }
   removal_readiness: {
     status: 'blocked' | 'observing' | 'eligible-for-announcement'
     zero_since: string
@@ -62,6 +71,7 @@ export interface McpCompatibilityObserverOptions {
   expectedModern?: boolean
   stateFile?: string | false
   legacyZeroWindowMs?: number
+  regressionWindowMs?: number
   now?: () => number
   onPersistenceError?: (error: unknown) => void
   onLegacyAfterModern?: (event: {
@@ -189,10 +199,23 @@ export function createMcpCompatibilityObserver(
   const profile = cleanLabel(options.profile, 64) ?? 'unknown'
   const expectedModern = options.expectedModern ?? false
   const legacyZeroWindowMs = options.legacyZeroWindowMs ?? DEFAULT_LEGACY_ZERO_WINDOW_MS
+  const regressionWindowMs = options.regressionWindowMs ?? DEFAULT_REGRESSION_WINDOW_MS
   const stateFile =
     options.stateFile === false ? undefined : (options.stateFile ?? defaultStateFile(profile))
   const state = stateFile ? loadState(stateFile, profile, now()) : freshState(profile, now())
   let persistence = Promise.resolve()
+  // A regression needs a usable time to expire from. A missing, invalid or
+  // future timestamp in restored state restarts the window now and is saved,
+  // so the regression stays visible for one window and then expires instead
+  // of vanishing, sticking, or re-arming on every restart.
+  let restartedWindow = false
+  if (state.legacy_after_modern_requests > 0) {
+    const at = Date.parse(state.last_legacy_after_modern_at ?? '')
+    if (!Number.isFinite(at) || at > now()) {
+      state.last_legacy_after_modern_at = new Date(now()).toISOString()
+      restartedWindow = true
+    }
+  }
 
   function persist(): void {
     if (!stateFile) return
@@ -208,6 +231,8 @@ export function createMcpCompatibilityObserver(
         options.onPersistenceError?.(error)
       })
   }
+
+  if (restartedWindow) persist()
 
   return {
     observe: (req, body) => {
@@ -249,6 +274,11 @@ export function createMcpCompatibilityObserver(
       if (expectedModern && state.legacy_after_modern_requests > 0) {
         reasons.push('legacy traffic observed after modern traffic')
       }
+      const lastRegressionAt = state.last_legacy_after_modern_at
+      const regressionActive =
+        expectedModern &&
+        lastRegressionAt !== undefined &&
+        current - Date.parse(lastRegressionAt) < regressionWindowMs
       const status =
         reasons.length === 0
           ? 'eligible-for-announcement'
@@ -268,6 +298,11 @@ export function createMcpCompatibilityObserver(
         removal_policy: {
           sustained_zero_window_ms: legacyZeroWindowMs,
           announcement_required: true,
+        },
+        regression: {
+          active: regressionActive,
+          window_ms: regressionWindowMs,
+          last_legacy_after_modern_at: lastRegressionAt ?? null,
         },
         removal_readiness: {
           status,
