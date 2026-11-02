@@ -75,7 +75,12 @@ context IDs, network addresses, or user-agent strings. Set
 string to disable persistence. `ATRIBD_MCP_EXPECT_MODERN=1` makes the updater
 reject legacy traffic observed after modern traffic. The same regression emits
 the structured `mcp_legacy_after_modern` error event and degrades the health
-response. Check one or more profiles without restarting them:
+response. Only a regression in the last 24 hours (`report.compatibility.regression.active`)
+degrades health or fails the updater and the monitor. The lifetime counters and
+removal readiness keep every observation, so one stray probe no longer degrades
+a profile until its state file is deleted. `/mcp/ready` answers whether the
+daemon serves; a regression does not change it. Check one or more profiles
+without restarting them:
 
 ```sh
 pnpm monitor:mcp-compatibility -- \

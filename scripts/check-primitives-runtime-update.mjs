@@ -421,6 +421,31 @@ assert.throws(() => {
   })
 }, /modern-only profile regressed to legacy traffic/)
 
+// A daemon that reports the windowed regression gates on it: lifetime
+// legacy-after-modern traffic outside the window does not block an update.
+{
+  const settled = atribdHealthBody()
+  settled.report.compatibility.legacy_after_modern_requests = 14
+  settled.report.compatibility.regression = {
+    active: false,
+    window_ms: 86_400_000,
+    last_legacy_after_modern_at: '2026-10-28T21:37:44.130Z',
+  }
+  validateHealthPayload(settled, {
+    expectedRuntimeVersion: '0.1.0',
+    expectedPrimitiveVersions,
+    mode: 'atribd',
+  })
+  settled.report.compatibility.regression.active = true
+  assert.throws(() => {
+    validateHealthPayload(settled, {
+      expectedRuntimeVersion: '0.1.0',
+      expectedPrimitiveVersions,
+      mode: 'atribd',
+    })
+  }, /regressed to legacy traffic \(last at 2026-10-28T21:37:44.130Z; 14 lifetime\)/)
+}
+
 assert.throws(() => {
   const withoutIdempotency = atribdHealthBody()
   delete withoutIdempotency.report.idempotency

@@ -727,8 +727,9 @@ export async function bindAtribdHttpHost(
     const path = requestPath(req)
     const backendStatus = backendProvider.status()
     const compatibilityReport = compatibility.report()
-    const compatibilityRegression =
-      compatibilityReport.expected_modern && compatibilityReport.legacy_after_modern_requests > 0
+    // Recent regressions only (compatibility-observability.ts). Readiness says
+    // whether the daemon serves; a regression degrades health, not readiness.
+    const compatibilityRegression = compatibilityReport.regression.active
     const daemon = {
       name: 'atribd',
       version,
@@ -748,9 +749,7 @@ export async function bindAtribdHttpHost(
           ? 'starting'
           : backendStatus.state === 'error'
             ? 'error'
-            : compatibilityRegression
-              ? 'degraded'
-              : 'ready'
+            : 'ready'
       const code =
         backendStatus.state === 'starting' ? 503 : backendStatus.state === 'error' ? 500 : 200
       sendJson(res, code, {

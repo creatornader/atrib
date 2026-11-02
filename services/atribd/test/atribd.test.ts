@@ -1321,6 +1321,15 @@ describe('atribd health surface', () => {
       expect(health.status).toBe('degraded')
       expect(health.report?.compatibility?.expected_modern).toBe(true)
       expect(health.report?.compatibility?.legacy_after_modern_requests).toBe(1)
+
+      // Readiness reports whether the daemon serves, which a regression does
+      // not change; the regression is in the report for whoever reads it.
+      const ready = (await (await fetch(host.readyEndpoint)).json()) as {
+        status?: string
+        report?: { compatibility?: { regression?: { active?: boolean } } }
+      }
+      expect(ready.status).toBe('ready')
+      expect(ready.report?.compatibility?.regression?.active).toBe(true)
     } finally {
       await host.close()
     }

@@ -7,6 +7,7 @@ import { createRequire } from 'node:module'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { compatibilityRegressionActive } from './check-mcp-compatibility-alerts.mjs'
 
 export const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const HOME = process.env.HOME ?? ''
@@ -469,12 +470,9 @@ export function validateHealthPayload(
       if (typeof compatibility.removal_readiness?.status !== 'string') {
         issues.push('invalid report.compatibility removal readiness')
       }
-      if (
-        compatibility.expected_modern === true &&
-        compatibility.legacy_after_modern_requests > 0
-      ) {
+      if (compatibilityRegressionActive(compatibility)) {
         issues.push(
-          `modern-only profile regressed to legacy traffic ${compatibility.legacy_after_modern_requests} time(s)`,
+          `modern-only profile regressed to legacy traffic (last at ${compatibility.regression?.last_legacy_after_modern_at ?? compatibility.last_legacy_after_modern_at ?? 'unknown'}; ${compatibility.legacy_after_modern_requests} lifetime)`,
         )
       }
     }
