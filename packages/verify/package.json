@@ -45,14 +45,14 @@
     "@noble/ed25519": "^3.2.0",
     "@noble/hashes": "^2.4.0",
     "@noble/secp256k1": "^3.2.0",
-    "@sd-jwt/core": "0.22.0",
-    "@sd-jwt/sd-jwt-vc": "0.22.0",
+    "@sd-jwt/core": "0.24.0",
+    "@sd-jwt/sd-jwt-vc": "0.24.0",
     "canonicalize": "^5.1.0",
-    "jose": "6.2.12"
+    "jose": "6.2.14"
   },
   "devDependencies": {
     "zod": "^4.6.6",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "fast-check": "^4.10.2",
     "typescript": "^6.0.3",
     "vitest": "^5.0.5"
