@@ -17,20 +17,20 @@
   },
   "dependencies": {
     "@atrib/mcp": "workspace:*",
-    "@cloudflare/codemode": "0.5.4",
-    "@modelcontextprotocol/sdk": "^1.32.1",
-    "agents": "0.28.1",
+    "@cloudflare/codemode": "0.5.6",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "agents": "0.32.0",
     "zod": "^4.6.6"
   },
   "devDependencies": {
     "@atrib/graph-node": "workspace:*",
-    "@cloudflare/workers-types": "5.20261016.1",
-    "@playwright/test": "^1.64.0",
-    "@types/node": "^26.6.5",
+    "@cloudflare/workers-types": "5.20261030.1",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.0.5",
-    "wrangler": "4.151.0",
-    "@cloudflare/vitest-plugin": "1.4.4"
+    "wrangler": "4.156.0",
+    "@cloudflare/vitest-plugin": "1.4.11"
   }
 }
