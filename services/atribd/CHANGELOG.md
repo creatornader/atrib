@@ -1,5 +1,11 @@
 # @atrib/daemon
 
+## 0.5.2
+
+### Patch Changes
+
+- 76a793f: Count a legacy-after-modern MCP request as an active regression for 24 hours instead of forever. The report gains `compatibility.regression` (`active`, `window_ms`, `last_legacy_after_modern_at`); health degrades only while it is active, and `/mcp/ready` reports whether the daemon serves. Lifetime counters and removal readiness are unchanged.
+
 ## 0.5.1
 
 ### Patch Changes
