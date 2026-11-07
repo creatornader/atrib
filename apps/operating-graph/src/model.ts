@@ -332,20 +332,24 @@ export function projectOperatingView(
   for (const [key, group] of byCell) {
     const heads = activeHeads(group)
     const headHashes = new Set(heads.map((entry) => entry.record_hash))
-    const resolution =
-      latest(
-        resolutions.filter((entry) => {
-          const claimed = entry.event.resolves ?? []
-          const claimedHeads = new Set(claimed)
-          return (
-            entry.event.accepted_head !== undefined &&
-            headHashes.has(entry.event.accepted_head) &&
-            claimedHeads.size === headHashes.size &&
-            [...headHashes].every((hash) => claimedHeads.has(hash)) &&
-            [...claimedHeads].every((hash) => entry.record.informed_by?.includes(hash) === true)
-          )
-        }),
-      ) ?? null
+    const complete = resolutions.filter((entry) => {
+      const claimed = entry.event.resolves ?? []
+      const claimedHeads = new Set(claimed)
+      return (
+        entry.event.accepted_head !== undefined &&
+        headHashes.has(entry.event.accepted_head) &&
+        claimedHeads.size === headHashes.size &&
+        [...headHashes].every((hash) => claimedHeads.has(hash)) &&
+        [...claimedHeads].every((hash) => entry.record.informed_by?.includes(hash) === true)
+      )
+    })
+    // Two complete resolutions that pick different heads are themselves a
+    // conflict. Taking the newer timestamp would let a producer clock settle
+    // it, so the cell stays in conflict until one resolution revises the other
+    // or a further resolution supersedes both.
+    const standing = activeHeads(complete)
+    const choices = new Set(standing.map((entry) => entry.event.accepted_head))
+    const resolution = choices.size === 1 ? latest(standing) : null
     const acceptedHead =
       resolution?.event.accepted_head ?? (heads.length === 1 ? heads[0]?.record_hash : null)
     allCells.push({

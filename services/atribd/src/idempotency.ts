@@ -42,9 +42,19 @@ export type IdempotencyBeginResult =
   | { kind: 'binding-mismatch' }
   | { kind: 'indeterminate' }
 
+/**
+ * The operator's finding about a write whose outcome the daemon never learned.
+ * `not-dispatched` releases the key so the same retry can run; `completed`
+ * stores the result the action actually produced so the retry replays it.
+ */
+export type IdempotencyReconciliation =
+  { outcome: 'not-dispatched' } | { outcome: 'completed'; result: CallToolResult }
+
 export interface WriteIdempotencyStore {
   begin(key: string, binding: string): Promise<IdempotencyBeginResult>
   complete(keyHash: string, binding: string, result: CallToolResult): Promise<void>
+  /** Resolve an unresolved pending entry. Only pending entries can be reconciled. */
+  reconcile(key: string, finding: IdempotencyReconciliation): Promise<void>
   report(): {
     schema: typeof IDEMPOTENCY_SCHEMA
     window_ms: number
@@ -221,7 +231,7 @@ export function createWriteIdempotencyStore(
     },
     async complete(keyHash, binding, result) {
       const prior = state.entries[keyHash]
-      if (!prior || prior.binding !== binding) {
+      if (!prior || prior.status !== 'pending' || prior.binding !== binding) {
         throw new Error('atribd: idempotency completion has no matching pending entry')
       }
       state.entries[keyHash] = {
@@ -231,6 +241,26 @@ export function createWriteIdempotencyStore(
         created_at: prior.created_at,
         updated_at: new Date(now()).toISOString(),
         result: structuredClone(result),
+      }
+      await persist()
+    },
+    async reconcile(key, finding) {
+      const keyHash = hashKey(key)
+      const prior = state.entries[keyHash]
+      if (!prior || prior.status !== 'pending') {
+        throw new Error('atribd: no unresolved pending entry exists for this idempotency key')
+      }
+      if (finding.outcome === 'not-dispatched') {
+        delete state.entries[keyHash]
+      } else {
+        state.entries[keyHash] = {
+          key_hash: keyHash,
+          binding: prior.binding,
+          status: 'completed',
+          created_at: prior.created_at,
+          updated_at: new Date(now()).toISOString(),
+          result: structuredClone(finding.result),
+        }
       }
       await persist()
     },

@@ -3,7 +3,10 @@
 `scripts/upgrade-ots-receipts.mjs` is a host-owned maintenance worker. It
 scans a mirror directory for JSONL envelopes with `_local.ots_receipts` and
 replaces only receipts that move from `pending` to `complete`. It never edits
-the signed `record` object.
+the signed `record` object. Producers may keep appending while it runs: the
+worker re-reads each file just before replacing it and carries any appended
+lines over. If the file was rewritten instead, it leaves the file alone and the
+receipts stay pending for the next run.
 
 Run it against one mirror directory:
 

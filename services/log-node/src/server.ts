@@ -89,13 +89,12 @@ export async function bindServer(
   // doesn't match the tree size the inclusion proof was computed against.
   let submitQueue = Promise.resolve<void>(undefined)
 
-  // Dedup cache: record_hash hex → proof bundle
-  // Bounded to MAX_PROOF_CACHE entries (~30MB at ~300 bytes/entry).
-  // NOTE: Idempotency is best-effort. After cache eviction, re-submission
-  // of the same record will append a new entry with a different log_index
-  // and a fresh proof. Both proofs are independently valid. The spec allows
-  // this: §2.6.1 Step 6 says "return the existing inclusion proof" as a
-  // SHOULD, not a MUST, for implementations with bounded caches.
+  // Proof cache: record_hash hex → proof bundle, bounded to MAX_PROOF_CACHE
+  // entries (~30MB at ~300 bytes/entry). It is only a cache. Idempotency
+  // (§2.6.1 Step 6) comes from the record index over the tree, so a record
+  // resubmitted after a restart or an eviction gets a proof for its existing
+  // entry rather than a second append.
+  findRecordIndex(tree, '')
   const proofCache = new Map<string, ProofBundle>()
   const subscribers = new Set<LogStreamSubscriber>()
   const normalizedGraphFanoutOptions = normalizeGraphFanoutOptions(graphFanoutOptions)
@@ -857,16 +856,82 @@ function decodeEntry(bytes: Uint8Array, index: number): DecodedEntry {
   }
 }
 
-function handleLookup(res: ServerResponse, tree: MerkleTree, hexHash: string): void {
+/**
+ * record_hash to log index, for every entry in the tree. The proof cache is
+ * bounded and lives in memory, so it cannot answer §2.6.1 Step 6 after a
+ * restart or an eviction; this index can. Keys are the first six hash bytes
+ * (a safe integer), and candidates are confirmed against the stored entry,
+ * so a prefix collision costs a comparison, not a wrong answer. The index
+ * catches up from the tree on each lookup, so every append path is covered.
+ */
+interface RecordIndex {
+  indexed: number
+  byPrefix: Map<number, number | number[]>
+}
+
+const recordIndexes = new WeakMap<MerkleTree, RecordIndex>()
+
+function hashPrefixKey(hash: Uint8Array): number {
+  let key = 0
+  for (let i = 0; i < 6; i++) key = key * 256 + (hash[i] as number)
+  return key
+}
+
+function findRecordIndex(tree: MerkleTree, recordHashHex: string): number | undefined {
+  let index = recordIndexes.get(tree)
+  if (!index) {
+    index = { indexed: 0, byPrefix: new Map() }
+    recordIndexes.set(tree, index)
+  }
   const size = tree.size
-  for (let i = 0; i < size; i++) {
-    const e = tree.entryBytes(i)
-    const recordHashHex = hexEncode(e.subarray(1, 33))
-    if (recordHashHex === hexHash) {
-      res.setHeader('cache-control', 'public, max-age=60')
-      sendJson(res, 200, decodeEntry(e, i))
-      return
-    }
+  for (let i = index.indexed; i < size; i++) {
+    const key = hashPrefixKey(tree.entryBytes(i).subarray(1, 33))
+    const prior = index.byPrefix.get(key)
+    if (prior === undefined) index.byPrefix.set(key, i)
+    else if (typeof prior === 'number') index.byPrefix.set(key, [prior, i])
+    else prior.push(i)
+  }
+  index.indexed = size
+  if (!/^[0-9a-f]{64}$/.test(recordHashHex)) return undefined
+  const target = hexToBytes(recordHashHex)
+  const candidates = index.byPrefix.get(hashPrefixKey(target))
+  if (candidates === undefined) return undefined
+  for (const candidate of typeof candidates === 'number' ? [candidates] : candidates) {
+    if (bytesEqual(tree.entryBytes(candidate).subarray(1, 33), target)) return candidate
+  }
+  return undefined
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  return bytes
+}
+
+function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) return false
+  for (let i = 0; i < left.length; i++) if (left[i] !== right[i]) return false
+  return true
+}
+
+function cacheProof(
+  proofCache: Map<string, ProofBundle>,
+  recordHashHex: string,
+  proof: ProofBundle,
+): void {
+  if (proofCache.size >= MAX_PROOF_CACHE) {
+    const oldest = proofCache.keys().next().value
+    if (oldest !== undefined) proofCache.delete(oldest)
+  }
+  proofCache.set(recordHashHex, proof)
+}
+
+function handleLookup(res: ServerResponse, tree: MerkleTree, hexHash: string): void {
+  const index = findRecordIndex(tree, hexHash)
+  if (index !== undefined) {
+    res.setHeader('cache-control', 'public, max-age=60')
+    sendJson(res, 200, decodeEntry(tree.entryBytes(index), index))
+    return
   }
   sendJson(res, 404, { error: 'not found', record_hash: `sha256:${hexHash}` })
 }
@@ -885,18 +950,10 @@ async function handleProofLookup(
     return
   }
 
-  const size = tree.size
-  for (let i = 0; i < size; i++) {
-    const e = tree.entryBytes(i)
-    const recordHashHex = hexEncode(e.subarray(1, 33))
-    if (recordHashHex !== hexHash) continue
-
-    const proof = await makeProofBundle(tree, signer, i)
-    if (proofCache.size >= MAX_PROOF_CACHE) {
-      const oldest = proofCache.keys().next().value
-      if (oldest !== undefined) proofCache.delete(oldest)
-    }
-    proofCache.set(hexHash, proof)
+  const index = findRecordIndex(tree, hexHash)
+  if (index !== undefined) {
+    const proof = await makeProofBundle(tree, signer, index)
+    cacheProof(proofCache, hexHash, proof)
     res.setHeader('cache-control', 'public, max-age=60')
     sendJson(res, 200, proof)
     return
@@ -1429,7 +1486,17 @@ async function handleSubmit(
     // Re-check cache inside the lock. two concurrent requests for the same
     // record can both miss the fast-path check above, but only the first
     // should append. The second finds the proof cached by the first.
-    const cachedInLock = proofCache.get(recordHashHex)
+    let cachedInLock = proofCache.get(recordHashHex)
+    if (cachedInLock === undefined) {
+      // Already in the tree but not in the bounded cache: after a restart or
+      // an eviction. Return a proof for the existing entry instead of
+      // appending the same record a second time.
+      const existingIndex = findRecordIndex(tree, recordHashHex)
+      if (existingIndex !== undefined) {
+        cachedInLock = await makeProofBundle(tree, signer, existingIndex)
+        cacheProof(proofCache, recordHashHex, cachedInLock)
+      }
+    }
     if (cachedInLock !== undefined) {
       sendJson(res, 200, cachedInLock)
       if (graphFanoutEndpoint) {
@@ -1447,12 +1514,7 @@ async function handleSubmit(
     appendedEntry = decodeEntry(entryBytes, logIndex)
     proof = await makeProofBundle(tree, signer, logIndex)
 
-    // Cache for idempotency. evict oldest entry if at capacity
-    if (proofCache.size >= MAX_PROOF_CACHE) {
-      const oldest = proofCache.keys().next().value
-      if (oldest !== undefined) proofCache.delete(oldest)
-    }
-    proofCache.set(recordHashHex, proof)
+    cacheProof(proofCache, recordHashHex, proof)
   } finally {
     lock.release()
   }

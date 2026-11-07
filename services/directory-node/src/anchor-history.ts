@@ -27,7 +27,19 @@ interface BootstrapAnchorEntry {
   record_hash: string
 }
 
-type AnchorJournalEntry = BootstrapAnchorEntry | PreparedAnchorEntry | CommittedAnchorEntry
+/**
+ * A prepared record the log refused for good. It leaves the pending slot
+ * without joining the committed chain, so a replacement anchor for the same
+ * directory state can be prepared against the same committed head.
+ */
+interface AbandonedAnchorEntry {
+  state: 'abandoned'
+  record_hash: string
+  reason: string
+}
+
+type AnchorJournalEntry =
+  BootstrapAnchorEntry | PreparedAnchorEntry | CommittedAnchorEntry | AbandonedAnchorEntry
 
 const RECORD_HASH_RE = /^sha256:[0-9a-f]{64}$/
 
@@ -129,39 +141,59 @@ export class AnchorHistory {
       return
     }
 
+    if (entry.state === 'abandoned') {
+      if (typeof entry.record_hash !== 'string' || typeof entry.reason !== 'string') {
+        throw new Error(`directory anchor journal line ${line} has an invalid abandonment`)
+      }
+      this.applyAbandon(entry.record_hash, line)
+      return
+    }
+
     if (entry.state !== 'committed' || typeof entry.record_hash !== 'string') {
       throw new Error(`directory anchor journal line ${line} has an unknown state`)
     }
     this.applyCommit(entry.record_hash, line)
   }
 
-  private applyCommit(recordHash: string, line?: number): void {
+  /** Checks that `recordHash` is the pending record and may leave the pending slot. */
+  private checkPendingHead(
+    recordHash: string,
+    action: 'commits' | 'abandons',
+    line?: number,
+  ): AnchorRecord {
+    const where = `directory anchor journal${line ? ` line ${line}` : ''}`
     const record = this.byHash.get(recordHash)
     if (!record) {
-      throw new Error(
-        `directory anchor journal${line ? ` line ${line}` : ''} commits unknown record ${recordHash}`,
-      )
+      throw new Error(`${where} ${action} unknown record ${recordHash}`)
     }
-
     const pendingIndex = this.pendingHashes.indexOf(recordHash)
     if (pendingIndex < 0) {
-      throw new Error(
-        `directory anchor journal${line ? ` line ${line}` : ''} repeats committed record ${recordHash}`,
-      )
+      throw new Error(`${where} ${action} record ${recordHash} that is not pending`)
     }
     if (pendingIndex !== 0) {
-      throw new Error(
-        `directory anchor journal${line ? ` line ${line}` : ''} commits records out of order`,
-      )
+      throw new Error(`${where} ${action} records out of order`)
     }
+    return record
+  }
 
-    const expectedParent = this.latestCommittedHash()
-    if (record.chain_root !== expectedParent) {
+  private applyAbandon(recordHash: string, line?: number): void {
+    this.checkPendingHead(recordHash, 'abandons', line)
+    this.pendingHashes.shift()
+    this.byHash.delete(recordHash)
+  }
+
+  private checkCommit(recordHash: string, line?: number): AnchorRecord {
+    const record = this.checkPendingHead(recordHash, 'commits', line)
+    if (record.chain_root !== this.latestCommittedHash()) {
       throw new Error(
         `directory anchor journal${line ? ` line ${line}` : ''} breaks the anchor chain`,
       )
     }
+    return record
+  }
 
+  private applyCommit(recordHash: string, line?: number): void {
+    const record = this.checkCommit(recordHash, line)
     this.pendingHashes.shift()
     this.chronological.push({ recordHash, record })
   }
@@ -201,7 +233,16 @@ export class AnchorHistory {
     this.bootstrapRecordHash = recordHash
   }
 
+  /**
+   * Moves the pending record onto the committed chain. Validates before it
+   * writes, so a wrong call never leaves a journal line that would stop the
+   * next start. Committing the record that is already the committed head is a
+   * no-op, which keeps a retried commit after an ambiguous write safe.
+   */
   async commit(recordHash: string): Promise<void> {
+    if (this.pendingHashes.length === 0 && this.chronological.at(-1)?.recordHash === recordHash)
+      return
+    this.checkCommit(recordHash)
     if (this.persistencePath) {
       await appendJsonLineDurably(this.persistencePath, {
         state: 'committed',
@@ -209,6 +250,22 @@ export class AnchorHistory {
       })
     }
     this.applyCommit(recordHash)
+  }
+
+  /**
+   * Releases the pending record after the log refused it for good. The
+   * record never joins the chain. Only the pending record can be abandoned.
+   */
+  async abandon(recordHash: string, reason: string): Promise<void> {
+    this.checkPendingHead(recordHash, 'abandons')
+    if (this.persistencePath) {
+      await appendJsonLineDurably(this.persistencePath, {
+        state: 'abandoned',
+        record_hash: recordHash,
+        reason: reason.slice(0, 300),
+      })
+    }
+    this.applyAbandon(recordHash)
   }
 
   latestCommittedHash(): string {

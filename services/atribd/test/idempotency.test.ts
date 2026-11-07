@@ -142,6 +142,53 @@ describe('write idempotency store', () => {
     now += 101
     expect((await store.begin(KEY, binding)).kind).toBe('owner')
   })
+
+  it('records an outcome only for a write that is still pending', async () => {
+    const store = createWriteIdempotencyStore({ stateFile: false })
+    const binding = writeActionBinding(writeRequest('one outcome'))
+    const begin = await store.begin(KEY, binding)
+    if (begin.kind !== 'owner') throw new Error('expected owner')
+    await store.complete(begin.keyHash, begin.binding, result(`sha256:${'8'.repeat(64)}`))
+    await expect(
+      store.complete(begin.keyHash, begin.binding, result(`sha256:${'9'.repeat(64)}`)),
+    ).rejects.toThrow(/no matching pending entry/)
+    await expect(store.reconcile(KEY, { outcome: 'not-dispatched' })).rejects.toThrow(
+      /no unresolved pending entry/,
+    )
+    expect(await store.begin(KEY, binding)).toEqual({
+      kind: 'replay',
+      result: result(`sha256:${'8'.repeat(64)}`),
+    })
+  })
+
+  it('lets an operator resolve an indeterminate write after a restart', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'atribd-idempotency-reconcile-'))
+    const path = join(dir, 'state.json')
+    try {
+      const released = writeActionBinding(writeRequest('never ran'))
+      const landed = writeActionBinding(writeRequest('did run', 'retry-key-00000002'))
+      const first = createWriteIdempotencyStore({ profile: 'test', stateFile: path })
+      await first.begin(KEY, released)
+      await first.begin('retry-key-00000002', landed)
+      await first.flush()
+
+      const operator = createWriteIdempotencyStore({ profile: 'test', stateFile: path })
+      await operator.reconcile(KEY, { outcome: 'not-dispatched' })
+      await operator.reconcile('retry-key-00000002', {
+        outcome: 'completed',
+        result: result(`sha256:${'a'.repeat(64)}`),
+      })
+
+      const restarted = createWriteIdempotencyStore({ profile: 'test', stateFile: path })
+      expect((await restarted.begin(KEY, released)).kind).toBe('owner')
+      expect(await restarted.begin('retry-key-00000002', landed)).toEqual({
+        kind: 'replay',
+        result: result(`sha256:${'a'.repeat(64)}`),
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('backend duplicate-safe writes', () => {
@@ -287,6 +334,34 @@ describe('backend duplicate-safe writes', () => {
         if (value === undefined) delete process.env[key]
         else process.env[key] = value
       }
+    }
+  })
+})
+
+describe('reconcile-idempotency command', () => {
+  it('releases an indeterminate key from the command line', async () => {
+    const { reconcileIdempotencyCommand } = await import('../src/index.js')
+    const dir = mkdtempSync(join(tmpdir(), 'atribd-idempotency-cli-'))
+    const path = join(dir, 'state.json')
+    try {
+      const binding = writeActionBinding(writeRequest('cli action'))
+      const daemon = createWriteIdempotencyStore({
+        profile: process.env.ATRIB_AGENT,
+        stateFile: path,
+      })
+      await daemon.begin(KEY, binding)
+      await daemon.flush()
+      await expect(reconcileIdempotencyCommand(['--key', KEY], path)).rejects.toThrow(/Usage/)
+      expect(await reconcileIdempotencyCommand(['--key', KEY, '--not-dispatched'], path)).toMatch(
+        /released/,
+      )
+      const restarted = createWriteIdempotencyStore({
+        profile: process.env.ATRIB_AGENT,
+        stateFile: path,
+      })
+      expect((await restarted.begin(KEY, binding)).kind).toBe('owner')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 })

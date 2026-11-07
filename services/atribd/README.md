@@ -227,6 +227,16 @@ keeps completed results for seven days. `ATRIBD_IDEMPOTENCY_STATE_FILE`
 selects another path or disables persistence when set to an empty string.
 Unresolved pending entries never expire automatically. After a crash, such a
 key returns an indeterminate-outcome error until the operator reconciles it.
+Stop the daemon for that profile, establish whether the write landed, then run
+one of:
+
+```bash
+atribd reconcile-idempotency --key <key> --not-dispatched   # the retry runs the write
+atribd reconcile-idempotency --key <key> --result result.json # the retry replays this result
+```
+
+Only a pending entry can be reconciled, and only a pending entry can be
+completed, so a late or repeated completion never replaces a stored result.
 
 Caller-facing timeouts do not release the per-context write lock. The lock
 stays held until the underlying primitive settles. If the late call succeeds,

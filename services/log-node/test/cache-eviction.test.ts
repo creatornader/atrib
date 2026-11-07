@@ -3,13 +3,9 @@
 /**
  * Idempotency cache behavior tests (Gap #5).
  *
- * Verifies that re-submitting a record returns the cached proof, and that
- * after enough submissions to cause eviction, a re-submitted record gets
- * a fresh (but valid) proof with a new log_index.
- *
- * NOTE: The MAX_PROOF_CACHE is 100,000 entries. We can't test actual eviction
- * at that scale in a unit test (too slow). Instead we test the observable
- * idempotency behavior and verify the cache hit path.
+ * Verifies that re-submitting a record returns the cached proof, and that a
+ * record re-submitted after the in-memory cache is gone (restart or
+ * eviction) gets a proof for its existing entry instead of a second append.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
@@ -19,6 +15,9 @@ import { signRecord, hexEncode } from '@atrib/mcp'
 import type { AtribRecord } from '@atrib/mcp'
 import { startLogServer, type LogServer } from '../src/index.js'
 import crypto from 'crypto'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 ed.hashes.sha512 = sha512
 
@@ -115,5 +114,34 @@ describe('idempotency cache', () => {
     expect(resubmit.log_index).toBe(first.log_index)
     // The checkpoint in the cached proof reflects the tree state at first submission,
     // which is valid for verifying this entry's inclusion (the entry existed at that point)
+  })
+
+  it('returns the existing entry after a restart instead of appending it again', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'atrib-log-restart-'))
+    const persistencePath = join(directory, 'tree')
+    const logPrivateKey = ed.utils.randomSecretKey()
+    try {
+      const before = await startLogServer({ port: 0, logPrivateKey, persistencePath })
+      const record = await makeSignedRecord(privateKey, creatorKey, 'restart-target')
+      const first = await post(before.url, record)
+      await post(before.url, await makeSignedRecord(privateKey, creatorKey, 'restart-other'))
+      await before.close()
+
+      const after = await startLogServer({ port: 0, logPrivateKey, persistencePath })
+      try {
+        const resubmit = await post(after.url, record)
+        expect(resubmit.log_index).toBe(first.log_index)
+        expect(resubmit.leaf_hash).toBe(first.leaf_hash)
+        const stats = (await (await fetch(`${after.url}/v1/stats`)).json()) as Record<
+          string,
+          unknown
+        >
+        expect(stats.tree_size ?? stats.total_entries).toBe(2)
+      } finally {
+        await after.close()
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 })

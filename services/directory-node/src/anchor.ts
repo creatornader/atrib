@@ -155,7 +155,7 @@ export async function verifyDirectoryAnchorSignature(record: AnchorRecord): Prom
 export async function submitDirectoryAnchor(
   logEndpoint: string,
   record: AnchorRecord,
-): Promise<{ submitted: boolean; error?: string }> {
+): Promise<{ submitted: boolean; rejected?: true; error?: string }> {
   try {
     const submitUrl = `${logEndpoint.replace(/\/$/, '')}/entries`
     const response = await fetch(submitUrl, {
@@ -167,6 +167,9 @@ export async function submitDirectoryAnchor(
       const errBody = await response.text().catch(() => '')
       return {
         submitted: false,
+        // A 4xx other than a timeout or rate limit means the log refused this
+        // exact record, and resubmitting the same bytes will not change that.
+        ...(isDefinitiveRejection(response.status) ? { rejected: true as const } : {}),
         error: `log returned ${response.status}: ${errBody.slice(0, 200)}`,
       }
     }
@@ -177,6 +180,10 @@ export async function submitDirectoryAnchor(
       error: e instanceof Error ? e.message : String(e),
     }
   }
+}
+
+function isDefinitiveRejection(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408 && status !== 425 && status !== 429
 }
 
 /**
