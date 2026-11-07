@@ -18,6 +18,7 @@
  * source of truth).
  */
 
+import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import {
@@ -31,6 +32,11 @@ import {
 } from './http-host.js'
 import { createAtribdHttpProxyRuntime, createAtribdRuntime } from './stdio.js'
 import { DEFAULT_TOOL_TIMEOUT_MS } from './backend.js'
+import {
+  createWriteIdempotencyStore as openIdempotencyStore,
+  validateIdempotencyKey as checkIdempotencyKey,
+  type IdempotencyReconciliation,
+} from './idempotency.js'
 
 export {
   createMcpCompatibilityObserver,
@@ -50,6 +56,7 @@ export {
   validateIdempotencyKey,
   writeActionBinding,
   type IdempotencyBeginResult,
+  type IdempotencyReconciliation,
   type WriteIdempotencyStore,
   type WriteIdempotencyStoreOptions,
 } from './idempotency.js'
@@ -284,6 +291,7 @@ function usage(): string {
   atribd [--transport stdio]
   atribd --transport streamable-http [--host 127.0.0.1] [--port 8796] [--path /mcp]
   atribd --transport stdio-http-proxy --endpoint http://127.0.0.1:8796/mcp
+  atribd reconcile-idempotency --key <key> (--not-dispatched | --result <file.json>)
 
 Options:
   --http                         Alias for --transport streamable-http.
@@ -302,7 +310,51 @@ Options:
 `
 }
 
+const RECONCILE_USAGE = `Usage:
+  atribd reconcile-idempotency --key <key> --not-dispatched
+  atribd reconcile-idempotency --key <key> --result <file.json>
+
+Resolves a write that returns an indeterminate-outcome error. Stop the daemon
+for the profile first; it reads the store only at startup. --not-dispatched
+releases the key so the same retry runs. --result stores the MCP result the
+write actually produced so the retry replays it. The store is the one atribd
+uses for ATRIB_AGENT, or ATRIBD_IDEMPOTENCY_STATE_FILE when set.
+`
+
+/** Operator path out of the D184 pending state. */
+export async function reconcileIdempotencyCommand(
+  argv: readonly string[],
+  stateFile = process.env.ATRIBD_IDEMPOTENCY_STATE_FILE || undefined,
+): Promise<string> {
+  let key: string | undefined
+  let finding: IdempotencyReconciliation | undefined
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--key') key = checkIdempotencyKey(requireArg(argv, ++i, '--key'))
+    else if (arg === '--not-dispatched') finding = { outcome: 'not-dispatched' }
+    else if (arg === '--result') {
+      const parsed: unknown = JSON.parse(readFileSync(requireArg(argv, ++i, '--result'), 'utf8'))
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('--result must hold an MCP tool result object')
+      }
+      finding = { outcome: 'completed', result: parsed as never }
+    } else if (arg === '--help' || arg === '-h') return RECONCILE_USAGE
+    else throw new Error(`unknown reconcile-idempotency argument: ${arg}`)
+  }
+  if (!key || !finding) throw new Error(RECONCILE_USAGE)
+  const store = openIdempotencyStore({ profile: process.env.ATRIB_AGENT, stateFile })
+  await store.reconcile(key, finding)
+  await store.flush()
+  return finding.outcome === 'not-dispatched'
+    ? 'atribd: released the key; the same retry will run the write\n'
+    : 'atribd: stored the result; the same retry will replay it\n'
+}
+
 async function main(): Promise<void> {
+  if (process.argv[2] === 'reconcile-idempotency') {
+    process.stdout.write(await reconcileIdempotencyCommand(process.argv.slice(3)))
+    return
+  }
   const options = parseCliOptions(process.argv.slice(2))
   if (options.help) {
     process.stdout.write(usage())

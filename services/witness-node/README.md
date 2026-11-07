@@ -10,7 +10,8 @@ The service:
 - reconstructs the current RFC 6962 root from canonical level-zero tiles;
 - compares the later tile prefix with the last durably witnessed view;
 - refuses rollback, same-size split views, changed historical leaves, and root
-  mismatches;
+  mismatches, and keeps a same-size split against its own prior view as a
+  public immutable incident, since both signed notes prove the equivocation;
 - optionally compares complete signed views from configured checkpoint sources,
   refuses to cosign on a conflict, and persists a public immutable incident;
 - signs the normative 76-byte C2SP cosignature payload;

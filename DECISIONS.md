@@ -9291,8 +9291,13 @@ a `content` object and root-derived `content_id`;
 **Failure boundary.** A directory state can exist with a pending anchor when
 the first submission fails. The response reports that state explicitly.
 Successor writes do not advance until the service proves whether the exact
-pending record reached the log. A persistent 4xx response therefore blocks
-writes and requires operator repair instead of allowing an unverifiable gap.
+pending record reached the log. A lookup miss followed by a definitive
+refusal (a 4xx other than 408, 425, or 429) proves the record never entered
+the log. Since 2026-11-07 the journal then appends an `abandoned` entry for
+that hash and rebuilds the same directory state on the last committed anchor.
+Abandoned bodies are not retrievable, and a commit is validated against the
+pending head and the chain before it is appended. Any other failure still
+blocks writes instead of allowing an unverifiable gap.
 
 **Conformance.** Service tests pin predecessor linkage, concurrent publish
 serialization, failed-submission retry, committed-body retrieval, and

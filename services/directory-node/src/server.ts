@@ -20,7 +20,12 @@ import { AtribDirectory } from '@atrib/directory'
 import type { IdentityClaim } from '@atrib/directory'
 import { verifyClaimSignature } from '@atrib/directory'
 import * as ed25519 from '@noble/ed25519'
-import { buildDirectoryAnchor, directoryAnchorContextId, submitDirectoryAnchor } from './anchor.js'
+import {
+  buildDirectoryAnchor,
+  directoryAnchorContextId,
+  submitDirectoryAnchor,
+  type AnchorRecord,
+} from './anchor.js'
 import { AnchorHistory } from './anchor-history.js'
 import { appendJsonLineDurably } from './durable-jsonl.js'
 
@@ -288,8 +293,9 @@ export async function bindDirectoryServer(
 async function reconcilePendingAnchor(
   logEndpoint: string,
   anchorHistory: AnchorHistory,
+  rebuild: (record: AnchorRecord) => Promise<{ record: AnchorRecord; record_hash: string }>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const pending = anchorHistory.pending()
+  let pending = anchorHistory.pending()
   if (!pending) return { ok: true }
 
   const lookupUrl = `${logEndpoint.replace(/\/$/, '')}/lookup/${pending.recordHash.slice('sha256:'.length)}`
@@ -335,7 +341,27 @@ async function reconcilePendingAnchor(
     }
   }
 
-  const submission = await submitDirectoryAnchor(logEndpoint, pending.record)
+  let submission = await submitDirectoryAnchor(logEndpoint, pending.record)
+  if (!submission.submitted && submission.rejected) {
+    // The log refused these exact bytes for good. Release them and anchor the
+    // same directory state again with a fresh record against the same head,
+    // so one refused record cannot block every later anchor.
+    const refused = pending.recordHash
+    try {
+      await anchorHistory.abandon(refused, submission.error ?? 'log refused the record')
+      const replacement = await rebuild(pending.record)
+      await anchorHistory.prepare(replacement.record, replacement.record_hash)
+    } catch (e) {
+      return {
+        ok: false,
+        error:
+          `pending anchor ${refused} was refused and could not be replaced: ` +
+          `${e instanceof Error ? e.message : String(e)}`,
+      }
+    }
+    pending = anchorHistory.pending()!
+    submission = await submitDirectoryAnchor(logEndpoint, pending.record)
+  }
   if (!submission.submitted) {
     return {
       ok: false,
@@ -443,7 +469,18 @@ async function handle(
 
     const result = await serializePublish(async () => {
       if (config.logEndpoint) {
-        const reconciliation = await reconcilePendingAnchor(config.logEndpoint, anchorHistory)
+        const reconciliation = await reconcilePendingAnchor(
+          config.logEndpoint,
+          anchorHistory,
+          (refused) =>
+            buildDirectoryAnchor({
+              directoryOrigin: config.origin,
+              operatorPrivateKey: config.operatorPrivateKey,
+              epoch: refused.metadata.directory_epoch,
+              rootHash: refused.metadata.directory_root,
+              previousAnchorRecordHash: anchorHistory.latestCommittedHash(),
+            }),
+        )
         if (!reconciliation.ok) return { blocked: reconciliation.error }
       }
 

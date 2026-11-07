@@ -142,6 +142,50 @@ describe('operating graph projection', () => {
     })
   })
 
+  it('keeps a cell in conflict when complete resolutions pick different heads', () => {
+    const first = entry('a', 'accepted_state', 'launch-status', { value: 'ready' })
+    const second = entry('b', 'accepted_state', 'launch-status', { value: 'blocked' })
+    const resolve = (character: string, accepted: OperatingEntry, options = {}) =>
+      entry(character, 'resolution', 'launch-status', {
+        accepted_head: accepted.record_hash,
+        resolves: [first.record_hash, second.record_hash],
+        informed_by: [first.record_hash, second.record_hash],
+        ...options,
+      })
+    const pickFirst = resolve('c', first, { timestamp: 500 })
+    const pickSecond = resolve('d', second, { timestamp: 900, agent: BOB })
+    const competing = projectOperatingView([first, second, pickFirst, pickSecond], {
+      workspace_id: WORKSPACE.id,
+    })
+    expect(competing.cells[0]).toMatchObject({
+      status: 'conflict',
+      accepted_head: null,
+      resolution: null,
+    })
+
+    const agreeing = projectOperatingView(
+      [first, second, pickSecond, resolve('e', second, { timestamp: 100 })],
+      { workspace_id: WORKSPACE.id },
+    )
+    expect(agreeing.cells[0]).toMatchObject({
+      status: 'resolved',
+      accepted_head: second.record_hash,
+      resolution: { record_hash: pickSecond.record_hash },
+    })
+
+    const settled = resolve('6', first, {
+      timestamp: 100,
+      revises: pickSecond.record_hash,
+    })
+    const revised = projectOperatingView([first, second, pickFirst, pickSecond, settled], {
+      workspace_id: WORKSPACE.id,
+    })
+    expect(revised.cells[0]).toMatchObject({
+      status: 'resolved',
+      accepted_head: first.record_hash,
+    })
+  })
+
   it('projects task, team, and agent scopes with named identities', () => {
     const aliceDecision = entry('d', 'decision', 'database', {
       value: 'sqlite',
