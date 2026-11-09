@@ -45,17 +45,17 @@
     "@noble/ed25519": "^3.2.0",
     "@noble/hashes": "^2.4.0",
     "@noble/secp256k1": "^3.2.0",
-    "@sd-jwt/core": "0.22.0",
-    "@sd-jwt/sd-jwt-vc": "0.22.0",
+    "@sd-jwt/core": "0.24.3",
+    "@sd-jwt/sd-jwt-vc": "0.24.3",
     "canonicalize": "^5.1.0",
-    "jose": "6.2.12"
+    "jose": "6.2.15"
   },
   "devDependencies": {
     "zod": "^4.6.6",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "fast-check": "^4.10.2",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   },
   "repository": {
     "type": "git",
