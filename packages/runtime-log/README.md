@@ -263,9 +263,10 @@ and values shaped like a Nostr secret key (`nsec1...`) are replaced with
 returned payloads as sensitive. `plaintext_hash` always covers the original
 decrypted object.
 
-The source reads frames produced by `buzz-acp`: Buzz 0.x desktop agents,
-standalone `buzz-acp`, and hosted agents that run it. Agents run locally by
-the Buzz 1.0 app do not emit observer frames.
+The source reads frames produced by `buzz-acp`: Buzz 0.x desktop agents and
+standalone or self-hosted `buzz-acp`. It is untested against frames from any
+other producer. Agents run locally by the Buzz 1.0 app do not emit observer
+frames.
 
 Sequence checks use the process-wide counter implemented by current
 `buzz-acp`. Missing, duplicate, or out-of-order frames fail closed by default.
