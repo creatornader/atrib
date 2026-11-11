@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -352,6 +352,11 @@ describe('reconcile-idempotency command', () => {
       await daemon.begin(KEY, binding)
       await daemon.flush()
       await expect(reconcileIdempotencyCommand(['--key', KEY], path)).rejects.toThrow(/Usage/)
+      const malformed = join(dir, 'result.json')
+      writeFileSync(malformed, JSON.stringify({ ok: true }))
+      await expect(
+        reconcileIdempotencyCommand(['--key', KEY, '--result', malformed], path),
+      ).rejects.toThrow(/content array/)
       expect(await reconcileIdempotencyCommand(['--key', KEY, '--not-dispatched'], path)).toMatch(
         /released/,
       )

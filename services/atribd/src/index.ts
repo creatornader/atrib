@@ -334,8 +334,14 @@ export async function reconcileIdempotencyCommand(
     else if (arg === '--not-dispatched') finding = { outcome: 'not-dispatched' }
     else if (arg === '--result') {
       const parsed: unknown = JSON.parse(readFileSync(requireArg(argv, ++i, '--result'), 'utf8'))
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        throw new Error('--result must hold an MCP tool result object')
+      // The stored result is replayed to every retry, so refuse a file that is
+      // not shaped like a tool result.
+      if (
+        !parsed ||
+        typeof parsed !== 'object' ||
+        !Array.isArray((parsed as { content?: unknown }).content)
+      ) {
+        throw new Error('--result must hold an MCP tool result object with a content array')
       }
       finding = { outcome: 'completed', result: parsed as never }
     } else if (arg === '--help' || arg === '-h') return RECONCILE_USAGE
