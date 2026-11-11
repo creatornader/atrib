@@ -159,7 +159,7 @@ describe('Buzz observer runtime-log source', () => {
     expect(bundle.frames[0]?.telemetry.startedAt).toBe('2026-07-24T12:00:00.000Z')
   })
 
-  it('returns decrypted payloads only on request and never returns a secret key', async () => {
+  it('returns decrypted payloads only on request, with nsec values redacted', async () => {
     const nsec = `nsec1${'q5'.repeat(29)}`
     const fixture = await fixtureFrame(1)
     const decrypted = {
@@ -197,6 +197,39 @@ describe('Buzz observer runtime-log source', () => {
     expect(hashOnly.frames[0]?.plaintext_hash).toBe(originalHash)
     expect(withPayloads.frames[0]?.plaintext_hash).toBe(originalHash)
     expect(withPayloads.frames[0]?.event_hash).toBe(hashOnly.frames[0]?.event_hash)
+  })
+
+  it('commits a batch frame as one event and reports the inner sequence numbers as missing', async () => {
+    const [first, batch] = await Promise.all([fixtureFrame(1), fixtureFrame(3)])
+    const inner = [2, 3].map((seq) => ({ ...first!.telemetry, seq, kind: 'acp_read' }))
+    const decrypted = new Map<string, unknown>([
+      [first!.event.content, first!.telemetry],
+      [batch!.event.content, { ...batch!.telemetry, kind: 'batch', payload: { events: inner } }],
+    ])
+    const options = {
+      load_events: () => [first!.event, batch!.event],
+      owner_pubkey: OWNER_PUBKEY,
+      decrypt: (event: NostrEvent) => decrypted.get(event.content),
+    }
+    const window = { session_id: 'buzz-observer-process', start: 1, end: 3 }
+
+    await expect(new BuzzObserverRuntimeLogSource(options).exportWindow(window)).rejects.toThrow(
+      'sequence_gap',
+    )
+
+    const bundle = await new BuzzObserverRuntimeLogSource({
+      ...options,
+      sequence_policy: 'report-gaps',
+    }).exportWindow(window)
+    expect(bundle.events.map((event) => event.kind)).toEqual([
+      'buzz.observer.turn_started',
+      'buzz.observer.batch',
+    ])
+    expect(bundle.sequence_audit.sequence_complete).toBe(false)
+    expect(bundle.sequence_audit.missing_ranges).toEqual([{ start: 2, end: 2 }])
+    expect(bundle.frames[1]?.plaintext_hash).toBe(
+      hashRuntimeLogEvent(decrypted.get(batch!.event.content)),
+    )
   })
 
   it('keeps event commitments stable across capture storage layouts', async () => {
