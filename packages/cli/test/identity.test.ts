@@ -183,6 +183,11 @@ describe('atrib identity CLI', () => {
         body += chunk
       })
       request.on('end', () => {
+        if (request.url?.includes('/refusing-directory/')) {
+          response.writeHead(503, { 'content-type': 'application/json' })
+          response.end(JSON.stringify({ error: 'unavailable' }))
+          return
+        }
         submittedRevocations.push(JSON.parse(body))
         response.writeHead(200, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ log_index: 7 }))
@@ -271,6 +276,33 @@ describe('atrib identity CLI', () => {
       })
       expect(submittedRevocations[0]).not.toHaveProperty('successor_key')
       expect(envValue(second.stdout, 'ATRIB_REVOKED_KEYS')).toBe(firstRunKey)
+
+      // A directory that refuses the claim must not leave the revoked run active.
+      const secondRunKey = rotated.active_run?.run_pubkey
+      const refused = await runCli([
+        CLI,
+        'identity',
+        'init',
+        '--profile',
+        'support',
+        '--profile-dir',
+        profileDirectory,
+        '--log',
+        logEndpoint,
+        '--publish',
+        '--directory',
+        `${logEndpoint}/refusing-directory`,
+      ])
+      expect(refused.status).not.toBe(0)
+      expect(refused.stderr).toContain('The profile was saved with the predecessor revoked')
+      const afterRefusal = loadIdentityProfile(join(profileDirectory, 'support.json'))
+      expect(afterRefusal.revoked_runs?.map((entry) => entry.revoked_key)).toEqual([
+        firstRunKey,
+        secondRunKey,
+      ])
+      expect(afterRefusal.active_run?.run_pubkey).not.toBe(secondRunKey)
+      expect(await identityProfileErrors(afterRefusal, principalSeed)).toEqual([])
+      expect(submittedRevocations).toHaveLength(2)
 
       const shown = spawnSync(
         'node',

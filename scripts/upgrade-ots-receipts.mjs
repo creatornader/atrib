@@ -44,7 +44,9 @@ async function rewriteFile(path, upgradeReceipt, logger) {
   try {
     text = await readFile(path, 'utf8')
   } catch (error) {
-    logger(`atrib: OTS receipt worker skipped ${path}: ${error instanceof Error ? error.message : String(error)}`)
+    logger(
+      `atrib: OTS receipt worker skipped ${path}: ${error instanceof Error ? error.message : String(error)}`,
+    )
     return { files: 0, upgraded: 0, pending: 0, malformed: 1, unchanged: 0 }
   }
 
@@ -79,32 +81,52 @@ async function rewriteFile(path, upgradeReceipt, logger) {
         stats.upgraded += 1
         changed = true
       } catch (error) {
-        logger(`atrib: OTS receipt worker kept pending receipt in ${path}:${lineIndex + 1}: ${error instanceof Error ? error.message : String(error)}`)
+        logger(
+          `atrib: OTS receipt worker kept pending receipt in ${path}:${lineIndex + 1}: ${error instanceof Error ? error.message : String(error)}`,
+        )
       }
     }
     lines[lineIndex] = JSON.stringify(envelope)
   }
 
   if (changed) {
-    const replacement = `${lines.join('\n')}${text.endsWith('\n') ? '' : '\n'}`
     const temporary = `${path}.ots-upgrade-${process.pid}.tmp`
     try {
+      // Producers append to the mirror while receipts upgrade over the
+      // network. Re-read just before the swap and carry any appended lines,
+      // so the rename never drops a record written after the first read.
+      const current = await readFile(path, 'utf8')
+      if (!current.startsWith(text) || (current.length > text.length && !text.endsWith('\n'))) {
+        logger(
+          `atrib: OTS receipt worker left ${path} unchanged because it was rewritten during the upgrade`,
+        )
+        return { ...stats, upgraded: 0 }
+      }
+      const replacement = `${lines.join('\n')}${text.endsWith('\n') ? '' : '\n'}${current.slice(text.length)}`
       await writeFile(temporary, replacement, 'utf8')
       await rename(temporary, path)
     } catch (error) {
-      logger(`atrib: OTS receipt worker could not update ${path}: ${error instanceof Error ? error.message : String(error)}`)
+      logger(
+        `atrib: OTS receipt worker could not update ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
   }
   return stats
 }
 
-export async function upgradeOtsReceipts({ mirrorDir, upgradeReceipt = defaultUpgradeReceipt, logger = console.warn }) {
+export async function upgradeOtsReceipts({
+  mirrorDir,
+  upgradeReceipt = defaultUpgradeReceipt,
+  logger = console.warn,
+}) {
   const total = { files: 0, upgraded: 0, pending: 0, malformed: 0, unchanged: 0 }
   let entries
   try {
     entries = await readdir(mirrorDir, { withFileTypes: true })
   } catch (error) {
-    logger(`atrib: OTS receipt worker skipped ${mirrorDir}: ${error instanceof Error ? error.message : String(error)}`)
+    logger(
+      `atrib: OTS receipt worker skipped ${mirrorDir}: ${error instanceof Error ? error.message : String(error)}`,
+    )
     return total
   }
   for (const entry of entries) {
@@ -133,7 +155,9 @@ async function main() {
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   main().catch((error) => {
-    console.warn(`atrib: OTS receipt worker failed: ${error instanceof Error ? error.message : String(error)}`)
+    console.warn(
+      `atrib: OTS receipt worker failed: ${error instanceof Error ? error.message : String(error)}`,
+    )
     process.exitCode = 0
   })
 }

@@ -98,7 +98,9 @@ private `_local.content` body uses this application schema:
 Kinds are `accepted_state`, `decision`, `outcome`, `handoff`, and
 `resolution`. Handoffs use `from_agent` and `to_agent`. A resolution includes
 `accepted_head` plus `resolves`, and its signed record must cite every hash in
-`resolves` through `informed_by`.
+`resolves` through `informed_by`. When two complete resolutions pick different
+heads, the cell stays in conflict: the newer timestamp does not decide it. A
+resolution that revises the other, or agreement on the same head, settles it.
 
 Application state is deliberately body-aware. Public log commitments alone do
 not reveal names, state values, or resolution choices. The reader requires an

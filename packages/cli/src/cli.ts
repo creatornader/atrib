@@ -818,11 +818,26 @@ async function runIdentityInit(flags: Flags): Promise<void> {
           throw new Error(`generated identity profile failed verification: ${errors.join(', ')}`)
         }
 
+        // The log has accepted the predecessor's revocation, so the profile must
+        // record it before anything else can fail. Saving after the directory
+        // publish left a failed publish with a revoked run still marked active,
+        // and the rerun revoked it a second time under a different successor.
+        saveIdentityProfile(path, profile)
         let directoryResult: Record<string, unknown> | undefined
         if (flags.publish) {
-          directoryResult = await publishIdentityClaim(profile.signed_claim, flags)
+          try {
+            directoryResult = await publishIdentityClaim(profile.signed_claim, flags)
+          } catch (error) {
+            throw new Error(
+              `${error instanceof Error ? error.message : String(error)}. The profile was saved` +
+                (rotation.revocation
+                  ? ` with the predecessor revoked at log_index ${rotation.revocation.log_index};`
+                  : ';') +
+                ' rerun to issue a run and publish again.',
+              { cause: error },
+            )
+          }
         }
-        saveIdentityProfile(path, profile)
 
         const encodedCertificate = base64urlEncode(
           new TextEncoder().encode(JSON.stringify(run.certificate)),

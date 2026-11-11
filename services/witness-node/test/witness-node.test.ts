@@ -160,6 +160,32 @@ describe('witness node end to end', () => {
     expect((await fetch(`${witness.url}/v1/health`)).status).toBe(503)
   })
 
+  it('keeps its own same-size split view as an immutable incident', async () => {
+    const log = await startFixtureLog([leafHash(Uint8Array.of(1)), leafHash(Uint8Array.of(2))])
+    const stateDirectory = mkdtempSync(join(tmpdir(), 'atrib-witness-split-test-'))
+    temporaryDirectories.push(stateDirectory)
+    const witness = await startWitnessServer({
+      identity: { name: WITNESS_NAME, privateKey: WITNESS_SEED },
+      log: { logBaseUrl: log.url, logKey: { name: LOG_NAME, publicKey: logPublicKey } },
+      stateDirectory,
+    })
+    closers.push(witness.close)
+    await witness.update()
+
+    log.hashes[1] = leafHash(Uint8Array.of(98))
+    await expect(witness.update()).rejects.toThrow(/different root incident sha256:[0-9a-f]{64}/)
+    const incidentList = (await (await fetch(`${witness.url}/v1/incidents`)).json()) as {
+      incidents: Array<{ kind: string; sources: string[] }>
+    }
+    expect(incidentList.incidents).toHaveLength(1)
+    expect(incidentList.incidents[0]?.kind).toBe('same_size_split_view')
+    expect(incidentList.incidents[0]?.sources).toContain('witness:prior-view')
+    expect(await (await fetch(`${witness.url}/v1/status`)).json()).toMatchObject({
+      tree_size: 2,
+      incident_count: 1,
+    })
+  })
+
   it('refuses a gossiped split view and publishes an immutable incident', async () => {
     const primary = await startFixtureLog([
       leafHash(Uint8Array.of(1)),

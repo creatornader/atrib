@@ -43,6 +43,8 @@ pnpm --filter @atrib/archive-node dev
 
 For isolated tests only, set `ATRIB_ARCHIVE_ALLOW_UNCOMMITTED=1` to skip trusted-log confirmation.
 
+With `ATRIB_ARCHIVE_PERSIST` set, each stored or merged entry is appended as one line, and puts run one at a time. An entry is served only after its line is written, so a submission that failed to persist is written again on retry instead of being answered from memory.
+
 ## Fly Deployment
 
 The service deploys from `services/archive-node/fly.toml`. The deploy workflow includes an `archive-node` dispatch option and redeploys the archive when `services/archive-node/`, `spec/conformance/2.12/`, `packages/mcp/`, or `packages/verify/` changes.

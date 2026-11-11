@@ -66,7 +66,30 @@ export async function witnessOnce(options: WitnessOnceOptions): Promise<WitnessO
   const unchanged = prior !== undefined && checkpoint.treeSize === prior.treeSize
   if (prior && checkpoint.treeSize === prior.treeSize) {
     if (rootHashBase64 !== prior.rootHashBase64) {
-      throw new Error('checkpoint split view: same tree size has a different root')
+      // Both notes carry the operator's signature, so the pair is evidence of
+      // equivocation in its own right. Keep it as an immutable incident, as
+      // gossip-detected splits are, instead of only refusing to cosign.
+      const observedAtMs = (options.nowSeconds ?? Math.floor(Date.now() / 1_000)) * 1_000
+      const evidence = await analyzeCheckpointGossip(
+        [
+          {
+            source_id: 'witness:prior-view',
+            observed_at_ms: prior.witnessedAtSeconds * 1_000,
+            checkpoint_note: prior.checkpointNote,
+          },
+          {
+            source_id: `primary:${stripTrailingSlash(options.log.logBaseUrl)}`,
+            observed_at_ms: observedAtMs,
+            checkpoint_note: checkpointNote,
+          },
+        ],
+        options.log.logKey,
+      )
+      for (const incident of evidence.incidents) options.store.commitIncident(incident)
+      const recorded = evidence.incidents.map((incident) => incident.incident_id).join(', ')
+      throw new Error(
+        `checkpoint split view: same tree size has a different root${recorded ? ` incident ${recorded}` : ''}`,
+      )
     }
     if (gossipSources.length === 0) {
       return {

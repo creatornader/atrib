@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -28,7 +28,11 @@ async function fixture(lines) {
 
 test('upgrades a pending receipt in the local sidecar', async () => {
   const { directory, path } = await fixture([{ record: {}, _local: { ots_receipts: [pending] } }])
-  const report = await upgradeOtsReceipts({ mirrorDir: directory, upgradeReceipt: async () => complete, logger: () => {} })
+  const report = await upgradeOtsReceipts({
+    mirrorDir: directory,
+    upgradeReceipt: async () => complete,
+    logger: () => {},
+  })
   const line = JSON.parse((await readFile(path, 'utf8')).trim())
   assert.equal(report.upgraded, 1)
   assert.deepEqual(line._local.ots_receipts, [complete])
@@ -38,7 +42,14 @@ test('leaves an already upgraded receipt unchanged', async () => {
   const { directory, path } = await fixture([{ record: {}, _local: { ots_receipts: [complete] } }])
   let calls = 0
   const before = await readFile(path, 'utf8')
-  const report = await upgradeOtsReceipts({ mirrorDir: directory, upgradeReceipt: async () => { calls += 1; return complete }, logger: () => {} })
+  const report = await upgradeOtsReceipts({
+    mirrorDir: directory,
+    upgradeReceipt: async () => {
+      calls += 1
+      return complete
+    },
+    logger: () => {},
+  })
   assert.equal(report.upgraded, 0)
   assert.equal(calls, 0)
   assert.equal(await readFile(path, 'utf8'), before)
@@ -47,15 +58,58 @@ test('leaves an already upgraded receipt unchanged', async () => {
 test('skips a malformed sidecar line', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'atrib-ots-worker-'))
   await writeFile(join(directory, 'records.jsonl'), '{not-json}\n')
-  const report = await upgradeOtsReceipts({ mirrorDir: directory, upgradeReceipt: async () => complete, logger: () => {} })
+  const report = await upgradeOtsReceipts({
+    mirrorDir: directory,
+    upgradeReceipt: async () => complete,
+    logger: () => {},
+  })
   assert.equal(report.malformed, 1)
   assert.equal(report.upgraded, 0)
 })
 
 test('keeps a pending receipt when the upgrader has no result', async () => {
   const { directory, path } = await fixture([{ record: {}, _local: { ots_receipts: [pending] } }])
-  const report = await upgradeOtsReceipts({ mirrorDir: directory, upgradeReceipt: async () => null, logger: () => {} })
+  const report = await upgradeOtsReceipts({
+    mirrorDir: directory,
+    upgradeReceipt: async () => null,
+    logger: () => {},
+  })
   const line = JSON.parse((await readFile(path, 'utf8')).trim())
   assert.equal(report.upgraded, 0)
   assert.deepEqual(line._local.ots_receipts, [pending])
+})
+
+test('keeps a record a producer appends while a receipt upgrades', async () => {
+  const { directory, path } = await fixture([{ record: {}, _local: { ots_receipts: [pending] } }])
+  const appended = { record: { appended: true }, _local: {} }
+  const report = await upgradeOtsReceipts({
+    mirrorDir: directory,
+    upgradeReceipt: async () => {
+      await appendFile(path, `${JSON.stringify(appended)}\n`)
+      return complete
+    },
+    logger: () => {},
+  })
+  const lines = (await readFile(path, 'utf8'))
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line))
+  assert.equal(report.upgraded, 1)
+  assert.deepEqual(lines[0]._local.ots_receipts, [complete])
+  assert.deepEqual(lines[1], appended)
+})
+
+test('leaves a file rewritten during the upgrade untouched', async () => {
+  const { directory, path } = await fixture([{ record: {}, _local: { ots_receipts: [pending] } }])
+  const rewritten = `${JSON.stringify({ record: { compacted: true } })}\n`
+  const report = await upgradeOtsReceipts({
+    mirrorDir: directory,
+    upgradeReceipt: async () => {
+      await writeFile(path, rewritten)
+      return complete
+    },
+    logger: () => {},
+  })
+  assert.equal(report.upgraded, 0)
+  assert.equal(await readFile(path, 'utf8'), rewritten)
 })

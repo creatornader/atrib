@@ -449,6 +449,26 @@ describe('directory-node /v6/anchors body retrieval', () => {
     expect(after.total_anchors).toBe(2)
   })
 
+  it('replaces an anchor the log refused for good instead of blocking later ones', async () => {
+    // The first anchor and its first retry are both refused as invalid.
+    stubLog.postStatuses.push(400, 400)
+    const first = await publishOneExpectingPending('alice')
+
+    const second = await publishOne('bob')
+    expect(stubLog.submissions).toHaveLength(4)
+    const [refused, refusedAgain, replacement, successor] = stubLog.submissions
+    expect(hashDirectoryAnchor(refused!)).toBe(first.recordHash)
+    expect(hashDirectoryAnchor(refusedAgain!)).toBe(first.recordHash)
+    // The replacement anchors the same directory state against the same head.
+    expect(hashDirectoryAnchor(replacement!)).not.toBe(first.recordHash)
+    expect(replacement!.metadata.directory_epoch).toBe(refused!.metadata.directory_epoch)
+    expect(replacement!.metadata.directory_root).toBe(refused!.metadata.directory_root)
+    expect(replacement!.chain_root).toBe(refused!.chain_root)
+    expect(successor!.chain_root).toBe(hashDirectoryAnchor(replacement!))
+    expect(hashDirectoryAnchor(successor!)).toBe(second.recordHash)
+    expect((await fetch(`${handle.url}/v6/anchors/${first.recordHash}`)).status).toBe(404)
+  })
+
   it('serializes concurrent publishes into one anchor chain', async () => {
     const publishes = await Promise.all(
       Array.from({ length: 8 }, (_, index) => publishOne(`agent-${index}`)),

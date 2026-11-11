@@ -196,6 +196,7 @@ type BackendStatus =
   | { state: 'starting'; startedAt: number }
   | { state: 'ready'; startedAt: number; readyAt: number; backend: AtribdBackend }
   | { state: 'error'; startedAt: number; errorAt: number; error: unknown }
+  | { state: 'closed'; startedAt: number; closedAt: number }
 
 function createBackendProvider(factory: () => Promise<AtribdBackend>): {
   get(): Promise<AtribdBackend>
@@ -206,22 +207,40 @@ function createBackendProvider(factory: () => Promise<AtribdBackend>): {
   let status: BackendStatus = { state: 'starting', startedAt }
   const ready = factory().then(
     (backend) => {
-      status = { state: 'ready', startedAt, readyAt: Date.now(), backend }
+      // A backend that finishes mounting after close() must not report ready.
+      if (status.state !== 'closed') {
+        status = { state: 'ready', startedAt, readyAt: Date.now(), backend }
+      }
       return backend
     },
     (error: unknown) => {
-      status = { state: 'error', startedAt, errorAt: Date.now(), error }
+      if (status.state !== 'closed') {
+        status = { state: 'error', startedAt, errorAt: Date.now(), error }
+      }
       throw error
     },
   )
   void ready.catch(() => {})
+  let closing: Promise<void> | undefined
 
   return {
-    get: () => ready,
+    get: () =>
+      status.state === 'closed'
+        ? Promise.reject(new Error('atribd: the daemon is shutting down'))
+        : ready,
     status: () => status,
-    close: async () => {
-      const backend = status.state === 'ready' ? status.backend : await ready.catch(() => undefined)
-      await backend?.close()
+    // Closed is terminal: later calls share the first close, and requests that
+    // arrive while in-flight work drains are refused instead of reaching a
+    // backend whose primitives are being torn down.
+    close: () => {
+      if (!closing) {
+        status = { state: 'closed', startedAt, closedAt: Date.now() }
+        closing = ready.then(
+          (backend) => backend.close(),
+          () => undefined,
+        )
+      }
+      return closing
     },
   }
 }
@@ -749,9 +768,15 @@ export async function bindAtribdHttpHost(
           ? 'starting'
           : backendStatus.state === 'error'
             ? 'error'
-            : 'ready'
+            : backendStatus.state === 'closed'
+              ? 'closed'
+              : 'ready'
       const code =
-        backendStatus.state === 'starting' ? 503 : backendStatus.state === 'error' ? 500 : 200
+        backendStatus.state === 'starting' || backendStatus.state === 'closed'
+          ? 503
+          : backendStatus.state === 'error'
+            ? 500
+            : 200
       sendJson(res, code, {
         status,
         report: {
@@ -765,6 +790,17 @@ export async function bindAtribdHttpHost(
       return
     }
     if (path === healthPath || path === '/health') {
+      if (backendStatus.state === 'closed') {
+        sendJson(res, 503, {
+          status: 'closed',
+          report: {
+            daemon: { ...daemon, backend: 'closed', backend_closed_at: backendStatus.closedAt },
+            requests: { ...counters },
+            compatibility: compatibilityReport,
+          },
+        })
+        return
+      }
       if (backendStatus.state === 'starting') {
         sendJson(res, 503, {
           status: 'starting',

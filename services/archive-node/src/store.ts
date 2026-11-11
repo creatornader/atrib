@@ -108,6 +108,7 @@ export function normalizeArchiveSubmission(input: unknown): ArchiveSubmissionEnv
 export class ArchiveStore {
   private readonly entries = new Map<string, StoredArchiveEntry>()
   private readonly persistencePath: string | undefined
+  private queue: Promise<void> = Promise.resolve()
   private readonly retentionWindowMs: number
   private readonly nowMs: () => number
 
@@ -166,13 +167,28 @@ export class ArchiveStore {
       ...(submission.resolvedFacts ? { resolvedFacts: submission.resolvedFacts } : {}),
     }
 
-    const existing = this.entries.get(computedHash)
-    const entry = existing ? mergeEntries(existing, next) : next
-    this.entries.set(computedHash, entry)
-    if (!existing || stableJson(entry) !== stableJson(existing)) {
-      await this.persist(entry)
-    }
-    return { created: existing === undefined, entry }
+    // Puts run one at a time, and an entry is visible only once its line is
+    // durable. Otherwise a retry after a failed append would find the entry
+    // in memory, skip the write and report success for a body a restart
+    // loses, and two merges could land on disk in the wrong order.
+    return this.exclusive(async () => {
+      const existing = this.entries.get(computedHash)
+      const entry = existing ? mergeEntries(existing, next) : next
+      if (!existing || stableJson(entry) !== stableJson(existing)) {
+        await this.persist(entry)
+      }
+      this.entries.set(computedHash, entry)
+      return { created: existing === undefined, entry }
+    })
+  }
+
+  private exclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(operation, operation)
+    this.queue = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    return run
   }
 
   private async persist(entry: StoredArchiveEntry): Promise<void> {
