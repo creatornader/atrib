@@ -254,10 +254,26 @@ decryption, checks the owner and agent tags, validates known telemetry fields,
 and commits the complete decrypted JSON object. Unknown fields remain covered
 by `plaintext_hash` even when the typed projection does not expose them.
 
+Returned frames carry hashes and typed telemetry fields, not the decrypted
+payload. `buzz-acp` frames can contain the agent's secret key and the system
+prompt, so `telemetry.payload` is returned only with `include_payloads: true`,
+and values shaped like a Nostr secret key (`nsec1...`) are replaced with
+`[redacted:nsec]` first. `plaintext_hash` always covers the original decrypted
+object.
+
+The source reads frames produced by `buzz-acp`: Buzz 0.x desktop agents,
+standalone `buzz-acp`, and hosted agents that run it. Agents run locally by
+the Buzz 1.0 app do not emit observer frames.
+
 Sequence checks use the process-wide counter implemented by current
 `buzz-acp`. Missing, duplicate, or out-of-order frames fail closed by default.
 Set `sequence_policy: 'report-gaps'` only when an incomplete captured window is
-acceptable and must stay explicit in the proof.
+acceptable and must stay explicit in the proof. Current `buzz-acp` merges
+streamed chunks and wraps several events in one `batch` frame that carries
+only the last inner sequence number, so a live capture is rarely contiguous.
+Use `report-gaps` for those captures: each `batch` frame is committed as one
+`buzz.observer.batch` event, and the window is never reported complete. The
+source does not unwrap inner events.
 
 The decrypt callback and captured bodies remain host-owned. The manifest does
 not claim relay admission, relay persistence, Buzz audit-log inclusion, runtime

@@ -8,6 +8,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { describe, expect, it } from 'vitest'
 import { deriveNostrEventId, type NostrEvent } from '@atrib/verify'
 import {
+  BUZZ_OBSERVER_REDACTED_SECRET,
   BUZZ_OBSERVER_SEQUENCE_PROJECTION,
   MAX_BUZZ_OBSERVER_PAYLOAD_BYTES,
   BuzzObserverRuntimeLogSource,
@@ -117,10 +118,12 @@ describe('Buzz observer runtime-log source', () => {
     expect(bundle.frames.every((frame) => frame.event_verification.valid)).toBe(true)
     expect(bundle.frames[0]?.plaintext_hash).toBe(
       hashRuntimeLogEvent({
-        ...bundle.frames[0]?.telemetry,
+        ...(await fixtureFrame(1)).telemetry,
         futureField: 'committed even before the adapter understands it',
       }),
     )
+    expect(bundle.frames.every((frame) => !('payload' in frame.telemetry))).toBe(true)
+    expect(JSON.stringify(bundle)).not.toContain('session/prompt')
     const publicManifest = JSON.stringify(bundle.manifest)
     expect(publicManifest).not.toContain('ciphertext-')
     expect(publicManifest).not.toContain('session/prompt')
@@ -154,6 +157,46 @@ describe('Buzz observer runtime-log source', () => {
       hashRuntimeLogEvent(telemetryByCiphertext.get(fixtures[0]!.event.content)),
     )
     expect(bundle.frames[0]?.telemetry.startedAt).toBe('2026-07-24T12:00:00.000Z')
+  })
+
+  it('returns decrypted payloads only on request and never returns a secret key', async () => {
+    const nsec = `nsec1${'q5'.repeat(29)}`
+    const fixture = await fixtureFrame(1)
+    const decrypted = {
+      ...fixture.telemetry,
+      kind: 'acp_write',
+      payload: {
+        method: 'session/new',
+        params: { env: [{ name: 'BUZZ_PRIVATE_KEY', value: nsec }] },
+        note: `key=${nsec} trailing`,
+      },
+    }
+    const options = {
+      load_events: () => [fixture.event],
+      owner_pubkey: OWNER_PUBKEY,
+      decrypt: () => decrypted,
+    }
+    const window = { session_id: 'buzz-observer-process', start: 1, end: 1 }
+
+    const hashOnly = await new BuzzObserverRuntimeLogSource(options).exportWindow(window)
+    expect(hashOnly.frames[0]?.telemetry.payload).toBeUndefined()
+    expect(JSON.stringify(hashOnly)).not.toContain('nsec1')
+
+    const withPayloads = await new BuzzObserverRuntimeLogSource({
+      ...options,
+      include_payloads: true,
+    }).exportWindow(window)
+    expect(withPayloads.frames[0]?.telemetry.payload).toEqual({
+      method: 'session/new',
+      params: { env: [{ name: 'BUZZ_PRIVATE_KEY', value: BUZZ_OBSERVER_REDACTED_SECRET }] },
+      note: `key=${BUZZ_OBSERVER_REDACTED_SECRET} trailing`,
+    })
+    expect(JSON.stringify(withPayloads)).not.toContain('nsec1')
+
+    const originalHash = hashRuntimeLogEvent(decrypted)
+    expect(hashOnly.frames[0]?.plaintext_hash).toBe(originalHash)
+    expect(withPayloads.frames[0]?.plaintext_hash).toBe(originalHash)
+    expect(withPayloads.frames[0]?.event_hash).toBe(hashOnly.frames[0]?.event_hash)
   })
 
   it('keeps event commitments stable across capture storage layouts', async () => {
