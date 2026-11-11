@@ -29,6 +29,7 @@ export const BUZZ_OBSERVER_SEQUENCE_AUDIT_SCHEMA =
   'https://atrib.dev/schemas/runtime-log/buzz-observer-sequence-audit/v0' as const
 export const BUZZ_OBSERVER_SEQUENCE_PROJECTION = 'buzz.observer-sequence-audit' as const
 export const MAX_BUZZ_OBSERVER_PAYLOAD_BYTES = 65_535 as const
+export const BUZZ_OBSERVER_REDACTED_SECRET = '[redacted:nsec]' as const
 
 export type BuzzObserverCaptureKind = 'live-subscription' | 'desktop-local-archive'
 export type BuzzObserverSequencePolicy = 'require-contiguous' | 'report-gaps'
@@ -45,7 +46,11 @@ export interface BuzzObserverTelemetry {
   readonly sessionId: string | null
   readonly turnId: string | null
   readonly startedAt: string | null
-  readonly payload: Record<string, unknown>
+  /**
+   * Present only when the source was created with `include_payloads: true`.
+   * Values shaped like a Nostr secret key are replaced before return.
+   */
+  readonly payload?: Record<string, unknown>
 }
 
 export interface BuzzObserverFrame {
@@ -138,6 +143,12 @@ export interface BuzzObserverRuntimeLogSourceOptions {
   readonly decrypt: (event: NostrEvent) => unknown | Promise<unknown>
   readonly capture_kind?: BuzzObserverCaptureKind
   readonly sequence_policy?: BuzzObserverSequencePolicy
+  /**
+   * Return each frame's decrypted payload on `telemetry.payload`. Off by
+   * default: `buzz-acp` frames can carry the agent's secret key and the system
+   * prompt. `plaintext_hash` always covers the original decrypted bytes.
+   */
+  readonly include_payloads?: boolean
   readonly source_version?: string
   readonly runtime?: RuntimeLogRuntimeRef
 }
@@ -152,6 +163,7 @@ export class BuzzObserverRuntimeLogSource implements RuntimeLogSource {
   private readonly decrypt: BuzzObserverRuntimeLogSourceOptions['decrypt']
   private readonly captureKind: BuzzObserverCaptureKind
   private readonly sequencePolicy: BuzzObserverSequencePolicy
+  private readonly includePayloads: boolean
   private readonly sourceVersion: string
   private readonly runtime: RuntimeLogRuntimeRef
 
@@ -168,6 +180,7 @@ export class BuzzObserverRuntimeLogSource implements RuntimeLogSource {
     this.decrypt = options.decrypt
     this.captureKind = options.capture_kind ?? 'live-subscription'
     this.sequencePolicy = options.sequence_policy ?? 'require-contiguous'
+    this.includePayloads = options.include_payloads ?? false
     this.sourceVersion = options.source_version ?? 'v1'
     this.runtime = options.runtime ?? {
       name: 'Buzz',
@@ -316,7 +329,11 @@ export class BuzzObserverRuntimeLogSource implements RuntimeLogSource {
       const event = parsed as unknown as NostrEvent
       const tags = validateTelemetryTags(event, this.ownerPubkey)
       const decrypted = await this.decrypt(event)
-      const { telemetry, payload: decryptedPayload } = parseTelemetry(decrypted, label)
+      const { telemetry, payload: decryptedPayload } = parseTelemetry(
+        decrypted,
+        label,
+        this.includePayloads,
+      )
       const ciphertextHash = hashRuntimeLogEvent(event.content)
       const plaintextHash = hashRuntimeLogEvent(decryptedPayload)
       frames.push({
@@ -466,6 +483,7 @@ function exactSingleTag(event: NostrEvent, name: string): string {
 function parseTelemetry(
   value: unknown,
   label: string,
+  includePayload: boolean,
 ): {
   telemetry: BuzzObserverTelemetry
   payload: Readonly<Record<string, unknown>>
@@ -500,10 +518,28 @@ function parseTelemetry(
       sessionId: readNullableString(parsed, 'sessionId'),
       turnId: readNullableString(parsed, 'turnId'),
       startedAt,
-      payload,
+      ...(includePayload ? { payload: redactSecrets(payload) } : {}),
     },
     payload: parsed,
   }
+}
+
+const NSEC_PATTERN = /nsec1[02-9ac-hj-np-z]{58}/g
+
+function redactSecrets<T>(value: T): T {
+  if (typeof value === 'string') {
+    return value.replace(NSEC_PATTERN, BUZZ_OBSERVER_REDACTED_SECRET) as T
+  }
+  if (Array.isArray(value)) return value.map((member) => redactSecrets(member)) as T
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, member]) => [
+        key.replace(NSEC_PATTERN, BUZZ_OBSERVER_REDACTED_SECRET),
+        redactSecrets(member),
+      ]),
+    ) as T
+  }
+  return value
 }
 
 function formatSequenceFailure(audit: BuzzObserverSequenceAudit): string {
