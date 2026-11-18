@@ -1,5 +1,11 @@
 # @atrib/cli
 
+## 0.4.2
+
+### Patch Changes
+
+- 9baa102: `atrib identity init` saves the profile as soon as the log accepts the predecessor's revocation, before the optional directory publish. A failed publish no longer leaves a revoked run marked active, and the rerun no longer revokes it a second time under a different successor.
+
 ## 0.4.1
 
 ### Patch Changes
