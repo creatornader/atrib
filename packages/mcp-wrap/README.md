@@ -71,6 +71,92 @@ plus a local log submission were produced. It needs network access the first
 time `npx` fetches the upstream filesystem server, but it does not need an LLM
 API key or the production atrib log.
 
+## Parallel web research
+
+Use [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)
+through the wrapper to search the web and fetch source pages while keeping a
+signed action trail. The anonymous endpoint needs no Parallel account or API
+key; free-tier search uses Fast mode and is rate limited.
+
+After installing `@atrib/mcp-wrap`, save this as `parallel-search.json`:
+
+```json
+{
+  "name": "parallel-search",
+  "agent": "research",
+  "upstream": {
+    "type": "http",
+    "url": "https://search.parallel.ai/mcp",
+    "headers": {
+      "User-Agent": "atrib-mcp-wrap-parallel-research/1.0"
+    }
+  },
+  "serverUrl": "https://search.parallel.ai/mcp",
+  "contextIdSource": "harness",
+  "autoChainFallback": "fresh"
+}
+```
+
+The wrapper still needs an atrib signing key. Use an existing key from
+[Key resolution](#key-resolution), or create a new file-backed identity once:
+
+```bash
+node --input-type=module <<'JS'
+import { randomBytes } from 'node:crypto'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+const dir = join(homedir(), '.atrib', 'keys')
+mkdirSync(dir, { recursive: true, mode: 0o700 })
+writeFileSync(join(dir, 'parallel-research.key'), randomBytes(32).toString('base64url'), {
+  mode: 0o600,
+  flag: 'wx',
+})
+JS
+```
+
+This refuses to overwrite an existing key. Keep the seed private. Add a separate
+entry to your MCP host's configuration, replacing all three paths with absolute
+paths on your machine. The binary is installed in your project's
+`node_modules/.bin/` directory:
+
+```json
+{
+  "mcpServers": {
+    "parallel-research": {
+      "command": "/absolute/path/to/project/node_modules/.bin/atrib-wrap",
+      "args": ["/absolute/path/to/parallel-search.json"],
+      "env": {
+        "ATRIB_KEY_FILE": "/absolute/path/to/.atrib/keys/parallel-research.key"
+      }
+    }
+  }
+}
+```
+
+If `ATRIB_PRIVATE_KEY` is already set in the host's environment, it takes
+precedence over `ATRIB_KEY_FILE`. Restart the host and confirm that this entry
+exposes `web_search` and `web_fetch`. Ask it to search for a focused question,
+fetch the most relevant primary-source pages, and cite their URLs. For example:
+"Find the current MCP Streamable HTTP transport requirements, then fetch the
+specification pages that support your answer." Reuse one `session_id` across
+related Parallel search and fetch calls when supplying that optional argument.
+
+The config uses the host's discovered context when available. Without a caller
+context, `fresh` keeps unrelated calls in separate contexts; provide atrib
+context metadata if you need a linked research chain from another host.
+
+Successful calls produce signed records in
+`~/.atrib/records/parallel-search-research.jsonl`; diagnostics go to
+`~/.atrib/logs/parallel-search-research.log`. Each mirror line contains `record`
+and may contain a private `_local` sidecar with the query and returned content.
+The default wrapper posture hashes tool names and uses salted argument/result
+commitments. Signed records are submitted to the public atrib log by default;
+raw sidecar content stays local. Choose a different `logEndpoint` before calling
+tools if you use your own log, and review [privacy postures](../../atrib-spec.md#8-privacy-postures)
+before researching sensitive material. A signature proves the wrapper's signed
+account of a call, not that a source page is accurate or signed by Parallel.
+
 ## Config shape
 
 ```jsonc
