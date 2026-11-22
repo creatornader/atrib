@@ -10775,3 +10775,45 @@ check offline.
 with the privacy rules above; until then, no registry, corpus or count changes.
 
 **ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
+
+## P061: log-window event roots should be RFC 6962 Merkle trees
+
+**Filed 2026-11-02.** Candidate draft: [docs/adr-draft-p061-merkle-window-roots.md](docs/adr-draft-p061-merkle-window-roots.md).
+
+**Source:** A [D121](#d121-runtime-log-proof-manifests-verify-host-owned-run-windows)
+`event_root` is one hash over the flat list of a window's event refs. Proving
+one event belongs to a window therefore discloses every ref in it: the id,
+position, kind, timestamp and content hash of every other event. Hosts that
+manifest a growing log at intervals also get a series of roots with no
+checkable relation, so an earlier event edited between two manifests goes
+unnoticed. On one real 895-event session transcript, a single-event proof
+needs 235,229 bytes under v0 and 628 bytes under a Merkle root, and
+consistency proofs between windows take 9 to 11 hashes.
+
+**The decision in question:** whether to add a v1 window root, the RFC 6962
+Merkle Tree Hash over one leaf per event ref, with a single-event proof
+object, an optional `prior_window` claim and consistency proofs between
+windows of the same log.
+
+**Considerations.**
+
+- Additive. v0 manifests stay valid; `canonicalization.algorithm`
+  discriminates. No record field, event type, edge or log entry changes.
+- Reuses the [§1.2.10.1](atrib-spec.md#12101-session-tree-construction) tree
+  algebra and the existing `@atrib/mcp` and `@atrib/verify` RFC 6962 helpers.
+  A schema string inside each leaf preimage keeps window roots and session
+  roots apart.
+- Not a `session_checkpoint`: session leaves are signed record hashes, and
+  runtime-log events are unsigned host events.
+- A salted leaf variant addresses guessable neighbour hashes for sources
+  without random event ids; recommended specified but off by default.
+- The [D168](#d168-coverage-manifests-make-capture-scope-verifiable) coverage
+  action root has the same flat-list limit and is the natural second step.
+
+**Trigger:** owner go-ahead to implement, or the first consumer that needs to
+prove a single runtime-log event without the whole window.
+
+**Likely outcome (not committed):** accept v1 as drafted, make it the default
+for new manifests once the corpus lands, and keep v0 verifiable.
+
+**ADR number** will be assigned when the decision is acted on. Do not pre-allocate.
