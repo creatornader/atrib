@@ -1,5 +1,13 @@
 # @atrib/summarize
 
+## 0.6.2
+
+### Patch Changes
+
+- Updated dependencies [a32451a]
+- Updated dependencies [7045438]
+  - @atrib/mcp@0.27.1
+
 ## 0.6.1
 
 ### Patch Changes

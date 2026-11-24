@@ -1,5 +1,14 @@
 # @atrib/recall
 
+## 6.0.2
+
+### Patch Changes
+
+- Updated dependencies [a32451a]
+- Updated dependencies [7045438]
+  - @atrib/mcp@0.27.1
+  - @atrib/verify@0.15.2
+
 ## 6.0.1
 
 ### Patch Changes
