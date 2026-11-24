@@ -25,6 +25,7 @@ import {
   signTransactionRecord,
 } from '../src/index.js'
 import type { AtribRecord } from '../src/index.js'
+import { setRecordReferenceResolverScanHookForTests } from '../src/record-reference.js'
 
 const TEST_KEY = new Uint8Array(32).fill(23)
 const CTX = 'c'.repeat(32)
@@ -201,9 +202,39 @@ describe('defaultRecordReferenceResolver', () => {
       expect(stats.full_file_scans).toBe(0)
       expect(stats.append_file_scans).toBe(1)
 
+      // A small append is not worth rewriting the whole index, so the next
+      // process rescans the same short tail instead.
       simulateNewProcess()
       await expect(defaultRecordReferenceResolver(second.recordHash)).resolves.toBe('found')
-      expect(recordReferenceResolverCacheStatsForTests().persisted_file_caches).toBe(1)
+      const later = recordReferenceResolverCacheStatsForTests()
+      expect(later.full_file_scans).toBe(0)
+      expect(later.append_file_scans).toBe(1)
+    })
+
+    it('rewrites the index once enough bytes have been appended', async () => {
+      const first = await makeRecord('d', 0)
+      const second = await makeRecord('e', 1)
+      const mirrorPath = join(tmpDir, 'producer.jsonl')
+      await writeFile(mirrorPath, line(first.record))
+      await expect(defaultRecordReferenceResolver(missingHash)).resolves.toBe('not-found')
+      const before = await readFile(indexPath(), 'utf8')
+
+      await appendFile(mirrorPath, line(second.record))
+      simulateNewProcess()
+      await expect(defaultRecordReferenceResolver(second.recordHash)).resolves.toBe('found')
+      expect(await readFile(indexPath(), 'utf8')).toBe(before)
+
+      const padded = { record: second.record, _local: { content: 'x'.repeat(256 * 1024) } }
+      await appendFile(mirrorPath, `${JSON.stringify(padded)}\n`)
+      simulateNewProcess()
+      await expect(defaultRecordReferenceResolver(second.recordHash)).resolves.toBe('found')
+      expect(await readFile(indexPath(), 'utf8')).not.toBe(before)
+
+      simulateNewProcess()
+      await expect(defaultRecordReferenceResolver(second.recordHash)).resolves.toBe('found')
+      const stats = recordReferenceResolverCacheStatsForTests()
+      expect(stats.persisted_file_caches).toBe(1)
+      expect(stats.append_file_scans).toBe(0)
     })
 
     it('falls back to a full scan after truncation', async () => {
@@ -312,6 +343,45 @@ describe('defaultRecordReferenceResolver', () => {
       simulateNewProcess()
       await expect(defaultRecordReferenceResolver(missingHash)).resolves.toBe('not-found')
       expect(recordReferenceResolverCacheStatsForTests().full_file_scans).toBe(1)
+    })
+
+    it('does not cache a scan the file was rewritten under', async () => {
+      const first = await makeRecord('d', 0)
+      const second = await makeRecord('e', 1)
+      const third = await makeRecord('a', 2)
+      const mirrorPath = join(tmpDir, 'producer.jsonl')
+      await writeFile(mirrorPath, line(first.record))
+
+      // Another producer rewrites the mirror, longer, right after the scan read it.
+      setRecordReferenceResolverScanHookForTests(async () => {
+        setRecordReferenceResolverScanHookForTests(undefined)
+        await writeFile(mirrorPath, line(second.record) + line(third.record))
+      })
+      await expect(defaultRecordReferenceResolver(missingHash)).resolves.toBe('not-found')
+
+      simulateNewProcess()
+      await expect(defaultRecordReferenceResolver(first.recordHash)).resolves.toBe('not-found')
+      await expect(defaultRecordReferenceResolver(third.recordHash)).resolves.toBe('found')
+      expect(recordReferenceResolverCacheStatsForTests().append_file_scans).toBe(0)
+    })
+
+    it('keeps a scan that only saw concurrent appends', async () => {
+      const first = await makeRecord('d', 0)
+      const second = await makeRecord('e', 1)
+      const mirrorPath = join(tmpDir, 'producer.jsonl')
+      await writeFile(mirrorPath, line(first.record))
+
+      setRecordReferenceResolverScanHookForTests(async () => {
+        setRecordReferenceResolverScanHookForTests(undefined)
+        await appendFile(mirrorPath, line(second.record))
+      })
+      await expect(defaultRecordReferenceResolver(missingHash)).resolves.toBe('not-found')
+
+      simulateNewProcess()
+      await expect(defaultRecordReferenceResolver(second.recordHash)).resolves.toBe('found')
+      const stats = recordReferenceResolverCacheStatsForTests()
+      expect(stats.full_file_scans).toBe(0)
+      expect(stats.append_file_scans).toBe(1)
     })
 
     it('ignores bytes past the stat it read', async () => {

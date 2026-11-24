@@ -47,6 +47,8 @@ interface LocalMirrorFileCacheEntry extends LocalMirrorFileState {
   endedWithNewline: boolean
   /** sha256 hex of the last RECORD_HASH_INDEX_TAIL_BYTES bytes before `size`. */
   tailSha256: string
+  /** File size the on-disk index entry covers, when one exists. */
+  persistedSize?: number | undefined
 }
 
 // Persisted beside each mirror directory so short-lived producers, such as
@@ -57,6 +59,10 @@ interface LocalMirrorFileCacheEntry extends LocalMirrorFileState {
 const RECORD_HASH_INDEX_SCHEMA = 'atrib.record-hash-index.v1'
 const RECORD_HASH_INDEX_FILE = '.atrib-record-hash-index-v1.json'
 const RECORD_HASH_INDEX_TAIL_BYTES = 4096
+// Rewriting the index costs time proportional to the whole corpus, so a
+// producer that appends one row per process must not rewrite it every time.
+// Until this many bytes are appended, the next process rescans that tail.
+const RECORD_HASH_INDEX_REWRITE_BYTES = 256 * 1024
 const HEX64_PATTERN = /^[0-9a-f]{64}$/
 
 let localRecordHashCache: Set<string> | undefined
@@ -66,6 +72,7 @@ let localMirrorFullFileScansForTests = 0
 let localMirrorAppendFileScansForTests = 0
 let localMirrorReusedFileCachesForTests = 0
 let localMirrorPersistedFileCachesForTests = 0
+let afterMirrorScanHookForTests: ((file: string) => Promise<void>) | undefined
 
 /**
  * Resolve a record_hash against local mirrors first, then the public log.
@@ -168,18 +175,23 @@ async function loadLocalRecordHashes(): Promise<Set<string>> {
         entry = previous
         if (previousFromDisk) localMirrorPersistedFileCachesForTests += 1
         else localMirrorReusedFileCachesForTests += 1
-      } else if (previous && (await canResumeAfter(file, previous, state))) {
-        const combined = new Set(previous.hashes)
-        await collectFileHashes(file, combined, previous.size, state.size)
-        entry = await fileCacheEntry(file, state, combined)
-        localMirrorAppendFileScansForTests += 1
-        changedDirectories.add(directory)
       } else {
-        const scanned = new Set<string>()
-        await collectFileHashes(file, scanned, 0, state.size)
-        entry = await fileCacheEntry(file, state, scanned)
-        localMirrorFullFileScansForTests += 1
-        changedDirectories.add(directory)
+        const resumeFrom =
+          previous && (await canResumeAfter(file, previous, state)) ? previous : undefined
+        const scan = await scanFileEntry(file, state, resumeFrom)
+        if (resumeFrom) localMirrorAppendFileScansForTests += 1
+        else localMirrorFullFileScansForTests += 1
+        for (const hash of scan.entry.hashes) hashes.add(hash)
+        // The file changed under the scan in a way an append cannot explain.
+        // The hashes still serve this lookup, but they are not cached.
+        if (!scan.stable) continue
+        entry = scan.entry
+        if (
+          entry.persistedSize === undefined ||
+          entry.size - entry.persistedSize >= RECORD_HASH_INDEX_REWRITE_BYTES
+        ) {
+          changedDirectories.add(directory)
+        }
       }
 
       nextFileCaches.set(file, entry)
@@ -221,16 +233,43 @@ async function canResumeAfter(
   return (await tailDigest(file, previous.size)) === previous.tailSha256
 }
 
-async function fileCacheEntry(
+// Scans [resumeFrom.size, state.size), or the whole file. The tail digest is
+// taken before and after the read: a truncation or rewrite that lands during
+// the scan would otherwise be cached under metadata that no longer describes
+// the bytes that were hashed. Concurrent appends leave both checks intact.
+async function scanFileEntry(
   file: string,
   state: LocalMirrorFileState,
-  hashes: Set<string>,
-): Promise<LocalMirrorFileCacheEntry> {
+  resumeFrom: LocalMirrorFileCacheEntry | undefined,
+): Promise<{ entry: LocalMirrorFileCacheEntry; stable: boolean }> {
+  const tailSha256 = await tailDigest(file, state.size)
+  const hashes = new Set(resumeFrom?.hashes)
+  await collectFileHashes(file, hashes, resumeFrom?.size ?? 0, state.size)
+  const endedWithNewline = await fileEndsWithNewline(file, state.size)
+  if (afterMirrorScanHookForTests) await afterMirrorScanHookForTests(file)
+
+  let stable: boolean
+  try {
+    const after = await stat(file)
+    stable =
+      after.ino === state.ino &&
+      (after.size > state.size ||
+        (after.size === state.size &&
+          after.mtimeMs === state.mtimeMs &&
+          after.ctimeMs === state.ctimeMs)) &&
+      (await tailDigest(file, state.size)) === tailSha256
+  } catch {
+    stable = false
+  }
   return {
-    ...state,
-    hashes,
-    endedWithNewline: await fileEndsWithNewline(file, state.size),
-    tailSha256: await tailDigest(file, state.size),
+    entry: {
+      ...state,
+      hashes,
+      endedWithNewline,
+      tailSha256,
+      persistedSize: resumeFrom?.persistedSize,
+    },
+    stable,
   }
 }
 
@@ -330,7 +369,16 @@ function parseRecordHashIndexEntry(
   }
   return {
     name,
-    entry: { size, mtimeMs, ctimeMs, ino, endedWithNewline, tailSha256, hashes: set },
+    entry: {
+      size,
+      mtimeMs,
+      ctimeMs,
+      ino,
+      endedWithNewline,
+      tailSha256,
+      hashes: set,
+      persistedSize: size,
+    },
   }
 }
 
@@ -372,6 +420,9 @@ async function writeRecordHashIndex(
   try {
     await writeFile(temporaryPath, `${JSON.stringify(index)}\n`, { encoding: 'utf8', mode: 0o600 })
     await rename(temporaryPath, path)
+    for (const [file, entry] of caches) {
+      if (dirname(file) === directory) entry.persistedSize = entry.size
+    }
   } catch {
     // Advisory cache: a failed write only costs the next process a rescan.
   } finally {
@@ -514,6 +565,14 @@ export function clearRecordReferenceResolverCacheForTests(): void {
   localMirrorAppendFileScansForTests = 0
   localMirrorReusedFileCachesForTests = 0
   localMirrorPersistedFileCachesForTests = 0
+  afterMirrorScanHookForTests = undefined
+}
+
+/** Runs between a mirror scan and its stability check. Not part of the package surface. */
+export function setRecordReferenceResolverScanHookForTests(
+  hook: ((file: string) => Promise<void>) | undefined,
+): void {
+  afterMirrorScanHookForTests = hook
 }
 
 export function recordReferenceResolverCacheStatsForTests(): {
