@@ -19,13 +19,14 @@ import {
   genesisChainRoot,
   getPublicKey,
   hexEncode,
+  recordHashExistsInMirror,
   recordReferenceResolverCacheStatsForTests,
   sha256,
   signRecord,
   signTransactionRecord,
 } from '../src/index.js'
 import type { AtribRecord } from '../src/index.js'
-import { setRecordReferenceResolverScanHookForTests } from '../src/record-reference.js'
+import { setRecordHashIndexScanHookForTests } from '../src/record-hash-index.js'
 
 const TEST_KEY = new Uint8Array(32).fill(23)
 const CTX = 'c'.repeat(32)
@@ -353,8 +354,8 @@ describe('defaultRecordReferenceResolver', () => {
       await writeFile(mirrorPath, line(first.record))
 
       // Another producer rewrites the mirror, longer, right after the scan read it.
-      setRecordReferenceResolverScanHookForTests(async () => {
-        setRecordReferenceResolverScanHookForTests(undefined)
+      setRecordHashIndexScanHookForTests(async () => {
+        setRecordHashIndexScanHookForTests(undefined)
         await writeFile(mirrorPath, line(second.record) + line(third.record))
       })
       await expect(defaultRecordReferenceResolver(missingHash)).resolves.toBe('not-found')
@@ -371,8 +372,8 @@ describe('defaultRecordReferenceResolver', () => {
       const mirrorPath = join(tmpDir, 'producer.jsonl')
       await writeFile(mirrorPath, line(first.record))
 
-      setRecordReferenceResolverScanHookForTests(async () => {
-        setRecordReferenceResolverScanHookForTests(undefined)
+      setRecordHashIndexScanHookForTests(async () => {
+        setRecordHashIndexScanHookForTests(undefined)
         await appendFile(mirrorPath, line(second.record))
       })
       await expect(defaultRecordReferenceResolver(missingHash)).resolves.toBe('not-found')
@@ -382,6 +383,29 @@ describe('defaultRecordReferenceResolver', () => {
       const stats = recordReferenceResolverCacheStatsForTests()
       expect(stats.full_file_scans).toBe(0)
       expect(stats.append_file_scans).toBe(1)
+    })
+
+    it('rescans when metadata matches but the bytes before the indexed size do not', async () => {
+      const first = await makeRecord('d', 0)
+      const mirrorPath = join(tmpDir, 'producer.jsonl')
+      await writeFile(mirrorPath, line(first.record))
+      await expect(defaultRecordReferenceResolver(missingHash)).resolves.toBe('not-found')
+
+      // What a same-size rewrite inside one timestamp tick leaves behind: the
+      // index metadata still matches the file, but it describes other bytes.
+      const index = JSON.parse(await readFile(indexPath(), 'utf8')) as {
+        files: Array<{ hashes: string[]; tailSha256: string }>
+      }
+      index.files[0]!.hashes = ['f'.repeat(64)]
+      index.files[0]!.tailSha256 = 'e'.repeat(64)
+      await writeFile(indexPath(), JSON.stringify(index))
+
+      simulateNewProcess()
+      await expect(defaultRecordReferenceResolver(missingHash)).resolves.toBe('not-found')
+      await expect(defaultRecordReferenceResolver(first.recordHash)).resolves.toBe('found')
+      const stats = recordReferenceResolverCacheStatsForTests()
+      expect(stats.full_file_scans).toBe(1)
+      expect(stats.persisted_file_caches).toBe(0)
     })
 
     it('ignores bytes past the stat it read', async () => {
@@ -396,6 +420,96 @@ describe('defaultRecordReferenceResolver', () => {
       simulateNewProcess()
       await expect(defaultRecordReferenceResolver(first.recordHash)).resolves.toBe('found')
       expect(recordReferenceResolverCacheStatsForTests().full_file_scans).toBe(1)
+    })
+  })
+
+  describe('explicit mirror files', () => {
+    const missingHash = `sha256:${'f'.repeat(64)}`
+    const line = (record: AtribRecord) => `${JSON.stringify({ record })}\n`
+
+    it('answers repeated lookups from one scan', async () => {
+      const first = await makeRecord('d', 0)
+      const second = await makeRecord('e', 1)
+      const mirrorPath = join(tmpDir, 'custom-mirror.log')
+      await writeFile(mirrorPath, line(first.record))
+
+      expect(await recordHashExistsInMirror({ path: mirrorPath, recordHash: missingHash })).toBe(
+        false,
+      )
+      expect(
+        await recordHashExistsInMirror({ path: mirrorPath, recordHash: first.recordHash }),
+      ).toBe(true)
+      expect(recordReferenceResolverCacheStatsForTests().full_file_scans).toBe(1)
+
+      await appendFile(mirrorPath, line(second.record))
+      expect(
+        await recordHashExistsInMirror({ path: mirrorPath, recordHash: second.recordHash }),
+      ).toBe(true)
+      const stats = recordReferenceResolverCacheStatsForTests()
+      expect(stats.full_file_scans).toBe(1)
+      expect(stats.append_file_scans).toBe(1)
+    })
+
+    it('shares one scan between concurrent lookups', async () => {
+      const { record, recordHash } = await makeRecord('d', 0)
+      const mirrorPath = join(tmpDir, 'producer.jsonl')
+      await writeFile(mirrorPath, line(record))
+
+      const results = await Promise.all([
+        recordHashExistsInMirror({ path: mirrorPath, recordHash }),
+        recordHashExistsInMirror({ path: mirrorPath, recordHash: missingHash }),
+        recordHashExistsInMirror({ path: mirrorPath, recordHash }),
+      ])
+      expect(results).toEqual([true, false, true])
+      expect(recordReferenceResolverCacheStatsForTests().full_file_scans).toBe(1)
+    })
+
+    it('lets a new process reuse the persisted index', async () => {
+      const { record, recordHash } = await makeRecord('d', 0)
+      const mirrorPath = join(tmpDir, 'producer.jsonl')
+      await writeFile(mirrorPath, line(record))
+      expect(await recordHashExistsInMirror({ path: mirrorPath, recordHash })).toBe(true)
+
+      clearRecordReferenceResolverCacheForTests()
+      const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      await expect(
+        defaultRecordReferenceResolver(recordHash, undefined, { localMirrorPaths: [mirrorPath] }),
+      ).resolves.toBe('found')
+      expect(fetchSpy).not.toHaveBeenCalled()
+      const stats = recordReferenceResolverCacheStatsForTests()
+      expect(stats.full_file_scans).toBe(0)
+      expect(stats.persisted_file_caches).toBe(1)
+    })
+
+    it('does not accept a hash a row only declares', async () => {
+      const { record, recordHash } = await makeRecord('d', 0)
+      const declaredHash = `sha256:${'a'.repeat(64)}`
+      const mirrorPath = join(tmpDir, 'producer.jsonl')
+      await writeFile(
+        mirrorPath,
+        `${JSON.stringify({ record_hash: declaredHash })}\n${JSON.stringify({ signed_record: record })}\n`,
+      )
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 404 } as Response)
+
+      for (const freshProcess of [false, true]) {
+        if (freshProcess) clearRecordReferenceResolverCacheForTests()
+        for (const hash of [declaredHash, recordHash]) {
+          expect(await recordHashExistsInMirror({ path: mirrorPath, recordHash: hash })).toBe(false)
+          // Process-wide discovery keeps accepting declared hashes.
+          await expect(defaultRecordReferenceResolver(hash)).resolves.toBe('found')
+        }
+      }
+    })
+
+    it('returns false for a missing or empty mirror', async () => {
+      const mirrorPath = join(tmpDir, 'producer.jsonl')
+      expect(await recordHashExistsInMirror({ path: mirrorPath, recordHash: missingHash })).toBe(
+        false,
+      )
+      await writeFile(mirrorPath, '')
+      expect(await recordHashExistsInMirror({ path: mirrorPath, recordHash: missingHash })).toBe(
+        false,
+      )
     })
   })
 })

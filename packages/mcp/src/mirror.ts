@@ -30,16 +30,17 @@
  */
 
 import { createReadStream } from 'node:fs'
-import { open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
+import { open, readFile, readdir, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import * as readline from 'node:readline'
+import { writeAdvisoryIndexFile } from './advisory-index.js'
 import { canonicalRecord } from './canon.js'
 import { resolveChainRoot, genesisChainRoot } from './chain-root.js'
 import { sha256, hexEncode } from './hash.js'
 import { SHA256_REF_PATTERN } from './refs.js'
+import { parseMirrorLine, parseMirrorValue } from './mirror-parse.js'
+import { mirrorFileHasRecordHash } from './record-hash-index.js'
 import type { AtribRecord } from './types.js'
-import { hasCreatorSignerEntry } from './types.js'
 
 /**
  * Read the most recent record from a JSONL mirror file.
@@ -329,14 +330,10 @@ async function loadMirrorTailIndex(path: string): Promise<MirrorTailIndex | null
 }
 
 async function writeMirrorTailIndex(path: string, index: MirrorTailIndex): Promise<void> {
-  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`
   try {
-    await writeFile(temporaryPath, `${JSON.stringify(index)}\n`, { encoding: 'utf-8', mode: 0o600 })
-    await rename(temporaryPath, path)
+    await writeAdvisoryIndexFile(path, `${JSON.stringify(index)}\n`)
   } catch (error) {
     console.warn(`atrib: mirror tail index write failed at ${path}: ${errorMessage(error)}`)
-  } finally {
-    await rm(temporaryPath, { force: true }).catch(() => undefined)
   }
 }
 
@@ -629,6 +626,9 @@ export async function recordHashExistsInMirror(opts: {
   contextId?: string | undefined
 }): Promise<boolean> {
   if (!SHA256_REF_PATTERN.test(opts.recordHash)) return false
+  // Without a context filter the answer is set membership, which the record
+  // hash index serves without rehashing the mirror on every call.
+  if (!opts.contextId) return mirrorFileHasRecordHash(opts.path, opts.recordHash)
   let exists = true
   try {
     const stats = await stat(opts.path)
@@ -654,49 +654,6 @@ export async function recordHashExistsInMirror(opts: {
     return false
   }
   return false
-}
-
-function parseMirrorValue(value: unknown): AtribRecord | null {
-  if (!isObject(value)) return null
-  const wrapped = value['record']
-  const candidate = isObject(wrapped) ? wrapped : value
-  const hasCreatorSigner = hasCreatorSignerEntry(candidate)
-  const contentIdRequired = [
-    'https://atrib.dev/v1/types/tool_call',
-    'https://atrib.dev/v1/types/transaction',
-    'https://atrib.dev/v1/types/directory_anchor',
-    'https://atrib.dev/v1/types/session_checkpoint',
-  ].includes(candidate['event_type'] as string)
-  if (
-    candidate['spec_version'] !== 'atrib/1.0' ||
-    (('content_id' in candidate || contentIdRequired) &&
-      typeof candidate['content_id'] !== 'string') ||
-    typeof candidate['creator_key'] !== 'string' ||
-    (typeof candidate['signature'] !== 'string' &&
-      ('signature' in candidate || !hasCreatorSigner)) ||
-    typeof candidate['chain_root'] !== 'string' ||
-    typeof candidate['event_type'] !== 'string' ||
-    typeof candidate['context_id'] !== 'string' ||
-    typeof candidate['timestamp'] !== 'number' ||
-    !Number.isFinite(candidate['timestamp'])
-  ) {
-    return null
-  }
-  const record = candidate as unknown as AtribRecord
-  try {
-    canonicalRecord(record)
-  } catch {
-    return null
-  }
-  return record
-}
-
-function parseMirrorLine(line: string): AtribRecord | null {
-  try {
-    return parseMirrorValue(JSON.parse(line) as unknown)
-  } catch {
-    return null
-  }
 }
 
 export interface ChainContext {
