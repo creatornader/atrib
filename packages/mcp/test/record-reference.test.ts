@@ -385,6 +385,29 @@ describe('defaultRecordReferenceResolver', () => {
       expect(stats.append_file_scans).toBe(1)
     })
 
+    it('rescans when metadata matches but the bytes before the indexed size do not', async () => {
+      const first = await makeRecord('d', 0)
+      const mirrorPath = join(tmpDir, 'producer.jsonl')
+      await writeFile(mirrorPath, line(first.record))
+      await expect(defaultRecordReferenceResolver(missingHash)).resolves.toBe('not-found')
+
+      // What a same-size rewrite inside one timestamp tick leaves behind: the
+      // index metadata still matches the file, but it describes other bytes.
+      const index = JSON.parse(await readFile(indexPath(), 'utf8')) as {
+        files: Array<{ hashes: string[]; tailSha256: string }>
+      }
+      index.files[0]!.hashes = ['f'.repeat(64)]
+      index.files[0]!.tailSha256 = 'e'.repeat(64)
+      await writeFile(indexPath(), JSON.stringify(index))
+
+      simulateNewProcess()
+      await expect(defaultRecordReferenceResolver(missingHash)).resolves.toBe('not-found')
+      await expect(defaultRecordReferenceResolver(first.recordHash)).resolves.toBe('found')
+      const stats = recordReferenceResolverCacheStatsForTests()
+      expect(stats.full_file_scans).toBe(1)
+      expect(stats.persisted_file_caches).toBe(0)
+    })
+
     it('ignores bytes past the stat it read', async () => {
       const first = await makeRecord('d', 0)
       const mirrorPath = join(tmpDir, 'producer.jsonl')

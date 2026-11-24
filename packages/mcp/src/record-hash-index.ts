@@ -140,7 +140,13 @@ async function refreshFileEntry(
       previousFromDisk = previous !== undefined
     }
 
-    if (previous && sameFileState(previous, state)) {
+    // Timestamps can be too coarse to show a same-size rewrite that follows a
+    // read closely, so unchanged metadata alone does not prove unchanged bytes.
+    if (
+      previous &&
+      sameFileState(previous, state) &&
+      (await tailDigest(file, state.size)) === previous.tailSha256
+    ) {
       if (previousFromDisk) persistedFileCachesForTests += 1
       else reusedFileCachesForTests += 1
       fileCaches.set(file, previous)
