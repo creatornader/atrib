@@ -17,10 +17,10 @@
     "@atrib/verify": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
-    "fast-check": "^4.10.2",
+    "@types/node": "^26.6.6",
+    "fast-check": "^4.11.0",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.1"
   }
 }
