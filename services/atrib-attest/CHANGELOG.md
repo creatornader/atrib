@@ -1,5 +1,13 @@
 # @atrib/attest
 
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies [a32451a]
+- Updated dependencies [7045438]
+  - @atrib/mcp@0.27.1
+
 ## 0.6.0
 
 ### Minor Changes

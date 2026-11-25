@@ -1,5 +1,14 @@
 # @atrib/action-gate
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [a32451a]
+- Updated dependencies [7045438]
+  - @atrib/mcp@0.27.1
+  - @atrib/verify@0.15.2
+
 ## 0.3.0
 
 ### Minor Changes

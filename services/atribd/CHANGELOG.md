@@ -1,5 +1,21 @@
 # @atrib/daemon
 
+## 0.5.3
+
+### Patch Changes
+
+- 9baa102: Give an indeterminate keyed write a way out. `atribd reconcile-idempotency --key <key>` releases the key (`--not-dispatched`) or stores the result the write produced (`--result <file>`), and the store gains `reconcile()`. A completion now applies only to a pending entry, so a late or repeated completion cannot replace a stored result.
+
+  Closing the HTTP host is now terminal: health and readiness report `closed` with a 503, a second close shares the first, and a backend that finishes mounting after close no longer reports ready.
+
+- Updated dependencies [a32451a]
+- Updated dependencies [7045438]
+  - @atrib/mcp@0.27.1
+  - @atrib/verify@0.15.2
+  - @atrib/attest@0.6.1
+  - @atrib/recall@6.0.2
+  - @atrib/summarize@0.6.2
+
 ## 0.5.2
 
 ### Patch Changes

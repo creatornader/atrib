@@ -1,6 +1,6 @@
 {
   "name": "@atrib/summarize",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Legacy summarization MCP server retained during the D164 alias window. Summarizes signed records so agents read context, not raw bytes.",
   "author": "atrib <hello@atrib.dev>",
   "keywords": [
