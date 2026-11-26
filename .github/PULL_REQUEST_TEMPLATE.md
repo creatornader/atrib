@@ -12,6 +12,10 @@ Which section(s) of `atrib-spec.md` does this relate to?
 - [ ] New tests added for changed behavior
 - [ ] Typecheck passes (`pnpm -r typecheck`)
 
+## Docs
+
+Run `node scripts/docs-map.mjs --base origin/main`. Each flagged section is edited in this PR or acknowledged in a commit message or this description (`docs-map: <doc>#<section>: <why no edit>`).
+
 ## Checklist
 
 - [ ] No `any` types introduced

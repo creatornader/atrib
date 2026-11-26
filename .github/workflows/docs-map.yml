@@ -1,0 +1,40 @@
+name: docs-map
+
+# On each pull request, flag the doc sections whose code the branch changed
+# while the section stayed untouched (scripts/docs-map.mjs, map in
+# docs/docs-map.json). A flag clears when the PR edits the section or a
+# commit message or the PR body carries "docs-map: <doc>#<section>: <why>".
+# A body edit reruns this job alone, not the full CI. The map's own
+# integrity check runs in `pnpm doc-sync` in ci.yml.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  docs-map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history: the check reads the branch's commit messages from the merge base.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Flag doc sections this branch may have outdated
+        env:
+          DOCS_MAP_PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/docs-map.mjs --base "origin/$GITHUB_BASE_REF"

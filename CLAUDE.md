@@ -83,6 +83,7 @@ atrib/
     check-release-publish-readiness.mjs # Release preflight. Verifies every Changesets-publishable workspace package already exists on npm, while first-publish-pending packages stay in `.changeset/config.json` ignore.
     check-mcp-v2-owned-surfaces.mjs # MCP v2 source and publish-archive inventory gate. Uses pnpm pack so workspace dependencies match the publish-ready manifest.
     check-mcp-v2-packed-runtime.mjs # Fresh-installs every published MCP v2 surface and its atrib dependency closure from local pnpm archives. Checks stdio and daemon HTTP negotiation, tool execution, invalid-input rejection, recovery, signed mirrors, and wrapper configuration with the installed client and isolated local endpoints.
+    docs-map.mjs                 # Docs map check, shared byte for byte with atrib's other repos. Reads docs/docs-map.json (which doc sections describe which code), fails on a stale map, and on a pull request flags sections whose code changed while they did not. See "Docs map" below.
   metrics/                     # Dated JSON snapshots from `pnpm --filter @atrib/log-node metrics` and `pnpm metrics:npm-downloads` (npm + PyPI download counts per package, current/deprecated tagged)
   packages/
     mcp/                       # @atrib/mcp: MCP server middleware (public)
@@ -238,7 +239,19 @@ records its core field, compatibility and degradation decisions.
 ## Sync triggers
 
 The full event-to-doc mapping lives at [`DOC-SYNC-TRIGGERS.md`](DOC-SYNC-TRIGGERS.md) (73 rows; the `doc-sync-triggers-row-count` check keeps this claim honest). It was extracted from this file so the hub doc stays under the 40k-char SessionStart performance threshold. Both files are authoritative; this section is the quick reference, the linked file is the canonical source.
-A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (run via `pnpm doc-sync` and integrated into CI). It detects number-word drift between canonical sources and target documents (edge type count, node type count, dashboard view count, public package count, workspace package list completeness, payment detection-case count, evidence profile count, DOC-SYNC-TRIGGERS row count). When adding a new "<word> <thing>" claim that should remain synchronized with an enumeration, extend the script with a new check to avoid reliance on manual review.
+A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (run via `pnpm doc-sync` and integrated into CI). It detects number-word drift between canonical sources and target documents (edge type count, node type count, dashboard view count, public package count, workspace package list completeness, payment detection-case count, evidence profile count, DOC-SYNC-TRIGGERS row count) and checks that the framework adapter tables and the CLI's README sections name what the code exports. When adding a new "<word> <thing>" claim that should remain synchronized with an enumeration, extend the script with a new check to avoid reliance on manual review.
+
+### Docs map
+
+[`docs/docs-map.json`](docs/docs-map.json) binds each doc, or a section of one, to the code it describes. [`scripts/docs-map.mjs`](scripts/docs-map.mjs) checks it, in `pnpm doc-sync` and as a pull-request step in CI. It fails when a mapped doc, heading or path is gone or a doc is in no entry. On a pull request it also flags each section whose code the branch changed while the section stayed untouched.
+
+Before asking for review, run `node scripts/docs-map.mjs --base origin/main`. For each flag, edit the section in the same PR, or put a line in a commit message or the PR description that says why it needs no edit (a bot PR, such as a Dependabot bump, can only use the description):
+
+```
+docs-map: packages/mcp/README.md: internal refactor, public API unchanged
+```
+
+A section is named by its heading's anchor (`README.md#packages`). Flags on `fail` entries fail CI until edited or acknowledged; `warn` entries only report. Add a new doc to the map in the PR that adds it. DOC-SYNC-TRIGGERS rows that name code paths belong in the map; event rows stay prose.
 
 ### Quick reference (most-frequent triggers)
 
