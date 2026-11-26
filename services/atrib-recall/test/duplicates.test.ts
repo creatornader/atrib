@@ -363,6 +363,30 @@ describe('history recall collapses re-signed copies', () => {
     // An annotation aimed at the forged copy does not lift the statement.
     const important = await recall({ event_type: 'observation', min_importance: 'high' }, file)
     expect(important.total).toBe(0)
+
+    // The same holds when the forged copy is the earliest one, which is the
+    // copy the group is first collapsed to.
+    const forgedEarly = { ...valid, timestamp: 500 } as AtribRecord
+    const earlyAnnotation = await makeSigned({
+      timestamp: 3600,
+      event_type: EVENT_TYPE_ANNOTATION_URI,
+      args_hash: `sha256:${'3'.repeat(64)}`,
+      annotates: computeRecordHash(forgedEarly),
+    })
+    writeFileSync(
+      file,
+      [
+        line(forgedEarly, 'same'),
+        line(valid, 'same'),
+        line(earlyAnnotation, 'note', { importance: 'critical', topics: ['release'] }),
+      ].join('\n'),
+    )
+    for (const filter of [{ min_importance: 'high' as const }, { topic_tags: ['release'] }]) {
+      expect((await recall({ event_type: 'observation', ...filter }, file)).total).toBe(0)
+    }
+    const plain = await recall({ event_type: 'observation' }, file)
+    expect(plain.total).toBe(1)
+    expect(plain.records[0]).not.toHaveProperty('annotations')
   })
 
   it('treats a statement said again after its revision as live', async () => {

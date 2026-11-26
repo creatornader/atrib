@@ -1630,10 +1630,12 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
   // Point the kept copy's annotation and revision lookups at the group's.
   const applyGroupView = (kept: LoadedRecord, group: HistoryGroup | undefined): void => {
     const members = group?.members ?? [kept]
+    // Only the view's members contribute. The kept copy goes first when it
+    // is one of them, so its own summary wins; a kept copy that was left
+    // out of the view (it failed its signature check) contributes nothing.
+    const ordered = members.includes(kept) ? [kept, ...members.filter((m) => m !== kept)] : members
     const annotations = mergeAnnotations(
-      [kept, ...members.filter((m) => m !== kept)].map((m) =>
-        snapshot.annotationsByRecord.get(m.record_hash),
-      ),
+      ordered.map((m) => snapshot.annotationsByRecord.get(m.record_hash)),
     )
     if (annotations) annotationsByRecord.set(kept.record_hash, annotations)
     else annotationsByRecord.delete(kept.record_hash)

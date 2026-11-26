@@ -10219,9 +10219,10 @@ returns every signed copy.
   does.
 - An unverifiable copy can still move where a statement sorts before the
   page is cut, because ordering does not wait for signature checks, and it
-  is still counted in `total` and `collapsed_duplicates`. It never changes
-  what the returned record reports or which statements the importance,
-  topic and `include_revised` filters admit. Content search can show an
+  is still counted in `total` and `collapsed_duplicates`. Unless the caller
+  asks for unverified records, it never changes what the returned record
+  reports or which statements the importance, topic and `include_revised`
+  filters admit. Content search can show an
   unverifiable copy as the kept one.
 
 **Cross-references.**
