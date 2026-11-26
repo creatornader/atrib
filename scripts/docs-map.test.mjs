@@ -443,10 +443,13 @@ test('PR mode ignores color and external diff settings; malformed acks warn', ()
     r.git('config', 'color.ui', 'always')
     r.git('config', 'color.diff', 'always')
     r.branch('f')
-    r.commit('c\n\ndocs-map: README.md#Commands typo: heading text, not slug', {
-      'src/cli.js': '2',
-      'README.md': README.replace('Run it.', 'Run it now.'),
-    })
+    r.commit(
+      'docs-map: a subject line, not an ack\n\ndocs-map: README.md#Commands typo: heading text, not slug',
+      {
+        'src/cli.js': '2',
+        'README.md': README.replace('Run it.', 'Run it now.'),
+      },
+    )
     const res = run(r.root, { map: 'docs/docs-map.json', base: 'main' })
     assert.deepEqual(res.flags, [])
     assert.equal(res.warnings.length, 1)
@@ -616,7 +619,7 @@ test('upstreams: ./ paths, unprefixed negation, local colons, unchecked pin move
   const pin = up.git('rev-parse', 'HEAD').trim()
   const map = {
     version: 1,
-    upstreams: { up: { ref: './upstream/up.ref', path: '.upstream/up' } },
+    upstreams: { up: { ref: './upstream//./up.ref', path: '.upstream/up' } },
     entries: [{ doc: 'README.md', covers: ['up:src/**', '!**/*.test.ts'] }],
   }
   const r = repo({
@@ -650,6 +653,10 @@ test('upstreams: ./ paths, unprefixed negation, local colons, unchecked pin move
       run(r.root, { ...opts, base: 'main' }).flags.map((f) => f.changed),
       [['up:src/verbs.ts']],
     )
+    // A pin the clone lacks is its own error, not also "no clone".
+    r.put({ 'upstream/up.ref': `${'1'.repeat(40)}\n` })
+    assert.equal(run(r.root, { ...opts, base: 'main' }).errors.length, 1)
+    r.put({ 'upstream/up.ref': `${up.git('rev-parse', 'HEAD').trim()}\n` })
     // Without the clone, moving the pin fails instead of passing unchecked.
     rmSync(clone, { recursive: true, force: true })
     assert.deepEqual(run(r.root, { ...opts, base: 'main' }).errors, [

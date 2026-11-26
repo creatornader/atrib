@@ -45,7 +45,8 @@
 //   file. A section runs from its heading to the next heading of the same or a
 //   higher level, so its subsections belong to it.
 // - Globs: ** any depth, * within one path segment, ? one character, {a,b}
-//   alternatives. A leading ! in covers excludes. Each * or ** in a doc glob
+//   alternatives. A leading ! excludes; with an upstream prefix it excludes
+//   only in that upstream, and without one in every repo. Each * or ** in a doc glob
 //   captures, and $1..$9 in covers reuse the captures. Such an entry needs
 //   each doc it expands to to cover some file, and each covers glob to match
 //   for some doc; a plain entry needs every positive glob to match.
@@ -69,14 +70,17 @@
 //   commit. With --base, a branch that moves the ref file counts every
 //   upstream file changed between the old and new commit as changed, so the
 //   sections bound to them are flagged. A missing clone skips that upstream's
-//   globs with a warning; a clone that lacks a pinned commit is an error.
+//   globs with a warning; a clone that lacks a pinned commit is an error, and
+//   so is a branch that moves a pin with no clone to check it against. A
+//   prefix counts only for a name under upstreams, so a local "notes:a.md"
+//   stays local.
 //   --drift compares each pin with its clone's checked-out commit and lists
 //   the sections bound to the files changed between them, so a scheduled job
 //   can say what moving the pin will ask for.
 
 import { execFileSync, execSync } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, posix } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const VERSION = '1.1.0'
@@ -466,7 +470,9 @@ export function readAcks(root, mergeBase, prBody) {
   for (const m of text.matchAll(/^[ \t>*-]*docs-map:.*$/gim)) {
     const a = m[0].match(/^[ \t>*-]*docs-map:[ \t]*([^\s#:]+(?:#[^\s:]+)?):[ \t]*(\S.*)$/i)
     if (a) acks.set(a[1], a[2].trim())
-    else acks.malformed.push(m[0].trim())
+    // A line whose first word names no path or section, such as a commit
+    // subject "docs-map: fix ...", is prose, not a broken ack.
+    else if (/^[ \t>*-]*docs-map:[ \t]*\S*[./#]/i.test(m[0])) acks.malformed.push(m[0].trim())
   }
   return acks
 }
@@ -540,7 +546,8 @@ export function upstreamChanges(root, mergeBase, changed, up, map) {
     const info = up.info.get(name)
     if (!old) continue
     if (!info) {
-      if (readPin(root, u.ref) !== old)
+      // A clone that exists but is unusable already has its own error.
+      if (!existsSync(join(root, u.path, '.git')) && readPin(root, u.ref) !== old)
         errors.push(
           `upstream ${name}: this branch moves ${u.ref} but there is no clone at ${u.path} to check the move against`,
         )
@@ -604,8 +611,8 @@ export function loadMap(root, mapPath) {
           continue
         }
         // Paths are repo-relative, as git prints them, so a pin move is seen.
-        u.ref = u.ref.replace(/^(\.\/)+/, '')
-        u.path = u.path.replace(/^(\.\/)+/, '').replace(/\/+$/, '')
+        u.ref = posix.normalize(u.ref).replace(/\/+$/, '')
+        u.path = posix.normalize(u.path).replace(/\/+$/, '')
         for (const key of ['ref', 'path'])
           if (
             !u[key] ||
