@@ -401,6 +401,7 @@ Filters on shape `history` (passed under `filters`):
 | `event_type`                                       | Filter by event kind. Accepts `tool_call`, `transaction`, `observation`, `directory_anchor`, `annotation`, `revision`, or a full event_type URI.                                                    |
 | `content_id`, `tool_name`, `args_hash`             | Exact-match probes per spec [§1.2.2](../../atrib-spec.md#122-content_id-derivation) / [§8.2](../../atrib-spec.md#82-opaque-name-posture) / [§8.3](../../atrib-spec.md#83-salted-commitment-posture) |
 | `min_importance`, `topic_tags`, `include_revised`  | Annotation / revision-aware filtering. `include_revised=true` hides records superseded by a revision.                                                                                               |
+| `collapse_duplicates`                              | Default true: re-signed copies of one statement fold into the earliest copy, which carries `duplicate_count` and `duplicate_latest_timestamp`. Also applies to content search. Pass false to see every signed copy.                                                  |
 | `min_signers`                                      | Signer-count threshold.                                                                                                                                                                             |
 
 Ordering, paging, and presentation ride at the top level: `rank_by`, `rank_anchor`, `limit`, `offset`, `compact`, `include_unverified`, `toc`.

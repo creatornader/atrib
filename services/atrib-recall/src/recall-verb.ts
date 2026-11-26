@@ -100,6 +100,12 @@ const RecallFilters = z.object({
     .boolean()
     .optional()
     .describe('History only. Hide records superseded by a revision when true.'),
+  collapse_duplicates: z
+    .boolean()
+    .optional()
+    .describe(
+      'History and content. Default true: re-signed copies of one statement collapse to the earliest copy, which carries duplicate_count. Set false to see every signed copy.',
+    ),
   min_signers: z.number().optional().describe('History only. Minimum count of distinct signers.'),
 })
 
@@ -271,6 +277,9 @@ export async function runRecallVerb(
           ...(f.min_importance !== undefined ? { min_importance: f.min_importance } : {}),
           ...(f.topic_tags !== undefined ? { topic_tags: f.topic_tags } : {}),
           ...(f.include_revised !== undefined ? { include_revised: f.include_revised } : {}),
+          ...(f.collapse_duplicates !== undefined
+            ? { collapse_duplicates: f.collapse_duplicates }
+            : {}),
           ...(f.min_signers !== undefined ? { min_signers: f.min_signers } : {}),
           ...(input.limit !== undefined ? { limit: input.limit } : {}),
           ...(input.offset !== undefined ? { offset: input.offset } : {}),
@@ -319,6 +328,9 @@ export async function runRecallVerb(
             ...(input.evidence_mode !== undefined ? { evidence_mode: input.evidence_mode } : {}),
             ...(input.include_tool_call_args !== undefined
               ? { include_tool_call_args: input.include_tool_call_args }
+              : {}),
+            ...(f.collapse_duplicates !== undefined
+              ? { collapse_duplicates: f.collapse_duplicates }
               : {}),
           },
           signal,

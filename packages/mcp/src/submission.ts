@@ -57,6 +57,11 @@ const ARCHIVE_RECORDS_PATH = '/v1/records'
 const MAX_RETRIES = 3
 const INITIAL_BACKOFF_MS = 1000
 const MAX_WINDOW_MS = 30_000
+const RESEND_TIMEOUT_MS = 10_000
+const RESEND_INTERVAL_MS = 60_000
+// §2.6.1 statuses that refuse the record itself: malformed or invalid (400),
+// too large (413), unprocessable (422). No retry can change the answer.
+const RECORD_REFUSED_STATUSES = new Set([400, 413, 422])
 const DEFAULT_ARCHIVE_TIMEOUT_MS = 5000
 /**
  * Default cap on the number of unsubmitted records held in memory while the
@@ -183,7 +188,43 @@ export interface ArchiveSubmissionOptions {
   timeoutMs?: number
 }
 
+/** A record a queue accepted but has not yet seen the log confirm. */
+export interface SubmissionOutboxEntry {
+  record: AtribRecord
+  priority: 'high' | 'normal'
+}
+
+/**
+ * Durable store for records awaiting log confirmation. The queue itself is
+ * memory-only, so a process that exits or is killed mid-submission loses
+ * the record's place in line. A host that supplies an outbox lets a later
+ * process finish the delivery. Implementations must not throw.
+ */
+export interface SubmissionOutbox {
+  /** Persist a record before its first submission attempt. */
+  put(recordHash: string, entry: SubmissionOutboxEntry, endpoint: string): Promise<void>
+  /** Forget a record that `endpoint` confirmed or refused as invalid. */
+  remove(recordHash: string, endpoint: string): Promise<void>
+  /**
+   * Return records earlier processes left unconfirmed for `endpoint` that
+   * are due for another attempt, and mark them claimed so concurrent
+   * processes do not all resend the same ones.
+   */
+  claimDue(endpoint: string): Promise<Array<SubmissionOutboxEntry & { recordHash: string }>>
+}
+
 export interface SubmissionQueueOptions {
+  /**
+   * Optional durable outbox. When set, every submitted record is persisted
+   * until the log confirms it or refuses the record itself. Creating the
+   * queue resends records that earlier processes left unconfirmed, and a
+   * long-lived queue looks again when it submits, at most once a minute.
+   * The resend is non-blocking and is awaited by `flush()` like any other
+   * submission. Submission to the log
+   * is idempotent (§2.6.1 step 6), so a resend of an already-logged record
+   * returns the existing proof.
+   */
+  outbox?: SubmissionOutbox
   /**
    * Maximum number of records held in `pendingRecords` while the log is
    * unreachable. When this cap would be exceeded, the queue evicts the
@@ -211,6 +252,7 @@ export function createSubmissionQueue(
 ): SubmissionQueue {
   const endpoint = normalizeLogEndpoint(logEndpoint ?? DEFAULT_LOG_ENDPOINT)
   const maxQueueDepth = options.maxQueueDepth ?? DEFAULT_MAX_QUEUE_DEPTH
+  const outbox = options.outbox
   const archiveSubmission =
     options.archiveSubmission !== undefined
       ? {
@@ -303,16 +345,38 @@ export function createSubmissionQueue(
     }
   }
 
+  async function forgetInOutbox(hash: string): Promise<void> {
+    if (!outbox) return
+    try {
+      await outbox.remove(hash, endpoint)
+    } catch {
+      // The outbox is best effort; a leftover entry is resent and then
+      // removed by a later process.
+    }
+  }
+
   async function submitWithRetry(
     record: AtribRecord,
     priority: Priority,
     sidecar?: SubmissionSidecar,
+    mode: 'new' | 'resend' = 'new',
   ): Promise<void> {
     const hash = recordHash(record)
     const startTime = Date.now()
     let backoff = INITIAL_BACKOFF_MS
+    // A resend gets one attempt and never joins pendingRecords: the outbox
+    // already holds it for the next process to try.
+    const maxAttempts = mode === 'resend' ? 1 : MAX_RETRIES
 
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (outbox && mode === 'new') {
+      try {
+        await outbox.put(hash, { record, priority }, endpoint)
+      } catch {
+        // Best effort: the record is still submitted from memory.
+      }
+    }
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (Date.now() - startTime > MAX_WINDOW_MS) break
 
       try {
@@ -328,6 +392,9 @@ export function createSubmissionQueue(
             'X-atrib-Priority': priority,
           },
           body: JSON.stringify(record),
+          // A resend runs at start-up inside the caller's flush deadline, so
+          // one stalled connection must not hold every other resend back.
+          ...(mode === 'resend' ? { signal: AbortSignal.timeout(RESEND_TIMEOUT_MS) } : {}),
         })
 
         if (response.ok) {
@@ -345,6 +412,9 @@ export function createSubmissionQueue(
           ) {
             const proof = raw as unknown as ProofBundle
             proofCache.set(hash, proof)
+            // Only a well-formed proof counts as confirmation. A 2xx with
+            // a malformed body leaves the outbox entry for a later resend.
+            await forgetInOutbox(hash)
             await submitToArchive(record, proof, sidecar, hash)
           }
           pendingRecords.delete(hash)
@@ -359,17 +429,24 @@ export function createSubmissionQueue(
         if (response.status >= 400 && response.status < 500) {
           console.warn(`atrib: log submission rejected (${response.status})`, { record_hash: hash })
           pendingRecords.delete(hash)
+          // Only a status that says the record itself is unacceptable ends
+          // its durable life. A 401, 403, 404 or 429 usually comes from
+          // something in front of the log, or from the log on a bad day,
+          // and the same record may be accepted later.
+          if (RECORD_REFUSED_STATUSES.has(response.status)) await forgetInOutbox(hash)
           return
         }
       } catch {
         // Network error. retry
       }
 
-      if (attempt < MAX_RETRIES - 1) {
+      if (attempt < maxAttempts - 1) {
         await new Promise((resolve) => setTimeout(resolve, backoff))
         backoff *= 2
       }
     }
+
+    if (mode === 'resend') return
 
     // All retries failed. cache locally with its priority preserved. Enforce
     // the queue cap before insert so a long outage cannot grow unbounded.
@@ -380,19 +457,49 @@ export function createSubmissionQueue(
     pendingRecords.set(hash, { record, priority, ...(sidecar ? { sidecar } : {}) })
   }
 
+  function track(work: Promise<void>): void {
+    const promise = work
+      .catch((err) => {
+        console.warn('atrib: unexpected submission error', err)
+      })
+      .finally(() => {
+        // Prune resolved promise to prevent unbounded growth in long-running
+        // processes that never call flush().
+        const idx = pendingPromises.indexOf(promise)
+        if (idx !== -1) pendingPromises.splice(idx, 1)
+      })
+    pendingPromises.push(promise)
+  }
+
+  async function resendUnconfirmed(source: SubmissionOutbox): Promise<void> {
+    const due = await source.claimDue(endpoint)
+    await Promise.allSettled(
+      due.map((entry) => {
+        // The filename is not trusted: a record is resent only under the
+        // hash this queue computes for it.
+        if (recordHash(entry.record) !== entry.recordHash) return forgetInOutbox(entry.recordHash)
+        return submitWithRetry(entry.record, entry.priority, undefined, 'resend')
+      }),
+    )
+  }
+
+  let lastResendAt = 0
+  function resendIfDue(): void {
+    if (!outbox) return
+    const now = Date.now()
+    if (now - lastResendAt < RESEND_INTERVAL_MS) return
+    lastResendAt = now
+    track(resendUnconfirmed(outbox))
+  }
+
+  resendIfDue()
+
   return {
     submit(record: AtribRecord, priority: Priority, sidecar?: SubmissionSidecar): void {
-      const promise = submitWithRetry(record, priority, sidecar)
-        .catch((err) => {
-          console.warn('atrib: unexpected submission error', err)
-        })
-        .finally(() => {
-          // Prune resolved promise to prevent unbounded growth in long-running
-          // processes that never call flush().
-          const idx = pendingPromises.indexOf(promise)
-          if (idx !== -1) pendingPromises.splice(idx, 1)
-        })
-      pendingPromises.push(promise)
+      track(submitWithRetry(record, priority, sidecar))
+      // A daemon builds its queue once and lives for days, so it looks for
+      // records other processes left behind whenever it has work of its own.
+      resendIfDue()
     },
 
     getProof(hash: string): ProofBundle | undefined {

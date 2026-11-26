@@ -14,9 +14,10 @@
  * submission and a dead endpoint stalls the whole test on retries.
  */
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import * as ed from '@noble/ed25519'
@@ -406,5 +407,83 @@ describe('D081 byte-identicality: emitInProcess vs handleEmit', () => {
     expect(r.receipt_id).toBeUndefined()
     expect(r.warnings.some((w) => w.includes('local substrate emit commit failed'))).toBe(true)
     expect(r.log_index).not.toBeNull()
+  })
+})
+
+describe('emitInProcess resends records an earlier call left unconfirmed', () => {
+  it('a later call delivers the record a timed-out call left in the outbox', async () => {
+    const seed = await fixedSeed()
+    // One endpoint that hangs until `answering` flips, so the first call
+    // times out and the second one reaches a working log at the same URL.
+    let answering = false
+    const received: AtribRecord[] = []
+    const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      if (!answering) return
+      let body = ''
+      req.on('data', (c) => (body += c))
+      req.on('end', () => {
+        received.push(JSON.parse(body) as AtribRecord)
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            log_index: received.length - 1,
+            checkpoint: 'stub',
+            inclusion_proof: [],
+            leaf_hash: 'stub',
+          }),
+        )
+      })
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const addr = server.address()
+    if (!addr || typeof addr === 'string') throw new Error('no address')
+    const url = `http://127.0.0.1:${addr.port}/v1/entries`
+    const outboxDir = join(
+      tmpDir,
+      '.atrib-submission-outbox-v1',
+      createHash('sha256').update(url).digest('hex').slice(0, 16),
+    )
+
+    try {
+      const first = await emitInProcess(
+        { event_type: 'https://atrib.dev/v1/types/observation', content: { what: 'lost' } },
+        { key: { privateKey: seed, source: 'env' }, logEndpoint: url, flushDeadlineMs: 150 },
+      )
+      expect(first.log_index).toBeNull()
+      expect(first.warnings.some((w) => w.includes('flush exceeded'))).toBe(true)
+      const firstHex = first.record_hash.slice('sha256:'.length)
+      expect(await readdir(outboxDir)).toEqual([`${firstHex}.json`])
+
+      // The first process is gone. Its entry is old enough to be picked up.
+      server.closeAllConnections()
+      const longAgo = new Date(Date.now() - 120_000)
+      await utimes(join(outboxDir, `${firstHex}.json`), longAgo, longAgo)
+      answering = true
+
+      const second = await emitInProcess(
+        { event_type: 'https://atrib.dev/v1/types/observation', content: { what: 'next' } },
+        { key: { privateKey: seed, source: 'env' }, logEndpoint: url },
+      )
+      expect(second.log_index).not.toBeNull()
+      // The first call's own retries may also have landed; the log treats a
+      // repeat as the same record.
+      const delivered = [
+        ...new Set(received.map((r) => `sha256:${hexEncode(sha256(canonicalRecord(r)))}`)),
+      ]
+      expect(delivered.sort()).toEqual([first.record_hash, second.record_hash].sort())
+      expect(await readdir(outboxDir)).toEqual([])
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  it('submissionOutbox: false keeps submission memory-only', async () => {
+    const seed = await fixedSeed()
+    await emitInProcess(
+      { event_type: 'https://atrib.dev/v1/types/observation', content: { what: 'no-outbox' } },
+      { key: { privateKey: seed, source: 'env' }, logEndpoint: log.url, submissionOutbox: false },
+    )
+    expect(await readdir(tmpDir)).toEqual(['mirror.jsonl'])
   })
 })

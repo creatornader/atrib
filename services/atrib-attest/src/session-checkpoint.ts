@@ -46,6 +46,7 @@ import {
   computeContentId,
   computeRoot,
   createSubmissionQueue,
+  type SubmissionOutbox,
   getPublicKey,
   hexEncode,
   inheritChainContext,
@@ -58,7 +59,7 @@ import {
   type SubmissionQueue,
 } from '@atrib/mcp'
 import { resolveKey, type ResolvedKey } from './keys.js'
-import { mirrorRecord } from './storage.js'
+import { mirrorRecord, resolveSubmissionOutbox } from './storage.js'
 
 /** The session_checkpoint event_type URI (§1.2.10, D139; extension-staged per D073). */
 export const SESSION_CHECKPOINT_EVENT_TYPE_URI = 'https://atrib.dev/v1/types/session_checkpoint'
@@ -79,6 +80,11 @@ export interface SessionCheckpoint {
 export type SessionCheckpointRecord = AtribRecord & { checkpoint: SessionCheckpoint }
 
 export interface EmitSessionCheckpointOptions {
+  /**
+   * Durable outbox for records the log has not confirmed. Defaults to a
+   * directory beside the mirror file; `false` disables it.
+   */
+  submissionOutbox?: SubmissionOutbox | false | undefined
   /**
    * 32-hex context_id whose stream to checkpoint. Defaults to
    * `resolveEnvContextId()` (D078/D083 harness discovery). Without a
@@ -396,7 +402,8 @@ export async function emitSessionCheckpoint(
 
     // Non-blocking submission per §5.3.5 / §5.8; the queue owns retries.
     const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
-    const queue: SubmissionQueue = createSubmissionQueue(logEndpoint)
+    const outbox = resolveSubmissionOutbox(options.submissionOutbox, undefined)
+    const queue: SubmissionQueue = createSubmissionQueue(logEndpoint, outbox ? { outbox } : {})
     queue.submit(record, 'normal')
 
     // §5.9 mirror with the D099 sidecar: the flat leaf list stays local in
