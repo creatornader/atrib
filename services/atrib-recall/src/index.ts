@@ -192,6 +192,7 @@ import { extractRecordHashFieldsFromMcpResult, registerTraceTools } from './trac
 import { registerVerifyTool } from './verification.js'
 import type { EdgeType } from './graph.js'
 import { synthesizeDisplaySummary, resolveDisplayProducer, formatAge } from './legibility.js'
+import { collapseDuplicates, duplicateKeyForRecord } from './duplicates.js'
 
 const ATRIB_RECORD_FILE = process.env.ATRIB_RECORD_FILE
 const ATRIB_MIRROR_DIR = process.env.ATRIB_MIRROR_DIR ?? join(homedir(), '.atrib', 'records')
@@ -256,6 +257,12 @@ type ContentIndexEntry = {
   tokens: string[]
   lifecycle_anchor: boolean
   tool_call_score_factor: number
+  /**
+   * Shared by every re-signed copy of one statement (see duplicates.ts).
+   * Optional and unversioned: an index written before this field existed
+   * simply collapses nothing until the next mirror change rebuilds it.
+   */
+  duplicate_key?: string
 }
 
 type ContentIndexFile = {
@@ -489,11 +496,7 @@ function getContentSearchSnapshotForRecall(
     return contentSearchIndexSnapshot
   }
 
-  if (
-    cached &&
-    !cached.partial &&
-    isAppendOnlyMirrorChange(cached.stats, fingerprint.stats)
-  ) {
+  if (cached && !cached.partial && isAppendOnlyMirrorChange(cached.stats, fingerprint.stats)) {
     contentSearchIndexSnapshot = contentSearchSnapshotFromLoaded(
       loadedSnapshot,
       contentIndexStatus(
@@ -642,6 +645,7 @@ function contentIndexEntryFromLoaded(
   const annotations = snapshot.annotationsByRecord.get(lr.record_hash)
   const toolName = (lr.record as AtribRecord & { tool_name?: string }).tool_name
   const displayProducer = resolveDisplayProducer(lr.record, lr.producer)
+  const duplicateKey = duplicateKeyOf(lr)
   return {
     record_hash: lr.record_hash,
     event_type: lr.record.event_type,
@@ -655,6 +659,7 @@ function contentIndexEntryFromLoaded(
     tokens: indexableTokensForRecord(lr, annotations),
     lifecycle_anchor: shouldSuppressLifecycleAnchorForQuery(lr, annotations, []),
     tool_call_score_factor: operationalToolCallScoreFactor(lr, annotations),
+    ...(duplicateKey ? { duplicate_key: duplicateKey } : {}),
   }
 }
 
@@ -762,6 +767,7 @@ function normalizeContentIndexEntry(value: unknown): ContentIndexEntry | undefin
   if (typeof obj.tool_name === 'string') entry.tool_name = obj.tool_name
   if (typeof obj.producer === 'string') entry.producer = obj.producer
   if (typeof obj.display_producer === 'string') entry.display_producer = obj.display_producer
+  if (typeof obj.duplicate_key === 'string') entry.duplicate_key = obj.duplicate_key
   if (obj.annotations && typeof obj.annotations === 'object') {
     entry.annotations = obj.annotations as AggAnnotationSummary
   }
@@ -1101,6 +1107,12 @@ export interface RecallArgs {
    */
   include_revised?: boolean
   /**
+   * Re-signed copies of one statement collapse to the earliest copy, which
+   * then carries `duplicate_count`. Default true. Set false to list every
+   * signed copy. See duplicates.ts for what counts as a copy.
+   */
+  collapse_duplicates?: boolean
+  /**
    * Layer 1 filter (NEW in 0.5.0): minimum count of distinct cross-attesting
    * signers per D052. Useful for transaction records that must carry >= 2
    * signers; also useful as a credibility filter when querying multi-agent
@@ -1197,6 +1209,8 @@ type RecallRecordCompact = {
   annotations?: AnnotationSummary
   /** New in 0.5.0: record hashes of D059 revisions superseding this record. */
   superseded_by?: string[]
+  /** Later re-signed copies of this statement that were collapsed into it. */
+  duplicate_count?: number
   /**
    * New in 0.8.0 (Layer 1 v2 legibility): one-line human-legible
    * description. Annotation summary if present, else per-event_type
@@ -1232,12 +1246,14 @@ export type RecallRecordToc = {
   topic_tags?: string[]
   timestamp: number
   superseded_by?: string[]
+  duplicate_count?: number
 }
 
 type RecallRecordFull = AtribRecord & {
   signature_verified: boolean
   annotations?: AnnotationSummary
   superseded_by?: string[]
+  duplicate_count?: number
   local_content?: unknown
   local_producer?: string
 }
@@ -1279,6 +1295,11 @@ export interface RecallResult {
    * the caller can see how close to the threshold the best result was.
    */
   top_score?: number
+  /**
+   * Re-signed copies folded into an earlier copy before ranking and paging.
+   * Present only when at least one was folded.
+   */
+  collapsed_duplicates?: number
 }
 
 /**
@@ -1406,6 +1427,7 @@ type VerifiedBundle = {
   signature_verified: boolean
   annotations?: AnnotationSummary
   superseded_by?: string[]
+  duplicate_count?: number
   /** D062 `_local.content` carried through for Layer 1 v2 legibility. */
   content?: unknown
   /** D062 `_local.producer` carried through for Layer 1 v2 legibility. */
@@ -1416,6 +1438,7 @@ async function annotateVerification(
   loaded: { record: AtribRecord; record_hash: string; content?: unknown; producer?: string }[],
   annotationsByRecord: Map<string, AnnotationSummary>,
   revisionsByRecord: Map<string, string[]>,
+  extraCopies?: Map<unknown, number>,
 ): Promise<VerifiedBundle[]> {
   return Promise.all(
     loaded.map(async (lr) => {
@@ -1434,6 +1457,8 @@ async function annotateVerification(
       if (ann) out.annotations = ann
       const supers = revisionsByRecord.get(lr.record_hash)
       if (supers && supers.length > 0) out.superseded_by = supers
+      const copies = extraCopies?.get(lr)
+      if (copies !== undefined) out.duplicate_count = copies
       if (lr.content !== undefined) out.content = lr.content
       if (lr.producer !== undefined) out.producer = lr.producer
       return out
@@ -1458,6 +1483,7 @@ function compactify(bundles: VerifiedBundle[], now: number = Date.now()): Recall
     if (toolName) out.tool_name = toolName
     if (b.annotations) out.annotations = b.annotations
     if (b.superseded_by) out.superseded_by = b.superseded_by
+    if (b.duplicate_count) out.duplicate_count = b.duplicate_count
     // Layer 1 v2 legibility fields. Always populated (the helpers fall
     // back to sentinels when source data is missing). Cheap to compute
     // and the agent-side cost of opaque hashes is non-trivial.
@@ -1473,6 +1499,7 @@ function fullify(bundles: VerifiedBundle[]): RecallRecordFull[] {
     const out = { ...b.record, signature_verified: b.signature_verified } as RecallRecordFull
     if (b.annotations) out.annotations = b.annotations
     if (b.superseded_by) out.superseded_by = b.superseded_by
+    if (b.duplicate_count) out.duplicate_count = b.duplicate_count
     if (b.content !== undefined) out.local_content = b.content
     if (b.producer !== undefined) out.local_producer = b.producer
     return out
@@ -1566,6 +1593,24 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
     })
   }
 
+  // Collapse re-signed copies after filtering, so a copy that fails a
+  // filter never stands in for one that passes, and before ranking and
+  // paging, so `total` and the page both count statements, not copies.
+  let extraCopies: Map<unknown, number> | undefined
+  let collapsedDuplicates = 0
+  if (args.collapse_duplicates !== false) {
+    const collapse = collapseDuplicates(filtered, (lr) => ({
+      key: duplicateKeyOf(lr),
+      timestamp: lr.record.timestamp,
+      recordHash: lr.record_hash,
+    }))
+    if (collapse.collapsed > 0) {
+      filtered = collapse.kept
+      extraCopies = collapse.extraCopies
+      collapsedDuplicates = collapse.collapsed
+    }
+  }
+
   // Sort: timestamp (default, newest first), Park et al. relevance, or
   // BFS shortest-path causal distance from rank_anchor.
   let relevanceTopScore: number | undefined
@@ -1607,6 +1652,7 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
       records: [],
       quality: 'below_threshold',
       top_score: relevanceTopScore,
+      ...(collapsedDuplicates > 0 ? { collapsed_duplicates: collapsedDuplicates } : {}),
     }
   }
 
@@ -1616,7 +1662,12 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
   // reduce default token weight in agent context windows.
   const limit = Math.max(1, Math.min(200, args.limit ?? 10))
   const page = filtered.slice(offset, offset + limit)
-  let verified = await annotateVerification(page, annotationsByRecord, revisionsByRecord)
+  let verified = await annotateVerification(
+    page,
+    annotationsByRecord,
+    revisionsByRecord,
+    extraCopies,
+  )
 
   // Apply verification filter post-paging so `total` reflects the unfiltered
   // count (matches user expectation of "how many records exist that match
@@ -1646,6 +1697,7 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
       if (b.annotations?.max_importance) out.importance = b.annotations.max_importance
       if (b.annotations?.topics) out.topic_tags = b.annotations.topics
       if (b.superseded_by) out.superseded_by = b.superseded_by
+      if (b.duplicate_count) out.duplicate_count = b.duplicate_count
       return out
     })
   } else if (compact) {
@@ -1665,7 +1717,19 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
       'offset is not stable when new records are appended. For consistent paging, capture the' +
       ' first-page timestamps and re-page using a context_id or event_type filter instead.',
     records,
+    ...(collapsedDuplicates > 0 ? { collapsed_duplicates: collapsedDuplicates } : {}),
   }
+}
+
+const duplicateKeyCache = new WeakMap<object, string | null>()
+
+/** Duplicate key for a loaded record, computed once per loaded object. */
+function duplicateKeyOf(lr: { record: AtribRecord }): string | undefined {
+  const cached = duplicateKeyCache.get(lr)
+  if (cached !== undefined) return cached ?? undefined
+  const key = duplicateKeyForRecord(lr.record)
+  duplicateKeyCache.set(lr, key ?? null)
+  return key
 }
 
 function readPackageVersion(): string {
@@ -1822,6 +1886,8 @@ export interface RecallByContentArgs {
   max_records?: number | undefined
   evidence_mode?: 'bounded' | 'require_complete' | undefined
   include_tool_call_args?: boolean | undefined
+  /** Default true. Set false to rank every re-signed copy separately. */
+  collapse_duplicates?: boolean | undefined
 }
 
 export async function runRecallByContent(
@@ -1881,7 +1947,7 @@ export async function runRecallByContent(
   const filteredSearchPool = searchPool.filter(
     (entry) => !(entry.lifecycle_anchor && !queryMentionsLifecycle(queryTokens)),
   )
-  const scored = filteredSearchPool.map((entry) => {
+  const scoredCopies = filteredSearchPool.map((entry) => {
     const ann = entry.annotations
     const suppressLifecycleAnchor = entry.lifecycle_anchor && !queryMentionsLifecycle(queryTokens)
     const toolCallScoreFactor = effectiveToolCallScoreFactor(entry, includeToolCallArgs)
@@ -1899,6 +1965,18 @@ export async function runRecallByContent(
     const score = parkScore(r, i, rel, ATRIB_RECALL_ALPHA, ATRIB_RECALL_BETA, ATRIB_RECALL_GAMMA)
     return { entry, score, recency: r, importance: i, relevance: rel }
   })
+  // Re-signed copies score almost identically, so left alone they crowd
+  // every other result out of the top k. Each group is ranked once, as its
+  // earliest copy within the searched records.
+  const collapse =
+    args.collapse_duplicates === false
+      ? undefined
+      : collapseDuplicates(scoredCopies, (item) => ({
+          key: item.entry.duplicate_key,
+          timestamp: item.entry.timestamp,
+          recordHash: item.entry.record_hash,
+        }))
+  const scored = collapse ? collapse.kept : scoredCopies
   await checkpointRecallCancellation(signal)
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score
@@ -1925,8 +2003,11 @@ export async function runRecallByContent(
     ),
     candidate_records: filteredSearchPool.length,
     truncated_corpus: !completeCoverage,
+    ...(collapse && collapse.collapsed > 0 ? { collapsed_duplicates: collapse.collapsed } : {}),
     count: top.length,
-    results: top.map(({ entry, score, recency, importance, relevance }) => {
+    results: top.map((item) => {
+      const { entry, score, recency, importance, relevance } = item
+      const copies = collapse?.extraCopies.get(item)
       return {
         record_hash: entry.record_hash,
         event_type: entry.event_type,
@@ -1938,6 +2019,7 @@ export async function runRecallByContent(
         display_summary: entry.display_summary,
         display_producer: entry.display_producer,
         age: formatAge(entry.timestamp, now),
+        ...(copies !== undefined ? { duplicate_count: copies } : {}),
         score,
         components: { recency, importance, relevance },
       }
@@ -2256,6 +2338,14 @@ export function registerAtribRecallTools(server: McpServer): void {
             'Default false: revised records remain visible with superseded_by populated. Set true to hide ' +
               'records that have been superseded by a revision record (revises field equals this record).',
           ),
+        collapse_duplicates: z
+          .boolean()
+          .optional()
+          .describe(
+            'Default true: re-signed copies of one statement (same signed fields except timestamp, chain_root ' +
+              'and signature; never tool_call or transaction records) collapse to the earliest copy, which ' +
+              'carries duplicate_count. Set false to list every signed copy.',
+          ),
         min_signers: z
           .number()
           .optional()
@@ -2436,6 +2526,12 @@ export function registerAtribRecallTools(server: McpServer): void {
           .optional()
           .describe(
             'Lift the operational tool_call score suppression for this query so unannotated tool_call records, including their indexed args and result excerpts, rank by ordinary recency and relevance. The default keeps them down-weighted so operational noise does not dominate conversational recall.',
+          ),
+        collapse_duplicates: z
+          .boolean()
+          .optional()
+          .describe(
+            'Default true: re-signed copies of one statement rank once, as the earliest copy, with duplicate_count. Set false to rank every signed copy separately.',
           ),
       },
     },

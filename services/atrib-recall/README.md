@@ -95,6 +95,8 @@ mcp__atrib-recall__recall_my_attribution_history({
   min_importance?: 'critical' | 'high' | 'medium' | 'low' | 'noise',
   topic_tags?: string[],         // OR-match against annotation topic_tags.
   include_revised?: boolean,     // True hides records superseded by a D059 revision.
+  collapse_duplicates?: boolean, // Default true: re-signed copies of one statement fold into the earliest
+                                 // copy, which carries duplicate_count. False lists every signed copy.
   min_signers?: number,          // Distinct-signer threshold; 1 for non-transaction records.
 
   // Ranking.
