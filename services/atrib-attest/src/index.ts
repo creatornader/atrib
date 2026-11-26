@@ -18,12 +18,14 @@
 import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { randomBytes } from 'node:crypto'
+import { dirname, join } from 'node:path'
 import {
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
   LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS,
   LOCAL_SUBSTRATE_REQUEST_SCHEMA,
   canonicalRecord,
+  createFileSubmissionOutbox,
   createHttpLocalSubstrateTransport,
   createSubmissionQueue,
   genesisChainRoot,
@@ -44,6 +46,7 @@ import {
   type LocalSubstrateProducer,
   type LocalSubstrateWalJoin,
   type ProofBundle,
+  type SubmissionOutbox,
   type SubmissionQueue,
   type TryLocalSubstrateCoordinatorResult,
   type UnsignedAtribRecord,
@@ -354,6 +357,11 @@ export interface CreateAtribEmitServerOptions {
   /** Override informed_by record lookup, primarily for tests and embedded hosts. */
   recordReferenceResolver?: RecordReferenceResolver | undefined
   /**
+   * Durable store for records the log has not confirmed yet. Defaults to a
+   * directory beside the mirror file; `false` keeps submission memory-only.
+   */
+  submissionOutbox?: SubmissionOutbox | false | undefined
+  /**
    * Optional long-lived-agent local substrate shadow probe. `undefined` reads
    * opt-in env config; `false` disables env config for this server.
    */
@@ -380,11 +388,32 @@ export interface WriteToolDeps {
   options: CreateAtribAttestServerOptions
 }
 
+const SUBMISSION_OUTBOX_DIR_NAME = '.atrib-submission-outbox-v1'
+
+/**
+ * The durable outbox kept beside a mirror file. A signer killed after it
+ * mirrored a record but before the log confirmed it leaves an entry here,
+ * and the next write process that shares the mirror directory resends it.
+ * `ATRIB_SUBMISSION_OUTBOX=off` disables it for a host that wants none.
+ */
+function resolveSubmissionOutbox(
+  option: SubmissionOutbox | false | undefined,
+  mirrorPath: string | undefined,
+): SubmissionOutbox | undefined {
+  if (option === false) return undefined
+  if (option !== undefined) return option
+  if (process.env['ATRIB_SUBMISSION_OUTBOX'] === 'off') return undefined
+  return createFileSubmissionOutbox({
+    dir: join(dirname(resolveMirrorWritePath(mirrorPath)), SUBMISSION_OUTBOX_DIR_NAME),
+  })
+}
+
 function buildWriteToolDeps(options: CreateAtribAttestServerOptions): WriteToolDeps {
   const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
+  const outbox = resolveSubmissionOutbox(options.submissionOutbox, undefined)
   return {
     resolveServerKey: createServerKeyResolver(options),
-    queue: createSubmissionQueue(logEndpoint),
+    queue: createSubmissionQueue(logEndpoint, outbox ? { outbox } : {}),
     logEndpoint,
     options,
   }
@@ -1295,7 +1324,10 @@ function notifyLocalSubstrateWarning(
  * always reported `log_index: null` and a misleading "submission queued"
  * warning, even when the record had already landed on the log.
  */
-function getProofFor(queue: SubmissionQueue | undefined, recordHash: string): ProofBundle | undefined {
+function getProofFor(
+  queue: SubmissionQueue | undefined,
+  recordHash: string,
+): ProofBundle | undefined {
   if (!queue) return undefined
   return queue.getProof(
     recordHash.startsWith('sha256:') ? recordHash.slice('sha256:'.length) : recordHash,
@@ -1346,6 +1378,12 @@ export interface EmitInProcessOptions {
    * interactive CLI, a service with its own backpressure).
    */
   flushDeadlineMs?: number
+  /**
+   * Durable store for records the log has not confirmed yet. Defaults to a
+   * directory beside the mirror file, so a later call resends what a killed
+   * or timed-out call left behind. `false` keeps submission memory-only.
+   */
+  submissionOutbox?: SubmissionOutbox | false | undefined
   /** Override informed_by record lookup, primarily for tests and embedded hosts. */
   recordReferenceResolver?: RecordReferenceResolver | undefined
   /**
@@ -1402,7 +1440,14 @@ export async function emitInProcess(
   const key = options.key ?? (await resolveKey())
   const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
   const flushDeadlineMs = options.flushDeadlineMs ?? DEFAULT_FLUSH_DEADLINE_MS
-  const queue = options.submit === false ? undefined : createSubmissionQueue(logEndpoint)
+  const outbox =
+    options.submit === false
+      ? undefined
+      : resolveSubmissionOutbox(options.submissionOutbox, options.mirrorPath)
+  const queue =
+    options.submit === false
+      ? undefined
+      : createSubmissionQueue(logEndpoint, outbox ? { outbox } : {})
   const result = await handleEmit({
     input,
     key,
@@ -1441,25 +1486,24 @@ export async function emitInProcess(
     queue.flush().then(() => true as const),
     new Promise<false>((resolve) => setTimeout(() => resolve(false), flushDeadlineMs)),
   ])
-  if (!flushed) {
-    result.warnings.push(
-      `flush exceeded ${flushDeadlineMs}ms deadline; record signed and mirrored locally, log submission may still be in flight`,
-    )
-    return result
-  }
-  // Flush completed within the deadline. handleEmit had to read the proof
-  // synchronously, before the submission promise could resolve, so its
-  // result carries `log_index: null` and a "submission queued; proof not
-  // yet available" warning. After flush the proof is in the queue's cache;
-  // re-read it and patch the result so callers see the proof they would
-  // get if they queried the log directly. The warning becomes misleading
-  // (the submission DID complete), so drop it.
+  // handleEmit had to read the proof synchronously, before the submission
+  // promise could resolve, so its result carries `log_index: null` and a
+  // "submission queued; proof not yet available" warning. Once this
+  // record's proof is in the queue's cache, patch the result so callers see
+  // the proof they would get if they queried the log directly, and drop the
+  // warning, which would now mislead. The flush also covers records resent
+  // from the outbox, so this record can be confirmed even when the flush as
+  // a whole ran past the deadline.
   const proof = getProofFor(queue, result.record_hash)
   if (proof) {
     result.log_index = proof.log_index
     result.inclusion_proof = proof.inclusion_proof
     result.warnings = result.warnings.filter(
       (w) => !w.startsWith('submission queued; proof not yet available'),
+    )
+  } else if (!flushed) {
+    result.warnings.push(
+      `flush exceeded ${flushDeadlineMs}ms deadline; record signed and mirrored locally, log submission may still be in flight`,
     )
   }
   return result

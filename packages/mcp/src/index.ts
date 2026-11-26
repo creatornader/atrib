@@ -330,9 +330,15 @@ export { createSubmissionQueue } from './submission.js'
 export type {
   ArchiveSubmissionOptions,
   ProofBundle,
+  SubmissionOutbox,
+  SubmissionOutboxEntry,
   SubmissionQueue,
+  SubmissionQueueOptions,
   SubmissionSidecar,
 } from './submission.js'
+// Node-only durable outbox for the submission queue.
+export { createFileSubmissionOutbox } from './submission-outbox.js'
+export type { FileSubmissionOutboxOptions } from './submission-outbox.js'
 
 // Anchor plurality (D138, §2.11.7-§2.11.13): producer-side anchor-set config,
 // the §2.11.10 anchoring-claim builder, and non-blocking fan-out submission.
