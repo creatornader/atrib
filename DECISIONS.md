@@ -10030,6 +10030,149 @@ only if it verifies under the pinned `ATRIB_SIGNER_PUBKEY`.
 
 ---
 
+## D191: A durable outbox carries unconfirmed records across processes
+
+**Date:** 2026-11-26
+
+**Status:** Accepted
+
+**Context.** The submission queue holds records in memory. A write process
+signs a record, appends it to the local mirror, and waits a bounded time for
+the log to answer. If the process is killed or its wait ends first, the record
+stays in the mirror and nothing ever sends it again. The mirror line cannot
+tell a later reader whether the log confirmed the record, because the line is
+written before the answer arrives. A host that retried by signing again
+produced a second record instead of delivering the first.
+
+**Decision.** `createSubmissionQueue` accepts an optional `outbox`. With one
+set, the queue persists each record before its first attempt and removes it
+when the log returns a well-formed proof or a permanent 4xx rejection.
+Creating a queue resends the records earlier processes left behind.
+
+1. The outbox is an interface on the queue, not a file dependency.
+   `submission.ts` stays free of Node imports for the Worker entry point.
+   `createFileSubmissionOutbox` is the Node implementation: one file per
+   record, named by record hash, mode 0600, written through a temp file.
+2. Resending relies on [§2.6.1](atrib-spec.md#261-submit-entry) step 6. The
+   log returns the existing proof for a record it already holds, so a resend
+   can never append a duplicate.
+3. Resending is non-blocking under
+   [§5.3.5](atrib-spec.md#535-log-submission) and
+   [§5.8](atrib-spec.md#58-degradation-contract). It starts when the queue is
+   created, makes one attempt per record, is awaited only by `flush()`, and
+   every outbox failure is swallowed.
+4. An entry rests for 60 seconds after it is written or claimed, longer than
+   the queue's 30 second retry window. A claim refreshes the entry's mtime so
+   concurrent processes do not all resend it. One process claims at most 8
+   entries. An entry first queued more than 14 days ago is dropped unsent.
+5. An entry records the log endpoint it was queued for. A queue resends only
+   entries for its own endpoint, and only under the hash it computes itself
+   for the stored record.
+6. `@atrib/attest` turns the outbox on by default for `emitInProcess`, the
+   CLI and the write-tool servers, in `.atrib-submission-outbox-v1/` beside
+   the mirror file. `submissionOutbox: false` or
+   `ATRIB_SUBMISSION_OUTBOX=off` keeps submission memory-only. Other
+   `createSubmissionQueue` callers are unchanged until they pass an outbox.
+7. `emitInProcess` reports a record's proof whenever the queue holds it, even
+   when the flush as a whole ran past its deadline on resends.
+
+**Alternatives considered.**
+
+- Scan the mirror and ask the log about each record at start. This needs one
+  request per mirror record on every start. The outbox costs one small file
+  per write and nothing per start when it is empty.
+- Record confirmation in the mirror line. The mirror is append-only and is
+  written before the answer exists.
+- Have the host retry by emitting again. That signs a second record, which is
+  how the duplicates this decision responds to were produced.
+
+**Consequences.**
+
+- The outbox holds signed record bytes, which is what the log receives. It
+  holds no local sidecar content.
+- A record signed before this change, or by a producer without an outbox, is
+  not resent. Confirming older records needs a one-time backfill, which is not
+  part of this decision.
+- Archive submission after a resend carries the record and proof without the
+  original evidence sidecar.
+
+**Cross-references.**
+
+- [§5.9](atrib-spec.md#59-local-mirror-conventions), local mirror
+  conventions.
+- [D146](#d146-mirror-inheritance-is-corpus-scoped-with-a-deletable-advisory-tail-index),
+  the advisory tail index kept beside the same mirror files.
+
+---
+
+## D192: Listing and search reads collapse re-signed copies of one statement
+
+**Date:** 2026-11-26
+
+**Status:** Accepted
+
+**Context.** A producer that retried after a timeout signed the same statement
+again. One operator mirror held 14 statements signed more than once, 63 extra
+copies in all, one of them 45 times. Each copy is a valid record with its own
+hash, and signed records are never removed. In content search the copies score
+almost identically and fill the top results.
+
+**Decision.** The history and content read shapes collapse a group of
+re-signed copies to its earliest copy by default. The kept record carries
+`duplicate_count`, and the response carries `collapsed_duplicates` when any
+copy was folded. `collapse_duplicates: false` returns every signed copy.
+
+1. Two records are copies when every signed field matches except
+   `timestamp`, `chain_root` and `signature`, the fields a re-signing
+   necessarily changes. The group therefore shares creator, context, event
+   type, content commitment and declared references.
+2. Only records that commit to explicit content through `args_hash`
+   ([D099](#d099-explicit-emit-records-commit-local-content-through-default-args_hash))
+   qualify. `tool_call` and `transaction` records never qualify: the same
+   call or payment made twice is two acts.
+3. The earliest copy by signed `timestamp` is kept, with ties broken by the
+   smaller record hash. In content search under a bounded window, "earliest"
+   means earliest among the searched records.
+4. History collapses after filters and before ranking and paging, so `total`
+   counts statements. Content search collapses after scoring and before the
+   top-k cut.
+5. Collapsing is presentation only. Walks, chains, annotation and revision
+   lookups, orphans, by-signer and state reads are unchanged, and a hidden
+   copy still resolves by hash. This keeps the read side within
+   [§3.1](atrib-spec.md#31-design-principles-and-rationale): no edge and no
+   record is added, removed or reinterpreted.
+6. The durable content index stores an optional `duplicate_key` per entry
+   without a version change. An index written earlier collapses nothing until
+   the next mirror change rebuilds it.
+
+**Alternatives considered.**
+
+- Remove the copies from the mirror. Signed records are evidence and some
+  copies are already in the public log.
+- Match on local sidecar content. The sidecar is unsigned, so the match would
+  rest on bytes no signature covers. `args_hash` is the signed commitment to
+  the same content.
+- Collapse on context, event type and content alone. Two producers, or one
+  producer citing different sources, can say the same thing for different
+  reasons.
+
+**Consequences.**
+
+- A producer that deliberately signs the same statement twice in one context
+  sees one result with `duplicate_count: 1` unless it asks for every copy.
+- Salted commitments differ per record, so salted copies do not collapse.
+- An annotation or revision that targets a later copy is not shown on the
+  kept earliest copy.
+
+**Cross-references.**
+
+- [D164](#d164-attestrecall-verb-rename-and-primitive-surface-collapse), the
+  `recall` verb and its legacy aliases, which share this behavior.
+- [D191](#d191-a-durable-outbox-carries-unconfirmed-records-across-processes),
+  which removes the reason to sign again.
+
+---
+
 # Pending decisions
 
 These will get full ADRs when we act on them. Recorded here so they remain findable and don't silently drop. Per the global Deferred Decision Logging convention, this section uses the forward-looking pattern (forward-looking decisions that will become numbered ADRs when codified).
