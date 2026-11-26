@@ -245,7 +245,7 @@ A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (r
 
 [`docs/docs-map.json`](docs/docs-map.json) binds each doc, or a section of one, to the code it describes. [`scripts/docs-map.mjs`](scripts/docs-map.mjs) checks it, in `pnpm doc-sync` and as a pull-request step in CI. It fails when a mapped doc, heading or path is gone or a doc is in no entry. On a pull request it also flags each section whose code the branch changed while the section stayed untouched.
 
-Before asking for review, run `node scripts/docs-map.mjs --base origin/main`. For each flag, edit the section in the same PR, or put a line in a commit message that says why it needs no edit:
+Before asking for review, run `node scripts/docs-map.mjs --base origin/main`. For each flag, edit the section in the same PR, or put a line in a commit message or the PR description that says why it needs no edit (a bot PR, such as a Dependabot bump, can only use the description):
 
 ```
 docs-map: packages/mcp/README.md: internal refactor, public API unchanged

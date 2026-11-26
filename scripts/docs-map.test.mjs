@@ -34,13 +34,15 @@ function repo(files) {
       if (c === null) rmSync(join(root, p))
       else writeFileSync(join(root, p), typeof c === 'string' ? c : JSON.stringify(c, null, 2))
     }
+    // Stage, so plain mode (tracked files only) sees the change.
+    g('add', '-A')
   }
   put(files)
-  g('add', '-A')
   g('commit', '-q', '-m', 'base')
   return {
     root,
     put,
+    git: g,
     commit(msg, fs = {}) {
       put(fs)
       g('add', '-A')
@@ -60,7 +62,7 @@ const baseMap = (extra = {}) => ({
     {
       doc: 'README.md',
       section: 'config',
-      covers: ['src/config.js', '!src/**/*.test.js'],
+      covers: ['src/config*', '!src/**/*.test.js'],
       mode: 'warn',
     },
   ],
@@ -87,6 +89,25 @@ test('slugs follow GitHub anchors', () => {
   assert.equal(slugify('`rousr send` & friends'), 'rousr-send--friends')
   assert.equal(slugify('[Link](x.md) text'), 'link-text')
   assert.equal(slugify('October 16: the work map'), 'october-16-the-work-map')
+  assert.equal(slugify('`Map<K,V>` and <code>b</code>'), 'mapkv-and-b')
+  assert.equal(slugify('Café naïve'), 'café-naïve')
+})
+
+test('headings: GitHub duplicate slugs, a closing # run, inline fences', () => {
+  const p = parseHeadings(
+    '# Foo\n# Foo\n# Foo 1\n## Using C#\n## Done ##\n```js``` inline\n## After\n',
+  )
+  assert.deepEqual(
+    p.heads.map((h) => [h.text, h.slug]),
+    [
+      ['Foo', 'foo'],
+      ['Foo', 'foo-1'],
+      ['Foo 1', 'foo-1-1'],
+      ['Using C#', 'using-c'],
+      ['Done', 'done'],
+      ['After', 'after'],
+    ],
+  )
 })
 
 test('sections run to the next heading of the same or higher level, ignoring fenced code', () => {
@@ -359,6 +380,103 @@ test('CLI exit codes: 0 clean, 1 map error, 2 unacknowledged flag', () => {
     assert.match(cli('--why', 'src/cli.js').stdout, /README\.md § Commands/)
     r.put({ 'EXTRA.md': '# x\n' })
     assert.equal(cli('--base', 'main').status, 1)
+  } finally {
+    r.cleanup()
+  }
+})
+
+test('PR mode: a deletion at the end of one section does not clear the next', () => {
+  const r = repo({
+    'README.md': README,
+    'src/config.js': '1',
+    'docs/docs-map.json': baseMap(),
+    'src/cli.js': '1',
+  })
+  try {
+    r.branch('f')
+    r.commit('c', { 'src/config.js': '2', 'README.md': README.replace('--x\n\n', '') })
+    const res = run(r.root, { map: 'docs/docs-map.json', base: 'main' })
+    assert.deepEqual(
+      res.flags.map((f) => f.key),
+      ['README.md#config'],
+    )
+  } finally {
+    r.cleanup()
+  }
+})
+
+test('PR mode: entries sharing a section make one flag, fail if any entry fails', () => {
+  const r = repo({
+    'README.md': README,
+    'src/a.js': '1',
+    'src/b.js': '1',
+    'docs/docs-map.json': {
+      version: 1,
+      entries: [
+        { doc: 'README.md', covers: ['src/a.js'], mode: 'warn' },
+        { doc: 'README.md', covers: ['src/b.js'] },
+      ],
+    },
+  })
+  try {
+    r.branch('f')
+    r.commit('c', { 'src/a.js': '2', 'src/b.js': '2' })
+    const res = run(r.root, { map: 'docs/docs-map.json', base: 'main' })
+    assert.deepEqual(
+      res.flags.map((f) => [f.key, f.mode, f.changed]),
+      [['README.md', 'fail', ['src/a.js', 'src/b.js']]],
+    )
+  } finally {
+    r.cleanup()
+  }
+})
+
+test('PR mode ignores color and external diff settings; malformed acks warn', () => {
+  const r = repo({
+    'README.md': README,
+    'src/cli.js': '1',
+    'src/config.js': '1',
+    'docs/docs-map.json': baseMap(),
+  })
+  try {
+    r.git('config', 'color.ui', 'always')
+    r.git('config', 'color.diff', 'always')
+    r.branch('f')
+    r.commit('c\n\ndocs-map: README.md#Commands typo: heading text, not slug', {
+      'src/cli.js': '2',
+      'README.md': README.replace('Run it.', 'Run it now.'),
+    })
+    const res = run(r.root, { map: 'docs/docs-map.json', base: 'main' })
+    assert.deepEqual(res.flags, [])
+    assert.equal(res.warnings.length, 1)
+    assert.match(res.warnings[0], /does not parse/)
+  } finally {
+    r.cleanup()
+  }
+})
+
+test('plain mode ignores untracked files; CRLF docs render and keep their endings', () => {
+  const r = repo({
+    'README.md':
+      '# T\r\n\r\n<!-- docs-map:generated id="v" -->\r\nold\r\n<!-- docs-map:end id="v" -->\r\n',
+    'docs/docs-map.json': {
+      version: 1,
+      unbound: ['README.md'],
+      entries: [],
+      generators: [{ id: 'v', doc: 'README.md', command: 'echo new' }],
+    },
+  })
+  try {
+    writeFileSync(join(r.root, 'scratch.md'), '# scratch\n')
+    assert.deepEqual(run(r.root, { map: 'docs/docs-map.json' }).errors, [
+      'README.md: generated block "v" is stale; run node scripts/docs-map.mjs --write',
+    ])
+    run(r.root, { map: 'docs/docs-map.json', write: true })
+    assert.equal(
+      readFileSync(join(r.root, 'README.md'), 'utf8'),
+      '# T\r\n\r\n<!-- docs-map:generated id="v" -->\r\nnew\r\n<!-- docs-map:end id="v" -->\r\n',
+    )
+    assert.deepEqual(run(r.root, { map: 'docs/docs-map.json' }).errors, [])
   } finally {
     r.cleanup()
   }

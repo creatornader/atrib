@@ -50,7 +50,11 @@ import type { IdentityKeySource, IdentityProfile, PrincipalKind } from './identi
 
 // The version is package.json's, so `atrib --version` cannot drift from the
 // published release. npm always ships package.json beside dist/.
-const VERSION: string = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
+const VERSION = (
+  JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+    version: string
+  }
+).version
 
 const HELP = `atrib CLI v${VERSION}
 

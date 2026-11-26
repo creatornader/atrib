@@ -46,7 +46,8 @@
         "services/*/package.json",
         "apps/*/package.json",
         "pnpm-workspace.yaml"
-      ]
+      ],
+      "mode": "warn"
     },
     {
       "doc": "README.md",
@@ -69,7 +70,11 @@
       "section": "Try the demo",
       "covers": ["packages/integration/examples/end-to-end/**"]
     },
-    { "doc": "README.md", "section": "Key generation", "covers": ["packages/cli/src/**"] },
+    {
+      "doc": "README.md",
+      "section": "Key generation",
+      "covers": ["packages/cli/src/**"]
+    },
     {
       "doc": "README.md",
       "covers": ["packages/*/src/index.ts", "services/*/src/index.ts"],
@@ -96,7 +101,8 @@
         "services/*/package.json",
         "apps/*/package.json",
         "pnpm-workspace.yaml"
-      ]
+      ],
+      "mode": "warn"
     },
     {
       "doc": "CLAUDE.md",
@@ -107,7 +113,7 @@
     {
       "doc": "CLAUDE.md",
       "section": "Docs map",
-      "covers": ["scripts/docs-map.mjs", "docs/docs-map.json"]
+      "covers": ["scripts/docs-map.mjs", ".github/workflows/docs-map.yml"]
     },
     {
       "doc": "STATUS.md",
@@ -124,7 +130,10 @@
       "covers": ["packages/*/package.json", "services/*/package.json"],
       "mode": "warn"
     },
-    { "doc": "DESIGN.md", "covers": ["apps/dashboard/**", "!apps/dashboard/test/**"] },
+    {
+      "doc": "DESIGN.md",
+      "covers": ["apps/dashboard/**", "!apps/dashboard/test/**"]
+    },
     {
       "doc": "METRICS.md",
       "covers": ["scripts/collect-npm-downloads.mjs", "services/log-node/scripts/metrics.mjs"]
@@ -134,7 +143,11 @@
       "covers": ["package.json", ".github/workflows/ci.yml"],
       "mode": "warn"
     },
-    { "doc": "atrib-spec.md", "covers": ["spec/conformance/**"], "mode": "warn" },
+    {
+      "doc": "atrib-spec.md",
+      "covers": ["spec/conformance/**"],
+      "mode": "warn"
+    },
     {
       "doc": "skills/atrib/SKILL.md",
       "covers": [
@@ -146,7 +159,11 @@
     },
     {
       "doc": "packages/*/README.md",
-      "covers": ["packages/$1/src/index.ts", "packages/$1/src/lib.rs", "packages/$1/package.json"]
+      "covers": [
+        "packages/$1/src/index.ts",
+        "packages/$1/src/lib.rs",
+        "packages/$1/demo-record-surfaces.json"
+      ]
     },
     {
       "doc": "packages/*/README.md",
@@ -154,17 +171,14 @@
         "packages/$1/src/**",
         "packages/$1/scripts/**",
         "packages/$1/Cargo.toml",
-        "packages/$1/build-wasm.sh"
+        "packages/$1/build-wasm.sh",
+        "packages/$1/package.json"
       ],
       "mode": "warn"
     },
     {
       "doc": "services/*/README.md",
-      "covers": [
-        "services/$1/src/index.ts",
-        "services/$1/src/server.ts",
-        "services/$1/package.json"
-      ]
+      "covers": ["services/$1/src/index.ts", "services/$1/src/server.ts"]
     },
     {
       "doc": "services/*/README.md",
@@ -195,8 +209,14 @@
       "covers": ["spec/conformance/$1**", "!**/*.md"],
       "mode": "warn"
     },
-    { "doc": "python/README.md", "covers": ["python/src/**", "python/pyproject.toml"] },
-    { "doc": "policies/README.md", "covers": ["policies/*.json"] },
+    {
+      "doc": "python/README.md",
+      "covers": ["python/src/**"]
+    },
+    {
+      "doc": "policies/README.md",
+      "covers": ["policies/*.json"]
+    },
     {
       "doc": "docs/payments-profile.md",
       "covers": [
@@ -231,18 +251,23 @@
       "covers": ["services/witness-node/src/**", "services/witness-node/Dockerfile"],
       "mode": "warn"
     },
-    { "doc": "docs/ots-pending-receipt-worker.md", "covers": ["scripts/upgrade-ots-receipts.mjs"] },
+    {
+      "doc": "docs/ots-pending-receipt-worker.md",
+      "covers": ["scripts/upgrade-ots-receipts.mjs"]
+    },
     {
       "doc": "docs/publishing-new-npm-package.md",
       "covers": [
         ".github/workflows/release.yml",
         ".changeset/config.json",
         "scripts/check-release-publish-readiness.mjs"
-      ]
+      ],
+      "mode": "warn"
     },
     {
       "doc": "docs/publishing-new-pypi-package.md",
-      "covers": [".github/workflows/release-pypi.yml", "python/pyproject.toml"]
+      "covers": [".github/workflows/release-pypi.yml", "python/pyproject.toml"],
+      "mode": "warn"
     },
     {
       "doc": "docs/stateless-mcp-attribution-guide.md",

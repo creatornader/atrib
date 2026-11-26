@@ -14,7 +14,7 @@ Which section(s) of `atrib-spec.md` does this relate to?
 
 ## Docs
 
-Run `node scripts/docs-map.mjs --base origin/main`. Each flagged section is edited in this PR or acknowledged in a commit message (`docs-map: <doc>#<section>: <why no edit>`).
+Run `node scripts/docs-map.mjs --base origin/main`. Each flagged section is edited in this PR or acknowledged in a commit message or this description (`docs-map: <doc>#<section>: <why no edit>`).
 
 ## Checklist
 
