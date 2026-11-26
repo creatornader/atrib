@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// docs-map v1.0.0
+// docs-map v1.1.0
 //
 // Binds doc sections to the code they describe and checks the binding.
 // The same file is copied byte for byte into every repo that uses it; change
@@ -11,6 +11,7 @@
 //   node scripts/docs-map.mjs --base origin/main also flag sections this branch's code changes may have outdated
 //   node scripts/docs-map.mjs --write            re-render generated blocks, then check
 //   node scripts/docs-map.mjs --why <file>...    list the doc sections bound to these files
+//   node scripts/docs-map.mjs --drift            list sections bound to upstream files changed since the pin
 //   node scripts/docs-map.mjs --json             print the result as JSON
 //   --map <path>                                 map file (default docs/docs-map.json)
 //
@@ -33,7 +34,11 @@
 //   "generators": [
 //     { "id": "cli-usage", "doc": "README.md", "command": "node cli.mjs --help",
 //       "cwd": ".", "fence": "text" }
-//   ]
+//   ],
+//   "upstreams": {
+//     "atrib": { "repo": "creatornader/atrib", "ref": "upstream/atrib.ref",
+//                "path": ".upstream/atrib" }
+//   }
 // }
 //
 // - section is a heading's text or its GitHub slug; omit it to bind the whole
@@ -55,13 +60,26 @@
 //     docs-map: README.md#packages: <why no edit is needed>
 //   in a commit message on the branch, or in DOCS_MAP_PR_BODY, acknowledges a
 //   flag (doc path, then # and the heading's slug; no # for a whole file).
+// - A doc is any text file an entry names; docs globs only set which files
+//   must be in the map. Sections need markdown headings; a whole-file entry
+//   can bind a page's source, such as a .tsx or .html file.
+// - Upstreams bind docs here to code in another repo. The ref file holds the
+//   upstream commit this repo was last checked against, and path is a git
+//   clone of it. A covers glob "atrib:src/**" matches upstream files at that
+//   commit. With --base, a branch that moves the ref file counts every
+//   upstream file changed between the old and new commit as changed, so the
+//   sections bound to them are flagged. A missing clone skips that upstream's
+//   globs with a warning; a clone that lacks a pinned commit is an error.
+//   --drift compares each pin with its clone's checked-out commit and lists
+//   the sections bound to the files changed between them, so a scheduled job
+//   can say what moving the pin will ask for.
 
 import { execFileSync, execSync } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const VERSION = '1.0.0'
+const VERSION = '1.1.0'
 
 // Plain stream writes, so linters that forbid console calls stay quiet.
 const print = (text) => process.stdout.write(`${text}\n`)
@@ -79,6 +97,7 @@ export function parseArgs(argv) {
     write: false,
     json: false,
     why: null,
+    drift: false,
   }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -86,6 +105,7 @@ export function parseArgs(argv) {
     else if (a === '--base') opts.base = argv[++i]
     else if (a === '--write') opts.write = true
     else if (a === '--json') opts.json = true
+    else if (a === '--drift') opts.drift = true
     else if (a === '--why') opts.why = []
     else if (opts.why && !a.startsWith('-')) opts.why.push(a)
     else if (a === '--version') opts.version = true
@@ -145,8 +165,18 @@ export function globToRegex(glob) {
   return { re: new RegExp(`^${re}$`), captures }
 }
 
+// An upstream path is "name:path". A glob matches only paths in its own
+// repo, so "**/*.ts" never matches an upstream file and "atrib:**" never a
+// local one.
+const scope = (s) => {
+  const colon = s.indexOf(':')
+  const slash = s.indexOf('/')
+  return colon > 0 && (slash < 0 || colon < slash) ? s.slice(0, colon) : ''
+}
+
 const globCache = new Map()
 export function globMatch(glob, path) {
+  if (scope(glob) !== scope(path)) return null
   let g = globCache.get(glob)
   if (!g) globCache.set(glob, (g = globToRegex(glob)))
   return g.re.exec(path)
@@ -412,6 +442,93 @@ export function readAcks(root, mergeBase, prBody) {
   return acks
 }
 
+// ---------- upstreams ----------
+
+// The pinned commit in a ref file: the first line that is not blank or a #
+// comment. null when the file is absent, undefined when it holds no SHA.
+export function readPin(root, ref, rev = null) {
+  let text
+  try {
+    text = rev ? git(root, ['show', `${rev}:${ref}`]) : readFileSync(join(root, ref), 'utf8')
+  } catch {
+    return null
+  }
+  const line = text
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l && !l.startsWith('#'))
+  const sha = line ? line.split(/\s+/)[0] : ''
+  return /^[0-9a-f]{40}$/.test(sha) ? sha : undefined
+}
+
+// Lists each upstream's files at its pinned commit, prefixed with its name.
+export function upstreamState(root, map) {
+  const files = []
+  const warnings = []
+  const errors = []
+  const unavailable = new Set()
+  const info = new Map()
+  for (const [name, u] of Object.entries(map.upstreams || {})) {
+    const sha = readPin(root, u.ref)
+    if (!sha) {
+      errors.push(`upstream ${name}: ${u.ref} must hold one 40-character commit SHA`)
+      unavailable.add(name)
+      continue
+    }
+    const dir = join(root, u.path)
+    if (!existsSync(join(dir, '.git'))) {
+      warnings.push(
+        `upstream ${name}: no clone at ${u.path}, so its covers are not checked (clone ${u.repo || 'it'} there with full history)`,
+      )
+      unavailable.add(name)
+      continue
+    }
+    let list
+    try {
+      list = git(dir, ['ls-tree', '-r', '-z', '--name-only', sha])
+    } catch {
+      errors.push(
+        `upstream ${name}: the clone at ${u.path} does not have ${sha}; fetch with full history`,
+      )
+      unavailable.add(name)
+      continue
+    }
+    for (const f of list.split('\0').filter(Boolean)) files.push(`${name}:${f}`)
+    info.set(name, { dir, sha, ref: u.ref })
+  }
+  return { files, warnings, errors, unavailable, info }
+}
+
+// Upstream files changed between the pin at the merge base and the pin now.
+// A pin that is new on this branch sets a baseline and changes nothing.
+export function upstreamChanges(root, mergeBase, changed, up) {
+  const out = []
+  const errors = []
+  for (const [name, { dir, sha, ref }] of up.info) {
+    if (!changed.has(ref)) continue
+    const old = readPin(root, ref, mergeBase)
+    if (!old || old === sha) continue
+    try {
+      const diff = git(dir, [
+        'diff',
+        '--no-color',
+        '--no-ext-diff',
+        '--name-only',
+        '--no-renames',
+        '-z',
+        old,
+        sha,
+      ])
+      for (const f of diff.split('\0').filter(Boolean)) out.push(`${name}:${f}`)
+    } catch {
+      errors.push(
+        `upstream ${name}: cannot compare ${old} with ${sha} in its clone; fetch with full history`,
+      )
+    }
+  }
+  return { files: out, errors }
+}
+
 // ---------- the check ----------
 
 export function loadMap(root, mapPath) {
@@ -435,6 +552,17 @@ export function loadMap(root, mapPath) {
         `${mapPath}: entries[${i}] (${e.doc}) needs covers with at least one positive glob`,
       )
   })
+  if (map.upstreams !== undefined) {
+    if (typeof map.upstreams !== 'object' || Array.isArray(map.upstreams))
+      errors.push(`${mapPath}: upstreams must be an object`)
+    else
+      for (const [name, u] of Object.entries(map.upstreams)) {
+        if (!/^[a-z0-9][a-z0-9-]*$/.test(name))
+          errors.push(`${mapPath}: upstream name "${name}" must be lowercase letters, digits and -`)
+        if (!u || typeof u.ref !== 'string' || typeof u.path !== 'string')
+          errors.push(`${mapPath}: upstreams.${name} needs ref and path`)
+      }
+  }
   const ids = new Set()
   ;(map.generators || []).forEach((g, i) => {
     if (!g.id || !g.doc || !g.command)
@@ -448,9 +576,14 @@ export function loadMap(root, mapPath) {
 const sub = (glob, caps) => glob.replace(/\$(\d)/g, (_, n) => caps[Number(n) - 1] ?? '')
 
 // Expands each entry against the file list into concrete bindings.
-export function expandEntries(map, files) {
+export function expandEntries(map, files, coverFiles = files, unavailable = new Set()) {
   const bindings = []
   const errors = []
+  // An upstream glob whose clone is missing cannot be checked here.
+  const skipped = (c) => {
+    const m = c.replace(/^!/, '').match(/^([a-z0-9][a-z0-9-]*):/)
+    return Boolean(m && unavailable.has(m[1]))
+  }
   ;(map.entries || []).forEach((e, i) => {
     const label = `entries[${i}] ${e.doc}${e.section ? ` § ${e.section}` : ''}`
     const matched = files.map((f) => [f, globMatch(e.doc, f)]).filter(([, m]) => m)
@@ -476,7 +609,12 @@ export function expandEntries(map, files) {
       let any = false
       covers.forEach((c, k) => {
         if (c.startsWith('!')) return
-        const hit = files.some((f) => globMatch(c, f))
+        if (skipped(c)) {
+          any = true
+          globHit.set(k, true)
+          return
+        }
+        const hit = coverFiles.some((f) => globMatch(c, f))
         any ||= hit
         globHit.set(k, globHit.get(k) || hit)
         if (!hit && !templated) errors.push(`${label}: covers glob "${c}" matches no file`)
@@ -512,7 +650,15 @@ export function run(root, opts, env = process.env) {
   const files = listFiles(root, { untracked: Boolean(opts.base) })
   const isDoc = (f) => anyMatch(map.docs || ['**/*.md'], f) && !anyMatch(map.ignore, f)
   const docs = files.filter(isDoc)
-  const { bindings, errors: expandErrors } = expandEntries(map, files)
+  const up = upstreamState(root, map)
+  errors.push(...up.errors)
+  warnings.push(...up.warnings)
+  const { bindings, errors: expandErrors } = expandEntries(
+    map,
+    files,
+    files.concat(up.files),
+    up.unavailable,
+  )
   errors.push(...expandErrors)
 
   // Generated blocks (render first so section checks see the new text).
@@ -612,6 +758,9 @@ export function run(root, opts, env = process.env) {
   // PR mode.
   if (opts.base) {
     const { mergeBase, changed, untracked } = changesSince(root, opts.base)
+    const upChanged = upstreamChanges(root, mergeBase, changed, up)
+    errors.push(...upChanged.errors)
+    for (const f of upChanged.files) changed.add(f)
     const acks = readAcks(root, mergeBase, env.DOCS_MAP_PR_BODY)
     const used = new Set()
     const touchCache = new Map()
@@ -669,7 +818,9 @@ export function run(root, opts, env = process.env) {
 export function why(root, opts, paths) {
   const { map, errors } = loadMap(root, opts.map)
   if (errors.length) return { errors, bound: [] }
-  const { bindings } = expandEntries(map, listFiles(root))
+  const files = listFiles(root)
+  const up = upstreamState(root, map)
+  const { bindings } = expandEntries(map, files, files.concat(up.files), up.unavailable)
   return {
     errors: [],
     bound: paths.map((p) => ({
@@ -679,6 +830,56 @@ export function why(root, opts, paths) {
         .map((b) => (b.section ? `${b.doc} § ${b.section}` : b.doc)),
     })),
   }
+}
+
+// --drift: what moving each upstream pin to its clone's HEAD would flag.
+export function drift(root, opts) {
+  const { map, errors } = loadMap(root, opts.map)
+  if (errors.length) return { errors, warnings: [], upstreams: [] }
+  const files = listFiles(root)
+  const up = upstreamState(root, map)
+  const { bindings } = expandEntries(map, files, files.concat(up.files), up.unavailable)
+  const upstreams = []
+  for (const [name, { dir, sha }] of up.info) {
+    const head = git(dir, ['rev-parse', 'HEAD']).trim()
+    const changed =
+      head === sha
+        ? []
+        : git(dir, [
+            'diff',
+            '--no-color',
+            '--no-ext-diff',
+            '--name-only',
+            '--no-renames',
+            '-z',
+            sha,
+            head,
+          ])
+            .split('\0')
+            .filter(Boolean)
+            .map((f) => `${name}:${f}`)
+    const sections = new Map()
+    for (const b of bindings) {
+      if (anyMatch(map.frozen, b.doc)) continue
+      const hits = changed.filter((f) => matchesCovers(b.covers, f))
+      if (hits.length === 0) continue
+      const where = b.section ? `${b.doc} § ${b.section}` : b.doc
+      const prior = sections.get(where)
+      if (!prior) sections.set(where, { section: where, mode: b.mode, changed: hits })
+      else {
+        if (b.mode === 'fail') prior.mode = 'fail'
+        for (const h of hits) if (!prior.changed.includes(h)) prior.changed.push(h)
+      }
+    }
+    upstreams.push({
+      name,
+      pin: sha,
+      head,
+      changed: changed.length,
+      sections: [...sections.values()],
+    })
+  }
+  return { errors: up.errors, warnings: up.warnings, upstreams }
 }
 
 // ---------- output ----------
@@ -752,7 +953,7 @@ function main() {
     return print(
       readFileSync(new URL(import.meta.url), 'utf8')
         .split('\n')
-        .slice(2, 15)
+        .slice(2, 16)
         .map((l) => l.replace(/^\/\/ ?/, ''))
         .join('\n'),
     )
@@ -763,6 +964,31 @@ function main() {
     else
       for (const b of r.bound)
         print(`${b.file}\n${b.sections.map((s) => `  ${s}`).join('\n') || '  (no doc section)'}`)
+    process.exit(r.errors.length ? 1 : 0)
+  }
+  if (opts.drift) {
+    const r = drift(root, opts)
+    if (opts.json) print(JSON.stringify(r, null, 2))
+    else {
+      for (const e of r.errors) print(`error: ${e}`)
+      for (const w of r.warnings) print(`warning: ${w}`)
+      for (const u of r.upstreams) {
+        print(
+          u.pin === u.head
+            ? `${u.name}: the pin is current (${u.pin.slice(0, 12)})`
+            : `${u.name}: ${u.changed} file${u.changed === 1 ? '' : 's'} changed from ${u.pin.slice(0, 12)} to ${u.head.slice(0, 12)}; ${u.sections.length} bound section${u.sections.length === 1 ? '' : 's'} to review`,
+        )
+        for (const s of u.sections)
+          print(
+            `  ${s.section} (${s.mode})\n${s.changed
+              .slice(0, 10)
+              .map((f) => `    ${f}`)
+              .join(
+                '\n',
+              )}${s.changed.length > 10 ? `\n    ... and ${s.changed.length - 10} more` : ''}`,
+          )
+      }
+    }
     process.exit(r.errors.length ? 1 : 0)
   }
   let result

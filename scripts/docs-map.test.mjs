@@ -16,6 +16,7 @@ import {
   findBlocks,
   readAcks,
   run,
+  drift,
 } from './docs-map.mjs'
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'docs-map.mjs')
@@ -503,5 +504,157 @@ test('frozen and unbound lists take ! exclusions', () => {
     )
   } finally {
     r.cleanup()
+  }
+})
+
+test('upstreams: prefixed covers match at the pin; a pin bump flags bound docs', () => {
+  const up = repo({ 'src/verbs.ts': 'a', 'src/other.ts': 'a', 'README.md': '# up\n' })
+  const sha = () => up.git('rev-parse', 'HEAD').trim()
+  const first = sha()
+  const map = {
+    version: 1,
+    docs: ['**/*.md', 'site/*.tsx'],
+    upstreams: { up: { repo: 'example/up', ref: 'upstream/up.ref', path: '.upstream/up' } },
+    entries: [
+      { doc: 'site/Verbs.tsx', covers: ['up:src/verbs.ts'] },
+      { doc: 'README.md', covers: ['src/**', 'up:README.md'], mode: 'warn' },
+    ],
+  }
+  const r = repo({
+    '.gitignore': '.upstream/\n',
+    'README.md': '# site\n',
+    'src/a.ts': '1',
+    'site/Verbs.tsx': 'export const VERBS = ["a"]\n',
+    'upstream/up.ref': `# pinned upstream commit\n${first}\n`,
+    'docs/docs-map.json': map,
+  })
+  try {
+    const opts = { map: 'docs/docs-map.json' }
+    // No clone: a warning, and the upstream globs are skipped.
+    let res = run(r.root, opts)
+    assert.deepEqual(res.errors, [])
+    assert.match(res.warnings[0], /upstream up: no clone at \.upstream\/up/)
+
+    execFileSync('git', ['clone', '-q', up.root, join(r.root, '.upstream/up')])
+    res = run(r.root, opts)
+    assert.deepEqual([res.errors, res.warnings], [[], []])
+
+    // A prefixed glob that matches nothing upstream is a stale entry, and a
+    // local glob never matches an upstream file.
+    r.put({
+      'docs/docs-map.json': {
+        ...map,
+        entries: [
+          { doc: 'site/Verbs.tsx', covers: ['up:src/gone.ts'] },
+          { doc: 'README.md', covers: ['**/verbs.ts', 'src/**'] },
+        ],
+      },
+    })
+    assert.deepEqual(run(r.root, opts).errors, [
+      'entries[0] site/Verbs.tsx: covers glob "up:src/gone.ts" matches no file',
+      'entries[1] README.md: covers glob "**/verbs.ts" matches no file',
+    ])
+    r.commit('restore map', { 'docs/docs-map.json': map })
+
+    // Upstream moves; the branch bumps the pin and leaves the page alone.
+    up.commit('change verbs', { 'src/verbs.ts': 'b', 'src/other.ts': 'b' })
+    execFileSync('git', ['-C', join(r.root, '.upstream/up'), 'pull', '-q'])
+    r.branch('bump')
+    r.commit('bump pin', { 'upstream/up.ref': `${sha()}\n` })
+    res = run(r.root, { ...opts, base: 'main' })
+    assert.deepEqual(
+      res.flags.map((f) => [f.key, f.mode, f.changed]),
+      [['site/Verbs.tsx', 'fail', ['up:src/verbs.ts']]],
+    )
+    // Editing the page clears it, as for any whole-file doc.
+    r.put({ 'site/Verbs.tsx': 'export const VERBS = ["a", "b"]\n' })
+    assert.deepEqual(run(r.root, { ...opts, base: 'main' }).flags, [])
+
+    // A pin the clone does not have is an error.
+    r.put({ 'upstream/up.ref': `${'0'.repeat(40)}\n` })
+    assert.match(run(r.root, opts).errors[0], /does not have 0{40}; fetch with full history/)
+    r.put({ 'upstream/up.ref': 'main\n' })
+    assert.deepEqual(run(r.root, opts).errors, [
+      'upstream up: upstream/up.ref must hold one 40-character commit SHA',
+    ])
+  } finally {
+    r.cleanup()
+    up.cleanup()
+  }
+})
+
+test('upstreams: a pin new on the branch sets a baseline and flags nothing', () => {
+  const up = repo({ 'src/verbs.ts': 'a' })
+  const r = repo({
+    'README.md': '# site\n',
+    '.gitignore': '.upstream/\n',
+    'docs/docs-map.json': { version: 1, entries: [{ doc: 'README.md', covers: ['.gitignore'] }] },
+  })
+  try {
+    execFileSync('git', ['clone', '-q', up.root, join(r.root, '.upstream/up')])
+    r.branch('add')
+    r.commit('add upstream', {
+      'upstream/up.ref': `${up.git('rev-parse', 'HEAD').trim()}\n`,
+      'site/Verbs.tsx': 'x\n',
+      'docs/docs-map.json': {
+        version: 1,
+        upstreams: { up: { ref: 'upstream/up.ref', path: '.upstream/up' } },
+        entries: [
+          { doc: 'README.md', covers: ['.gitignore'] },
+          { doc: 'site/Verbs.tsx', covers: ['up:src/**'] },
+        ],
+      },
+    })
+    const res = run(r.root, { map: 'docs/docs-map.json', base: 'main' })
+    assert.deepEqual([res.errors, res.flags], [[], []])
+  } finally {
+    r.cleanup()
+    up.cleanup()
+  }
+})
+
+test('upstreams: --drift lists the sections a pin move would flag', () => {
+  const up = repo({ 'src/verbs.ts': 'a', 'src/other.ts': 'a' })
+  const pin = up.git('rev-parse', 'HEAD').trim()
+  const r = repo({
+    '.gitignore': '.upstream/\n',
+    'README.md': '# site\n\n## Verbs\n\nattest, recall\n',
+    'upstream/up.ref': `${pin}\n`,
+    'docs/docs-map.json': {
+      version: 1,
+      upstreams: { up: { ref: 'upstream/up.ref', path: '.upstream/up' } },
+      entries: [
+        { doc: 'README.md', section: 'Verbs', covers: ['up:src/verbs.ts'] },
+        { doc: 'README.md', section: 'Verbs', covers: ['up:src/**'], mode: 'warn' },
+      ],
+    },
+  })
+  try {
+    const clone = join(r.root, '.upstream/up')
+    execFileSync('git', ['clone', '-q', up.root, clone])
+    const opts = { map: 'docs/docs-map.json' }
+    assert.deepEqual(drift(r.root, opts).upstreams, [
+      { name: 'up', pin, head: pin, changed: 0, sections: [] },
+    ])
+    up.commit('change', { 'src/verbs.ts': 'b', 'src/other.ts': 'b' })
+    execFileSync('git', ['-C', clone, 'pull', '-q'])
+    const [u] = drift(r.root, opts).upstreams
+    assert.equal(u.changed, 2)
+    assert.deepEqual(u.sections, [
+      {
+        section: 'README.md § Verbs',
+        mode: 'fail',
+        changed: ['up:src/verbs.ts', 'up:src/other.ts'],
+      },
+    ])
+    const cli = spawnSync('node', [SCRIPT, '--drift'], { cwd: r.root, encoding: 'utf8' })
+    assert.equal(cli.status, 0)
+    assert.match(
+      cli.stdout,
+      /^up: 2 files changed from \w{12} to \w{12}; 1 bound section to review\n {2}README\.md § Verbs \(fail\)\n/,
+    )
+  } finally {
+    r.cleanup()
+    up.cleanup()
   }
 })
