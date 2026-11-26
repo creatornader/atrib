@@ -481,3 +481,27 @@ test('plain mode ignores untracked files; CRLF docs render and keep their ending
     r.cleanup()
   }
 })
+
+test('frozen and unbound lists take ! exclusions', () => {
+  const r = repo({
+    'plans/old.md': '# old\n',
+    'plans/live.md': '# live\n',
+    'src/a.js': '1',
+    'docs/docs-map.json': {
+      version: 1,
+      frozen: ['plans/**', '!plans/live.md'],
+      entries: [{ doc: 'plans/live.md', covers: ['src/a.js'] }],
+    },
+  })
+  try {
+    assert.deepEqual(run(r.root, { map: 'docs/docs-map.json' }).errors, [])
+    r.branch('f')
+    r.commit('c', { 'src/a.js': '2' })
+    assert.deepEqual(
+      run(r.root, { map: 'docs/docs-map.json', base: 'main' }).flags.map((f) => f.key),
+      ['plans/live.md'],
+    )
+  } finally {
+    r.cleanup()
+  }
+})

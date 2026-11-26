@@ -164,7 +164,8 @@ export function matchesCovers(covers, path) {
   return hit
 }
 
-const anyMatch = (globs, path) => (globs || []).some((g) => globMatch(g, path))
+// Glob lists in the map (docs, ignore, frozen, unbound) take ! exclusions too.
+const anyMatch = (globs, path) => matchesCovers(globs || [], path)
 
 // ---------- markdown ----------
 
