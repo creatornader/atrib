@@ -83,6 +83,7 @@ atrib/
     check-release-publish-readiness.mjs # Release preflight. Verifies every Changesets-publishable workspace package already exists on npm, while first-publish-pending packages stay in `.changeset/config.json` ignore.
     check-mcp-v2-owned-surfaces.mjs # MCP v2 source and publish-archive inventory gate. Uses pnpm pack so workspace dependencies match the publish-ready manifest.
     check-mcp-v2-packed-runtime.mjs # Fresh-installs every published MCP v2 surface and its atrib dependency closure from local pnpm archives. Checks stdio and daemon HTTP negotiation, tool execution, invalid-input rejection, recovery, signed mirrors, and wrapper configuration with the installed client and isolated local endpoints.
+    docs-map.mjs                 # Docs map check, shared byte for byte with atrib's other repos. Reads docs/docs-map.json (which doc sections describe which code), fails on a stale map, and on a pull request flags sections whose code changed while they did not. See "Docs map" below.
   metrics/                     # Dated JSON snapshots from `pnpm --filter @atrib/log-node metrics` and `pnpm metrics:npm-downloads` (npm + PyPI download counts per package, current/deprecated tagged)
   packages/
     mcp/                       # @atrib/mcp: MCP server middleware (public)
