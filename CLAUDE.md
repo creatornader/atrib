@@ -238,7 +238,19 @@ records its core field, compatibility and degradation decisions.
 ## Sync triggers
 
 The full event-to-doc mapping lives at [`DOC-SYNC-TRIGGERS.md`](DOC-SYNC-TRIGGERS.md) (73 rows; the `doc-sync-triggers-row-count` check keeps this claim honest). It was extracted from this file so the hub doc stays under the 40k-char SessionStart performance threshold. Both files are authoritative; this section is the quick reference, the linked file is the canonical source.
-A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (run via `pnpm doc-sync` and integrated into CI). It detects number-word drift between canonical sources and target documents (edge type count, node type count, dashboard view count, public package count, workspace package list completeness, payment detection-case count, evidence profile count, DOC-SYNC-TRIGGERS row count). When adding a new "<word> <thing>" claim that should remain synchronized with an enumeration, extend the script with a new check to avoid reliance on manual review.
+A subset of triggers is mechanically enforced by `scripts/check-doc-sync.mjs` (run via `pnpm doc-sync` and integrated into CI). It detects number-word drift between canonical sources and target documents (edge type count, node type count, dashboard view count, public package count, workspace package list completeness, payment detection-case count, evidence profile count, DOC-SYNC-TRIGGERS row count) and checks that the framework adapter tables and the CLI's README sections name what the code exports. When adding a new "<word> <thing>" claim that should remain synchronized with an enumeration, extend the script with a new check to avoid reliance on manual review.
+
+### Docs map
+
+[`docs/docs-map.json`](docs/docs-map.json) binds each doc, or a section of one, to the code it describes. [`scripts/docs-map.mjs`](scripts/docs-map.mjs) checks it, in `pnpm doc-sync` and as a pull-request step in CI. It fails when a mapped doc, heading or path is gone or a doc is in no entry. On a pull request it also flags each section whose code the branch changed while the section stayed untouched.
+
+Before asking for review, run `node scripts/docs-map.mjs --base origin/main`. For each flag, edit the section in the same PR, or put a line in a commit message that says why it needs no edit:
+
+```
+docs-map: packages/mcp/README.md: internal refactor, public API unchanged
+```
+
+A section is named by its heading's anchor (`README.md#packages`). Flags on `fail` entries fail CI until edited or acknowledged; `warn` entries only report. Add a new doc to the map in the PR that adds it. DOC-SYNC-TRIGGERS rows that name code paths belong in the map; event rows stay prose.
 
 ### Quick reference (most-frequent triggers)
 

@@ -2,28 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * atrib CLI entry point (§5.6.1).
- *
- * Subcommands:
- *   keygen [--keychain] [--service NAME]    Generate an Ed25519 keypair.
- *   export-pubkey --keychain [--service NAME]   Print the pubkey for a Keychain entry.
- *   delete-key --keychain [--service NAME]   Remove a Keychain entry.
- *   delegate [--keychain [--service NAME] | --key-file PATH] --scope PATH --ttl SECONDS
- *            [--context HEX] [--not-before UNIX_MS]
- *                                            Issue a §1.11 certificate for
- *                                            a new ephemeral run key.
- *   publish-claim --keychain [--service NAME] [--display-name NAME] [--organization ORG] [--email EMAIL] [--url URL]
- *                  [--directory URL] [--capabilities-file PATH] [--tool-names CSV] [--event-types CSV]
- *                  [--max-amount-currency USD --max-amount-value 100] [--counterparties CSV] [--expires-at ISO8601]
- *                                            Publish an IdentityClaim (§6.1) to the
- *                                            directory, optionally with a §6.7 capability
- *                                            envelope. Reads the seed from Keychain.
- *   identity init --principal NAME --workspace NAME --agent NAME
- *                 [--profile NAME] [--principal-kind human|organization]
- *                 [--scope PATH] [--ttl SECONDS] [--context HEX] [--log URL] [--publish]
- *                                            Create or recover a named identity
- *                                            profile and issue an ephemeral run.
- *   identity show [--profile NAME]            Inspect and verify a named profile.
+ * atrib CLI entry point (§5.6.1). The subcommands and their flags are
+ * documented once, in HELP below; packages/cli/README.md has a section per
+ * subcommand, and doc-sync checks the two name the same commands.
  */
 
 import {
@@ -67,7 +48,9 @@ import {
 } from './identity.js'
 import type { IdentityKeySource, IdentityProfile, PrincipalKind } from './identity.js'
 
-const VERSION = '0.2.1'
+// The version is package.json's, so `atrib --version` cannot drift from the
+// published release. npm always ships package.json beside dist/.
+const VERSION: string = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 
 const HELP = `atrib CLI v${VERSION}
 

@@ -1,0 +1,253 @@
+{
+  "version": 1,
+  "mode": "fail",
+  "ignore": [
+    "node_modules/**",
+    "**/node_modules/**",
+    ".changeset/*.md",
+    ".github/ISSUE_TEMPLATE/**",
+    ".claude/**"
+  ],
+  "frozen": [
+    "**/CHANGELOG.md",
+    "docs/adr-draft-*.md",
+    "docs/*-charter.md",
+    "docs/attest-recall-rename-impact.md",
+    "docs/atrib-sdk-session-brief.md",
+    "docs/recall-vector-layer-research.md",
+    "docs/redesign-upgrade-path.md",
+    "docs/traces-integration-research.md",
+    "docs/website-redesign-relay.md",
+    "proof-packets/**"
+  ],
+  "unbound": [
+    "CODE_OF_CONDUCT.md",
+    "GOVERNANCE.md",
+    "SECURITY.md",
+    "PRIOR-ART.md",
+    "DECISIONS.md",
+    "DOC-SYNC-TRIGGERS.md",
+    "tasks/*.md",
+    "docs/concepts/*.md",
+    "docs/proof-x401-open-threads.md",
+    "docs/stateless-mcp-v2-follow-through.md",
+    ".changeset/README.md",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    "AGENTS.md",
+    "services/log/README.md",
+    "packages/integration/test/fixtures/*/README.md"
+  ],
+  "entries": [
+    {
+      "doc": "README.md",
+      "section": "Packages",
+      "covers": [
+        "packages/*/package.json",
+        "services/*/package.json",
+        "apps/*/package.json",
+        "pnpm-workspace.yaml"
+      ]
+    },
+    {
+      "doc": "README.md",
+      "section": "Framework support",
+      "covers": ["packages/agent/src/adapters/**", "packages/agent/src/index.ts"]
+    },
+    {
+      "doc": "README.md",
+      "section": "Payment-related completion detection",
+      "covers": ["packages/agent/src/transaction.ts", "spec/conformance/payments-profile/**"]
+    },
+    {
+      "doc": "README.md",
+      "section": "Open-source operating graph",
+      "covers": ["apps/operating-graph/src/**"],
+      "mode": "warn"
+    },
+    {
+      "doc": "README.md",
+      "section": "Try the demo",
+      "covers": ["packages/integration/examples/end-to-end/**"]
+    },
+    { "doc": "README.md", "section": "Key generation", "covers": ["packages/cli/src/**"] },
+    {
+      "doc": "README.md",
+      "covers": ["packages/*/src/index.ts", "services/*/src/index.ts"],
+      "mode": "warn"
+    },
+    {
+      "doc": "CLAUDE.md",
+      "section": "Repository structure",
+      "covers": [
+        "packages/*/package.json",
+        "services/*/package.json",
+        "apps/*/package.json",
+        "scripts/*.mjs",
+        "spec/conformance/*/manifest.json",
+        ".github/scripts/**"
+      ],
+      "mode": "warn"
+    },
+    {
+      "doc": "CLAUDE.md",
+      "section": "Monorepo",
+      "covers": [
+        "packages/*/package.json",
+        "services/*/package.json",
+        "apps/*/package.json",
+        "pnpm-workspace.yaml"
+      ]
+    },
+    {
+      "doc": "CLAUDE.md",
+      "section": "Dependencies",
+      "covers": ["packages/mcp/package.json", "packages/agent/package.json"],
+      "mode": "warn"
+    },
+    {
+      "doc": "CLAUDE.md",
+      "section": "Docs map",
+      "covers": ["scripts/docs-map.mjs", "docs/docs-map.json"]
+    },
+    {
+      "doc": "STATUS.md",
+      "covers": [
+        ".github/workflows/deploy-services.yml",
+        "services/*/fly.toml",
+        "packages/*/package.json",
+        "services/*/package.json"
+      ],
+      "mode": "warn"
+    },
+    {
+      "doc": "ARCHITECTURE.md",
+      "covers": ["packages/*/package.json", "services/*/package.json"],
+      "mode": "warn"
+    },
+    { "doc": "DESIGN.md", "covers": ["apps/dashboard/**", "!apps/dashboard/test/**"] },
+    {
+      "doc": "METRICS.md",
+      "covers": ["scripts/collect-npm-downloads.mjs", "services/log-node/scripts/metrics.mjs"]
+    },
+    {
+      "doc": "CONTRIBUTING.md",
+      "covers": ["package.json", ".github/workflows/ci.yml"],
+      "mode": "warn"
+    },
+    { "doc": "atrib-spec.md", "covers": ["spec/conformance/**"], "mode": "warn" },
+    {
+      "doc": "skills/atrib/SKILL.md",
+      "covers": [
+        "services/atrib-attest/src/**",
+        "services/atrib-recall/src/**",
+        "services/atribd/src/**"
+      ],
+      "mode": "warn"
+    },
+    {
+      "doc": "packages/*/README.md",
+      "covers": ["packages/$1/src/index.ts", "packages/$1/src/lib.rs", "packages/$1/package.json"]
+    },
+    {
+      "doc": "packages/*/README.md",
+      "covers": [
+        "packages/$1/src/**",
+        "packages/$1/scripts/**",
+        "packages/$1/Cargo.toml",
+        "packages/$1/build-wasm.sh"
+      ],
+      "mode": "warn"
+    },
+    {
+      "doc": "services/*/README.md",
+      "covers": [
+        "services/$1/src/index.ts",
+        "services/$1/src/server.ts",
+        "services/$1/package.json"
+      ]
+    },
+    {
+      "doc": "services/*/README.md",
+      "covers": ["services/$1/**", "!services/$1/**/*.md", "!services/$1/test/**"],
+      "mode": "warn"
+    },
+    {
+      "doc": "apps/*/README.md",
+      "covers": ["apps/$1/**", "!apps/$1/**/*.md", "!apps/$1/test/**"],
+      "mode": "warn"
+    },
+    {
+      "doc": "apps/operating-graph/conformance/README.md",
+      "covers": ["apps/operating-graph/conformance/**"]
+    },
+    {
+      "doc": "packages/agent/test/fixtures/*/README.md",
+      "covers": ["packages/agent/test/fixtures/$1/**"],
+      "mode": "warn"
+    },
+    {
+      "doc": "packages/integration/examples/**README.md",
+      "covers": ["packages/integration/examples/$1**", "!**/*.md"],
+      "mode": "warn"
+    },
+    {
+      "doc": "spec/conformance/**README.md",
+      "covers": ["spec/conformance/$1**", "!**/*.md"],
+      "mode": "warn"
+    },
+    { "doc": "python/README.md", "covers": ["python/src/**", "python/pyproject.toml"] },
+    { "doc": "policies/README.md", "covers": ["policies/*.json"] },
+    {
+      "doc": "docs/payments-profile.md",
+      "covers": [
+        "packages/agent/src/transaction.ts",
+        "packages/verify/src/payments.ts",
+        "packages/verify/src/calculate.ts",
+        "spec/conformance/payments-profile/**",
+        "spec/conformance/4.6/**"
+      ],
+      "mode": "warn"
+    },
+    {
+      "doc": "docs/evidence-profiles/*.md",
+      "covers": [
+        "packages/verify/src/evidence-envelope.ts",
+        "spec/conformance/evidence-envelope/**"
+      ],
+      "mode": "warn"
+    },
+    {
+      "doc": "docs/source-bound-evidence.md",
+      "covers": ["spec/conformance/1.12/**", "packages/verify/src/evidence-statements.ts"],
+      "mode": "warn"
+    },
+    {
+      "doc": "docs/extensions/dev.atrib-attribution/v0.1.md",
+      "covers": ["spec/conformance/mcp-extension/**"],
+      "mode": "warn"
+    },
+    {
+      "doc": "docs/independent-operator.md",
+      "covers": ["services/witness-node/src/**", "services/witness-node/Dockerfile"],
+      "mode": "warn"
+    },
+    { "doc": "docs/ots-pending-receipt-worker.md", "covers": ["scripts/upgrade-ots-receipts.mjs"] },
+    {
+      "doc": "docs/publishing-new-npm-package.md",
+      "covers": [
+        ".github/workflows/release.yml",
+        ".changeset/config.json",
+        "scripts/check-release-publish-readiness.mjs"
+      ]
+    },
+    {
+      "doc": "docs/publishing-new-pypi-package.md",
+      "covers": [".github/workflows/release-pypi.yml", "python/pyproject.toml"]
+    },
+    {
+      "doc": "docs/stateless-mcp-attribution-guide.md",
+      "covers": ["packages/mcp/src/**", "packages/mcp-wrap/src/**", "services/atribd/src/**"],
+      "mode": "warn"
+    }
+  ]
+}

@@ -1332,6 +1332,70 @@ function checkDocSyncTriggersRowCount() {
   ok(check, `DOC-SYNC-TRIGGERS.md has ${rows} rows, CLAUDE.md agrees`)
 }
 
+// Every framework adapter that @atrib/agent exports from src/adapters/ has a
+// row in both adapter tables: the README's "Framework support" and the
+// package README's unified adapter table.
+function checkFrameworkAdapterTables() {
+  const check = 'framework-adapter-tables'
+  const index = read('packages/agent/src/index.ts')
+  const exported = [...index.matchAll(/^export \{ (\w+) \} from '\.\/adapters\/[\w-]+\.js'/gm)].map((m) => m[1])
+  if (exported.length === 0) {
+    fail(check, 'no adapter exports found in packages/agent/src/index.ts')
+    return
+  }
+  const section = (text, heading) => {
+    const start = text.indexOf(`\n## ${heading}\n`)
+    if (start < 0) return null
+    const next = text.indexOf('\n## ', start + 1)
+    return text.slice(start, next < 0 ? undefined : next)
+  }
+  const targets = [
+    ['README.md', section(read('README.md'), 'Framework support')],
+    ['packages/agent/README.md', read('packages/agent/README.md')],
+  ]
+  const missing = []
+  for (const [file, text] of targets) {
+    if (text === null) {
+      fail(check, `${file}: "## Framework support" section not found`)
+      return
+    }
+    const rows = lines(text).filter((l) => l.startsWith('|')).join('\n')
+    for (const name of exported) if (!rows.includes(`\`${name}(`)) missing.push(`${file} has no table row for ${name}`)
+  }
+  if (missing.length) fail(check, missing.join('; '), { missing })
+  else ok(check, `${exported.length} adapter exports, both adapter tables list them`)
+}
+
+// The CLI documents its subcommands once, in HELP in packages/cli/src/cli.ts.
+// The package README has one "### `<subcommand>`" section per subcommand.
+function checkCliSubcommandSections() {
+  const check = 'cli-subcommand-sections'
+  const src = read('packages/cli/src/cli.ts')
+  const help = src.match(/const HELP = `([\s\S]*?)`\n/)
+  if (!help) {
+    fail(check, 'HELP not found in packages/cli/src/cli.ts')
+    return
+  }
+  const fromHelp = new Set(
+    [...help[1].matchAll(/^ {2}atrib ((?:identity )?[a-z][a-z-]*)/gm)].map((m) => m[1]).filter((c) => c !== 'help'),
+  )
+  const readme = read('packages/cli/README.md')
+  const fromReadme = new Set([...readme.matchAll(/^### `((?:identity )?[a-z][a-z-]*)/gm)].map((m) => m[1]))
+  const undocumented = [...fromHelp].filter((c) => !fromReadme.has(c))
+  const unknown = [...fromReadme].filter((c) => !fromHelp.has(c))
+  if (undocumented.length || unknown.length) {
+    fail(
+      check,
+      [
+        undocumented.length ? `in HELP but no README section: ${undocumented.join(', ')}` : '',
+        unknown.length ? `README section but not in HELP: ${unknown.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join('; '),
+    )
+  } else ok(check, `${fromHelp.size} CLI subcommands, packages/cli/README.md has a section for each`)
+}
+
 // ─── helpers ───────────────────────────────────────────────────────────────
 
 function capitalize(word) {
@@ -1351,6 +1415,8 @@ const checks = [
   checkPaymentProtocolCount,
   checkEvidenceProfileCount,
   checkDocSyncTriggersRowCount,
+  checkFrameworkAdapterTables,
+  checkCliSubcommandSections,
   checkPublicBoundaryWording,
   checkControlBytes,
   checkPrivateWordlist,
