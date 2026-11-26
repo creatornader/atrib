@@ -10153,7 +10153,8 @@ returns every signed copy.
    cannot displace the genuine copies. Unless the caller asked for
    unverified records, copies that fail the check also leave the count, the
    latest timestamp and the merged view. Signatures are checked for the
-   groups on the returned page only. Content search does not verify
+   groups that an annotation or revision points at, before the filters, and
+   for the groups on the returned page. Content search does not verify
    signatures, as before. In content search under a bounded window,
    "earliest" means earliest among the searched records.
 4. A group has no time bound, because the retries it exists for ran for
@@ -10217,13 +10218,16 @@ returns every signed copy.
   re-signing, which
   [D191](#d191-a-durable-outbox-carries-unconfirmed-records-across-processes)
   does.
-- An unverifiable copy can still move where a statement sorts before the
-  page is cut, because ordering does not wait for signature checks, and it
-  is still counted in `total` and `collapsed_duplicates`. Unless the caller
-  asks for unverified records, it never changes what the returned record
-  reports or which statements the importance, topic and `include_revised`
-  filters admit. Content search can show an
-  unverifiable copy as the kept one.
+- In history, an unverifiable copy can still move where a statement sorts
+  before the page is cut, because ordering does not wait for signature
+  checks. Its timestamp also feeds recency scoring, so it can carry an old
+  statement over the relevance noise floor. It is still counted in `total`
+  and `collapsed_duplicates`. Unless the caller asks for unverified
+  records, it never changes what the returned record reports or which
+  statements the importance, topic and `include_revised` filters admit.
+- Content search does not verify signatures. It can show an unverifiable
+  copy as the kept one, and counts and merges annotations across every
+  copy.
 
 **Cross-references.**
 

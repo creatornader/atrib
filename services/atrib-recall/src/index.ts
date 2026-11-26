@@ -1777,8 +1777,8 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
   // reduce default token weight in agent context windows.
   const limit = Math.max(1, Math.min(200, args.limit ?? 10))
   const page = filtered.slice(offset, offset + limit)
-  // Signatures are checked for the groups on this page only, which keeps a
-  // mirror with many groups cheap. The kept copy becomes the earliest one
+  // Groups no annotation or revision points at are checked here, for this
+  // page only, which keeps a mirror with many groups cheap. The kept copy becomes the earliest one
   // that verifies, so a damaged or forged line with an early timestamp
   // cannot stand in for the genuine copies and then be dropped. Unless the
   // caller asked for unverified records, copies that fail the check also
