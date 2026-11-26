@@ -57,6 +57,11 @@ const ARCHIVE_RECORDS_PATH = '/v1/records'
 const MAX_RETRIES = 3
 const INITIAL_BACKOFF_MS = 1000
 const MAX_WINDOW_MS = 30_000
+const RESEND_TIMEOUT_MS = 10_000
+const RESEND_INTERVAL_MS = 60_000
+// §2.6.1 statuses that refuse the record itself: malformed or invalid (400),
+// too large (413), unprocessable (422). No retry can change the answer.
+const RECORD_REFUSED_STATUSES = new Set([400, 413, 422])
 const DEFAULT_ARCHIVE_TIMEOUT_MS = 5000
 /**
  * Default cap on the number of unsubmitted records held in memory while the
@@ -198,7 +203,7 @@ export interface SubmissionOutboxEntry {
 export interface SubmissionOutbox {
   /** Persist a record before its first submission attempt. */
   put(recordHash: string, entry: SubmissionOutboxEntry, endpoint: string): Promise<void>
-  /** Forget a record the log confirmed or permanently rejected. */
+  /** Forget a record the log confirmed or refused as invalid. */
   remove(recordHash: string): Promise<void>
   /**
    * Return records earlier processes left unconfirmed for `endpoint` that
@@ -211,9 +216,11 @@ export interface SubmissionOutbox {
 export interface SubmissionQueueOptions {
   /**
    * Optional durable outbox. When set, every submitted record is persisted
-   * until the log confirms it, and creating the queue resends records that
-   * earlier processes left unconfirmed. The resend is non-blocking and is
-   * awaited by `flush()` like any other submission. Submission to the log
+   * until the log confirms it or refuses the record itself. Creating the
+   * queue resends records that earlier processes left unconfirmed, and a
+   * long-lived queue looks again when it submits, at most once a minute.
+   * The resend is non-blocking and is awaited by `flush()` like any other
+   * submission. Submission to the log
    * is idempotent (§2.6.1 step 6), so a resend of an already-logged record
    * returns the existing proof.
    */
@@ -385,6 +392,9 @@ export function createSubmissionQueue(
             'X-atrib-Priority': priority,
           },
           body: JSON.stringify(record),
+          // A resend runs at start-up inside the caller's flush deadline, so
+          // one stalled connection must not hold every other resend back.
+          ...(mode === 'resend' ? { signal: AbortSignal.timeout(RESEND_TIMEOUT_MS) } : {}),
         })
 
         if (response.ok) {
@@ -419,7 +429,11 @@ export function createSubmissionQueue(
         if (response.status >= 400 && response.status < 500) {
           console.warn(`atrib: log submission rejected (${response.status})`, { record_hash: hash })
           pendingRecords.delete(hash)
-          await forgetInOutbox(hash)
+          // Only a status that says the record itself is unacceptable ends
+          // its durable life. A 401, 403, 404 or 429 usually comes from
+          // something in front of the log, or from the log on a bad day,
+          // and the same record may be accepted later.
+          if (RECORD_REFUSED_STATUSES.has(response.status)) await forgetInOutbox(hash)
           return
         }
       } catch {
@@ -463,17 +477,29 @@ export function createSubmissionQueue(
       due.map((entry) => {
         // The filename is not trusted: a record is resent only under the
         // hash this queue computes for it.
-        if (recordHash(entry.record) !== entry.recordHash) return Promise.resolve()
+        if (recordHash(entry.record) !== entry.recordHash) return forgetInOutbox(entry.recordHash)
         return submitWithRetry(entry.record, entry.priority, undefined, 'resend')
       }),
     )
   }
 
-  if (outbox) track(resendUnconfirmed(outbox))
+  let lastResendAt = 0
+  function resendIfDue(): void {
+    if (!outbox) return
+    const now = Date.now()
+    if (now - lastResendAt < RESEND_INTERVAL_MS) return
+    lastResendAt = now
+    track(resendUnconfirmed(outbox))
+  }
+
+  resendIfDue()
 
   return {
     submit(record: AtribRecord, priority: Priority, sidecar?: SubmissionSidecar): void {
       track(submitWithRetry(record, priority, sidecar))
+      // A daemon builds its queue once and lives for days, so it looks for
+      // records other processes left behind whenever it has work of its own.
+      resendIfDue()
     },
 
     getProof(hash: string): ProofBundle | undefined {

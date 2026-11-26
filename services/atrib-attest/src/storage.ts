@@ -27,6 +27,7 @@
 // defaults to ATRIB_MIRROR_FILE, then to a per-agent file under
 // ~/.atrib/records.
 
+import { createFileSubmissionOutbox, type SubmissionOutbox } from '@atrib/mcp'
 import { appendFile, mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -94,4 +95,24 @@ export async function mirrorRecord(
   } catch (e) {
     console.warn('atrib-emit: mirror append failed', e instanceof Error ? e.message : String(e))
   }
+}
+
+const SUBMISSION_OUTBOX_DIR_NAME = '.atrib-submission-outbox-v1'
+
+/**
+ * The durable outbox kept beside a mirror file. A signer killed after it
+ * mirrored a record but before the log confirmed it leaves an entry here,
+ * and the next write process that shares the mirror directory resends it.
+ * `ATRIB_SUBMISSION_OUTBOX=off` disables it for a host that wants none.
+ */
+export function resolveSubmissionOutbox(
+  option: SubmissionOutbox | false | undefined,
+  mirrorPath: string | undefined,
+): SubmissionOutbox | undefined {
+  if (option === false) return undefined
+  if (option !== undefined) return option
+  if (process.env['ATRIB_SUBMISSION_OUTBOX'] === 'off') return undefined
+  return createFileSubmissionOutbox({
+    dir: join(dirname(resolveMirrorWritePath(mirrorPath)), SUBMISSION_OUTBOX_DIR_NAME),
+  })
 }

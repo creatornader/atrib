@@ -17,6 +17,7 @@
 import { mkdtemp, readdir, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import * as ed from '@noble/ed25519'
@@ -437,7 +438,11 @@ describe('emitInProcess resends records an earlier call left unconfirmed', () =>
     const addr = server.address()
     if (!addr || typeof addr === 'string') throw new Error('no address')
     const url = `http://127.0.0.1:${addr.port}/v1/entries`
-    const outboxDir = join(tmpDir, '.atrib-submission-outbox-v1')
+    const outboxDir = join(
+      tmpDir,
+      '.atrib-submission-outbox-v1',
+      createHash('sha256').update(url).digest('hex').slice(0, 16),
+    )
 
     try {
       const first = await emitInProcess(
@@ -460,7 +465,11 @@ describe('emitInProcess resends records an earlier call left unconfirmed', () =>
         { key: { privateKey: seed, source: 'env' }, logEndpoint: url },
       )
       expect(second.log_index).not.toBeNull()
-      const delivered = received.map((r) => `sha256:${hexEncode(sha256(canonicalRecord(r)))}`)
+      // The first call's own retries may also have landed; the log treats a
+      // repeat as the same record.
+      const delivered = [
+        ...new Set(received.map((r) => `sha256:${hexEncode(sha256(canonicalRecord(r)))}`)),
+      ]
       expect(delivered.sort()).toEqual([first.record_hash, second.record_hash].sort())
       expect(await readdir(outboxDir)).toEqual([])
     } finally {

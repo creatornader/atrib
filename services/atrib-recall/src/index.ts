@@ -192,7 +192,12 @@ import { extractRecordHashFieldsFromMcpResult, registerTraceTools } from './trac
 import { registerVerifyTool } from './verification.js'
 import type { EdgeType } from './graph.js'
 import { synthesizeDisplaySummary, resolveDisplayProducer, formatAge } from './legibility.js'
-import { collapseDuplicates, duplicateKeyForRecord } from './duplicates.js'
+import {
+  collapseDuplicateGroups,
+  duplicateBucketForRecord,
+  duplicateKeyForRecord,
+  findDuplicateGroups,
+} from './duplicates.js'
 
 const ATRIB_RECORD_FILE = process.env.ATRIB_RECORD_FILE
 const ATRIB_MIRROR_DIR = process.env.ATRIB_MIRROR_DIR ?? join(homedir(), '.atrib', 'records')
@@ -259,8 +264,7 @@ type ContentIndexEntry = {
   tool_call_score_factor: number
   /**
    * Shared by every re-signed copy of one statement (see duplicates.ts).
-   * Optional and unversioned: an index written before this field existed
-   * simply collapses nothing until the next mirror change rebuilds it.
+   * Present only on entries that share a statement with another entry.
    */
   duplicate_key?: string
 }
@@ -275,6 +279,11 @@ type ContentIndexFile = {
   mirror_stats: MirrorFileStat[]
   total_records: number
   created_at: string
+  /**
+   * Entries carry `duplicate_key`. An index without this marker predates
+   * the field and is rebuilt, so a stale index never hides the collapse.
+   */
+  duplicate_keys: true
   entries: ContentIndexEntry[]
 }
 
@@ -634,18 +643,34 @@ function contentIndexFileFromLoaded(snapshot: LoadedMirrorSnapshot): ContentInde
     mirror_stats: snapshot.stats,
     total_records: snapshot.loaded.length,
     created_at: new Date().toISOString(),
-    entries: snapshot.loaded.map((lr) => contentIndexEntryFromLoaded(lr, snapshot)),
+    duplicate_keys: true,
+    entries: contentIndexEntriesFromLoaded(snapshot),
   }
+}
+
+function contentIndexEntriesFromLoaded(snapshot: LoadedMirrorSnapshot): ContentIndexEntry[] {
+  // Only records that share a bucket can be copies, so only those are keyed.
+  const bucketSizes = new Map<string, number>()
+  for (const lr of snapshot.loaded) {
+    const bucket = duplicateBucketForRecord(lr.record)
+    if (bucket !== undefined) bucketSizes.set(bucket, (bucketSizes.get(bucket) ?? 0) + 1)
+  }
+  return snapshot.loaded.map((lr) => {
+    const bucket = duplicateBucketForRecord(lr.record)
+    const shared = bucket !== undefined && (bucketSizes.get(bucket) ?? 0) > 1
+    return contentIndexEntryFromLoaded(lr, snapshot, shared)
+  })
 }
 
 function contentIndexEntryFromLoaded(
   lr: LoadedRecord,
   snapshot: LoadedMirrorSnapshot,
+  sharesDuplicateBucket: boolean,
 ): ContentIndexEntry {
   const annotations = snapshot.annotationsByRecord.get(lr.record_hash)
   const toolName = (lr.record as AtribRecord & { tool_name?: string }).tool_name
   const displayProducer = resolveDisplayProducer(lr.record, lr.producer)
-  const duplicateKey = duplicateKeyOf(lr)
+  const duplicateKey = sharesDuplicateBucket ? duplicateKeyOf(lr) : undefined
   return {
     record_hash: lr.record_hash,
     event_type: lr.record.event_type,
@@ -667,7 +692,7 @@ function contentSearchSnapshotFromLoaded(
   snapshot: LoadedMirrorSnapshot,
   index: ContentIndexStatus,
 ): ContentSearchSnapshot {
-  const entries = snapshot.loaded.map((lr) => contentIndexEntryFromLoaded(lr, snapshot))
+  const entries = contentIndexEntriesFromLoaded(snapshot)
   return {
     signature: snapshot.signature,
     stats: snapshot.stats,
@@ -723,6 +748,7 @@ function validateContentIndexFile(
   }
   if (!Array.isArray(obj.mirror_stats)) return undefined
   if (typeof obj.created_at !== 'string') return undefined
+  if (obj.duplicate_keys !== true) return undefined
   const entries = obj.entries.map(normalizeContentIndexEntry)
   if (entries.some((entry) => entry === undefined)) return undefined
   return {
@@ -736,6 +762,7 @@ function validateContentIndexFile(
     mirror_stats: fingerprint.stats,
     total_records: obj.total_records,
     created_at: obj.created_at,
+    duplicate_keys: true,
     entries: entries as ContentIndexEntry[],
   }
 }
@@ -1108,7 +1135,8 @@ export interface RecallArgs {
   include_revised?: boolean
   /**
    * Re-signed copies of one statement collapse to the earliest copy, which
-   * then carries `duplicate_count`. Default true. Set false to list every
+   * then carries `duplicate_count` and `duplicate_latest_timestamp` and is
+   * ordered by its latest copy. Default true. Set false to list every
    * signed copy. See duplicates.ts for what counts as a copy.
    */
   collapse_duplicates?: boolean
@@ -1209,8 +1237,10 @@ type RecallRecordCompact = {
   annotations?: AnnotationSummary
   /** New in 0.5.0: record hashes of D059 revisions superseding this record. */
   superseded_by?: string[]
-  /** Later re-signed copies of this statement that were collapsed into it. */
+  /** Other signed copies of this statement that were collapsed into it. */
   duplicate_count?: number
+  /** Timestamp of the latest collapsed copy. Present with duplicate_count. */
+  duplicate_latest_timestamp?: number
   /**
    * New in 0.8.0 (Layer 1 v2 legibility): one-line human-legible
    * description. Annotation summary if present, else per-event_type
@@ -1247,6 +1277,7 @@ export type RecallRecordToc = {
   timestamp: number
   superseded_by?: string[]
   duplicate_count?: number
+  duplicate_latest_timestamp?: number
 }
 
 type RecallRecordFull = AtribRecord & {
@@ -1254,6 +1285,7 @@ type RecallRecordFull = AtribRecord & {
   annotations?: AnnotationSummary
   superseded_by?: string[]
   duplicate_count?: number
+  duplicate_latest_timestamp?: number
   local_content?: unknown
   local_producer?: string
 }
@@ -1321,6 +1353,7 @@ function rankByRelevance(
   annotationsByRecord: Map<string, AnnotationSummary>,
   rankAnchor: string | undefined,
   bm25Index?: BM25Index,
+  timestampOf: (lr: LoadedRecord) => number = (lr) => lr.record.timestamp,
 ): number {
   const now = Date.now()
   // Treat rank_anchor as a free-form query unless it parses as a record_hash
@@ -1346,7 +1379,7 @@ function rankByRelevance(
     const ann = annotationsByRecord.get(lr.record_hash)
     const suppressLifecycleAnchor = shouldSuppressLifecycleAnchorForQuery(lr, ann, queryTokens)
     const toolCallScoreFactor = operationalToolCallScoreFactor(lr, ann)
-    const r = recencyScore(lr.record.timestamp, now, ATRIB_RECALL_TAU_DAYS) * toolCallScoreFactor
+    const r = recencyScore(timestampOf(lr), now, ATRIB_RECALL_TAU_DAYS) * toolCallScoreFactor
     const i = suppressLifecycleAnchor ? 0 : importanceScore(ann)
     // Raw BM25 is unbounded and can saturate from one rare term in a long
     // query. Convert it to the bounded Park relevance component by clamping
@@ -1368,7 +1401,7 @@ function rankByRelevance(
     const sb = scores.get(b.record_hash) ?? 0
     if (sb !== sa) return sb - sa
     // Stable tie-break on timestamp newest-first.
-    return b.record.timestamp - a.record.timestamp
+    return timestampOf(b) - timestampOf(a)
   })
   // Return the top score so the caller can apply the anti-noise threshold
   // (Layer 1 v2: suppress low-confidence top-K rather than train the agent
@@ -1396,21 +1429,27 @@ function rankByCausalDistance(
   filtered: LoadedRecord[],
   all: LoadedRecord[],
   rankAnchor: string | undefined,
+  timestampOf: (lr: LoadedRecord) => number = (lr) => lr.record.timestamp,
+  // Hashes that count as the record for distance: a collapsed group is as
+  // near the anchor as its nearest copy.
+  hashesOf: (lr: LoadedRecord) => string[] = (lr) => [lr.record_hash],
 ): void {
   if (!rankAnchor || !/^sha256:[0-9a-f]{64}$/.test(rankAnchor)) {
     // Fall back to timestamp newest-first when the anchor is unusable;
     // matches the existing pre-Layer-1 default rather than leaving an
     // arbitrary order.
-    filtered.sort((a, b) => b.record.timestamp - a.record.timestamp)
+    filtered.sort((a, b) => timestampOf(b) - timestampOf(a))
     return
   }
   const graph = buildLocalGraph(all)
   const dist = shortestDistances(graph, rankAnchor)
+  const distanceOf = (lr: LoadedRecord): number =>
+    Math.min(...hashesOf(lr).map((hash) => dist.get(hash) ?? Number.POSITIVE_INFINITY))
   filtered.sort((a, b) => {
-    const da = dist.get(a.record_hash) ?? Number.POSITIVE_INFINITY
-    const db = dist.get(b.record_hash) ?? Number.POSITIVE_INFINITY
+    const da = distanceOf(a)
+    const db = distanceOf(b)
     if (da !== db) return da - db
-    return b.record.timestamp - a.record.timestamp
+    return timestampOf(b) - timestampOf(a)
   })
 }
 
@@ -1428,26 +1467,38 @@ type VerifiedBundle = {
   annotations?: AnnotationSummary
   superseded_by?: string[]
   duplicate_count?: number
+  duplicate_latest_timestamp?: number
   /** D062 `_local.content` carried through for Layer 1 v2 legibility. */
   content?: unknown
   /** D062 `_local.producer` carried through for Layer 1 v2 legibility. */
   producer?: string
 }
 
+const signatureVerdicts = new WeakMap<AtribRecord, boolean>()
+
+/** Local signature check, remembered per loaded record object. */
+async function signatureVerifies(record: AtribRecord): Promise<boolean> {
+  const known = signatureVerdicts.get(record)
+  if (known !== undefined) return known
+  let ok: boolean
+  try {
+    ok = await verifyRecord(record)
+  } catch {
+    ok = false
+  }
+  signatureVerdicts.set(record, ok)
+  return ok
+}
+
 async function annotateVerification(
   loaded: { record: AtribRecord; record_hash: string; content?: unknown; producer?: string }[],
   annotationsByRecord: Map<string, AnnotationSummary>,
   revisionsByRecord: Map<string, string[]>,
-  extraCopies?: Map<unknown, number>,
+  groupOf?: Map<unknown, { members: unknown[]; latestTimestamp: number }>,
 ): Promise<VerifiedBundle[]> {
   return Promise.all(
     loaded.map(async (lr) => {
-      let ok: boolean
-      try {
-        ok = await verifyRecord(lr.record)
-      } catch {
-        ok = false
-      }
+      const ok = await signatureVerifies(lr.record)
       const out: VerifiedBundle = {
         record: lr.record,
         record_hash: lr.record_hash,
@@ -1457,8 +1508,11 @@ async function annotateVerification(
       if (ann) out.annotations = ann
       const supers = revisionsByRecord.get(lr.record_hash)
       if (supers && supers.length > 0) out.superseded_by = supers
-      const copies = extraCopies?.get(lr)
-      if (copies !== undefined) out.duplicate_count = copies
+      const group = groupOf?.get(lr)
+      if (group) {
+        out.duplicate_count = group.members.length - 1
+        out.duplicate_latest_timestamp = group.latestTimestamp
+      }
       if (lr.content !== undefined) out.content = lr.content
       if (lr.producer !== undefined) out.producer = lr.producer
       return out
@@ -1484,6 +1538,9 @@ function compactify(bundles: VerifiedBundle[], now: number = Date.now()): Recall
     if (b.annotations) out.annotations = b.annotations
     if (b.superseded_by) out.superseded_by = b.superseded_by
     if (b.duplicate_count) out.duplicate_count = b.duplicate_count
+    if (b.duplicate_latest_timestamp !== undefined) {
+      out.duplicate_latest_timestamp = b.duplicate_latest_timestamp
+    }
     // Layer 1 v2 legibility fields. Always populated (the helpers fall
     // back to sentinels when source data is missing). Cheap to compute
     // and the agent-side cost of opaque hashes is non-trivial.
@@ -1500,6 +1557,9 @@ function fullify(bundles: VerifiedBundle[]): RecallRecordFull[] {
     if (b.annotations) out.annotations = b.annotations
     if (b.superseded_by) out.superseded_by = b.superseded_by
     if (b.duplicate_count) out.duplicate_count = b.duplicate_count
+    if (b.duplicate_latest_timestamp !== undefined) {
+      out.duplicate_latest_timestamp = b.duplicate_latest_timestamp
+    }
     if (b.content !== undefined) out.local_content = b.content
     if (b.producer !== undefined) out.local_producer = b.producer
     return out
@@ -1534,7 +1594,7 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
   const includeUnverified = args.include_unverified === true
 
   const snapshot = getLoadedMirrorSnapshot(recordFile)
-  const { loaded: all, files, annotationsByRecord, revisionsByRecord } = snapshot
+  const { loaded: all, files } = snapshot
 
   // Base recall is the broad "what do I know about X?" surface, so omitted
   // context_id defaults to cross-context history. D078/D083 env scoping remains
@@ -1558,6 +1618,67 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
   if (args.content_id) filtered = filtered.filter((lr) => lr.record.content_id === args.content_id)
   if (args.tool_name) filtered = filtered.filter((lr) => lr.record.tool_name === args.tool_name)
   if (args.args_hash) filtered = filtered.filter((lr) => lr.record.args_hash === args.args_hash)
+
+  // Collapse re-signed copies. This runs after the filters on signed fields,
+  // which every copy passes or fails together, and before the annotation and
+  // revision filters, which then see the whole group: an annotation or a
+  // revision aimed at any copy counts for the statement.
+  let groupOf: Map<LoadedRecord, { members: LoadedRecord[]; latestTimestamp: number }> | undefined
+  let collapsedDuplicates = 0
+  let annotationsByRecord = snapshot.annotationsByRecord
+  let revisionsByRecord = snapshot.revisionsByRecord
+  if (args.collapse_duplicates !== false) {
+    const groups = findDuplicateGroups(filtered, (lr) => ({
+      bucket: duplicateBucketForRecord(lr.record),
+      key: () => duplicateKeyOf(lr),
+      timestamp: lr.record.timestamp,
+      recordHash: lr.record_hash,
+    }))
+    if (groups.length > 0) {
+      // The kept copy is the earliest one whose signature verifies, so a
+      // damaged or forged line with an early timestamp cannot stand in for
+      // the genuine copies and then be dropped as unverified.
+      const chosen = new Map<unknown, LoadedRecord>()
+      for (const group of groups) {
+        let kept = group.members[0] as LoadedRecord
+        if (!includeUnverified) {
+          for (const member of group.members) {
+            if (await signatureVerifies(member.record)) {
+              kept = member
+              break
+            }
+          }
+        }
+        chosen.set(group, kept)
+      }
+      const collapse = collapseDuplicateGroups(
+        filtered,
+        groups,
+        (group) => chosen.get(group) as LoadedRecord,
+      )
+      filtered = collapse.kept
+      groupOf = collapse.groupOf
+      collapsedDuplicates = collapse.collapsed
+      annotationsByRecord = new Map(annotationsByRecord)
+      revisionsByRecord = new Map(revisionsByRecord)
+      for (const [kept, group] of collapse.groupOf) {
+        const annotations = mergeGroupAnnotations(kept, group.members, snapshot.annotationsByRecord)
+        if (annotations) annotationsByRecord.set(kept.record_hash, annotations)
+        const revisions = [
+          ...new Set(
+            group.members.flatMap((m) => snapshot.revisionsByRecord.get(m.record_hash) ?? []),
+          ),
+        ]
+        if (revisions.length > 0) revisionsByRecord.set(kept.record_hash, revisions)
+      }
+    }
+  }
+  // A collapsed statement is ordered by its latest copy, so a statement
+  // that was said again still sorts after what was said in between.
+  const timestampOf = (lr: LoadedRecord): number =>
+    groupOf?.get(lr)?.latestTimestamp ?? lr.record.timestamp
+  const hashesOf = (lr: LoadedRecord): string[] =>
+    groupOf?.get(lr)?.members.map((m) => m.record_hash) ?? [lr.record_hash]
 
   // Layer 1 filters (consume the annotation + revision aggregations).
   if (args.min_importance) {
@@ -1593,35 +1714,23 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
     })
   }
 
-  // Collapse re-signed copies after filtering, so a copy that fails a
-  // filter never stands in for one that passes, and before ranking and
-  // paging, so `total` and the page both count statements, not copies.
-  let extraCopies: Map<unknown, number> | undefined
-  let collapsedDuplicates = 0
-  if (args.collapse_duplicates !== false) {
-    const collapse = collapseDuplicates(filtered, (lr) => ({
-      key: duplicateKeyOf(lr),
-      timestamp: lr.record.timestamp,
-      recordHash: lr.record_hash,
-    }))
-    if (collapse.collapsed > 0) {
-      filtered = collapse.kept
-      extraCopies = collapse.extraCopies
-      collapsedDuplicates = collapse.collapsed
-    }
-  }
-
   // Sort: timestamp (default, newest first), Park et al. relevance, or
   // BFS shortest-path causal distance from rank_anchor.
   let relevanceTopScore: number | undefined
   if (args.rank_by === 'relevance') {
-    relevanceTopScore = rankByRelevance(filtered, annotationsByRecord, args.rank_anchor)
+    relevanceTopScore = rankByRelevance(
+      filtered,
+      annotationsByRecord,
+      args.rank_anchor,
+      undefined,
+      timestampOf,
+    )
   } else if (args.rank_by === 'causal_distance') {
-    rankByCausalDistance(filtered, all, args.rank_anchor)
+    rankByCausalDistance(filtered, all, args.rank_anchor, timestampOf, hashesOf)
   } else {
     // Newest first - the agent typically wants its most-recent provable
     // actions, not the genesis of the log.
-    filtered.sort((a, b) => b.record.timestamp - a.record.timestamp)
+    filtered.sort((a, b) => timestampOf(b) - timestampOf(a))
   }
 
   // Layer 1 v2 anti-noise threshold: when rank_by='relevance' and the
@@ -1662,12 +1771,7 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
   // reduce default token weight in agent context windows.
   const limit = Math.max(1, Math.min(200, args.limit ?? 10))
   const page = filtered.slice(offset, offset + limit)
-  let verified = await annotateVerification(
-    page,
-    annotationsByRecord,
-    revisionsByRecord,
-    extraCopies,
-  )
+  let verified = await annotateVerification(page, annotationsByRecord, revisionsByRecord, groupOf)
 
   // Apply verification filter post-paging so `total` reflects the unfiltered
   // count (matches user expectation of "how many records exist that match
@@ -1698,6 +1802,9 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
       if (b.annotations?.topics) out.topic_tags = b.annotations.topics
       if (b.superseded_by) out.superseded_by = b.superseded_by
       if (b.duplicate_count) out.duplicate_count = b.duplicate_count
+      if (b.duplicate_latest_timestamp !== undefined) {
+        out.duplicate_latest_timestamp = b.duplicate_latest_timestamp
+      }
       return out
     })
   } else if (compact) {
@@ -1719,6 +1826,40 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
     records,
     ...(collapsedDuplicates > 0 ? { collapsed_duplicates: collapsedDuplicates } : {}),
   }
+}
+
+/**
+ * Annotation summary for a collapsed group: the highest importance and
+ * every topic across the copies, and the kept copy's own summary when it
+ * has one, else the first summary found on another copy.
+ */
+function mergeGroupAnnotations(
+  kept: LoadedRecord,
+  members: LoadedRecord[],
+  annotationsByRecord: Map<string, AnnotationSummary>,
+): AnnotationSummary | undefined {
+  const all = [kept, ...members.filter((m) => m !== kept)]
+    .map((m) => annotationsByRecord.get(m.record_hash))
+    .filter((a): a is AnnotationSummary => a !== undefined)
+  if (all.length === 0) return undefined
+  if (all.length === 1) return all[0]
+  const merged: AnnotationSummary = {}
+  const topics = new Set<string>()
+  for (const annotation of all) {
+    if (
+      annotation.max_importance &&
+      (!merged.max_importance ||
+        IMPORTANCE_NUMERIC[annotation.max_importance] > IMPORTANCE_NUMERIC[merged.max_importance])
+    ) {
+      merged.max_importance = annotation.max_importance
+    }
+    for (const topic of annotation.topics ?? []) topics.add(topic)
+    if (merged.summary === undefined && annotation.summary !== undefined) {
+      merged.summary = annotation.summary
+    }
+  }
+  if (topics.size > 0) merged.topics = [...topics].sort()
+  return merged
 }
 
 const duplicateKeyCache = new WeakMap<object, string | null>()
@@ -1966,21 +2107,41 @@ export async function runRecallByContent(
     return { entry, score, recency: r, importance: i, relevance: rel }
   })
   // Re-signed copies score almost identically, so left alone they crowd
-  // every other result out of the top k. Each group is ranked once, as its
-  // earliest copy within the searched records.
-  const collapse =
-    args.collapse_duplicates === false
-      ? undefined
-      : collapseDuplicates(scoredCopies, (item) => ({
-          key: item.entry.duplicate_key,
-          timestamp: item.entry.timestamp,
-          recordHash: item.entry.record_hash,
-        }))
-  const scored = collapse ? collapse.kept : scoredCopies
+  // every other result out of the top k. Each group is ranked once: shown
+  // as its earliest copy within the searched records, scored as its best
+  // copy, so recency and annotations on a later copy still count.
+  type ScoredCopy = (typeof scoredCopies)[number]
+  let scored = scoredCopies
+  let scoredGroupOf: Map<ScoredCopy, { members: ScoredCopy[]; latestTimestamp: number }> | undefined
+  let collapsedDuplicates = 0
+  if (args.collapse_duplicates !== false) {
+    const groups = findDuplicateGroups(scoredCopies, (item) => ({
+      bucket: item.entry.duplicate_key,
+      key: () => item.entry.duplicate_key,
+      timestamp: item.entry.timestamp,
+      recordHash: item.entry.record_hash,
+    }))
+    if (groups.length > 0) {
+      const collapse = collapseDuplicateGroups(scoredCopies, groups, (group) => {
+        const earliest = group.members[0] as ScoredCopy
+        const best = group.members.reduce((a, b) => (b.score > a.score ? b : a))
+        return { ...best, entry: earliest.entry }
+      })
+      // The chosen items are new objects, so they are not in scoredCopies:
+      // drop every member and add the chosen ones.
+      const members = new Set<ScoredCopy>(groups.flatMap((g) => [...g.members, ...g.twins]))
+      scored = [...scoredCopies.filter((item) => !members.has(item)), ...collapse.groupOf.keys()]
+      scoredGroupOf = collapse.groupOf
+      collapsedDuplicates = collapse.collapsed
+    }
+  }
   await checkpointRecallCancellation(signal)
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score
-    return b.entry.timestamp - a.entry.timestamp
+    return (
+      (scoredGroupOf?.get(b)?.latestTimestamp ?? b.entry.timestamp) -
+      (scoredGroupOf?.get(a)?.latestTimestamp ?? a.entry.timestamp)
+    )
   })
   const k = Math.max(1, Math.min(50, args.k ?? 10))
   const top = scored.slice(0, k)
@@ -2003,11 +2164,11 @@ export async function runRecallByContent(
     ),
     candidate_records: filteredSearchPool.length,
     truncated_corpus: !completeCoverage,
-    ...(collapse && collapse.collapsed > 0 ? { collapsed_duplicates: collapse.collapsed } : {}),
+    ...(collapsedDuplicates > 0 ? { collapsed_duplicates: collapsedDuplicates } : {}),
     count: top.length,
     results: top.map((item) => {
       const { entry, score, recency, importance, relevance } = item
-      const copies = collapse?.extraCopies.get(item)
+      const group = scoredGroupOf?.get(item)
       return {
         record_hash: entry.record_hash,
         event_type: entry.event_type,
@@ -2019,7 +2180,12 @@ export async function runRecallByContent(
         display_summary: entry.display_summary,
         display_producer: entry.display_producer,
         age: formatAge(entry.timestamp, now),
-        ...(copies !== undefined ? { duplicate_count: copies } : {}),
+        ...(group
+          ? {
+              duplicate_count: group.members.length - 1,
+              duplicate_latest_timestamp: group.latestTimestamp,
+            }
+          : {}),
         score,
         components: { recency, importance, relevance },
       }

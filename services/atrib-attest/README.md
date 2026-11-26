@@ -166,8 +166,10 @@ retain the environment and per-agent default ladder above.
 
 A write keeps each signed record in `.atrib-submission-outbox-v1/`, beside
 the mirror file, until the log confirms it. If the process is killed or its
-flush deadline passes first, the next write that shares the mirror directory
-resends the record. The log returns the existing proof for a record it
+flush deadline passes first, a later write that shares the mirror directory
+resends the record; a long-running server looks at most once a minute. An
+entry is removed when the log confirms the record or refuses the record
+itself (400, 413, 422), and after 14 days. The log returns the existing proof for a record it
 already holds, so a resend never adds a second entry. Resends make one
 attempt each and never delay the write beyond its flush deadline. Set
 `ATRIB_SUBMISSION_OUTBOX=off`, or pass `submissionOutbox: false`, to keep

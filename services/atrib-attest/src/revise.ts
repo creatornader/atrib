@@ -10,7 +10,8 @@
 
 import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
-import { createSubmissionQueue, EVENT_TYPE_REVISION_URI, type SubmissionQueue } from '@atrib/mcp'
+import { createSubmissionQueue, EVENT_TYPE_REVISION_URI, type SubmissionOutbox, type SubmissionQueue } from '@atrib/mcp'
+import { resolveSubmissionOutbox } from './storage.js'
 import {
   handleEmit,
   registerAttestTool,
@@ -76,6 +77,11 @@ export interface AtribReviseServer {
 }
 
 export interface CreateAtribReviseServerOptions {
+  /**
+   * Durable outbox for records the log has not confirmed. Defaults to a
+   * directory beside the mirror file; `false` disables it.
+   */
+  submissionOutbox?: SubmissionOutbox | false | undefined
   /** Override the resolved key (primarily for testing). */
   key?: ResolvedKey | null | undefined
   /** Override the log endpoint (defaults to env or @atrib/mcp default). */
@@ -178,7 +184,8 @@ export async function createAtribReviseServer(
 
 function buildReviseWriteToolDeps(options: CreateAtribReviseServerOptions): WriteToolDeps {
   const logEndpoint = options.logEndpoint ?? process.env['ATRIB_LOG_ENDPOINT']
-  const queue: SubmissionQueue = createSubmissionQueue(logEndpoint)
+  const outbox = resolveSubmissionOutbox(options.submissionOutbox, undefined)
+  const queue: SubmissionQueue = createSubmissionQueue(logEndpoint, outbox ? { outbox } : {})
   return {
     resolveServerKey: createServerKeyResolver(options),
     queue,

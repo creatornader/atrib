@@ -42,6 +42,8 @@ export interface HistoryQuery {
   min_importance?: 'critical' | 'high' | 'medium' | 'low' | 'noise'
   topic_tags?: string[]
   include_revised?: boolean
+  /** Default true. False lists every re-signed copy of a statement. */
+  collapse_duplicates?: boolean
   min_signers?: number
   rank_by?: 'timestamp' | 'relevance' | 'causal_distance'
   rank_anchor?: string
@@ -75,6 +77,8 @@ export interface ByContentQuery {
   k?: number
   max_records?: number
   evidence_mode?: 'bounded' | 'require_complete'
+  /** Default true. False ranks every re-signed copy of a statement. */
+  collapse_duplicates?: boolean
 }
 
 export interface SessionChainQuery {

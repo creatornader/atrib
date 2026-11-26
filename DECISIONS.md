@@ -10046,34 +10046,45 @@ produced a second record instead of delivering the first.
 
 **Decision.** `createSubmissionQueue` accepts an optional `outbox`. With one
 set, the queue persists each record before its first attempt and removes it
-when the log returns a well-formed proof or a permanent 4xx rejection.
-Creating a queue resends the records earlier processes left behind.
+when the log returns a well-formed proof or refuses the record itself (400,
+413 or 422). Creating a queue resends the records earlier processes left
+behind, and a long-lived queue looks again when it submits, at most once a
+minute.
 
 1. The outbox is an interface on the queue, not a file dependency.
    `submission.ts` stays free of Node imports for the Worker entry point.
    `createFileSubmissionOutbox` is the Node implementation: one file per
-   record, named by record hash, mode 0600, written through a temp file.
+   record, named by record hash, mode 0600, written through a temp file, in
+   a subdirectory per log endpoint.
 2. Resending relies on [§2.6.1](atrib-spec.md#261-submit-entry) step 6. The
    log returns the existing proof for a record it already holds, so a resend
    can never append a duplicate.
 3. Resending is non-blocking under
    [§5.3.5](atrib-spec.md#535-log-submission) and
-   [§5.8](atrib-spec.md#58-degradation-contract). It starts when the queue is
-   created, makes one attempt per record, is awaited only by `flush()`, and
-   every outbox failure is swallowed.
+   [§5.8](atrib-spec.md#58-degradation-contract). It makes one attempt per
+   record with a 10 second limit, is awaited only by `flush()`, and every
+   outbox failure is swallowed.
 4. An entry rests for 60 seconds after it is written or claimed, longer than
    the queue's 30 second retry window. A claim refreshes the entry's mtime so
-   concurrent processes do not all resend it. One process claims at most 8
-   entries. An entry first queued more than 14 days ago is dropped unsent.
-5. An entry records the log endpoint it was queued for. A queue resends only
-   entries for its own endpoint, and only under the hash it computes itself
-   for the stored record.
-6. `@atrib/attest` turns the outbox on by default for `emitInProcess`, the
-   CLI and the write-tool servers, in `.atrib-submission-outbox-v1/` beside
+   concurrent processes do not all resend it, and a claimer skips an entry
+   whose mtime moved since it scanned. One call claims at most 8 entries,
+   chosen at random when more are due. The claim is not atomic, so two
+   processes can still resend one record; the log accepts the repeat. An
+   entry first queued more than 14 days ago is dropped unsent.
+5. Entries for different log endpoints live in different subdirectories, so
+   a backlog for one log cannot hide entries for another. A queue resends an
+   entry only under the hash it computes itself for the stored record, and
+   removes an entry whose name does not match.
+6. A status other than 400, 413 or 422 never removes an entry. A 401, 403,
+   404 or 429 usually comes from something in front of the log, and the
+   same record may be accepted later.
+7. `@atrib/attest` turns the outbox on by default for `emitInProcess`, the
+   CLI, the write-tool servers and session checkpoints, in
+   `.atrib-submission-outbox-v1/` beside
    the mirror file. `submissionOutbox: false` or
    `ATRIB_SUBMISSION_OUTBOX=off` keeps submission memory-only. Other
    `createSubmissionQueue` callers are unchanged until they pass an outbox.
-7. `emitInProcess` reports a record's proof whenever the queue holds it, even
+8. `emitInProcess` reports a record's proof whenever the queue holds it, even
    when the flush as a whole ran past its deadline on resends.
 
 **Alternatives considered.**
@@ -10095,6 +10106,10 @@ Creating a queue resends the records earlier processes left behind.
   part of this decision.
 - Archive submission after a resend carries the record and proof without the
   original evidence sidecar.
+- An entry the log keeps answering with a status that is not about the
+  record stays until it is 14 days old, at one attempt per minute at most.
+- The outbox directory is trusted as far as the mirror directory beside it
+  is. Anyone who can write there can already append to the mirror.
 
 **Cross-references.**
 
@@ -10112,15 +10127,15 @@ Creating a queue resends the records earlier processes left behind.
 **Status:** Accepted
 
 **Context.** A producer that retried after a timeout signed the same statement
-again. One operator mirror held 14 statements signed more than once, 63 extra
-copies in all, one of them 45 times. Each copy is a valid record with its own
-hash, and signed records are never removed. In content search the copies score
-almost identically and fill the top results.
+again, in some cases dozens of times over several days. Each copy is a valid
+record with its own hash, and signed records are never removed. In content
+search the copies score almost identically and fill the top results.
 
 **Decision.** The history and content read shapes collapse a group of
 re-signed copies to its earliest copy by default. The kept record carries
-`duplicate_count`, and the response carries `collapsed_duplicates` when any
-copy was folded. `collapse_duplicates: false` returns every signed copy.
+`duplicate_count` and `duplicate_latest_timestamp`, and the response carries
+`collapsed_duplicates` when any copy was folded. `collapse_duplicates: false`
+returns every signed copy.
 
 1. Two records are copies when every signed field matches except
    `timestamp`, `chain_root` and `signature`, the fields a re-signing
@@ -10131,19 +10146,38 @@ copy was folded. `collapse_duplicates: false` returns every signed copy.
    qualify. `tool_call` and `transaction` records never qualify: the same
    call or payment made twice is two acts.
 3. The earliest copy by signed `timestamp` is kept, with ties broken by the
-   smaller record hash. In content search under a bounded window, "earliest"
-   means earliest among the searched records.
-4. History collapses after filters and before ranking and paging, so `total`
-   counts statements. Content search collapses after scoring and before the
-   top-k cut.
-5. Collapsing is presentation only. Walks, chains, annotation and revision
+   smaller record hash. In history, unless the caller asked for unverified
+   records, the kept copy is the earliest one whose signature verifies, so a
+   damaged or forged line with an early timestamp cannot displace the
+   genuine copies. Content search does not verify signatures, as before. In
+   content search under a bounded window, "earliest" means earliest among
+   the searched records.
+4. A group has no time bound, because the retries it exists for ran for
+   days. A statement that is deliberately said again later is therefore one
+   group too. The group is ordered by its latest copy, in timestamp order and
+   in recency scoring, so a restatement still sorts after what was said in
+   between, and `duplicate_latest_timestamp` reports when that was.
+5. A group answers for all of its copies. An annotation or revision aimed at
+   any copy counts for the statement: `superseded_by` is the union, the
+   annotation summary takes the highest importance and every topic, and the
+   importance, topic and `include_revised` filters see the merged view.
+   Causal-distance ranking uses the nearest copy. Content search scores the
+   group as its best-scoring copy.
+6. History collapses after the filters on signed fields and before the
+   annotation and revision filters, ranking and paging, so `total` counts
+   statements. Content search collapses after scoring and before the top-k
+   cut; its `candidate_records` still counts copies.
+7. One signed record read from two mirror files is not a copy. Inside a
+   group the repeat is dropped without being counted.
+8. Collapsing is presentation only. Walks, chains, annotation and revision
    lookups, orphans, by-signer and state reads are unchanged, and a hidden
    copy still resolves by hash. This keeps the read side within
    [§3.1](atrib-spec.md#31-design-principles-and-rationale): no edge and no
    record is added, removed or reinterpreted.
-6. The durable content index stores an optional `duplicate_key` per entry
-   without a version change. An index written earlier collapses nothing until
-   the next mirror change rebuilds it.
+9. The durable content index stores `duplicate_key` on entries that share a
+   statement with another entry, and a `duplicate_keys` marker on the file.
+   The index version string is unchanged. An index without the marker is
+   rebuilt on first use.
 
 **Alternatives considered.**
 
@@ -10155,14 +10189,23 @@ copy was folded. `collapse_duplicates: false` returns every signed copy.
 - Collapse on context, event type and content alone. Two producers, or one
   producer citing different sources, can say the same thing for different
   reasons.
+- Bound a group by time or by adjacency. The retries seen in practice were
+  spread over days and interleaved with other records, so either bound would
+  leave them uncollapsed. Ordering by the latest copy handles the restated
+  statement without a bound.
 
 **Consequences.**
 
 - A producer that deliberately signs the same statement twice in one context
   sees one result with `duplicate_count: 1` unless it asks for every copy.
 - Salted commitments differ per record, so salted copies do not collapse.
-- An annotation or revision that targets a later copy is not shown on the
-  kept earliest copy.
+- A retry that resolved a different set of `informed_by` references than the
+  first attempt is a different statement and does not collapse.
+- A collapsed record's own `timestamp` can be older than its place in a
+  newest-first list suggests. `duplicate_latest_timestamp` explains the
+  position.
+- An older runtime sharing the index file rewrites it without the marker,
+  and the two rebuild it in turn. Results stay correct for each.
 
 **Cross-references.**
 
