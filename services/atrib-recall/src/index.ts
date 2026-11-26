@@ -1655,7 +1655,26 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
       collapsedDuplicates = collapse.collapsed
       annotationsByRecord = new Map(annotationsByRecord)
       revisionsByRecord = new Map(revisionsByRecord)
-      for (const [kept, group] of collapse.groupOf) applyGroupView(kept, group)
+      for (const [kept, group] of collapse.groupOf) {
+        // The filters below read this view, so a copy that fails its
+        // signature check must not shape it. Only groups that some
+        // annotation or revision points at need the check here; the rest
+        // are checked if they reach the returned page.
+        let view: HistoryGroup = group
+        const pointedAt = group.members.some(
+          (m) =>
+            snapshot.annotationsByRecord.has(m.record_hash) ||
+            snapshot.revisionsByRecord.has(m.record_hash),
+        )
+        if (pointedAt && !includeUnverified) {
+          const verdicts = await Promise.all(group.members.map((m) => signatureVerifies(m.record)))
+          const genuine = group.members.filter((_, index) => verdicts[index])
+          if (genuine.length > 0 && genuine.length < group.members.length) {
+            view = { members: genuine, latestTimestamp: group.latestTimestamp }
+          }
+        }
+        applyGroupView(kept, view)
+      }
     }
   }
   // A collapsed statement is ordered by its latest copy, so a statement

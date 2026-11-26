@@ -333,6 +333,38 @@ describe('history recall collapses re-signed copies', () => {
     expect(shown.signature_verified).toBe(true)
   })
 
+  it('does not let a copy that fails its check change what the filters admit', async () => {
+    const valid = await makeSigned({ timestamp: 1000 })
+    const revision = await makeSigned({
+      timestamp: 2000,
+      event_type: EVENT_TYPE_REVISION_URI,
+      args_hash: `sha256:${'1'.repeat(64)}`,
+      revises: computeRecordHash(valid),
+    })
+    const forgedLate = { ...valid, timestamp: 3000 } as AtribRecord
+    const annotation = await makeSigned({
+      timestamp: 3500,
+      event_type: EVENT_TYPE_ANNOTATION_URI,
+      args_hash: `sha256:${'2'.repeat(64)}`,
+      annotates: computeRecordHash(forgedLate),
+    })
+    writeFileSync(
+      file,
+      [
+        line(valid, 'same'),
+        line(revision, 'changed'),
+        line(forgedLate, 'same'),
+        line(annotation, 'note', { importance: 'critical' }),
+      ].join('\n'),
+    )
+    // The forged copy is not a restatement, so the revision still stands.
+    const live = await recall({ event_type: 'observation', include_revised: true }, file)
+    expect(live.total).toBe(0)
+    // An annotation aimed at the forged copy does not lift the statement.
+    const important = await recall({ event_type: 'observation', min_importance: 'high' }, file)
+    expect(important.total).toBe(0)
+  })
+
   it('treats a statement said again after its revision as live', async () => {
     const green = await makeSigned({ timestamp: 1000 })
     const revision = await makeSigned({

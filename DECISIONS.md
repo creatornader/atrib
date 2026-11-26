@@ -10218,9 +10218,11 @@ returns every signed copy.
   [D191](#d191-a-durable-outbox-carries-unconfirmed-records-across-processes)
   does.
 - An unverifiable copy can still move where a statement sorts before the
-  page is cut, because ordering does not wait for signature checks. It
-  never changes what the returned record reports. Content search can show
-  an unverifiable copy as the kept one.
+  page is cut, because ordering does not wait for signature checks, and it
+  is still counted in `total` and `collapsed_duplicates`. It never changes
+  what the returned record reports or which statements the importance,
+  topic and `include_revised` filters admit. Content search can show an
+  unverifiable copy as the kept one.
 
 **Cross-references.**
 
