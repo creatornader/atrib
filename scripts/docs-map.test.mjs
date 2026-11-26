@@ -593,20 +593,68 @@ test('upstreams: a pin new on the branch sets a baseline and flags nothing', () 
   try {
     execFileSync('git', ['clone', '-q', up.root, join(r.root, '.upstream/up')])
     r.branch('add')
+    // README exists at the merge base and stays untouched, so only a baseline
+    // that changes nothing keeps it unflagged.
     r.commit('add upstream', {
       'upstream/up.ref': `${up.git('rev-parse', 'HEAD').trim()}\n`,
-      'site/Verbs.tsx': 'x\n',
       'docs/docs-map.json': {
         version: 1,
-        upstreams: { up: { ref: 'upstream/up.ref', path: '.upstream/up' } },
-        entries: [
-          { doc: 'README.md', covers: ['.gitignore'] },
-          { doc: 'site/Verbs.tsx', covers: ['up:src/**'] },
-        ],
+        upstreams: { up: { ref: './upstream/up.ref', path: './.upstream/up/' } },
+        entries: [{ doc: 'README.md', covers: ['.gitignore', 'up:src/**'] }],
       },
     })
     const res = run(r.root, { map: 'docs/docs-map.json', base: 'main' })
     assert.deepEqual([res.errors, res.flags], [[], []])
+  } finally {
+    r.cleanup()
+    up.cleanup()
+  }
+})
+
+test('upstreams: ./ paths, unprefixed negation, local colons, unchecked pin moves', () => {
+  const up = repo({ 'src/verbs.ts': 'a', 'src/verbs.test.ts': 'a' })
+  const pin = up.git('rev-parse', 'HEAD').trim()
+  const map = {
+    version: 1,
+    upstreams: { up: { ref: './upstream/up.ref', path: '.upstream/up' } },
+    entries: [{ doc: 'README.md', covers: ['up:src/**', '!**/*.test.ts'] }],
+  }
+  const r = repo({
+    '.gitignore': '.upstream/\n',
+    'README.md': '# site\n',
+    'notes:2026.md': '# a local doc whose name has a colon\n',
+    'upstream/up.ref': `${pin.toUpperCase()}\n`,
+    'docs/docs-map.json': map,
+  })
+  try {
+    const clone = join(r.root, '.upstream/up')
+    execFileSync('git', ['clone', '-q', up.root, clone])
+    const opts = { map: 'docs/docs-map.json' }
+    // A local file with a colon is still a local doc, so it must be mapped.
+    assert.deepEqual(run(r.root, opts).errors, [
+      'notes:2026.md: not in the docs map; add an entry, or list it under frozen or unbound',
+    ])
+    r.commit('map it', { 'docs/docs-map.json': { ...map, unbound: ['notes:2026.md'] } })
+
+    // Only the test file changes upstream: the unprefixed ! drops it.
+    up.commit('tests', { 'src/verbs.test.ts': 'b' })
+    execFileSync('git', ['-C', clone, 'pull', '-q'])
+    r.branch('bump')
+    r.commit('bump', { 'upstream/up.ref': `${up.git('rev-parse', 'HEAD').trim()}\n` })
+    assert.deepEqual(run(r.root, { ...opts, base: 'main' }).flags, [])
+    // A real change flags, through the ./ ref path.
+    up.commit('verbs', { 'src/verbs.ts': 'b' })
+    execFileSync('git', ['-C', clone, 'pull', '-q'])
+    r.commit('bump again', { 'upstream/up.ref': `${up.git('rev-parse', 'HEAD').trim()}\n` })
+    assert.deepEqual(
+      run(r.root, { ...opts, base: 'main' }).flags.map((f) => f.changed),
+      [['up:src/verbs.ts']],
+    )
+    // Without the clone, moving the pin fails instead of passing unchecked.
+    rmSync(clone, { recursive: true, force: true })
+    assert.deepEqual(run(r.root, { ...opts, base: 'main' }).errors, [
+      'upstream up: this branch moves upstream/up.ref but there is no clone at .upstream/up to check the move against',
+    ])
   } finally {
     r.cleanup()
     up.cleanup()

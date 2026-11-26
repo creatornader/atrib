@@ -165,13 +165,23 @@ export function globToRegex(glob) {
   return { re: new RegExp(`^${re}$`), captures }
 }
 
-// An upstream path is "name:path". A glob matches only paths in its own
-// repo, so "**/*.ts" never matches an upstream file and "atrib:**" never a
-// local one.
+// An upstream path is "name:path", for a name in the map's upstreams. A glob
+// matches only paths in its own repo, so "**/*.ts" never matches an upstream
+// file and "atrib:**" never a local one. loadMap sets the names.
+let upstreamNames = new Set()
+export function setUpstreamNames(names) {
+  upstreamNames = new Set(names)
+}
 const scope = (s) => {
   const colon = s.indexOf(':')
   const slash = s.indexOf('/')
-  return colon > 0 && (slash < 0 || colon < slash) ? s.slice(0, colon) : ''
+  if (colon <= 0 || (slash >= 0 && slash < colon)) return ''
+  const name = s.slice(0, colon)
+  return upstreamNames.has(name) ? name : ''
+}
+const unscoped = (s) => {
+  const name = scope(s)
+  return name ? s.slice(name.length + 1) : s
 }
 
 const globCache = new Map()
@@ -183,12 +193,15 @@ export function globMatch(glob, path) {
 }
 
 // Patterns may start with "!" to exclude. A path matches when it matches a
-// positive pattern and no negative one.
+// positive pattern and no negative one. A negative pattern without an
+// upstream prefix excludes in every repo, so "!**/*.test.*" also drops
+// upstream tests; one with a prefix excludes only in that upstream.
 export function matchesCovers(covers, path) {
   let hit = false
   for (const p of covers) {
     if (p.startsWith('!')) {
-      if (globMatch(p.slice(1), path)) return false
+      const neg = p.slice(1)
+      if (globMatch(neg, path) || (!scope(neg) && globMatch(neg, unscoped(path)))) return false
     } else if (!hit && globMatch(p, path)) hit = true
   }
   return hit
@@ -340,13 +353,29 @@ export function blockBody(text, block) {
 
 // ---------- git ----------
 
-function git(root, args) {
+function git(root, args, env = process.env) {
   return execFileSync('git', args, {
     cwd: root,
+    env,
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+}
+
+// Git in an upstream clone, without the repo-locating variables a git hook
+// exports, which would point it back at this repo.
+function ugit(dir, args) {
+  const env = { ...process.env }
+  for (const k of [
+    'GIT_DIR',
+    'GIT_WORK_TREE',
+    'GIT_INDEX_FILE',
+    'GIT_COMMON_DIR',
+    'GIT_OBJECT_DIRECTORY',
+  ])
+    delete env[k]
+  return git(dir, args, env)
 }
 
 // Tracked files, plus untracked ones when asked (PR mode, so a new file
@@ -457,7 +486,7 @@ export function readPin(root, ref, rev = null) {
     .split('\n')
     .map((l) => l.trim())
     .find((l) => l && !l.startsWith('#'))
-  const sha = line ? line.split(/\s+/)[0] : ''
+  const sha = line ? line.split(/\s+/)[0].toLowerCase() : ''
   return /^[0-9a-f]{40}$/.test(sha) ? sha : undefined
 }
 
@@ -485,7 +514,7 @@ export function upstreamState(root, map) {
     }
     let list
     try {
-      list = git(dir, ['ls-tree', '-r', '-z', '--name-only', sha])
+      list = ugit(dir, ['ls-tree', '-r', '-z', '--name-only', sha])
     } catch {
       errors.push(
         `upstream ${name}: the clone at ${u.path} does not have ${sha}; fetch with full history`,
@@ -500,16 +529,27 @@ export function upstreamState(root, map) {
 }
 
 // Upstream files changed between the pin at the merge base and the pin now.
-// A pin that is new on this branch sets a baseline and changes nothing.
-export function upstreamChanges(root, mergeBase, changed, up) {
+// A pin that is new on this branch sets a baseline and changes nothing. A
+// branch that moves a pin it cannot check fails, so the move gets a review.
+export function upstreamChanges(root, mergeBase, changed, up, map) {
   const out = []
   const errors = []
-  for (const [name, { dir, sha, ref }] of up.info) {
-    if (!changed.has(ref)) continue
-    const old = readPin(root, ref, mergeBase)
-    if (!old || old === sha) continue
+  for (const [name, u] of Object.entries(map.upstreams || {})) {
+    if (!changed.has(u.ref)) continue
+    const old = readPin(root, u.ref, mergeBase)
+    const info = up.info.get(name)
+    if (!old) continue
+    if (!info) {
+      if (readPin(root, u.ref) !== old)
+        errors.push(
+          `upstream ${name}: this branch moves ${u.ref} but there is no clone at ${u.path} to check the move against`,
+        )
+      continue
+    }
+    const { dir, sha } = info
+    if (old === sha) continue
     try {
-      const diff = git(dir, [
+      const diff = ugit(dir, [
         'diff',
         '--no-color',
         '--no-ext-diff',
@@ -559,10 +599,24 @@ export function loadMap(root, mapPath) {
       for (const [name, u] of Object.entries(map.upstreams)) {
         if (!/^[a-z0-9][a-z0-9-]*$/.test(name))
           errors.push(`${mapPath}: upstream name "${name}" must be lowercase letters, digits and -`)
-        if (!u || typeof u.ref !== 'string' || typeof u.path !== 'string')
+        if (!u || typeof u.ref !== 'string' || typeof u.path !== 'string') {
           errors.push(`${mapPath}: upstreams.${name} needs ref and path`)
+          continue
+        }
+        // Paths are repo-relative, as git prints them, so a pin move is seen.
+        u.ref = u.ref.replace(/^(\.\/)+/, '')
+        u.path = u.path.replace(/^(\.\/)+/, '').replace(/\/+$/, '')
+        for (const key of ['ref', 'path'])
+          if (
+            !u[key] ||
+            u[key] === '.' ||
+            u[key].startsWith('/') ||
+            u[key].split('/').includes('..')
+          )
+            errors.push(`${mapPath}: upstreams.${name}.${key} must be a path inside the repo`)
       }
   }
+  setUpstreamNames(errors.length ? [] : Object.keys(map.upstreams || {}))
   const ids = new Set()
   ;(map.generators || []).forEach((g, i) => {
     if (!g.id || !g.doc || !g.command)
@@ -758,7 +812,7 @@ export function run(root, opts, env = process.env) {
   // PR mode.
   if (opts.base) {
     const { mergeBase, changed, untracked } = changesSince(root, opts.base)
-    const upChanged = upstreamChanges(root, mergeBase, changed, up)
+    const upChanged = upstreamChanges(root, mergeBase, changed, up, map)
     errors.push(...upChanged.errors)
     for (const f of upChanged.files) changed.add(f)
     const acks = readAcks(root, mergeBase, env.DOCS_MAP_PR_BODY)
@@ -840,24 +894,34 @@ export function drift(root, opts) {
   const up = upstreamState(root, map)
   const { bindings } = expandEntries(map, files, files.concat(up.files), up.unavailable)
   const upstreams = []
+  const driftErrors = [...up.errors]
   for (const [name, { dir, sha }] of up.info) {
-    const head = git(dir, ['rev-parse', 'HEAD']).trim()
-    const changed =
-      head === sha
-        ? []
-        : git(dir, [
-            'diff',
-            '--no-color',
-            '--no-ext-diff',
-            '--name-only',
-            '--no-renames',
-            '-z',
-            sha,
-            head,
-          ])
-            .split('\0')
-            .filter(Boolean)
-            .map((f) => `${name}:${f}`)
+    let head
+    let changed
+    try {
+      head = ugit(dir, ['rev-parse', '--verify', 'HEAD^{commit}']).trim()
+      changed =
+        head === sha
+          ? []
+          : ugit(dir, [
+              'diff',
+              '--no-color',
+              '--no-ext-diff',
+              '--name-only',
+              '--no-renames',
+              '-z',
+              sha,
+              head,
+            ])
+              .split('\0')
+              .filter(Boolean)
+              .map((f) => `${name}:${f}`)
+    } catch {
+      driftErrors.push(
+        `upstream ${name}: cannot compare the pin with the clone's checked-out commit`,
+      )
+      continue
+    }
     const sections = new Map()
     for (const b of bindings) {
       if (anyMatch(map.frozen, b.doc)) continue
@@ -879,7 +943,7 @@ export function drift(root, opts) {
       sections: [...sections.values()],
     })
   }
-  return { errors: up.errors, warnings: up.warnings, upstreams }
+  return { errors: driftErrors, warnings: up.warnings, upstreams }
 }
 
 // ---------- output ----------
