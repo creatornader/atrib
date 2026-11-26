@@ -215,7 +215,7 @@ describe('file submission outbox', () => {
     expect(await readdir(endpointDir(dir))).toEqual([`${'12'.repeat(32)}.2.y.tmp`])
   })
 
-  it('claims at most maxClaim entries, oldest first', async () => {
+  it('claims at most maxClaim entries per call', async () => {
     const outbox = createFileSubmissionOutbox({ dir, maxClaim: 2 })
     const hashes: string[] = []
     for (let i = 0; i < 4; i++) {
@@ -234,6 +234,29 @@ describe('file submission outbox', () => {
       hashes.slice().sort(),
     )
     expect(await outbox.claimDue(ENDPOINT)).toEqual([])
+  })
+
+  it('confirming a record for one log leaves another log’s entry alone', async () => {
+    const outbox = createFileSubmissionOutbox({ dir })
+    const other = 'https://other.test/v1/entries'
+    const record = await makeSignedRecord(250)
+    const hash = recordHashHex(record)
+    await outbox.put(hash, { record, priority: 'normal' }, ENDPOINT)
+    await outbox.put(hash, { record, priority: 'normal' }, other)
+    await outbox.remove(hash, ENDPOINT)
+    expect(await entryNames(dir)).toEqual([])
+    expect(await entryNames(dir, other)).toEqual([`${hash}.json`])
+  })
+
+  it('keeps writing after its directory is cleared', async () => {
+    const outbox = createFileSubmissionOutbox({ dir })
+    const first = await makeSignedRecord(251)
+    await outbox.put(recordHashHex(first), { record: first, priority: 'normal' }, ENDPOINT)
+    await rm(dir, { recursive: true, force: true })
+    const second = await makeSignedRecord(252)
+    const hash = recordHashHex(second)
+    await outbox.put(hash, { record: second, priority: 'normal' }, ENDPOINT)
+    expect(await entryNames(dir)).toEqual([`${hash}.json`])
   })
 
   it('claims oldest first when everything due fits in one claim', async () => {

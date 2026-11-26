@@ -203,8 +203,8 @@ export interface SubmissionOutboxEntry {
 export interface SubmissionOutbox {
   /** Persist a record before its first submission attempt. */
   put(recordHash: string, entry: SubmissionOutboxEntry, endpoint: string): Promise<void>
-  /** Forget a record the log confirmed or refused as invalid. */
-  remove(recordHash: string): Promise<void>
+  /** Forget a record that `endpoint` confirmed or refused as invalid. */
+  remove(recordHash: string, endpoint: string): Promise<void>
   /**
    * Return records earlier processes left unconfirmed for `endpoint` that
    * are due for another attempt, and mark them claimed so concurrent
@@ -348,7 +348,7 @@ export function createSubmissionQueue(
   async function forgetInOutbox(hash: string): Promise<void> {
     if (!outbox) return
     try {
-      await outbox.remove(hash)
+      await outbox.remove(hash, endpoint)
     } catch {
       // The outbox is best effort; a leftover entry is resent and then
       // removed by a later process.

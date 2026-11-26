@@ -1621,56 +1621,41 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
 
   // Collapse re-signed copies. This runs after the filters on signed fields,
   // which every copy passes or fails together, and before the annotation and
-  // revision filters, which then see the whole group: an annotation or a
-  // revision aimed at any copy counts for the statement.
-  let groupOf: Map<LoadedRecord, { members: LoadedRecord[]; latestTimestamp: number }> | undefined
+  // revision filters, which then see the whole group.
+  type HistoryGroup = { members: LoadedRecord[]; latestTimestamp: number }
+  let groupOf: Map<LoadedRecord, HistoryGroup> | undefined
   let collapsedDuplicates = 0
   let annotationsByRecord = snapshot.annotationsByRecord
   let revisionsByRecord = snapshot.revisionsByRecord
+  // Point the kept copy's annotation and revision lookups at the group's.
+  const applyGroupView = (kept: LoadedRecord, group: HistoryGroup | undefined): void => {
+    const members = group?.members ?? [kept]
+    const annotations = mergeAnnotations(
+      [kept, ...members.filter((m) => m !== kept)].map((m) =>
+        snapshot.annotationsByRecord.get(m.record_hash),
+      ),
+    )
+    if (annotations) annotationsByRecord.set(kept.record_hash, annotations)
+    else annotationsByRecord.delete(kept.record_hash)
+    const revisions = groupRevisions(members, snapshot)
+    if (revisions.length > 0) revisionsByRecord.set(kept.record_hash, revisions)
+    else revisionsByRecord.delete(kept.record_hash)
+  }
   if (args.collapse_duplicates !== false) {
-    const groups = findDuplicateGroups(filtered, (lr) => ({
-      bucket: duplicateBucketForRecord(lr.record),
-      key: () => duplicateKeyOf(lr),
-      timestamp: lr.record.timestamp,
-      recordHash: lr.record_hash,
-    }))
+    // Copies share every signed field the filters above look at, so a group
+    // found over the whole mirror is either all in scope or all out.
+    const inScope = filtered === all ? undefined : new Set(filtered)
+    const groups = duplicateGroupsOf(all).filter(
+      (group) => !inScope || inScope.has(group.members[0] as LoadedRecord),
+    )
     if (groups.length > 0) {
-      // The kept copy is the earliest one whose signature verifies, so a
-      // damaged or forged line with an early timestamp cannot stand in for
-      // the genuine copies and then be dropped as unverified.
-      const chosen = new Map<unknown, LoadedRecord>()
-      for (const group of groups) {
-        let kept = group.members[0] as LoadedRecord
-        if (!includeUnverified) {
-          for (const member of group.members) {
-            if (await signatureVerifies(member.record)) {
-              kept = member
-              break
-            }
-          }
-        }
-        chosen.set(group, kept)
-      }
-      const collapse = collapseDuplicateGroups(
-        filtered,
-        groups,
-        (group) => chosen.get(group) as LoadedRecord,
-      )
+      const collapse = collapseDuplicateGroups(filtered, groups)
       filtered = collapse.kept
       groupOf = collapse.groupOf
       collapsedDuplicates = collapse.collapsed
       annotationsByRecord = new Map(annotationsByRecord)
       revisionsByRecord = new Map(revisionsByRecord)
-      for (const [kept, group] of collapse.groupOf) {
-        const annotations = mergeGroupAnnotations(kept, group.members, snapshot.annotationsByRecord)
-        if (annotations) annotationsByRecord.set(kept.record_hash, annotations)
-        const revisions = [
-          ...new Set(
-            group.members.flatMap((m) => snapshot.revisionsByRecord.get(m.record_hash) ?? []),
-          ),
-        ]
-        if (revisions.length > 0) revisionsByRecord.set(kept.record_hash, revisions)
-      }
+      for (const [kept, group] of collapse.groupOf) applyGroupView(kept, group)
     }
   }
   // A collapsed statement is ordered by its latest copy, so a statement
@@ -1771,6 +1756,35 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
   // reduce default token weight in agent context windows.
   const limit = Math.max(1, Math.min(200, args.limit ?? 10))
   const page = filtered.slice(offset, offset + limit)
+  // Signatures are checked for the groups on this page only, which keeps a
+  // mirror with many groups cheap. The kept copy becomes the earliest one
+  // that verifies, so a damaged or forged line with an early timestamp
+  // cannot stand in for the genuine copies and then be dropped. Unless the
+  // caller asked for unverified records, copies that fail the check also
+  // leave the count, the latest timestamp and the merged view.
+  if (groupOf) {
+    for (let i = 0; i < page.length; i++) {
+      const shown = page[i] as LoadedRecord
+      const group = groupOf.get(shown)
+      if (!group) continue
+      const verdicts = await Promise.all(group.members.map((m) => signatureVerifies(m.record)))
+      const genuine = group.members.filter((_, index) => verdicts[index])
+      if (genuine.length === 0 || genuine.length === group.members.length) continue
+      const kept = genuine[0] as LoadedRecord
+      const view: HistoryGroup | undefined = includeUnverified
+        ? group
+        : genuine.length > 1
+          ? {
+              members: genuine,
+              latestTimestamp: Math.max(...genuine.map((m) => m.record.timestamp)),
+            }
+          : undefined
+      groupOf.delete(shown)
+      if (view) groupOf.set(kept, view)
+      applyGroupView(kept, view)
+      page[i] = kept
+    }
+  }
   let verified = await annotateVerification(page, annotationsByRecord, revisionsByRecord, groupOf)
 
   // Apply verification filter post-paging so `total` reflects the unfiltered
@@ -1829,18 +1843,13 @@ export async function recall(args: RecallArgs, recordFile?: string): Promise<Rec
 }
 
 /**
- * Annotation summary for a collapsed group: the highest importance and
- * every topic across the copies, and the kept copy's own summary when it
- * has one, else the first summary found on another copy.
+ * One annotation summary for a collapsed group: the highest importance and
+ * every topic across the copies, and the first summary in the order given.
  */
-function mergeGroupAnnotations(
-  kept: LoadedRecord,
-  members: LoadedRecord[],
-  annotationsByRecord: Map<string, AnnotationSummary>,
+function mergeAnnotations(
+  summaries: Array<AnnotationSummary | undefined>,
 ): AnnotationSummary | undefined {
-  const all = [kept, ...members.filter((m) => m !== kept)]
-    .map((m) => annotationsByRecord.get(m.record_hash))
-    .filter((a): a is AnnotationSummary => a !== undefined)
+  const all = summaries.filter((a): a is AnnotationSummary => a !== undefined)
   if (all.length === 0) return undefined
   if (all.length === 1) return all[0]
   const merged: AnnotationSummary = {}
@@ -1860,6 +1869,56 @@ function mergeGroupAnnotations(
   }
   if (topics.size > 0) merged.topics = [...topics].sort()
   return merged
+}
+
+/**
+ * Revisions that supersede a collapsed statement. A revision counts when it
+ * targets the latest copy, or was signed at or after the latest copy. A
+ * statement that was revised and then said again is live: the older
+ * revision does not reach forward over the restatement.
+ */
+function groupRevisions(members: LoadedRecord[], snapshot: LoadedMirrorSnapshot): string[] {
+  if (members.length === 1) {
+    return snapshot.revisionsByRecord.get((members[0] as LoadedRecord).record_hash) ?? []
+  }
+  let latest = members[0] as LoadedRecord
+  for (const member of members) {
+    if (member.record.timestamp >= latest.record.timestamp) latest = member
+  }
+  const out = new Set<string>()
+  for (const member of members) {
+    for (const revision of snapshot.revisionsByRecord.get(member.record_hash) ?? []) {
+      const signedAt = snapshot.loadedByHash.get(revision)?.record.timestamp
+      if (member === latest || (signedAt !== undefined && signedAt >= latest.record.timestamp)) {
+        out.add(revision)
+      }
+    }
+  }
+  return [...out]
+}
+
+const duplicateGroupCache = new WeakMap<
+  LoadedRecord[],
+  {
+    size: number
+    groups: Array<{ members: LoadedRecord[]; twins: LoadedRecord[]; latestTimestamp: number }>
+  }
+>()
+
+/** Duplicate groups over a loaded mirror, found once per loaded snapshot. */
+function duplicateGroupsOf(
+  loaded: LoadedRecord[],
+): Array<{ members: LoadedRecord[]; twins: LoadedRecord[]; latestTimestamp: number }> {
+  const cached = duplicateGroupCache.get(loaded)
+  if (cached && cached.size === loaded.length) return cached.groups
+  const groups = findDuplicateGroups(loaded, (lr) => ({
+    bucket: duplicateBucketForRecord(lr.record),
+    key: () => duplicateKeyOf(lr),
+    timestamp: lr.record.timestamp,
+    recordHash: lr.record_hash,
+  }))
+  duplicateGroupCache.set(loaded, { size: loaded.length, groups })
+  return groups
 }
 
 const duplicateKeyCache = new WeakMap<object, string | null>()
@@ -2125,7 +2184,11 @@ export async function runRecallByContent(
       const collapse = collapseDuplicateGroups(scoredCopies, groups, (group) => {
         const earliest = group.members[0] as ScoredCopy
         const best = group.members.reduce((a, b) => (b.score > a.score ? b : a))
-        return { ...best, entry: earliest.entry }
+        const annotations = mergeAnnotations(group.members.map((m) => m.entry.annotations))
+        return {
+          ...best,
+          entry: annotations ? { ...earliest.entry, annotations } : earliest.entry,
+        }
       })
       // The chosen items are new objects, so they are not in scoredCopies:
       // drop every member and add the chosen ones.

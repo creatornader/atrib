@@ -87,15 +87,9 @@ export function createFileSubmissionOutbox(options: FileSubmissionOutboxOptions)
   const maxClaim = options.maxClaim ?? DEFAULT_MAX_CLAIM
   const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS
   const ensured = new Set<string>()
-  // remove() is not told the endpoint, so it clears the record from every
-  // endpoint directory this outbox has touched, plus any it finds on disk.
-  const knownEndpointDirs = new Set<string>()
 
   function endpointDir(endpoint: string): string {
-    const name = createHash('sha256').update(endpoint).digest('hex').slice(0, 16)
-    const path = join(dir, name)
-    knownEndpointDirs.add(path)
-    return path
+    return join(dir, createHash('sha256').update(endpoint).digest('hex').slice(0, 16))
   }
 
   function entryPath(endpoint: string, recordHash: string): string {
@@ -123,11 +117,21 @@ export function createFileSubmissionOutbox(options: FileSubmissionOutboxOptions)
         `${recordHash}.${process.pid}.${randomUUID()}${TEMP_SUFFIX}`,
       )
       try {
+        const body = JSON.stringify(file)
+        const write = (): Promise<void> =>
+          writeFile(temporaryPath, body, { encoding: 'utf-8', mode: 0o600 })
         if (!ensured.has(targetDir)) {
           await mkdir(targetDir, { recursive: true, mode: 0o700 })
           ensured.add(targetDir)
+          await write()
+        } else {
+          // The directory can be cleared under a long-lived process.
+          await write().catch(async (error: NodeJS.ErrnoException) => {
+            if (error.code !== 'ENOENT') throw error
+            await mkdir(targetDir, { recursive: true, mode: 0o700 })
+            await write()
+          })
         }
-        await writeFile(temporaryPath, JSON.stringify(file), { encoding: 'utf-8', mode: 0o600 })
         // link() fails when the entry already exists, which keeps the first
         // queued_at across in-process retries, and a reader never sees a
         // partial file. A filesystem without hard links gets a rename, but
@@ -151,14 +155,9 @@ export function createFileSubmissionOutbox(options: FileSubmissionOutboxOptions)
       }
     },
 
-    async remove(recordHash: string): Promise<void> {
+    async remove(recordHash: string, endpoint: string): Promise<void> {
       if (!/^[0-9a-f]{64}$/.test(recordHash)) return
-      const dirs = new Set(knownEndpointDirs)
-      const names = await readdir(dir).catch(() => [] as string[])
-      for (const name of names) {
-        if (/^[0-9a-f]{16}$/.test(name)) dirs.add(join(dir, name))
-      }
-      await Promise.all([...dirs].map((path) => removePath(join(path, `${recordHash}.json`))))
+      await removePath(entryPath(endpoint, recordHash))
     },
 
     async claimDue(

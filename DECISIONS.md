@@ -10108,6 +10108,8 @@ minute.
   original evidence sidecar.
 - An entry the log keeps answering with a status that is not about the
   record stays until it is 14 days old, at one attempt per minute at most.
+  The outbox has no cap on entries, so a host that is offline for days
+  holds one small file per record written in that time.
 - The outbox directory is trusted as far as the mirror directory beside it
   is. Anyone who can write there can already append to the mirror.
 
@@ -10146,21 +10148,25 @@ returns every signed copy.
    qualify. `tool_call` and `transaction` records never qualify: the same
    call or payment made twice is two acts.
 3. The earliest copy by signed `timestamp` is kept, with ties broken by the
-   smaller record hash. In history, unless the caller asked for unverified
-   records, the kept copy is the earliest one whose signature verifies, so a
-   damaged or forged line with an early timestamp cannot displace the
-   genuine copies. Content search does not verify signatures, as before. In
-   content search under a bounded window, "earliest" means earliest among
-   the searched records.
+   smaller record hash. In history the kept copy is the earliest one whose
+   signature verifies, so a damaged or forged line with an early timestamp
+   cannot displace the genuine copies. Unless the caller asked for
+   unverified records, copies that fail the check also leave the count, the
+   latest timestamp and the merged view. Signatures are checked for the
+   groups on the returned page only. Content search does not verify
+   signatures, as before. In content search under a bounded window,
+   "earliest" means earliest among the searched records.
 4. A group has no time bound, because the retries it exists for ran for
    days. A statement that is deliberately said again later is therefore one
    group too. The group is ordered by its latest copy, in timestamp order and
    in recency scoring, so a restatement still sorts after what was said in
    between, and `duplicate_latest_timestamp` reports when that was.
-5. A group answers for all of its copies. An annotation or revision aimed at
-   any copy counts for the statement: `superseded_by` is the union, the
-   annotation summary takes the highest importance and every topic, and the
-   importance, topic and `include_revised` filters see the merged view.
+5. A group answers for all of its copies. An annotation aimed at any copy
+   counts for the statement: the summary takes the highest importance and
+   every topic, in history and in content search results. A revision counts
+   when it targets the latest copy or was signed at or after the latest
+   copy, so a statement that was revised and then said again is live. The
+   importance, topic and `include_revised` filters see this merged view.
    Causal-distance ranking uses the nearest copy. Content search scores the
    group as its best-scoring copy.
 6. History collapses after the filters on signed fields and before the
@@ -10206,6 +10212,15 @@ returns every signed copy.
   position.
 - An older runtime sharing the index file rewrites it without the marker,
   and the two rebuild it in turn. Results stay correct for each.
+- A producer that keeps re-signing a statement after an agent revised it
+  makes the statement read as live again. The fix for that is to stop the
+  re-signing, which
+  [D191](#d191-a-durable-outbox-carries-unconfirmed-records-across-processes)
+  does.
+- An unverifiable copy can still move where a statement sorts before the
+  page is cut, because ordering does not wait for signature checks. It
+  never changes what the returned record reports. Content search can show
+  an unverifiable copy as the kept one.
 
 **Cross-references.**
 

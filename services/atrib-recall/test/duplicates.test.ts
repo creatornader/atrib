@@ -293,12 +293,88 @@ describe('history recall collapses re-signed copies', () => {
     const records = result.records as Array<{ record_hash: string; duplicate_count?: number }>
     expect(records.map((r) => r.record_hash)).toEqual([computeRecordHash(valid)])
     expect(result.filtered_out_by_verification).toBe(0)
-    expect(records[0]!.duplicate_count).toBe(1)
+    // The copy that fails its check is not counted as a signed copy.
+    expect(records[0]!.duplicate_count).toBeUndefined()
 
     const lenient = await recall({ include_unverified: true }, file)
     expect((lenient.records[0] as { record_hash: string }).record_hash).toBe(
-      computeRecordHash(forged),
+      computeRecordHash(valid),
     )
+    expect((lenient.records[0] as { duplicate_count?: number }).duplicate_count).toBe(1)
+  })
+
+  it('leaves a copy that fails its check out of the count and the latest time', async () => {
+    const valid = await makeSigned({ timestamp: 100 })
+    const again = await makeSigned({ timestamp: 200, chain_root: `sha256:${'d'.repeat(64)}` })
+    const forgedLate = { ...valid, timestamp: 9_999_999_999_999 } as AtribRecord
+    writeFileSync(
+      file,
+      [line(valid, 'same'), line(again, 'same'), line(forgedLate, 'same')].join('\n'),
+    )
+    const result = await recall({}, file)
+    const record = result.records[0] as {
+      record_hash: string
+      duplicate_count?: number
+      duplicate_latest_timestamp?: number
+    }
+    expect(record.record_hash).toBe(computeRecordHash(valid))
+    expect(record.duplicate_count).toBe(1)
+    expect(record.duplicate_latest_timestamp).toBe(200)
+
+    writeFileSync(file, [line(valid, 'same'), line(forgedLate, 'same')].join('\n'))
+    const single = await recall({}, file)
+    expect(single.records).toHaveLength(1)
+    expect(single.records[0]).not.toHaveProperty('duplicate_count')
+    expect(single.records[0]).not.toHaveProperty('duplicate_latest_timestamp')
+
+    const lenient = await recall({ include_unverified: true }, file)
+    const shown = lenient.records[0] as { record_hash: string; signature_verified: boolean }
+    expect(shown.record_hash).toBe(computeRecordHash(valid))
+    expect(shown.signature_verified).toBe(true)
+  })
+
+  it('treats a statement said again after its revision as live', async () => {
+    const green = await makeSigned({ timestamp: 1000 })
+    const revision = await makeSigned({
+      timestamp: 2000,
+      event_type: EVENT_TYPE_REVISION_URI,
+      args_hash: `sha256:${'1'.repeat(64)}`,
+      revises: computeRecordHash(green),
+    })
+    const greenAgain = await makeSigned({
+      timestamp: 3000,
+      chain_root: `sha256:${'d'.repeat(64)}`,
+    })
+    writeFileSync(
+      file,
+      [line(green, 'green'), line(revision, 'red'), line(greenAgain, 'green')].join('\n'),
+    )
+    const shown = await recall({ event_type: 'observation' }, file)
+    expect(shown.records[0]).not.toHaveProperty('superseded_by')
+    const live = await recall({ event_type: 'observation', include_revised: true }, file)
+    expect(live.total).toBe(1)
+
+    // A revision signed after the last copy supersedes the statement
+    // whichever copy it names.
+    const later = await makeSigned({
+      timestamp: 4000,
+      event_type: EVENT_TYPE_REVISION_URI,
+      args_hash: `sha256:${'2'.repeat(64)}`,
+      revises: computeRecordHash(green),
+    })
+    writeFileSync(
+      file,
+      [
+        line(green, 'green'),
+        line(revision, 'red'),
+        line(greenAgain, 'green'),
+        line(later, 'red again'),
+      ].join('\n'),
+    )
+    const revised = await recall({ event_type: 'observation' }, file)
+    expect((revised.records[0] as { superseded_by?: string[] }).superseded_by).toEqual([
+      computeRecordHash(later),
+    ])
   })
 
   it('orders a restated statement after what was said in between', async () => {
@@ -501,6 +577,37 @@ describe('content search collapses re-signed copies', () => {
       expect(every.count).toBe(5)
       expect(every).not.toHaveProperty('collapsed_duplicates')
     }
+  })
+
+  it('shows annotations from any copy on the ranked statement', async () => {
+    const first = await makeSigned({ timestamp: 1000 })
+    const second = await makeSigned({ timestamp: 2000, chain_root: `sha256:${'d'.repeat(64)}` })
+    const annotation = await makeSigned({
+      timestamp: 3000,
+      event_type: EVENT_TYPE_ANNOTATION_URI,
+      args_hash: `sha256:${'2'.repeat(64)}`,
+      annotates: computeRecordHash(second),
+    })
+    writeFileSync(
+      process.env.ATRIB_RECORD_FILE!,
+      [
+        line(first, 'zebra migration finished'),
+        line(second, 'zebra migration finished'),
+        line(annotation, 'note', { importance: 'critical', topics: ['release'] }),
+      ].join('\n'),
+    )
+    vi.resetModules()
+    const recallModule = await import('../src/index.js')
+    const result = await recallModule.runRecallByContent({
+      query: 'zebra migration',
+      evidence_mode: 'require_complete',
+    })
+    const results = result.results as Array<{
+      record_hash: string
+      annotations?: { max_importance?: string }
+    }>
+    const kept = results.find((r) => r.record_hash === computeRecordHash(first))
+    expect(kept?.annotations?.max_importance).toBe('critical')
   })
 
   it('is reachable through the recall verb for history and content', async () => {

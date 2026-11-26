@@ -18,14 +18,12 @@
 import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { randomBytes } from 'node:crypto'
-import { dirname, join } from 'node:path'
 import {
   EVENT_TYPE_ANNOTATION_URI,
   EVENT_TYPE_REVISION_URI,
   LOCAL_SUBSTRATE_DEFAULT_TIMEOUT_MS,
   LOCAL_SUBSTRATE_REQUEST_SCHEMA,
   canonicalRecord,
-  createFileSubmissionOutbox,
   createHttpLocalSubstrateTransport,
   createSubmissionQueue,
   genesisChainRoot,
